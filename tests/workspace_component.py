@@ -8,10 +8,12 @@ import sqlite3
 import subprocess
 import tarfile
 import tempfile
+import time
 
 import yaml
 
 from native_workspace import NativeDesktop
+from native_client import hold_owner, live_owners, stop_owner
 from tui_smoke import Desktop
 from workspace import ROOT, RUNTIME, classic_workspace, client_layout, database_environment, fixture_workspace, workspace_checkpoint
 
@@ -66,9 +68,25 @@ def snapshot(state):
         assignments = db.execute('SELECT * FROM workspace_display_assignments ORDER BY workspace_id, view_id, instance_id').fetchall()
         receipts = db.execute('SELECT * FROM workspace_display_transfer_receipts ORDER BY workspace_id, request_id').fetchall()
         bindings = db.execute('SELECT * FROM workspace_application_thread_bindings ORDER BY workspace_id, instance_id').fetchall()
+        workspaces = db.execute('SELECT workspace_id, label, root_ref, subpath, state, created_at FROM workspaces ORDER BY workspace_id').fetchall()
+        usage = dict(db.execute('SELECT workspace_id, last_used_at FROM workspaces'))
     return {'workspace': identity, 'ledger': ledger, 'checkpoint': workspace_checkpoint(database),
         'layout': client_layout(state / 'workspace.db.client', identity), 'assignments': assignments,
-        'receipts': receipts, 'bindings': bindings}
+        'receipts': receipts, 'bindings': bindings, 'workspaces': workspaces, 'usage': usage}
+
+
+def owner_records(project, state, mode):
+    probe = project / 'src/componentproof'
+    probe.mkdir(exist_ok=True)
+    shutil.copyfile(ROOT / 'tests/fixtures/workspace_component/records.lua', probe / 'records.lua')
+    index = (ROOT / 'tests/fixtures/workspace_component/_index.yaml').read_text()
+    if not (project / 'modules/workspace').exists():
+        index = index.replace('bee.workspace.persist:', 'bee.storage:')
+    (probe / '_index.yaml').write_text(index)
+    result = subprocess.run([str(RUNTIME), 'run', '--verbose', '--host', 'bee:workers', '--set', f'registry.history_path={state / "probe-registry.db"}',
+        'workspace-component-records', mode], cwd=project, env=database_environment(state), capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0 and 'RESTORE OWNER RECORDS OPENABLE' in result.stdout + result.stderr, result.stdout + result.stderr
+    print(f'Owner records {mode}: catalog, assignments, committed receipt and active binding open through {project.name}', flush=True)
 
 
 def stopped(ui):
@@ -81,12 +99,40 @@ def stopped(ui):
 
 
 def native_boot(binary, folder, state, application=None):
+    started = time.monotonic()
     try:
         stopped(NativeDesktop(binary, folder, state, application=application))
     finally:
-        result = subprocess.run([str(binary), '--state', str(state), 'stop'], cwd=folder,
-            capture_output=True, text=True, timeout=60)
-        assert result.returncode == 0, result.stdout + result.stderr
+        try:
+            result = subprocess.run([str(binary), '--state', str(state), 'stop'], cwd=folder,
+                capture_output=True, text=True, timeout=60)
+            assert result.returncode == 0, result.stdout + result.stderr
+        finally:
+            for pid in live_owners(binary, state):
+                stop_owner(hold_owner(pid, binary, state))
+    print(f'Native {state.name}: Settings open and owner stopped in {time.monotonic() - started:.3f}s', flush=True)
+
+
+def restored_state(before, after):
+    assert before['workspace'] == after['workspace']
+    for key in ['ledger', 'workspaces', 'assignments', 'receipts', 'bindings']:
+        assert before[key] == after[key], key
+    for workspace, last_used in before['usage'].items():
+        assert after['usage'][workspace] >= last_used
+    previous, restored = before['checkpoint']['applications'], after['checkpoint']['applications']
+    assert previous and len(previous) == len(restored)
+    for left, right in zip(previous, restored):
+        for key in ['id', 'instance_id', 'definition_id', 'resume_schema', 'resume_state', 'restart_policy']:
+            assert left[key] == right[key], (key, left, right)
+    assert before['layout'][0] == after['layout'][0]
+    previous_layout, restored_layout = before['layout'][1], after['layout'][1]
+    assert restored_layout['scene']['revision'] >= previous_layout['scene']['revision']
+    previous_scene = {key: value for key, value in previous_layout['scene'].items() if key != 'revision'}
+    restored_scene = {key: value for key, value in restored_layout['scene'].items() if key != 'revision'}
+    assert previous_scene == restored_scene, (previous_scene, restored_scene)
+    previous_values = {key: value for key, value in previous_layout.items() if key != 'scene'}
+    restored_values = {key: value for key, value in restored_layout.items() if key != 'scene'}
+    assert previous_values == restored_values, (previous_values, restored_values)
 
 
 def recovery(binary, evidence):
@@ -103,26 +149,20 @@ def recovery(binary, evidence):
         old_state = folder / 'old-state'
         old_state.mkdir()
         stopped(Desktop(old_state, project=origin, runtime=RUNTIME, apps=('bee.settings.app:app',)))
+        owner_records(origin, old_state, 'seed')
         before = snapshot(old_state)
+        assert len(before['workspaces']) >= 2
+        for key in ['assignments', 'receipts', 'bindings']:
+            assert before[key], f'empty baseline {key}'
         native_boot(binary, folder, old_state)
         after = snapshot(old_state)
-        assert before['workspace'] == after['workspace']
-        for key in ['ledger', 'assignments', 'receipts', 'bindings']:
-            assert before[key] == after[key], key
-        previous, restored = before['checkpoint']['applications'], after['checkpoint']['applications']
-        assert previous and len(previous) == len(restored)
-        for left, right in zip(previous, restored):
-            for key in ['id', 'instance_id', 'definition_id', 'resume_schema', 'resume_state', 'restart_policy']:
-                assert left[key] == right[key], (key, left, right)
-        assert before['layout'][0] == after['layout'][0]
-        previous_layout, restored_layout = before['layout'][1], after['layout'][1]
-        assert restored_layout['scene']['revision'] >= previous_layout['scene']['revision']
-        previous_scene = {key: value for key, value in previous_layout['scene'].items() if key != 'revision'}
-        restored_scene = {key: value for key, value in restored_layout['scene'].items() if key != 'revision'}
-        assert previous_scene == restored_scene, (previous_scene, restored_scene)
-        previous_values = {key: value for key, value in previous_layout.items() if key != 'scene'}
-        restored_values = {key: value for key, value in restored_layout.items() if key != 'scene'}
-        assert previous_values == restored_values, (previous_values, restored_values)
+        restored_state(before, after)
+        with fixture_workspace(unit_tests=False) as upgraded:
+            owner_records(upgraded, old_state, 'verify')
+            native_boot(binary, folder, old_state)
+            restarted = snapshot(old_state)
+            restored_state(before, restarted)
+            owner_records(upgraded, old_state, 'verify')
         fresh_state = folder / 'fresh-state'
         native_boot(binary, folder, fresh_state, application='bee.settings.app:app')
         fresh_before = snapshot(fresh_state)
@@ -131,7 +171,10 @@ def recovery(binary, evidence):
         assert fresh_before['workspace'] == fresh_after['workspace']
         assert fresh_before['ledger'] == fresh_after['ledger']
         result = {'baseline': commit, 'workspace': after['workspace'], 'migration_count': len(after['ledger']),
-            'old_state_restore': True, 'fresh_state_restart': True, 'checkpoint_layout_ids_preserved': True}
+            'old_state_restore': True, 'old_state_second_restart': True, 'fresh_state_restart': True,
+            'checkpoint_layout_ids_preserved': True, 'owner_records_openable': True,
+            'checkpoint_count': len(after['checkpoint']['applications']),
+            'row_counts': {key: len(after[key]) for key in ['workspaces', 'assignments', 'receipts', 'bindings']}}
         (evidence / 'workspace-component.json').write_text(json.dumps(result, indent=2) + '\n')
     print('Standalone: fresh-state restart and origin/main checkpoint/layout/ledger/identity restore pass', flush=True)
 

@@ -135,8 +135,8 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
         and grant.resource == "threads" and scope.scope == "owned" then
         return {id = id, kind = "security.policy", meta = {comment = "Host-generated owned thread read grant"},
             data = {policy = {actions = {"funcs.call"},
-                resources = {"bee.threads.service:get", "bee.threads.service:list",
-                    "bee.threads.service:read_after"}, effect = "allow"}}}, nil, nil, nil
+                resources = {"bee.threads.binding:get", "bee.threads.binding:list",
+                    "bee.threads.binding:read_after"}, effect = "allow"}}}, nil, nil, nil
     end
     if (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write")
         and (grant.operation == "files.read" or grant.operation == "files.write")
@@ -162,7 +162,7 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
         and grant.resource == "threads" and scope.scope == "children" then
         return {id = id, kind = "security.policy", meta = {comment = "Host-generated child thread message grant"},
             data = {policy = {actions = {"funcs.call"},
-                resources = {"bee.threads.service:send", "bee.threads.service:notify"},
+                resources = {"bee.threads.binding:send", "bee.threads.binding:notify"},
                 effect = "allow"}}}, nil, nil, nil
     end
     if grant.capability == "agents.launch" and grant.operation == "agents.launch"

@@ -169,7 +169,7 @@ local function prepare_host(port: string, codex: string)
     admit("bee.credentials:credential_sources", "sources", {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "codex", projection_kinds = {"environment"}}, function(item: Object): boolean return item.ref == SOURCE end)
 end
 local function thread(): string
-    local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Codex path"})
+    local created = call("bee.threads.binding:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Codex path"})
     if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
     return created.thread_id
 end
@@ -215,7 +215,7 @@ local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
     for _ = 1, 32 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
         if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
@@ -275,7 +275,7 @@ local function define_tests()
                 local resources = principals.objects(first.resources)
                 first.resources = resources
                 resources[#resources + 1] = {name = "session", grant_ref = "host-session", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
-                local first_result = await_carrier(spawn_carrier("bee.harness.carrier:process", first, "open", nil), "first native turn")
+                local first_result = await_carrier(spawn_carrier("bee.harness.service:carrier", first, "open", nil), "first native turn")
                 if not first_result.value then error("first native turn: " .. tostring(first_result.error)) end
                 local first_settlement = assert(bounds.object(first_result.value.settlement))
                 test.eq(first_settlement.outcome, "succeeded")
@@ -291,7 +291,7 @@ local function define_tests()
                 second.previous_attempt_id = first_id
                 second.resources = resources
                 second.brief = "Second native prompt"
-                local second_result = await_carrier(spawn_carrier("bee.harness.carrier:process", second, "open", nil), "second native turn")
+                local second_result = await_carrier(spawn_carrier("bee.harness.service:carrier", second, "open", nil), "second native turn")
                 if not second_result.value then error("second native turn: " .. tostring(second_result.error)) end
                 local second_settlement = assert(bounds.object(second_result.value.settlement))
                 test.eq(second_settlement.outcome, "succeeded")
@@ -341,7 +341,7 @@ local function define_tests()
                 shell("rm -rf " .. root)
                 error("the configured Codex executable requires placement stdin_close")
             end
-            local pid = spawn_carrier("bee.harness.carrier:process", launch_request, "open", nil)
+            local pid = spawn_carrier("bee.harness.service:carrier", launch_request, "open", nil)
             -- The late write goes in once the endpoint has recorded the
             -- request, while the child waits on the held answer.
             local requested = false
@@ -400,12 +400,12 @@ local function define_tests()
             apply(provider)
             local resumed = await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", changed_request, "resume", nil), "changed provider")
             if resumed.value then
-                local stored = call("bee.threads.carrier:checkpoint", {thread_id = changed_thread, attempt_id = changed_attempt})
+                local stored = call("bee.threads.binding:checkpoint", {thread_id = changed_thread, attempt_id = changed_attempt})
                 error("changed provider resumed: " .. json.encode(resumed.value):sub(1, 700)
                     .. "; crash " .. tostring(crashed.error) .. "; stored " .. json.encode(stored):sub(1, 700))
             end
             if not tostring(resumed.error):find("no longer digests as recorded", 1, true) then
-                local stored = call("bee.threads.carrier:checkpoint", {thread_id = changed_thread, attempt_id = changed_attempt})
+                local stored = call("bee.threads.binding:checkpoint", {thread_id = changed_thread, attempt_id = changed_attempt})
                 error("resume did not refuse the changed provider: " .. tostring(resumed.error) .. "; crash " .. tostring(crashed.error) .. "; stored " .. json.encode(stored):sub(1, 600))
             end
             provider_data.model = previous_model
@@ -415,7 +415,7 @@ local function define_tests()
             -- credential, so it must fail without materializing provider data.
             local bare_attempt = fresh("attempt")
             local endpoint_before = shell("cat " .. record)
-            local bare = await_carrier(spawn_carrier("bee.harness.carrier:process", request(thread(), bare_attempt, BARE_POLICY, {}), "open", nil), "bare policy")
+            local bare = await_carrier(spawn_carrier("bee.harness.service:carrier", request(thread(), bare_attempt, BARE_POLICY, {}), "open", nil), "bare policy")
             if not bare.value then error("bare policy did not settle: " .. tostring(bare.error)) end
             test.eq((assert(bounds.object(bare.value.settlement))).outcome, "failed")
             local bare_kinds = evidence_kinds(bare_attempt)

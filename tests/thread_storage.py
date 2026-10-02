@@ -14,6 +14,17 @@ from workspace import ROOT, RUNTIME
 # subscription stays absent after restart.
 PROBE = r'''
 local contract = require("contract")
+local function object(value: unknown): {[string]: unknown}
+    assert(type(value) == "table", "fixture value must be an object")
+    return value
+end
+local function objects(value: unknown): {{[string]: unknown}}
+    assert(type(value) == "table", "fixture value must be an array")
+    local result: {{[string]: unknown}} = {}
+    for index, item in ipairs(value) do result[index] = object(item) end
+    return result
+end
+
 local sql = require("sql")
 local uuid = require("uuid")
 local io = require("io")
@@ -23,10 +34,10 @@ local function key(): string
     if err or not id then error("uuid: " .. tostring(err)) end
     return id
 end
-local function call(binding: any, method: string, request: {[string]: unknown}): {[string]: unknown}
-    local reply = assert(binding[method](binding, request))
-    assert(type(reply) == "table" and reply.ok == true, method .. " failed: " .. tostring(reply.error and reply.error.code) .. "/" .. tostring(reply.error and reply.error.message))
-    return reply.value :: {[string]: unknown}
+local function call(raw: unknown, method: string): {[string]: unknown}
+    local reply = object(raw)
+    assert(type(reply) == "table" and reply.ok == true, method .. " failed: " .. tostring(reply.error and object(reply.error).code) .. "/" .. tostring(reply.error and object(reply.error).message))
+    return object(reply.value)
 end
 local function main(phase: string?, sub: string?, cursor: string?)
     local before, before_error = sql.get("bee.threads:db")
@@ -34,27 +45,27 @@ local function main(phase: string?, sub: string?, cursor: string?)
     local authority = assert(contract.open("bee.threads:authority_local"))
     local delivery = assert(contract.open("bee.threads:delivery_local"))
     if phase == "prepare" then
-        call(authority, "create", {thread_id = THREAD, idempotency_key = key(), title = "Lifecycle"})
+        call(authority:create({thread_id = THREAD, idempotency_key = key(), title = "Lifecycle"}), "create")
         for i = 1, 5 do
-            call(authority, "record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
-                body = {message_id = "m" .. tostring(i), message_kind = "request", recipient_ids = {}, content = {text = "line " .. tostring(i)}}})
+            call(authority:record({thread_id = THREAD, idempotency_key = key(), kind = "message",
+                body = {message_id = "m" .. tostring(i), message_kind = "request", recipient_ids = {}, content = {text = "line " .. tostring(i)}}}), "record")
         end
-        local created = call(delivery, "subscribe", {thread_id = THREAD, idempotency_key = key(), consumer_id = "durable", after_sequence = 0, durability = "durable"})
-        local page = call(delivery, "page", {thread_id = THREAD, subscription_id = created.subscription_id})
-        call(delivery, "ack_page", {thread_id = THREAD, idempotency_key = key(), subscription_id = created.subscription_id, page_id = page.page_id, scanned_through = page.scanned_through})
-        call(delivery, "close_subscription", {thread_id = THREAD, idempotency_key = key(), subscription_id = created.subscription_id})
+        local created = call(delivery:subscribe({thread_id = THREAD, idempotency_key = key(), consumer_id = "durable", after_sequence = 0, durability = "durable"}), "subscribe")
+        local page = call(delivery:page({thread_id = THREAD, subscription_id = created.subscription_id}), "page")
+        call(delivery:ack_page({thread_id = THREAD, idempotency_key = key(), subscription_id = created.subscription_id, page_id = page.page_id, scanned_through = page.scanned_through}), "ack_page")
+        call(delivery:close_subscription({thread_id = THREAD, idempotency_key = key(), subscription_id = created.subscription_id}), "close_subscription")
         io.print("SUB=" .. tostring(created.subscription_id) .. " CURSOR=" .. tostring(page.scanned_through))
     elseif phase == "resume" then
         local expected = math.floor(tonumber(cursor) or -1)
-        local resumed = call(delivery, "resume", {thread_id = THREAD, idempotency_key = key(), subscription_id = sub})
+        local resumed = call(delivery:resume({thread_id = THREAD, idempotency_key = key(), subscription_id = sub}), "resume")
         assert(resumed.after_sequence == expected, "cursor not preserved across restart")
         assert(resumed.lease_generation == 2, "resume did not fence the old lease")
-        local page = call(delivery, "page", {thread_id = THREAD, subscription_id = sub})
+        local page = call(delivery:page({thread_id = THREAD, subscription_id = sub}), "page")
         assert(page.from_sequence == expected, "resumed page did not start at the preserved cursor")
         io.print("RESUMED")
     elseif phase == "forget" then
-        call(delivery, "close_subscription", {thread_id = THREAD, idempotency_key = key(), subscription_id = sub})
-        call(delivery, "forget_subscription", {thread_id = THREAD, idempotency_key = key(), subscription_id = sub})
+        call(delivery:close_subscription({thread_id = THREAD, idempotency_key = key(), subscription_id = sub}), "close_subscription")
+        call(delivery:forget_subscription({thread_id = THREAD, idempotency_key = key(), subscription_id = sub}), "forget_subscription")
         io.print("FORGOTTEN")
     elseif phase == "verify" then
         local reply = assert(delivery:page({thread_id = THREAD, subscription_id = sub}))
@@ -93,7 +104,7 @@ def main():
 
         def run(*arguments, ok=True):
             registry = folder / f"registry-{arguments[0]}.db"
-            result = subprocess.run([str(RUNTIME), "run", "lifecycle-probe", *arguments, "--set", f"registry.history_path={registry}"],
+            result = subprocess.run([str(RUNTIME), "run", "--host", "bee:terminal", "lifecycle-probe", *arguments, "--set", f"registry.history_path={registry}"],
                                     cwd=folder, env=environment, capture_output=True, text=True, timeout=30)
             output = result.stdout + result.stderr
             assert (result.returncode == 0) == ok, output

@@ -20,7 +20,7 @@ local function principal(actor: string, write: boolean): funcs.Executor
 end
 
 local function call(client: funcs.Executor, request: unknown): Object
-    local raw, err = client:call("bee.harness.profiles:call", request)
+    local raw, err = client:call("bee.harness.binding:call", request)
     assert(not err, tostring(err))
     local reply = bounds.object(raw)
     assert(reply, "malformed profile reply")

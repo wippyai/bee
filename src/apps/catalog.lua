@@ -10,7 +10,7 @@ local M = {}
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
 type Follower = {observed: string?}
-type Selection = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor}}
+type Selection = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor}, codes: {[string]: string}?}
 
 local function decode_entry(raw: unknown): Entry?
     local entry = bounds.object(raw)
@@ -66,6 +66,39 @@ function M.descriptor(id: string, pinned: registry.Snapshot?): contract.Descript
     return descriptor(id, {[id] = decoded})
 end
 
+-- Execution identity includes imported Lua libraries, whose bytes are retained
+-- by an already running producer even when its application revision is unchanged.
+function M.code(pinned: registry.Snapshot, id: string): string
+    local seen: {[string]: boolean} = {}
+    local parts: {string} = {}
+    local function visit(target: string): ()
+        if seen[target] then return end
+        seen[target] = true
+        if #parts >= 1024 then error("Application code dependency capacity exceeded") end
+        local entry = decode_entry(pinned:get(target))
+        if not entry then error("Application code dependency is unavailable: " .. target) end
+        if target ~= id and entry.kind ~= "library.lua" then return end
+        local config: Object = {}
+        for key, value in pairs(entry.data) do
+            if key ~= "source" then config[key] = value end
+        end
+        local source = entry.data.source
+        if type(source) ~= "string" then error("Application code source is unavailable: " .. target) end
+        local encoded = assert(canonical.encode(config, 65536))
+        parts[#parts + 1] = target .. ":" .. entry.kind .. ":" .. assert(hash.sha256(source)) .. ":" .. assert(hash.sha256(encoded))
+        local imports = bounds.object(entry.data.imports)
+        if imports then
+            for _, imported in pairs(imports) do
+                if type(imported) ~= "string" then error("Invalid application code import") end
+                visit(imported)
+            end
+        end
+    end
+    visit(id)
+    table.sort(parts)
+    return assert(hash.sha256(table.concat(parts, "\n")))
+end
+
 -- Durable registry edits and activation overlay revisions both invalidate the
 -- broker's admission projection. The latter does not advance registry history.
 function M.revision(workspace_id: string): string
@@ -83,7 +116,21 @@ function M.revision(workspace_id: string): string
     if not encoded then error("Encode application admission revision: " .. tostring(encode_error)) end
     local fingerprint, digest_error = hash.sha256(encoded)
     if not fingerprint then error("Hash application admission revision: " .. tostring(digest_error)) end
-    return version:string() .. ":" .. fingerprint .. ":" .. application_admissions.revision(workspace_id, node_id)
+    -- Revision discovery still invalidates malformed admission; read owns its
+    -- validation and withdraws the catalog rather than retaining old authority.
+    local code_fingerprint = "unavailable"
+    local code_ok, observed_code = pcall(function(): string
+        local codes: {string} = {}
+        local selected = M.read(workspace_id, pinned)
+        for definition_id, code in pairs(assert(selected.codes)) do
+            codes[#codes + 1] = definition_id .. ":" .. code
+        end
+        table.sort(codes)
+        return assert(hash.sha256(table.concat(codes, ":")))
+    end)
+    if code_ok then code_fingerprint = observed_code end
+    return version:string() .. ":" .. fingerprint .. ":" .. code_fingerprint
+        .. ":" .. application_admissions.revision(workspace_id, node_id)
 end
 
 local function items(bindings: {contract.Binding}, pinned: registry.Snapshot): {contract.Descriptor}
@@ -127,9 +174,9 @@ end
 -- Overlays change the effective catalog without advancing registry history.
 -- Compare the bounded admission/presentation values captured in one snapshot;
 -- source code and unrelated registry entries are not serialized here.
-function M.read(workspace_id: string): Selection
+function M.read(workspace_id: string, snapshot: registry.Snapshot?): Selection
     if not contract.workspace_id(workspace_id) then error("Invalid application catalog workspace") end
-    local pinned = assert(registry.snapshot())
+    local pinned = snapshot or assert(registry.snapshot())
     local revision = pinned:version():string()
     local function lookup(id: string): Entry?
         local entry = pinned:get(id)
@@ -175,8 +222,11 @@ function M.read(workspace_id: string): Selection
         return left.definition_id < right.definition_id
     end)
     table.sort(evidence)
+    local selected_items = items(bindings, pinned)
+    local codes: {[string]: string} = {}
+    for _, item in ipairs(selected_items) do codes[item.definition_id] = M.code(pinned, item.definition_id) end
     return {revision = revision, evidence = table.concat(evidence, ":"), bindings = bindings,
-        items = items(bindings, pinned)}
+        items = selected_items, codes = codes}
 end
 
 local function open_target(selection: Selection?, definition_id: string): (contract.Binding?, contract.Descriptor?)
@@ -222,21 +272,17 @@ function M.same(a: Selection, b: Selection): boolean
     end
     for i, left in ipairs(a.items) do
         local right = b.items[i]
-        if left.definition_id ~= right.definition_id or left.definition_revision ~= right.definition_revision
+        if (a.codes and a.codes[left.definition_id]) ~= (b.codes and b.codes[right.definition_id])
+            or left.definition_id ~= right.definition_id or left.definition_revision ~= right.definition_revision
             or left.title ~= right.title or left.icon ~= right.icon or left.group ~= right.group
             or left.role ~= right.role or left.singleton ~= right.singleton
             or left.resume_schema ~= right.resume_schema or left.restart_policy ~= right.restart_policy then return false end
     end
     return true
 end
--- Only an exact compatible automatic definition update may replace a running
--- application through recovery. Incompatible checkpoints stay live until the
--- person closes them; the catalog itself grants no destructive authority.
-function M.replaces(running: contract.Descriptor, replacement: contract.Descriptor?): boolean
-    return replacement ~= nil and running.restart_policy == "automatic"
-        and replacement.restart_policy == "automatic"
-        and replacement.resume_schema == running.resume_schema
-        and replacement.definition_revision ~= running.definition_revision
+function M.replaces(running: contract.Descriptor, replacement: contract.Descriptor?, running_code: string?, replacement_code: string?): boolean
+    return replacement ~= nil and (replacement.definition_revision ~= running.definition_revision
+        or running_code ~= replacement_code)
 end
 -- A revision follower applies each observed revision through a refresh. The
 -- observed revision advances only when the refresh succeeds, so a refresh that

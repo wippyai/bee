@@ -28,7 +28,7 @@ local function main()
     if not callback then error("fixture callback missing") end
     local selected: Object? = nil
     for _ = 1, 100 do
-        local raw, err = funcs.call("bee.gateway:address", {})
+        local raw, err = funcs.call("bee.gateway.binding:address", {})
         if not err and type(raw) == "table" then selected = assert(bounds.object(raw)); break end
         time.sleep("20ms")
     end
@@ -37,7 +37,7 @@ local function main()
     for _, url in ipairs({"http://" .. address .. "/mcp/other", "http://" .. address .. "/ready/extra", "http://" .. address .. "/ready?extra=1", "http://example.invalid/ready"}) do
         if security.can("http_client.request", url) then error("readiness policy grants an unrelated URL") end
     end
-    call("bee.threads.service:create", {thread_id = "container-thread", idempotency_key = "create", title = "Container gateway proof"})
+    call("bee.threads.binding:create", {thread_id = "container-thread", idempotency_key = "create", title = "Container gateway proof"})
     local admitted = call("bee.gateway.binding:admit", {subject = "bee.test.container", action_id = "container-action", attempt_id = "container-attempt",
         thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "capabilities"}, hooks = {"SessionStart"}, ttl_ms = 120000})
     local binding = assert(bounds.object(admitted.binding))

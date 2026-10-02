@@ -89,7 +89,7 @@ local function run()
                 test.neq(address, "127.0.0.1:0")
                 local replay = configuration.endpoint()
                 test.eq(replay, address)
-                local supplied, supplied_error = funcs.call("bee.gateway:address", {address = "127.0.0.1:1"})
+                local supplied, supplied_error = funcs.call("bee.gateway.binding:address", {address = "127.0.0.1:1"})
                 test.is_true(supplied == nil)
                 test.is_true(supplied_error ~= nil)
                 -- A real listener on another loopback interface exercises

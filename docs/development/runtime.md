@@ -8,7 +8,9 @@ runtime. Bee does not vendor a runtime source directory.
 Bee builds from unpatched runtime main; the manifest lists no patches. `make setup` and standalone builds use the same builder
 and manifest. Wippy owns application deployment, Hub resolution, command
 dispatch, state opening and shutdown; Bee registers its native components
-through Wippy boot.
+through Wippy boot. Bee uses the public Lua SQL error text for owned stores.
+The current pin does not expose numeric SQLite result codes in Lua. Runtime [PR #891](https://github.com/wippyai/runtime/pull/891) adds `sqlite_code` and `sqlite_extended_code` to
+`err:details()`; numeric codes arrive when Bee adopts that runtime release.
 
 ## Toolchain currency
 

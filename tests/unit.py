@@ -1,6 +1,7 @@
 """Run every registered Lua test entry in four isolated, balanced processes."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack
+import os
 import re
 import subprocess
 import time
@@ -16,7 +17,9 @@ SLOW = {
     "bee.harness.catalog:launch_test": 390.0,
     "bee.harness.catalog:permission_carrier_test": 125.0,
     "bee.harness.catalog:gateway_carrier_test": 60.0,
-    "bee.harness.catalog:carrier_test": 40.0,
+    "bee.harness.catalog:carrier_test": 80.0,
+    "bee.harness.catalog:carrier_stream_test": 90.0,
+    "bee.harness.catalog:carrier_drain_test": 65.0,
     "bee.placement.native:native_test": 25.0,
 }
 DEFAULT_WEIGHT = 1.0
@@ -84,6 +87,9 @@ def report_shard(result):
 
 
 def main():
+    jobs = int(os.environ.get("BEE_TEST_JOBS", SHARDS))
+    if not 1 <= jobs <= SHARDS:
+        raise ValueError(f"BEE_TEST_JOBS must be between 1 and {SHARDS}")
     entries = test_entries()
     groups = split(entries)
     with ExitStack() as fixtures:
@@ -91,7 +97,7 @@ def main():
         # Retain the unfiltered strict lint before any test process starts.
         fixture_lint(folders[0])
         results = []
-        with ThreadPoolExecutor(max_workers=SHARDS) as executor:
+        with ThreadPoolExecutor(max_workers=jobs) as executor:
             jobs = [executor.submit(run_shard, index, folders[index], group)
                     for index, group in enumerate(groups)]
             for job in as_completed(jobs):

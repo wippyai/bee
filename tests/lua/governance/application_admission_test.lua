@@ -206,7 +206,7 @@ local function define_tests()
             binding.policies = {"bee:ordinary-policy", id}
             value.overlay_ids = {[id] = true}
             value.generated_policies = {{id = id, kind = "security.policy",
-                data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.service:get"},
+                data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.binding:get"},
                     effect = "allow"}}}}
             local projected = assert(admission.project(value))
             test.eq(#projected.record.bindings[1].policies, 2)

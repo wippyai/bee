@@ -51,15 +51,12 @@ def exercise(args, scratch, phase):
         ui.open_start()
         ui.choose("Settings")
         ui.wait("BEE SETTINGS", timeout=30)
-        if any("╭─ Settings " in line and "□" in line for line in ui.screen.display):
-            ui.window_control("□")
-        ui.wait_until(lambda: "▣ Settings" in ui.screen.display[0], "Settings maximized")
         tab("About", "Themes")
         ui.wait("BEE SETTINGS · ABOUT", timeout=30)
         ui.wait("bee/bee  installed", timeout=180)
         ui.wait(expected, timeout=180)
         if marker:
-            ui.wait(args.marker, timeout=30)
+            ui.wait(getattr(args, "code_marker", args.marker), timeout=30)
         frame(name)
 
     try:
@@ -75,6 +72,8 @@ def exercise(args, scratch, phase):
         print(f"{phase}: owner PID {pid}; client PID {ui.process.pid}", flush=True)
         if phase == "live":
             about("01-baseline-about", "update available")
+            if getattr(args, "baseline_code_marker", None):
+                ui.wait(args.baseline_code_marker, timeout=30)
             assert f"installed {args.from_version}" in ui.text(), ui.text()
             assert f"Hub {args.to_version}" in ui.text(), ui.text()
             # Keep this Settings/About application across the update. Modules
@@ -83,9 +82,6 @@ def exercise(args, scratch, phase):
             for item in ("Apps", "Advanced", "Modules"):
                 ui.choose(item)
             ui.wait("MODULES", timeout=30)
-            if any("╭─ Modules " in line and "□" in line for line in ui.screen.display):
-                ui.window_control("□")
-            ui.wait_until(lambda: "▣ Modules" in ui.screen.display[0], "Modules maximized")
             tab("Installed", "Installed")
             ui.wait("MODULES  INSTALLED", timeout=30)
             ui.wait("Update Bee", timeout=180)
@@ -110,11 +106,11 @@ def exercise(args, scratch, phase):
             (args.evidence / "live.pids.json").write_text(json.dumps(pids) + "\n")
             print(f"Apply returned: owner PID before {pid}; after {after[0]}", flush=True)
             assert "Completed:" in ui.text() and "Receipt state: complete" in ui.text(), ui.text()
-            assert "▣ Modules" in ui.screen.display[0], ui.text()
-            ui.window_control("×")
+            ui.key(b"\x17")
             ui.wait("BEE SETTINGS · ABOUT", timeout=30)
             ui.key(b"r")
             ui.wait(f"installed {args.to_version}", timeout=180)
+            ui.wait(getattr(args, "code_marker", args.marker), timeout=30)
             frame("06-live-about")
             assert live_owners(args.binary, state) == [pid] and not owner.exited()
         else:
@@ -151,6 +147,8 @@ def exercise(args, scratch, phase):
             ui.close()
         if owner is not None:
             stop_owner(owner)
+        for pid in live_owners(args.binary, state):
+            stop_owner(hold_owner(pid, args.binary, state))
 
 
 def main():

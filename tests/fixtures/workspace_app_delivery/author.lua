@@ -54,7 +54,7 @@ end
 
 local function listener_ready()
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.binding:address", {})
         local address = not address_error and bounds.object(raw) or nil
         if address and type(address.address) == "string" then return end
         time.sleep("100ms")
@@ -85,7 +85,7 @@ end
 local function agent_report(): Object?
     local cursor = 0
     for _ = 1, 64 do
-        local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
         for _, raw in ipairs(assert(bounds.array((page.records or {})))) do
             local record = bounds.object(raw)
             local body = record and bounds.object(record.body)
@@ -115,12 +115,12 @@ local function main()
     local brief = required("bee.workspace.app.probe:brief")
     bind(workspace_id)
     listener_ready()
-    local plan = call("bee.harness.launch:resolve", {definition_ref = DEFINITION})
-    reply("bee.harness.launch:setup", {workspace_id = workspace_id, definition_ref = DEFINITION,
+    local plan = call("bee.harness.binding:resolve", {definition_ref = DEFINITION})
+    reply("bee.harness.binding:setup", {workspace_id = workspace_id, definition_ref = DEFINITION,
         expected_plan_digest = plan.plan_digest})
-    call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "create-" .. THREAD,
+    call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = "create-" .. THREAD,
         title = "Tally, from its written spec"})
-    local started = call("bee.harness.launch:start", {request_id = "workspace-app-author",
+    local started = call("bee.harness.binding:start", {request_id = "workspace-app-author",
         definition_ref = DEFINITION, workspace_id = workspace_id, thread_id = THREAD, brief = brief})
     await_exit(tostring(started.carrier))
     local report = agent_report()

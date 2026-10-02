@@ -11,7 +11,7 @@ local function make_request(operation_ref: string, input: {[string]: unknown}): 
     local digest, err = types.digest(input)
     if not digest then error("digest failed: " .. tostring(err)) end
     local colon = operation_ref:find(":", 1, true)
-    local ns = colon and operation_ref:sub(1, colon - 1) or "bee.hive.telemetry"
+    local ns = colon and operation_ref:sub(1, colon - 1) or "bee.hive.telemetry.binding"
     local raw = {
         protocol_revision = types.REVISION,
         request_id = "req-1",
@@ -77,7 +77,7 @@ local function define_tests()
     test.describe("Hive telemetry dispatch execution", function()
         test.it("successfully dispatches reviewed open telemetry operations", function()
             -- 1. stats
-            local req_stats = make_request("bee.hive.telemetry:stats", {})
+            local req_stats = make_request("bee.hive.telemetry.binding:stats", {})
             local rep_stats = dispatch.dispatch(req_stats)
             test.is_true(rep_stats.ok)
             test.is_nil(rep_stats.error)
@@ -93,7 +93,7 @@ local function define_tests()
             end
 
             -- 2. presence
-            local req_pres = make_request("bee.hive.telemetry:presence", {})
+            local req_pres = make_request("bee.hive.telemetry.binding:presence", {})
             local rep_pres = dispatch.dispatch(req_pres)
             test.is_true(rep_pres.ok)
             test.is_nil(rep_pres.error)
@@ -106,7 +106,7 @@ local function define_tests()
             end
 
             -- 3. catalog_list
-            local req_cat = make_request("bee.hive.telemetry:catalog_list", {})
+            local req_cat = make_request("bee.hive.telemetry.binding:catalog_list", {})
             local rep_cat = dispatch.dispatch(req_cat)
             test.is_true(rep_cat.ok)
             test.is_nil(rep_cat.error)
@@ -119,7 +119,7 @@ local function define_tests()
         end)
 
         test.it("rejects request with wrong owner service id", function()
-            local req = make_request("bee.hive.telemetry:stats", {})
+            local req = make_request("bee.hive.telemetry.binding:stats", {})
             req.owner_ref = {node_id = "forge", service_id = "bee.wrong_service"}
             local rep = dispatch.dispatch(req)
             test.is_false(rep.ok)
@@ -130,8 +130,8 @@ local function define_tests()
         end)
 
         test.it("rejects request when resource_ref is present (node telemetry only)", function()
-            local req = make_request("bee.hive.telemetry:stats", {})
-            req.owner_ref = {node_id = "forge", service_id = "bee.hive.telemetry", resource_ref = "cpu-core-0"}
+            local req = make_request("bee.hive.telemetry.binding:stats", {})
+            req.owner_ref = {node_id = "forge", service_id = "bee.hive.telemetry.binding", resource_ref = "cpu-core-0"}
             local rep = dispatch.dispatch(req)
             test.is_false(rep.ok)
             test.not_nil(rep.error)
@@ -141,7 +141,7 @@ local function define_tests()
         end)
 
         test.it("rejects request with operation revision mismatch", function()
-            local req = make_request("bee.hive.telemetry:stats", {})
+            local req = make_request("bee.hive.telemetry.binding:stats", {})
             req.operation_revision = "999"
             local rep = dispatch.dispatch(req)
             test.is_false(rep.ok)
@@ -152,7 +152,7 @@ local function define_tests()
         end)
 
         test.it("rejects request with input digest mismatch", function()
-            local req = make_request("bee.hive.telemetry:catalog_list", {after_operation_ref = "bee:some_other_op"})
+            local req = make_request("bee.hive.telemetry.binding:catalog_list", {after_operation_ref = "bee:some_other_op"})
             -- Alter the digest so it no longer matches the input
             req.input_digest = "0000000000000000000000000000000000000000000000000000000000000000"
             local rep = dispatch.dispatch(req)
@@ -209,7 +209,7 @@ local function define_tests()
         end)
 
         test.it("enforces host ceiling denial when exposure policy is absent", function()
-            local req = make_request("bee.hive.telemetry:stats", {})
+            local req = make_request("bee.hive.telemetry.binding:stats", {})
             -- Scope has catalog access but NOT hive_exposure_policy
             local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_dispatch_policy"}, req)
             test.is_false(rep.ok)
@@ -220,7 +220,7 @@ local function define_tests()
         end)
 
         test.it("enforces narrow dispatch policy requirement on funcs.call", function()
-            local req = make_request("bee.hive.telemetry:stats", {})
+            local req = make_request("bee.hive.telemetry.binding:stats", {})
             -- Scope has exposure policy and catalog policy, but NOT hive_dispatch_policy
             local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
                 "bee.security.hive:hive_telemetry_policy"}, req)
@@ -232,7 +232,7 @@ local function define_tests()
         end)
 
         test.it("succeeds under explicitly scoped narrow policies", function()
-            local req = make_request("bee.hive.telemetry:stats", {})
+            local req = make_request("bee.hive.telemetry.binding:stats", {})
             -- Scope has exactly the necessary policies
             local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
                 "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_telemetry_policy"}, req)
@@ -250,7 +250,7 @@ local function define_tests()
         end)
 
         test.it("admits the host ceiling through the exposure scope", function()
-            local req = make_request("bee.hive.telemetry:stats", {})
+            local req = make_request("bee.hive.telemetry.binding:stats", {})
             local scope = {"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_facade_policy",
                 "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_telemetry_policy"}
             local rep = call_scoped(scope, req)

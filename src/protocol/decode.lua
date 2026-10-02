@@ -37,6 +37,8 @@ function M.reply(value: unknown): Reply?
     local mount, code = contract.text(value.mount, 1024), contract.text(value.error_code, 80)
     if not request_id or not id or not instance or not title or not mount or not code
         or type(value.error) ~= "string" or #value.error > 4096 then return nil end
+    local notice = contract.text(value.notice, 160)
+    if value.notice ~= nil and not notice then return nil end
     local icon = contract.text(value.icon, 8)
     if value.icon ~= nil and not icon then return nil end
     local thread_id: string? = nil
@@ -48,7 +50,7 @@ function M.reply(value: unknown): Reply?
     local observer: boolean? = nil
     if value.observer == true then observer = true end
     return {version = 1, request_id = request_id, op = op, id = id, instance_id = instance, workspace_id = workspace_id, icon = icon, thread_id = thread_id,
-        title = title, mount = mount, error_code = code, error = value.error,
+        title = title, notice = notice, mount = mount, error_code = code, error = value.error,
         definition_id = contract.text(value.definition_id, 160) or "", resume_schema = contract.text(value.resume_schema, 80) or "",
         restart_policy = contract.text(value.restart_policy, 16) or "never",
         resume_state = type(value.resume_state) == "string" and #value.resume_state <= 65536 and value.resume_state or "",
@@ -96,6 +98,8 @@ local function window(value: unknown): model.Window?
     local mode = window_mode(value.mode)
     local restore = restore_mode(value.restore_mode)
     if not mode or not restore then return nil end
+    local notice = contract.text(value.notice, 160)
+    if value.notice ~= nil and not notice then return nil end
     local icon = contract.text(value.icon, 8)
     if value.icon ~= nil and not icon then return nil end
     local user_title = contract.text(value.user_title, 80)
@@ -104,16 +108,17 @@ local function window(value: unknown): model.Window?
     if value.accent ~= nil and selected_accent == nil then return nil end
     local workspace_id = contract.workspace_id(value.workspace_id)
     if value.workspace_id ~= nil and not workspace_id then return nil end
-    local side = value.snap_side
+    local side: unknown = value.snap_side
     local snap_side: string? = nil
-    if side == "left" or side == "right" then snap_side = side
+    if side == "left" then snap_side = "left"
+    elseif side == "right" then snap_side = "right"
     elseif side ~= nil then return nil end
     local ratio = value.snap_ratio
     local snap_ratio: number? = nil
     if type(ratio) == "number" and ratio > 0 and ratio <= 1 then snap_ratio = ratio
     elseif ratio ~= nil then return nil end
     if (snap_side == nil) ~= (snap_ratio == nil) then return nil end
-    return {id = value.id, instance_id = value.instance_id, workspace_id = workspace_id, title = value.title,
+    return {id = value.id, instance_id = value.instance_id, workspace_id = workspace_id, title = value.title, notice = notice,
         user_title = user_title, accent = selected_accent, icon = icon,
         bounds = bounds, normal_bounds = normal, mode = mode, restore_mode = restore,
         snap_side = snap_side, snap_ratio = snap_ratio}

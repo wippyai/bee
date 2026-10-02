@@ -41,4 +41,4 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    cluster: bee.hive.telemetry:cluster
+    cluster: bee.hive.telemetry.binding:cluster

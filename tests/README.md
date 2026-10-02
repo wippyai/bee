@@ -24,3 +24,11 @@ list back to its fixture field. Object guards retain the original record.
 
 Governance staging and activation share `bee.gov:resolver.Resolver`; the Hub
 and overlay implementations and typed fixtures use the same receiver interface.
+
+Carrier recovery, stream bursts and post-exit drain cases run as separate entries
+with the existing 180-second limit. Their monitored-exit collector drains queued
+exits before reporting a deadline, including exits delivered as the timer wins.
+The unit composition stages `fixtures/gateway_clock` and grants the gateway
+read access to its fixture instant. The expiry test selects the binding's exact
+expiry after the child presents its credential, then restores the clock; it
+uses the real HTTP authentication and placement enforcement paths.

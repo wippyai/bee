@@ -3,7 +3,6 @@ namespace: bee.sessions.service
 entries:
 - name: process_host
   kind: ns.requirement
-  default: bee:workers
   meta:
     comment: Host process tree that supervises the durable session scheduler
   targets:
@@ -11,9 +10,7 @@ entries:
     path: .host
 - name: scheduler_policies
   kind: ns.requirement
-  default: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy,
-    bee.security.threads:thread_node_policy, bee.security.threads:thread_sessions_owner_policy,
-    bee.sessions.security:scheduler_policy, bee.sessions.security:scheduler_principal_policy]
+  default: []
   meta:
     comment: Host-selected policy allowlist for the scheduler actor
   targets:
@@ -63,7 +60,6 @@ entries:
 - name: scheduler_service
   kind: process.service
   process: bee.sessions.service:scheduler_worker
-  host: bee:workers
   lifecycle:
     auto_start: true
     security:

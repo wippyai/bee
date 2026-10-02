@@ -31,11 +31,11 @@ local function define_tests()
     test.describe("Hive catalog", function()
         test.it("includes only operations the host ceiling admits", function()
             local full = probe({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.hive:probe_exposure_policy"})
-            test.is_true(has(full.operations, "bee.hive.telemetry:stats"))
+            test.is_true(has(full.operations, "bee.hive.telemetry.binding:stats"))
             test.is_true(has(full.operations, "bee.hive:probe_open"))
             test.is_true(has(full.interfaces, "bee.hive:probe_tool"))
             local narrow = probe({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy"})
-            test.is_true(has(narrow.operations, "bee.hive.telemetry:stats"))
+            test.is_true(has(narrow.operations, "bee.hive.telemetry.binding:stats"))
             test.is_false(has(narrow.operations, "bee.hive:probe_open"))
             test.is_false(has(narrow.interfaces, "bee.hive:probe_tool"))
             test.is_true(has(narrow.diagnostics, "bee.hive:probe_open: host ceiling denies open"))
@@ -124,7 +124,7 @@ local function define_tests()
             end
         end)
         test.it("re-resolves an operation at admission under the current ceiling", function()
-            local operation_ref = "bee.hive.telemetry:presence"
+            local operation_ref = "bee.hive.telemetry.binding:presence"
             local resolved, resolve_error = catalog.resolve(operation_ref)
             if not resolved then error(tostring(resolve_error)) end
             test.eq(resolved.mode, "open")

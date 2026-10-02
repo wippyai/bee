@@ -7,7 +7,7 @@ local bounds = require("bounds")
 
 local function base_request(): {[string]: unknown}
     return {
-        attempt_id = "attempt-current", claim = "claim-current", observation_target = "bee.threads.service:turn_observation",
+        attempt_id = "attempt-current", claim = "claim-current", observation_target = "bee.threads.binding:turn_observation",
         generation = 2, prompt = "continue the task",
         sender = {kind = "principal", id = "owner"}, driver_binding_ref = "bee.driver.fixture:binding", profile_id = "session",
         driver_methods = {prepare = "bee.driver.fixture.binding:prepare", dispatch = "bee.driver.fixture.binding:dispatch", normalize = "bee.driver.fixture.binding:normalize"},

@@ -85,18 +85,9 @@ entries:
     path: .lifecycle.security.groups
 - name: sweeper_policies
   kind: ns.requirement
+  default: []
   meta:
     comment: Host-selected policy grants for the supervision sweeper
-  default:
-  - bee.placement.native.security:placement_store_policy
-  - bee.placement.native.security:placement_exec_policy
-  - bee.placement.native.security:placement_service_policy
-  - bee.resources.security:resource_resolve_policy
-  - bee.credentials.security:credential_materialize_policy
-  - bee.placement.native.security:placement_sweeper_policy
-  - bee.security.gateway:gateway_supervision_policy
-  - bee.placement.docker.security:docker_policy
-  - bee.placement.docker.security:docker_socket_policy
   targets:
   - entry: bee.placement.docker.service:sweeper_service
     path: .lifecycle.security.policies
@@ -172,3 +163,47 @@ entries:
   targets:
   - entry: bee.placement.docker.service:image_owner_service
     path: .lifecycle.security.policies
+- name: target_prepare_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.placement.docker.binding:prepare
+    path: .security.policies
+  - entry: bee.placement.docker.binding:prepare_environment
+    path: .security.policies
+- name: target_start_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.placement.docker.binding:start
+    path: .security.policies
+  - entry: bee.placement.docker.binding:status
+    path: .security.policies
+  - entry: bee.placement.docker.binding:stop
+    path: .security.policies
+  - entry: bee.placement.docker.binding:reconcile
+    path: .security.policies
+  - entry: bee.placement.docker.binding:cleanup
+    path: .security.policies
+  - entry: bee.placement.docker.binding:evidence
+    path: .security.policies
+  - entry: bee.placement.docker.binding:attach
+    path: .security.policies
+  - entry: bee.placement.docker.binding:capabilities
+    path: .security.policies
+  - entry: bee.placement.docker.binding:measure_executable
+    path: .security.policies
+  - entry: bee.placement.docker.binding:close_stdin
+    path: .security.policies
+- name: target_runner_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.placement.docker.service:runner
+    path: .security.policies

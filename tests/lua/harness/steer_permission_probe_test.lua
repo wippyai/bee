@@ -60,9 +60,9 @@ local function define_tests()
             local generated = principals.strings((assert(bounds.object(grant_data.policy))).resources)
             local methods: {[string]: boolean} = {}
             for _, method in ipairs(generated) do methods[method] = true end
-            test.is_true(methods["bee.threads.service:send"] == true)
-            test.is_true(methods["bee.threads.service:notify"] == true)
-            test.is_nil(methods["bee.threads.service:record"])
+            test.is_true(methods["bee.threads.binding:send"] == true)
+            test.is_true(methods["bee.threads.binding:notify"] == true)
+            test.is_nil(methods["bee.threads.binding:record"])
 
             local create_policy = assert(security.policy("bee.security.threads:thread_create_policy"))
             local message_policy = assert(security.policy(policy_id))
@@ -70,7 +70,7 @@ local function define_tests()
             local creator_policies: {security.Policy} = {create_policy, message_policy}
             local creator = funcs.new():with_actor(actor):with_scope(security.new_scope(creator_policies))
             local thread_id = fresh("thread")
-            local created, create_error = creator:call("bee.threads.service:create", {
+            local created, create_error = creator:call("bee.threads.binding:create", {
                 thread_id = thread_id, idempotency_key = fresh("create"), title = "Steering probe"})
             if create_error then error("create thread: " .. tostring(create_error)) end
             test.eq((assert(bounds.object(created))).ok, true)
@@ -98,7 +98,7 @@ local function define_tests()
                     test.eq((assert(bounds.object(probe.send_reply))).ok, true)
                     local record_error = probe.record_transport_error
                     print("RAW_THREADS_MESSAGE_RECORD_FUNCS_CALL_ERROR=" .. tostring(record_error))
-                    test.eq(record_error, "not allowed: bee.threads.service:record")
+                    test.eq(record_error, "not allowed: bee.threads.binding:record")
                     test.is_nil(probe.record_reply)
                     return
                 end

@@ -12,6 +12,7 @@ entries:
     path: .host
 - name: authority_policies
   kind: ns.requirement
+  default: []
   meta:
     comment: Host-selected policy grants for the approval authority
   targets:
@@ -19,6 +20,7 @@ entries:
     path: .lifecycle.security.policies
 - name: worker_policies
   kind: ns.requirement
+  default: []
   meta:
     comment: Host-selected policy grants for the approval outbox worker
   targets:

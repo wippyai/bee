@@ -26,10 +26,10 @@ local profile_validation = require("profile_validation")
 local descriptors = require("descriptors")
 local budgets = require("budgets")
 local M = {}
-M.CARRIER = "bee.harness.carrier:process"
+M.CARRIER = "bee.harness.service:carrier"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
-M.THREADS = "bee.threads.service"
-M.CARRIER_OPS = "bee.threads.carrier"
+M.THREADS = "bee.threads.binding"
+M.CARRIER_OPS = "bee.threads.binding"
 M.RESOURCES = "bee.resources.binding"
 M.CREDENTIALS = "bee.credentials.binding"
 M.MAX_BRIEF_BYTES = 16384
@@ -167,7 +167,7 @@ local function read_definition(pinned: catalog.Pinned, definition_ref: string): 
 end
 type Selected = {profile_id: string, revision: integer, profile: profiles.Profile}
 local function selected_profile(workspace: string, id: string, revision: integer, definition_ref: string): (Selected?, Reply?)
-    local raw, err = funcs.call("bee.harness.profiles:call", {operation = "get", workspace_id = workspace, profile_id = id})
+    local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
     if err then return nil, fail("UNAVAILABLE", "saved profile did not answer") end
     local reply = bounds.object(raw)
     if not reply then return nil, fail("UNAVAILABLE", "invalid saved profile reply") end

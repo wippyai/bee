@@ -2240,7 +2240,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     lease: bee.harness.carrier:lease
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
 - name: fixture_open_cli_binding
   kind: contract.binding
   meta:

@@ -1,6 +1,7 @@
 {
   "ids": [
     "bee.agents:definition",
+    "bee.app.threads:definition",
     "bee.app:definition",
     "bee.approvals.binding:local",
     "bee.approvals.env:database_ref",

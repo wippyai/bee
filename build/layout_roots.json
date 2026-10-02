@@ -8,14 +8,11 @@
     "arguments": "library.lua",
     "caller": "library.lua",
     "client": "library.lua",
-    "host_leases": "library.lua",
     "interaction": "library.lua",
-    "names": "library.lua",
-    "sessions": "library.lua",
-    "sessions_protocol": "library.lua",
-    "status_reader": "library.lua",
-    "status_surface": "library.lua",
-    "thread_protocol": "library.lua"
+    "names": "library.lua"
+  },
+  "bee.app.threads": {
+    "client": "library.lua"
   },
   "bee.capability": {
     "model": "library.lua"

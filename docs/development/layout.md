@@ -458,3 +458,12 @@ conventions and `build/layout_roots.json`.
 | `bee` | `bee.launch.service` | `workspace_hosts` |
 | `bee.console` (host) | `bee.console.env` | `environment`, `executor`, `home`, `lang`, `path`, `user` |
 | `bee.console` (host) | `bee.console.security` | `command_policy`, `executor_policy` |
+
+Application owner clients are extracted from the base SDK. Managed work uses
+`bee.sessions.client:sessions` and `bee.sessions.types:protocol`; host leases use
+`bee.workspace.client:host_leases`. Threads status readers and presentation
+values live in `bee.app.threads.client:status_reader` and
+`bee.app.threads.types:status_surface`. Consumers import these entries directly.
+The base SDK depends only on Values and UI. These helper moves preserve source
+bytes, topics, schemas, owner bindings and stored identities; no state migration
+or compatibility alias accompanies them.

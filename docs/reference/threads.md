@@ -334,7 +334,7 @@ This grant does not permit `bee.threads.binding:record`, which also accepts
 observations and has a different authority contract. A direct `record` call
 can fail at the function-call boundary before Threads returns an operation
 reply. `notify` wakes a watcher on the caller's own thread and carries no
-message body. `bee.app:client.thread_request` is scoped to the
+message body. `bee.app.threads:client.request` is scoped to the
 initiating thread and is not a child-thread messaging route.
 
 ## Cross-node inbox forwarding

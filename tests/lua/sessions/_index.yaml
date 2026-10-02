@@ -105,7 +105,7 @@ entries:
   method: open
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_run
   kind: function.lua
@@ -113,7 +113,7 @@ entries:
   method: run
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_send
   kind: function.lua
@@ -121,7 +121,7 @@ entries:
   method: send
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_await
   kind: function.lua
@@ -129,7 +129,7 @@ entries:
   method: await
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_join
   kind: function.lua
@@ -137,7 +137,7 @@ entries:
   method: join
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_get
   kind: function.lua
@@ -145,7 +145,7 @@ entries:
   method: get
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_cancel
   kind: function.lua
@@ -153,7 +153,7 @@ entries:
   method: cancel
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_close
   kind: function.lua
@@ -161,7 +161,7 @@ entries:
   method: close
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_list
   kind: function.lua
@@ -169,7 +169,7 @@ entries:
   method: list
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_catalog
   kind: function.lua
@@ -177,7 +177,7 @@ entries:
   method: catalog
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: probe
   kind: function.lua
@@ -186,7 +186,7 @@ entries:
   meta: {type: test_support}
   imports:
     bounds: bee.values:bounds
-    sessions: bee.app:sessions
+    sessions: bee.sessions.client:sessions
 - name: probe_policy
   kind: security.policy
   meta: {type: test_support}
@@ -201,7 +201,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    protocol: bee.app:sessions_protocol
+    protocol: bee.sessions.types:protocol
 - name: client_test
   kind: function.lua
   source: file://client_test.lua
@@ -211,8 +211,8 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    sessions: bee.app:sessions
-    protocol: bee.app:sessions_protocol
+    sessions: bee.sessions.client:sessions
+    protocol: bee.sessions.types:protocol
 - name: wiring_test
   kind: function.lua
   source: file://wiring_test.lua
@@ -231,7 +231,7 @@ entries:
   meta: {type: test_support}
   modules: [security]
 
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
+  imports: {protocol: bee.sessions.types:protocol, sessions: bee.sessions.client:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: interactive_exited
   kind: function.lua
@@ -291,7 +291,7 @@ entries:
   kind: library.lua
   source: file://fake_owner.lua
   meta: {type: test_support}
-  imports: {bounds: bee.values:bounds, principals: bee.test.principals:bound, sessions: bee.app:sessions, protocol: bee.app:sessions_protocol}
+  imports: {bounds: bee.values:bounds, principals: bee.test.principals:bound, sessions: bee.sessions.client:sessions, protocol: bee.sessions.types:protocol}
 
 - name: driver_route_test
   kind: function.lua

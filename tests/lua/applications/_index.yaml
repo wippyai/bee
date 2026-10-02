@@ -90,7 +90,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    protocol: bee.app:thread_protocol
+    protocol: bee.app.threads.types:protocol
 - name: client_test
   kind: function.lua
   source: file://client_test.lua
@@ -99,6 +99,7 @@ entries:
   imports:
     test: wippy.test:test
     client: bee.app:client
+    threads: bee.app.threads:client
 - name: folder_picker_test
   kind: function.lua
   source: file://folder_picker_test.lua

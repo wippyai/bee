@@ -22,7 +22,8 @@ generator when the corpus is intentionally updated.
 | Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
 | Workspace storage and application state | [Workspace component](../modules/workspace/src/README.md), [storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
 | Node workspace catalog, lazy workspace hosts, workspace extensions and the Workspaces viewer | [Workspace catalog](reference/workspace-catalog.md) |
-| Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md) |
+| Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md), [optional application Threads client](../modules/application-threads/src/README.md) |
+| Managed work and workspace host lease clients | [Sessions](../modules/sessions/src/README.md), [Workspace](../modules/workspace/src/README.md) |
 | Shared bounds, canonical JSON, time conversions, and reply decoding | [Values module](../modules/values/src/README.md) |
 | Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |
 | Native executable, updates, and I/O events | [Native distribution](operations/native.md) |

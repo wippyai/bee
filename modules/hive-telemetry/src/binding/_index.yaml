@@ -125,7 +125,7 @@ entries:
   - system
   imports:
     bounds: bee.values:bounds
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
   meta:
     comment: Open Hive operation paging this node's live workspace holdings with each
       host phase and lease count

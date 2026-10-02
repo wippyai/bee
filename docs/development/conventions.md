@@ -15,9 +15,11 @@ folder re-declares its parent's namespace. There are no `host/` folders;
 host wiring lives in the app root or beside its component. The host component
 `src/host` is the documented desktop-owner namespace, not an installable
 component wiring subfolder. Module source roots map hyphen-separated package
-names to dotted namespaces (`git-worktree` → `bee.git.worktree`). The only
-package-root spelling exception is `modules/application/src` → `bee.app`, the
-public SDK. Namespace segments and mapped folders contain no underscores.
+names to dotted namespaces (`git-worktree` → `bee.git.worktree`). The SDK
+package-root spelling exceptions are
+`modules/application/src` → `bee.app` and
+`modules/application-threads/src` → `bee.app.threads`, its opt-in Threads client.
+Namespace segments and mapped folders contain no underscores.
 No child production `src/` path diverges from its namespace.
 
 Each entry lives in the namespace of the component that owns its concept,
@@ -59,7 +61,8 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
-| `modules/application/src` | Public SDK namespace `bee.app`: application client, owner clients and their bounded values |
+| `modules/application/src` | Public SDK namespace `bee.app`: application client and owner reply decoding |
+| `modules/application-threads/src` | Opt-in authenticated Threads client as `bee.app.threads`, with status reader in `.client` and wire/presentation decoders in `.types` |
 | `modules/ui/src` | Shared frame, appearance and bounded text as `bee.ui`; forms, visualization, diagrams and folder picker in `.forms`, `.viz`, `.diagram` and `.picker` |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
@@ -107,7 +110,8 @@ entry: host wiring cannot leak implementations into a component root.
 
 | Component namespace | Shared root libraries |
 |---|---|
-| `bee.app` | `arguments`, `caller`, `client`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `thread_protocol` |
+| `bee.app` | `arguments`, `caller`, `client`, `interaction`, `names` |
+| `bee.app.threads` | `client` |
 | `bee.capability` | `model` |
 | `bee.credentials` | `formats`, `protocol` |
 | `bee.desktop` | `model`, `state`, `layout` |
@@ -126,12 +130,14 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.ui` | `appearance`, `frame`, `text` |
 | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
 
-The SDK `bee.app` owns its documented public application and owner-client
-helpers at its root. Shared frame, appearance and text values belong to
-`bee.ui`; the presentation kits live in `bee.ui.forms`, `bee.ui.viz`,
-`bee.ui.diagram` and `bee.ui.picker`. The listed root entries are included in
-the same explicit set. New shared root libraries require a documented
-responsibility and a reviewed update to the set; a new implementation does not qualify simply because it is shared.
+The SDK `bee.app` owns its documented public application helpers at its root.
+Shared frame, appearance and text values belong to `bee.ui`; presentation kits
+live in `bee.ui.forms`, `bee.ui.viz`, `bee.ui.diagram` and `bee.ui.picker`.
+Sessions clients and their decoders belong to `bee.sessions.client` and
+`bee.sessions.types`; workspace host leases belong to `bee.workspace.client`.
+The listed root entries are included in the same explicit set. New shared root
+libraries require a documented responsibility and a reviewed update to the set;
+a new implementation does not qualify simply because it is shared.
 
 An append requirement (`+=`) contributes one element. It has no array default;
 an absent host selection contributes nothing instead of a nested empty array.

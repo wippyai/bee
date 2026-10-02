@@ -16,7 +16,7 @@ entries:
     client: bee.app:client
     appearance: bee.ui:appearance
     caller: bee.app:caller
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
     model: bee.workspace.manager.app:model
     creation: bee.workspace.manager.app:creation
     folder_picker: bee.ui.picker:folder

@@ -12,7 +12,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     probe: bee.host.processes.app:probe
     view: bee.host.processes.app:view
     history_values: bee.host.processes.app:history

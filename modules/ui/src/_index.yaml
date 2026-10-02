@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.ui
+entries:
+- name: definition
+  kind: ns.definition
+  module: ui
+  readme: file://README.md
+  meta:
+    title: Bee UI
+    comment: Shared frame, semantic appearance, and bounded text helpers without application authority
+- name: text
+  kind: library.lua
+  source: file://text.lua
+- name: appearance
+  kind: library.lua
+  source: file://appearance.lua
+  modules:
+  - env
+- name: frame
+  kind: library.lua
+  source: file://frame.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.ui:appearance

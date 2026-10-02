@@ -1,7 +1,7 @@
 # Reference applications
 
 Proven, self-contained Bee application screens for copying: each is a pure
-view over `bee.app:frame`, `viz`, `diagram` or `forms` with the model
+view over `bee.ui:frame`, `viz`, `diagram` or `forms` with the model
 the application owns, and each is drawn at every size class by
 `make reference-apps-check`. Read one, copy it into an application's `view.lua`
 and replace the sample data. Overlay and form interaction patterns are in

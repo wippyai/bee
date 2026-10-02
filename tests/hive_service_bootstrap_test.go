@@ -157,7 +157,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err := os.CopyFS(srcDir, os.DirFS(frozenSource)); err != nil {
 			t.Fatal(err)
 		}
-		moduleNames := []string{"hive", "persist", "sync", "threads", "hive-telemetry", "application"}
+		moduleNames := []string{"values", "hive", "persist", "sync", "threads", "hive-telemetry", "application", "ui"}
 		for _, name := range moduleNames {
 			if err := os.CopyFS(filepath.Join(folder, "modules", name), os.DirFS(filepath.Join(root, "modules", name))); err != nil {
 				t.Fatal(err)

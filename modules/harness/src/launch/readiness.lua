@@ -4,7 +4,7 @@ local funcs = require("funcs")
 local driver_locate = require("driver_locate")
 local driver_types = require("driver_types")
 local M = {}
-M.PROBE = "bee.harness.launch:locate_probe"
+M.PROBE = "bee.harness.binding:locate_probe"
 
 type Probe = {located: boolean, result: driver_types.LocateResult?, error: string?}
 type Cache = {[string]: Probe}

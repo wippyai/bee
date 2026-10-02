@@ -13,34 +13,34 @@ entries:
     - bee.sessions.binding:open
     - bee.sessions:threads_journal_ref
     - bee.threads:journal_local
-    - bee.threads.service:session_create
-    - bee.threads.service:session_attach
-    - bee.threads.service:session_describe
-    - bee.threads.service:session_scan
-    - bee.threads.service:session_transition
-    - bee.threads.service:work_send
-    - bee.threads.service:work_describe
-    - bee.threads.service:work_history
-    - bee.threads.service:work_scan
-    - bee.threads.service:turn_reserve
-    - bee.threads.service:turn_recover
-    - bee.threads.service:turn_pull
-    - bee.threads.service:turn_accept
-    - bee.threads.service:turn_observation
-    - bee.threads.service:work_settle
-    - bee.threads.service:work_uncertain
-    - bee.threads.service:work_cancel
-    - bee.threads.service:operation_lookup
-    - bee.threads.service:operation_describe
-    - bee.threads.service:feed_read
+    - bee.threads.binding:session_create
+    - bee.threads.binding:session_attach
+    - bee.threads.binding:session_describe
+    - bee.threads.binding:session_scan
+    - bee.threads.binding:session_transition
+    - bee.threads.binding:work_send
+    - bee.threads.binding:work_describe
+    - bee.threads.binding:work_history
+    - bee.threads.binding:work_scan
+    - bee.threads.binding:turn_reserve
+    - bee.threads.binding:turn_recover
+    - bee.threads.binding:turn_pull
+    - bee.threads.binding:turn_accept
+    - bee.threads.binding:turn_observation
+    - bee.threads.binding:work_settle
+    - bee.threads.binding:work_uncertain
+    - bee.threads.binding:work_cancel
+    - bee.threads.binding:operation_lookup
+    - bee.threads.binding:operation_describe
+    - bee.threads.binding:feed_read
     - bee.placement.native.binding:stop
     - bee.placement.native.binding:reconcile
-    - bee.harness.profiles:contract
-    - bee.harness.profiles:call
-    - bee.harness.launch:present
+    - bee.harness:profiles
+    - bee.harness.binding:call
+    - bee.harness.binding:present
     - bee.harness.launch:admission
-    - bee.harness.launch:setup
-    - bee.harness.launch:locate_probe
+    - bee.harness.binding:setup
+    - bee.harness.binding:locate_probe
     effect: allow
 - name: owner_setup_policy
   kind: security.policy.expr
@@ -64,26 +64,26 @@ entries:
     - bee.sessions.binding:external_executor_binding
     - bee.threads:journal_local
     - bee.executor.external.binding:run_turn
-    - bee.threads.service:session_scan
-    - bee.threads.service:session_create
-    - bee.threads.service:session_attach
-    - bee.threads.service:session_describe
-    - bee.threads.service:session_transition
-    - bee.threads.service:work_send
-    - bee.threads.service:work_describe
-    - bee.threads.service:work_history
-    - bee.threads.service:work_scan
-    - bee.threads.service:turn_reserve
-    - bee.threads.service:turn_recover
-    - bee.threads.service:turn_pull
-    - bee.threads.service:turn_accept
-    - bee.threads.service:turn_observation
-    - bee.threads.service:work_settle
-    - bee.threads.service:work_uncertain
-    - bee.threads.service:work_cancel
-    - bee.threads.service:operation_lookup
-    - bee.threads.service:operation_describe
-    - bee.threads.service:feed_read
+    - bee.threads.binding:session_scan
+    - bee.threads.binding:session_create
+    - bee.threads.binding:session_attach
+    - bee.threads.binding:session_describe
+    - bee.threads.binding:session_transition
+    - bee.threads.binding:work_send
+    - bee.threads.binding:work_describe
+    - bee.threads.binding:work_history
+    - bee.threads.binding:work_scan
+    - bee.threads.binding:turn_reserve
+    - bee.threads.binding:turn_recover
+    - bee.threads.binding:turn_pull
+    - bee.threads.binding:turn_accept
+    - bee.threads.binding:turn_observation
+    - bee.threads.binding:work_settle
+    - bee.threads.binding:work_uncertain
+    - bee.threads.binding:work_cancel
+    - bee.threads.binding:operation_lookup
+    - bee.threads.binding:operation_describe
+    - bee.threads.binding:feed_read
     - bee.placement.native.binding:stop
     - bee.placement.native.binding:reconcile
     effect: allow
@@ -111,4 +111,22 @@ entries:
   policy:
     actions: [registry.get, registry.snapshot]
     resources: ['*']
+    effect: allow
+- name: lifecycle_policy
+  kind: security.policy
+  policy:
+    actions: [bee.sessions.lifecycle, registry.get, registry.snapshot, process.registry.lookup, process.send]
+    resources: [bee.sessions.service:scheduler_service, 'bee.hub.operations:*', bee.sessions.scheduler, bee.threads.binding:work_scan, '*']
+    effect: allow
+- name: lifecycle_worker_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.snapshot, process.listen, process.send]
+    resources: ['bee.hub.operations:*', bee.sessions.service:scheduler_worker, bee.sessions.lifecycle, '*']
+    effect: allow
+- name: lifecycle_journal_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.binding:work_scan]
     effect: allow

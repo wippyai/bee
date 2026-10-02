@@ -20,27 +20,7 @@ entries:
     canonical: bee.threads.records:canonical
 - name: target_presentation_policies
   kind: ns.requirement
-  default:
-  - bee.harness.security:carrier_policy
-  - bee.harness.security:interactive_session_policy
-  - bee.harness.security:carrier_environment_policy
-  - bee.harness.security:profile_workspace_policy
-  - bee.security.threads:thread_create_policy
-  - bee.harness.security:harness_setup_policy
-  - bee.placement.native.security:placement_store_policy
-  - bee.placement.native.security:placement_exec_policy
-  - bee.placement.native.security:placement_runner_policy
-  - bee.resources.security:resource_grant_policy
-  - bee.resources.security:resource_resolve_policy
-  - bee.credentials.security:credential_issue_policy
-  - bee.credentials.security:credential_materialize_workspace_policy
-  - bee.security.gateway:gateway_materialize_policy
-  - bee.security.gateway:gateway_supervision_policy
-  - bee.security.storage:workspace_folder_browse_policy
-  - bee.security.storage:workspace_catalog_read_policy
-  - bee.security.threads:thread_sessions_owner_policy
-  - bee.harness.security:presentation_owner_policy
-  - bee.harness.security:presentation_bridge_policy
+  default: []
   targets:
   - entry: bee.harness.service:open
     path: .security.policies
@@ -80,3 +60,18 @@ entries:
     canonical: bee.threads.records:canonical
   security:
     policies: [bee.harness.security:presentation_bridge_policy]
+- name: carrier
+  kind: process.lua
+  source: file://process.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  - funcs
+  - uuid
+  imports:
+    machine: bee.harness.carrier:machine
+    placement_protocol: bee.placement.native:protocol
+    lease: bee.harness.carrier:lease
+  security: {policies: []}

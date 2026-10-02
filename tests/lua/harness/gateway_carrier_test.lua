@@ -18,7 +18,6 @@ local json = require("json")
 local placement_fixture = require("placement_fixture")
 local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.harness.catalog:gateway_fixture_policy"
-local EXPIRING_POLICY = "bee.harness.catalog:gateway_expiring_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
 local BINDING = "bee.driver.claude:binding"
 local CARRIER = "bee.harness.catalog:carrier_faulted"
@@ -124,7 +123,7 @@ local function open_gateway(): integer
     return math.floor(tonumber(opened.epoch) or 0)
 end
 local function thread(workspace_id: string?): string
-    local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway carrier"}, workspace_id)
+    local created = call("bee.threads.binding:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway carrier"}, workspace_id)
     if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
     return created.thread_id
 end
@@ -201,7 +200,7 @@ local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
     for _ = 1, 32 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
         if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
@@ -213,7 +212,7 @@ local function notice(thread_id: string, prefix: string): Object?
     local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
     local cursor = 0
     while true do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         for _, item in ipairs(principals.objects(page.records)) do
             if item.kind == "observation" and item.source == "stream" then
                 local data = assert(bounds.object((assert(bounds.object(item.body))).data))
@@ -236,7 +235,7 @@ local function notice(thread_id: string, prefix: string): Object?
         if page.has_more ~= true then
             local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
             if remaining <= 0 then return nil end
-            call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
+            call("bee.threads.binding:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
         end
     end
 end
@@ -341,7 +340,6 @@ end
 local function define_tests()
     test.describe("Gateway through the carrier", function()
         install_policy(POLICY)
-        install_policy(EXPIRING_POLICY)
         install_policy("bee.harness.catalog:gateway_surface_policy")
         admit_root()
         await_readiness_route_commit()
@@ -608,19 +606,27 @@ local function define_tests()
             test.eq(seen.after_hold, 401)
         end)
         test.it("refuses a token that expires inside the takeover grace at once", function()
-            local seen = lose_carrier_then(EXPIRING_POLICY, function(attempt_id: string)
-                test.eq(binding_of(attempt_id, 1).valid, true)
-                -- The binding expires 2.5 s after its admission; the poll
-                -- outlasts that by a margin whatever the runtime's load.
-                local expired = binding_of(attempt_id, 1)
-                for _ = 1, 160 do
-                    if expired.valid == false then break end
-                    time.sleep("50ms")
-                    expired = binding_of(attempt_id, 1)
-                end
-                test.eq(expired.valid, false)
-                test.eq(expired.reason, "binding has expired")
+            local instant = assert(registry.get("bee.gateway:fixture_instant"))
+            local succeeded, seen = pcall(function(): Object
+                return lose_carrier_then(nil, function(attempt_id: string)
+                    local live = binding_of(attempt_id, 1)
+                    test.eq(live.valid, true)
+                    assert(type(live.expires_at) == "string", "binding expiry")
+                    instant.data = {at = live.expires_at}
+                    local changes = assert(registry.snapshot()):changes()
+                    changes:update(instant)
+                    assert(changes:apply())
+                    local expired = binding_of(attempt_id, 1)
+                    test.eq(expired.valid, false)
+                    test.eq(expired.reason, "binding has expired")
+                end)
             end)
+            instant.data = {}
+            local changes = assert(registry.snapshot()):changes()
+            changes:update(instant)
+            assert(changes:apply())
+            if not succeeded then error(tostring(seen)) end
+            assert(type(seen) == "table", "expired token report")
             test.eq(seen.after_hold, 401)
         end)
         test.it("commits the child's hooks as records through its own commit path and keeps content out", function()

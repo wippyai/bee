@@ -93,7 +93,7 @@ end
 local function raw_call(target: string, req: Object): Object
     local caller = make_caller()
     local request = req
-    if target == "bee.driver.wippy:run" and req.operation == "run" and req.workspace_id == nil then
+    if target == "bee.driver.wippy.binding:run" and req.operation == "run" and req.workspace_id == nil then
         local scoped: Object = {}
         for key, value in pairs(req) do scoped[key] = value end
         scoped.workspace_id = WORKSPACE_ID
@@ -140,7 +140,7 @@ local function driver_call(operation: string, req: Object): Object
     local payload = {}
     for k, v in pairs(req) do payload[k] = v end
     payload.operation = operation
-    local rep = raw_call("bee.driver.wippy:run", payload)
+    local rep = raw_call("bee.driver.wippy.binding:run", payload)
     if not rep.ok and (not rep.value or (assert(bounds.object(rep.value))).outcome ~= "cancelled") then
         error("driver_call " .. operation .. " failed: " .. json.encode(rep))
     end
@@ -505,7 +505,7 @@ end
             local thread_id = new_thread("Malformed Tool Arguments")
             local action_id, attempt_id = "act-bad-args", "att-bad-args"
             prepare(thread_id, action_id, attempt_id)
-            local res = raw_call("bee.driver.wippy:run", {
+            local res = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id,
                 agent_ref = "bee.driver.wippy.test:test_agent", brief = "call_tool_bad_arguments",
                 host_config = {endpoint = get_mock_url(), stream = true},
@@ -520,7 +520,7 @@ end
             local thread_id = new_thread("Large Tool Checkpoint")
             local action_id, attempt_id = "act-large-checkpoint", "att-large-checkpoint"
             prepare(thread_id, action_id, attempt_id)
-            local res = raw_call("bee.driver.wippy:run", {
+            local res = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id,
                 agent_ref = "bee.driver.wippy.test:test_agent", brief = "call_tool_large_checkpoint",
                 host_config = {endpoint = get_mock_url(), stream = false},
@@ -729,7 +729,7 @@ end
             local attempt_id = "att-many-1"
             prepare(thread_id, action_id, attempt_id)
 
-            local res = raw_call("bee.driver.wippy:run", {
+            local res = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run",
                 thread_id = thread_id,
                 action_id = action_id,
@@ -752,7 +752,7 @@ end
             local attempt_id = "att-fence-1"
             prepare(thread_id, action_id, attempt_id)
 
-            local res = raw_call("bee.driver.wippy:run", {
+            local res = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run",
                 thread_id = thread_id,
                 action_id = action_id,
@@ -775,7 +775,7 @@ end
             local attempt_id = "att-hc-1"
             prepare(thread_id, action_id, attempt_id)
 
-            local plain = raw_call("bee.driver.wippy:run", {
+            local plain = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run",
                 thread_id = thread_id,
                 action_id = action_id,
@@ -787,7 +787,7 @@ end
             test.is_false(plain.ok)
             test.is_true(tostring((assert(bounds.object(plain.error))).message):find("plain http", 1, true) ~= nil)
 
-            local cred = raw_call("bee.driver.wippy:run", {
+            local cred = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run",
                 thread_id = thread_id,
                 action_id = action_id,
@@ -800,7 +800,7 @@ end
             test.is_false(cred.ok)
             test.is_true(tostring((assert(bounds.object(cred.error))).message):find("resolve credential", 1, true) ~= nil)
 
-            local unknown = raw_call("bee.driver.wippy:run", {
+            local unknown = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run",
                 thread_id = thread_id,
                 action_id = action_id,
@@ -815,12 +815,12 @@ end
 
         test.it("validates run, status, wait and cancel requests", function()
             local url = get_mock_url()
-            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t"}).error))).code, "INVALID")
-            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "bogus"}).error))).code, "INVALID")
-            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "wait", thread_id = "t", attempt_id = "a", wait_ms = -1}).error))).code, "INVALID")
-            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t", action_id = "a", attempt_id = "b", workspace_id = 42}).error))).code, "INVALID")
-            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "status", thread_id = "t", attempt_id = "a", workspace_id = "extra"}).error))).code, "INVALID")
-            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "cancel", thread_id = "t", attempt_id = "a", wait_ms = "soon"}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy.binding:run", {operation = "run", thread_id = "t"}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy.binding:run", {operation = "bogus"}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy.binding:run", {operation = "wait", thread_id = "t", attempt_id = "a", wait_ms = -1}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy.binding:run", {operation = "run", thread_id = "t", action_id = "a", attempt_id = "b", workspace_id = 42}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy.binding:run", {operation = "status", thread_id = "t", attempt_id = "a", workspace_id = "extra"}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy.binding:run", {operation = "cancel", thread_id = "t", attempt_id = "a", wait_ms = "soon"}).error))).code, "INVALID")
 
             local thread_id = new_thread("Validate Thread")
             local action_id = "act-val-1"

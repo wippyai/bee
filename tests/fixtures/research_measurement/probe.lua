@@ -28,20 +28,20 @@ local function run(): Object
     if not actor then error("fixture actor missing") end
     local subject = actor:id()
     assert(subject ~= "bee.research.measurement", "operator must differ from measured producer")
-    call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "create", title = "Canonical JSON research"})
-    call("bee.threads.service:join", {thread_id = THREAD, idempotency_key = "join-producer", member_id = "bee.research.measurement",
+    call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = "create", title = "Canonical JSON research"})
+    call("bee.threads.binding:join", {thread_id = THREAD, idempotency_key = "join-producer", member_id = "bee.research.measurement",
         role = "participant", expected_revision = 1})
-    call("bee.threads.service:join", {thread_id = THREAD, idempotency_key = "join-dashboard", member_id = "bee.local",
+    call("bee.threads.binding:join", {thread_id = THREAD, idempotency_key = "join-dashboard", member_id = "bee.local",
         role = "observer", expected_revision = 2})
-    call("bee.threads.service:admit_action", {thread_id = THREAD, idempotency_key = "admit", action_id = ACTION,
+    call("bee.threads.binding:admit_action", {thread_id = THREAD, idempotency_key = "admit", action_id = ACTION,
         admitted = {request_id = "measure-request", principal_id = subject, binding_ref = "measure-binding",
             binding_digest = "measure-digest", grant_refs = {}, budget_ref = "fixed-budget", input = {text = "Measure reviewed sources"}}})
-    call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = "prepare", action_id = ACTION, attempt_id = ATTEMPT,
+    call("bee.threads.binding:prepare_attempt", {thread_id = THREAD, idempotency_key = "prepare", action_id = ACTION, attempt_id = ATTEMPT,
         prepared = {binding_ref = "measure-binding", binding_digest = "measure-digest", profile_id = "measure-profile",
             profile_digest = "measure-profile-digest", placement_binding = "measure-placement", placement_attempt_id = "measure-placement-attempt", plan_digest = "measure-plan"}})
     local address: string? = nil
     for _ = 1, 100 do
-        local raw = funcs.call("bee.gateway:address", {})
+        local raw = funcs.call("bee.gateway.binding:address", {})
         local value = bounds.object(raw)
         if value and type(value.address) == "string" then address = value.address; break end
         time.sleep("20ms")
@@ -101,7 +101,7 @@ local function run(): Object
     local message = tool("thread_message", {idempotency_key = "fabricated", message_id = "fabricated", message_kind = "progress",
         recipient_ids = {}, content = {text = json.encode(fake)}})
     assert(message.ok == true, "ordinary message should remain permitted")
-    local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
+    local page = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
     local observations, fabricated = 0, false
     if type(page.records) ~= "table" then error("records missing") end
     for _, raw in ipairs(page.records) do

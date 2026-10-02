@@ -9,6 +9,7 @@ type Window = {
     instance_id: string,
     workspace_id: string?,
     title: string,
+    notice: string?,
     user_title: string?,
     accent: string?,
     icon: string?,
@@ -47,7 +48,7 @@ local function copy_window(value: Window): Window
     return {
         id = value.id,
         instance_id = value.instance_id, workspace_id = value.workspace_id,
-        title = value.title, user_title = value.user_title, accent = value.accent, icon = value.icon,
+        title = value.title, notice = value.notice, user_title = value.user_title, accent = value.accent, icon = value.icon,
         bounds = copy_rect(value.bounds),
         normal_bounds = copy_rect(value.normal_bounds),
         mode = value.mode,
@@ -256,13 +257,14 @@ function M.display_title(window: Window): string
 end
 
 -- The broker supplies the current app title; a user label remains independent.
-function M.announce(scene: Scene, id: string, instance_id: string, title: string): Scene
+function M.announce(scene: Scene, id: string, instance_id: string, title: string, notice: string?): Scene
     local index = find_index(scene.windows, id)
     if not index then return scene end
     local current = scene.windows[index]
-    if current.instance_id ~= instance_id or current.title == title then return scene end
+    if current.instance_id ~= instance_id or current.title == title and current.notice == notice then return scene end
     local windows = copy_windows(scene.windows)
     windows[index].title = title
+    windows[index].notice = notice
     return commit(scene, scene.width, scene.height, scene.focus, windows)
 end
 

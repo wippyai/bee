@@ -15,12 +15,12 @@ entries:
     effect: allow
 - name: adapter
   kind: library.lua
-  source: file://hub/migrations.lua
+  source: file://migrations.lua
   imports:
     migration_runner: wippy.migration:runner
 - name: migration_binding
   kind: library.lua
-  source: file://hub/migration_runner.lua
+  source: file://migration_runner.lua
   modules: [sql, funcs, security]
   imports:
     migrations: probe:adapter

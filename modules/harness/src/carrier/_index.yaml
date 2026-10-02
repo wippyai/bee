@@ -22,31 +22,18 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     service_reply: bee.protocol:reply
-- name: types
-  kind: library.lua
-  source: file://types.lua
-  imports:
-    classify: bee.harness.catalog:classify
-    driver_types: bee.driver:types
-    placement_types: bee.placement:types
-    policy: bee.harness.carrier:policy
-    permission: bee.harness.permission:adapter
-    checkpoint: bee.harness.carrier:checkpoint
-    stream_json: bee.driver.transport:stream_json
-    settle: bee.harness.carrier:settle
-    record_types: bee.threads.records:types
 - name: hints
   kind: library.lua
   source: file://hints.lua
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
     record_values: bee.threads.records:values
     thread_record: bee.threads.records:record
     checkpoint: bee.harness.carrier:checkpoint
     service_reply: bee.protocol:reply
-    carrier_types: bee.harness.carrier:types
+    carrier_types: bee.harness:types
 - name: settle
   kind: library.lua
   source: file://settle.lua
@@ -115,7 +102,7 @@ entries:
     placement_types: bee.placement:types
     prestart: bee.harness.carrier:prestart
     placement_decode: bee.placement:decode
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
     observation_decode: bee.threads.records:observation
     placement_resolver: bee.placement:resolver
     placement_protocol: bee.placement.native:protocol
@@ -124,7 +111,7 @@ entries:
     record_values: bee.threads.records:values
     gateway_protocol: bee.gateway:protocol
     service_reply: bee.protocol:reply
-    carrier_types: bee.harness.carrier:types
+    carrier_types: bee.harness:types
     hints: bee.harness.carrier:hints
     permission_exchange: bee.harness.permission:exchange
     descriptor: bee.driver:descriptor
@@ -136,29 +123,3 @@ entries:
   source: file://lease.lua
   imports:
     leases: bee.app:host_leases
-- name: process
-  kind: process.lua
-  source: file://process.lua
-  method: main
-  modules:
-  - process
-  - channel
-  - time
-  - funcs
-  - uuid
-  imports:
-    machine: bee.harness.carrier:machine
-    placement_protocol: bee.placement.native:protocol
-    lease: bee.harness.carrier:lease
-  security:
-    policies:
-    - bee.harness.security:carrier_policy
-    - bee.harness.security:carrier_process_registry_policy
-    - bee.harness.security:carrier_environment_policy
-    - bee.security.desktop:workspace_host_lease_policy
-- name: capabilities
-  kind: function.lua
-  source: file://capabilities_method.lua
-  method: handle
-  imports:
-    machine: bee.harness.carrier:machine

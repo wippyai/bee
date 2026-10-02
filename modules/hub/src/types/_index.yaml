@@ -1,0 +1,10 @@
+version: '1.0'
+namespace: bee.hub.types
+entries:
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical

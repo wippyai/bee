@@ -20,4 +20,4 @@ entries:
   source: file://events.lua
   imports:
     bounds: bee.threads.records:bounds
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types

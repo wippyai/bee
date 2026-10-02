@@ -59,7 +59,7 @@ function M.open(value: unknown): Object
     local plan, refused = admission.resolve(tostring(spec.definition), "window", workspace,
         profile and bounds.id(profile.id), profile and bounds.integer(profile.revision))
     if not plan then return refused or fail("window plan unavailable") end
-    local setup, setup_error = funcs.call("bee.harness.launch:setup", {workspace_id = workspace,
+    local setup, setup_error = funcs.call("bee.harness.binding:setup", {workspace_id = workspace,
         definition_ref = plan.definition_ref, expected_plan_digest = plan.plan_digest,
         saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision})
     local prepared = bounds.object(setup)
@@ -120,7 +120,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         execution_generation = 1, definition_revision = "1", registry_revision = "1", launch_token = request.request_id,
         resume_schema = "bee.agent.window@1", resume_state = "", arguments = {encoded}}, operation_key))
     local function opened(token: string)
-        local raw, lookup_error = funcs.call("bee.threads.service:operation_lookup", {operation_key = operation_key})
+        local raw, lookup_error = funcs.call("bee.threads.binding:operation_lookup", {operation_key = operation_key})
         local lookup = bounds.object(raw)
         local result = lookup and bounds.object(lookup.value)
         local reply: Object
@@ -152,7 +152,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 local candidate = supplied and canonical.encode(supplied, 16384, 16)
                 if not supplied or candidate ~= expected or body.operation_key ~= operation_key then reply = fail(decode_error or "window operation key changed")
                 else
-                    local raw, lookup_error = funcs.call("bee.threads.service:operation_lookup", {operation_key = operation_key})
+                    local raw, lookup_error = funcs.call("bee.threads.binding:operation_lookup", {operation_key = operation_key})
                     local lookup = bounds.object(raw)
                     local result = lookup and bounds.object(lookup.value)
                     if lookup_error or not lookup or lookup.ok ~= true or not result then reply = fail("window receipt unavailable")

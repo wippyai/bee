@@ -9,7 +9,7 @@
 local hive = require("hive")
 local M = {}
 M.OWNER_SERVICE = "bee.threads"
-M.OPERATION = "bee.threads.service:inbox_send"
+M.OPERATION = "bee.threads.binding:inbox_send"
 type Object = {[string]: unknown}
 type Options = {timeout: string?}
 type Outcome = {ok: boolean, value: unknown, error: unknown}

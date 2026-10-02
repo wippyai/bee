@@ -71,7 +71,7 @@ local function run_code(instance_id: string, thread_id: string?): string?
     local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
     local policy = assert(security.policy(THREADS_POLICY))
     local executor = assert(funcs.new():with_actor(actor):with_scope(security.new_scope({policy})))
-    local raw, call_error = executor:call("bee.threads.service:get", {thread_id = thread_id or RUN_THREAD})
+    local raw, call_error = executor:call("bee.threads.binding:get", {thread_id = thread_id or RUN_THREAD})
     if call_error then error("run thread: " .. tostring(call_error)) end
     local reply = assert(bounds.object(raw))
     if reply.ok == true then return nil end
@@ -184,29 +184,29 @@ local function define_tests()
                     end
                 end
             end
-            local launched, launch_error = funcs.call("bee.threads.service:create",
+            local launched, launch_error = funcs.call("bee.threads.binding:create",
                 {thread_id = "open-membership-thread", idempotency_key = "open-membership-thread-create", title = "Open membership"})
             if launch_error then error("create launch thread: " .. tostring(launch_error)) end
             unwrap(launched)
             local first, first_view = open(DEFINITION, "stable-view-1")
-            local created = as_app(first, "bee.threads.service:create",
+            local created = as_app(first, "bee.threads.binding:create",
                 {thread_id = thread_id or RUN_THREAD, idempotency_key = RUN_THREAD .. "-create", title = "Stable run"})
             test.eq(created.thread_id, RUN_THREAD)
             test.is_nil(run_code(first))
             close(first_view)
             local second, _ = open(DEFINITION, "stable-view-2")
             test.is_nil(run_code(second))
-            local steered = as_app(second, "bee.threads.service:record",
+            local steered = as_app(second, "bee.threads.binding:record",
                 {thread_id = RUN_THREAD, idempotency_key = "stable-steer-1", kind = "message",
                     body = {message_id = "stable-steer-1", message_kind = "progress",
                         recipient_ids = {}, content = {text = "continue"}}})
             test.eq(steered.sequence, 1)
-            local reread = as_app(second, "bee.threads.service:read_after",
+            local reread = as_app(second, "bee.threads.binding:read_after",
                 {thread_id = RUN_THREAD, cursor = 0, limit = 8})
             test.eq(#(principals.items(reread.records)), 1)
             local other, _ = open(OTHER_DEFINITION, "stable-view-3")
             test.eq(run_code(other), "DENIED")
-            test.eq(app_code(other, "bee.threads.service:get", {thread_id = RUN_THREAD}), "DENIED")
+            test.eq(app_code(other, "bee.threads.binding:get", {thread_id = RUN_THREAD}), "DENIED")
             set_admission(false)
             local function revoked_refused()
                 local deadline = time.after("15s")
@@ -215,7 +215,7 @@ local function define_tests()
                     local tick = channel.select({deadline:case_receive(), time.after("200ms"):case_receive()})
                     assert(tick.ok and tick.channel ~= deadline, "revoked app kept its runs")
                 end
-                test.eq(app_code(second, "bee.threads.service:record",
+                test.eq(app_code(second, "bee.threads.binding:record",
                     {thread_id = RUN_THREAD, idempotency_key = "stable-steer-2", kind = "message",
                         body = {message_id = "stable-steer-2", message_kind = "progress",
                             recipient_ids = {}, content = {text = "after revoke"}}}), "DENIED")
@@ -227,7 +227,7 @@ local function define_tests()
             -- Boot can read its initial catalog before governance has
             -- reapplied a retained definition. Backfill must preserve this
             -- app family until the admitted definition returns.
-            local backfill_created = as_app(other, "bee.threads.service:create",
+            local backfill_created = as_app(other, "bee.threads.binding:create",
                 {thread_id = BACKFILL_THREAD, idempotency_key = BACKFILL_THREAD .. "-create", title = "Backfill run"})
             test.eq(backfill_created.thread_id, BACKFILL_THREAD)
             assert(process.cancel(broker, "restart retained alias probe"))
@@ -275,7 +275,7 @@ local function define_tests()
                         end
                     end
                 end
-                as_app(other, "bee.threads.service:get", {thread_id = BACKFILL_THREAD})
+                as_app(other, "bee.threads.binding:get", {thread_id = BACKFILL_THREAD})
             end)
             set_admission_for(OTHER_DEFINITION, true)
             if restarted_broker then
@@ -325,14 +325,14 @@ local function define_tests()
             end
             local ok, scenario_error = pcall(function()
                 assert(catalogs:receive():from() == broker)
-                local launched, launch_error = funcs.call("bee.threads.service:create",
+                local launched, launch_error = funcs.call("bee.threads.binding:create",
                     {thread_id = "refused-refresh-thread", idempotency_key = "refused-refresh-thread-create", title = "Refused refresh"})
                 if launch_error then error("create launch thread: " .. tostring(launch_error)) end
                 unwrap(launched)
                 local opened = open(DEFINITION, "refused-refresh-open")
                 test.eq(opened.error_code, "", "application did not become ready")
                 local instance = tostring(opened.instance_id)
-                as_app(instance, "bee.threads.service:create",
+                as_app(instance, "bee.threads.binding:create",
                     {thread_id = "refused-refresh-run", idempotency_key = "refused-refresh-run-create", title = "Refused run"})
                 test.is_nil(run_code(instance, "refused-refresh-run"))
 

@@ -38,8 +38,8 @@ entries:
   groups: [bee.security.hive:hive_exposure_scope]
   policy:
     actions: [hive.expose.open]
-    resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list,
-      bee.hive.telemetry:holdings, bee.hive.telemetry:cluster]
+    resources: [bee.hive.telemetry.binding:presence, bee.hive.telemetry.binding:stats, bee.hive.telemetry.binding:catalog_list,
+      bee.hive.telemetry.binding:holdings, bee.hive.telemetry.binding:cluster]
     effect: allow
 - name: coordinator
   kind: process.lua

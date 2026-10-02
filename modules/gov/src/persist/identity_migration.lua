@@ -52,7 +52,7 @@ function M.apply(db: sql.DB, destination_raw: unknown, source_override: unknown?
 
     local prior, prior_error = db:query(
         "SELECT destination_node FROM bee_governance_node_identity_migrations WHERE source_node = ?", {source})
-    if prior_error or not prior then return false, "read governance node identity migration ledger" end
+    if prior_error or not prior then return false, "read governance node identity migration ledger: " .. tostring(prior_error) end
     if #prior > 0 then
         if #prior == 1 and prior[1].destination_node == destination then return true, nil end
         return false, "governance legacy node identity was already migrated to another destination"
@@ -61,18 +61,24 @@ function M.apply(db: sql.DB, destination_raw: unknown, source_override: unknown?
     local tx, begin_error = db:begin({isolation = sql.isolation.SERIALIZABLE})
     if not tx then return false, "begin governance identity migration: " .. tostring(begin_error or "unknown error") end
     local function fail(message: string): (boolean, string?)
-        tx:rollback()
+        local rolled_back, rollback_error = tx:rollback()
+        if rolled_back ~= true or rollback_error then
+            message = message .. "; rollback governance identity migration: " .. tostring(rollback_error or "no reason given")
+        end
         return false, message
     end
 
     local _, defer_error = tx:execute("PRAGMA defer_foreign_keys = ON")
-    if defer_error then return fail("defer governance foreign keys for identity migration") end
+    if defer_error then return fail("defer governance foreign keys for identity migration: " .. tostring(defer_error)) end
 
     local raced, raced_error = tx:query(
         "SELECT destination_node FROM bee_governance_node_identity_migrations WHERE source_node = ?", {source})
-    if raced_error or not raced then return fail("recheck governance node identity migration ledger") end
+    if raced_error or not raced then return fail("recheck governance node identity migration ledger: " .. tostring(raced_error)) end
     if #raced > 0 then
-        tx:rollback()
+        local rolled_back, rollback_error = tx:rollback()
+        if rolled_back ~= true or rollback_error then
+            return false, "rollback governance identity migration: " .. tostring(rollback_error or "no reason given")
+        end
         if #raced == 1 and raced[1].destination_node == destination then return true, nil end
         return false, "governance legacy node identity was already migrated to another destination"
     end
@@ -82,7 +88,7 @@ function M.apply(db: sql.DB, destination_raw: unknown, source_override: unknown?
             {destination, source})
         if update_error then
             return fail("migrate governance owner_node rows in " .. table_name
-                .. "; conflicting destination records cannot be merged safely")
+                .. "; conflicting destination records cannot be merged safely: " .. tostring(update_error))
         end
     end
     for _, table_name in ipairs(SOURCE_NODE_TABLES) do
@@ -90,22 +96,21 @@ function M.apply(db: sql.DB, destination_raw: unknown, source_override: unknown?
             {destination, source})
         if update_error then
             return fail("migrate governance local source_node rows in " .. table_name
-                .. "; conflicting destination records cannot be merged safely")
+                .. "; conflicting destination records cannot be merged safely: " .. tostring(update_error))
         end
     end
 
     local violations, check_error = tx:query("PRAGMA foreign_key_check")
-    if check_error or not violations then return fail("check governance references after node identity migration") end
+    if check_error or not violations then return fail("check governance references after node identity migration: " .. tostring(check_error)) end
     if #violations > 0 then return fail("governance node identity migration leaves broken references") end
 
     local _, record_error = tx:execute([[INSERT INTO bee_governance_node_identity_migrations
 (source_node, destination_node, migrated_at)
 VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))]], {source, destination})
-    if record_error then return fail("record governance node identity migration") end
+    if record_error then return fail("record governance node identity migration: " .. tostring(record_error)) end
     local committed, commit_error = tx:commit()
     if committed ~= true or commit_error then
-        tx:rollback()
-        return false, "commit governance node identity migration"
+        return fail("commit governance node identity migration: " .. tostring(commit_error))
     end
     return true, nil
 end

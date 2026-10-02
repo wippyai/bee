@@ -4,7 +4,7 @@ local bounds = require("bounds")
 local M = {}
 type ReplyOp = "open" | "close" | "closed" | "focus" | "attached" | "bind" | "unbind" | "page" | "title" | "closing" | "quit" | "shutdown" | "fence"
 type Reply = {version: integer, request_id: string, op: ReplyOp, id: string, instance_id: string, workspace_id: string?,
-    title: string, icon: string?, mount: string, definition_id: string, thread_id: string?, resume_schema: string, restart_policy: string, resume_state: string, error: string, error_code: string, observer: boolean?}
+    title: string, icon: string?, notice: string?, mount: string, definition_id: string, thread_id: string?, resume_schema: string, restart_policy: string, resume_state: string, error: string, error_code: string, observer: boolean?}
 type RequestOp = "open" | "close" | "bind" | "unbind" | "shutdown"
 type Request = {version: integer, request_id: string, op: RequestOp, workspace_id: string?, id: string, instance_id: string, definition_id: string, thread_id: string?, recipient: string, restore_instance_id: string, restore_view_id: string, resume_schema: string, resume_state: string, arguments: {string}, observer: boolean?}
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,

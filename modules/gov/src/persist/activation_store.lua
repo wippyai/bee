@@ -56,8 +56,7 @@ local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)
 end
 local function storage(err: unknown, action: string): Result
-    if transaction.busy(err) then return transaction.storage_failure("governance activation database is busy") end
-    return failure("INTERNAL", action)
+    return transaction.sql_failure(err, action)
 end
 local function id(value: unknown): string?
     return bounds.id(value)
@@ -974,7 +973,7 @@ function M.applied(store: Store, component_raw: unknown): Result
         -- Old package evidence retains its captured package and digest. Read it
         -- under the renamed package without rewriting immutable intent bytes.
         local rows, err = tx:query("SELECT a.target_db, a.migration_id, a.ordinal, a.checksum, a.component, a.intent_id, i.migration_work_bytes, i.migration_work_digest FROM bee_governance_applied_migrations a JOIN bee_governance_activation_intents i ON i.owner_node = a.owner_node AND i.workspace_id = a.workspace_id AND i.intent_id = a.intent_id WHERE a.owner_node = ? AND a.workspace_id = ? AND (a.component = ? OR (? = 'bee/gov' AND a.component = 'bee/governance')) ORDER BY a.target_db, a.ordinal, a.migration_id", {store.node, store.workspace, component, component})
-        if not rows then return storage(err, "read applied migrations") end
+        if err or not rows then return storage(err, "read applied migrations") end
         local migrations: Object = {}
         local databases: Object = {}
         local work_by_intent: {[string]: migration_work.Work} = {}
@@ -1126,7 +1125,7 @@ function M.close(store: Store): (boolean, string?)
     if store.closed then return true, nil end
     store.closed = true
     local released, err = store.db:release()
-    if released ~= true or err then return false, "close governance activation database" end
+    if released ~= true or err then return false, transaction.error_message("close governance activation database", err) end
     return true, nil
 end
 local MAX_DESIRED_SLOTS = 1024
@@ -1142,7 +1141,7 @@ function M.applied_admission_source(resource: string, workspace_raw: unknown,
         return failure("INVALID", "applied application admission identity is invalid")
     end
     local db, err = database.open({resource = resource, ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
-    if not db then return failure("UNAVAILABLE", tostring(err or "open governance activation database")) end
+    if not db then return failure("UNAVAILABLE", transaction.error_message("open governance activation database", err)) end
     local result = transaction.read(db, "governance activation", function(tx): Result
         local rows, query_error = tx:query("SELECT DISTINCT i.source_node FROM bee_governance_activation_slots s JOIN bee_governance_activation_intents i ON i.owner_node = s.owner_node AND i.workspace_id = s.workspace_id AND i.intent_id = s.observed_intent_id AND i.overlay_owner = s.overlay_owner JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id AND e.revision = s.observed_execution_revision WHERE s.workspace_id = ? AND s.overlay_owner = ? AND s.observed_outcome = 'applied' AND e.outcome = 'applied' AND i.application_admission_digest = ? LIMIT 2", {workspace, overlay_owner, admission_digest})
         if query_error or not rows then return storage(query_error, "read applied application admission source") end
@@ -1155,8 +1154,7 @@ function M.applied_admission_source(resource: string, workspace_raw: unknown,
         end
         return transaction.success({source_node = source_node}, false)
     end)
-    db:release()
-    return result
+    return transaction.release(db, "governance activation", result)
 end
 
 -- A bounded revision token for the workspace's process-local application
@@ -1169,16 +1167,15 @@ function M.catalog_revision(resource: string, node_raw: unknown, workspace_raw: 
     local node, workspace = id(node_raw), id(workspace_raw)
     if not node or not workspace then return failure("INVALID", "governance activation identity is invalid") end
     local db, err = sql.get(resource)
-    if not db then return failure("UNAVAILABLE", tostring(err or "open governance activation database")) end
+    if not db then return failure("UNAVAILABLE", transaction.error_message("open governance activation database", err)) end
     local function close_failure(code: string, message: string): Result
-        db:release()
-        return failure(code, message)
+        return transaction.release(db, "governance activation", failure(code, message))
     end
     local revisions: {string} = {}
     local overlay_owners: {string} = {}
     local rows, query_error = db:query("SELECT overlay_owner, revision FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? ORDER BY overlay_owner LIMIT ?",
         {node, workspace, MAX_DESIRED_SLOTS + 1})
-    if query_error or not rows then return close_failure("INTERNAL", "read governance activation revisions") end
+    if query_error or not rows then return close_failure("INTERNAL", transaction.error_message("read governance activation revisions", query_error)) end
     if #rows > MAX_DESIRED_SLOTS then return close_failure("CAPACITY", "governance activation slots exceed their bound") end
     for _, row in ipairs(rows) do
         local overlay_owner, revision = id(row.overlay_owner), count(row.revision, false)
@@ -1187,7 +1184,7 @@ function M.catalog_revision(resource: string, node_raw: unknown, workspace_raw: 
         overlay_owners[#overlay_owners + 1] = overlay_owner
     end
     local released, release_error = db:release()
-    if released ~= true or release_error then return failure("UNAVAILABLE", "close governance activation database") end
+    if released ~= true or release_error then return failure("UNAVAILABLE", transaction.error_message("close governance activation database", release_error)) end
     return transaction.success({revision = table.concat(revisions, ";"), overlay_owners = overlay_owners}, false)
 end
 
@@ -1198,11 +1195,10 @@ function M.desired_slots(resource: string, node_raw: string): Result
     local node = id(node_raw)
     if not node then return failure("INVALID", "governance activation node is invalid") end
     local db, err = database.open({resource = resource, ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
-    if not db then return failure("UNAVAILABLE", tostring(err or "open governance activation database")) end
+    if not db then return failure("UNAVAILABLE", transaction.error_message("open governance activation database", err)) end
     local migrated, migration_error = identity_migration.apply(db, node)
     if not migrated then
-        db:release()
-        return failure("UNAVAILABLE", tostring(migration_error or "migrate governance node identity"))
+        return transaction.release(db, "governance activation", failure("UNAVAILABLE", tostring(migration_error or "migrate governance node identity")))
     end
     local result = transaction.read(db, "governance activation", function(tx): Result
         local rows, query_error = tx:query("SELECT workspace_id, overlay_owner FROM bee_governance_activation_slots WHERE owner_node = ? AND desired_intent_id IS NOT NULL ORDER BY workspace_id, overlay_owner LIMIT ?", {node, MAX_DESIRED_SLOTS + 1})
@@ -1216,8 +1212,7 @@ function M.desired_slots(resource: string, node_raw: string): Result
         end
         return transaction.success({slots = slots}, false)
     end)
-    db:release()
-    return result
+    return transaction.release(db, "governance activation", result)
 end
 function M.open(resource: string, node_raw: string, workspace_raw: string): (Store?, string?)
     if type(resource) ~= "string" or resource == "" then return nil, "governance activation database is not linked" end
@@ -1227,8 +1222,8 @@ function M.open(resource: string, node_raw: string, workspace_raw: string): (Sto
     if not db then return nil, err end
     local migrated, migration_error = identity_migration.apply(db, node)
     if not migrated then
-        db:release()
-        return nil, migration_error or "migrate governance node identity"
+        local result = transaction.release(db, "governance", failure("UNAVAILABLE", migration_error or "migrate governance node identity"))
+        return nil, result.message
     end
     return {db = db, node = node, workspace = workspace, closed = false}, nil
 end

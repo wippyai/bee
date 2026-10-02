@@ -321,7 +321,7 @@ falls back to a local thread with the same name.
 ## Application child messages
 
 The host-generated `threads.message` grant with `scope: children` permits an
-application actor to call `bee.threads.service:send` and `notify` on threads it
+application actor to call `bee.threads.binding:send` and `notify` on threads it
 owns through managed-agent launch. To steer a child action, `send` a typed
 `request` message whose `recipient_ids` names the child's admitted principal
 and whose `recipient_action_ids` names its action. The request carries
@@ -330,7 +330,7 @@ and whose `recipient_action_ids` names its action. The request carries
 and body after an ambiguous reply, then inspect the thread for the committed
 message before trying another key.
 
-This grant does not permit `bee.threads.service:record`, which also accepts
+This grant does not permit `bee.threads.binding:record`, which also accepts
 observations and has a different authority contract. A direct `record` call
 can fail at the function-call boundary before Threads returns an operation
 reply. `notify` wakes a watcher on the caller's own thread and carries no

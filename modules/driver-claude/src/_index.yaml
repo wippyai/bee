@@ -54,10 +54,6 @@ entries:
   variable: ANTHROPIC_API_KEY
   default: ''
   readonly: true
-- name: environment
-  kind: env.storage.os
-  lifecycle:
-    auto_start: true
 - name: config_home
   kind: env.variable
   storage: bee.harness.host:environment

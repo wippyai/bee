@@ -53,7 +53,7 @@ end
 local function define_tests()
     test.describe("Application open thread membership", function()
         test.it("admits the managed window principal into the thread the open names", function()
-            call("bee.threads.service:create", {thread_id = THREAD,
+            call("bee.threads.binding:create", {thread_id = THREAD,
                 idempotency_key = THREAD .. "-create", title = "Open membership"})
 
             local owner = tostring(process.pid())
@@ -85,7 +85,7 @@ local function define_tests()
             assert(opened.error_code == "", "managed window did not become ready: " .. tostring(opened.error))
             local instance_id = assert(opened.instance_id)
 
-            local joined = as_application(instance_id, "bee.threads.service:get", {thread_id = THREAD})
+            local joined = as_application(instance_id, "bee.threads.binding:get", {thread_id = THREAD})
             local member = assert(bounds.object(assert(joined.membership)))
             test.eq(member.member_id, "bee.application:" .. WORKSPACE .. ":" .. instance_id)
             test.eq(member.role, "participant")
@@ -122,7 +122,7 @@ local function define_tests()
             assert(opened.error_code == "", "window that names a missing thread did not become ready: " .. tostring(opened.error))
             local instance_id = assert(opened.instance_id)
 
-            local ok, fault = pcall(as_application, instance_id, "bee.threads.service:get", {thread_id = missing})
+            local ok, fault = pcall(as_application, instance_id, "bee.threads.binding:get", {thread_id = missing})
             if ok then error("broker fabricated membership for a missing thread") end
             if not tostring(fault):find("NOT_FOUND", 1, true) then
                 error("missing thread refusal changed: " .. tostring(fault))
@@ -171,7 +171,7 @@ local function define_tests()
             test.eq(acked.error_code, "")
             local stopped = false
             for _ = 1, 150 do
-                local ok = pcall(as_application, instance_id, "bee.threads.service:get", {thread_id = THREAD})
+                local ok = pcall(as_application, instance_id, "bee.threads.binding:get", {thread_id = THREAD})
                 if not ok then stopped = true; break end
                 time.sleep(time.parse_duration("200ms"))
             end

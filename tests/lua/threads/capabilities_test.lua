@@ -70,7 +70,7 @@ local function define_tests()
         end)
         test.it("answers the same report to any caller without storage access", function()
             local caller = funcs.new():with_actor(security.new_actor("bee.test.nobody")):with_scope(security.new_scope({"bee.threads:client_test_policy"}))
-            local reply, err = caller:call("bee.threads:capabilities", {})
+            local reply, err = caller:call("bee.threads.binding:capabilities", {})
             if err then error(tostring(err)) end
             local described = assert(bounds.object(reply))
             local limits = assert(bounds.object(described.limits))

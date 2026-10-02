@@ -194,6 +194,22 @@ function M.page(raw: unknown): (Page?, string?)
     return {items = items}, nil
 end
 
+-- A bounded journal scan must prove that no admitted execution survived a crash.
+function M.drain_problem(raw: unknown): string?
+    local value = bounds.object(raw)
+    if not value or type(value.interactive_active) ~= "boolean" then return "interactive session drain evidence is unavailable" end
+    if value.interactive_active then
+        return "close interactive sessions before the component transition"
+    end
+    local page, problem = M.page(raw)
+    if not page then return problem or "scheduler journal is unavailable" end
+    if #page.items == M.MAX_SCAN then return "scheduler drain scan is incomplete" end
+    for _, work in ipairs(page.items) do
+        if work.state ~= "queued" or work.uncertainty then return "durable session work remains uncertain or active" end
+    end
+    return nil
+end
+
 local function accepted_turn(journal: Journal, turn: Turn): (boolean, string?)
     if turn.phase == "accepted" then return true, nil end
     local accepted, accept_error = journal.accept_turn({turn = turn.turn, claim = turn.claim,
@@ -318,7 +334,7 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
         driver_methods = route.driver_methods, budget = turn.budget,
         session_budget = (object(route.budgets) or {}).session, session_consumption = turn.session_consumption, supervision = route.supervision,
         placement_methods = route.placement_methods, checkpoint = context}
-    local observation_target: string? = "bee.threads.service:turn_observation"
+    local observation_target: string? = "bee.threads.binding:turn_observation"
     if journal.target then
         local selected_target, target_error = journal.target("turn_observation")
         if target_error or not selected_target then

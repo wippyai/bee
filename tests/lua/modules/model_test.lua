@@ -190,13 +190,33 @@ local function define_tests()
                 test.neq(state.notice, "")
             end
         end)
+        test.it("hydrates a Bee component directly from its host-selected root", function()
+            local state = model.new()
+            model.select(state, "bee/files")
+            model.set_action(state, "update")
+            model.begin_update_hydration(state)
+            model.apply_installed(state, ok({version = 4, modules = {{component = "bee/files", version = "1.0.0", source = "hub", direct = true, used_by = {}}},
+                roots = {{id = "bee.deps:files", component = "bee/files", version = "1.0.0", managed = true,
+                    parameters = {{name = "target_workspace_root", value = "bee.env:files_root"}}}}}))
+            test.eq(#state.parameters, 1)
+            test.eq(state.parameters[1].value, "bee.env:files_root")
+            test.eq(state.selected, "bee/files")
+            test.eq(state.action, "update")
+        end)
+        test.it("requires the Hub management result instead of inferring authority from the root ID", function()
+            local state = model.new()
+            model.apply_installed(state, ok({modules = {}, roots = {{id = "bee.hub.deps:root", component = "acme/app",
+                version = "1.0.0", parameters = {}}}}))
+            test.eq(state.installed_read, "error")
+            test.eq(state.notice, "Invalid installed inventory: installed inventory contains an invalid root")
+        end)
         test.it("hydrates an update from the installed root's typed parameters", function()
             local state = model.new()
             model.select(state, "acme/app")
             model.select_version(state, "2.0.0")
             model.apply_installed(state, ok({modules = {{component = "acme/app", version = "1.2.0", source = "hub", direct = true, used_by = {}}},
-                roots = {{id = "host:acme", component = "acme/app", version = "1.2.0", parameters = {{name = "acme.app:port", value = 1}}},
-                    {id = "bee.hub.deps:5f89da0438fa1b1767532b58bd38cda2396f39889ab9e492e7f8f20d22fc9e9f", component = "acme/app", version = "1.2.0",
+                roots = {{id = "host:acme", component = "acme/app", version = "1.2.0", managed = false, parameters = {{name = "acme.app:port", value = 1}}},
+                    {id = "bee.hub.deps:5f89da0438fa1b1767532b58bd38cda2396f39889ab9e492e7f8f20d22fc9e9f", component = "acme/app", version = "1.2.0", managed = true,
                         parameters = {{name = "acme.app:enabled", value = true}, {name = "acme.app:port", value = 8080}}}}}))
             test.eq(#state.parameters, 0)
             model.set_action(state, "update")
@@ -209,7 +229,7 @@ local function define_tests()
             local intent, loading_problem = model.plan_intent(state)
             test.is_nil(intent)
             test.eq(loading_problem, "installed settings are still loading; retry after the inventory read completes")
-            model.apply_installed(state, ok({modules = {}, roots = {{id = "bee.hub.deps:5f89da0438fa1b1767532b58bd38cda2396f39889ab9e492e7f8f20d22fc9e9f", component = "acme/app", version = "1.2.0",
+            model.apply_installed(state, ok({modules = {}, roots = {{id = "bee.hub.deps:5f89da0438fa1b1767532b58bd38cda2396f39889ab9e492e7f8f20d22fc9e9f", component = "acme/app", version = "1.2.0", managed = true,
                 parameters = {{name = "acme.app:enabled", value = true}, {name = "acme.app:port", value = 8080}}}}}))
             intent = model.plan_intent(state)
             test.not_nil(intent)
@@ -219,7 +239,7 @@ local function define_tests()
             local state = model.new()
             model.select(state, "acme/store")
             model.apply_installed(state, ok({modules = {{component = "acme/store", version = "0.1.0", source = "hub", direct = true, used_by = {}}},
-                roots = {{id = "host:dependency_store", component = "acme/store", version = "0.1.0", parameters = {{name = "target_db", value = "host:db"}}}}}))
+                roots = {{id = "host:dependency_store", component = "acme/store", version = "0.1.0", managed = false, parameters = {{name = "target_db", value = "host:db"}}}}}))
             test.eq(state.installed_read, "ready")
             test.eq(#state.installed_roots, 1)
             test.eq(state.installed_roots[1].parameters[1].name, "target_db")
@@ -248,7 +268,7 @@ local function define_tests()
         test.it("preserves edited and intentionally cleared values across inventory refresh", function()
             local state = model.new()
             model.select(state, "acme/app")
-            local installed = {modules = {}, roots = {{id = "bee.hub.deps:5f89da0438fa1b1767532b58bd38cda2396f39889ab9e492e7f8f20d22fc9e9f", component = "acme/app", version = "1.2.0",
+            local installed = {modules = {}, roots = {{id = "bee.hub.deps:5f89da0438fa1b1767532b58bd38cda2396f39889ab9e492e7f8f20d22fc9e9f", component = "acme/app", version = "1.2.0", managed = true,
                 parameters = {{name = "acme.app:enabled", value = true}, {name = "acme.app:port", value = 8080}}}}}
             model.apply_installed(state, ok(installed))
             model.set_action(state, "update")

@@ -39,6 +39,9 @@ hub-self-update-runtime-check:
 .PHONY: hub-self-update-standalone-check
 hub-self-update-standalone-check:
 	BEE_RUNTIME="$(or $(BEE_RUNTIME),$(abspath $(WIPPY)))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
+.PHONY: hub-core-pack
+hub-core-pack: $(TOOLCHAIN_CURRENT)
+	WIPPY="$(abspath $(WIPPY))" BEE_CORE_VERSION="$(BEE_CORE_VERSION)" build/core-pack.sh
 .PHONY: settings-unit-check capability-grants-unit-check
 settings-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.settings view_test

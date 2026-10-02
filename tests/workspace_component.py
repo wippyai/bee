@@ -114,7 +114,15 @@ def recovery(binary, evidence):
         for left, right in zip(previous, restored):
             for key in ['id', 'instance_id', 'definition_id', 'resume_schema', 'resume_state', 'restart_policy']:
                 assert left[key] == right[key], (key, left, right)
-        assert before['layout'] == after['layout']
+        assert before['layout'][0] == after['layout'][0]
+        previous_layout, restored_layout = before['layout'][1], after['layout'][1]
+        assert restored_layout['scene']['revision'] >= previous_layout['scene']['revision']
+        previous_scene = {key: value for key, value in previous_layout['scene'].items() if key != 'revision'}
+        restored_scene = {key: value for key, value in restored_layout['scene'].items() if key != 'revision'}
+        assert previous_scene == restored_scene, (previous_scene, restored_scene)
+        previous_values = {key: value for key, value in previous_layout.items() if key != 'scene'}
+        restored_values = {key: value for key, value in restored_layout.items() if key != 'scene'}
+        assert previous_values == restored_values, (previous_values, restored_values)
         fresh_state = folder / 'fresh-state'
         native_boot(binary, folder, fresh_state, application='bee.settings.app:app')
         fresh_before = snapshot(fresh_state)

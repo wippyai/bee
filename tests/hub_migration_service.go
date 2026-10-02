@@ -17,14 +17,6 @@ import (
 	"github.com/wippyai/wapp"
 )
 
-type packageEntry struct {
-	Namespace string         `json:"ns"`
-	Name      string         `json:"name"`
-	Kind      string         `json:"kind"`
-	Data      map[string]any `json:"data,omitempty"`
-	Meta      map[string]any `json:"meta,omitempty"`
-}
-
 func repoRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {

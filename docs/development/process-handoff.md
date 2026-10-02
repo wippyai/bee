@@ -34,7 +34,9 @@ remain attached. `make session-fallback-check` exercises a session exit.
 The session Lua tests check schema rejection, queued-command acknowledgements,
 and same-PID readiness.
 
-The desktop client checkpoints a version-one layout and requests an acknowledged
+The `bee/client` component owns the desktop client at
+`bee.client.service:main`, with handoff and qualified layout values in
+`bee.client.types`. The client checkpoints a version-one layout and requests an acknowledged
 supervised replacement on `OUTDATED`. Its supervisor keeps the viewport and
 physical attachments, starts a new client, admits the same display identity,
 and announces readiness after the presenter renders. The replacement replays

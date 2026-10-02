@@ -29,6 +29,34 @@ local function define_tests()
             test.eq(resolved and resolved.configure, PREFIX .. "configure")
         end)
 
+        test.it("resolves every shipped driver in its own binding namespace", function()
+            for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode", "wippy"}) do
+                local prefix = "bee.driver." .. provider .. ".binding:"
+                local resolved, failure = route.resolve(prefix .. "binding")
+                test.is_nil(failure)
+                test.not_nil(resolved)
+                local selected = assert(resolved)
+                test.eq(selected.prepare, prefix .. "prepare")
+                test.eq(selected.dispatch, prefix .. "dispatch")
+                test.eq(selected.normalize, prefix .. "normalize")
+                test.eq(selected.configure, prefix .. "configure")
+            end
+        end)
+
+        test.it("refuses dangling and noncallable method targets", function()
+            for _, entry in ipairs({{kind = "library.lua"}, {kind = "registry.entry"}}) do
+                local resolved, failure = decode({[PREFIX .. "normalize"] = entry})
+                test.is_nil(resolved)
+                test.eq(failure, "selected driver target normalize is unavailable")
+            end
+            local binding = {kind = "contract.binding", data = {contracts = {{contract = "bee.driver:driver", methods = methods()}}}}
+            local resolved, failure = route.decode(BINDING, binding, function(_: string): (unknown?, string?)
+                return nil, "missing"
+            end)
+            test.is_nil(resolved)
+            test.eq(failure, "selected driver target prepare is unavailable")
+        end)
+
         test.it("refuses methods outside the selected binding", function()
             local broken = methods()
             broken.prepare = "bee.driver.codex.binding:prepare"

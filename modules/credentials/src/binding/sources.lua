@@ -1,8 +1,4 @@
--- MIT. Linked references of the credential broker: the store and the host's
--- source allowlist, the ceiling every definition stays under. Providers map
--- to their declared destinations; a file source may additionally name one
--- host-selected setup file. Its source path, retained destination and content
--- format are one admission decision.
+-- MIT. Host-selected credential source admission and linked resources.
 local registry = require("registry")
 local bounds = require("bounds")
 local formats = require("formats")

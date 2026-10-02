@@ -51,8 +51,9 @@ gateway hook endpoints and harness policies. Placement, credentials and
 resources own their corresponding roots, host requirements and policies.
 Driver components own their launch policies and default host requirements.
 Requirements use package defaults that an assembly can replace. The Gateway
-component owns the MCP listener, tool routes and tool policies; the harness
-package adds only the hook endpoints used by managed agents.
+component supplies MCP handlers, tool catalogs and tool policies; the host owns
+the listener, router and routes. The harness hook endpoints call the Gateway's
+hook handlers under host-selected policies.
 
 The Agent application's public definition ID and driver definition IDs remain
 unchanged when their source moves into these packages. Saved workspace state

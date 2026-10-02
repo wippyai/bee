@@ -1,8 +1,4 @@
--- MIT. Host-owned saved launch profiles. The profile store is a typed facade
--- over bee.sync; callers never select its database or owner identity.
-local security = require("security")
-local ctx = require("ctx")
-local system = require("system")
+-- SPDX-License-Identifier: MIT
 local registry = require("registry")
 local sql = require("sql")
 local hash = require("hash")
@@ -12,7 +8,6 @@ local sync = require("sync")
 local transaction = require("transaction")
 local protocol = require("protocol")
 local migration = require("migration")
-local validation = require("validation")
 local driver_profile = require("driver_profile")
 
 local M = {}
@@ -24,8 +19,6 @@ type Stored = {profile_id: string, revision: integer, profile: Profile?, tombsto
 local DATABASE_REF = "bee.harness.profiles:database_ref"
 local FEED_PREFIX = "harness.profiles:"
 local EVENT_TYPE = "harness.profile.changed"
-local READ = "bee.harness.profiles.read"
-local WRITE = "bee.harness.profiles.write"
 
 local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)
@@ -50,27 +43,6 @@ local function feed(workspace: string): (string?, string?)
     local digest, hash_error = hash.sha256(workspace)
     if not digest or hash_error then return nil, tostring(hash_error or "workspace feed cannot be measured") end
     return FEED_PREFIX .. digest, nil
-end
-
-local function authority(input: Request): (string?, string?, Result?)
-    local actor_object = security.actor()
-    if not actor_object then return nil, nil, failure("UNAUTHENTICATED", "profile operation requires an actor") end
-    local actor = bounds.id(actor_object:id())
-    if not actor then return nil, nil, failure("UNAUTHENTICATED", "profile actor identity is invalid") end
-    local action = (input.operation == "get" or input.operation == "list") and READ or WRITE
-    -- This check deliberately precedes registry access and database opening.
-    -- Metadata is derived here from host-inherited context, never from the request.
-    local workspace = bounds.id(ctx.get("bee.workspace_id"))
-    if not security.can(action, input.workspace_id, {workspace_id = workspace or ""}) then
-        return nil, nil, failure("DENIED", "profile operation is not authorized")
-    end
-    local node, node_error = system.node.id()
-    if node_error or not node or node == "" then
-        return nil, nil, failure("UNAVAILABLE", "native node identity is unavailable")
-    end
-    local owner = bounds.id(node)
-    if not owner then return nil, nil, failure("UNAVAILABLE", "native node identity is invalid") end
-    return owner, actor, nil
 end
 
 local function database_resource(): (string?, string?)
@@ -233,11 +205,7 @@ local function remove(store: sync.Store, tx: sql.Transaction, input: Request, no
     return transaction.success(reply(input, input.profile_id, revision, nil, true), result.replayed)
 end
 
-function M.call(raw: unknown): Result
-    local input, invalid = protocol.decode(raw)
-    if not input then return failure("INVALID_ARGUMENT", invalid or "invalid profile request") end
-    local node, actor, denied = authority(input)
-    if not node or not actor then return denied or failure("DENIED", "profile operation refused") end
+function M.call(input: Request, node: string, actor: string, pinned: registry.Snapshot, validate: (registry.Snapshot, Profile) -> string?): Result
     local feed_name, feed_error = feed(input.workspace_id)
     if not feed_name then return failure("INTERNAL", feed_error or "profile feed failed") end
     local owner: string = node
@@ -245,14 +213,12 @@ function M.call(raw: unknown): Result
     local selected_feed: string = feed_name
     local store, open_error = open(owner)
     if not store then return failure("UNAVAILABLE", open_error or "profile store unavailable") end
-    local pinned, pin_error = registry.snapshot()
-    if not pinned then store:close(); return failure("UNAVAILABLE", tostring(pin_error or "profile migration registry unavailable")) end
     local migrated = store:migrate(FEED_PREFIX, migration.ID, function(source: unknown): (unknown?, string?)
         return migration.convert(source, function(ref: string): string?
             local entry = pinned:get(ref)
             local data = entry and bounds.object(entry.data)
             return data and bounds.id(data.binding_ref) or nil
-        end, function(profile: Profile): string? return validation.check(pinned, profile) end,
+        end, function(profile: Profile): string? return validate(pinned, profile) end,
         function(ref: string, presentation: string?): migration.NativeHome?
             local entry = pinned:get(ref)
             local definition = entry and bounds.object(entry.data)
@@ -270,10 +236,6 @@ function M.call(raw: unknown): Result
         end), nil
     end)
     if not migrated.ok then store:close(); return clean(migrated) end
-    if input.profile then
-        local invalid_profile = validation.check(pinned, input.profile)
-        if invalid_profile then store:close(); return failure("INVALID_ARGUMENT", invalid_profile) end
-    end
     local request: Request = {operation = input.operation, workspace_id = input.workspace_id,
         profile_id = input.profile_id, profile = input.profile, expected_revision = input.expected_revision,
         idempotency_key = input.idempotency_key, after_key = input.after_key,

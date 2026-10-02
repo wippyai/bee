@@ -1,9 +1,10 @@
--- MIT. Hub plans describe one dependency-root change against a captured
+-- MIT. Hub plans describe a dependency-root change against a captured
 -- registry revision. Confirmation covers the request and measured artifacts.
 local bounds = require("bounds")
 local canonical = require("canonical")
 local hash = require("hash")
 local graph = require("graph")
+local inspection = require("inspection")
 local inventory = require("inventory")
 local binary_identity = require("binary_identity")
 local native_compat = require("native_compat")
@@ -12,7 +13,7 @@ local semver = require("semver")
 local M = {}
 type Request = {action: string, component: string, version: string, parameters: {requirements.Parameter}, migration_policy: string}
 type Module = {component: string, version: string, previous_version: string, digest: string,
-    change: string, entries: integer, requirements: requirements.Result}
+    change: string, reason: string?, entries: integer, requirements: requirements.Result}
 type Migration = {id: string, component: string, target_db: string, timestamp: string}
 -- One security policy the plan adds, replaces with a new package version, or
 -- removes with its departing package, summarized from the policy definition.
@@ -89,6 +90,28 @@ local function target_error(holes: requirements.Result, targets: {[string]: bool
     return nil
 end
 
+local function installer_error(packages: {{component: string, entries: {{id: string, kind: string, data: unknown}}}}, entries: {unknown}): string?
+    for _, item in ipairs(packages) do
+        if item.component == "bee/hub" then
+            local candidate: {[string]: {id: string, kind: string, data: unknown}} = {}
+            for _, entry in ipairs(item.entries) do candidate[entry.id] = entry end
+            for _, raw in ipairs(entries) do
+                local entry = bounds.object(raw)
+                local owned = entry and bounds.object(entry.registry)
+                local id = entry and bounds.id(entry.id) or nil
+                if entry and owned and id and owned.owner == "bee/hub"
+                    and (entry.kind == "library.lua" or entry.kind == "function.lua" or entry.kind == "process.lua") then
+                    local proposed = candidate[id]
+                    if not proposed or proposed.kind ~= entry.kind or canonical.encode(proposed.data) ~= canonical.encode(entry.data) then
+                        return "Bee self-update would replace the active Hub installer: " .. id
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
 function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source,
 	 baked_identity: binary_identity.Baked?): (Prepared?, string?)
     local installed, inventory_error = inventory.decode(state, revision)
@@ -133,15 +156,36 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     end
     local root_id, root_error = M.root_id(request.component)
     if not root_id then return nil, root_error end
+    local component_roots: {[string]: inventory.Root} = {}
+    local component_versions: {[string]: string} = {}
+    local newest: {[string]: boolean} = {}
+    local third_party_roots: {[string]: string} = {}
     local existing: inventory.Root? = nil
     local roots: {graph.Edge} = {}
     for _, root in ipairs(installed.roots) do
-        if root.managed then
+        if self_update and inventory.host_component(root) then
+            if component_roots[root.component] then return nil, "component has multiple host roots: " .. root.component end
+            component_roots[root.component] = root
+            local selected = root.version
+            for _, item in ipairs(installed.modules) do
+                if item.component == root.component and item.version ~= "" then selected = item.version; break end
+            end
+            if not semver.parse(selected) then return nil, "host component has no exact installed version: " .. root.id end
+            component_versions[root.component] = selected
+            roots[#roots + 1] = {component = root.component, version = ">=" .. selected .. " || =" .. request.version, parameters = root.parameters}
+        elseif root.managed then
             if root.component == request.component then
                 if existing then return nil, "component has multiple roots; host configuration needs review" end
                 existing = root
             elseif controlled[root.component] then
-                roots[#roots + 1] = {component = root.component, version = root.version, parameters = root.parameters}
+                local selected = root.version
+                if self_update and not root.component:match("^bee/") then
+                    for _, item in ipairs(installed.modules) do
+                        if item.component == root.component and item.version ~= "" then selected = item.version; break end
+                    end
+                    third_party_roots[root.component] = selected
+                end
+                roots[#roots + 1] = {component = root.component, version = selected, parameters = root.parameters}
             end
         elseif self_update and root.component == "bee/bee" and root.owner == "" then
             if existing then return nil, "Bee has multiple deployment roots; host configuration needs review" end
@@ -188,7 +232,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         local selected_root = false
         if entry then
             for _, root in ipairs(installed.roots) do
-                if root.id == entry.id and root.managed then selected_root = true; break end
+                if root.id == entry.id and (root.managed or (self_update and inventory.host_component(root))) then selected_root = true; break end
             end
         end
         if not selected_root and entry and owned and data and entry.kind == "ns.dependency" and type(owned.owner) == "string"
@@ -216,8 +260,88 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             end
         end
     end
-    local resolved, graph_error = graph.resolve(roots, source, selections)
+    local removed_components: {[string]: boolean} = {}
+    if self_update then
+        local resolution = bounds.object(raw_state.resolution)
+        local lock = resolution and bounds.object(resolution.lock)
+        if lock and type(lock.modules) == "table" then
+            for _, raw in ipairs(lock.modules) do
+                local item = bounds.object(raw)
+                if item and type(item.name) == "string" and item.name:match("^bee/") and not selections[item.name] then
+                    removed_components[item.name] = true
+                end
+            end
+        end
+    end
+    local retained_reasons: {[string]: string} = {}
+    local rejected_versions: {[string]: string} = {}
+    local candidate_source = source
+    if self_update and installed.selected then
+        local core, core_error = source.artifact(request.component, request.version)
+        if not core then return nil, core_error end
+        local cached: {[string]: inspection.Inspection} = {}
+        candidate_source = {
+            artifact = function(component: string, version: string): (inspection.Inspection?, string?)
+                local key = component .. "@" .. version
+                if cached[key] then return cached[key], nil end
+                return source.artifact(component, version)
+            end,
+            versions = function(component: string, page: integer): ({string}?, boolean?, string?)
+                local listed, more, problem = source.versions(component, page)
+                local root = component_roots[component]
+                if not root then return listed, more, problem end
+                local current = component_versions[component]
+                if not current then return nil, nil, "host component has no installed version: " .. component end
+                if not listed or more == nil then
+                    retained_reasons[component] = problem or "component release catalog unavailable"
+                    return {current}, false, nil
+                end
+                local allowed: {string} = {}
+                for _, version in ipairs(listed) do
+                    if not semver.parse(version) then return nil, nil, component .. " has an invalid version" end
+                    if (semver.compare(version, current) or -1) > 0
+                        and semver.matches(version, ">=" .. current .. " || =" .. request.version) then
+                        local artifact, artifact_error = source.artifact(component, version)
+                        local incompatible: string? = artifact_error or "component artifact unavailable"
+                        if artifact then
+                            cached[component .. "@" .. version] = artifact
+                            incompatible = native_compat.check({core, artifact}, baked_identity)
+                                or installer_error({artifact}, raw_state.entries)
+                            for _, entry in ipairs(artifact.entries) do
+                                if entry.kind == "ns.dependency" then
+                                    local edge, edge_error = graph.edge(entry.data)
+                                    if not edge then return nil, nil, edge_error end
+                                    local third_party = third_party_roots[edge.component]
+                                    if third_party and not semver.matches(third_party, edge.version, true) then
+                                        incompatible = component .. " requires third-party root " .. edge.component .. " " .. edge.version
+                                    elseif removed_components[edge.component] then
+                                        incompatible = component .. " requires removed component " .. edge.component
+                                    elseif edge.component == "bee/bee" and not semver.matches(request.version, edge.version, true) then
+                                        incompatible = component .. " requires bee/bee " .. edge.version
+                                    end
+                                end
+                            end
+                        end
+                        if incompatible then
+                            if not rejected_versions[component] or (semver.compare(version, rejected_versions[component]) or 0) > 0 then
+                                retained_reasons[component], rejected_versions[component] = incompatible, version
+                            end
+                        else allowed[#allowed + 1] = version end
+                    end
+                end
+                -- The captured installed artifact remains available even if its
+                -- release is no longer listed by the Hub.
+                if page == 1 then allowed[#allowed + 1] = current end
+                return allowed, more, nil
+            end,
+        }
+        for component in pairs(component_roots) do newest[component] = true end
+    end
+    local resolved, graph_error = graph.resolve(roots, candidate_source, selections, newest)
     if not resolved then return nil, graph_error end
+    for _, item in ipairs(resolved.packages) do
+        if removed_components[item.component] then return nil, "Bee self-update would reinstall removed component: " .. item.component end
+    end
     if request.action == "uninstall" then
         local required_by: {string} = {}
         for _, item in ipairs(resolved.packages) do
@@ -231,24 +355,8 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         end
     end
     if self_update then
-        for _, item in ipairs(resolved.packages) do
-            if item.component == "bee/hub" then
-                local candidate: {[string]: {id: string, kind: string, data: unknown}} = {}
-                for _, entry in ipairs(item.entries) do candidate[entry.id] = entry end
-                for _, raw in ipairs(raw_state.entries) do
-                    local entry = bounds.object(raw)
-                    local owned = entry and bounds.object(entry.registry)
-                    local id = entry and bounds.id(entry.id) or nil
-                    if entry and owned and id and owned.owner == "bee/hub"
-                        and (entry.kind == "library.lua" or entry.kind == "function.lua" or entry.kind == "process.lua") then
-                        local proposed = candidate[id]
-                        if not proposed or proposed.kind ~= entry.kind or canonical.encode(proposed.data) ~= canonical.encode(entry.data) then
-                            return nil, "Bee self-update would replace the active Hub installer: " .. id
-                        end
-                    end
-                end
-            end
-        end
+        local active_error = installer_error(resolved.packages, raw_state.entries)
+        if active_error then return nil, active_error end
         local compatibility_error = native_compat.check(resolved.packages, baked_identity)
         if compatibility_error then return nil, compatibility_error end
     end
@@ -288,7 +396,27 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         if change ~= "keep" or item.component == request.component or not same_digest then
             for _, id in ipairs(item.requirements.missing) do missing[#missing + 1] = id end
         end
-        modules[#modules + 1] = {component = item.component, version = item.version, previous_version = previous,
+        local reason: string? = nil
+        if change == "keep" and component_roots[item.component] then
+            local constraints: {string} = {}
+            for _, parent in ipairs(resolved.packages) do
+                for _, edge in ipairs(parent.dependencies) do
+                    if edge.component == item.component then constraints[#constraints + 1] = parent.component .. " requires " .. edge.version end
+                end
+            end
+            for _, root in ipairs(installed.roots) do
+                if root.component == item.component and not inventory.host_component(root) then
+                    constraints[#constraints + 1] = root.id .. " requires " .. root.version
+                end
+            end
+            table.sort(constraints)
+            reason = retained_reasons[item.component]
+            if #constraints > 0 then
+                reason = (reason and (reason .. "; ") or "") .. table.concat(constraints, ", ")
+            end
+            if not reason then reason = "no newer compatible version published for bee/bee " .. request.version end
+        end
+        modules[#modules + 1] = {component = item.component, version = item.version, previous_version = previous, reason = reason,
             digest = item.digest, change = change, entries = #item.entries, requirements = item.requirements}
         if change ~= "keep" then
             if not self_update and protected[item.component] and old then

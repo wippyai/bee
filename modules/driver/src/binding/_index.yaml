@@ -4,18 +4,15 @@ entries:
 - name: universal
   kind: library.lua
   source: file://universal.lua
-  modules:
-  - registry
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     descriptor: bee.driver.descriptor:descriptor
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration
     types: bee.driver:types
     locate: bee.driver.locate:locate
     codec_registry: bee.driver.codec:codec_registry
-    option_render: bee.driver.configuration:option_render
-    normalizer: bee.driver.kit:normalize
+    option_render: bee.driver.binding:option_render
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
@@ -26,3 +23,36 @@ entries:
     profile: bee.driver.profiles:profile
     descriptor: bee.driver.descriptor:descriptor
     types: bee.driver:types
+- name: quote
+  kind: library.lua
+  source: file://quote.lua
+- name: toml
+  kind: library.lua
+  source: file://toml.lua
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules:
+  - hash
+  - funcs
+  - security
+  - registry
+  - json
+  - toml
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    driver_resolver: bee.driver.binding:resolver
+    types: bee.driver:types
+    instructions: bee.driver.profiles:instructions
+- name: option_render
+  kind: library.lua
+  source: file://option_render.lua
+  modules:
+  - json
+  - toml
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    configuration: bee.driver.binding:configuration

@@ -14,4 +14,4 @@ entries:
     placement_decode: bee.placement:decode
     transitions: bee.placement:transitions
     request_protocol: bee.placement:request
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration

@@ -14,10 +14,10 @@ entries:
     launch: bee.driver.agy.binding:launch
     protocol: bee.driver.agy.binding:protocol
     configuration: bee.driver.agy.binding:configuration
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
     observation: bee.threads.records:observation
     stream_json: bee.driver.transport:stream_json
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     bounds: bee.values:bounds
     record_bounds: bee.threads.records:bounds
     driver_types: bee.driver:types

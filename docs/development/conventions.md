@@ -73,6 +73,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |
+| `modules/driver/src` | Driver contracts and shared types at the root; configuration, option rendering, quoting and TOML helpers in `.binding`, observations and normalization in `.codec`, and framing in `.transport` |
 | `modules/placement/src` | Shared placement contract, launch values, transition rules and binding resolution |
 | `modules/sync/src` | Owner-local projection, event and receipt ledger |
 | `modules/approvals/src` | Durable approval owner, inbox feed and outbox worker |

@@ -381,11 +381,6 @@ entries:
         container_omit:
         - hooks
         - mcp_servers
-- name: locate
-  kind: library.lua
-  source: file://locate.lua
-  imports:
-    universal: bee.driver.binding:universal
 - name: command
   kind: registry.entry
   meta:

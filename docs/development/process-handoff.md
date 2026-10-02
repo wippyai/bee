@@ -94,10 +94,12 @@ application still follow that application's normal stop lifecycle; no native
 session state is invented.
 
 The standalone acceptance checks the live registry renderer as well as the
-retained window's code marker. Core self-update retains host-selected child
-component definitions and requirement parameters. Independent component updates
-expose their new registry code before application replacement can occur; running
-executions follow their existing lifecycle. The broker does not synthesize a
+retained window's code marker. Update Bee selects the core and the
+newest compatible versions of host-selected Bee component roots in one plan and
+registry transaction, preserving requirement parameters and removed components.
+The review explains components retained because no compatible update is available.
+Updated component definitions expose their new registry code before application
+replacement; running executions follow their existing lifecycle. The broker does not synthesize a
 second registry or restart path for core updates.
 
 The desktop session and workspace host already use same-PID handoff; desktop

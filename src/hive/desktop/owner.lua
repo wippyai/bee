@@ -5,6 +5,7 @@
 -- to it, and that supervisor holds a lease on the workspace's host until the
 -- workspace's last session ends.
 local process = require("process")
+local env = require("env")
 local security = require("security")
 local channel = require("channel")
 local time = require("time")
@@ -292,8 +293,10 @@ function M.startup_failure(state: State?, reason: string): ()
         owner_name = key and retained.owner_name(key) or ""
     end
     if owner_name == "" then return end
+    local detail = reason:sub(1, 4096)
+    assert(env.set("bee.launch:startup_error", detail))
     local route = process.registry.lookup(owner_name)
-    if route then send(tostring(route), "bee.retained.failure", {version = 1, error = reason:sub(1, 4096)}) end
+    if route then send(tostring(route), "bee.retained.failure", {version = 1, error = detail}) end
 end
 -- Whether a retained desktop supervisor serves the workspace now.
 function M.serves(state: State, workspace_id: string): boolean
@@ -826,6 +829,7 @@ function M.event(state: State, event: process.Event, now: integer): ()
         local result: unknown = event.result
         local cause = type(result) == "table" and result.error ~= nil and tostring(result.error) or "without an error result"
         if served.folder then
+            M.startup_failure(state, "Retained desktop owner exited: " .. cause)
             state.stopped = true
             error("Retained desktop owner exited: " .. cause)
         end

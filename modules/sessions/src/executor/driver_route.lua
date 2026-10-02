@@ -28,7 +28,9 @@ function M.decode(binding_ref: string, raw_binding: unknown, lookup: Lookup): (M
     if not binding or binding.kind ~= "contract.binding" or type(contracts) ~= "table" then
         return nil, "selected driver binding is malformed"
     end
-    local prefix = binding_ref:gsub(":", ".") .. ":"
+    local namespace = binding_ref:match("^([^:]+):[^:]+$")
+    if not namespace then return nil, "selected driver binding is malformed" end
+    local prefix = namespace .. ":"
     local selected: Object? = nil
     for _, raw_contract in ipairs(contracts) do
         local contract = object(raw_contract)

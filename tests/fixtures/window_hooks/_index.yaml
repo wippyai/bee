@@ -264,7 +264,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.host:main
-    - bee.session:main
+    - bee.desktop.service:main
     - bee.apps:broker
     - bee.terminal:main
     effect: allow

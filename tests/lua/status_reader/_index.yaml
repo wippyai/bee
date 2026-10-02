@@ -27,9 +27,9 @@ entries:
   modules: [funcs]
   imports:
     test: wippy.test:test
-    bindings: bee.session:bindings
+    bindings: bee.desktop.types:bindings
     model: bee.desktop:model
-    statuses: bee.session:statuses
+    statuses: bee.desktop.service:statuses
     reader: bee.app:status_reader
 - name: model_test
   kind: function.lua
@@ -59,6 +59,6 @@ entries:
   modules: [funcs, security, channel]
   imports:
     test: wippy.test:test
-    driver: bee.session:status
+    driver: bee.desktop.service:status
     reader: bee.app:status_reader
     harness: bee.threads:harness

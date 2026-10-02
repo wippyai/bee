@@ -31,7 +31,7 @@ def injected_database():
 local function main()
     local db = assert(store.database(nil))
     local rows = assert(db:query("SELECT count(*) AS count FROM workspace_schema_migrations"))
-    assert(rows[1].count == 12)
+    assert(rows[1].count == 14)
     assert(db:release())
 end
 return {main = main}
@@ -51,7 +51,7 @@ return {main = main}
             'workspace-component-probe'], cwd=project, env=database_environment(project), capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stdout + result.stderr
         with sqlite3.connect(project / 'injected.db') as db:
-            assert db.execute('SELECT count(*) FROM workspace_schema_migrations').fetchone()[0] == 12
+            assert db.execute('SELECT count(*) FROM workspace_schema_migrations').fetchone()[0] == 14
             assert db.execute('SELECT count(*) FROM workspaces').fetchone()[0] == 0
         default = project / 'workspace.db'
         if default.exists():
@@ -115,7 +115,9 @@ def native_boot(binary, folder, state, application=None):
 
 def restored_state(before, after):
     assert before['workspace'] == after['workspace']
-    for key in ['ledger', 'workspaces', 'assignments', 'receipts', 'bindings']:
+    assert after['ledger'][:len(before['ledger'])] == before['ledger']
+    assert [row[0] for row in after['ledger']] == list(range(1, 15))
+    for key in ['workspaces', 'assignments', 'receipts', 'bindings']:
         assert before[key] == after[key], key
     for workspace, last_used in before['usage'].items():
         assert after['usage'][workspace] >= last_used

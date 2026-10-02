@@ -6,6 +6,8 @@ a full node owner restart from committed state. Selective process handoff does
 not support mixing topic namespaces; saved applications recover with the current
 protocol after restart.
 
+The `bee/desktop` component owns the desktop session at
+`bee.desktop.service:main`, with checkpoint decoders in `bee.desktop.types`.
 Bee supports a same-PID code handoff for the desktop session. The
 runtime delivers `OUTDATED` only after the session opts in. The session drains
 accepted desktop commands and binding updates before calling `process.upgrade`

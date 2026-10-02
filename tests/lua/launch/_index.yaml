@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    startup_failure: bee.launch:startup_failure
+    retained: bee.launch:retained_protocol
 - name: ownership_test
   kind: function.lua
   source: file://ownership_test.lua

@@ -53,7 +53,13 @@ def declared_migrations(source):
 
 def bytes_check():
     for path in ['modules/workspace/src/migrations/migrations.lua', 'src/client/store.lua']:
-        prior = subprocess.check_output(['git', 'show', 'origin/main:' + ('src/storage/store.lua' if path == 'modules/workspace/src/migrations/migrations.lua' else path)], cwd=ROOT, text=True)
+        baseline_path = path
+        if path == 'modules/workspace/src/migrations/migrations.lua':
+            exists = subprocess.run(['git', 'cat-file', '-e', 'origin/main:' + path], cwd=ROOT,
+                capture_output=True, check=False)
+            if exists.returncode:
+                baseline_path = 'src/storage/store.lua'
+        prior = subprocess.check_output(['git', 'show', 'origin/main:' + baseline_path], cwd=ROOT, text=True)
         current = (ROOT / path).read_text()
         assert declared_migrations(current) == declared_migrations(prior), path
     for path in sorted((ROOT / 'modules').glob('*/src/migrations/*.lua')):

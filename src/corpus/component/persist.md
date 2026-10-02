@@ -59,6 +59,7 @@ environment without a terminal. Ready owners and isolated compositions expose
 an empty field. Repeated or regressing checkpoints do not renew startup waits.
 Migration SQL and checksums remain unchanged.
 
-The current runtime pin exposes SQLite messages without numeric result codes.
-Runtime [PR #891](https://github.com/wippyai/runtime/pull/891) adds `sqlite_code` and `sqlite_extended_code`
-to Lua error details; those fields arrive with that runtime release.
+The transaction runner classifies SQLite busy (5) and locked (6) from
+`err:details().sqlite_code`, including extended codes via their primary code.
+Other errors remain internal failures even when their text contains "busy" or
+"locked". Error messages retain the original operation and runtime text.

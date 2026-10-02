@@ -291,9 +291,9 @@ rejection. The same build seals a Hub core with `bee.deps` excluded; the Hub
 composition supplies those host-selected roots. The bundled baseline and Hub
 core share the component artifacts, and host admission authorizes their use.
 
-New runtime patches require upstream Go tests, a refreshed runtime checksum and
-a clean pinned build. `make -C native patched-check` validates the native source
-against the manifest without modifying repository module files. Documentation
+Runtime updates require upstream Go tests, a refreshed runtime checksum and
+a clean pinned build. `make -C native pinned-check` validates the native module
+against the manifest without replacements or patches. Documentation
 edits need link/source consistency checks and an update to the relevant current
 contract; avoid machine-specific paths, credentials and local stores.
 

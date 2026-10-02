@@ -172,9 +172,7 @@ external links resolve to regular files owned by the process UID or root;
 the target and every canonical parent through filesystem root must also have
 `mode & 022 == 0`, including sticky directories. Resolution is bounded to 40
 symlinks and detects loops. Refusals retain the runtime's path and reason in the
-broker and Agent catalog. This requires the runtime release containing
-[runtime#890](https://github.com/wippyai/runtime/pull/890); the current pin safely
-ignores the field and retains containment. Windows retains containment because
+broker and Agent catalog. The pinned runtime implements this policy. Windows retains containment because
 ownership/ACL evidence is unavailable. See the
 [credential contract](../../modules/credentials/src/README.md#machine-login-links).
 

@@ -59,7 +59,7 @@ hub-self-update-runtime-check:
 	python3 tests/runtime_self_update_check.py
 .PHONY: hub-self-update-standalone-check
 hub-self-update-standalone-check:
-	BEE_RUNTIME="$(or $(BEE_RUNTIME),$(abspath $(WIPPY)))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
 .PHONY: hub-core-artifact-check
 hub-core-artifact-check: native-pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/core_artifact.py "$(abspath $(BEE_DEPLOYMENT))" "$(abspath $(BEE_BUNDLE_MANIFEST))"
@@ -752,10 +752,9 @@ layout-upgrade-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/layout_upgrade.py --previous "$(abspath $(LAYOUT_PREVIOUS_BEE))" --binary "$(abspath $(BEE_BINARY))" --previous-source "$(abspath $(LAYOUT_PREVIOUS_SOURCE))"
 
 .PHONY: login-links-check
-# Explicit proof against the local runtime PR build; the production pin stays unchanged.
-login-links-check:
-	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
-	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)
+# Synthetic login-link acceptance against the pinned upstream toolchain.
+login-links-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/login_links.py
 
 .PHONY: ui-module
 ui-module:

@@ -467,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 982,
+      "bytes": 1645,
       "id": "component/persist",
-      "sha256": "6af2ef4e8a77b2bccb23c295388422ad6186a38c9c50fb90a6e4a2b4f35f4e25",
+      "sha256": "fc148580d65d0f5fd03db0682009a7dd5986584df6b1bd31ea5ece7ccb36544b",
       "source": "modules/persist/src/README.md",
       "title": "bee.persist",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 726335,
+    "bytes": 726998,
     "documents": 77
   }
 }

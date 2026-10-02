@@ -2,11 +2,15 @@ version: '1.0'
 namespace: bee.security.storage
 entries:
 - name: workspace_storage_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
     actions:
+    - env.get
+    - env.set
     - db.get
     resources:
+    - bee.persist:startup_progress
     - bee.env:workspace_db
     effect: allow
 - name: workspace_storage_boundary
@@ -65,13 +69,14 @@ entries:
     resources: [security, bee.security.storage:workspace_catalog_scope, bee.workspace.catalog:backend]
     effect: allow
 - name: workspace_catalog_store_policy
-  kind: security.policy
+  kind: security.policy.expr
   groups: [workspace_catalog_scope]
   meta:
     comment: The catalog backend's store, the host's admitted roots and its own execution
   policy:
-    actions: [db.get, registry.get, bee.workspace.manager.execute]
-    resources: [bee.env:workspace_db, bee.resources:roots_ref, bee.resources:resource_roots, bee.workspace.catalog:backend]
+    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
+    actions: [db.get, registry.get, bee.workspace.manager.execute, env.set, env.get]
+    resources: [bee.env:workspace_db, bee.resources:roots_ref, bee.resources:resource_roots, bee.workspace.catalog:backend, bee.persist:startup_progress]
     effect: allow
 - name: workspace_catalog_volume_policy
   kind: security.policy

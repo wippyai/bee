@@ -28,6 +28,16 @@ local function define_tests()
         end)
     end)
     test.describe("Retained startup progress", function()
+        test.it("survives a delayed phase while owner work advances and bounds a stall", function()
+            local state = startup_watchdog.new(0, 10000)
+            test.is_true(startup_watchdog.advance(state, "booting", 1))
+            for revision = 1, 8 do
+                test.is_true(startup_watchdog.advance(state, "booting", revision * 9000, revision))
+                test.is_false(startup_watchdog.expired(state, revision * 9000 + 9999))
+            end
+            test.is_false(startup_watchdog.advance(state, "booting", 81000, 8))
+            test.is_true(startup_watchdog.expired(state, 82000))
+        end)
         test.it("accepts bounded readiness phases and refuses malformed progress", function()
             for _, phase in ipairs({"booting", "host_leasing", "host_attaching",
                 "client_boot", "admitting", "rendering", "running"}) do

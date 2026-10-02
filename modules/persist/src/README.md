@@ -16,3 +16,11 @@ Owned-store consumers include `bee.approvals`, `bee.credentials.persist`,
 `bee.sync.persist`, and `bee.threads.persist` (ledger
 `bee_thread_schema_migrations`, label `thread`). `bee.storage:store` still
 carries its workspace ledger. Moving that ledger here remains a proposal.
+
+Missing migrations announce their owner label and old/new revision before work,
+and completion after commit, through `bee.persist:startup_progress`, backed by the native host environment.
+The owning store scope grants reads and writes only to this progress field; no terminal is required.
+Stores report while retained startup is active; ready owners and isolated compositions expose an empty field.
+Verification advances progress as ledger rows are first checked; repeated or regressing checkpoints do not renew startup waits. Cache and
+migration activity let the retained launch distinguish slow work from a stall.
+Migration SQL and checksums remain unchanged.

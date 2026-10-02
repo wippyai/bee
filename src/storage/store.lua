@@ -4,6 +4,7 @@
 -- Registry configuration owns its file and lifecycle. Applications cannot import
 -- this library and their database boundary denies the reserved store namespaces.
 local sql = require("sql")
+local env = require("env")
 local json = require("json")
 local hash = require("hash")
 local binding = require("binding")
@@ -438,6 +439,8 @@ local function migration_map(): {[integer]: Migration}
 end
 
 local function migrate(db: sql.DB): (boolean, string?)
+    local active = env.get("bee.persist:startup_progress")
+    local reporting = active ~= nil and active ~= ""
     local tx, begin_err = db:begin()
     if not tx then return false, error_text("begin workspace migration", begin_err) end
 
@@ -505,6 +508,7 @@ local function migrate(db: sql.DB): (boolean, string?)
             return false, "workspace migration checksum changed for id " .. tostring(id)
         end
         known[id] = true
+        if reporting then env.set("bee.persist:startup_progress", "Checking data: workspace " .. tostring(id) .. "/" .. tostring(#migrations)) end
         expected_id = expected_id + 1
     end
 
@@ -515,6 +519,7 @@ local function migrate(db: sql.DB): (boolean, string?)
                 rollback(tx)
                 return false, checksum_err or "workspace migration checksum is unavailable"
             end
+            if reporting then env.set("bee.persist:startup_progress", "Upgrading data: workspace " .. tostring(migration.id - 1) .. "->" .. tostring(migration.id)) end
             local _, apply_err = tx:execute(migration.sql)
             if apply_err then
                 rollback(tx)
@@ -528,6 +533,7 @@ local function migrate(db: sql.DB): (boolean, string?)
                 rollback(tx)
                 return false, error_text("record workspace migration " .. migration.name, record_err)
             end
+            if reporting then env.set("bee.persist:startup_progress", "Applied data: workspace " .. tostring(migration.id)) end
         end
     end
 
@@ -536,6 +542,7 @@ local function migrate(db: sql.DB): (boolean, string?)
         rollback(tx)
         return false, error_text("commit workspace migration", commit_err)
     end
+    if reporting then env.set("bee.persist:startup_progress", "Upgraded data: workspace") end
     return true, nil
 end
 

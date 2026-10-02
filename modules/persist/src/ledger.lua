@@ -5,6 +5,7 @@
 -- before any table is touched.
 local sql = require("sql")
 local hash = require("hash")
+local env = require("env")
 local M = {}
 type Migration = {id: integer, name: string, sql: string, rebuild: boolean}
 type Ledger = {table: string, label: string}
@@ -36,7 +37,7 @@ function M.check(expected: {Migration}): string?
     end
     return nil
 end
-local function read_ledger(db: sql.DB, ledger: Ledger, expected: {Migration}): ({[integer]: boolean}?, string?)
+local function read_ledger(db: sql.DB, ledger: Ledger, expected: {Migration}, reporting: boolean): ({[integer]: boolean}?, string?)
     local name, name_error = table_name(ledger)
     if not name then return nil, name_error end
     local _, create_err = db:execute("CREATE TABLE IF NOT EXISTS " .. name .. [[ (
@@ -67,6 +68,7 @@ local function read_ledger(db: sql.DB, ledger: Ledger, expected: {Migration}): (
         if row_name ~= migration.name then return nil, ledger.label .. " migration name changed" end
         if checksum ~= expected_checksum then return nil, ledger.label .. " migration checksum changed" end
         known[id] = true
+        if reporting then env.set("bee.persist:startup_progress", "Checking data: " .. ledger.label .. " " .. tostring(id) .. "/" .. tostring(#expected)) end
         expected_id = expected_id + 1
     end
     return known, nil
@@ -141,12 +143,18 @@ end
 function M.apply(db: sql.DB, ledger: Ledger, expected: {Migration}): (boolean, string?)
     local shape_error = M.check(expected)
     if shape_error then return false, shape_error end
-    local known, ledger_err = read_ledger(db, ledger, expected)
+    local active = env.get("bee.persist:startup_progress")
+    local reporting = active ~= nil and active ~= ""
+    if reporting then env.set("bee.persist:startup_progress", "Checking data: " .. ledger.label) end
+    local known, ledger_err = read_ledger(db, ledger, expected, reporting)
     if not known then return false, ledger_err end
     for _, migration in ipairs(expected) do
         if not known[migration.id] then
+            local phase = ledger.label .. " " .. tostring(migration.id - 1) .. "->" .. tostring(migration.id)
+            if reporting then env.set("bee.persist:startup_progress", "Upgrading data: " .. phase) end
             local applied, apply_err = apply_one(db, ledger, migration)
             if not applied then return false, apply_err end
+            if reporting then env.set("bee.persist:startup_progress", "Upgraded data: " .. phase) end
         end
     end
     return true, nil

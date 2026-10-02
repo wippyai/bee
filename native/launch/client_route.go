@@ -41,8 +41,11 @@ func defaultClientSeams() clientSeams {
 		join:           joinOwner,
 		waitEnrolled:   waitEnrolled,
 		report:         os.Stdout,
+		progressReport: os.Stderr,
 		released:       waitReleased,
 		holdOwnerExit:  holdOwnerProcessExit,
+		progress:       observeStartup,
+		abortOwner:     abortStartedOwner,
 	}
 }
 
@@ -53,7 +56,9 @@ func waitEnrolled(ctx context.Context, state, node string, public ed25519.Public
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(waitOwnerTimeout)
+	progressWait := newStartupWait(time.Now(), waitOwnerTimeout)
+	phase := ""
+	ownerSeen := false
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -62,13 +67,38 @@ func waitEnrolled(ctx context.Context, state, node string, public ed25519.Public
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		startup, progressError := readStartup(state)
+		if progressError != nil && !errors.Is(progressError, os.ErrNotExist) {
+			return progressError
+		}
+		if err != nil || !startup.belongsTo(descriptor.OwnerPID, descriptor.Launch) {
+			startup = startupSnapshot{}
+		}
 		if err == nil {
+			ownerSeen = true
 			if key, ok := enrollment.Resolve(ctx, descriptor.Execution, node); ok && key.Equal(public) {
-				return nil
+				if startup.Version == 0 || (startup.Ready && !startup.Stopped) {
+					return nil
+				}
 			}
 		}
-		if time.Now().After(deadline) {
-			return errors.New("owner did not enroll this client before the timeout")
+		if err := progressWait.observe(time.Now(), startup); err != nil {
+			return err
+		}
+		if startup.Version == 1 && startup.Phase != phase {
+			phase = startup.Phase
+			if _, err := fmt.Fprintln(os.Stderr, phase+"…"); err != nil {
+				return err
+			}
+		}
+		if ownerSeen {
+			running, err := app.Owned(state)
+			if err != nil {
+				return err
+			}
+			if !running {
+				return errors.New("Bee owner exited before client enrollment")
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -196,7 +226,7 @@ func startDetachedOwner(ctx context.Context, launch app.Launch, launchID string)
 		return nil, nil, err
 	}
 	command := execOwnerCommand(executable, launch, log)
-	command.Env = append(os.Environ(), ownerLaunchVariable+"="+launchID)
+	command.Env = append(os.Environ(), ownerLaunchVariable+"="+launchID, ownerProgressLogVariable+"="+log.Name())
 	done, wait, err := startDetachedCommand(ctx, command)
 	if err != nil {
 		_ = log.Close()

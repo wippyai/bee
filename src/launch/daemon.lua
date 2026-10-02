@@ -6,20 +6,31 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local io = require("io")
+local env = require("env")
 local system = require("system")
 local logger = require("logger")
 local leases = require("leases")
 local command_stop = require("command_stop")
 local types = require("types")
+local startup_watchdog = require("startup_watchdog")
 
 local function main()
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     -- The node serves once its host manager and Hive supervisor run.
-    local deadline = time.after("10s")
+    local started = time.now()
+    local startup = startup_watchdog.new(0, 10000)
+    local phase = "starting services"
     while not process.registry.lookup(leases.MANAGER) or not process.registry.lookup(types.SUPERVISOR_NAME) do
-        local selected = channel.select({time.after("50ms"):case_receive(), deadline:case_receive(), events:case_receive()})
-        if selected.channel == deadline then error("The node's host manager or Hive supervisor did not start") end
+        local now_ms = math.floor(time.now():sub(started):milliseconds())
+        local raw = env.get("bee.env:startup_sequence")
+        local sequence = raw and tonumber(raw)
+        if sequence and sequence > 0 and sequence == math.floor(sequence) then
+            startup_watchdog.advance(startup, "starting", now_ms, math.floor(sequence))
+            phase = env.get("bee.env:startup_phase") or phase
+        end
+        if startup_watchdog.expired(startup, now_ms) then error("Node startup stalled during " .. phase .. ": no progress for 10s") end
+        local selected = channel.select({time.after("50ms"):case_receive(), events:case_receive()})
         if selected.channel == events and selected.value.kind == process.event.CANCEL then return end
     end
     local self = tostring(process.pid())
@@ -31,6 +42,7 @@ local function main()
     local stops, stops_error = command_stop.open()
     if not stops then error(stops_error) end
     logger:info("Bee daemon ready", {node = node})
+    env.set("bee.env:startup_phase", "running")
     assert(io.print("BEE_DAEMON_READY " .. node .. " " .. seed .. " " .. self))
     while true do
         local selected = channel.select({events:case_receive(), stops.channel:case_receive()})

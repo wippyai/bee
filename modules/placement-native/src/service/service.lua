@@ -640,8 +640,7 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
                 outcome = fail("UNAVAILABLE", "start cancelled")
             end
         else
-            local current = load(attempt.attempt_id)
-            outcome = succeed(current)
+            outcome = fail("UNCERTAIN", "runner did not acknowledge startup within " .. tostring(request.timeouts.start_ms) .. "ms; startup outcome is unknown")
         end
     end
     process.unlisten(replies)

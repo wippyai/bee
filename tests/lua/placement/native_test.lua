@@ -2896,6 +2896,32 @@ local function define_tests()
             end, 8000) then error("successor retained launch did not exit") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
         end)
+        test.it("reports an unacknowledged startup deadline as uncertain and leaves the runner supervised", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            local timeouts = assert(bounds.object(request.timeouts))
+            timeouts.start_ms = 100
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
+            local deadline = time.after("10s")
+            local selected = channel.select({pending:case_receive(), deadline:case_receive()})
+            process.unlisten(pending)
+            if not selected.ok or selected.channel == deadline then error("startup fixture did not claim the attempt") end
+            local message = selected.value
+            local data = assert(bounds.object(message:payload():data()))
+            local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+            local stopped = process.terminate(tostring(message:from()))
+            test.is_true(stopped)
+            test.eq(data.attempt_id, prepared.attempt_id)
+            if call_error then error(tostring(call_error)) end
+            local reply = principals.reply(raw)
+            test.is_false(reply.ok)
+            test.eq(reply.error and reply.error.code, "UNCERTAIN")
+            test.eq(reply.error and reply.error.message, "runner did not acknowledge startup within 100ms; startup outcome is unknown")
+            test.eq(current.execution_state, "starting")
+            test.is_false(has(kinds(prepared.attempt_id), "child.started"))
+        end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()
             local workspace = fresh("ws")
@@ -2954,7 +2980,7 @@ local function define_tests()
             local recorded = kinds(revoked_attempt)
             if capability == "process_group" then
                 test.is_true(has(recorded, "credential.revoked"))
-                test.is_false(has(recorded, "grant.revoked"))
+                test.is_false(has(recorded, "grant.revoked"), "credential revocation was also recorded as a resource grant revocation")
                 test.is_true(has(recorded, "stop.requested"))
             else
                 attempt_of(call(OWNER, "stop", {attempt_id = revoked_attempt, mode = "forced"}))
@@ -2973,7 +2999,7 @@ local function define_tests()
             unrunnable.projections = {missing.projection_id}
             attempt_of(call(OWNER, "prepare", unrunnable))
             local failed = call(OWNER, "start", {attempt_id = missing_attempt})
-            test.is_false(failed.ok)
+            test.is_false(failed.ok, "a nonexistent executable returned a successful start reply")
             if tostring(failed.error and failed.error.message):find(SENTINEL, 1, true) then error("sentinel leaked into the start reply") end
             local failed_page = value(call(OWNER, "evidence", {attempt_id = missing_attempt, limit = 64}))
             for _, item in ipairs(principals.objects(failed_page.evidence)) do

@@ -34,6 +34,9 @@ the replaceable `target_root` requirement.
    transaction, not a home lock or a separate manager.
 2. `start` spawns the runner under the placement scope and waits for its
    startup acknowledgment within the admitted start budget.
+   An elapsed budget returns `UNCERTAIN` without changing the recorded execution
+   state or stopping the runner. The caller checks `status` or `reconcile` before
+   deciding what to do next; an unacknowledged start does not authorize a retry.
    `stop` before the runner claims startup atomically records exit and complete
    cleanup, releasing the retained session without touching its existing files.
    A delayed start cannot claim that stopped attempt; repeated stops return its

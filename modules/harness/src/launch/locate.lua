@@ -89,13 +89,15 @@ local function executable_version(path: string, probe: {[string]: unknown}): (st
     return probe_version.read(path, probe, function(argv) return capture(argv, nil, false) end)
 end
 
-local function login_exists(path: string, variable: string?, directory: string?): boolean?
+local function login_exists(path: string, variable: string?, directory: string?): (boolean?, string?)
     local volume = fs.get(LOGIN_SOURCE)
     if not volume then return nil end
     local info, stat_error = volume:stat(path)
     if info then return true end
     if stat_error and stat_error:kind() == errors.NOT_FOUND then return false end
-    return nil
+    local reason = tostring(stat_error or "login source could not be inspected"):gsub("[%c]", " "):sub(1, 512)
+    if stat_error and stat_error:kind() == errors.PERMISSION_DENIED then return false, reason end
+    return nil, reason
 end
 
 local function environment_names(): {[string]: boolean}?

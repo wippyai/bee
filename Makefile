@@ -682,3 +682,9 @@ lua-boundary-check:
 layout-upgrade-check:
 	@test -n "$(LAYOUT_PREVIOUS_BEE)" -a -n "$(LAYOUT_PREVIOUS_SOURCE)" || { echo 'Set LAYOUT_PREVIOUS_BEE and LAYOUT_PREVIOUS_SOURCE to origin/main build and source.'; exit 1; }
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/layout_upgrade.py --previous "$(abspath $(LAYOUT_PREVIOUS_BEE))" --binary "$(abspath $(BEE_BINARY))" --previous-source "$(abspath $(LAYOUT_PREVIOUS_SOURCE))"
+
+.PHONY: login-links-check
+# Explicit proof against the local runtime PR build; the production pin stays unchanged.
+login-links-check:
+	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
+	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)

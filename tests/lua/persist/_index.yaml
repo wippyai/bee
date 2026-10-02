@@ -22,14 +22,5 @@ entries:
   imports:
     test: wippy.test:test
     ledger: bee.persist.persist:ledger
-  security: {policies: [bee.persist:ledger_test_policy]}
-- name: transaction_test
-  kind: function.lua
-  source: file://transaction_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [sql]
-  imports:
-    test: wippy.test:test
     transaction: bee.persist.persist:transaction
   security: {policies: [bee.persist:ledger_test_policy]}

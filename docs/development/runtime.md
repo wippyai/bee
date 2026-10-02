@@ -2,10 +2,10 @@
 
 Bee builds Wippy from the repository and commit recorded in
 [`wippy.build.json`](../../wippy.build.json). The same manifest records Bee's Go
-version and build tags; Bee builds unpatched upstream runtime sources. Bee does not vendor a runtime source directory.
+version and build tags. Bee builds unpatched upstream runtime sources and does
+not vendor a runtime source directory.
 
-Bee builds from unpatched runtime main; the manifest lists no patches. `make setup` and standalone builds use the same builder
-and manifest. Wippy owns application deployment, Hub resolution, command
+`make setup` and standalone builds use the same builder and manifest. Wippy owns application deployment, Hub resolution, command
 dispatch, state opening and shutdown; Bee registers its native components
 through Wippy boot. Bee uses
 `err:details().sqlite_code` to classify SQLite busy/locked errors for owned stores,
@@ -39,7 +39,7 @@ make portable-deployment-check
 make standalone
 ```
 
-The generated provenance records the selected runtime commit and any patch digests.
+The generated provenance records the selected runtime commit.
 A runtime change is ready only when the manifest, dependency identity checks and Bee's
 relevant acceptance gates agree. Experimental upstream work remains outside the
 published integration until its own acceptance contract exists.

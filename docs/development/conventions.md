@@ -201,7 +201,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The current root contains 24,067 Lua lines under `src/`, with the same value
+The current root contains 23,987 Lua lines under `src/`, with the same value
 as its initial ceiling in `build/root-src-lua-budget.txt`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.
 Lower the ceiling as later component moves reduce root code.

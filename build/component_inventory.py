@@ -57,6 +57,9 @@ SQL_TABLE = re.compile(
     r"(?!IF\s+NOT\s+EXISTS\b)(?:[\"`\[])?([A-Za-z_][A-Za-z0-9_]*)",
     re.IGNORECASE,
 )
+LEDGER_TABLE = re.compile(
+    r"\b(?:MIGRATION_TABLE|table)\s*=\s*([\"'])([A-Za-z][A-Za-z0-9_]*_schema_migrations)\1"
+)
 HANDOFF_TARGET = re.compile(r"\bmake\s+([a-z][A-Za-z0-9_.-]*-check)\b")
 PROPOSAL_EVIDENCE = re.compile(
     r"Hive supervisor and module service handoff and generation rollback remain\s+proposals\."
@@ -469,13 +472,12 @@ def build_inventory():
     for path in sorted(lua_paths):
         text = path.read_text(encoding="utf-8")
         source = rel(path)
-        for schema in SCHEMA_TAG.findall(text):
-            schema_sources[schema].add(source)
         owner = nearest_namespace(path, index_documents)
         if owner.endswith(".migrations"):
             owner = owner[: -len(".migrations")]
-        for match in SQL_TABLE.finditer(text):
-            table = match.group(1)
+        table_matches = [(match, match.group(1)) for match in SQL_TABLE.finditer(text)]
+        table_matches.extend((match, match.group(2)) for match in LEDGER_TABLE.finditer(text))
+        for match, table in table_matches:
             line = text.count("\n", 0, match.start()) + 1
             key = (table, owner, source, line)
             tables[key] = {
@@ -484,6 +486,8 @@ def build_inventory():
                 "source": source,
                 "line": line,
             }
+        for schema in SCHEMA_TAG.findall(text):
+            schema_sources[schema].add(source)
 
     for path in paths:
         text = path.read_text(encoding="utf-8")

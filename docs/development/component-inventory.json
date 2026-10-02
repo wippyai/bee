@@ -10590,6 +10590,12 @@
       "table": "bee_approval_runtime_leases"
     },
     {
+      "line": 28,
+      "owner_namespace": "bee.approvals",
+      "source": "modules/approvals/src/service.lua",
+      "table": "bee_approval_schema_migrations"
+    },
+    {
       "line": 6,
       "owner_namespace": "bee.credentials",
       "source": "modules/credentials/src/migrations/migrations.lua",
@@ -10630,6 +10636,12 @@
       "owner_namespace": "bee.credentials",
       "source": "modules/credentials/src/migrations/migrations.lua",
       "table": "bee_credential_projections"
+    },
+    {
+      "line": 28,
+      "owner_namespace": "bee.credentials.persist",
+      "source": "modules/credentials/src/persist/broker.lua",
+      "table": "bee_credential_schema_migrations"
     },
     {
       "line": 180,
@@ -10678,6 +10690,12 @@
       "owner_namespace": "bee.gateway",
       "source": "modules/gateway/src/migrations/migrations.lua",
       "table": "bee_gateway_listener"
+    },
+    {
+      "line": 43,
+      "owner_namespace": "bee.gateway.binding",
+      "source": "modules/gateway/src/binding/gateway.lua",
+      "table": "bee_gateway_schema_migrations"
     },
     {
       "line": 170,
@@ -10854,6 +10872,12 @@
       "table": "bee_placement_runner_authorities"
     },
     {
+      "line": 18,
+      "owner_namespace": "bee.placement.native.persist",
+      "source": "modules/placement-native/src/persist/store.lua",
+      "table": "bee_placement_schema_migrations"
+    },
+    {
       "line": 112,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
@@ -10882,6 +10906,12 @@
       "owner_namespace": "bee.resources",
       "source": "modules/resources/src/migrations/migrations.lua",
       "table": "bee_resource_node_identity_migrations"
+    },
+    {
+      "line": 21,
+      "owner_namespace": "bee.resources.persist",
+      "source": "modules/resources/src/persist/authority.lua",
+      "table": "bee_resource_schema_migrations"
     },
     {
       "line": 599,
@@ -10978,6 +11008,12 @@
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_versions"
+    },
+    {
+      "line": 7,
+      "owner_namespace": "bee.sync.persist",
+      "source": "modules/sync/src/persist/database.lua",
+      "table": "bee_sync_schema_migrations"
     },
     {
       "line": 98,
@@ -11178,6 +11214,12 @@
       "table": "bee_thread_runs"
     },
     {
+      "line": 8,
+      "owner_namespace": "bee.threads.persist",
+      "source": "modules/threads/src/persist/database.lua",
+      "table": "bee_thread_schema_migrations"
+    },
+    {
       "line": 132,
       "owner_namespace": "bee.threads",
       "source": "modules/threads/src/migrations/migrations.lua",
@@ -11220,103 +11262,103 @@
       "table": "bee_threads"
     },
     {
-      "line": 35,
+      "line": 34,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_desktops"
     },
     {
-      "line": 44,
+      "line": 43,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_layouts"
     },
     {
-      "line": 59,
+      "line": 265,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_schema_migrations"
     },
     {
-      "line": 23,
+      "line": 22,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_state"
     },
     {
-      "line": 99,
+      "line": 85,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_application_thread_bindings"
     },
     {
-      "line": 116,
+      "line": 102,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_application_thread_bindings_v5"
     },
     {
-      "line": 217,
+      "line": 203,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_application_thread_bindings_v6"
     },
     {
-      "line": 72,
+      "line": 58,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_assignments"
     },
     {
-      "line": 181,
+      "line": 167,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_assignments_v6"
     },
     {
-      "line": 79,
+      "line": 65,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_transfer_receipts"
     },
     {
-      "line": 194,
+      "line": 180,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_transfer_receipts_v6"
     },
     {
-      "line": 274,
+      "line": 260,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_folder"
     },
     {
-      "line": 57,
+      "line": 43,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_identity"
     },
     {
-      "line": 35,
+      "line": 27,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_schema_migrations"
     },
     {
-      "line": 45,
+      "line": 31,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_state"
     },
     {
-      "line": 169,
+      "line": 155,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_state_v6"
     },
     {
-      "line": 156,
+      "line": 142,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspaces"
@@ -15512,12 +15554,12 @@
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 77,
-    "owned_table_declaration_count": 131,
+    "owned_table_declaration_count": 138,
     "persisted_id_count": 796,
     "requirement_count": 127,
     "requirement_target_count": 299,
-    "root_src_lua_budget": 24067,
-    "root_src_lua_lines": 24067,
+    "root_src_lua_budget": 23987,
+    "root_src_lua_lines": 23987,
     "schema_tag_count": 70,
     "topic_count": 137
   },

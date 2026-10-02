@@ -20,7 +20,8 @@ multiple presentations must not duplicate execution.
 The generated [component inventory](component-inventory.json) records current
 namespaces and entry IDs, every `ns.requirement` target and its resolver,
 message topics, owned stores and tables, native-known IDs, and checked handoff
-evidence. It reports zero dangling requirement targets. Run
+evidence. Topic values ending in a dot are dynamic prefixes; other values are
+literal topics. It reports zero dangling requirement targets. Run
 `make component-inventory-check` to verify the source snapshot, its persisted
 identity baseline and the root source budget. A persisted ID, topic or schema
 removal needs an entry in `build/component-inventory-migrations.json` naming

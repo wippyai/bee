@@ -1,7 +1,7 @@
 # Repository layout audit
 
 `make lint` runs the permanent placement check in `build/layout_check.py`.
-Production consists of the host `src/` and 43 component `modules/*/src/` roots.
+Production consists of the host `src/` and 47 component `modules/*/src/` roots.
 The only root spelling exception is the public SDK: `application` exports
 `bee.app`. Hyphenated component names expand into namespace nesting; all child
 folders match their namespace. `src/host` is the host's documented desktop-owner
@@ -87,7 +87,8 @@ reviewed binding, and the application journey fixture edits that host selection.
 
 Application entries, renderers, screen models and rendering helpers live under
 component `app/` namespaces. The public rendering kit remains in `application`;
-the desktop component and core terminal sources implement the desktop shell. Placement's
+the desktop and terminal components implement the desktop shell. Root launch
+retains physical display ownership. Placement's
 process-local native terminal facade is an executor contract, not an application
 screen: it consumes the caller's terminal grant. Docker's short window adapter
 selects its backend; it does not duplicate the native facade. Retained

@@ -53,13 +53,13 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `modules/hive-manager/src` | Hive management app as an installable package |
 | `modules/workspace/src` | Workspace catalog contracts, authorized bindings, SQL repositories, immutable migrations and checkpoint/selection values as `bee.workspace` and its `.catalog`, `.binding`, `.persist`, `.migrations` and `.types` children |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
-| `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
-| `src/client` | Desktop client, public commands, qualified layout and client store |
+| `src/launch` | Local startup, presenter selection, physical display ownership, coordinated exit and the node host manager |
+| `modules/client/src` | Desktop attachment actors and commands in `.service`, catalog and attachment operations in `.binding`, qualified layouts and handoff values in `.types`, SQL in `.persist`, immutable migrations in `.migrations` |
 | `src/interaction` | Bounded host/client questions and delivery state |
 | `src/apps` | Admission, application lifecycle, producer capabilities and routing as `bee.apps` |
 | `modules/desktop/src` | Pure scene, reducer and layout values as `bee.desktop`; shared decoders in `.types`, committed projection and status observation in `.service` |
 | `src/protocol` | Private core message decoders |
-| `src/terminal` | Replaceable presenter, input and composition |
+| `modules/terminal/src` | Replaceable presenter and asynchronous delivery in `.service`, input values in `.types`, desktop shell view helpers at `bee.terminal`; physical display ownership stays in `src/launch` |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application client and owner reply decoding |
 | `modules/application-threads/src` | Opt-in authenticated Threads client as `bee.app.threads`, with status reader in `.client` and wire/presentation decoders in `.types` |
@@ -126,6 +126,7 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.placement` | `decode`, `request`, `transitions`, `types` |
 | `bee.placement.native` | `protocol` |
 | `bee.sync` | `protocol`, `replica_protocol`, `types` |
+| `bee.terminal` | `bar`, `chrome`, `connection`, `dialog`, `help`, `menu`, `render`, `selection`, `title_editor`, `window_chrome`, `workspace_menu` |
 | `bee.threads` | `record_types`, `types` |
 | `bee.ui` | `appearance`, `frame`, `text` |
 | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
@@ -176,8 +177,10 @@ Application entries, renderers, screen models and view helpers live in
 `modules/<module>/src/app` as `<module namespace>.app`. The SDK root
 `bee.app` belongs only to `modules/application`; app children such as
 `bee.files.app` import its helpers and own their separate application entries.
-Desktop values and the projection actor live in `modules/desktop/src`; the
-terminal shell remains in `src/terminal`.
+Desktop values and the projection actor live in `modules/desktop/src`; desktop
+client actors and qualified layouts live in `modules/client/src`. The terminal
+shell and delivery live in `modules/terminal/src`; root launch owns the physical
+display.
 
 Within a module, keep shared domain types and contracts at the root. Public contract
 bindings live in `binding`. Workspace catalog contracts retain their existing
@@ -268,7 +271,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 19,277 Lua line ceiling under `src/`, recorded in
+The root has a 13,706 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

@@ -51,8 +51,8 @@ entries:
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
     clock: bee.values:clock
-    delivery: bee.terminal:delivery
-    input: bee.protocol:input
+    delivery: bee.terminal.service:delivery
+    input: bee.terminal.types:input
 - name: command
   kind: process.lua
   source: file://display_command.lua
@@ -113,5 +113,5 @@ entries:
     clock: bee.values:clock
     display: bee.hive.desktop:display
     remote: bee.hive.desktop:remote
-    delivery: bee.terminal:delivery
-    input: bee.protocol:input
+    delivery: bee.terminal.service:delivery
+    input: bee.terminal.types:input

@@ -32,6 +32,8 @@ authorize them. Component services own their domain protocol and state.
 |---|---|---|
 | Core | Workspace/client lifetime, composition, admission and application lifecycle | Runtime primitives and shared value contracts; no default-app implementation imports |
 | Desktop component | Pure scene, focus, geometry and committed projection | Host-selected policies and client lifetime; preserved topics and handoff checkpoints |
+| Client component | Attachment actors, catalog bindings and qualified layout storage | Host-selected private boundaries, resources, command and catalog policies; preserved IDs, topics and checkpoints |
+| Terminal component | Replaceable presenter, shell view helpers, input values and viewport delivery | Host-selected boundary imports and viewport grants; root launch owns the surface and physical display lifetime |
 | Shared UI values | Frame, semantic appearance, bounded text and the forms, visualization, diagram and folder-picker kits in `bee/ui` | Value contracts only; UI has no application SDK or owner-service dependencies |
 | Default apps | Terminal, Settings, Process Manager and other bundled apps | Standalone processes with explicit grants and core protocols |
 | Optional packages | Installed applications, coding tools, harnesses, models and services | Published contracts and host admission |

@@ -85,7 +85,7 @@ local function define_tests()
             test.is_false(call_can(scope, "security.policy.get", "bee.security.storage:workspace_storage_policy"))
             test.is_false(call_can(scope, "security.policy.get", "foreign:policy"))
             test.is_false(call_can(scope, "db.get", "bee.env:client_db"))
-            test.is_false(call_can(scope, "funcs.call", "bee.client:allocate_desktop"))
+            test.is_false(call_can(scope, "funcs.call", "bee.client.binding:allocate_desktop"))
         end)
 
         test.it("constrains broker_policy to worker host while retaining nonhost actions", function()

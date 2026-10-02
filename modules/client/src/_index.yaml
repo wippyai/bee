@@ -1,0 +1,250 @@
+version: '1.0'
+namespace: bee.client
+entries:
+- name: definition
+  kind: ns.definition
+  module: client
+  readme: file://README.md
+  meta:
+    title: Bee client
+    comment: Desktop attachment client, qualified layouts and local catalog; host
+      selects authority and lifetime
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: '*'
+- name: dependency_desktop
+  kind: ns.dependency
+  component: bee/desktop
+  version: '*'
+- name: dependency_workspace
+  kind: ns.dependency
+  component: bee/workspace
+  version: '*'
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: target_protocol_application
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.binding:desktops
+    path: .imports.contract
+  - entry: bee.client.binding:list_desktops
+    path: .imports.contract
+  - entry: bee.client.binding:allocate_desktop
+    path: .imports.contract
+  - entry: bee.client.binding:workspace_pages
+    path: .imports.contract
+  - entry: bee.client.persist:store
+    path: .imports.contract
+  - entry: bee.client.service:main
+    path: .imports.contract
+  - entry: bee.client.service:local
+    path: .imports.contract
+  - entry: bee.client.service:local_command
+    path: .imports.contract
+  - entry: bee.client.service:local_application
+    path: .imports.contract
+  - entry: bee.client.service:desktop
+    path: .imports.contract
+  - entry: bee.client.service:application
+    path: .imports.contract
+  - entry: bee.client.types:lifecycle
+    path: .imports.contract
+  - entry: bee.client.types:handoff
+    path: .imports.contract
+  - entry: bee.client.types:state
+    path: .imports.contract
+- name: target_apps_attachment
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.binding:attachments
+    path: .imports.attachment
+- name: target_launch_retained_protocol
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.retained_protocol
+  - entry: bee.client.service:local
+    path: .imports.retained_protocol
+  - entry: bee.client.service:local_command
+    path: .imports.retained_protocol
+  - entry: bee.client.service:local_application
+    path: .imports.retained_protocol
+  - entry: bee.client.service:desktop
+    path: .imports.retained_protocol
+  - entry: bee.client.service:application
+    path: .imports.retained_protocol
+- name: target_launch_bootstrap
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.launcher
+  - entry: bee.client.service:local
+    path: .imports.launcher
+  - entry: bee.client.service:local_command
+    path: .imports.launcher
+  - entry: bee.client.service:local_application
+    path: .imports.launcher
+  - entry: bee.client.service:desktop
+    path: .imports.launcher
+  - entry: bee.client.service:application
+    path: .imports.launcher
+- name: target_apps_command
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.command
+  - entry: bee.client.service:local
+    path: .imports.command
+  - entry: bee.client.service:local_command
+    path: .imports.command
+  - entry: bee.client.service:local_application
+    path: .imports.command
+  - entry: bee.client.service:desktop
+    path: .imports.command
+  - entry: bee.client.service:application
+    path: .imports.command
+- name: target_protocol_decode
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.decode
+  - entry: bee.client.service:local
+    path: .imports.decode
+  - entry: bee.client.service:local_command
+    path: .imports.decode
+  - entry: bee.client.service:local_application
+    path: .imports.decode
+  - entry: bee.client.service:desktop
+    path: .imports.decode
+  - entry: bee.client.service:application
+    path: .imports.decode
+- name: target_terminal_input
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.input_decode
+  - entry: bee.client.service:local
+    path: .imports.input_decode
+  - entry: bee.client.service:local_command
+    path: .imports.input_decode
+  - entry: bee.client.service:local_application
+    path: .imports.input_decode
+  - entry: bee.client.service:desktop
+    path: .imports.input_decode
+  - entry: bee.client.service:application
+    path: .imports.input_decode
+- name: target_host_inventory
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.inventory
+  - entry: bee.client.service:local
+    path: .imports.inventory
+  - entry: bee.client.service:local_command
+    path: .imports.inventory
+  - entry: bee.client.service:local_application
+    path: .imports.inventory
+  - entry: bee.client.service:desktop
+    path: .imports.inventory
+  - entry: bee.client.service:application
+    path: .imports.inventory
+  - entry: bee.client.types:assignments
+    path: .imports.inventory
+- name: target_host_protocol
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.host_protocol
+  - entry: bee.client.service:local
+    path: .imports.host_protocol
+  - entry: bee.client.service:local_command
+    path: .imports.host_protocol
+  - entry: bee.client.service:local_application
+    path: .imports.host_protocol
+  - entry: bee.client.service:desktop
+    path: .imports.host_protocol
+  - entry: bee.client.service:application
+    path: .imports.host_protocol
+- name: target_host_transfer
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.transfer
+  - entry: bee.client.service:local
+    path: .imports.transfer
+  - entry: bee.client.service:local_command
+    path: .imports.transfer
+  - entry: bee.client.service:local_application
+    path: .imports.transfer
+  - entry: bee.client.service:desktop
+    path: .imports.transfer
+  - entry: bee.client.service:application
+    path: .imports.transfer
+  - entry: bee.client.types:assignments
+    path: .imports.transfer
+- name: target_protocol_display_transfer
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.transfer_ui
+  - entry: bee.client.service:local
+    path: .imports.transfer_ui
+  - entry: bee.client.service:local_command
+    path: .imports.transfer_ui
+  - entry: bee.client.service:local_application
+    path: .imports.transfer_ui
+  - entry: bee.client.service:desktop
+    path: .imports.transfer_ui
+  - entry: bee.client.service:application
+    path: .imports.transfer_ui
+- name: target_launch_display
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:main
+    path: .imports.physical
+  - entry: bee.client.service:local
+    path: .imports.physical
+  - entry: bee.client.service:local_command
+    path: .imports.physical
+  - entry: bee.client.service:local_application
+    path: .imports.physical
+  - entry: bee.client.service:desktop
+    path: .imports.physical
+  - entry: bee.client.service:application
+    path: .imports.physical
+- name: target_interaction_protocol
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.types:inbox
+    path: .imports.questions
+- name: command_host
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:desktop
+    path: .meta.command.host
+  - entry: bee.client.service:application
+    path: .meta.command.host
+- name: command_actor
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:desktop
+    path: .meta.command.security.actor
+  - entry: bee.client.service:application
+    path: .meta.command.security.actor
+- name: command_policies
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.service:desktop
+    path: .meta.command.security.policies
+  - entry: bee.client.service:application
+    path: .meta.command.security.policies
+- name: catalog_policies
+  kind: ns.requirement
+  targets:
+  - entry: bee.client.binding:list_desktops
+    path: .security.policies
+  - entry: bee.client.binding:allocate_desktop
+    path: .security.policies

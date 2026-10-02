@@ -12,14 +12,14 @@ standalone application processes, typed boundary decoders and host-selected
 permissions intact. Registry metadata describes capabilities; it never grants
 them. Native Terminal runs with the operating system user's authority.
 
-Keep desktop responsibilities in the `src/` component folders (`src/host`,
-`src/client`, `src/launch` and their siblings, one namespace per folder),
-public application helpers in `modules/application/src`, shared frame, appearance
-and text helpers and the forms, visualization, diagram and picker kits in
-`modules/ui/src`, and application UI in
-`modules/<module>/src/app` child namespaces. Desktop values and the committed
-projection live in `modules/desktop/src`; the terminal shell remains in
-`src/terminal`.
+Keep host lifetime and admission in the `src/` component folders (`src/host`,
+`src/launch` and their siblings, one namespace per folder),
+public application helpers in `modules/application/src`, shared frame, appearance,
+text and presentation kits in `modules/ui/src`, and application UI in
+`modules/<module>/src/app` child namespaces. Desktop values and projection live
+in `modules/desktop/src`; client actors, attachment/catalog bindings and
+qualified layout storage live in `modules/client/src`. The terminal shell and
+delivery live in `modules/terminal/src`; `bee.launch:display` owns the physical display.
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples

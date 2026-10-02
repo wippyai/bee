@@ -13,14 +13,14 @@ with tempfile.TemporaryDirectory(prefix="bee-clipboard-contract-") as temporary:
     folder = Path(temporary)
     source = folder / "src"
     source.mkdir()
-    shutil.copy2(ROOT / "src/client/clipboard.lua", source)
+    shutil.copy2(ROOT / "modules/client/src/types/clipboard.lua", source)
     shutil.copy2(ROOT / "tests/lua/client/clipboard_test.lua", source)
     document = {
-        "version": "1.0", "namespace": "bee.client", "entries": [
+        "version": "1.0", "namespace": "bee.client.types", "entries": [
             {"name": "clipboard", "kind": "library.lua", "source": "file://clipboard.lua"},
             {"name": "clipboard_test", "kind": "function.lua", "source": "file://clipboard_test.lua",
              "method": "run", "meta": {"type": "test", "suite": "bee"},
-             "imports": {"test": "wippy.test:test", "clipboard": "bee.client:clipboard"}},
+             "imports": {"test": "wippy.test:test", "clipboard": "bee.client.types:clipboard"}},
             {"name": "test_dependency", "kind": "ns.dependency", "component": "wippy/test", "version": "0.4.17"},
             {"name": "terminal", "kind": "terminal.host", "lifecycle": {"auto_start": True}},
             {"name": "workers", "kind": "process.host", "host": {"workers": 2, "max_processes": 16}, "lifecycle": {"auto_start": True}},
@@ -37,4 +37,4 @@ with tempfile.TemporaryDirectory(prefix="bee-clipboard-contract-") as temporary:
     for package in packages:
         shutil.copy2(package, vendor)
     subprocess.run([str(RUNTIME), "lint"], cwd=folder, check=True, timeout=60)
-    subprocess.run([str(RUNTIME), "test", "--host", "bee.client:terminal"], cwd=folder, check=True, timeout=60)
+    subprocess.run([str(RUNTIME), "test", "--host", "bee.client.types:terminal"], cwd=folder, check=True, timeout=60)

@@ -151,11 +151,11 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	retained = append(retained, []byte("    arguments: bee.app:arguments\n    clipboard: bee.client:clipboard\n")...)
+	retained = append(retained, []byte("    arguments: bee.app:arguments\n    clipboard: bee.client.types:clipboard\n")...)
 	if err := os.WriteFile(retainedManifest, retained, 0600); err != nil {
 		t.Fatal(err)
 	}
-	clipboard, err := os.ReadFile(filepath.Join(repository, "src/client/clipboard.lua"))
+	clipboard, err := os.ReadFile(filepath.Join(repository, "modules/client/src/types/clipboard.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.WriteFile(filepath.Join(clipboardDir, "clipboard.lua"), clipboard, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client.types\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	host, err := os.ReadFile(filepath.Join(fixtureSnapshot, "host.manifest"))

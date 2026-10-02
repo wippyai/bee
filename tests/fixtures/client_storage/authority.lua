@@ -7,7 +7,7 @@ local function no_database()
     assert(err)
 end
 local function call(name: string, request: unknown, code: string): unknown
-    local result, err = funcs.new():call("bee.client:" .. name, request)
+    local result, err = funcs.new():call("bee.client.binding:" .. name, request)
     if err then error(tostring(err)) end
     if type(result) ~= "table" or result.code ~= code then error("Unexpected desktop operation result") end
     return result

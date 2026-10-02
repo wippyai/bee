@@ -1,6 +1,64 @@
 version: '1.0'
 namespace: bee.deps
 entries:
+- name: terminal
+  kind: ns.dependency
+  component: bee/terminal
+  version: 0.1.0-dev
+  parameters:
+  - name: target_application_protocol
+    value: bee.protocol:application
+  - name: target_protocol_decode
+    value: bee.protocol:decode
+  - name: target_display_transfer
+    value: bee.protocol:display_transfer
+- name: client
+  kind: ns.dependency
+  component: bee/client
+  version: 0.1.0-dev
+  parameters:
+  - name: target_protocol_application
+    value: bee.protocol:application
+  - name: target_apps_attachment
+    value: bee.apps:attachment
+  - name: target_launch_retained_protocol
+    value: bee.launch:retained_protocol
+  - name: target_launch_bootstrap
+    value: bee.launch:bootstrap
+  - name: target_apps_command
+    value: bee.apps:command
+  - name: target_protocol_decode
+    value: bee.protocol:decode
+  - name: target_terminal_input
+    value: bee.terminal.types:input
+  - name: target_host_inventory
+    value: bee.host:inventory
+  - name: target_host_protocol
+    value: bee.host:protocol
+  - name: target_host_transfer
+    value: bee.host:transfer
+  - name: target_protocol_display_transfer
+    value: bee.protocol:display_transfer
+  - name: target_launch_display
+    value: bee.launch:display
+  - name: target_interaction_protocol
+    value: bee.interaction:protocol
+  - name: command_host
+    value: bee:terminal
+  - name: command_actor
+    value:
+      id: bee.local
+  - name: command_policies
+    value:
+    - bee.security.desktop:desktop_policy
+    - bee.security.desktop:client_spawn_policy
+    - bee.security.desktop:presenter_actor_policy
+    - bee.security.storage:client_storage_policy
+    - bee.security.desktop:local_launcher_spawn_policy
+    - bee.security.desktop:local_super_edit_recovery_call_policy
+  - name: catalog_policies
+    value:
+    - bee.security.storage:client_storage_policy
 - name: desktop
   kind: ns.dependency
   component: bee/desktop

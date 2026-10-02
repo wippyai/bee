@@ -10,7 +10,7 @@ from workspace import ROOT, RUNTIME, database_environment
 def main():
     with tempfile.TemporaryDirectory(prefix="bee-sync-module-") as directory:
         folder = Path(directory)
-        for module in ("application", "node", "persist", "sync", "threads", "hive"):
+        for module in ("ui", "node", "persist", "sync", "threads", "hive", "values"):
             shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
         shutil.copytree(ROOT / "tests/fixtures/sync_module", folder / "src/probe")
         (folder / "src" / "_index.yaml").write_text("""version: '1.0'
@@ -67,7 +67,7 @@ return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout
 modules:
   - name: bee/persist
     version: 0.1.0-dev
-  - name: bee/application
+  - name: bee/ui
     version: 0.1.0-dev
   - name: bee/node
     version: 0.1.0-dev
@@ -77,6 +77,8 @@ modules:
     version: 0.1.0-dev
   - name: bee/hive
     version: 0.1.0-dev
+  - name: bee/values
+    version: 0.1.0-dev
 """)
         (folder / ".wippy.yaml").write_text("""version: '1.0'
 shutdown:
@@ -84,11 +86,12 @@ shutdown:
 workspace:
   replacements:
     bee/persist: ./modules/persist
-    bee/application: ./modules/application
+    bee/ui: ./modules/ui
     bee/node: ./modules/node
     bee/sync: ./modules/sync
     bee/threads: ./modules/threads
     bee/hive: ./modules/hive
+    bee/values: ./modules/values
 """)
         environment = database_environment(folder)
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=folder, check=True, timeout=60, env=environment)

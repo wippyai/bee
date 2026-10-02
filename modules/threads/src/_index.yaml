@@ -326,6 +326,8 @@ entries:
     path: .security.policies
   - entry: bee.threads.binding:session_scan
     path: .security.policies
+  - entry: bee.threads.binding:node_summary
+    path: .security.policies
   - entry: bee.threads.binding:session_transition
     path: .security.policies
   - entry: bee.threads.binding:work_send

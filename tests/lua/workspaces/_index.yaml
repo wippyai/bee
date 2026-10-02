@@ -22,8 +22,8 @@ entries:
     view: bee.workspace.manager.app:view
     creation: bee.workspace.manager.app:creation
     folder_picker: bee.app:folder_picker
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     caller: bee.app:caller
 - name: creation_test
   kind: function.lua

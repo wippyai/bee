@@ -100,3 +100,10 @@ Approval views expose `requesting_session` when the authenticated requester is a
 The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also `local.runtime_lease`). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. Grant consumes that exact approved proposal, revalidating its owner incarnation after a restart. Approval migration 5 stores leases and per-effect receipts in the Approvals ledger.
 
 Check/use require consume authority and the exact subject/workspace. Use additionally checks tool/input digest, expiry, revocation and the use bound; the same effect key replays only the same exact operation. Persisted runtime authority survives an owner restart. Subject or workspace manager may revoke; list exposes only the caller's records in one workspace. Saved profile references cannot transfer authority. The shared permission exchange uses matching references before requesting another decision and rechecks the same receipt before dispatch/recovery; Deny still wins.
+
+The host-selected counts-only `bee.approvals.binding:node_summary` accepts an
+empty object and requires `bee.approvals.summary` on `node`. It returns
+`{ok=true,value={pending_approvals=N}}` for pending, unexpired requests owned by
+this native node. It exposes no request contents or decision authority.
+Applications reach Hive-wide counts through the approved Hive telemetry status
+contract.

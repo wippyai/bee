@@ -9,41 +9,41 @@ local preview = require("preview")
 local function define_tests()
     test.describe("Hub inspection request", function()
         test.it("pages only source owned by the exact installed component and revision", function()
-            local state = {resolution = {modules = {{name = "bee/application", version = "0.1.0-dev", source = "local"}}}, entries = {
-                {id = "bee.app:frame", kind = "library.lua", registry = {owner = "bee/application"}, data = {source = "frame source"}},
+            local state = {resolution = {modules = {{name = "bee/ui", version = "0.1.0-dev", source = "local"}}}, entries = {
+                {id = "bee.ui:frame", kind = "library.lua", registry = {owner = "bee/ui"}, data = {source = "frame source"}},
                 {id = "bee.private:policy", kind = "library.lua", registry = {owner = "bee/private"}, data = {source = "private source"}},
-                {id = "bee.app:config", kind = "registry.entry", registry = {owner = "bee/application"}, data = {secret = "private"}},
+                {id = "bee.ui:config", kind = "registry.entry", registry = {owner = "bee/ui"}, data = {secret = "private"}},
             }}
-            local listed = assert(inventory.sources(state, 7, {component = "bee/application", version = "0.1.0-dev"}))
+            local listed = assert(inventory.sources(state, 7, {component = "bee/ui", version = "0.1.0-dev"}))
             test.eq(#listed.entries, 1)
-            test.eq(listed.entries[1].id, "bee.app:frame")
-            local page = assert(inventory.sources(state, 7, {component = "bee/application", version = "0.1.0-dev",
-                entry_id = "bee.app:frame", expected_revision = 7, offset = 6, limit = 6}))
+            test.eq(listed.entries[1].id, "bee.ui:frame")
+            local page = assert(inventory.sources(state, 7, {component = "bee/ui", version = "0.1.0-dev",
+                entry_id = "bee.ui:frame", expected_revision = 7, offset = 6, limit = 6}))
             test.eq(page.content, "source")
             test.is_true(page.eof)
-            test.is_nil(inventory.sources(state, 7, {component = "bee/application", version = "0.1.0-dev",
+            test.is_nil(inventory.sources(state, 7, {component = "bee/ui", version = "0.1.0-dev",
                 entry_id = "bee.private:policy", expected_revision = 7}))
-            test.is_nil(inventory.sources(state, 8, {component = "bee/application", version = "0.1.0-dev",
-                entry_id = "bee.app:frame", expected_revision = 7}))
+            test.is_nil(inventory.sources(state, 8, {component = "bee/ui", version = "0.1.0-dev",
+                entry_id = "bee.ui:frame", expected_revision = 7}))
         end)
         test.it("reads the frame implementation from the installed development component", function()
             local current = assert(installed.read())
             local version: string? = nil
             for _, item in ipairs(current.modules) do
-                if item.component == "bee/application" then version = item.version end
+                if item.component == "bee/ui" then version = item.version end
             end
             test.not_nil(version)
             if not version then return end
-            local manifest = assert(installed.sources({component = "bee/application", version = version}))
+            local manifest = assert(installed.sources({component = "bee/ui", version = version}))
             local revision = manifest.revision
             local entries = manifest.entries
             local found = false
             for _, entry in ipairs(entries) do
-                if entry.id == "bee.app:frame" then found = true end
+                if entry.id == "bee.ui:frame" then found = true end
             end
             test.is_true(found)
-            local page = assert(installed.sources({component = "bee/application", version = version,
-                entry_id = "bee.app:frame", expected_revision = revision, offset = 0, limit = 4096}))
+            local page = assert(installed.sources({component = "bee/ui", version = version,
+                entry_id = "bee.ui:frame", expected_revision = revision, offset = 0, limit = 4096}))
             test.is_true((page.content):find("function M.", 1, true) ~= nil)
         end)
         test.it("returns entry summaries first with stable paging", function()

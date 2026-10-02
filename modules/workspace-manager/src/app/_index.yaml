@@ -12,9 +12,9 @@ entries:
   - uuid
   - funcs
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     client: bee.app:client
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     caller: bee.app:caller
     leases: bee.app:host_leases
     model: bee.workspace.manager.app:model
@@ -36,7 +36,7 @@ entries:
   kind: library.lua
   source: file://model.lua
   imports:
-    text: bee.app:text
+    text: bee.ui:text
     caller: bee.app:caller
     bounds: bee.values:bounds
     contract: bee.protocol:application
@@ -46,15 +46,15 @@ entries:
   source: file://creation.lua
   imports:
     folder_picker: bee.app:folder_picker
-    text: bee.app:text
+    text: bee.ui:text
     caller: bee.app:caller
     model: bee.workspace.manager.app:model
 - name: view
   kind: library.lua
   source: file://view.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     model: bee.workspace.manager.app:model
     creation: bee.workspace.manager.app:creation
     folder_picker: bee.app:folder_picker

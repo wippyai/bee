@@ -258,7 +258,7 @@ entries:
     test: wippy.test:test
     recovery: bee.harness.app:recovery
     restore_view: bee.harness.app:restore_view
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua

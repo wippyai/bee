@@ -7,30 +7,52 @@ entries:
   method: plan
   modules: [security]
   imports:
-    worktree: bee.git.worktree:worktree
-    bounds: bee.threads.records:bounds
+    worktree: bee.git.worktree.binding:worktree
+    bounds: bee.values:bounds
     types: bee.placement:types
   security:
-    policies: [bee.git.worktree:worktree_policy]
+    policies: [bee.git.worktree.security:worktree_policy]
 - name: setup
   kind: function.lua
   source: file://setup_method.lua
   method: handle
   modules: [security]
   imports:
-    worktree: bee.git.worktree:worktree
-    bounds: bee.threads.records:bounds
+    worktree: bee.git.worktree.binding:worktree
+    bounds: bee.values:bounds
     types: bee.placement:types
   security:
-    policies: [bee.git.worktree:worktree_policy]
+    policies: [bee.git.worktree.security:worktree_policy]
 - name: cleanup
   kind: function.lua
   source: file://cleanup_method.lua
   method: handle
   modules: [security]
   imports:
-    worktree: bee.git.worktree:worktree
-    bounds: bee.threads.records:bounds
+    worktree: bee.git.worktree.binding:worktree
+    bounds: bee.values:bounds
     types: bee.placement:types
   security:
-    policies: [bee.git.worktree:worktree_policy]
+    policies: [bee.git.worktree.security:worktree_policy]
+- name: git_roots
+  kind: library.lua
+  source: file://git_roots.lua
+- name: worktree
+  kind: library.lua
+  source: file://worktree.lua
+  modules: [exec, fs, registry, hash, channel]
+  imports:
+    git_roots: bee.git.worktree.binding:git_roots
+    paths: bee.placement.profiles:paths
+    bounds: bee.values:bounds
+    quote: bee.driver.kit:quote
+- name: binding
+  kind: contract.binding
+  meta:
+    type: bee.placement.workdir_preparer
+  contracts:
+  - contract: bee.placement:workdir_preparer
+    methods:
+      plan: bee.git.worktree.binding:plan
+      setup: bee.git.worktree.binding:setup
+      cleanup: bee.git.worktree.binding:cleanup

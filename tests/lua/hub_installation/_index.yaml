@@ -8,6 +8,6 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
-    installation: bee.hub:installation
+    installation: bee.hub.activation:installation

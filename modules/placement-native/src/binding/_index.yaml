@@ -104,3 +104,12 @@ entries:
   imports:
     service: bee.placement.native.service:service
   security: {policies: []}
+- name: process_backend
+  kind: library.lua
+  source: file://process_backend.lua
+  modules:
+  - exec
+  - sql
+  imports:
+    types: bee.placement:types
+    materialization: bee.placement.native.service:materialization

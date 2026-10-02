@@ -6,8 +6,10 @@ entries:
   meta:
     comment: The broker reads this node's identity and its governed application activation catalog
   policy:
-    expression: '(action != "process.host" || resource == "bee:workers") && (action != "system.read" || resource == "node") && (action != "db.get" || resource == "bee.gov:db") && (action != "registry.overlay.get" || resource matches "^bee[.](gov[.]apps|packages|governance[.]workspace_applications):.+$")'
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get" && ((action != "process.host" || resource == "bee:workers") && (action != "system.read" || resource == "node") && (action != "db.get" || resource == "bee.gov.env:db") && (action != "registry.overlay.get" || resource matches "^bee[.](gov[.]apps|packages|governance[.]workspace_applications):.+$"))) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
+    - env.get
+    - env.set
     - system.read
     - tty.mount
     - tty.observe
@@ -249,8 +251,8 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.workspace.catalog:list
-    - bee.workspace.catalog:search
+    - bee.workspace.binding:list
+    - bee.workspace.binding:search
     effect: allow
 - name: client_node_defaults_call_policy
   kind: security.policy
@@ -283,5 +285,13 @@ entries:
   policy:
     expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
     actions: [process.registry.register, process.registry.unregister, process.registry.lookup, process.send]
+    resources: '*'
+    effect: allow
+
+- name: startup_progress_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "env.get" && resource in ["bee.env:startup_sequence", "bee.env:startup_phase"]) || (action == "env.set" && resource == "bee.env:startup_phase") || action == "time.ticker"'
+    actions: [env.get, env.set, time.ticker]
     resources: '*'
     effect: allow

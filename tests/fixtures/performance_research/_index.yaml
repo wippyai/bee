@@ -7,7 +7,7 @@ entries:
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
-  imports: {shared: bee.protocol:canonical}
+  imports: {shared: bee.values:canonical}
 - name: corpus
   kind: library.lua
   source: file://corpus.lua
@@ -51,4 +51,4 @@ entries:
       name: research-benchmark-probe
       security: {actor: {id: bee.research.benchmark.probe}}
 
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}

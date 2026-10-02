@@ -3,13 +3,13 @@
 # Publish Bee to the Wippy Hub: every physical module, then the bee/bee root,
 # uploading the sealed packs of one release deployment byte for byte.
 #
-# Usage: BEE_VERSION=X [BEE_DEPLOYMENT=dist/portable-deployment]
+# Usage: BEE_VERSION=X [BEE_DEPLOYMENT=dist/portable-deployment/hub]
 #        [HUB_VISIBILITY=private|public] build/hub-publish.sh check|publish
 #   check    dry-runs each upload and compares the Hub digest with the lock hash
 #   publish  uploads each immutable protected version, creating missing modules
 #
-# The deployment is the one `make native-pack BEE_VERSION=X` seals for the
-# release executable, so the Hub serves exactly the bytes its lock pins.
+# The deployment is the host composition `make native-pack` seals beside the
+# executable baseline, with a dependency-free bee/bee core.
 set -eu
 
 fail() {
@@ -27,7 +27,7 @@ root=$(
     cd -- "$(dirname -- "$0")/.." && pwd
 )
 runtime=${WIPPY:-$root/.wippy/bin/bee-wippy}
-deployment=${BEE_DEPLOYMENT:-$root/dist/portable-deployment}
+deployment=${BEE_DEPLOYMENT:-$root/dist/portable-deployment/hub}
 case "$runtime" in /*) ;; *) runtime=$root/$runtime ;; esac
 case "$deployment" in /*) ;; *) deployment=$root/$deployment ;; esac
 [ -x "$runtime" ] || fail "Wippy toolchain is missing: $runtime"
@@ -75,6 +75,22 @@ while read -r module module_version hash; do
     [ -f "$pack" ] || fail "sealed pack is missing: $pack"
     [ "sha256:$(sha256sum "$pack" | awk '{print $1}')" = "$hash" ] || fail "$pack does not match the lock hash $hash"
 done < "$stage/locked.tsv"
+
+# Inspect only the core WAPP. Loading the whole host would merge bee.deps into
+# its registry and conceal which artifact declared the component closure.
+mkdir -p "$stage/core/empty" "$stage/core/.wippy/vendor/bee"
+cp "$deployment/.wippy/vendor/bee/bee-$version.wapp" "$stage/core/.wippy/vendor/bee/"
+core_hash=$(awk '$1 == "bee/bee" { print $3 }' "$stage/locked.tsv")
+printf '%s\n' 'directories:' '  modules: .wippy' '  src: ./empty' 'modules:' \
+    '  - name: bee/bee' "    version: $version" "    hash: $core_hash" '    root: true' > "$stage/core/wippy.lock"
+(cd "$stage/core" && "$runtime" registry list --json > "$stage/core-entries.json")
+python3 - "$stage/core-entries.json" <<'PY'
+import json
+import sys
+for entry in json.load(open(sys.argv[1])):
+    if entry["kind"] == "ns.dependency":
+        sys.exit("hub publish: Bee self-update must leave component selection to host roots: " + entry["id"])
+PY
 
 # Dependencies publish before their dependents: tsort orders each module after
 # the sibling Bee modules its ns.dependency entries name; bee/bee is last.

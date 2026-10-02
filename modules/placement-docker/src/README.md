@@ -46,7 +46,7 @@ and returns `image_readiness`: image presence, runtime artifact presence and
 container platform. This is a read-only observation. The Sessions catalog
 passes a saved profile's placement selection through the host locator.
 
-The built-in `bee.placement.docker:coding` profile appears in the Agent placement
+The built-in `bee.placement.docker.profiles:coding` profile appears in the Agent placement
 form and selects `coding_recipe`. First use discovers the installed Linux CLI
 artifacts from host-selected executable references, measures their ELF platform
 and SHA-256 digests, and copies only those code artifacts into a build context.

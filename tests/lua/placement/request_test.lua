@@ -12,7 +12,7 @@ local DIGEST = string.rep("a", 64)
 local CONFIG_DIGEST = "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
 local function launch(): {[string]: unknown}
     return {idempotency_key = "key-1", owner_id = "bee.owner", owner_incarnation = 3, action_id = "action-1", attempt_id = "attempt-1",
-        binding_ref = "bee.driver.claude:binding", policy_ref = "bee.host:launch_policy", profile_id = "session", binding_digest = DIGEST, profile_digest = DIGEST,
+        binding_ref = "bee.driver.claude.binding:binding", policy_ref = "bee.host:launch_policy", profile_id = "session", binding_digest = DIGEST, profile_digest = DIGEST,
         launch = {executable = "claude", argv = {"-p", "hello world"}, environment = {"ANTHROPIC_BASE_URL"}, working_directory_ref = "project", readiness = "protocol:system.init"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = "app:project", subpath = "src/app", access = "write", purpose = "project"}},
         environment = {ANTHROPIC_BASE_URL = "http://127.0.0.1:9"}, required_cleanup = "process_group"}

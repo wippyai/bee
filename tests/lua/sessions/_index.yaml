@@ -10,7 +10,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.threads:harness
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: executor_registry_test
   kind: function.lua
   source: file://executor_registry_test.lua
@@ -18,16 +18,16 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
-    registry: bee.sessions:executor_registry
+    registry: bee.sessions.executor:executor_registry
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     locate: bee.sessions.service:locate
 - name: catalog_service_test_policy
@@ -47,7 +47,7 @@ entries:
     policies: [bee.tests.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.sessions.service:catalog
     machine: bee.harness.carrier:machine
@@ -62,7 +62,7 @@ entries:
     scheduler: bee.sessions.service:scheduler
     threads: bee.tests.fixtures.sessions:threads_owner
     executor: bee.tests.fixtures.sessions:fake_executor
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: fake_owner
   kind: contract.binding
   meta: {type: test_support}
@@ -94,7 +94,7 @@ entries:
   method: open
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_run
   kind: function.lua
@@ -102,7 +102,7 @@ entries:
   method: run
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_send
   kind: function.lua
@@ -110,7 +110,7 @@ entries:
   method: send
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_await
   kind: function.lua
@@ -118,7 +118,7 @@ entries:
   method: await
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_join
   kind: function.lua
@@ -126,7 +126,7 @@ entries:
   method: join
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_get
   kind: function.lua
@@ -134,7 +134,7 @@ entries:
   method: get
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_cancel
   kind: function.lua
@@ -142,7 +142,7 @@ entries:
   method: cancel
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_close
   kind: function.lua
@@ -150,7 +150,7 @@ entries:
   method: close
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_list
   kind: function.lua
@@ -158,7 +158,7 @@ entries:
   method: list
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: fake_catalog
   kind: function.lua
@@ -166,7 +166,7 @@ entries:
   method: catalog
   meta: {type: test_support}
   modules: [security]
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: probe
   kind: function.lua
@@ -174,7 +174,7 @@ entries:
   method: run
   meta: {type: test_support}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     sessions: bee.app:sessions
 - name: probe_policy
   kind: security.policy
@@ -198,7 +198,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     sessions: bee.app:sessions
     protocol: bee.app:sessions_protocol
@@ -210,7 +210,7 @@ entries:
   modules: [registry]
   imports:
     test: wippy.test:test
-    journal: bee.sessions:threads_journal
+    journal: bee.sessions.binding:threads_journal
   security:
     policies: [bee.tests.sessions:probe_policy]
 - name: fake_history
@@ -220,7 +220,7 @@ entries:
   meta: {type: test_support}
   modules: [security]
 
-  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.values:bounds}
 
 - name: interactive_exited
   kind: function.lua
@@ -261,7 +261,7 @@ entries:
   meta: {type: test_support}
   imports:
     boundary: bee.gateway.api:session_boundary
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     subject_call: bee.gateway.security:subject_call
   security:
     policies: [bee.gateway.security:execute_policy, bee.gateway.security:session_boundary_resolver_policy, bee.gateway.security:session_boundary_policy]
@@ -280,4 +280,4 @@ entries:
   kind: library.lua
   source: file://fake_owner.lua
   meta: {type: test_support}
-  imports: {bounds: bee.protocol:bounds, principals: bee.test.principals:bound, sessions: bee.app:sessions, protocol: bee.app:sessions_protocol}
+  imports: {bounds: bee.values:bounds, principals: bee.test.principals:bound, sessions: bee.app:sessions, protocol: bee.app:sessions_protocol}

@@ -16,11 +16,11 @@ M.ACTION = "bee.workspace.manager.command"
 M.MAX_MS = 30000
 -- Each command and the catalog operation it runs.
 M.OPERATIONS = {
-    ["bee.workspace:create"] = "bee.workspace.catalog:create",
-    ["bee.workspace:list"] = "bee.workspace.catalog:list",
-    ["bee.workspace:archive"] = "bee.workspace.catalog:archive",
-    ["bee.workspace:restore"] = "bee.workspace.catalog:restore",
-    ["bee.workspace:roots"] = "bee.workspace.catalog:roots",
+    ["bee.workspace:create"] = "bee.workspace.binding:create",
+    ["bee.workspace:list"] = "bee.workspace.binding:list",
+    ["bee.workspace:archive"] = "bee.workspace.binding:archive",
+    ["bee.workspace:restore"] = "bee.workspace.binding:restore",
+    ["bee.workspace:roots"] = "bee.workspace.binding:roots",
 }
 -- Catalog refusal codes as Hive fault codes; the message keeps the catalog code.
 local CODES: {[string]: string} = {INVALID = "INVALID_ARGUMENT", UNAUTHENTICATED = "DENIED", DENIED = "DENIED", FORBIDDEN = "DENIED",

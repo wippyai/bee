@@ -2,6 +2,10 @@ directories:
   modules: .wippy
   src: ./src
 modules:
+- name: bee/workspace
+  version: 0.1.0-dev
+- name: bee/values
+  version: 0.1.0-dev
 - name: bee/persist
   version: 0.1.0-dev
 - name: bee/sync

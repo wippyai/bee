@@ -62,7 +62,7 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
     bee.mcp = mcp
     draft.bee = bee
     if source.placement_profile_ref ~= nil then
-        if source.placement_profile_ref == "bee.placement:native" then
+        if source.placement_profile_ref == "bee.placement.profiles:native" then
             local prior_home = definition and home and home(definition, bounds.id(source.presentation)) or nil
             if not prior_home then reasons[#reasons + 1] = "Former native home cannot be established" end
             draft.placement = {kind = "native", home = prior_home}

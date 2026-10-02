@@ -8,6 +8,6 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    graph: bee.hub:graph
-    inspect: bee.hub:inspection
-    requirements: bee.hub:requirements
+    graph: bee.hub.package:graph
+    inspect: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements

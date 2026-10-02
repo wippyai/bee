@@ -1,3 +1,1642 @@
 {
-  "migrations": []
+  "migrations": [
+    {
+      "category": "ids",
+      "from": "bee.approvals.inbox:client_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.inbox.security:client_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals.inbox:sources",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.inbox.app:sources"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals.inbox:workspaces",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.inbox.app:workspaces"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals:local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.binding:local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals:node_identity_migration_source",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.env:node_identity_migration_source"
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals:policies_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.approvals.env:policies_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:command_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.security:command_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:executor",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.env:executor"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:executor_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.security:executor_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:home",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.env:home"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:lang",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.env:lang"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.env:path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.console:user",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.console.env:user"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:credential_sources",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:credential_sources"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.binding:local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:materializer_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:materializer_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:node_identity_migration_source",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:node_identity_migration_source"
+    },
+    {
+      "category": "ids",
+      "from": "bee.credentials:sources_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.credentials.env:sources_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.docs:corpus_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.docs.env:corpus_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:command",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.descriptor:command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:credential_format",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.credentials:credential_format"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:default_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.profiles:default_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:executable",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.env:executable"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:launch_policy_agy_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.security:launch_policy_agy_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:launch_policy_agy_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.security:launch_policy_agy_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:profiles",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.profiles:profiles"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.agy:research_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.agy.profiles:research_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:api_key",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.env:api_key"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:command",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.descriptor:command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:config_home",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.env:config_home"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:credential_format",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.credentials:credential_format"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:default_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.profiles:default_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:executable",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.env:executable"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:launch_policy_claude_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.security:launch_policy_claude_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:launch_policy_claude_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.security:launch_policy_claude_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:permission_adapter",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.permission:permission_adapter"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:profiles",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.profiles:profiles"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.claude:research_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.claude.profiles:research_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:command",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.descriptor:command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:config_home",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.env:config_home"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:credential_format",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.credentials:credential_format"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:default_provider",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.descriptor:default_provider"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:default_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.profiles:default_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:executable",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.env:executable"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:launch_policy_codex_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.security:launch_policy_codex_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:launch_policy_codex_named_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.security:launch_policy_codex_named_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:launch_policy_codex_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.security:launch_policy_codex_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:named_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.profiles:named_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:profiles",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.profiles:profiles"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.codex:research_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.codex.profiles:research_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:command",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.descriptor:command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:credential_format",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.credentials:credential_format"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:default_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.profiles:default_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:executable",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.env:executable"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:launch_policy_grok_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.security:launch_policy_grok_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:launch_policy_grok_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.security:launch_policy_grok_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:profiles",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.profiles:profiles"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.grok:research_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.grok.profiles:research_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:command",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.descriptor:command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:credential_format",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.credentials:credential_format"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:default_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.profiles:default_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:executable",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.env:executable"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:launch_policy_muse_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.security:launch_policy_muse_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:launch_policy_muse_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.security:launch_policy_muse_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:profiles",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.profiles:profiles"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.muse:research_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.muse.profiles:research_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:command",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.descriptor:command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:credential_format",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.credentials:credential_format"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:default_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.profiles:default_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:executable",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.env:executable"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:launch_policy_opencode_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.security:launch_policy_opencode_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:launch_policy_opencode_window",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.security:launch_policy_opencode_window"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:profiles",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.profiles:profiles"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.opencode:research_batch",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.opencode.profiles:research_batch"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.wippy:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.wippy.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.wippy:host_config",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.wippy.env:host_config"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver.wippy:profiles",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.wippy.profiles:profiles"
+    },
+    {
+      "category": "ids",
+      "from": "bee.driver:permission_request_hook",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.driver.permission:permission_request_hook"
+    },
+    {
+      "category": "ids",
+      "from": "bee.files:workspace_root_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.files.env:workspace_root_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:approval_consume_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:approval_consume_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:approval_request_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:approval_request_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:endpoint_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:endpoint_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:hook_executable",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:hook_executable"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:install_configuration_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:install_configuration_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:listener_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:listener_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:publish_configuration_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:publish_configuration_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_application_open_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_application_open_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_components_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_components_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_delivery_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_delivery_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_docs_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_docs_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_hub_publish_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_hub_publish_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_install_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_install_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_message_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_message_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_overlay_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_overlay_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_publish_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_publish_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_read_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_read_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gateway:tool_session_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:tool_session_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.git.worktree:binding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.git.worktree.binding:binding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.git.worktree:executor_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.git.worktree.env:executor_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.git.worktree:git_executor",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.git.worktree.env:git_executor"
+    },
+    {
+      "category": "ids",
+      "from": "bee.git.worktree:host_files",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.git.worktree.env:host_files"
+    },
+    {
+      "category": "ids",
+      "from": "bee.git.worktree:host_files_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.git.worktree.env:host_files_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.git.worktree:worktree_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.git.worktree.security:worktree_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov.overlays:client_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.overlays.security:client_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:activation_profiles_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:activation_profiles_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:approval_consume_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:approval_consume_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:approval_request_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:approval_request_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:delivery_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.binding:delivery_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:node_identity_migration_source",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:node_identity_migration_source"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:overlay_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.binding:overlay_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:publication_profiles_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:publication_profiles_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:workspace_folder_policy_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:workspace_folder_policy_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.gov:workspace_folder_read_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.env:workspace_folder_read_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.harness:carrier_host_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.harness.env:carrier_host_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.harness:gateway_hook",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.harness.api:gateway_hook"
+    },
+    {
+      "category": "ids",
+      "from": "bee.harness:gateway_hook_mcp",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.harness.api:gateway_hook_mcp"
+    },
+    {
+      "category": "ids",
+      "from": "bee.harness:gateway_hook_status",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.harness.api:gateway_hook_status"
+    },
+    {
+      "category": "ids",
+      "from": "bee.harness:harness_activation",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.harness.launch:harness_activation"
+    },
+    {
+      "category": "ids",
+      "from": "bee.harness:harness_setup",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.harness.launch:harness_setup"
+    },
+    {
+      "category": "ids",
+      "from": "bee.harness:profiles_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.harness.binding:profiles_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.manager:client_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hive.manager.security:client_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.manager:names",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hive.manager.app:names"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.manager:viewer_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hive.manager.security:viewer_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub.modules:client_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.modules.security:client_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub.modules:hub_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.modules.security:hub_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub.modules:publication_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.modules.security:publication_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub.modules:self_update_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.modules.security:self_update_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub:process_host_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.env:process_host_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub:publish_configuration_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.env:publish_configuration_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub:publish_executor",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.publication:publish_executor"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub:publish_executor_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.env:publish_executor_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.node:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.node.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.node:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.node.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.node:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.node.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.node:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.node.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.persist:startup_progress",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.persist.env:startup_progress"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.docker:boot_environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.docker.env:boot_environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.docker:coding",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.docker.profiles:coding"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.docker:coding_recipe",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.docker.profiles:coding_recipe"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.docker:environment_configuration",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.docker.env:environment_configuration"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:admitted_roots_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:admitted_roots_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:executor_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:executor_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:host_files_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:host_files_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:placement_admitted_roots",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:placement_admitted_roots"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:placement_executor",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:placement_executor"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:placement_host_files",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:placement_host_files"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:placement_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:placement_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:placement_resource_mode",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:placement_resource_mode"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:placement_workdir_preparers",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:placement_workdir_preparers"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:resource_mode_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:resource_mode_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:root",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:root"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:root_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:root_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:root_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:root_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:runner_host_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:runner_host_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement.native:workdir_preparers_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:workdir_preparers_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.placement:native",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.profiles:native"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.binding:local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:node_identity_migration_source",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.env:node_identity_migration_source"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:resource_roots",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.env:resource_roots"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:resources_workspace_extension",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.binding:resources_workspace_extension"
+    },
+    {
+      "category": "ids",
+      "from": "bee.resources:roots_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.resources.env:roots_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.sessions:executor_selection",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sessions.executor:executor_selection"
+    },
+    {
+      "category": "ids",
+      "from": "bee.sessions:threads_journal_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sessions.env:threads_journal_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.sync:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sync.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.sync:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sync.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.sync:db_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sync.env:db_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.sync:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sync.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.sync:exports_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sync.env:exports_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads.timeline:client_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.timeline.security:client_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:approvals_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.binding:approvals_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:authority_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.binding:authority_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:carrier_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.binding:carrier_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:database_path",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.env:database_path"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:database_ref",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.env:database_ref"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:db",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.env:db"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:delivery_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.binding:delivery_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:environment",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.env:environment"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:journal_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.binding:journal_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:lifecycle_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.binding:lifecycle_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads:projection_local",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.binding:projection_local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.workspace.manager:client_policy",
+      "migration": "M5",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.workspace.manager.security:client_policy"
+    },
+    {
+      "category": "ids",
+      "from": "bee:approver_policies",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.security.approvals:approver_policies"
+    },
+    {
+      "category": "ids",
+      "from": "bee:capability_catalog",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.security.capability:capability_catalog"
+    },
+    {
+      "category": "ids",
+      "from": "bee:docs_corpus",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.env:docs_corpus"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_endpoint",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.api:gateway_endpoint"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_installation_service",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.service:gateway_installation_service"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_listener",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.api:gateway_listener"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_mcp",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.api:gateway_mcp"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_publication_service",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.service:gateway_publication_service"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_ready",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.api:gateway_ready"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_router",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.api:gateway_router"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gateway_workspace_extension",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.binding:gateway_workspace_extension"
+    },
+    {
+      "category": "ids",
+      "from": "bee:gov_recovery_service",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gov.service:gov_recovery_service"
+    },
+    {
+      "category": "ids",
+      "from": "bee:hive_operation_adapters",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hive.supervisor:hive_operation_adapters"
+    },
+    {
+      "category": "ids",
+      "from": "bee:hub_publication",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.hub.publication:hub_publication"
+    },
+    {
+      "category": "ids",
+      "from": "bee:module_installation",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:module_installation"
+    },
+    {
+      "category": "ids",
+      "from": "bee:module_publication",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.gateway.env:module_publication"
+    },
+    {
+      "category": "ids",
+      "from": "bee:protected_kernel",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.security.gov:protected_kernel"
+    },
+    {
+      "category": "ids",
+      "from": "bee:sync_distribution_service",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sync.service:sync_distribution_service"
+    },
+    {
+      "category": "ids",
+      "from": "bee:sync_exports",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.sync.env:sync_exports"
+    },
+    {
+      "category": "ids",
+      "from": "bee:thread_outbox_pump_service",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.threads.service:thread_outbox_pump_service"
+    },
+    {
+      "category": "ids",
+      "from": "bee:workdir_preparers",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.placement.native.env:workdir_preparers"
+    },
+    {
+      "category": "ids",
+      "from": "bee:workspace_hosts",
+      "migration": "M0",
+      "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
+      "to": "bee.launch.service:workspace_hosts"
+    }
+  ]
 }

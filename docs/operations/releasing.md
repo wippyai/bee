@@ -242,23 +242,33 @@ make hub-check BEE_VERSION=0.1.0-dev
 Hub publication uploads the sealed packs of the release deployment, never a
 repack of the source. `build/release-source.sh` stages the source `make
 native-pack` packs: the release lock names `bee/bee` and every `bee/*` module
-at `BEE_VERSION`, each module's `wippy.yaml` carries that version, and every
+at `BEE_VERSION` except the executable's local `bee/bee` root, which uses
+a distinct `-0.boot` prerelease identity (for example,
+`0.1.0-0.boot.selfupdate.16` for core `0.1.0-selfupdate.16`). Each module's
+`wippy.yaml` carries the release version, and every
 `ns.dependency` on a sibling Bee module is pinned to it. Development keeps
 `0.1.0-dev`; only the staged copy changes.
 
-`build/hub-publish.sh` reads `dist/portable-deployment` (`BEE_DEPLOYMENT`
-selects another). It requires every lock row to be a Bee module at
+`make hub-check` and `make hub-publish` read the generated host composition
+at `dist/portable-deployment/hub` (`BEE_DEPLOYMENT` selects its parent).
+That composition carries the dependency-free `bee/bee` core at `BEE_VERSION`
+and the baseline component WAPPs byte for byte. Its `src/deps/_index.yaml`
+authors the exact host selections and requirement parameters. The core and
+boot root have distinct identities; the boot root is never published.
+`build/hub-publish.sh` receives the Hub composition directory directly.
+It requires every Bee lock row to be at
 `BEE_VERSION`, every Bee module to be locked, and every vendor pack to match
-its lock hash. It then runs `wippy publish --wapp` with each module's own
+its lock hash. It inspects the core WAPP and refuses dependency declarations
+before any upload. It then runs `wippy publish --wapp` with each module's own
 `wippy.yaml` for identity and metadata, in dependency order (`tsort` over
 sibling `ns.dependency` entries) with `bee/bee` last. `make hub-check` dry-runs
 each upload, prints the lock hash beside the `Digest:` the publisher reports,
 and fails when any pair differs. `make hub-publish BEE_VERSION=…` runs that
 check and uploads each immutable protected version with `--create`, so a
 module the Hub does not have yet is registered with `HUB_VISIBILITY`. The Hub
-therefore serves exactly the bytes the release executable's deployment lock
-pins, and online resolution of a released deployment finds each locked module
-at its locked digest. `make hub-publish-script-check` exercises the script
+serves exactly the bytes the generated Hub deployment lock pins. Components
+retain their embedded baseline hashes; `bee/bee` uses the separately sealed
+core hash. `make hub-publish-script-check` exercises the script
 against a mocked publisher.
 
 ### Publishing a release to the Hub
@@ -270,7 +280,9 @@ documents with `gh release download` (a draft release requires push access),
 verifies both checksums, extracts the deployment to
 `dist/hub-release/deployment` (`HUB_RELEASE_DIR` selects another directory)
 and requires its lock to name exactly the packs and hashes the executable's
-`bee.provenance.json` records. `HUB_RELEASE_ASSETS` names a directory already
+`bee.provenance.json` records. It also verifies the nested Hub deployment
+keeps the same component hashes, has the matching core release identity, and
+contains every pack at its lock hash. `HUB_RELEASE_ASSETS` names a directory already
 holding those four assets instead of downloading them. The target then runs
 `make hub-publish` for every Bee module at the tag's version from that
 deployment, then `make hub-release-install-check` against it.
@@ -281,7 +293,7 @@ CLI.
 `make hub-release-install-check BEE_DEPLOYMENT=DIR BEE_VERSION=X` is the
 post-publication check. It refuses a directory without a release lock or a
 lock that pins any `bee/*` module at another version, then launches the Modules
-app on a copy of that deployment and installs a real Hub package through the
+app on a copy of its generated Hub composition and installs a real Hub package through the
 production facade. The installation resolves every locked `bee/*` module from
 the Hub; a failure names each module that is missing from the Hub or whose Hub
 digest differs from the lock. `make check` keeps the Modules scenarios that do

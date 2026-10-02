@@ -99,7 +99,7 @@ local function fault_value(reply: service.Reply): {[string]: unknown}
     return assert(bounds.object(reply.value))
 end
 local function install_policy()
-    local entry = registry.get("bee:approver_policies")
+    local entry = registry.get("bee.security.approvals:approver_policies")
     if not entry then error("approver policies entry") end
     local data = assert(bounds.object(entry.data))
     local policies = principals.objects(data.policies)
@@ -115,7 +115,7 @@ local function install_policy()
     if not applied then error("install approver policy: " .. tostring(err)) end
 end
 local function replace_approvers(value: {unknown})
-    local entry = assert(registry.get("bee:approver_policies"))
+    local entry = assert(registry.get("bee.security.approvals:approver_policies"))
     local data = assert(bounds.object(entry.data))
     local policies = principals.objects(data.policies)
     local selected: {[string]: unknown}? = nil
@@ -473,11 +473,11 @@ local function define_tests()
             test.eq(decoded ~= nil, true)
         end)
         test.it("rejects malformed policy envelopes, sparse lists, duplicate names and fractional TTLs", function()
-            local entry = assert(registry.get("bee:approver_policies"))
+            local entry = assert(registry.get("bee.security.approvals:approver_policies"))
             local original, encode_error = json.encode(entry.data)
             if not original then error("encode approver policy fixture: " .. tostring(encode_error)) end
             local function write(data: {[string]: unknown})
-                local current = assert(registry.get("bee:approver_policies"))
+                local current = assert(registry.get("bee.security.approvals:approver_policies"))
                 current.data = data
                 local changes = registry.snapshot():changes()
                 assert(changes:update(current))

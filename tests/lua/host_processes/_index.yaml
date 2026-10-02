@@ -10,5 +10,5 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    probe: bee.host.processes:probe
+    probe: bee.host.processes.app:probe
     stop_request: bee.host.processes.app:stop_request

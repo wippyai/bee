@@ -402,10 +402,10 @@ def public_migration():
             shutil.copy2(ROOT / name, project / name)
         # The removed combined actor is historical test data, never production.
         legacy = ROOT / "tests/fixtures/legacy_workspace"
+        (project / "src/workspace").mkdir()
         shutil.copy2(legacy / "main.lua", project / "src/workspace/main.lua")
         index = project / "src/workspace/_index.yaml"
-        document = yaml.safe_load(index.read_text())
-        document["entries"].extend(yaml.safe_load((legacy / "_index.yaml").read_text())["entries"])
+        document = yaml.safe_load((legacy / "_index.yaml").read_text())
         next(e for e in document["entries"] if e["name"] == "main")["meta"] = {"command": {
             "name": "legacy-desktop-probe", "short": "Migration baseline", "security": {
                 "actor": {"id": "bee.local"}, "policies": ["bee.security.desktop:desktop_policy", "bee.workspace:core_spawn_policy",

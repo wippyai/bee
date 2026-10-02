@@ -7,5 +7,5 @@ entries:
     comment: Stock Files resolves its host-linked workspace reference and acquires only the read-only volume
   policy:
     actions: [registry.get, fs.get]
-    resources: [bee.files:workspace_root_ref, bee.env:files_root]
+    resources: [bee.files.env:workspace_root_ref, bee.env:files_root]
     effect: allow

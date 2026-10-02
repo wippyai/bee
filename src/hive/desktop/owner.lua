@@ -14,6 +14,7 @@ local funcs = require("funcs")
 local types = require("types")
 local protocol = require("protocol")
 local retained = require("retained")
+local startup_progress = require("startup_progress")
 local catalog = require("catalog")
 local session_policy = require("session_policy")
 local workspaces = require("workspaces")
@@ -340,7 +341,7 @@ end
 function M.progress(state: State, message: process.Message): ()
     local served = state.served[tostring(message:from())]
     if not served or not served.folder or served.ready or state.stopped then return end
-    local phase = retained.progress(message:payload():data())
+    local phase = startup_progress.decode(message:payload():data())
     if not phase then return end
     local route = process.registry.lookup(state.owner_name)
     if route then send(tostring(route), retained.TOPIC_PROGRESS, {version = 1, phase = phase}) end

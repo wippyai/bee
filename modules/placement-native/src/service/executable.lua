@@ -68,7 +68,7 @@ function M.capabilities(): Capabilities
         report.detail = "host files unavailable: " .. tostring(host_error)
         return report
     end
-    local root_path, root_error = resources.directory("bee.placement.native:root")
+    local root_path, root_error = resources.directory("bee.placement.native.env:root")
     if not root_path then
         report.detail = "placement root unavailable: " .. tostring(root_error)
         return report

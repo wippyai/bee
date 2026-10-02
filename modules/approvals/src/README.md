@@ -68,7 +68,7 @@ requester, digest and effect-key checks. A committed decision wakes the
 publication worker, so an approved publication uploads without any status
 poll.
 
-Approver policies are host-owned under `bee:approver_policies`:
+Approver policies are host-owned under `bee.security.approvals:approver_policies`:
 each names its approvers and the longest lifetime a request may ask for. An
 approver needs both the `bee.approvals.decide` action on the workspace and a
 place in the policy. Workspace membership alone exposes nothing. Approvals are

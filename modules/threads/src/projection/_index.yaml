@@ -6,8 +6,8 @@ entries:
   source: file://engine.lua
   modules: [sql, json, hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     record: bee.threads.records:record
     record_types: bee.threads:record_types
     reader: bee.threads.persist:reader
@@ -22,7 +22,7 @@ entries:
     record_types: bee.threads:record_types
     transaction: bee.threads.persist:transaction
     engine: bee.threads.projection:engine
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: status
   kind: library.lua
   source: file://status.lua
@@ -30,5 +30,5 @@ entries:
   imports:
     record_types: bee.threads:record_types
     transaction: bee.threads.persist:transaction
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     engine: bee.threads.projection:engine

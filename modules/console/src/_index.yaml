@@ -10,6 +10,3 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: command
-  kind: library.lua
-  source: file://command.lua

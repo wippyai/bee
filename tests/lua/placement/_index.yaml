@@ -37,7 +37,7 @@ entries:
     materialization: bee.placement.native.service:materialization
     observe: bee.placement.native:runner_observation
     types: bee.placement:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: materialization_runner_process
   kind: process.lua
   source: file://materialization_runner.lua
@@ -49,7 +49,7 @@ entries:
     materialization: bee.placement.native.service:materialization
     observe: bee.placement.native:runner_observation
     types: bee.placement:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: apply_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -82,7 +82,7 @@ entries:
   modules: [fs, funcs]
   security:
     policies: [bee.placement.native:fixture_stop_materialization_policy]
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}
 
 - name: request_test
   kind: function.lua
@@ -91,7 +91,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     request: bee.placement:request
     transitions: bee.placement:transitions
@@ -104,7 +104,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
     driver_types: bee.driver:types
@@ -117,7 +117,7 @@ entries:
 - name: preparer_temp_root
   kind: env.variable
   meta: {type: test_support}
-  storage: bee.placement.native:environment
+  storage: bee.placement.native.env:environment
   variable: TMPDIR
   readonly: true
 - name: workdir_preparer_test
@@ -127,7 +127,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [time, exec, json, funcs, sql, registry, env, process, channel]
   security:
-    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.placement.native.security:placement_runner_policy, bee.git.worktree:worktree_policy]
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.placement.native.security:placement_runner_policy, bee.git.worktree.security:worktree_policy]
   imports:
     test: wippy.test:test
     workdir_preparers: bee.placement.native.service:workdir_preparers
@@ -191,32 +191,32 @@ entries:
   method: prepare
   modules: [hash]
   imports:
-    bounds: bee.protocol:bounds
-    configure_protocol: bee.driver:configuration
+    bounds: bee.values:bounds
+    configure_protocol: bee.driver.configuration:configuration
 - name: fixture_agent_dispatch
   kind: function.lua
   source: file://fixture_agent.lua
   method: dispatch
   modules: [hash]
   imports:
-    bounds: bee.protocol:bounds
-    configure_protocol: bee.driver:configuration
+    bounds: bee.values:bounds
+    configure_protocol: bee.driver.configuration:configuration
 - name: fixture_agent_normalize
   kind: function.lua
   source: file://fixture_agent.lua
   method: normalize
   modules: [hash]
   imports:
-    bounds: bee.protocol:bounds
-    configure_protocol: bee.driver:configuration
+    bounds: bee.values:bounds
+    configure_protocol: bee.driver.configuration:configuration
 - name: fixture_agent_configure
   kind: function.lua
   source: file://fixture_agent.lua
   method: configure
   modules: [hash]
   imports:
-    bounds: bee.protocol:bounds
-    configure_protocol: bee.driver:configuration
+    bounds: bee.values:bounds
+    configure_protocol: bee.driver.configuration:configuration
 - name: test_launch_policy
   kind: registry.entry
   meta:
@@ -251,6 +251,7 @@ entries:
     drain_ms: 2000
     runner_drain_ms: 1000
     fixture: true
+    prepare_options: {}
     executables: {}
     environment: {}
 - name: test_non_native_launch_policy
@@ -274,24 +275,25 @@ entries:
     policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
   imports:
     placement_decode: bee.placement:decode
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
-    configuration: bee.driver.codex:configuration
-    grok_configuration: bee.driver.grok:configuration
-    grok_launch: bee.driver.grok:launch
-    claude_launch: bee.driver.claude:launch
-    codex_launch: bee.driver.codex:launch
-    agy_launch: bee.driver.agy:launch
-    muse_launch: bee.driver.muse:launch
-    opencode_launch: bee.driver.opencode:launch
-    configuration_protocol: bee.driver:configuration
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.configuration:configuration
+    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
     runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
     identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
     materialization: bee.placement.native.service:materialization
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
     executable_stream: bee.placement.native.service:executable_stream
@@ -307,14 +309,14 @@ entries:
   meta: {type: test, suite: bee, timeout: "30s"}
   modules: [funcs, security, registry, json, hash, time, exec]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
-    configuration_protocol: bee.driver:configuration
+    configuration_protocol: bee.driver.configuration:configuration
 - name: grok_login_fixture
   kind: fs.directory
   meta: {type: test_support}
@@ -329,12 +331,12 @@ entries:
   security:
     policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.credentials.security:credential_materialize_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
     quote: bee.driver.kit:quote
-    grok_launch: bee.driver.grok:launch
-    grok_configuration: bee.driver.grok:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    grok_configuration: bee.driver.grok.binding:configuration
     placement_service: bee.placement.native.service:service
     runner_fixture: bee.placement.native:materialization_runner
     homes: bee.placement.native.service:homes
@@ -403,15 +405,15 @@ entries:
   security:
     policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy, bee.placement.native:builder_test_caller_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
-    configuration_protocol: bee.driver:configuration
-    canonical: bee.threads.records:canonical
+    configuration_protocol: bee.driver.configuration:configuration
+    canonical: bee.values:canonical
     fixture_builder: bee.placement.native:fixture_instruction_builder
 - name: preparer_fixture_config
   kind: registry.entry

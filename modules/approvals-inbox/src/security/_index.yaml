@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.approvals.inbox.security
+entries:
+- name: client_policy
+  kind: security.policy
+  meta:
+    comment: The inbox reads the owner's inbox and requests and submits explicit decisions and withdrawals under the process actor; the owner authorizes each call
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.workspace.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, bee.approvals.binding:decide_batch, bee.approvals.binding:withdraw, bee.gov.binding:destination_call, bee.approvals.inbox.app:workspaces, bee.approvals.inbox.app:sources]
+    effect: allow

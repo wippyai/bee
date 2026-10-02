@@ -2,8 +2,9 @@ version: '1.0'
 namespace: bee.sync.security
 entries:
 - name: replica_store_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
-    actions: [db.get, registry.get]
-    resources: [bee.sync:db, bee.sync:database_ref]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, registry.get, env.set, env.get]
+    resources: [bee.sync.env:db, bee.sync.env:database_ref, bee.persist.env:startup_progress]
     effect: allow

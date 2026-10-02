@@ -17,124 +17,11 @@ entries:
   kind: library.lua
   source: file://types.lua
   imports:
-    bounds: bee.threads.records:bounds
-    login_evidence: bee.driver:login_evidence
+    bounds: bee.values:bounds
+    login_evidence: bee.driver.locate:login_evidence
     events: bee.driver.kit:events
     values: bee.threads.records:values
-- name: login_evidence
-  kind: library.lua
-  source: file://login_evidence.lua
-  imports:
-    bounds: bee.threads.records:bounds
-- name: probe_capture
-  kind: library.lua
-  source: file://probe_capture.lua
-  modules: [channel, time]
-- name: profile_access
-  kind: library.lua
-  source: file://profile_access.lua
-  imports:
-    bounds: bee.threads.records:bounds
-- name: schema_values
-  kind: library.lua
-  source: file://schema_values.lua
-  imports:
-    bounds: bee.threads.records:bounds
-- name: descriptor
-  kind: library.lua
-  source: file://descriptor.lua
-  modules:
-  - registry
-  imports:
-    bounds: bee.threads.records:bounds
-    login_evidence: bee.driver:login_evidence
-    schema_values: bee.driver:schema_values
-- name: locate
-  kind: library.lua
-  source: file://locate.lua
-  imports:
-    bounds: bee.threads.records:bounds
-    login_evidence: bee.driver:login_evidence
-- name: codec_registry
-  kind: library.lua
-  source: file://codec_registry.lua
-  imports:
-    bounds: bee.threads.records:bounds
-    normalizer: bee.driver.kit:normalize
-    claude_stream_json: bee.driver.codec:claude_stream_json
-    codex_jsonl: bee.driver.codec:codex_jsonl
-    opencode_json_events: bee.driver.codec:opencode_json_events
-    agy_stream_json: bee.driver.codec:agy_stream_json
-    grok_streaming_json: bee.driver.codec:grok_streaming_json
-    muse_record_jsonl: bee.driver.codec:muse_record_jsonl
-- name: option_render
-  kind: library.lua
-  source: file://option_render.lua
-  modules: [json, toml, hash]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    configuration: bee.driver:configuration
-- name: universal
-  kind: library.lua
-  source: file://universal.lua
-  modules:
-  - registry
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    descriptor: bee.driver:descriptor
-    configuration: bee.driver:configuration
-    types: bee.driver:types
-    locate: bee.driver:locate
-    codec_registry: bee.driver:codec_registry
-    option_render: bee.driver:option_render
-    normalizer: bee.driver.kit:normalize
-- name: instructions
-  kind: library.lua
-  source: file://instructions.lua
-  imports:
-    bounds: bee.threads.records:bounds
-- name: profile
-  kind: library.lua
-  source: file://profile.lua
-  imports:
-    bounds: bee.threads.records:bounds
-    types: bee.driver:types
-- name: resolver
-  kind: library.lua
-  source: file://resolver.lua
-  modules:
-  - registry
-  imports:
-    bounds: bee.threads.records:bounds
-    profile: bee.driver:profile
-    descriptor: bee.driver:descriptor
-    types: bee.driver:types
-- name: configuration
-  kind: library.lua
-  source: file://configuration.lua
-  modules:
-  - hash
-  - funcs
-  - security
-  - registry
-  - json
-  - toml
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    driver_resolver: bee.driver:resolver
-    types: bee.driver:types
-    instructions: bee.driver:instructions
-- name: preferences
-  kind: library.lua
-  source: file://preferences.lua
-  imports:
-    profile_access: bee.driver:profile_access
-    canonical: bee.threads.records:canonical
-    bounds: bee.threads.records:bounds
-    instructions: bee.driver:instructions
+    record_bounds: bee.threads.records:bounds
 - name: driver
   kind: contract.definition
   methods:
@@ -151,32 +38,7 @@ entries:
   methods:
   - name: locate
     description: Locate an admitted external driver profile from host-probed executable, login evidence, and platform evidence
-- name: permission_request_hook
-  kind: registry.entry
-  meta:
-    type: harness.permission_adapter
-    comment: Claude and Codex PermissionRequest hook response protocol; host acceptance separately authorizes answers
-  data:
-    adapter:
-      schema_revision: bee.permission-adapter@2
-      event_name: permission.hook
-      event_revision: '1'
-      request:
-        correlation: event_id
-        tool: tool_name
-        input: tool_input
-      response:
-        mode: hook
-        envelope:
-          hookSpecificOutput:
-            hookEventName: PermissionRequest
-        decision_field: hookSpecificOutput.decision.behavior
-        allow_value: allow
-        deny_value: deny
-        reason_field: hookSpecificOutput.decision.message
-      acknowledgment:
-        mode: continued_output
-      deny_acknowledgment:
-        mode: unproven
-      cancellation: deny_before_close
-      proof_fixture: permission_request_hook
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

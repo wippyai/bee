@@ -23,7 +23,7 @@ local lease_form = require("lease_form")
 local source_config = require("source_config")
 local hive = require("hive")
 local hive_types = require("hive_types")
-local WORKSPACES = "bee.approvals.inbox:workspaces"
+local WORKSPACES = "bee.approvals.inbox.app:workspaces"
 local POLL = "2s"
 type FeedSource = {id: string, node_id: string, workspace_id: string, local_owner: boolean, feed: string}
 local function unknown_answer(): model.Reply
@@ -52,7 +52,7 @@ local function main(value: unknown)
     if not local_node then error("inbox native node identity is unavailable") end
     local mesh, mesh_error = hive.open()
     if not mesh then error(mesh_error or "inbox Hive listener unavailable") end
-    local source_entry = registry.get("bee.approvals.inbox:sources")
+    local source_entry = registry.get("bee.approvals.inbox.app:sources")
     local declared: unknown = nil
     if source_entry and type(source_entry.data) == "table" then declared = source_entry.data.sources end
     local local_workspaces = inbox.workspaces(launch.workspace_id, admitted_workspaces())
@@ -108,7 +108,7 @@ local function main(value: unknown)
     local ticks = ticker:channel()
     local function refresh()
         for _, workspace in ipairs(local_workspaces) do
-            local raw = funcs.call("bee.workspace.catalog:read", {workspace_id = workspace})
+            local raw = funcs.call("bee.workspace.binding:read", {workspace_id = workspace})
             workspace_names[workspace] = model.workspace(raw, workspace)
         end
         for _, workspace in ipairs(state.workspaces) do

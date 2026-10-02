@@ -45,7 +45,7 @@ entries:
     launch_id: managed-window-fixture
     title: Open Claude Code window
     command_names: []
-    binding_ref: bee.driver.claude:binding
+    binding_ref: bee.driver.claude.binding:binding
     profile_id: window
     policy_ref: bee.managed.provider.fixture:policy_claude
     default_mode: window
@@ -71,7 +71,7 @@ entries:
     launch_id: managed-codex-window-fixture
     title: Open Codex window
     command_names: []
-    binding_ref: bee.driver.codex:binding
+    binding_ref: bee.driver.codex.binding:binding
     profile_id: window
     policy_ref: bee.managed.provider.fixture:policy_codex
     default_mode: window
@@ -112,7 +112,7 @@ entries:
   - json
   - registry
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     appearance: bee.app:appearance
   security:
     policies:

@@ -101,7 +101,7 @@ entries:
     comment: A bound MCP subject reads the one embedded documentation corpus through the docs facade; the volume is read-only and this grants no host path, registry write or network
   policy:
     actions: [funcs.call, fs.get, registry.get]
-    resources: [bee.docs.binding:call, bee.docs:corpus_ref, bee:docs_corpus]
+    resources: [bee.docs.binding:call, bee.docs.env:corpus_ref, bee.env:docs_corpus]
     effect: allow
 - name: gateway_tool_components_policy
   kind: security.policy.expr

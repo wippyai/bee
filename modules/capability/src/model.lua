@@ -67,7 +67,7 @@ local function decode_entry(raw: unknown): (Vocabulary?, string?)
     local meta = entry and object(entry.meta) or nil
     local data = entry and object(entry.data) or nil
     if not entry then return nil, "host capability catalog is malformed: entry is not an object" end
-    if entry.id ~= "bee:capability_catalog" then return nil, "host capability catalog is malformed: unexpected id " .. tostring(entry.id) end
+    if entry.id ~= "bee.security.capability:capability_catalog" then return nil, "host capability catalog is malformed: unexpected id " .. tostring(entry.id) end
     if entry.kind ~= "registry.entry" then return nil, "host capability catalog is malformed: unexpected kind " .. tostring(entry.kind) end
     if not meta or meta.type ~= "bee.capability_catalog" then return nil, "host capability catalog is malformed: unexpected metadata " .. tostring(meta and meta.type) end
     if not data then return nil, "host capability catalog is malformed: data is absent" end

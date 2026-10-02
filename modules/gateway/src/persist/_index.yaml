@@ -22,5 +22,5 @@ entries:
   source: file://surface_store.lua
   modules: [sql, json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     capability_model: bee.capability:model

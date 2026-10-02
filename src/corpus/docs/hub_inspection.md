@@ -185,7 +185,7 @@ newest release that is not yanked when `version` is omitted, and an update when
 the component already has a Hub dependency root. Install and update run the
 package's migrations (`up`) under the host's migration grants; uninstall uses
 `block`. The host files one approval, bound to the agent's thread and attempt,
-under the approval policy the host configuration `bee:module_installation`
+under the approval policy the host configuration `bee.gateway.env:module_installation`
 names (`module-installation`, decided in Approvals). The approval shows the
 package, version, source, dependency changes, the security policies the change
 adds, replaces or removes with their actions and resources, migrations and
@@ -223,7 +223,7 @@ An agent publishes a package to the Hub only through a person-approved grant:
 The worker admits the locked source tree against the configured source roots,
 seals it once into a `.wapp` file in worker-owned staging and preflights that
 file without uploading. It files one approval, bound to the agent's thread and
-attempt, under the approval policy the host configuration `bee:module_publication`
+attempt, under the approval policy the host configuration `bee.gateway.env:module_publication`
 names (`module-publication`, decided in Approvals). The approval shows the
 module, version, pack digest, visibility, organization and source tree; the plan
 digest binds all of them. Filing changes nothing on the Hub and returns
@@ -244,9 +244,9 @@ digests only.
 
 The person selects the publishing organization, uploader executable, admitted
 source roots and pack staging root once in the host configuration
-`bee:hub_publication`; every publication must belong to that organization and
+`bee.hub.publication:hub_publication`; every publication must belong to that organization and
 an absent link fails closed. The uploader runs under the host-selected executor
-`bee.hub:publish_executor`, which needs a POSIX sh with sha256sum. The host
+`bee.hub.publication:publish_executor`, which needs a POSIX sh with sha256sum. The host
 grants the tools per launch policy and links their MCP policy through the
 gateway's `target_tool_hub_publish_policy`.
 

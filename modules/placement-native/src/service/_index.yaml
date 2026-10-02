@@ -8,8 +8,8 @@ entries:
   - fs
   - hash
   imports:
-    bounds: bee.threads.records:bounds
-    resources: bee.placement.native:resources
+    bounds: bee.values:bounds
+    resources: bee.placement.native.env:resources
     types: bee.placement:types
     executable_stream: bee.placement.native.service:executable_stream
 - name: executable_stream
@@ -26,7 +26,7 @@ entries:
   kind: library.lua
   source: file://resource_resolution.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     types: bee.placement:types
 - name: capability
   kind: library.lua
@@ -35,7 +35,7 @@ entries:
   - exec
   imports:
     types: bee.placement:types
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
 - name: homes
   kind: library.lua
   source: file://homes.lua
@@ -45,21 +45,21 @@ entries:
   imports:
     formats: bee.credentials:formats
     types: bee.placement:types
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    resources: bee.placement.native:resources
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    resources: bee.placement.native.env:resources
 - name: identity
   kind: library.lua
   source: file://identity.lua
   modules:
   - exec
   imports:
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
 - name: writable_roots_adapter
   kind: library.lua
   source: file://writable_roots_adapter.lua
   imports:
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
     driver_types: bee.driver:types
 - name: workdir_preparers
   kind: library.lua
@@ -70,11 +70,11 @@ entries:
   - sql
   - json
   imports:
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     types: bee.placement:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     store: bee.placement.native.persist:store
-    paths: bee.placement:paths
+    paths: bee.placement.profiles:paths
 - name: service
   kind: library.lua
   source: file://service.lua
@@ -90,31 +90,31 @@ entries:
   - system
   - sql
   imports:
-    gateway_configuration: bee.gateway:configuration
-    configuration: bee.driver:configuration
-    preferences: bee.driver:preferences
-    resolver: bee.driver:resolver
+    gateway_configuration: bee.gateway.env:configuration
+    configuration: bee.driver.configuration:configuration
+    preferences: bee.driver.profiles:preferences
+    resolver: bee.driver.binding:resolver
     driver_types: bee.driver:types
-    placement_resolver: bee.placement:resolver
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    placement_resolver: bee.placement.binding:resolver
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types
     request: bee.placement:request
     transitions: bee.placement:transitions
     store: bee.placement.native.persist:store
     executable: bee.placement.native.service:executable
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     capability: bee.placement.native.service:capability
     homes: bee.placement.native.service:homes
     identity: bee.placement.native.service:identity
     protocol: bee.placement.native:protocol
     materialization: bee.placement.native.service:materialization
     gateway_protocol: bee.gateway:protocol
-    service_reply: bee.protocol:reply
+    service_reply: bee.values:reply
     credential_protocol: bee.credentials:protocol
     resource_resolution: bee.placement.native.service:resource_resolution
     workdir_preparers: bee.placement.native.service:workdir_preparers
-    placement_profiles: bee.placement:profiles
+    placement_profiles: bee.placement.profiles:profiles
 - name: materialization
   kind: library.lua
   source: file://materialization.lua
@@ -127,18 +127,18 @@ entries:
   - hash
   imports:
     store: bee.placement.native.persist:store
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
     workdir_preparers: bee.placement.native.service:workdir_preparers
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
-    bounds: bee.threads.records:bounds
-    configuration: bee.placement.native:configuration
+    bounds: bee.values:bounds
+    configuration: bee.placement.native.env:configuration
     provider_projection: bee.placement.native.service:provider_projection
     types: bee.placement:types
-    paths: bee.placement:paths
+    paths: bee.placement.profiles:paths
     gateway_protocol: bee.gateway:protocol
     credential_protocol: bee.credentials:protocol
-    service_reply: bee.protocol:reply
+    service_reply: bee.values:reply
     formats: bee.credentials:formats
 - name: runner
   kind: process.lua
@@ -152,18 +152,18 @@ entries:
   - exec
   - funcs
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     service: bee.placement.native.service:service
     materialization: bee.placement.native.service:materialization
     store: bee.placement.native.persist:store
     executable: bee.placement.native.service:executable
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     identity: bee.placement.native.service:identity
     output_buffer: bee.placement.native.service:output_buffer
     protocol: bee.placement.native:protocol
     quote: bee.driver.kit:quote
     types: bee.placement:types
-    process_backend: bee.placement.native:process_backend
+    process_backend: bee.placement.native.binding:process_backend
   security: {policies: []}
 - name: window
   kind: library.lua
@@ -172,14 +172,14 @@ entries:
   imports:
     protocol: bee.placement.native:protocol
     store: bee.placement.native.persist:store
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     materialization: bee.placement.native.service:materialization
     executable: bee.placement.native.service:executable
     quote: bee.driver.kit:quote
     service: bee.placement.native.service:service
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     identity: bee.placement.native.service:identity
-    process_backend: bee.placement.native:process_backend
+    process_backend: bee.placement.native.binding:process_backend
 - name: sweeper
   kind: process.lua
   source: file://sweeper.lua
@@ -204,8 +204,8 @@ entries:
   source: file://provider_projection.lua
   modules: [json, toml, registry]
   imports:
-    profiles: bee.placement:profiles
-    bounds: bee.threads.records:bounds
+    profiles: bee.placement.profiles:profiles
+    bounds: bee.values:bounds
     formats: bee.credentials:formats
     types: bee.driver:types
 - name: process_runner
@@ -223,11 +223,11 @@ entries:
     materialization: bee.placement.native.service:materialization
     store: bee.placement.native.persist:store
     executable: bee.placement.native.service:executable
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     identity: bee.placement.native.service:identity
     output_buffer: bee.placement.native.service:output_buffer
     protocol: bee.placement.native:protocol
     quote: bee.driver.kit:quote
     types: bee.placement:types
-    process_backend: bee.placement.native:process_backend
-    bounds: bee.protocol:bounds
+    process_backend: bee.placement.native.binding:process_backend
+    bounds: bee.values:bounds

@@ -1348,7 +1348,7 @@ func assertManagedRoute(state, provider string) error {
 			break
 		}
 	}
-	expectedDefinition := "bee.driver." + provider + ":default_window"
+	expectedDefinition := "bee.driver." + provider + ".profiles:default_window"
 	if app.DefinitionID != "bee.harness.app:app" || saved.DefinitionRef != expectedDefinition ||
 		saved.ThreadID == "" || saved.PreviousAttemptID == "" || saved.OriginRequestID == "" {
 		return fmt.Errorf("managed route identity mismatch: app=%+v checkpoint=%+v, expected definition %s", app, saved, expectedDefinition)
@@ -1395,7 +1395,7 @@ func assertManagedRoute(state, provider string) error {
 	if err := json.Unmarshal([]byte(preparedJSON), &record); err != nil {
 		return fmt.Errorf("decode managed prepared record: %w", err)
 	}
-	expectedBinding := "bee.driver." + provider + ":binding"
+	expectedBinding := "bee.driver." + provider + ".binding:binding"
 	if record.Body.BindingRef != expectedBinding || record.Body.ProfileID != "window" ||
 		record.Body.PlacementBinding != "bee.placement.native.binding:binding" {
 		return fmt.Errorf("managed prepared route = binding %q, profile %q, placement %q",

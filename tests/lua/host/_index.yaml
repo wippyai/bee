@@ -7,7 +7,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     handoff: bee.host:handoff
     inventory: bee.host:inventory
@@ -20,7 +20,7 @@ entries:
   imports:
     test: wippy.test:test
     recovery: bee.host:recovery
-    records: bee.workspace:recovery
+    records: bee.workspace.types:recovery
     inventory: bee.host:inventory
 - name: restores_test
   kind: function.lua
@@ -30,7 +30,7 @@ entries:
   imports:
     test: wippy.test:test
     restores: bee.host:restores
-    records: bee.workspace:recovery
+    records: bee.workspace.types:recovery
 - name: inventory_test
   kind: function.lua
   source: file://inventory_test.lua
@@ -87,7 +87,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [process, channel, time]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     connections: bee.host:clients
     contract: bee.protocol:application

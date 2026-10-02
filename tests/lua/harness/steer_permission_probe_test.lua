@@ -40,7 +40,7 @@ local function define_tests()
             local application = "bee.application:" .. workspace .. ":research"
             local app_id = "app.steer_probe:app"
             local owner = "bee.gov.apps:" .. workspace .. ".steer_probe"
-            local catalog = assert(capability_catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            local catalog = assert(capability_catalog.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
             local grant = {id = "app.steer_probe:message", expected_kind = "security.policy", value = nil,
                 targets = {app_id}, capability_request = {capability = "threads.message",
                     parameters = {scope = "children"}, catalog_revision = catalog.revision,

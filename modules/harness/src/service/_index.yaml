@@ -15,9 +15,9 @@ entries:
   - json
   - tty
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     admission: bee.harness.launch:admission
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
 - name: target_presentation_policies
   kind: ns.requirement
   default: []
@@ -39,9 +39,9 @@ entries:
   - json
   - tty
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     admission: bee.harness.launch:admission
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
 - name: presentation_executor
   kind: process.lua
   source: file://executor.lua
@@ -55,9 +55,9 @@ entries:
   method: open
   modules: [process, channel, time, uuid, hash, security, funcs, json, tty]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     admission: bee.harness.launch:admission
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
   security:
     policies: [bee.harness.security:presentation_bridge_policy]
 - name: carrier

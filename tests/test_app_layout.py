@@ -59,7 +59,7 @@ class AppLayout(unittest.TestCase):
         state = {'applications': [{'definition_id': ref, 'instance_id': str(i), 'resume_state': opaque} for i, ref in enumerate(old)]}
         database.execute('INSERT INTO workspace_state VALUES (?)', (json.dumps(state, indent=2),))
         database.executemany('INSERT INTO workspace_application_thread_bindings VALUES (?)', [(ref,) for ref in old])
-        sql = sql_block('src/storage/store.lua', 'APP_CHILD_NAMES_SQL')
+        sql = sql_block('modules/workspace/src/migrations/migrations.lua', 'APP_CHILD_NAMES_SQL')
         database.executescript(sql)
         migrated = json.loads(database.execute('SELECT value FROM workspace_state').fetchone()[0])
         for i, app in enumerate(migrated['applications']):
@@ -96,10 +96,10 @@ class AppLayout(unittest.TestCase):
             database.close()
 
     def test_applied_sql_is_unchanged(self):
-        for path in ['src/storage/store.lua', 'modules/sync/src/migrations/migrations.lua', 'modules/gateway/src/migrations/migrations.lua', 'modules/threads/src/migrations/migrations.lua']:
-            original = subprocess.check_output(['git', 'show', '463ac2ea:' + path], cwd=ROOT, text=True)
+        for path in ['modules/workspace/src/migrations/migrations.lua', 'modules/sync/src/migrations/migrations.lua', 'modules/gateway/src/migrations/migrations.lua', 'modules/threads/src/migrations/migrations.lua']:
+            original = subprocess.check_output(['git', 'show', '463ac2ea:' + ('src/storage/store.lua' if path == 'modules/workspace/src/migrations/migrations.lua' else path)], cwd=ROOT, text=True)
             current = (ROOT / path).read_text()
-            if path == 'src/storage/store.lua':
+            if path == 'modules/workspace/src/migrations/migrations.lua':
                 before = declared_migrations(original)
                 self.assertEqual(declared_migrations(current)[:len(before)], before, path)
                 continue

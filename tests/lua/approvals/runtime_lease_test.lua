@@ -27,7 +27,7 @@ local function value(reply: Object): Object
     return assert(bounds.object(reply.value))
 end
 local function install()
-    local entry = assert(registry.get("bee:approver_policies"))
+    local entry = assert(registry.get("bee.security.approvals:approver_policies"))
     local data = assert(bounds.object(entry.data))
     local policies = assert(bounds.array(data.policies, 64))
     for _, raw in ipairs(policies) do if assert(bounds.object(raw)).name == POLICY then return end end

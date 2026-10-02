@@ -23,14 +23,21 @@ tag=v0.0.1-alpha.1
 release() {
     assets=$1
     rm -rf "$assets" "$fixture/build"
-    mkdir -p "$assets" "$fixture/build/deployment" "$fixture/build/binary"
+    mkdir -p "$assets" "$fixture/build/deployment/hub/.wippy/vendor/bee" "$fixture/build/binary"
     printf '%s\n' 'modules:' > "$fixture/build/deployment/wippy.lock"
+    printf '%s\n' 'modules:' > "$fixture/build/deployment/hub/wippy.lock"
     packs=
     for module in bee threads; do
+        version=${tag#v}
+        hub_pack=$fixture/build/deployment/hub/.wippy/vendor/bee/$module-$version.wapp
+        printf 'core %s\n' "$module" > "$hub_pack"
+        [ "$module" != bee ] || version=0.0.1-0.boot.alpha.1
         hash=$(printf 'sealed %s\n' "$module" | sha256sum | awk '{print $1}')
-        printf '  - name: bee/%s\n    version: %s\n    hash: sha256:%s\n' "$module" "${tag#v}" "$hash" >> "$fixture/build/deployment/wippy.lock"
+        [ "$module" = bee ] || printf 'sealed %s\n' "$module" > "$hub_pack"
+        printf '  - name: bee/%s\n    version: %s\n    hash: sha256:%s\n' "$module" "${tag#v}" "$(sha256sum "$hub_pack" | awk '{print $1}')" >> "$fixture/build/deployment/hub/wippy.lock"
+        printf '  - name: bee/%s\n    version: %s\n    hash: sha256:%s\n' "$module" "$version" "$hash" >> "$fixture/build/deployment/wippy.lock"
         [ "$module" != threads ] || hash=${PROVENANCE_HASH:-$hash}
-        packs="$packs${packs:+,}{\"module\":\"bee/$module\",\"version\":\"${tag#v}\",\"sha256\":\"$hash\"}"
+        packs="$packs${packs:+,}{\"module\":\"bee/$module\",\"version\":\"$version\",\"sha256\":\"$hash\"}"
     done
     printf '{"manifest":{"application":{"packs":[%s]}}}\n' "$packs" > "$fixture/build/binary/bee.provenance.json"
     printf 'executable\n' > "$fixture/build/binary/bee"
@@ -83,6 +90,13 @@ printf 'tampered\n' >> "$fixture/published/bee-deployment.tar.gz"
 run "$tag" && fail 'a deployment archive that differs from its checksum was restored'
 grep -q 'bee-deployment.tar.gz does not match its release checksum' "$fixture/out" || fail 'the checksum mismatch was not named'
 [ ! -f "$fixture/restore/deployment/wippy.lock" ] || fail 'a stale deployment survived a refused restore'
+
+release "$fixture/published"
+printf 'tampered core\n' >> "$fixture/build/deployment/hub/.wippy/vendor/bee/bee-${tag#v}.wapp"
+tar -czf "$fixture/published/bee-deployment.tar.gz" -C "$fixture/build/deployment" .
+(cd "$fixture/published" && sha256sum bee-deployment.tar.gz > bee-deployment.tar.gz.sha256)
+run "$tag" && fail 'a core artifact that differs from its lock was restored'
+grep -q 'core deployment pack differs from its lock: bee/bee' "$fixture/out" || fail 'the core checksum mismatch was not named'
 
 PROVENANCE_HASH=0000000000000000000000000000000000000000000000000000000000000000 release "$fixture/published"
 run "$tag" && fail 'a deployment that differs from the executable provenance was restored'

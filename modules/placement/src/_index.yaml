@@ -14,7 +14,7 @@ entries:
     comment: Add the placement namespace to the host trust map
   default: bee.placement
   targets:
-  - entry: bee:protected_kernel
+  - entry: bee.security.gov:protected_kernel
     path: .data.namespaces +=
 - name: dependency_driver
   kind: ns.dependency
@@ -29,18 +29,18 @@ entries:
   source: file://types.lua
   imports:
     driver_types: bee.driver:types
-    preferences: bee.driver:preferences
+    preferences: bee.driver.profiles:preferences
 - name: request
   kind: library.lua
   source: file://request.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types
     driver_types: bee.driver:types
-    login_evidence: bee.driver:login_evidence
-    preferences: bee.driver:preferences
+    login_evidence: bee.driver.locate:login_evidence
+    preferences: bee.driver.profiles:preferences
 - name: transitions
   kind: library.lua
   source: file://transitions.lua
@@ -50,7 +50,7 @@ entries:
   kind: library.lua
   source: file://decode.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     types: bee.placement:types
 - name: placement
   kind: contract.definition
@@ -90,31 +90,7 @@ entries:
     description: Run setup before the child starts, optionally returning modified working_directory, extra writable roots, and state
   - name: cleanup
     description: Run cleanup after the child ends, using state recorded from setup
-- name: resolver
-  kind: library.lua
-  source: file://resolver.lua
-  modules: [hash, registry]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    types: bee.placement:types
-- name: paths
-  kind: library.lua
-  source: file://paths.lua
-  modules: [exec]
-  imports:
-    quote: bee.driver.kit:quote
-
-- name: profiles
-  kind: library.lua
-  source: file://profiles.lua
-  modules: [hash, registry]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-- name: native
-  kind: registry.entry
-  meta: {type: bee.placement_profile, title: Native}
-  data:
-    schema_revision: bee.placement-profile@1
-    placement_binding: bee.placement.native.binding:binding
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

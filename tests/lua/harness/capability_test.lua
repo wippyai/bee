@@ -10,7 +10,7 @@ local capability = require("capability")
 local bounds = require("bounds")
 
 local function fixture(): {[string]: unknown}
-    return {id = "bee:capability_catalog", kind = "registry.entry",
+    return {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
         meta = {type = "bee.capability_catalog"}, data = {revision = 1,
             never = {"exec"}, capabilities = {
                 {id = "workspace.files.read", revision = 2, confirm = "standard",

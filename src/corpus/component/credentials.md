@@ -1,7 +1,7 @@
 # bee.credentials
 
 The owner-local credential broker. A definition names a credential in a
-workspace from a source the host admits (`bee.credentials:credential_sources`: an
+workspace from a source the host admits (`bee.credentials.env:credential_sources`: an
 `env.variable` entry, the workspace or `*`, the audience or `*`, a provider,
 the projection kinds allowed); its digest covers configuration and source
 identity, never bytes, and redefining it moves to the next revision so
@@ -78,7 +78,7 @@ atomic replacement, revalidates the projection, attempt, generation, provider
 path and original source digest, and replaces only that login file. A newer
 source login causes a conflict and remains untouched. Configuration and state
 files are never written back.
-Registry source metadata in `bee.credentials:credential_sources` alone cannot grant filesystem
+Registry source metadata in `bee.credentials.env:credential_sources` alone cannot grant filesystem
 read: if a source ref is admitted by metadata but absent from
 `bee.credentials.security:credential_file_policy`, availability and materialization fail closed
 (`UNAVAILABLE`). Adding another source requires an explicit host policy grant

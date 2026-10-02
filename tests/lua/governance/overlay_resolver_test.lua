@@ -44,8 +44,8 @@ local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured,
             {id = "bee.host:db", kind = "db.sql.sqlite", data = {}, registry = {owner = "bee/host"}},
             {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"},
                 registry = {owner = "host/overlay"}},
-            {id = "bee:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
-                data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}},
+            {id = "bee.security.gov:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
+                data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}},
                 registry = {owner = "bee/host"}},
         },
         overlay_ids = { ["private.app:old-overlay"] = true },
@@ -142,7 +142,7 @@ local function define_tests()
         test.it("retains a capability requirement and validates its app policy append target", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture)()
-            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+            captured.entries[#captured.entries + 1] = {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "workspace.files.read",
                     revision = 1, confirm = "standard", parameters = {subpath = "relative_subpath"},
@@ -192,7 +192,7 @@ local function define_tests()
         test.it("accepts a Hive exposure request for the artifact's own operations", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture)()
-            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+            captured.entries[#captured.entries + 1] = {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 7, never = {"exec"}, capabilities = {{id = "hive.expose",
                     revision = 2, confirm = "explicit",
@@ -233,7 +233,7 @@ local function define_tests()
         test.it("requires every agents.launch definition to be a launch definition", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture)()
-            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+            captured.entries[#captured.entries + 1] = {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 7, never = {"exec"}, capabilities = {{id = "agents.launch",
                     revision = 1, confirm = "explicit",
@@ -325,7 +325,7 @@ local function define_tests()
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
                 data = {},
                 registry = {owner = "bee/host"}}
-            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+            captured.entries[#captured.entries + 1] = {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "threads.read",
                     revision = 1, confirm = "standard", parameters = {scope = "owned_scope"},
@@ -369,7 +369,7 @@ local function define_tests()
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
                 data = {},
                 registry = {owner = "bee/host"}}
-            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+            captured.entries[#captured.entries + 1] = {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "threads.read",
                     revision = 1, confirm = "standard", parameters = {scope = "owned_scope"},
@@ -407,7 +407,7 @@ local function define_tests()
                 applications = {{definition_id = "private.app:main", policies = {}, thread_access = "none"}}}
             local deps, spec = fixture(policy)
             local captured = (deps.capture)()
-            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+            captured.entries[#captured.entries + 1] = {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "workspace.files.read",
                     revision = 1, confirm = "standard", parameters = {subpath = "relative_subpath"},
@@ -449,7 +449,7 @@ local function define_tests()
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
                 data = {},
                 registry = {owner = "bee/host"}}
-            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+            captured.entries[#captured.entries + 1] = {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "app.database",
                     revision = 1, confirm = "standard", parameters = {name = "name"},

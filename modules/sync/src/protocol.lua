@@ -2,6 +2,7 @@
 -- adapters supply their own payload decoder; this layer verifies the common
 -- owner, feed, cursor, revision and tombstone envelope before a UI folds it.
 local bounds = require("bounds")
+local values = require("values")
 local M = {}
 M.EVENT_SCHEMA = "bee.sync-event@1"
 M.PROJECTION_SCHEMA = "bee.sync-projection@1"
@@ -48,8 +49,8 @@ function M.event(value: unknown, owner: string, feed: string, decode_payload: Pa
     if unexpected then return nil, unexpected end
     local common = envelope(item, M.EVENT_SCHEMA, owner, feed)
     if common then return nil, common end
-    local sequence, revision = bounds.count(item.sequence, 9007199254740991), bounds.count(item.revision, 9007199254740991)
-    local event_id, event_type, projection_key, committed_at = bounds.id(item.event_id), bounds.id(item.event_type), bounds.id(item.projection_key), bounds.id(item.committed_at)
+    local sequence, revision = values.count(item.sequence, 9007199254740991), values.count(item.revision, 9007199254740991)
+    local event_id, event_type, projection_key, committed_at = values.id(item.event_id), values.id(item.event_type), values.id(item.projection_key), values.id(item.committed_at)
     local tombstone = boolean(item.tombstone)
     if not sequence or sequence < 1 or not revision or revision < 1 or not event_id or not event_type or not projection_key or not committed_at or tombstone == nil or item.payload == nil then
         return nil, "sync event has invalid fields"
@@ -70,8 +71,8 @@ function M.projection(value: unknown, owner: string, feed: string, decode_value:
     if unexpected then return nil, unexpected end
     local common = envelope(item, M.PROJECTION_SCHEMA, owner, feed)
     if common then return nil, common end
-    local key, updated_at = bounds.id(item.key), bounds.id(item.updated_at)
-    local revision, sequence = bounds.count(item.revision, 9007199254740991), bounds.count(item.sequence, 9007199254740991)
+    local key, updated_at = values.id(item.key), values.id(item.updated_at)
+    local revision, sequence = values.count(item.revision, 9007199254740991), values.count(item.sequence, 9007199254740991)
     local tombstone = boolean(item.tombstone)
     if not key or not updated_at or not revision or revision < 1 or not sequence or sequence < 1 or tombstone == nil then return nil, "sync projection has invalid fields" end
     if tombstone then
@@ -111,11 +112,11 @@ function M.page(value: unknown, owner: string, feed: string, decode_payload: Pay
     if common then return nil, common end
     if item.reset_required ~= false then return nil, "sync page requires reset" end
     local raw_events = list(item.events)
-    local next, head, earliest = bounds.count(item.next_cursor, 9007199254740991), bounds.count(item.head_cursor, 9007199254740991), bounds.count(item.earliest_cursor, 9007199254740991)
+    local next, head, earliest = values.count(item.next_cursor, 9007199254740991), values.count(item.head_cursor, 9007199254740991), values.count(item.earliest_cursor, 9007199254740991)
     local more = boolean(item.more)
     local scope_revision: string? = nil
     if item.scope_revision ~= nil then
-        scope_revision = bounds.id(item.scope_revision)
+        scope_revision = values.id(item.scope_revision)
         if not scope_revision then return nil, "sync page scope_revision is invalid" end
     end
     if not raw_events or next == nil or head == nil or earliest == nil or more == nil or earliest > head or next > head then return nil, "sync page has invalid fields" end
@@ -143,13 +144,13 @@ function M.snapshot(value: unknown, owner: string, feed: string, decode_value: P
     if common then return nil, common end
     if item.reset_required ~= false then return nil, "sync snapshot requires reset" end
     local raw_items = list(item.items)
-    local cursor, earliest = bounds.count(item.cursor, 9007199254740991), bounds.count(item.earliest_cursor, 9007199254740991)
+    local cursor, earliest = values.count(item.cursor, 9007199254740991), values.count(item.earliest_cursor, 9007199254740991)
     local complete = boolean(item.complete)
     local next_key: string? = nil
     local scope_revision: string? = nil
-    if item.next_key ~= nil then next_key = bounds.id(item.next_key) end
+    if item.next_key ~= nil then next_key = values.id(item.next_key) end
     if item.scope_revision ~= nil then
-        scope_revision = bounds.id(item.scope_revision)
+        scope_revision = values.id(item.scope_revision)
         if not scope_revision then return nil, "sync snapshot scope_revision is invalid" end
     end
     if not raw_items or cursor == nil or earliest == nil or earliest > cursor or complete == nil or (not complete and not next_key) or (complete and next_key ~= nil) then return nil, "sync snapshot has invalid fields" end

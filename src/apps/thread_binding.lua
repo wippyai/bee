@@ -3,6 +3,7 @@
 -- The broker retains application lifecycle ownership. This module owns the
 -- thread binding reducer's effects and the values sent across its boundaries.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local principal = require("principal")
 local binding_protocol = require("binding_protocol")
 local reducer = require("reducer")
@@ -96,7 +97,7 @@ function M.reply(value: unknown): Reply?
     end
     local failure = object(input.error)
     local code = failure and bounds.id(failure.code)
-    local message = failure and bounds.text(failure.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+    local message = failure and bounds.text(failure.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
     if not failure or not exact(failure, {"code", "message", "retryable"}) or not code or not message
         or type(failure.retryable) ~= "boolean" or input.value ~= nil then return nil end
     local checked_code: string = code or ""
@@ -114,9 +115,9 @@ local function get_value(reply: unknown, thread_id: string, allow_closed: boolea
         or not exact(member, {"member_id", "role", "revision", "active"}) then return nil end
     if summary.workspace_id ~= nil and not workspace(summary.workspace_id) then return nil end
     local valid_state = summary.state == "open" or (allow_closed == true and summary.state == "closed")
-    if summary.thread_id ~= thread_id or not bounds.line(summary.title, bounds.MAX_TITLE_BYTES)
+    if summary.thread_id ~= thread_id or not bounds.line(summary.title, record_bounds.MAX_TITLE_BYTES)
         or not valid_state or not revision(summary.revision)
-        or not bounds.cursor(summary.head_sequence) or not bounds.id(summary.owner_id) or not bounds.timestamp(summary.created_at)
+        or not record_bounds.cursor(summary.head_sequence) or not bounds.id(summary.owner_id) or not bounds.timestamp(summary.created_at)
         or not bounds.id(member.member_id) or (member.role ~= "owner" and member.role ~= "participant" and member.role ~= "observer")
         or not revision(member.revision) or type(member.active) ~= "boolean" then return nil end
     return input

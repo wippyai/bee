@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.sync.values
+entries:
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+  imports:
+    values: bee.values:bounds
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+  imports:
+    bounds: bee.sync.values:bounds
+    encoder: bee.values:canonical
+- name: version
+  kind: library.lua
+  source: file://version.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.sync.values:canonical

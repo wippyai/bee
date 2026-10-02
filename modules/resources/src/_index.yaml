@@ -26,7 +26,7 @@ entries:
     comment: Add the resource owner's namespace to the host trust map
   default: bee.resources
   targets:
-  - entry: bee:protected_kernel
+  - entry: bee.security.gov:protected_kernel
     path: .data.namespaces +=
 - name: target_node_identity_storage
   kind: ns.requirement
@@ -34,55 +34,24 @@ entries:
     comment: Native state identity and its recorded legacy alias
   default: bee.harness.host:environment
   targets:
-  - entry: bee.resources:node_identity_migration_source
+  - entry: bee.resources.env:node_identity_migration_source
     path: .storage
 - name: target_db
   kind: ns.requirement
   meta:
     comment: SQL resource for associations and grants
-  default: bee.resources:db
+  default: bee.resources.env:db
   targets:
-  - entry: bee.resources:database_ref
+  - entry: bee.resources.env:database_ref
     path: .resource_ref
 - name: target_roots
   kind: ns.requirement
   meta:
     comment: The host's admitted root list, the ceiling every association stays under
-  default: bee.resources:resource_roots
+  default: bee.resources.env:resource_roots
   targets:
-  - entry: bee.resources:roots_ref
+  - entry: bee.resources.env:roots_ref
     path: .resource_ref
-- name: database_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked SQL resource; target_db fills resource_ref
-- name: roots_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked host roots entry; target_roots fills resource_ref
-- name: environment
-  kind: env.storage.os
-  lifecycle:
-    auto_start: true
-- name: node_identity_migration_source
-  kind: env.variable
-  storage: bee.harness.host:environment
-  variable: node_identity_migration_source
-  default: ""
-  readonly: true
-- name: db_path
-  kind: env.variable
-  storage: bee.resources:environment
-  variable: BEE_RESOURCES_DB
-  default: .wippy/resources.db
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.resources:db_path}
-  lifecycle:
-    auto_start: true
 - name: contract
   kind: contract.definition
   meta:
@@ -104,44 +73,7 @@ entries:
     description: One workspace's associations as a titled list, for a caller that may read the workspace; the shape of a workspace catalog extension
   - name: search
     description: One workspace's associations whose name starts with text, for a caller that may read the workspace
-- name: local
-  kind: contract.binding
-  contracts:
-  - contract: bee.resources:contract
-    methods:
-      associate: bee.resources.binding:associate
-      grant: bee.resources.binding:grant
-      revoke: bee.resources.binding:revoke
-      revoke_all: bee.resources.binding:revoke_all
-      resolve: bee.resources.binding:resolve
-      list: bee.resources.binding:list
-      describe: bee.resources.binding:describe
-      search: bee.resources.binding:search
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules: [registry, env, system]
-  imports:
-    bounds: bee.threads.records:bounds
-- name: resource_roots
-  kind: registry.entry
-  meta:
-    type: bee.resource_roots
-    comment: Host-selected roots available to first-use harness setup; driver declarations select only resource
-      names
-  data:
-    roots:
-    - root_ref: bee.env:workspace_root
-      access: write
-    - root_ref: bee.placement.native:root
-      access: write
-- name: resources_workspace_extension
-  kind: contract.binding
-  meta:
-    title: Resources
-    comment: The host attaches each workspace's resource associations to the workspace catalog and its viewer
-  contracts:
-  - contract: bee.workspace.catalog:extension
-    methods:
-      describe: bee.resources.binding:describe
-      search: bee.resources.binding:search
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

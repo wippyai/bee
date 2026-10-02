@@ -91,10 +91,12 @@ application `process.upgrade` handoff. Native PTY processes owned by a changed
 application still follow that application's normal stop lifecycle; no native
 session state is invented.
 
-The standalone acceptance checks the live registry renderer and retained window
-code marker using runtime PR #889 at `84c4b63d`. This proof runtime publishes
-changed pack definitions before application replacement and verifies unchanged
-owner PID; the repository runtime pin has not advanced in this change.
+The standalone acceptance checks the live registry renderer as well as the
+retained window's code marker. Core self-update retains host-selected child
+component definitions and requirement parameters. Independent component updates
+expose their new registry code before application replacement can occur; running
+executions follow their existing lifecycle. The broker does not synthesize a
+second registry or restart path for core updates.
 
 The desktop session and workspace host already use same-PID handoff; desktop
 clients, application brokers and the owner controller already use acknowledged

@@ -7,5 +7,5 @@ entries:
     comment: The selected docs facade scope resolves one linked corpus reference and reads only that volume
   policy:
     actions: [fs.get, registry.get]
-    resources: [bee.docs:corpus_ref, bee:docs_corpus]
+    resources: [bee.docs.env:corpus_ref, bee.env:docs_corpus]
     effect: allow

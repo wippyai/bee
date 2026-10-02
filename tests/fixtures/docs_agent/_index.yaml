@@ -13,18 +13,18 @@ entries:
         actor: {id: bee.test.docs_volume}
   security:
     policies: [bee.docs.agent:volume_policy]
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}
 
 - name: volume_policy
   kind: security.policy
   policy:
     actions: [fs.get]
-    resources: [bee:docs_corpus]
+    resources: [bee.env:docs_corpus]
     effect: allow
 - name: main
   kind: process.lua
   source: file://main.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   method: main
   modules: [funcs, http_client, json, time, process, io]
   meta:
@@ -42,5 +42,5 @@ entries:
   policy:
     actions: [funcs.call, http_client.private_ip, http_client.request, registry.get, bee.gateway.admit, bee.gateway.materialize]
     resources: [bee.gateway.binding:address, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:authorize_materialization,
-      bee.gateway.binding:materialize, bee:gateway_endpoint, 127.0.0.1, '*']
+      bee.gateway.binding:materialize, bee.gateway.api:gateway_endpoint, 127.0.0.1, '*']
     effect: allow

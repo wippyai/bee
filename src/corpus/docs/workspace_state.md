@@ -130,3 +130,16 @@ scalars for the layout changes in their owned projections/events/receipts and
 surfaces/active selections/trait grants. Embedded prose, actor instance strings
 and escaped opaque JSON remain unchanged. Existing migration SQL and checksums
 are preserved; each owner applies its additive migration through `bee.persist`.
+
+Placement migration 9 moves the concrete worktree binding to
+`bee.git.worktree.binding:binding` without rewriting its opaque cleanup state.
+It also moves complete reference scalars in stored attempt requests/grants.
+Sync 9 and Gateway 17 apply the component-root identity map to their serialized
+reference records; Gateway also moves its saved policy reference column.
+Resources 4 and Credentials 7 update resource roots and credential
+source/materializer identities in their own columns. The new migration blocks
+cover the cumulative map, including pre-refactor resource and credential IDs.
+These additive migrations
+preserve the earlier SQL/checksums, caller digests, incarnations and grant data.
+The complete identity map is `build/layout_identity_moves.json`; the root-only
+follow-up is `build/layout_root_moves.json`.

@@ -55,12 +55,31 @@ tar -xzf "$assets/bee-linux-amd64.tar.gz" -C "$assets" bee.provenance.json || fa
 # The release deployment holds the sealed packs every release executable
 # embeds; provenance proves it before any upload.
 python3 - "$assets/bee.provenance.json" "$deployment/wippy.lock" <<'PY'
-import json, re, sys
+import hashlib, json, re, sys
+from pathlib import Path
+import yaml
 embedded = {pack["module"]: (pack["version"], "sha256:" + pack["sha256"])
             for pack in json.load(open(sys.argv[1]))["manifest"]["application"]["packs"]}
 locked = dict((name, (version, digest)) for name, version, digest in re.findall(
     r"- name: (\S+)\n\s+version: (\S+)\n\s+hash: (\S+)", open(sys.argv[2]).read()))
 if embedded != locked:
     sys.exit(f"hub release: release deployment differs from the executable's embedded packs: {embedded} != {locked}")
+deployment = Path(sys.argv[2]).parent
+hub = yaml.safe_load((deployment / "hub/wippy.lock").read_text())
+published = {row["name"]: (row["version"], row["hash"]) for row in hub["modules"]}
+if published.keys() != embedded.keys():
+    sys.exit("hub release: core deployment differs from the baseline component set")
+for name, (version, digest) in published.items():
+    if name == "bee/bee":
+        release, _, metadata = version.partition("+")
+        base, _, prerelease = release.partition("-")
+        boot = base + "-0.boot" + ("." + prerelease if prerelease else "") + ("+" + metadata if metadata else "")
+        if embedded[name][0] != boot:
+            sys.exit("hub release: core and boot identities do not match this release")
+    elif (version, digest) != embedded[name]:
+        sys.exit("hub release: core deployment changed baseline component " + name)
+    pack = deployment / "hub/.wippy/vendor" / (name + "-" + version + ".wapp")
+    if "sha256:" + hashlib.sha256(pack.read_bytes()).hexdigest() != digest:
+        sys.exit("hub release: core deployment pack differs from its lock: " + name)
 PY
 printf 'hub release: %s deployment restored to %s; checksums and provenance verified\n' "$tag" "$deployment"

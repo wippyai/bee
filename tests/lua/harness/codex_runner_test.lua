@@ -29,7 +29,7 @@ local BARE_POLICY = "bee.harness.catalog:codex_fixture_policy_bare"
 local PROVIDER = "bee.harness.catalog:codex_fixture_provider"
 local SOURCE = "bee.harness.catalog:codex_sentinel_key"
 local ROOT = "bee.harness.catalog:project_fixture"
-local BINDING = "bee.driver.codex:binding"
+local BINDING = "bee.driver.codex.binding:binding"
 local SENTINEL = "sk-sentinel-bee-000"
 type Object = {[string]: unknown}
 type Outcome = {value: Object?, error: string?}
@@ -67,7 +67,7 @@ local function read_all(stream): string
     return content
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -110,7 +110,7 @@ local endpoint_executor: exec.Executor? = nil
 -- The endpoint holds each answer for the given seconds after recording
 -- the request, so the suite can act while the child is provably waiting.
 local function start_endpoint(record: string, hold_seconds: integer, text: string?): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local environment: {[string]: string}? = nil
     if text then environment = {PATH = "/usr/bin:/bin", BEE_ENDPOINT_TEXT = text} end
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record .. " " .. tostring(hold_seconds), {env = environment})
@@ -165,8 +165,8 @@ local function prepare_host(port: string, codex: string)
         policy_data.executables = {codex = codex}
         apply(entry)
     end
-    admit("bee.placement.native:placement_admitted_roots", "roots", {root_ref = ROOT, access = "write"}, function(item: Object): boolean return item.root_ref == ROOT end)
-    admit("bee.credentials:credential_sources", "sources", {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "codex", projection_kinds = {"environment"}}, function(item: Object): boolean return item.ref == SOURCE end)
+    admit("bee.placement.native.env:placement_admitted_roots", "roots", {root_ref = ROOT, access = "write"}, function(item: Object): boolean return item.root_ref == ROOT end)
+    admit("bee.credentials.env:credential_sources", "sources", {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "codex", projection_kinds = {"environment"}}, function(item: Object): boolean return item.ref == SOURCE end)
 end
 local function thread(): string
     local created = call("bee.threads.binding:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Codex path"})

@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.files.env
+entries:
+- name: workspace_root_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref

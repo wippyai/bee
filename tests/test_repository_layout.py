@@ -143,9 +143,9 @@ class RepositoryLayout(unittest.TestCase):
             host_component = source / 'example'
             host_component.mkdir()
             (host_component / '_index.yaml').write_text('namespace: bee.example\nentries:\n- name: executor\n  kind: exec.native\n')
-            sdk = root / 'modules/ui/src'
-            sdk.mkdir(parents=True)
-            (sdk / '_index.yaml').write_text('namespace: bee.ui\nentries:\n- name: appearance\n  kind: ns.requirement\n')
+            ui = root / 'modules/ui/src'
+            ui.mkdir(parents=True)
+            (ui / '_index.yaml').write_text('namespace: bee.ui\nentries:\n- name: appearance\n  kind: ns.requirement\n')
             errors = LAYOUT.audit(root)[0]
             self.assertTrue(any('bee.example:executor: root entry' in error for error in errors))
             for identity in ['bee:clock', 'bee:workers', 'bee.ui:appearance', 'bee.example:policies', 'bee.example:helper', 'bee.example:local']:

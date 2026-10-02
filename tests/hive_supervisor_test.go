@@ -102,9 +102,8 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive"), os.DirFS(filepath.Join(repository, "src/hive"))); err != nil {
 		t.Fatal(err)
 	}
-	// The manager is an application; this isolated supervisor composition has
-	// no desktop app lifecycle. It stages the application libraries only
-	// because the hive-telemetry package reads the host manager through them.
+	// This supervisor composition has no desktop app lifecycle. Telemetry and
+	// desktop values use the application SDK and shared UI packages.
 	if err := os.RemoveAll(filepath.Join(sourceSnapshot, "hive", "manager")); err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +262,7 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 			t.Fatal(err)
 		}
 	}
-	for _, directory := range []string{"application_arguments", "appearance"} {
+	for _, directory := range []string{"application_arguments"} {
 		if err := os.RemoveAll(filepath.Join(source, directory)); err != nil {
 			t.Fatal(err)
 		}

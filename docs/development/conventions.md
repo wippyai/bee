@@ -125,7 +125,8 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
 
 The SDK `bee.app` owns its documented public application helpers and presentation
-kits at its root. Shared frame, appearance and text values belong to `bee.ui`. Those entries are included in the same explicit set. New
+kits at its root. Shared frame, appearance and text values belong to `bee.ui`.
+Those entries are included in the same explicit set. New
 shared root libraries require a documented responsibility and a reviewed update
 to the set; a new implementation does not qualify simply because it is shared.
 

@@ -35,17 +35,6 @@ definition and policies; the broker supplies execution identity and durable
 thread bindings. Registry metadata and SDK imports do not authorize an
 application or a thread operation.
 
-Shared frame controls are application-owned values. Views return
-`controls = frame.controls(painter)` with their rows and hits. The actor owns
-a `frame.menu()` record, calls `frame.render(drawn, menu, preferences)` before
-presenting, and routes terminal events through `frame.route(menu, event, text_entry)`
-before its normal handlers. Nil means consumed; the second return value requests
-a redraw. More dispatches an enabled choice through the actor's existing mouse
-handler. Help lists declared buttons, tabs and hints, including unavailable
-actions. `Button.key` names the shortcut; `primary` reserves room when buttons
-overflow. Text entry preserves case and literal `?`; the Help footer stays
-clickable. Neither overlay grants permissions or bypasses app confirmations.
-
 ## Sessions client
 
 `sessions` (`bee.app:sessions`) calls the `bee.sessions:contract` and
@@ -96,12 +85,6 @@ Sessions navigation selects that terminal. Work still uses `send` and reaches
 interactive sessions through their driver hooks at the next turn boundary.
 Closing a viewer leaves the session running; `close` or `cancel` stops its
 placement with exit evidence.
-
-The host grants apps, presenters and physical display owners read access only
-to the existing nonsecret `bee.env:no_color` flag. Appearance reads it under
-the active caller scope. The presenter also strips color from incoming app
-rows when NO_COLOR is set, including rows produced on another node; selection
-stays visible through glyphs and reverse video.
 
 The SDK root is `bee.app`; a feature UI child such as `bee.files.app` is a
 separate namespace with its own app entry. Process topics use `bee.app.*`.

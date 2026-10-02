@@ -123,7 +123,7 @@ local function open_gateway(): integer
     return math.floor(tonumber(opened.epoch) or 0)
 end
 local function thread(workspace_id: string?): string
-    local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway carrier"}, workspace_id)
+    local created = call("bee.threads.binding:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway carrier"}, workspace_id)
     if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
     return created.thread_id
 end
@@ -200,7 +200,7 @@ local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
     for _ = 1, 32 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
         if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
@@ -212,7 +212,7 @@ local function notice(thread_id: string, prefix: string): Object?
     local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
     local cursor = 0
     while true do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         for _, item in ipairs(principals.objects(page.records)) do
             if item.kind == "observation" and item.source == "stream" then
                 local data = assert(bounds.object((assert(bounds.object(item.body))).data))
@@ -235,7 +235,7 @@ local function notice(thread_id: string, prefix: string): Object?
         if page.has_more ~= true then
             local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
             if remaining <= 0 then return nil end
-            call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
+            call("bee.threads.binding:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
         end
     end
 end

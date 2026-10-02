@@ -10,8 +10,8 @@ local hash = require("hash")
 local channel = require("channel")
 
 local M = {}
-M.DEFAULT_EXECUTOR = "bee.git_worktree:git_executor"
-M.DEFAULT_HOST_FILES = "bee.git_worktree:host_files"
+M.DEFAULT_EXECUTOR = "bee.git.worktree:git_executor"
+M.DEFAULT_HOST_FILES = "bee.git.worktree:host_files"
 M.MAX_STDOUT_BYTES = 16 * 1024 * 1024
 M.MAX_STDERR_BYTES = 64 * 1024
 
@@ -24,7 +24,7 @@ local function resolve_resource(ref_name: string, default_val: string): string
 end
 
 function M.run_git(args: {string}, executor_override: string?): (string?, integer?, string?)
-    local executor_ref = executor_override or resolve_resource("bee.git_worktree:executor_ref", M.DEFAULT_EXECUTOR)
+    local executor_ref = executor_override or resolve_resource("bee.git.worktree:executor_ref", M.DEFAULT_EXECUTOR)
     local executor, executor_error = exec.get(executor_ref)
     if not executor then return nil, nil, "executor " .. executor_ref .. " unavailable: " .. tostring(executor_error) end
     local proc, exec_error = executor:exec(quote.line(args))
@@ -77,7 +77,7 @@ function M.run_git(args: {string}, executor_override: string?): (string?, intege
 end
 
 function M.get_fs_volume(host_files_override: string?): (fs.FS?, string?)
-    local host_files_ref = host_files_override or resolve_resource("bee.git_worktree:host_files_ref", M.DEFAULT_HOST_FILES)
+    local host_files_ref = host_files_override or resolve_resource("bee.git.worktree:host_files_ref", M.DEFAULT_HOST_FILES)
     local volume, err = fs.get(host_files_ref)
     if not volume then return nil, "host files " .. host_files_ref .. " unavailable: " .. tostring(err) end
     return volume, nil
@@ -111,7 +111,7 @@ end
 
 function M.detect_git_roots(workdir: string, write_roots: {string}, host_files_override: string?): ({string}?, string?)
     if #write_roots == 0 then return {}, nil end
-    local executor_ref = resolve_resource("bee.git_worktree:executor_ref", M.DEFAULT_EXECUTOR)
+    local executor_ref = resolve_resource("bee.git.worktree:executor_ref", M.DEFAULT_EXECUTOR)
     local admitted_workdir = paths.admit(workdir, write_roots, executor_ref)
     if not admitted_workdir then return {}, nil end
     local volume, volume_err = M.get_fs_volume(host_files_override)
@@ -234,7 +234,7 @@ end
 function M.plan_dedicated(workdir: string, attempt_id: string, write_roots: {string}, executor_override: string?): (State?, string?)
     local component = path_component(attempt_id)
     if not component then return nil, "unsafe attempt identifier" end
-    local executor = executor_override or resolve_resource("bee.git_worktree:executor_ref", M.DEFAULT_EXECUTOR)
+    local executor = executor_override or resolve_resource("bee.git.worktree:executor_ref", M.DEFAULT_EXECUTOR)
     local admitted, err = paths.admit(workdir, write_roots, executor)
     if not admitted then return nil, err end
     local repo, code, repo_error = git(admitted, {"rev-parse", "--show-toplevel"}, executor)
@@ -262,7 +262,7 @@ function M.plan_dedicated(workdir: string, attempt_id: string, write_roots: {str
 end
 
 function M.apply_dedicated(state: State, write_roots: {string}, executor_override: string?, host_files_override: string?): (string?, {string}?, State?, string?)
-    local executor = executor_override or resolve_resource("bee.git_worktree:executor_ref", M.DEFAULT_EXECUTOR)
+    local executor = executor_override or resolve_resource("bee.git.worktree:executor_ref", M.DEFAULT_EXECUTOR)
     for _, path in ipairs({state.working_directory, state.common_directory}) do
         local allowed, err = paths.admit(path, write_roots, executor)
         if allowed ~= path then return nil, nil, state, err or "planned directory no longer admitted" end
@@ -305,7 +305,7 @@ end
 function M.cleanup_dedicated(value: unknown, executor_override: string?): (boolean?, string?, string?)
     local state, state_error = M.decode_state(value)
     if not state then return nil, nil, state_error end
-    local executor = executor_override or resolve_resource("bee.git_worktree:executor_ref", M.DEFAULT_EXECUTOR)
+    local executor = executor_override or resolve_resource("bee.git.worktree:executor_ref", M.DEFAULT_EXECUTOR)
     local parent_error = safe_parent(state, executor)
     if parent_error then return nil, nil, parent_error end
     local linked, linked_error = predicate({"test", "-L", state.worktree_path}, executor)

@@ -162,12 +162,12 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if not actor_id then return false, "permission_denied", "Application identity is invalid" end
         -- Prove the app's own membership through the app's own authority, so
         -- a reopened or already-bound instance is never joined twice.
-        local member_reply = thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id})
+        local member_reply = thread_call(actor_id, "bee.threads.binding:get", {thread_id = thread_id})
         if active_principal(member_reply, actor_id) == true then return true, nil, nil end
         if member_reply == nil then
             return false, "permission_denied", "Application thread membership could not be read"
         end
-        local read, read_error = funcs.new():with_scope(membership_scope):call("bee.threads.service:get", {thread_id = thread_id})
+        local read, read_error = funcs.new():with_scope(membership_scope):call("bee.threads.binding:get", {thread_id = thread_id})
         if read_error or type(read) ~= "table" then
             return false, "permission_denied", "Application thread membership could not be read"
         end
@@ -183,7 +183,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local head = bounds.object(value.summary)
         local revision = head and bounds.integer(head.revision) or nil
         if not revision or revision < 1 then return false, "permission_denied", "the thread head is unavailable" end
-        local joined, join_error = funcs.new():with_scope(membership_scope):call("bee.threads.service:join", {thread_id = thread_id,
+        local joined, join_error = funcs.new():with_scope(membership_scope):call("bee.threads.binding:join", {thread_id = thread_id,
             idempotency_key = "open:" .. instance_id .. ":join", member_id = actor_id, role = "participant", expected_revision = revision})
         if join_error or type(joined) ~= "table" then
             return false, "permission_denied", "Application thread membership could not be admitted"
@@ -201,7 +201,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             -- The row may already exist from a reopened or bound instance, or
             -- the head moved under a concurrent join. Re-prove through the
             -- app's own authority instead of assuming either outcome.
-            if active_principal(thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id}), actor_id) == true then
+            if active_principal(thread_call(actor_id, "bee.threads.binding:get", {thread_id = thread_id}), actor_id) == true then
                 return true, nil, nil
             end
             return false, "thread_conflict", "Application thread changed while opening"
@@ -220,7 +220,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if not thread_id then return true end
         local actor_id = thread_binding.actor(workspace_id, item.instance_id)
         if not actor_id then return true end
-        local member_reply = thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id})
+        local member_reply = thread_call(actor_id, "bee.threads.binding:get", {thread_id = thread_id})
         if active_principal(member_reply, actor_id) ~= true then return true end
         local head_revision: integer? = nil
         if type(member_reply) == "table" then
@@ -234,7 +234,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             actor_id = actor_id, role = "participant", initiating_owner_id = actor_id},
             workspace_id, "fence:" .. item.instance_id, head_revision)
         if not request then return false end
-        local left = funcs.new():with_scope(membership_scope):call("bee.threads.service:leave", request)
+        local left = funcs.new():with_scope(membership_scope):call("bee.threads.binding:leave", request)
         return type(left) == "table" and (left).ok == true
     end
     -- Every opened instance receives a live authorization for its app's
@@ -252,7 +252,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if not scoped then return false, "permission_denied", tostring(scope_error or "set application alias scope") end
             local instance_actor = thread_binding.actor(workspace_id, instance_id)
             if not instance_actor then return false, "permission_denied", "Application identity is invalid" end
-            local reply, call_error = scoped:call("bee.threads.service:register_app_alias", {stable = stable_id,
+            local reply, call_error = scoped:call("bee.threads.binding:register_app_alias", {stable = stable_id,
                 instance = instance_actor, workspace_id = workspace_id, definition_id = definition_id})
             if call_error then
                 return false, "permission_denied", "Application alias attestation call failed: " .. tostring(call_error):sub(1, 300)
@@ -277,7 +277,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         local scoped, scope_error = funcs.new():with_scope(alias_scope)
         if not scoped then return false, tostring(scope_error or "set application alias scope") end
-        local reply, call_error = scoped:call("bee.threads.service:retire_app_alias", {stable = stable.id,
+        local reply, call_error = scoped:call("bee.threads.binding:retire_app_alias", {stable = stable.id,
             instance = instance_actor, workspace_id = workspace_id, definition_id = item.descriptor.definition_id})
         if call_error then return false, "Application alias retirement call failed: " .. tostring(call_error):sub(1, 300) end
         if type(reply) ~= "table" or (reply).ok ~= true then
@@ -295,7 +295,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local stable_id: string = stable.id
         local scoped = funcs.new():with_scope(alias_scope)
         if not scoped then return false end
-        local reply, call_error = scoped:call("bee.threads.service:fence_app", {stable = stable_id})
+        local reply, call_error = scoped:call("bee.threads.binding:fence_app", {stable = stable_id})
         return not call_error and type(reply) == "table" and (reply).ok == true
     end
     local function backfill_retained_aliases(records: {AliasBackfill})
@@ -501,11 +501,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 emit(contract.reply(req.request_id, "open", "thread_conflict", "Application instance has another thread delegation"), true)
             elseif existing and existing.state.phase == "ready" then
                 local get = thread_binding.get_request(stored, workspace_id)
-                local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.service:get", get) or nil
+                local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.binding:get", get) or nil
                 if not thread_binding.owner_get(owner_reply, stored, workspace_id) then
                     emit(contract.reply(req.request_id, "open", "permission_denied", "Only the current thread owner may open the bound application"), true)
                 else
-                    local member_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
+                    local member_reply = get and thread_call(stored.actor_id, "bee.threads.binding:get", get) or nil
                     local membership = thread_binding.application_status(member_reply, stored, workspace_id)
                     if membership.state == "unknown" then
                         emit(contract.reply(req.request_id, "open", "uncertain", "Application thread membership could not be verified"), true)
@@ -533,7 +533,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local get = thread_binding.get_request(provisional, workspace_id)
         local owner_reply
         if get then
-            owner_reply = thread_call(provenance.initiating_owner, "bee.threads.service:get", get)
+            owner_reply = thread_call(provenance.initiating_owner, "bee.threads.binding:get", get)
         end
         local head_revision = thread_binding.owner_get(owner_reply, provisional, workspace_id)
         if not head_revision then
@@ -651,7 +651,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             return
         end
         local get = thread_binding.get_request(stored, workspace_id)
-        local membership_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
+        local membership_reply = get and thread_call(stored.actor_id, "bee.threads.binding:get", get) or nil
         local membership = thread_binding.application_status(membership_reply, stored, workspace_id)
         if membership.state == "unknown" then
             send_thread_result(sender, request, nil, "UNCERTAIN", "Application thread membership could not be verified")
@@ -666,10 +666,10 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local call: {[string]: unknown} = {thread_id = stored.thread_id}
         local target = ""
         if request.operation == "read" then
-            target = "bee.threads.service:read_after"
+            target = "bee.threads.binding:read_after"
             call.cursor, call.limit, call.filter = args.cursor or 0, args.limit, {kinds = {"message"}}
         elseif request.operation == "post" then
-            target = "bee.threads.service:record"
+            target = "bee.threads.binding:record"
             local body: {[string]: unknown} = {sender_id = stored.actor_id, message_id = args.message_id,
                 message_kind = args.message_kind, recipient_ids = args.recipient_ids, content = args.content,
                 outcome = args.outcome}
@@ -678,16 +678,16 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             end
             call.idempotency_key, call.kind, call.body, call.context = args.idempotency_key, "message", body, {}
         elseif request.operation == "subscribe" then
-            target = "bee.threads.delivery:subscribe"
+            target = "bee.threads.binding:subscribe"
             call.idempotency_key, call.consumer_id = args.idempotency_key, stored.actor_id
             call.after_sequence, call.filter, call.durability = args.after_sequence, {kinds = {"message"}}, "durable"
         elseif request.operation == "page" then
-            target = "bee.threads.delivery:page"
+            target = "bee.threads.binding:page"
             call.subscription_id, call.limit = args.subscription_id, args.limit
         else
-            target = request.operation == "ack_page" and "bee.threads.delivery:ack_page"
-                or request.operation == "resume" and "bee.threads.delivery:resume"
-                or "bee.threads.delivery:unsubscribe"
+            target = request.operation == "ack_page" and "bee.threads.binding:ack_page"
+                or request.operation == "resume" and "bee.threads.binding:resume"
+                or "bee.threads.binding:unsubscribe"
             call.idempotency_key, call.subscription_id = args.idempotency_key, args.subscription_id
             if request.operation == "ack_page" then
                 call.page_id, call.scanned_through = args.page_id, args.scanned_through

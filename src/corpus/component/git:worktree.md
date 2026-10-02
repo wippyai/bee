@@ -1,10 +1,10 @@
-# bee.git_worktree
+# bee.git.worktree
 
 Git metadata discovery and dedicated worktrees are a placement plugin. The
 component root contains its registry index and the `git_roots`, `worktree`,
 `plan`, `setup`, `cleanup`, and `binding` entries.
 
-The host selects `bee.git_worktree:binding` through placement's
+The host selects `bee.git.worktree:binding` through placement's
 `target_workdir_preparers` requirement. Its default list is empty; Bee's host
 composition selects this plugin. Registry metadata never authorizes execution.
 The contract has three methods: `plan` performs read-only inspection, placement
@@ -51,3 +51,9 @@ a durable plan without a child-creation intent prove that cleanup is safe.
 An interruption during child creation without a recorded process identity
 remains uncertain; placement preserves the work until absence is proven.
 Retained work is reported through `workdir_preparer.retained` evidence.
+
+The component root owns values, requirements and declarative contract wiring;
+`binding/` owns the callable `plan`, `setup` and `cleanup` implementations.
+Placement owns the durable preparer records and moves their old identities in
+its additive migration 8, including the completed-cleanup markers used on
+restart. The plugin owns no persistence ledger.

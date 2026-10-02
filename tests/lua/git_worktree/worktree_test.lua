@@ -9,7 +9,7 @@ local funcs = require("funcs")
 local security = require("security")
 
 local function unauthorized_call(target: string, request: {[string]: unknown}): {[string]: unknown}
-    local policy, policy_error = security.policy("bee.git_worktree.test:caller_policy")
+    local policy, policy_error = security.policy("bee.git.worktree.test:caller_policy")
     if not policy then error("caller policy: " .. tostring(policy_error)) end
     local reply, err = funcs.new():with_actor(security.new_actor("intruder", {})):with_scope(security.new_scope({policy})):call(target, request)
     if err then error("call " .. target .. ": " .. tostring(err)) end
@@ -386,14 +386,14 @@ local function define_tests()
             init_repo(repo)
             local request = {attempt_id = "test-att-denied", owner_id = "intruder", working_directory = repo,
                 write_roots = {repo}, options = {worktree = "dedicated"}, argv = {"test"}}
-            local planned = unauthorized_call("bee.git_worktree:plan", request)
+            local planned = unauthorized_call("bee.git.worktree.binding:plan", request)
             test.is_false(planned.ok)
             test.eq((assert(bounds.object(planned.error))).code, "DENIED")
-            local setup_res = unauthorized_call("bee.git_worktree:setup", request)
+            local setup_res = unauthorized_call("bee.git.worktree.binding:setup", request)
             test.is_false(setup_res.ok)
             test.eq((assert(bounds.object(setup_res.error))).code, "DENIED")
             local state = assert(worktree.plan_dedicated(repo, "test-att-denied", {repo}))
-            local cleanup_res = unauthorized_call("bee.git_worktree:cleanup", {attempt_id = "test-att-denied", owner_id = "intruder", state = state})
+            local cleanup_res = unauthorized_call("bee.git.worktree.binding:cleanup", {attempt_id = "test-att-denied", owner_id = "intruder", state = state})
             test.is_false(cleanup_res.ok)
             test.eq((assert(bounds.object(cleanup_res.error))).code, "DENIED")
             local _, present = checked_run({"test", "-e", state.worktree_path}, 1)

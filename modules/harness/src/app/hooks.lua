@@ -3,7 +3,7 @@
 local checkpoint = require("checkpoint")
 local bounds = require("bounds")
 local M = {}
-M.COMMIT = "bee.threads.carrier:commit"
+M.COMMIT = "bee.threads.binding:commit"
 M.CLAIM = "bee.gateway.binding:hook_claim"
 M.ACK = "bee.gateway.binding:hook_ack"
 M.SEAL = "bee.gateway.binding:seal"

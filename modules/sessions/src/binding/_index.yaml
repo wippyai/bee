@@ -34,7 +34,7 @@ entries:
     methods: {list: bee.sessions.binding:catalog}
 - name: target_owner_policies
   kind: ns.requirement
-  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_registry_read_policy, bee.harness.security:carrier_environment_policy, bee.sessions.security:owner_admission_policy, bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy, bee.harness.security:profile_workspace_policy]
+  default: []
   meta:
     comment: Host-selected authority for the Sessions admission and journal boundary
   targets:
@@ -160,9 +160,7 @@ entries:
 
 - name: target_control_policies
   kind: ns.requirement
-  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_registry_read_policy, bee.harness.security:carrier_environment_policy, bee.sessions.security:owner_admission_policy,
-    bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy,
-    bee.sessions.security:scheduler_principal_policy]
+  default: []
   meta:
     comment: Cancellation restores only the persisted placement owner after Threads authorizes the caller
   targets:

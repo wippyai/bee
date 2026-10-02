@@ -53,11 +53,11 @@ for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = 
 M.TOOL_POLICY_REFS = TOOL_POLICY_REFS
 function M.is_tool_policy_reference(value: string): boolean return BUILTIN_POLICY_REFS[value] == true end
 local TOOLS: {Tool} = {
-    {name = "thread_read", description = "Read committed records of the bound thread after a cursor, or of a member_thread the caller belongs to, such as the thread of a session it opened. A member_thread is refused unless the caller is an active member; the thread owner checks it again.", operation = "bee.threads.service:read_after",
+    {name = "thread_read", description = "Read committed records of the bound thread after a cursor, or of a member_thread the caller belongs to, such as the thread of a session it opened. A member_thread is refused unless the caller is an active member; the thread owner checks it again.", operation = "bee.threads.binding:read_after",
         policies = {TOOL_POLICY_REFS.read},
         schema = {type = "object", additionalProperties = false, properties = {cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64},
             member_thread = {type = "string", minLength = 1, maxLength = 160, description = "A thread the caller is a member of, such as the thread of a session it opened; omit for the bound thread"}}}, annotations = READ_ANNOTATIONS},
-    {name = "thread_message", description = "Record one note on the bound thread transcript as the authenticated subject. Recorded only; does not schedule execution. To give a session work call session_send.", operation = "bee.threads.service:record",
+    {name = "thread_message", description = "Record one note on the bound thread transcript as the authenticated subject. Recorded only; does not schedule execution. To give a session work call session_send.", operation = "bee.threads.binding:record",
         policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "content"}, properties = {
             idempotency_key = {type = "string", minLength = 1, maxLength = 160}, message_id = {type = "string", minLength = 1, maxLength = 160},

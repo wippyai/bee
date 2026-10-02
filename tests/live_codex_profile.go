@@ -98,7 +98,7 @@ local function main()
     -- A listener must exist before admission mints a gateway binding.
     local listener: Object? = nil
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.binding:address", {})
         if not address_error then listener = bounds.object(raw) end
         if listener and type(listener.address) == "string" then break end
         time.sleep("100ms")
@@ -106,24 +106,24 @@ local function main()
     if not listener or type(listener.address) ~= "string" then error("native MCP listener did not become ready") end
     -- Save the profile that names the Codex config profile.
     local profile_id = "live-codex-profile-" .. tostring(uuid.v7())
-    call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = profile_id,
+    call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = profile_id,
         expected_revision = 0, idempotency_key = "save-" .. profile_id,
         profile = {schema_revision = "bee.agent-profile@2", name = "Live Codex named profile", definition_ref = definition, driver_binding_ref = "bee.driver.codex:binding", provider = {options = {config_profile = config_profile}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}})
-    local plan = call("bee.harness.launch:resolve", {definition_ref = definition, workspace_id = workspace_id,
+    local plan = call("bee.harness.binding:resolve", {definition_ref = definition, workspace_id = workspace_id,
         saved_profile_id = profile_id, saved_profile_revision = 1})
-    reply("bee.harness.launch:setup", {workspace_id = workspace_id, definition_ref = definition,
+    reply("bee.harness.binding:setup", {workspace_id = workspace_id, definition_ref = definition,
         saved_profile_id = profile_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
-    call("bee.threads.service:create", {thread_id = thread_id, idempotency_key = "create-live-codex", title = "Live Codex named profile proof"})
+    call("bee.threads.binding:create", {thread_id = thread_id, idempotency_key = "create-live-codex", title = "Live Codex named profile proof"})
     -- The token is committed as an observation of the bound thread; the agent
     -- must read it back through the Bee MCP, so the answer is unguessable and
     -- cannot be a canned or fixture response.
     -- Seeded on the progress channel from the MCP source so only the agent's
     -- own stream answer can satisfy the check.
     local event: Object = {type = "text", segment_id = "live-codex-token", operation = "complete", text = token, channel = "progress"}
-    call("bee.threads.service:record", {thread_id = thread_id, idempotency_key = "seed-" .. token, kind = "observation", source = "mcp",
+    call("bee.threads.binding:record", {thread_id = thread_id, idempotency_key = "seed-" .. token, kind = "observation", source = "mcp",
         body = {type = "text", event_key = "live-codex-seed", data = event}})
     local brief = "Read your bound Bee thread with the thread_read MCP tool. Find the text observation whose text is a single short token, then reply with exactly that token and nothing else."
-    local started = call("bee.harness.launch:start", {request_id = "live-codex-" .. profile_id, definition_ref = definition,
+    local started = call("bee.harness.binding:start", {request_id = "live-codex-" .. profile_id, definition_ref = definition,
         workspace_id = workspace_id, thread_id = thread_id, brief = brief, saved_profile_id = profile_id,
         saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
     local pid = tostring(started.carrier)
@@ -155,7 +155,7 @@ local function main()
     local answered = false
     local receipted = false
     for _ = 1, 64 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         local records = page.records
         if type(records) ~= "table" then error("thread page records missing") end
         for _, raw in ipairs(records) do

@@ -22,7 +22,7 @@ end
 local function define_tests()
     test.describe("Sessions catalog route readiness", function()
         test.it("retains a saved profile's identity and title beside its definition", function()
-            local saved = assert(funcs.call("bee.harness.profiles:call", {operation = "put", workspace_id = "saved-profile-workspace",
+            local saved = assert(funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
                 profile = {schema_revision = "bee.agent-profile@2", name = "Selected container profile", definition_ref = "bee.driver.claude:default_window", driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {mcp = {}}}}))
             test.is_true((assert(bounds.object(saved))).ok == true)

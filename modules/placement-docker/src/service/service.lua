@@ -209,7 +209,7 @@ function M.prepare_environment(value: unknown): Reply
         if profile.profile.network == "none" then return succeed({}) end
         local client = docker_client.new("/var/run/docker.sock")
         local existing = client and client:inspect_network(profile.profile.network or "")
-        local raw = funcs.call("bee.gateway:address", {})
+        local raw = funcs.call("bee.gateway.binding:address", {})
         local endpoint = bounds.object(raw)
         if existing and endpoint and type(endpoint.address) == "string" and not endpoint.address:match("^127%.") then
             if not environment.recorded() then return succeed({address = endpoint.address}) end

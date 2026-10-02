@@ -4,11 +4,11 @@ local test = require("test")
 local types = require("types")
 local bounds = require("bounds")
 local function owner(): {[string]: unknown}
-    return {node_id = "forge", service_id = "bee.hive.telemetry"}
+    return {node_id = "forge", service_id = "bee.hive.telemetry.binding"}
 end
 local function call(extra: {[string]: unknown}?): {[string]: unknown}
     local value: {[string]: unknown} = {protocol_revision = types.REVISION, request_id = "r1", idempotency_key = "k1",
-        owner_ref = owner(), target = {operation_ref = "bee.hive.telemetry:stats"}, input = {}}
+        owner_ref = owner(), target = {operation_ref = "bee.hive.telemetry.binding:stats"}, input = {}}
     if extra then for key, item in pairs(extra) do value[key] = item end end
     return value
 end
@@ -17,7 +17,7 @@ local function define_tests()
         test.it("decodes a call and rejects a target naming both or neither", function()
             local decoded = types.decode_call(call())
             if not decoded then error("decode failed") end
-            test.eq(decoded.target.operation_ref, "bee.hive.telemetry:stats")
+            test.eq(decoded.target.operation_ref, "bee.hive.telemetry.binding:stats")
             test.is_nil(decoded.target.interface_ref)
             local _, both = types.decode_call(call({target = {operation_ref = "a:b", interface_ref = "a:c"}}))
             test.eq(both, "target names exactly one of operation_ref or interface_ref")
@@ -35,7 +35,7 @@ local function define_tests()
             local digest = types.digest(input)
             if not digest then error("digest failed") end
             local request: {[string]: unknown} = {protocol_revision = types.REVISION, request_id = "r1", idempotency_key = "k1",
-                caller_node_id = "laptop", caller_incarnation = "inc-1", owner_ref = owner(), operation_ref = "bee.hive.telemetry:stats",
+                caller_node_id = "laptop", caller_incarnation = "inc-1", owner_ref = owner(), operation_ref = "bee.hive.telemetry.binding:stats",
                 operation_revision = "1", input = input, input_digest = digest,
                 principal_ref = {issuer = "node:laptop", subject_id = "laptop"},
                 principal_assertion = {method = "node_supervisor", audience = "forge", issued_at = "2026-09-08T10:00:00.000Z", expires_at = "2026-09-08T10:05:00.000Z"},
@@ -91,12 +91,12 @@ local function define_tests()
             local _, big = types.decode_reply(types.reply_ok("r1", {text = string.rep("x", types.MAX_OUTPUT_BYTES)}))
             test.eq(big, "value exceeds " .. tostring(types.MAX_OUTPUT_BYTES) .. " bytes")
             -- An uncertain outcome carries the identity to ask about or replay; no other code may.
-            local uncertain = types.decode_reply(types.reply_error("r1", types.uncertain("outcome unknown", {operation_ref = "bee.threads.service:send", idempotency_key = "k-1"})))
+            local uncertain = types.decode_reply(types.reply_error("r1", types.uncertain("outcome unknown", {operation_ref = "bee.threads.binding:send", idempotency_key = "k-1"})))
             if not uncertain or not uncertain.error then error("uncertain reply is not a reply") end
             test.eq(uncertain.error.code, "UNCERTAIN")
             test.is_false(uncertain.error.retryable)
             test.eq(uncertain.error.identity and uncertain.error.identity.idempotency_key, "k-1")
-            test.eq(uncertain.error.identity and uncertain.error.identity.operation_ref, "bee.threads.service:send")
+            test.eq(uncertain.error.identity and uncertain.error.identity.operation_ref, "bee.threads.binding:send")
             local _, misplaced = types.decode_reply({protocol_revision = types.REVISION, request_id = "r1", ok = false, error = {code = "DENIED", message = "x", retryable = false, identity = {operation_ref = "a:b", idempotency_key = "k"}}})
             test.eq(misplaced, "only an UNCERTAIN fault carries an identity")
         end)

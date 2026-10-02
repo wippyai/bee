@@ -12,8 +12,7 @@ entries:
     resources: bee.docs:resources
     transaction: bee.persist:transaction
     bounds: bee.protocol:bounds
-  security:
-    policies: [bee.security.docs:docs_policy]
+  security: {policies: []}
   meta:
     type: tool
     title: Platform documentation

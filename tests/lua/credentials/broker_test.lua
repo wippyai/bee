@@ -948,6 +948,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local result = call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
                 audience = USER, attempt_id = attempt, generation_key = fresh("gk")})
             test.eq(code(result), "UNAVAILABLE")
+            test.is_true(tostring(result.error and result.error.message):find("denied", 1, true) ~= nil)
             clean(result)
         end)
         test.it("fails closed on missing, invalid, empty or oversized login files", function()

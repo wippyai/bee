@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.git_worktree.test
+namespace: bee.git.worktree.test
 entries:
 - name: git_roots_test
   kind: function.lua
@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee, timeout: '30s'}
   imports:
     test: wippy.test:test
-    git_roots: bee.git_worktree:git_roots
+    git_roots: bee.git.worktree:git_roots
 - name: worktree_test
   kind: function.lua
   source: file://worktree_test.lua
@@ -16,13 +16,13 @@ entries:
   meta: {type: test, suite: bee, timeout: '60s'}
   modules: [time, funcs, security]
   security:
-    policies: [bee.git_worktree:worktree_policy, bee.placement.native.security:placement_runner_policy, bee.placement.native.security:placement_service_policy, bee.git_worktree.test:caller_policy]
+    policies: [bee.git.worktree:worktree_policy, bee.placement.native.security:placement_runner_policy, bee.placement.native.security:placement_service_policy, bee.git.worktree.test:caller_policy]
   imports:
     bounds: bee.protocol:bounds
     test: wippy.test:test
-    worktree: bee.git_worktree:worktree
-    setup_method: bee.git_worktree:setup
-    cleanup_method: bee.git_worktree:cleanup
+    worktree: bee.git.worktree:worktree
+    setup_method: bee.git.worktree.binding:setup
+    cleanup_method: bee.git.worktree.binding:cleanup
 - name: caller_policy
   kind: security.policy
   meta:

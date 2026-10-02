@@ -126,15 +126,15 @@ local function define_tests()
             ensure_approver_policy()
             admit_root()
             local workspace = fresh("elevation")
-            local thread = call(AGENT, workspace, "bee.threads.service:create",
+            local thread = call(AGENT, workspace, "bee.threads.binding:create",
                 {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Elevation"}).thread_id
             call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
             local attempt = fresh("attempt")
             local action = "action-" .. attempt
-            call(AGENT, workspace, "bee.threads.service:admit_action", {thread_id = thread, action_id = action,
+            call(AGENT, workspace, "bee.threads.binding:admit_action", {thread_id = thread, action_id = action,
                 idempotency_key = fresh("admit"), admitted = {request_id = fresh("req"), principal_id = AGENT, binding_ref = "test-binding",
                     binding_digest = "test-digest", grant_refs = {}, budget_ref = "test-budget", input = {text = "elevate"}}})
-            call(AGENT, workspace, "bee.threads.service:prepare_attempt", {thread_id = thread, action_id = action,
+            call(AGENT, workspace, "bee.threads.binding:prepare_attempt", {thread_id = thread, action_id = action,
                 attempt_id = attempt, idempotency_key = fresh("prepare"), prepared = {binding_ref = "test-binding", binding_digest = "test-digest",
                     profile_id = "test-profile", profile_digest = "test-profile-digest", placement_binding = "test-placement",
                     placement_attempt_id = attempt, plan_digest = "test-plan"}})

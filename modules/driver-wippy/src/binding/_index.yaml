@@ -27,3 +27,12 @@ entries:
   imports:
     protocol: bee.driver.wippy:protocol
     normalizer: bee.driver.kit:normalize
+- name: run
+  kind: function.lua
+  source: file://run_method.lua
+  method: handle
+  imports:
+    bounds: bee.threads.records:bounds
+    runner: bee.driver.wippy:runner
+    managed_run: bee.harness.launch:managed_run
+    types: bee.driver.wippy:types

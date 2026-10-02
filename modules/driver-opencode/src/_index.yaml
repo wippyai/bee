@@ -46,10 +46,6 @@ entries:
   variable: opencode
   default: ''
   readonly: true
-- name: environment
-  kind: env.storage.os
-  lifecycle:
-    auto_start: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

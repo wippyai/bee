@@ -35,7 +35,7 @@ function M.resolve(call: Call, request: Request): (string?, string?)
     if missing_placement then return nil, missing_placement end
     if not bounds.id(request.previous_attempt_id) or request.previous_attempt_id == request.attempt_id then return nil, "continuation needs a distinct previous attempt" end
     if not bounds.id(request.session_ref) then return nil, "continuation needs a retained session" end
-    local stored, stored_error = value(call, "bee.threads.carrier:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
+    local stored, stored_error = value(call, "bee.threads.binding:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
     if not stored then return nil, stored_error end
     if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
     if request.placement_binding_ref and stored.placement_binding ~= request.placement_binding_ref then return nil, "previous attempt used another placement binding" end
@@ -72,7 +72,7 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     if missing_placement then return nil, missing_placement end
     if not bounds.id(request.previous_attempt_id) or request.previous_attempt_id == request.attempt_id then return nil, "continuation needs a distinct previous attempt" end
     if not bounds.id(request.session_ref) then return nil, "continuation needs a retained session" end
-    local stored, stored_error = value(call, "bee.threads.carrier:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
+    local stored, stored_error = value(call, "bee.threads.binding:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
     if not stored then return nil, stored_error end
     if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
     if stored.placement_binding ~= request.placement_binding_ref then return nil, "previous attempt used another placement binding" end
@@ -122,7 +122,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
     -- advances the owner's scan window. The thread itself has a fixed bound.
     local pages = math.ceil(bounds.MAX_THREAD_RECORDS / bounds.MAX_PAGE_RECORDS) + 1
     for _ = 1, pages do
-        local page, page_error = value(call, "bee.threads.service:read_after", {thread_id = request.thread_id, cursor = cursor,
+        local page, page_error = value(call, "bee.threads.binding:read_after", {thread_id = request.thread_id, cursor = cursor,
             limit = bounds.MAX_PAGE_RECORDS, filter = {kinds = {"observation"}, action_id = request.action_id}})
         if not page then return nil, page_error end
         local through = bounds.cursor(page.scanned_through)

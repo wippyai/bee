@@ -43,160 +43,70 @@ entries:
   method: start
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: status
   kind: function.lua
   source: file://methods.lua
   method: status
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: stop
   kind: function.lua
   source: file://methods.lua
   method: stop
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: reconcile
   kind: function.lua
   source: file://methods.lua
   method: reconcile
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: cleanup
   kind: function.lua
   source: file://methods.lua
   method: cleanup
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: evidence
   kind: function.lua
   source: file://methods.lua
   method: evidence
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: attach
   kind: function.lua
   source: file://methods.lua
   method: attach
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: capabilities
   kind: function.lua
   source: file://methods.lua
   method: capabilities
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: measure_executable
   kind: function.lua
   source: file://methods.lua
   method: measure_executable
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: close_stdin
   kind: function.lua
   source: file://methods.lua
   method: close_stdin
   imports:
     service: bee.placement.docker.service:service
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_service_policy
-    - bee.resources.security:resource_resolve_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: prepare_environment
   kind: function.lua
   source: file://methods.lua

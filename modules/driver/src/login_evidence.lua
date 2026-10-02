@@ -7,8 +7,8 @@ type Environment = {kind: "env_present", names: {string}}
 type Status = {kind: "auth_status", argv: {string}, success_exit_code: integer, timeout_ms: integer}
 type Evidence = File | Environment | Status
 type Declaration = {command: string, any_of: {Evidence}}
-type Check = {present: boolean?, exit_code: integer?}
-type Probe = {file: (string, string?, string?) -> boolean?, environment: (string) -> boolean?,
+type Check = {present: boolean?, exit_code: integer?, reason: string?}
+type Probe = {file: (string, string?, string?) -> (boolean?, string?), environment: (string) -> boolean?,
     status: ({string}, integer) -> integer?}
 
 local function array(raw: unknown, limit: integer): {unknown}?
@@ -104,6 +104,7 @@ function M.probe(declaration: Declaration, probe: Probe): {Check}
     for index, evidence in ipairs(declaration.any_of) do
         local present: boolean? = false
         local code: integer? = nil
+        local reason: string? = nil
         if evidence.kind == "auth_status" then
             code = probe.status(evidence.argv, evidence.timeout_ms)
             if code ~= nil then present = code == evidence.success_exit_code else present = nil end
@@ -112,14 +113,17 @@ function M.probe(declaration: Declaration, probe: Probe): {Check}
             local values = evidence.kind == "file_exists" and evidence.paths or evidence.names
             for _, value in ipairs(values) do
                 local found: boolean? = nil
-                if evidence.kind == "file_exists" then found = probe.file(value, evidence.variable, evidence.directory)
+                if evidence.kind == "file_exists" then
+                    local refusal: string? = nil
+                    found, refusal = probe.file(value, evidence.variable, evidence.directory)
+                    if refusal and not reason then reason = refusal end
                 else found = probe.environment(value) end
-                if found == true then present = true; break end
+                if found == true then present = true; reason = nil; break end
                 if found == nil then uncertain = true end
             end
             if present ~= true and uncertain then present = nil end
         end
-        checks[index] = {present = present, exit_code = code}
+        checks[index] = {present = present, exit_code = code, reason = reason}
     end
     return checks
 end
@@ -131,15 +135,20 @@ function M.decode_checks(raw: unknown, declaration: Declaration): ({Check}?, str
     local checks: {Check} = {}
     for index, value in ipairs(values) do
         local item = bounds.object(value)
-        if not item or bounds.fields(item, {"present", "exit_code"}) then return nil, "login check has unknown fields" end
+        if not item or bounds.fields(item, {"present", "exit_code", "reason"}) then return nil, "login check has unknown fields" end
         if item.present ~= nil and type(item.present) ~= "boolean" then return nil, "login check present must be boolean" end
         local code = item.exit_code ~= nil and bounds.count(item.exit_code) or nil
         local evidence = declaration.any_of[index]
         if item.exit_code ~= nil and (not code or code > 255 or evidence.kind ~= "auth_status") then return nil, "login check exit code is invalid" end
         if evidence.kind == "auth_status" and item.present ~= nil and (code == nil or item.present ~= (code == evidence.success_exit_code)) then return nil, "login status check disagrees with its exit code" end
+        local reason: string? = nil
+        if item.reason ~= nil then
+            reason = bounds.line(item.reason, 512)
+            if not reason or reason == "" or item.present == true or evidence.kind ~= "file_exists" then return nil, "login check reason is invalid" end
+        end
         local present = item.present
         if evidence.kind == "auth_status" and code ~= nil then present = code == evidence.success_exit_code end
-        checks[index] = {present = present, exit_code = code}
+        checks[index] = {present = present, exit_code = code, reason = reason}
     end
     return checks, nil
 end

@@ -99,6 +99,7 @@ entries:
   readonly: true
 - name: machine_login_source
   kind: fs.directory
+  link_policy: owner_safe
   directory: ${env:bee.env:machine_home}
   base: project
   mode: '0500'

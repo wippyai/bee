@@ -79,7 +79,7 @@ func stageHiveExposureAudiences(t *testing.T, source string) {
 		t.Fatal("staged Hive supervisor has no default exposure_audiences entry")
 	}
 	staged := strings.Replace(string(data), anchor,
-		"  data:\n    audiences:\n    - operation_ref: bee.hive.telemetry:stats\n      peers: [node-0]", 1)
+		"  data:\n    audiences:\n    - operation_ref: bee.hive.telemetry.binding:stats\n      peers: [node-0]", 1)
 	if err := os.WriteFile(path, []byte(staged), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +460,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		args := []string{"run", verbosity}
 		args = append(args, "--override", "bee.hive.service:supervisor_service:lifecycle.auto_start=false")
 		if feeds {
-			for _, service := range []string{"bee.approvals.service:worker_service", "bee.threads:owner_service", "bee.threads.delivery:waiter_service"} {
+			for _, service := range []string{"bee.approvals.service:worker_service", "bee.threads.service:owner_service", "bee.threads.service:waiter_service"} {
 				args = append(args, "--override", service+":lifecycle.auto_start=false")
 			}
 		}

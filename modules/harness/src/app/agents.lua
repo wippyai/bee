@@ -51,7 +51,9 @@ function M.list(client: sessions.Client, include_unavailable: boolean, query: st
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
                 local provider = ""
                 for _, feature in ipairs(candidate.features) do provider = feature:match("^driver:(.+)$") or provider end
-                if provider ~= "" then
+                if not ready and reason:find("owner_safe:", 1, true) then
+                    reason = "Login needed · " .. reason
+                elseif provider ~= "" then
                     if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
                     elseif candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
                     elseif reason:find("bee.", 1, true) then reason = "This agent cannot run with the current setup. Check its folder and permissions." end
@@ -160,7 +162,7 @@ end
 local function observe_thread(conv: Conversation)
     local thread = conv.session.snapshot.thread_ref
     if not thread then return end
-    local reply = caller.new(funcs.call):invoke("bee.threads.service:read_after", {thread_id = thread,
+    local reply = caller.new(funcs.call):invoke("bee.threads.binding:read_after", {thread_id = thread,
         cursor = conv.thread_cursor or 0, limit = 64})
     if not reply or not reply.ok then return end
     local page = bounds.object(reply.value)

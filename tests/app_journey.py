@@ -73,12 +73,13 @@ def bind_admission(project):
                                   "thread_access": "observe_post"})
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
-    harness_index = project / "modules/harness/src/_index.yaml"
-    harness = yaml.safe_load(harness_index.read_text())
-    agent_admission = next(entry for entry in harness["entries"]
-                           if entry["name"] == "target_agent_application_admission")
-    agent_admission["default"]["thread_access"] = "observe_post"
-    harness_index.write_text(yaml.safe_dump(harness, sort_keys=False))
+    dependencies_index = project / "src/deps/_index.yaml"
+    dependencies = yaml.safe_load(dependencies_index.read_text())
+    harness = next(entry for entry in dependencies["entries"] if entry["name"] == "harness")
+    agent_admission = next(parameter for parameter in harness["parameters"]
+                           if parameter["name"] == "bee.harness:target_agent_application_admission")
+    agent_admission["value"]["thread_access"] = "observe_post"
+    dependencies_index.write_text(yaml.safe_dump(dependencies, sort_keys=False))
 
 
 def assert_overlay_authority(project):

@@ -58,7 +58,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     contract: bee.protocol:application
-    application_admissions: bee.gov.activation:application_admissions
+    application_admissions: bee.gov.binding:application_admissions
     canonical: bee.values:canonical
     component_lifecycle: bee.hub.types:lifecycle
 - name: interactions

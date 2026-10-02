@@ -77,6 +77,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `modules/placement/src` | Shared placement contract, launch values, transition rules and binding resolution |
 | `modules/sync/src` | Owner-local projection, event and receipt ledger |
 | `modules/approvals/src` | Durable approval owner, inbox feed and outbox worker |
+| `modules/gov/src` | Public contracts and host requirements at `bee.gov`; schemas and domain values in `.types`, authorized resolution, admission and activation in `.binding`, SQL in `.persist`, recovery actors in `.service`, policy templates in `.security` |
 | `modules/placement-native/src` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `modules/node/src` | Authorized native-node descriptions and metadata |
 

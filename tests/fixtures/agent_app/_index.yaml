@@ -74,7 +74,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     record_bounds: bee.threads.records:bounds
-    artifact: bee.gov.delivery:artifact
+    artifact: bee.gov.types:artifact
     publication_service: bee.gov.binding:publication_service
   security:
     policies:
@@ -138,7 +138,7 @@ entries:
   modules: [funcs, registry, system, json, logger]
   imports:
     bounds: bee.values:bounds
-    preflight: bee.gov.activation:preflight
+    preflight: bee.gov.binding:preflight
   security:
     policies: [bee.agent.app.probe:stage_policy]
   meta:

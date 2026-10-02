@@ -12,7 +12,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     catalog: bee.apps:catalog
-    admission: bee.gov.activation:governed_application_admission
+    admission: bee.gov.types:governed_application_admission
     activation_store: bee.gov.persist:activation_store
     canonical: bee.values:canonical
     test: wippy.test:test

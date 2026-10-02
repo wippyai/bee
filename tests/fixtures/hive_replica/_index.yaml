@@ -65,13 +65,13 @@ entries:
     replicas: bee.sync.persist:replicas
     version: bee.sync.values:version
     canonical: bee.sync.values:canonical
-    artifact: bee.gov.delivery:artifact
-    delivery: bee.gov.delivery:delivery
+    artifact: bee.gov.types:artifact
+    delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
     plan_store: bee.gov.persist:plan_store
-    materializer: bee.gov.delivery:materializer
-    overlay_resolver: bee.gov.delivery:overlay_resolver
-    preflight: bee.gov.activation:preflight
+    materializer: bee.gov.binding:materializer
+    overlay_resolver: bee.gov.binding:overlay_resolver
+    preflight: bee.gov.binding:preflight
     publisher: bee.gov.binding:publisher
     sync: bee.sync.persist:store
   meta:

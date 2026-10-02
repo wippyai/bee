@@ -45,9 +45,9 @@ entries:
   modules: [funcs, registry, system, env, json, logger, sql, time]
   imports:
     bounds: bee.values:bounds
-    artifact: bee.gov.delivery:artifact
-    materializer: bee.gov.delivery:materializer
-    preflight: bee.gov.activation:preflight
+    artifact: bee.gov.types:artifact
+    materializer: bee.gov.binding:materializer
+    preflight: bee.gov.binding:preflight
     catalog: bee.apps:catalog
   security:
     policies:
@@ -84,8 +84,8 @@ entries:
   imports:
     bounds: bee.values:bounds
     guide: bee.gov.traits:guide
-    artifact: bee.gov.delivery:artifact
-    preflight: bee.gov.activation:preflight
+    artifact: bee.gov.types:artifact
+    preflight: bee.gov.binding:preflight
   security:
     policies: [bee.app.journey.probe:operator_policy]
   meta:

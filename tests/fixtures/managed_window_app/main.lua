@@ -541,7 +541,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     assert(type(updated_data.source) == "string", "checkpoint app lost its executable source")
     local updated_meta = assert(bounds.object(updated_app.meta))
     local application = assert(bounds.object(updated_meta.application))
-    application.revision = "2"
+    updated_data.source = updated_data.source:gsub("CHECKPOINT APP ", "CHECKPOINT APP 2 CODE ")
     apply(updated_app)
     local replacement_pid = ""
     local replacement_ready = false
@@ -555,7 +555,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
             local data: unknown = message:payload():data()
             assert(type(data) == "table" and type(data.pid) == "string", "invalid replacement readiness")
             assert(tostring(message:from()) == data.pid, "replacement readiness sender mismatch")
-            assert(data.definition_revision == "2", "replacement launched the old definition")
+            assert(data.definition_revision == "1", "code update changed the metadata revision")
             assert(data.resume_state == acknowledged, "replacement lost the last acknowledged checkpoint")
             replacement_pid = data.pid
             replacement_ready = true
@@ -593,11 +593,43 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     assert(replacement_snapshot.width == 36 and replacement_snapshot.height == 12,
         "replacement lost the controller viewport geometry")
 
-    -- Drain the replacement's startup checkpoint before creating the exact
-    -- shutdown race: a later pending checkpoint fences v3 after v2 exits.
     local replacement_initial = receive_sent(initial, replacement_pid)
     receive_checkpoint(initial, "accept")
     receive_receipt(replacement_initial, "", replacement_pid)
+    -- An unrelated registry transition must leave this execution in place.
+    apply(updated_app)
+    local unchanged = time.after("1500ms")
+    local unchanged_result = channel.select({app_ready:case_receive(), unchanged:case_receive()})
+    assert(unchanged_result.ok and unchanged_result.channel == unchanged, "unchanged definition restarted the application")
+    local incompatible = clone_entry(updated_app)
+    local incompatible_meta = assert(bounds.object(incompatible.meta))
+    local incompatible_application = assert(bounds.object(incompatible_meta.application))
+    incompatible_application.resume_schema = "checkpoint-fixture.v2"
+    incompatible_application.revision = "2"
+    apply(incompatible)
+    local fresh_message = wait_message(app_ready, "incompatible replacement", "7s")
+    local fresh: unknown = fresh_message:payload():data()
+    assert(type(fresh) == "table" and type(fresh.pid) == "string" and fresh.resume_state == "", "incompatible schema received saved state")
+    assert(fresh.pid ~= replacement_pid and fresh.definition_revision == "2", "incompatible schema did not restart fresh")
+    replacement_pid = fresh.pid
+    assert(view:handle() == view_handle, "incompatible replacement changed the window mount")
+    local notice = ""
+    while notice == "" do
+        local message = wait_message(replies, "fresh replacement notice")
+        local reply: unknown = message:payload():data()
+        if type(reply) == "table" and reply.op == "title" and reply.id == view_id then
+            assert(reply.instance_id == instance_id, "incompatible replacement changed instance identity")
+            assert(reply.notice == "Updated; saved state is incompatible. Restarted fresh.", "fresh restart lost its visible notice")
+            notice = reply.notice
+        end
+    end
+    updated_app = incompatible
+
+    -- Drain the replacement's startup checkpoint before creating the exact
+    -- shutdown race: a later pending checkpoint fences v3 after v2 exits.
+    local fresh_initial = receive_sent(initial, replacement_pid)
+    receive_checkpoint(initial, "accept")
+    receive_receipt(fresh_initial, "", replacement_pid)
     assert(process.send(replacement_pid, "bee.fixture.checkpoint.command", "lose"))
     receive_sent("lost-newer", replacement_pid)
     local pending_shutdown_write = receive_checkpoint("lost-newer", "lose")

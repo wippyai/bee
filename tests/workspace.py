@@ -207,6 +207,21 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             # composition compiles them against the library and never ships them.
             shutil.copytree(ROOT / "docs/reference/apps", folder / "src/tests/reference_apps/apps")
             shutil.copytree(ROOT / "tests/fixtures/sessions/src", folder / "src/tests/fixtures/sessions")
+            shutil.copytree(ROOT / "tests/fixtures/gateway_clock", folder / "src/gateway_clock")
+            gateway = folder / "modules/gateway/src/binding/gateway.lua"
+            gateway.write_text(gateway.read_text().replace('local time = require("time")',
+                                                          'local time = require("time")\nlocal fixture_clock = require("fixture_clock")')
+                               .replace("time.now()", "fixture_clock.now()"))
+            gateway_index = folder / "modules/gateway/src/binding/_index.yaml"
+            gateway_document = yaml.safe_load(gateway_index.read_text())
+            gateway_entry = next(entry for entry in gateway_document["entries"] if entry["name"] == "gateway")
+            gateway_entry["imports"]["fixture_clock"] = "bee.gateway:fixture_clock"
+            gateway_index.write_text(yaml.safe_dump(gateway_document, sort_keys=False))
+            gateway_security = folder / "modules/gateway/src/security/_index.yaml"
+            gateway_policies = yaml.safe_load(gateway_security.read_text())
+            clock_reader = next(entry for entry in gateway_policies["entries"] if entry["name"] == "database_ref_policy")
+            clock_reader["policy"]["resources"].append("bee.gateway:fixture_instant")
+            gateway_security.write_text(yaml.safe_dump(gateway_policies, sort_keys=False))
             # SDK unit tests explicitly select their synthetic contract owners.
             sessions_index = folder / "modules/sessions/src/binding/_index.yaml"
             sessions_document = yaml.safe_load(sessions_index.read_text())

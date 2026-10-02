@@ -16,35 +16,66 @@ local function unauthorized_call(target: string, request: {[string]: unknown}): 
     return assert(bounds.object(reply))
 end
 
+-- Every fixture command must stop at its own failure, before a later command
+-- obscures it. Predicates explicitly name their expected nonzero status.
+local function checked_run(args: {string}, expected: integer?): (string?, integer?, string?)
+    local output, code, cause = worktree.run_git(args)
+    if output == nil or code ~= (expected or 0) then
+        error(table.concat(args, " ") .. " (exit " .. tostring(code) .. "): " .. tostring(cause))
+    end
+    return output, code, cause
+end
+
 local counter = 0
 local function temp_dir(): string
     counter = counter + 1
-    local temporary, status, problem = worktree.run_git({"pwd", "-P"})
+    local temporary, status, problem = checked_run({"pwd", "-P"})
     if not temporary or status ~= 0 then error("test working directory: " .. tostring(problem)) end
     temporary = temporary:gsub("%s+$", "") .. "/.wippy"
     local dir = temporary .. "/bee-test-gitwt-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
-    worktree.run_git({"mkdir", "-p", dir})
+    checked_run({"mkdir", "-p", dir})
     return dir
 end
 
 local function cleanup_dir(dir: string)
-    worktree.run_git({"rm", "-rf", dir})
+    checked_run({"rm", "-rf", dir})
 end
 
-local function init_repo(dir: string)
-    local _, c1, e1 = worktree.run_git({"git", "init", "-b", "main", dir})
+local function init_repo(dir: string, name_key: string?)
+    local _, c1, e1 = checked_run({"git", "init", "-b", "main", dir})
     if c1 ~= 0 then error("git init failed: " .. tostring(e1)) end
-    worktree.run_git({"git", "-C", dir, "config", "user.name", "Test Worker"})
-    worktree.run_git({"git", "-C", dir, "config", "user.email", "worker@example.test"})
-    worktree.run_git({"git", "-C", dir, "config", "commit.gpgsign", "false"})
-    worktree.run_git({"sh", "-c", "echo base > " .. dir .. "/base.txt"})
-    worktree.run_git({"git", "-C", dir, "add", "base.txt"})
-    local _, c2, e2 = worktree.run_git({"git", "-C", dir, "commit", "-m", "initial commit"})
+    checked_run({"git", "-C", dir, "config", name_key or "user.name", "Test Worker"})
+    checked_run({"git", "-C", dir, "config", "user.email", "worker@example.test"})
+    checked_run({"git", "-C", dir, "config", "commit.gpgsign", "false"})
+    checked_run({"sh", "-c", "echo base > " .. dir .. "/base.txt"})
+    checked_run({"git", "-C", dir, "add", "base.txt"})
+    local _, c2, e2 = checked_run({"git", "-C", dir, "commit", "-m", "initial commit"})
     if c2 ~= 0 then error("git commit failed: " .. tostring(e2)) end
 end
 
 local function define_tests()
     test.describe("Git worktree dedicated lifecycle", function()
+        test.it("reports the initiating config error and exit status before committing", function()
+            local repo = temp_dir()
+            local succeeded, problem = pcall(function() init_repo(repo, "broken") end)
+            cleanup_dir(repo)
+            test.is_false(succeeded)
+            test.is_true(tostring(problem):find("config broken", 1, true) ~= nil, tostring(problem))
+            test.is_true(tostring(problem):find("exit 2", 1, true) ~= nil, tostring(problem))
+            test.is_true(tostring(problem):find("key does not contain a section: broken", 1, true) ~= nil, tostring(problem))
+        end)
+
+        test.it("reports a failed Git inspection with its native message and status", function()
+            local repo = temp_dir()
+            init_repo(repo)
+            checked_run({"sh", "-c", 'printf "[broken\\n" >> "$1/.git/config"', "fixture", repo})
+            local plan, problem = worktree.plan_dedicated(repo, "bad-config", {repo})
+            cleanup_dir(repo)
+            test.is_nil(plan)
+            test.is_true(tostring(problem):find("exit 128", 1, true) ~= nil, tostring(problem))
+            test.is_true(tostring(problem):find("bad config line", 1, true) ~= nil, tostring(problem))
+        end)
+
         test.it("creates a dedicated worktree and removes it when clean and merged", function()
             local repo = temp_dir()
             init_repo(repo)
@@ -72,7 +103,7 @@ local function define_tests()
             test.is_nil(reason)
 
             -- Verify worktree directory is gone
-            local out, code, _ = worktree.run_git({"git", "-C", repo, "worktree", "list"})
+            local out, code, _ = checked_run({"git", "-C", repo, "worktree", "list"})
             test.eq(code, 0)
             test.is_nil((out:find(wt_path, 1, true)))
 
@@ -92,7 +123,7 @@ local function define_tests()
             end
 
             -- Create uncommitted change in worktree
-            worktree.run_git({"sh", "-c", "echo dirty > " .. wt_path .. "/dirty.txt"})
+            checked_run({"sh", "-c", "echo dirty > " .. wt_path .. "/dirty.txt"})
 
             local retained, reason, clean_err = worktree.cleanup_dedicated(state)
             if clean_err then
@@ -103,10 +134,10 @@ local function define_tests()
             test.eq(reason, "uncommitted changes in worktree")
 
             -- Clean up manually
-            worktree.run_git({"git", "-C", repo, "worktree", "remove", "--force", wt_path})
+            checked_run({"git", "-C", repo, "worktree", "remove", "--force", wt_path})
             local br = tostring(state.branch)
             local del_cmd: {string} = {"git", "-C", repo, "branch", "-D", br}
-            worktree.run_git(del_cmd)
+            checked_run(del_cmd)
             cleanup_dir(repo)
         end)
 
@@ -123,9 +154,9 @@ local function define_tests()
             end
 
             -- Commit on worker branch
-            worktree.run_git({"sh", "-c", "echo change > " .. wt_path .. "/change.txt"})
-            worktree.run_git({"git", "-C", wt_path, "add", "change.txt"})
-            worktree.run_git({"git", "-C", wt_path, "commit", "-m", "worker commit"})
+            checked_run({"sh", "-c", "echo change > " .. wt_path .. "/change.txt"})
+            checked_run({"git", "-C", wt_path, "add", "change.txt"})
+            checked_run({"git", "-C", wt_path, "commit", "-m", "worker commit"})
 
             local retained, reason, clean_err = worktree.cleanup_dedicated(state)
             if clean_err then
@@ -138,7 +169,7 @@ local function define_tests()
             -- Now merge the worker branch into main
             local br = tostring(state.branch)
             local merge_cmd: {string} = {"git", "-C", repo, "merge", br}
-            worktree.run_git(merge_cmd)
+            checked_run(merge_cmd)
 
             -- Cleanup again -> now merged, should be removed
             local retained_after_merge, _, clean_after_err = worktree.cleanup_dedicated(state)
@@ -165,7 +196,7 @@ local function define_tests()
         test.it("rejects a symlinked worktree parent outside the grant", function()
             local repo, outside = temp_dir(), temp_dir()
             init_repo(repo)
-            worktree.run_git({"ln", "-s", outside, repo .. "/.worktrees"})
+            checked_run({"ln", "-s", outside, repo .. "/.worktrees"})
             local path, _, _, err = worktree.create_dedicated(repo, "escape", {repo})
             test.is_nil(path)
             test.not_nil(err)
@@ -195,8 +226,8 @@ local function define_tests()
             init_repo(repo)
             local path, _, state = worktree.create_dedicated(repo, "detached", {repo})
             if not path then error("setup failed") end
-            worktree.run_git({"git", "-C", path, "switch", "--detach"})
-            worktree.run_git({"git", "-C", path, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "detached work"})
+            checked_run({"git", "-C", path, "switch", "--detach"})
+            checked_run({"git", "-C", path, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "detached work"})
             local retained, _, err = worktree.cleanup_dedicated(state)
             test.is_true(retained)
             test.is_nil(err)
@@ -209,11 +240,11 @@ local function define_tests()
             local plan = assert(worktree.plan_dedicated(repo, "replay", {repo}))
             local path = assert((worktree.apply_dedicated(plan, {repo})))
             test.eq(worktree.apply_dedicated(plan, {repo}), path)
-            worktree.run_git({"git", "-C", repo, "worktree", "lock", path})
+            checked_run({"git", "-C", repo, "worktree", "lock", path})
             local _, _, err = worktree.cleanup_dedicated(plan)
             test.not_nil(err)
-            worktree.run_git({"git", "-C", repo, "worktree", "unlock", path})
-            worktree.run_git({"sh", "-c", 'printf "ignored\\n" >> "$1/.git/info/exclude"; touch "$2/ignored"', "fixture", repo, path})
+            checked_run({"git", "-C", repo, "worktree", "unlock", path})
+            checked_run({"sh", "-c", 'printf "ignored\\n" >> "$1/.git/info/exclude"; touch "$2/ignored"', "fixture", repo, path})
             local retained, _, ignored_error = worktree.cleanup_dedicated(plan)
             test.is_true(retained)
             test.is_nil(ignored_error)
@@ -223,10 +254,10 @@ local function define_tests()
         test.it("refuses preexisting names and write grants that omit Git metadata", function()
             local repo = temp_dir()
             init_repo(repo)
-            worktree.run_git({"mkdir", repo .. "/subdir"})
+            checked_run({"mkdir", repo .. "/subdir"})
             local plan, err = worktree.plan_dedicated(repo .. "/subdir", "restricted", {repo .. "/subdir"})
             test.is_nil(plan); test.not_nil(err)
-            worktree.run_git({"git", "-C", repo, "branch", "bee-worker-existing"})
+            checked_run({"git", "-C", repo, "branch", "bee-worker-existing"})
             plan, err = worktree.plan_dedicated(repo, "existing", {repo})
             test.is_nil(plan); test.not_nil(err)
             cleanup_dir(repo)
@@ -235,10 +266,10 @@ local function define_tests()
         test.it("passes shell metacharacters in workdirs as literal arguments", function()
             local root = temp_dir()
             local repo = root .. "/repo"
-            worktree.run_git({"mkdir", repo})
+            checked_run({"mkdir", repo})
             init_repo(repo)
             local literal = root .. "/repo '$(touch escaped)'"
-            worktree.run_git({"mv", repo, literal})
+            checked_run({"mv", repo, literal})
             local path, _, state, err = worktree.create_dedicated(literal, "quoted", {root})
             test.is_nil(err); test.not_nil(path)
             local retained, _, cleanup_error = worktree.cleanup_dedicated(state)
@@ -253,11 +284,11 @@ local function define_tests()
             local retained, _, err = worktree.cleanup_dedicated(plan)
             test.is_false(retained); test.is_nil(err)
             local path = assert((worktree.apply_dedicated(plan, {repo})))
-            worktree.run_git({"mv", path, path .. "-saved"})
-            worktree.run_git({"ln", "-s", outside, path})
+            checked_run({"mv", path, path .. "-saved"})
+            checked_run({"ln", "-s", outside, path})
             retained, _, err = worktree.cleanup_dedicated(plan)
             test.is_nil(retained); test.not_nil(err)
-            local _, present = worktree.run_git({"test", "-d", outside})
+            local _, present = checked_run({"test", "-d", outside})
             test.eq(present, 0)
             cleanup_dir(repo); cleanup_dir(outside)
         end)
@@ -266,9 +297,9 @@ local function define_tests()
             local repo = temp_dir()
             init_repo(repo)
             local plan = assert(worktree.plan_dedicated(repo, "replay", {repo}))
-            worktree.run_git({"mkdir", "-p", plan.working_directory .. "/.worktrees"})
+            checked_run({"mkdir", "-p", plan.working_directory .. "/.worktrees"})
             init_repo(plan.worktree_path)
-            worktree.run_git({"git", "-C", plan.worktree_path, "symbolic-ref", "HEAD", "refs/heads/" .. plan.branch})
+            checked_run({"git", "-C", plan.worktree_path, "symbolic-ref", "HEAD", "refs/heads/" .. plan.branch})
             local path, roots, _, err = worktree.apply_dedicated(plan, {repo})
             test.is_nil(path); test.is_nil(roots)
             test.not_nil(err)
@@ -293,12 +324,12 @@ local function define_tests()
             local first, _, state = worktree.create_dedicated(repo, "first", {repo})
             local second = worktree.create_dedicated(repo, "second", {repo})
             if not first or not second then error("fixture worktrees missing") end
-            worktree.run_git({"cp", second .. "/.git", first .. "/.git"})
-            worktree.run_git({"git", "-C", second, "symbolic-ref", "HEAD", "refs/heads/bee-worker-first"})
+            checked_run({"cp", second .. "/.git", first .. "/.git"})
+            checked_run({"git", "-C", second, "symbolic-ref", "HEAD", "refs/heads/bee-worker-first"})
             local retained, _, err = worktree.cleanup_dedicated(state)
             test.is_nil(retained)
             test.contains(tostring(err), "backreference")
-            local _, present = worktree.run_git({"test", "-d", second})
+            local _, present = checked_run({"test", "-d", second})
             test.eq(present, 0)
             cleanup_dir(repo)
         end)
@@ -309,12 +340,12 @@ local function define_tests()
             for index, flag in ipairs({"--assume-unchanged", "--skip-worktree"}) do
                 local path, _, state = worktree.create_dedicated(repo, "hidden-" .. tostring(index), {repo})
                 if not path then error("fixture worktree missing") end
-                worktree.run_git({"git", "-C", path, "update-index", flag, "base.txt"})
-                worktree.run_git({"sh", "-c", 'printf "dirty" > "$1/base.txt"', "fixture", path})
+                checked_run({"git", "-C", path, "update-index", flag, "base.txt"})
+                checked_run({"sh", "-c", 'printf "dirty" > "$1/base.txt"', "fixture", path})
                 local retained, reason, err = worktree.cleanup_dedicated(state)
                 test.is_true(retained); test.is_nil(err)
                 test.contains(tostring(reason), "index suppresses")
-                local _, present = worktree.run_git({"test", "-f", path .. "/base.txt"})
+                local _, present = checked_run({"test", "-f", path .. "/base.txt"})
                 test.eq(present, 0)
             end
             cleanup_dir(repo)
@@ -340,11 +371,13 @@ local function define_tests()
         end)
 
         test.it("drains stderr and stdout together and bounds retained output", function()
-            local out, code, err = worktree.run_git({"sh", "-c", "head -c 300000 /dev/zero >&2; printf ok"})
+            local out, code, err = checked_run({"sh", "-c", "head -c 300000 /dev/zero >&2; printf ok"})
             test.eq(out, "ok")
             test.eq(code, 0)
             test.is_true(#tostring(err) > 0 and #tostring(err) <= worktree.MAX_STDERR_BYTES + 4096)
-            local _, _, overflow = worktree.run_git({"sh", "-c", "head -c " .. tostring(worktree.MAX_STDOUT_BYTES + 1) .. " /dev/zero"})
+            local overflow_output, overflow_code, overflow = worktree.run_git({"sh", "-c", "head -c " .. tostring(worktree.MAX_STDOUT_BYTES + 1) .. " /dev/zero"})
+            test.is_nil(overflow_output)
+            test.eq(overflow_code, 0)
             test.contains(tostring(overflow), "git output exceeds")
         end)
 
@@ -363,7 +396,7 @@ local function define_tests()
             local cleanup_res = unauthorized_call("bee.git.worktree.binding:cleanup", {attempt_id = "test-att-denied", owner_id = "intruder", state = state})
             test.is_false(cleanup_res.ok)
             test.eq((assert(bounds.object(cleanup_res.error))).code, "DENIED")
-            local _, present = worktree.run_git({"test", "-e", state.worktree_path})
+            local _, present = checked_run({"test", "-e", state.worktree_path}, 1)
             test.eq(present, 1)
             cleanup_dir(repo)
         end)

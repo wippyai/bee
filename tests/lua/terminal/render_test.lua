@@ -18,6 +18,20 @@ local catalog: {menu.Descriptor} = {
 }
 local function define_tests()
     test.describe("Desktop presentation boundaries", function()
+        test.it("shows an incompatible checkpoint notice inside the same window with a custom label", function()
+            local scene = model.add(model.new(100, 30), "view", "instance", "App")
+            scene = model.place(scene, "view", {x = 2, y = 2, width = 96, height = 25})
+            scene = model.personalize(scene, "view", "My window", "rose")
+            local notice = "Updated; saved state is incompatible. Restarted fresh."
+            scene = model.announce(scene, "view", "instance", "App", notice)
+            local frame = render.draw(scene, {"view"}, {view = {rows = {"New code"}}}, nil, nil, "", "Bee")
+            local visible = plain_text(table.concat(frame.rows, "\n"))
+            test.is_true(visible:find(notice, 1, true) ~= nil)
+            test.is_true(visible:find("My window", 1, true) ~= nil)
+            test.is_true(visible:find("New code", 1, true) ~= nil)
+            test.eq(scene.windows[1].id, "view")
+            test.eq(scene.windows[1].instance_id, "instance")
+        end)
         test.it("accepts only exact aggregate attachment state for its display", function()
             local info = connection.new("{Antares@bee.client:main|one}", string.rep("a", 32),
                 string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")

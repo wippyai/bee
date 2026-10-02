@@ -54,7 +54,7 @@ function M.reduce(value: State, command: commands.Command): State
         tabs[#tabs + 1] = command.id
         return next_state(value, scene, tabs)
     elseif command.op == "announce" then
-        local scene = model.announce(value.scene, command.id, command.instance_id, command.title)
+        local scene = model.announce(value.scene, command.id, command.instance_id, command.title, command.notice)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "personalize" then

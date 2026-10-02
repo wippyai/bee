@@ -1,5 +1,6 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
+TEST_JOBS ?= 4
 # Runtime Lua cache fingerprints include the toolchain, entry source and
 # dependencies. A shared test cache survives each fixture's disposable HOME.
 RUNTIME_CACHE_KEY := $(shell python3 -c 'import json; print(json.load(open("wippy.build.json"))["runtime"]["commit"][:12])')
@@ -14,6 +15,13 @@ endif
 .PHONY: toolchain-current
 toolchain-current:
 	python3 build/verify_cached_toolchain.py current || $(MAKE) native-tools
+.PHONY: component-inventory component-inventory-check root-src-budget-check
+component-inventory:
+	python3 build/component_inventory.py --write
+component-inventory-check:
+	python3 build/component_inventory.py
+root-src-budget-check:
+	python3 build/component_inventory.py --budget-only
 lint: $(TOOLCHAIN_CURRENT)
 test: $(TOOLCHAIN_CURRENT)
 fixture-lint: $(TOOLCHAIN_CURRENT)
@@ -142,7 +150,7 @@ run:
 .PHONY: idle-cpu-check
 idle-cpu-check:
 	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
-lint: layout-check lua-boundary-check
+lint: layout-check lua-boundary-check component-inventory-check
 	$(WIPPY) lint $(LINT_FLAGS) --strict-any --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
@@ -151,9 +159,9 @@ codex-native-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
-test: fixture-gateway-client values-module
+test: fixture-gateway-client values-module component-inventory-check
 	python3 -m unittest discover -s tests -p 'test_*.py'
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
+	BEE_TEST_JOBS="$(TEST_JOBS)" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 
@@ -674,6 +682,11 @@ app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
 
+.PHONY: persist-migration-check
+persist-migration-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
+check: persist-migration-check
+check-shard-services-storage: persist-migration-check
 .PHONY: layout-check
 layout-check:
 	python3 build/layout_check.py

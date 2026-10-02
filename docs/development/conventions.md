@@ -26,6 +26,13 @@ host-free requirement defaults, duplicate Lua sources, orphan files and
 requirement/import targets. Domain ownership, dynamic registry discovery and
 public API reachability also require review.
 
+The generated [component inventory](component-inventory.json) records current
+namespace and entry IDs, requirement targets, topics, owner resources and
+tables, native-known IDs and process handoff evidence. Run
+`make component-inventory-check` to verify the source-derived snapshot and the
+persisted identity baseline. A persisted ID, topic or schema change must name an
+M0–M7 migration in `build/component-inventory-migrations.json`.
+
 | Location | Owns |
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission wiring |
@@ -45,7 +52,7 @@ public API reachability also require review.
 | `src/desktop` | Pure scene, reducer and layout values |
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
-| `src/storage` | Workspace database, catalog rows and migration ledger |
+| `src/storage` | Workspace database, catalog rows and immutable migrations; shared runner in `bee.persist` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
@@ -65,12 +72,13 @@ public API reachability also require review.
 | `modules/placement-native/src` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `modules/node/src` | Authorized native-node descriptions and metadata |
 
-The app keeps its entries in the root package even when a feature child uses
-the module's namespace prefix. It overrides module entries only through
-`bee.deps` requirement parameters. Module requirement defaults
-never point at app ids. Module `process.service` entries take their host and
-policy grants through requirements (`process_host`, per-service policy lists);
-their entries keep empty underlays the host fills.
+Bee's root index owns host composition and root process wiring. Module-owned
+application entries and their UI live in `modules/<module>/src/app` as
+`<module namespace>.app`. The host selects module entries through `bee.deps`
+requirement parameters. Module requirement defaults never point at host app
+IDs. Module `process.service` entries take their host and policy grants through
+requirements (`process_host`, per-service policy lists); their entries keep
+empty underlays the host fills.
 
 An append requirement (`+=`) contributes one element. It has no array default;
 an absent host selection contributes nothing instead of a nested empty array.
@@ -176,6 +184,9 @@ make portable-deployment-check
 make standalone
 ```
 
+`make test TEST_JOBS=1` runs the same four isolated Lua shards sequentially
+on a loaded host. The default runs all four in parallel.
+
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's
 `check-shard-*` targets; a new `check` member joins one shard, and
@@ -189,6 +200,11 @@ boundary. A constructed completion record does not prove process cleanup.
 parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
+
+The current root contains 23,987 Lua lines under `src/`, with the same value
+as its initial ceiling in `build/root-src-lua-budget.txt`. Run
+`make root-src-budget-check`; it fails if the count grows beyond that ceiling.
+Lower the ceiling as later component moves reduce root code.
 
 Fixtures use disposable test workspaces and remain outside production `src/`.
 Test scenario folders are independent overlay roots, not namespace children;

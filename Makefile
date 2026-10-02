@@ -51,9 +51,6 @@ hub-self-update-standalone-check:
 hub-core-artifact-check: native-pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/core_artifact.py "$(abspath $(BEE_DEPLOYMENT))" "$(abspath $(BEE_BUNDLE_MANIFEST))"
 check: hub-core-artifact-check
-.PHONY: hub-core-pack
-hub-core-pack: $(TOOLCHAIN_CURRENT)
-	WIPPY="$(abspath $(WIPPY))" BEE_CORE_VERSION="$(BEE_CORE_VERSION)" build/core-pack.sh
 .PHONY: settings-unit-check capability-grants-unit-check
 settings-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.settings view_test

@@ -1,14 +1,19 @@
 # Package boundaries
 
-Bee currently ships one native application pack. Its default component lock
+Bee's native executable embeds a full baseline component graph. Its component lock
 includes `bee/agents`, a meta-package for the separately composed harness,
 credential, placement, resource and driver components. The local Hub can
 inspect, plan and apply host-authorized components, and governed overlays can
 author, freeze, review, apply and recover a destination-owned runtime overlay.
-These package roots describe source and composition boundaries; they do not
-provide independent Bee package activation. Hub currently refuses separate
-`bee/*` targets except an update of `bee/bee` and refuses host-managed members.
-The explicit-root conversion described by M6 is still a proposal.
+Host-owned `bee.deps` roots select components and their requirement parameters.
+The M6 root conversion uses Hub's existing plan, apply and registry-history
+receipt; it changes no SQL schema. Optional Bee components can be managed
+individually. Required host roots and the installer dependency closure refuse
+independent removal or replacement. Core self-update preserves component
+selection and refuses artifacts that declare Bee-component dependencies.
+`make native-pack` seals the composed boot root and dependency-free Hub core
+together; their distinct release identities keep recovery and publication separate.
+Service drain, generation handoff and independent release streams remain proposals.
 The bare kernel can omit `bee/agents`; its known agent commands direct the user
 to install the package. Public enrollment, managed headless launch,
 destination-owned package transfer/install and independent release streams

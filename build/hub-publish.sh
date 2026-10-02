@@ -3,7 +3,7 @@
 # Publish Bee to the Wippy Hub: every physical module, then the bee/bee root,
 # uploading the sealed packs of one release deployment byte for byte.
 #
-# Usage: BEE_VERSION=X [BEE_DEPLOYMENT=dist/portable-deployment]
+# Usage: BEE_VERSION=X [BEE_DEPLOYMENT=dist/portable-deployment/hub]
 #        [HUB_VISIBILITY=private|public] build/hub-publish.sh check|publish
 #   check    dry-runs each upload and compares the Hub digest with the lock hash
 #   publish  uploads each immutable protected version, creating missing modules

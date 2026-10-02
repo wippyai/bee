@@ -65,8 +65,8 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 mkdir -p "$stage/artifacts/packs/bee"
-# --module selects each physical module from the release source, which names
-# bee/bee and every Bee module at this version.
+# --module selects each physical module from the release source. The local boot
+# root takes its own identity while sibling components retain the release version.
 WIPPY=$runtime BEE_BUILD_MANIFEST=$input_manifest BEE_VERSION=$version "$root/build/release-source.sh" "$stage/source"
 mkdir -p "$stage/source/.portable-packs/bee"
 python3 - "$stage/source/wippy.lock" "$boot_version" <<'PY'
@@ -218,4 +218,4 @@ if [ ! -L "$pointer" ] && [ -e "$pointer" ]; then
 fi
 replace_pointer "$pointer_stage" "$pointer"
 pointer_stage=
-printf 'Packed %s physical Bee modules into %s\n' "$(wc -l < "$stage/modules.tsv" | tr -d ' ')" "$generation_dir"
+printf 'Packed %s baseline modules and the Hub core into %s\n' "$(wc -l < "$stage/modules.tsv" | tr -d ' ')" "$generation_dir"

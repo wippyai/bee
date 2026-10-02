@@ -411,17 +411,17 @@
       "topic": "component"
     },
     {
-      "bytes": 3588,
+      "bytes": 3838,
       "id": "component/git:worktree",
-      "sha256": "9b80b8d5dbbecb616202be3eb1d2d86a7c6947e7642f62e6ba2f9b9b01aa9a0a",
+      "sha256": "9e5ce065a12c4ee6c1ac95c1cbd33aca974a80b7605afee965c145f670848ee3",
       "source": "modules/git-worktree/src/README.md",
       "title": "bee.git.worktree",
       "topic": "component"
     },
     {
-      "bytes": 21374,
+      "bytes": 21624,
       "id": "component/gov",
-      "sha256": "13e0f2df04a71e12b98972d3d880050eedbbe11064eb7b2bf65a35ecfb782346",
+      "sha256": "7e51fd67b3ec602394e9da33363ebfdc8e1ede517f0e78878d502928831ee3a3",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -467,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2889,
+      "bytes": 3439,
       "id": "component/persist",
-      "sha256": "8bcae1c4ad48c46be1ff8a5c04fc9bffbae8f1c6a9eacaa3d0f03259dfd0bd81",
+      "sha256": "f2ef901b035eaf6aefde28f782d38e6d6b51ae47bd5992cf62e3fccd2efd7cb1",
       "source": "modules/persist/src/README.md",
       "title": "bee.persist",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 731851,
+    "bytes": 732901,
     "documents": 77
   }
 }

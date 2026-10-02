@@ -191,6 +191,38 @@ def crash(project, state, owner, step):
         manifest.write_text(original_manifest)
 
 
+def diagnostic_failure(project, state, owner):
+    source = project / 'modules/persist/src/ledger.lua'
+    original = source.read_text()
+    table = OWNERS[owner][1]
+    injection = f'''    if not apply_err and ledger.table == "{table}" and migration.id == 1 then
+        _, apply_err = tx:execute([[CREATE TABLE diagnostic_abort (value INTEGER);
+CREATE TRIGGER diagnostic_abort_trigger BEFORE INSERT ON diagnostic_abort
+BEGIN SELECT RAISE(ROLLBACK, 'native startup migration abort'); END;
+INSERT INTO diagnostic_abort VALUES (1)]])
+    end
+'''
+    source.write_text(original.replace('    if apply_err then return', injection + '    if apply_err then return', 1))
+    try:
+        output = run(project, state, owner, 'native startup migration abort')
+    finally:
+        source.write_text(original)
+    phases = re.findall(r'^PERSIST_PROGRESS (.+)$', output, re.M)
+    assert f'Upgrading data: {owner} 0->1' in phases, output
+    assert not any(phase.startswith(('Applied data:', 'Upgraded data:')) for phase in phases), output
+    operation = f'apply {"Client" if owner == "client" else owner} migration '
+    native_message, cleanup = 'native startup migration abort', '; rollback migration:'
+    assert all(message in output for message in (operation, native_message, cleanup)), output
+    assert output.index(operation) < output.index(native_message) < output.index(cleanup), output
+    with sqlite3.connect(state / (owner + '.db')) as db:
+        assert db.execute("SELECT count(*) FROM sqlite_master WHERE name = 'diagnostic_abort'").fetchone() == (0,)
+        if owner == 'sync':
+            assert db.execute(f'SELECT count(*) FROM {table}').fetchone() == (0,)
+        else:
+            assert db.execute("SELECT count(*) FROM sqlite_master WHERE type = 'table'").fetchone() == (0,)
+    print(f'{owner}: active checkpoint retains operation/native/rollback diagnostics without announcing completion', flush=True)
+
+
 def main():
     bytes_check()
     with fixture_workspace(unit_tests=False) as project:
@@ -230,6 +262,10 @@ def main():
             return state / (owner + '.db')
 
         for owner in OWNERS:
+            state = project / '.wippy' / ('diagnostic-' + owner)
+            select_db(owner, state)
+            diagnostic_failure(project, state, owner)
+
             state = project / '.wippy' / ('fresh-' + owner)
             path = select_db(owner, state)
             progress(run(project, state, owner), owner, 0, OWNERS[owner][2], owner != 'sync')

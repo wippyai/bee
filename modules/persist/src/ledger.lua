@@ -19,6 +19,12 @@ local function integer(value: unknown): integer?
     if value ~= result then return nil end
     return result
 end
+local function rollback(tx: sql.Transaction, message: string?): string?
+    local rolled_back, err = tx:rollback()
+    if rolled_back == true and not err then return message end
+    local cause = "rollback migration: " .. tostring(err or "no reason given")
+    return message and (message .. "; " .. cause) or cause
+end
 local function table_name(ledger: Ledger): (string?, string?)
     if not ledger.table:match("^[a-z][a-z0-9_]*$") then return nil, ledger.label .. " migration ledger table name is invalid" end
     return ledger.table, nil
@@ -95,7 +101,7 @@ local function apply_migration(tx: sql.Transaction, ledger: Ledger, migration: M
     if apply_err then return "apply " .. ledger.label .. " migration " .. migration.name .. ": " .. tostring(apply_err) end
     if migration.rebuild then
         local violations, check_err = tx:query("PRAGMA foreign_key_check")
-        if check_err or not violations then return "check foreign keys after rebuild" end
+        if check_err or not violations then return "check foreign keys after rebuild: " .. tostring(check_err) end
         if #violations > 0 then return ledger.label .. " migration " .. migration.name .. " leaves broken references" end
     end
     local columns, values = "id, name, checksum", "?, ?, ?"
@@ -115,20 +121,22 @@ local function apply_transaction(db: sql.DB, ledger: Ledger, expected: {Migratio
     local rebuild = step and step.rebuild == true
     if rebuild then
         local _, off_err = db:execute("PRAGMA foreign_keys = OFF")
-        if off_err then return false, "disable foreign keys for rebuild" end
+        if off_err then return false, "disable foreign keys for rebuild: " .. tostring(off_err) end
     end
     local function finish(ok: boolean, err: string?): (boolean, string?)
         if rebuild then
             local _, on_err = db:execute("PRAGMA foreign_keys = ON")
-            if on_err then return false, "restore foreign keys after rebuild: " .. tostring(on_err) end
+            if on_err then
+                local cause = "restore foreign keys after rebuild: " .. tostring(on_err)
+                return false, err and (err .. "; " .. cause) or cause
+            end
         end
         return ok, err
     end
     local tx, begin_err = db:begin({isolation = sql.isolation.SERIALIZABLE})
     if not tx then return finish(false, "begin " .. ledger.label .. " migration: " .. tostring(begin_err)) end
     local function fail(err: string?): (boolean, string?)
-        tx:rollback()
-        return finish(false, err)
+        return finish(false, rollback(tx, err))
     end
     -- Recheck under the writer transaction, including when another opener won.
     local create_err = create_ledger(tx, ledger)
@@ -191,7 +199,7 @@ function M.rows(db: sql.DB, ledger: Ledger): ({{id: integer, name: string, check
     local name, name_error = table_name(ledger)
     if not name then return nil, name_error end
     local rows, query_err = db:query("SELECT id, name, checksum FROM " .. name .. " ORDER BY id")
-    if query_err or not rows then return nil, "read " .. ledger.label .. " migration ledger" end
+    if query_err or not rows then return nil, "read " .. ledger.label .. " migration ledger: " .. tostring(query_err) end
     local result: {{id: integer, name: string, checksum: string}} = {}
     for index, row in ipairs(rows) do
         local id = integer(row.id)

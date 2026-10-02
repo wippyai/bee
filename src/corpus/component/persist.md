@@ -20,6 +20,11 @@ The runner takes SQLite's writer lock before reading the ledger inside each
 migration transaction, then validates the ledger again so concurrent opens
 observe the winning writer's committed steps without applying them twice.
 
+SQL failures retain the native error text with the failing operation. Transaction
+begin, statement, commit, rollback and database release failures remain visible
+to the caller. Cleanup failures append to the initiating failure, including
+rollback and foreign-key restoration after a rebuild.
+
 | Slice | Responsibility |
 |---|---|
 | `bee.persist` | `ledger`: checksums, ledger replay, apply; `database`: SQLite open with WAL, full sync, foreign keys, busy timeout, then ledger apply |
@@ -44,3 +49,7 @@ grants reads and writes only to this progress field, backed by the native host
 environment without a terminal. Ready owners and isolated compositions expose
 an empty field. Repeated or regressing checkpoints do not renew startup waits.
 Migration SQL and checksums remain unchanged.
+
+The current runtime pin exposes SQLite messages without numeric result codes.
+Runtime [PR #891](https://github.com/wippyai/runtime/pull/891) adds `sqlite_code` and `sqlite_extended_code`
+to Lua error details; those fields arrive with that runtime release.

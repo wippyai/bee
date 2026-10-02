@@ -17,8 +17,9 @@ SLOW = {
     "bee.harness.catalog:launch_test": 390.0,
     "bee.harness.catalog:permission_carrier_test": 125.0,
     "bee.harness.catalog:gateway_carrier_test": 60.0,
-    "bee.harness.catalog:carrier_test": 100.0,
-    "bee.harness.catalog:carrier_stream_test": 70.0,
+    "bee.harness.catalog:carrier_test": 80.0,
+    "bee.harness.catalog:carrier_stream_test": 90.0,
+    "bee.harness.catalog:carrier_drain_test": 65.0,
     "bee.placement.native:native_test": 25.0,
 }
 DEFAULT_WEIGHT = 1.0

@@ -43,18 +43,18 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261001203931-ee0e72bf19aa",
+      "version": "v0.0.0-20261002010100-26b989103487",
       "package": "github.com/wippyai/bee/native/ioevents",
       "factory": "Component",
       "private": true
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261001203931-ee0e72bf19aa",
+      "version": "v0.0.0-20261002010100-26b989103487",
       "package": "github.com/wippyai/bee/native/launch",
       "factory": "Component",
-      "private": true,
-      "host": true
+      "host": true,
+      "private": true
     }
   ]
 }

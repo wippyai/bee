@@ -14,6 +14,6 @@ entries:
     types: bee.driver.wippy:types
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    driver_configuration: bee.driver.configuration:configuration
+    driver_configuration: bee.driver.binding:configuration
     agent_resolver: bee.harness.launch:agent_resolver
     record_bounds: bee.threads.records:bounds

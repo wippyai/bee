@@ -51,7 +51,7 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     placement_types: bee.placement:types
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration
     driver_resolver: bee.driver.binding:resolver
     mcp: bee.gateway.api:mcp
     surface: bee.gateway.catalog:surface
@@ -97,7 +97,7 @@ entries:
     continuation: bee.harness.carrier:continuation
     settle: bee.harness.carrier:settle
     stream_json: bee.driver.transport:stream_json
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration
     driver_resolver: bee.driver.binding:resolver
     driver_types: bee.driver:types
     placement_types: bee.placement:types

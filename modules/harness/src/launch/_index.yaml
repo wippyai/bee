@@ -77,7 +77,7 @@ entries:
     driver_resolver: bee.driver.binding:resolver
     driver_types: bee.driver:types
     locate: bee.driver.locate:locate
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     resources: bee.placement.native.env:resources
     placement_profiles: bee.placement.profiles:profiles
     placement_resolver: bee.placement.binding:resolver

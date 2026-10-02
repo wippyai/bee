@@ -11,7 +11,7 @@ entries:
     launch: bee.driver.opencode.binding:launch
     prepare: bee.driver.opencode.binding:prepare
     dispatch: bee.driver.opencode.binding:dispatch
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
 - name: configuration_test
   kind: function.lua
   source: file://configuration_test.lua
@@ -24,7 +24,7 @@ entries:
     test: wippy.test:test
     registry: registry
     configuration: bee.driver.opencode.binding:configuration
-    driver_configuration: bee.driver.configuration:configuration
+    driver_configuration: bee.driver.binding:configuration
     configure: bee.driver.opencode.binding:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types

@@ -91,7 +91,7 @@ entries:
   - sql
   imports:
     gateway_configuration: bee.gateway.env:configuration
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration
     preferences: bee.driver.profiles:preferences
     resolver: bee.driver.binding:resolver
     driver_types: bee.driver:types
@@ -161,7 +161,7 @@ entries:
     identity: bee.placement.native.service:identity
     output_buffer: bee.placement.native.service:output_buffer
     protocol: bee.placement.native:protocol
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     types: bee.placement:types
     process_backend: bee.placement.native.binding:process_backend
   security: {policies: []}
@@ -175,7 +175,7 @@ entries:
     resources: bee.placement.native.env:resources
     materialization: bee.placement.native.service:materialization
     executable: bee.placement.native.service:executable
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     service: bee.placement.native.service:service
     bounds: bee.values:bounds
     identity: bee.placement.native.service:identity
@@ -227,7 +227,7 @@ entries:
     identity: bee.placement.native.service:identity
     output_buffer: bee.placement.native.service:output_buffer
     protocol: bee.placement.native:protocol
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     types: bee.placement:types
     process_backend: bee.placement.native.binding:process_backend
     bounds: bee.values:bounds

@@ -44,7 +44,7 @@ entries:
     service: bee.placement.docker.service:service
     spec: bee.placement.docker.binding:spec
     paths: bee.placement.profiles:paths
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
 - name: runner
   kind: process.lua
   source: file://runner.lua
@@ -99,7 +99,7 @@ entries:
     profiles: bee.placement.profiles:profiles
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     docker_client: userspace.docker:docker_client
 - name: image_owner
   kind: process.lua
@@ -149,7 +149,7 @@ entries:
   modules: [exec, uuid]
   imports:
     bounds: bee.values:bounds
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     resources: bee.placement.native.env:resources
     capture: bee.driver.locate:probe_capture
     docker_client: userspace.docker:docker_client

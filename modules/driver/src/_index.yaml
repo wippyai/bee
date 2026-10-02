@@ -19,7 +19,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     login_evidence: bee.driver.locate:login_evidence
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     values: bee.threads.records:values
     record_bounds: bee.threads.records:bounds
 - name: driver

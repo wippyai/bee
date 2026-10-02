@@ -281,3 +281,12 @@ entries:
   source: file://fake_owner.lua
   meta: {type: test_support}
   imports: {bounds: bee.values:bounds, principals: bee.test.principals:bound, sessions: bee.app:sessions, protocol: bee.app:sessions_protocol}
+
+- name: driver_route_test
+  kind: function.lua
+  source: file://driver_route_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    route: bee.sessions.executor:driver_route

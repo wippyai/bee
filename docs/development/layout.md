@@ -371,12 +371,10 @@ conventions and `build/layout_roots.json`.
 | `bee.git.worktree` | `bee.git.worktree.env` | `executor_ref`, `git_executor`, `host_files`, `host_files_ref` |
 | `bee.git.worktree` | `bee.git.worktree.security` | `worktree_policy` |
 | `bee.gov.overlays` | `bee.gov.overlays.security` | `client_policy` |
-| `bee.gov` | `bee.gov.activation` | `activation_measure`, `activation_profile_decoder`, `application_admissions`, `governed_application_admission`, `headless_revert`, `lists`, `migration_work`, `preflight`, `protected_kernel`, `super_edit` |
+| `bee.gov` | `bee.gov.binding` | `activation_measure`, `application_admissions`, `delivery_local`, `headless_revert`, `hub_resolver`, `materializer`, `overlay_local`, `overlay_resolver`, `preflight`, `staging_resources` |
 | `bee.gov` | `bee.gov.env` | `activation_profiles_ref`, `approval_consume_policy_ref`, `approval_request_policy_ref`, `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `publication_profiles_ref`, `workspace_folder_policy_ref`, `workspace_folder_read_ref` |
-| `bee.gov` | `bee.gov.delivery` | `artifact`, `candidate`, `delivery`, `delivery_protocol`, `hub_resolver`, `lease_model`, `materializer`, `overlay_resolver`, `publication_profile_decoder`, `resolver`, `staging_resources` |
-| `bee.gov` | `bee.gov.capability` | `capability_files`, `capability_gateway`, `capability_grants`, `capability_request` |
-| `bee.gov` | `bee.gov.binding` | `delivery_local`, `overlay_local` |
-| `bee.gov` | `bee.gov.workspace` | `workspace`, `workspace_applications`, `workspace_protocol` |
+| `bee.gov` | `bee.gov.security` | `super_edit` |
+| `bee.gov` | `bee.gov.types` | `activation_profile_decoder`, `artifact`, `candidate`, `capability_files`, `capability_gateway`, `capability_grants`, `capability_request`, `delivery`, `delivery_protocol`, `governed_application_admission`, `lease_model`, `lists`, `migration_work`, `protected_kernel`, `publication_profile_decoder`, `resolver`, `workspace`, `workspace_applications`, `workspace_protocol` |
 | `bee.harness` | `bee.harness.env` | `carrier_host_ref` |
 | `bee.harness` | `bee.harness.api` | `gateway_hook`, `gateway_hook_mcp`, `gateway_hook_status` |
 | `bee.harness` | `bee.harness.launch` | `harness_activation`, `harness_setup` |

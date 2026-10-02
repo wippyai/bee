@@ -69,7 +69,8 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `modules/hub-modules/src` | Hub Modules package policies and dependencies; UI in `src/app` as `bee.hub.modules.app` |
 | `modules/gov-overlays/src` | Governance Overlays app as an installable package |
 | `modules/hive/src` | Cross-node protocol envelopes, routing/admission and workspace functions in `.binding`, value decoders in `.types`, supervisor/display/viewer actors in `.service`, desktop bridge/helpers in `.desktop`, exposure catalog and security templates |
-| `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
+| `src/threads/hive` | Host-selected Threads/Hive admission and identity policies with their existing IDs |
+| `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store, with the optional Hive adapter in `hive/binding` |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |
 | `modules/placement/src` | Shared placement contract, launch values, transition rules and binding resolution |
@@ -254,7 +255,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 16,341 Lua line ceiling under `src/`, recorded in
+The root has a 16,155 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

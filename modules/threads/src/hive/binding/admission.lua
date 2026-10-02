@@ -22,7 +22,6 @@ local M = {}
 -- each takes; the exposure mode a host ceiling must admit for them.
 M.OPERATION_REVISION = "1"
 M.EXPOSURE_MODE = "policy"
-M.OWNER_SERVICE = "bee.threads"
 -- The exact owner service each forwarded operation must name.
 local OWNER_SERVICE_BY_OPERATION: {[string]: string} = {
     ["bee.threads.binding:send"] = "bee.threads",
@@ -61,14 +60,12 @@ local fields_by_operation: {[string]: {string}} = {
     -- ceiling before any reply.
     ["bee.threads.binding:watch"] = {"thread_id", "after_sequence", "wait_ms", "transport_budget_ms", "caller_node_id"},
 }
-M.FIELDS = fields_by_operation
 M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref", "scope", "policies", "owner_id"}
 -- Operations whose payload deliberately carries no thread: an address
 -- resolution answers with the thread, it never receives one.
 M.THREADLESS_OPERATIONS = {["bee.threads.binding:inbox_resolve"] = true}
 type Object = {[string]: unknown}
 type Admission = {actor_id: string, policies: {string}, operation_ref: string, input: Object, caller_node_id: string, principal: types.PrincipalRef}
-type ServiceReply = {ok: boolean, error: {code: string, message: string}?, value: unknown, replayed: boolean?}
 -- admit: the common operation checks a forwarded request faces on every
 -- path (host exposure ceiling, owner service, revision, exact payload
 -- fields, digest, deadline) and then the principal mapping; a mapped

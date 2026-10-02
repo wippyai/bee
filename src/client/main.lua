@@ -444,7 +444,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 if target then
                     if not previous[identity] then bind(target) end
                     send(session, "bee.desktop.command", {version = 1, op = "announce", id = key,
-                        instance_id = view.instance_id, title = view.title})
+                        instance_id = view.instance_id, title = view.title, notice = view.notice})
                 end
             end
             for key, target in pairs(targets) do

@@ -50,6 +50,7 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
     # and the harness entries it rewrites.
     subprocess.run([str(workspace.RUNTIME), "lint", "--ns", "bee.managed.window.fixture,bee.harness.profiles,bee.harness.launch"],
                    cwd=folder, env=environment, check=True, timeout=60)
-    subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, env=environment, check=True, timeout=60)
+    selected = ["test", "bee.managed.window.fixture:checkpoint_ack_test"] if "--checkpoint-only" in sys.argv else []
+    subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal", *selected], cwd=folder, env=environment, check=True, timeout=60)
 
 print("Managed window app: responsive discovery/activation, cancellation cleanup, broker terminal grant, input/resize, detach/rebind and truthful receipts passed")

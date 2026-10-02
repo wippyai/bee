@@ -94,7 +94,12 @@ local function main(value: unknown)
 
     local function object(raw: unknown, label: string): Object
         if type(raw) ~= "table" then error(label .. " reply value is not an object") end
-        return raw :: Object
+        local result: Object = {}
+        for key, value in pairs(raw) do
+            if type(key) ~= "string" then error(label .. " reply value has a non-string key") end
+            result[key] = value
+        end
+        return result
     end
     local function exact_fields(value: Object, allowed: {string}, label: string)
         local fields: {[string]: boolean} = {}
@@ -127,7 +132,7 @@ local function main(value: unknown)
     end
     local function records(raw: unknown, label: string, thread_id: string): {Object}
         if type(raw) ~= "table" then error(label .. " records are not a list") end
-        local list = raw :: {unknown}
+        local list = raw
         local result: {Object} = {}
         for index, item in ipairs(list) do
             local record = object(item, label .. " record")

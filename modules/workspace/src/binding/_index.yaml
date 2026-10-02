@@ -34,7 +34,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: &id001
+  imports: &operation_modules
     protocol: bee.workspace.types:catalog
   security:
     policies: []
@@ -46,7 +46,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: list
@@ -57,7 +57,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: search
@@ -68,7 +68,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: rename
@@ -79,7 +79,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: archive
@@ -90,7 +90,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: restore
@@ -101,7 +101,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: inspect
@@ -112,7 +112,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: search_within
@@ -123,7 +123,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: roots
@@ -134,7 +134,7 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []
 - name: folders
@@ -145,6 +145,6 @@ entries:
   - funcs
   - security
   - registry
-  imports: *id001
+  imports: *operation_modules
   security:
     policies: []

@@ -311,7 +311,7 @@ entries:
     namespaces: [bee.app, bee.approvals, bee.apps, bee.capability, bee.client, bee.console, bee.deps,
       bee.desktop, bee.docs, bee.env, bee.gateway, bee.governance, bee.gov, bee.hive,
       bee.host, bee.hub, bee.interaction, bee.launch, bee.node, bee.persist, bee.protocol,
-      bee.security, bee.session, bee.settings, bee.storage, bee.sync, bee.terminal, bee.threads,
+      bee.security, bee.session, bee.settings, bee.sync, bee.terminal, bee.threads,
       bee.workspace]
     super_edit: []
     entries: ['bee:protected_kernel', 'bee:approver_policies', 'bee:capability_catalog', 'bee.env:gov_activation_profiles',

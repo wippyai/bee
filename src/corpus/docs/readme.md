@@ -19,7 +19,7 @@ generator when the corpus is intentionally updated.
 | Copyable, proven application screens (deploy board, inbox, logs, metrics, forms, overlays) | [Reference applications](reference/apps) |
 | Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md) |
 | Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
-| Workspace storage and application state | [Storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
+| Workspace storage and application state | [Workspace component](../modules/workspace/src/README.md), [storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
 | Node workspace catalog, lazy workspace hosts, workspace extensions and the Workspaces viewer | [Workspace catalog](reference/workspace-catalog.md) |
 | Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md) |
 | Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |

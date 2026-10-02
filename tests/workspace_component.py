@@ -3,7 +3,6 @@ from pathlib import Path
 import argparse
 import io
 import json
-import os
 import shutil
 import sqlite3
 import subprocess
@@ -81,6 +80,15 @@ def stopped(ui):
         ui.close()
 
 
+def native_boot(binary, folder, state, application=None):
+    try:
+        stopped(NativeDesktop(binary, folder, state, application=application))
+    finally:
+        result = subprocess.run([str(binary), '--state', str(state), 'stop'], cwd=folder,
+            capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
 def recovery(binary, evidence):
     evidence.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='bee-workspace-component-', dir=ROOT / '.wippy') as temporary:
@@ -96,7 +104,7 @@ def recovery(binary, evidence):
         old_state.mkdir()
         stopped(Desktop(old_state, project=origin, runtime=RUNTIME, apps=('bee.settings.app:app',)))
         before = snapshot(old_state)
-        stopped(NativeDesktop(binary, folder, old_state))
+        native_boot(binary, folder, old_state)
         after = snapshot(old_state)
         assert before['workspace'] == after['workspace']
         for key in ['ledger', 'assignments', 'receipts', 'bindings']:
@@ -108,9 +116,9 @@ def recovery(binary, evidence):
                 assert left[key] == right[key], (key, left, right)
         assert before['layout'] == after['layout']
         fresh_state = folder / 'fresh-state'
-        stopped(NativeDesktop(binary, folder, fresh_state, application='bee.settings.app:app'))
+        native_boot(binary, folder, fresh_state, application='bee.settings.app:app')
         fresh_before = snapshot(fresh_state)
-        stopped(NativeDesktop(binary, folder, fresh_state))
+        native_boot(binary, folder, fresh_state)
         fresh_after = snapshot(fresh_state)
         assert fresh_before['workspace'] == fresh_after['workspace']
         assert fresh_before['ledger'] == fresh_after['ledger']

@@ -27,7 +27,6 @@ local M = {}
 local STATE_VERSION = 1
 local MAX_STATE_BYTES = 2097152
 local MIGRATION_TABLE = "workspace_schema_migrations"
-local STATE_TABLE = "workspace_state"
 
 local function error_text(prefix: string, err: unknown): string
     if err == nil then return prefix end

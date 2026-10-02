@@ -96,6 +96,17 @@ entries:
     comment: Execution contracts and the pinned discovery of admitted driver bindings; carriers arrive with launch admission
 `
 
+const savedProfilesHarnessBindingIndex = `version: '1.0'
+namespace: bee.harness.binding
+entries:
+- name: call
+  kind: function.lua
+  source: file://method.lua
+  method: handle
+  imports: {service: bee.harness.profiles:service}
+  security: {policies: [bee.harness.security:profile_store_policy]}
+`
+
 const savedProfilesNodeRootIndex = `version: '1.0'
 namespace: bee.node
 entries:
@@ -209,6 +220,12 @@ func savedProfilesSetup(root, source string) error {
 	}
 	if err := savedProfilesCopyTree(filepath.Join(root, "src", "harness", "profiles"), filepath.Join(source, "modules", "harness", "src", "profiles")); err != nil {
 		return fmt.Errorf("copy profiles source: %w", err)
+	}
+	if err := savedProfilesWrite(filepath.Join(root, "src", "harness", "binding", "_index.yaml"), savedProfilesHarnessBindingIndex); err != nil {
+		return err
+	}
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "harness", "binding", "method.lua"), filepath.Join(source, "modules", "harness", "src", "binding", "method.lua")); err != nil {
+		return fmt.Errorf("copy profile binding: %w", err)
 	}
 	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "sync"), filepath.Join(source, "modules", "sync")); err != nil {
 		return fmt.Errorf("copy sync module: %w", err)

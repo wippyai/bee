@@ -4,6 +4,7 @@
 assignments, transfer receipts and application/thread binding rows. Workspace
 Manager remains a separate application. The root host owns database resources,
 permissions, workspace leases, process lifetime and recovery orchestration.
+Workspace decoders import primitive bounds directly from `bee.values`.
 
 `bee.workspace.catalog:contract`, `:extension` and `:local` retain their durable
 identities. The local binding calls the authorized `bee.workspace.binding`

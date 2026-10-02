@@ -52,6 +52,7 @@ entries:
     test: wippy.test:test
     capability_grants: bee.gov:capability_grants
     capability_model: bee.capability:model
+    enrollment: bee.hive.supervisor:enrollment
 - name: gateway_probe_contract
   kind: contract.definition
   methods: [{name: inspect}]

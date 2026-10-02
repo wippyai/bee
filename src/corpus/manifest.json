@@ -443,9 +443,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5164,
+      "bytes": 5457,
       "id": "component/hive:telemetry",
-      "sha256": "cd529647a8bc72e5152677a007c4758866156869439af3f7b33d496128df3d5d",
+      "sha256": "9d292545ea841aa9c8a0652c854b3a28459681179c4051cafaf5e717057f4721",
       "source": "modules/hive-telemetry/src/README.md",
       "title": "bee.hive.telemetry",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 731483,
+    "bytes": 731776,
     "documents": 77
   }
 }

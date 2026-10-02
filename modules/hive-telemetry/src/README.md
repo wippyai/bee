@@ -90,3 +90,9 @@ aggregate against stubbed node membership and an injected caller (link
 directions and addresses, counts, unavailable nodes, malformed pages, strict
 membership and input decoding). The kernel primitive keeps its own unit test
 at `tests/lua/launch/holdings_test.lua` (`bee.launch:holdings_test`).
+
+Bee links `target_peers` to the native owner's live
+`bee.hive.host:enrollment` entry. Its `peers` list retains enrolled offline
+Hive nodes; its `nodes` list names local desktop clients and is excluded from
+Hive status. A missing supervisor or owner reply yields unavailable counts,
+not zero.

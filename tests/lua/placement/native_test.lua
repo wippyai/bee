@@ -292,7 +292,7 @@ end
 local function provider_configuration_digest(): string
     local provider = registry.get("bee.placement.native:codex_test_provider")
     if not provider then error("provider entry") end
-    local digest, digest_error = configuration_protocol.digest({provider_ref = "bee.placement.native:codex_test_provider", provider = provider, fixture = true}, "bee.driver.codex.binding:configure")
+    local digest, digest_error = configuration_protocol.digest("bee.driver.codex.binding:binding", {provider_ref = "bee.placement.native:codex_test_provider", provider = provider, fixture = true}, "bee.driver.codex.binding:configure")
     if not digest then error(tostring(digest_error)) end
     return digest
 end
@@ -1483,7 +1483,7 @@ local function define_tests()
             local policy = assert(registry.get(NO_PROVIDER_POLICY))
             local policy_data = assert(bounds.object(policy.data))
             local options = assert(preferences.decode_prepare_options(policy_data.prepare_options))
-            local digest = assert(configuration_protocol.digest({option_values = options, context = "window", fixture = true}, "bee.driver.claude.binding:configure"))
+            local digest = assert(configuration_protocol.digest("bee.driver.claude.binding:binding", {option_values = options, context = "window", fixture = true}, "bee.driver.claude.binding:configure"))
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = NO_PROVIDER_POLICY
             request.binding_ref = "bee.driver.claude.binding:binding"

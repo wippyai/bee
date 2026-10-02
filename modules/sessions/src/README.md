@@ -10,7 +10,8 @@ worker contract.
 directly from its owner source; it also owns readiness observations and the
 Threads journal adapter. `bee.sessions.service` owns the pull scheduler and turn
 workers. `bee.sessions.executor` resolves host-selected executors and driver
-methods in the selected driver's binding namespace. Sessions has no persistence,
+methods exactly as declared by the metadata-discovered, host-activated binding,
+with callable targets read from one pinned registry snapshot. Sessions has no persistence,
 migration or tool namespace: Threads owns its durable records and migrations.
 
 A launch definition may select `session_profile_id` for structured executor

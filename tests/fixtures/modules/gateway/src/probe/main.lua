@@ -21,13 +21,13 @@ type HookPost = (string, string, unknown, string?) -> (number, string, unknown)
 type HeaderOf = (unknown, string) -> string?
 local ADDRESS = ""
 local function endpoint(): string
-    local selected, err = funcs.call("bee.gateway:address", {})
+    local selected, err = funcs.call("bee.gateway.binding:address", {})
     -- Auto-start services become ready asynchronously. Wait only for the
     -- reported starting state; a failed or missing service is an immediate error.
     for _ = 1, 100 do
         if not err or not tostring(err):find("gateway listener is starting", 1, true) then break end
         time.sleep("20ms")
-        selected, err = funcs.call("bee.gateway:address", {})
+        selected, err = funcs.call("bee.gateway.binding:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
     local address = (assert(bounds.object(selected))).address
@@ -195,7 +195,7 @@ local function prove_mcp_contract(token: string)
     assert(type(structured) == "table" and (assert(bounds.object(structured.error))).code ~= nil, "delivery refusal structured error")
 end
 local function record(text: string)
-    ok(call("bee.threads.service:record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
+    ok(call("bee.threads.binding:record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
         body = {message_id = "m-" .. key(), message_kind = "request", recipient_ids = {}, content = {text = text}}}), "record")
 end
 local function prove_configuration_scope(address: string)
@@ -234,7 +234,7 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.service:record", "bee.gov.binding:overlay_call", "bee.docs.binding:call"}) do
+    for _, target in ipairs({"bee.gateway.binding:address", "bee.threads.binding:read_after", "bee.threads.binding:record", "bee.gov.binding:overlay_call", "bee.docs.binding:call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
     -- The docs tool reads the one embedded corpus and reaches no other volume.
@@ -244,7 +244,7 @@ local function prove_endpoint_call_scope()
     assert(scope:evaluate(actor, "registry.get", "bee.env:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
     assert(scope:evaluate(actor, "bee.gov.overlay.read", "any-overlay") == "allow", "overlay read is absent")
     assert(scope:evaluate(actor, "bee.gov.overlay.write", "any-overlay") == "allow", "overlay write is absent")
-    for _, target in ipairs({"bee.threads.service:create", "bee.gateway.binding:materialize", "bee.hub.binding:call", "arbitrary:operation"}) do
+    for _, target in ipairs({"bee.threads.binding:create", "bee.gateway.binding:materialize", "bee.hub.binding:call", "arbitrary:operation"}) do
         assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
     end
 end
@@ -365,8 +365,8 @@ end
 -- and the bound thread still works with no member_thread.
 local function prove_child_thread()
     local child = "child-thread"
-    ok(call("bee.threads.service:create", {thread_id = child, idempotency_key = key(), title = "Child work"}), "create child thread")
-    ok(call("bee.threads.service:record", {thread_id = child, idempotency_key = key(), kind = "message",
+    ok(call("bee.threads.binding:create", {thread_id = child, idempotency_key = key(), title = "Child work"}), "create child thread")
+    ok(call("bee.threads.binding:record", {thread_id = child, idempotency_key = key(), kind = "message",
         body = {message_id = "child-note", message_kind = "progress", recipient_ids = {}, content = {text = "child progress"}}}), "record on child thread")
     local token, _ = admit("child-launcher", nil, 1, {"thread_read"})
     local member = tool("child-launcher", token, "thread_read", {cursor = 0, member_thread = child})
@@ -382,7 +382,7 @@ local function prove_child_thread()
     local foreign = "foreign-thread"
     local other = security.new_actor("bee.test.gateway.other", {})
     assert(other, "construct the foreign actor")
-    local created, create_error = funcs.new():with_actor(other):call("bee.threads.service:create",
+    local created, create_error = funcs.new():with_actor(other):call("bee.threads.binding:create",
         {thread_id = foreign, idempotency_key = key(), title = "Someone else"})
     assert(not create_error and type(created) == "table" and (assert(bounds.object(created))).ok == true,
         "create foreign thread: " .. tostring(create_error or json.encode(created)))
@@ -396,7 +396,7 @@ local function main()
     prove_configuration_scope(ADDRESS)
     local opened = ok(call("bee.gateway.binding:open", {address = ADDRESS}), "open")
     assert(opened.epoch == 1, "first epoch")
-    ok(call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = key(), title = "Gateway"}), "create")
+    ok(call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = key(), title = "Gateway"}), "create")
     for index = 1, 3 do record("line " .. tostring(index)) end
     local token_a, binding_a = admit("act-a")
     local readiness_response, readiness_error = http_client.get("http://" .. ADDRESS .. "/ready", {timeout = "2s", query = {nonce = "fixture-readiness"}})
@@ -570,15 +570,15 @@ local function main()
     local token_d, binding_d = admit("act-d")
     record("line 4")
     assert(tool("act-d", token_d, "thread_read", {cursor = 0}).ok == true, "read the bound thread")
-    local marks = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"delivery.mark"}}}), "read marks")
+    local marks = ok(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"delivery.mark"}}}), "read marks")
     assert(#(assert(bounds.array(marks.records))) == 0, "viewing wrote a delivery mark")
     do
     -- thread_message is an explicitly admitted write. Its arguments contain
     -- only the message and a stable key; the endpoint supplies the thread,
     -- authenticated sender, fixed kind and action/attempt context.
-    ok(call("bee.threads.service:admit_action", {thread_id = THREAD, idempotency_key = key(), action_id = "mcp-action",
+    ok(call("bee.threads.binding:admit_action", {thread_id = THREAD, idempotency_key = key(), action_id = "mcp-action",
         admitted = {request_id = "mcp-request", principal_id = ACTOR, binding_ref = "mcp-binding", binding_digest = "mcp-digest", grant_refs = {}, budget_ref = "mcp-budget", input = {text = "mcp"}}}), "admit MCP action")
-    ok(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "mcp-action", attempt_id = "mcp-attempt",
+    ok(call("bee.threads.binding:prepare_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "mcp-action", attempt_id = "mcp-attempt",
         prepared = {binding_ref = "mcp-binding", binding_digest = "mcp-digest", profile_id = "mcp-profile", profile_digest = "mcp-profile-digest", placement_binding = "mcp-placement", placement_attempt_id = "mcp-placement-attempt", plan_digest = "mcp-plan"}}), "prepare MCP attempt")
     local mcp_admit = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "mcp-action", attempt_id = "mcp-attempt", thread_id = THREAD,
         owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit MCP message")
@@ -594,7 +594,7 @@ local function main()
     local changed_arguments: Object = {idempotency_key = "mcp-message-key", message_id = "mcp-message", message_kind = "notification", content = {text = "changed"}}
     local changed = tool("mcp-action", mcp_token, "thread_message", changed_arguments)
     assert(changed.ok == false and (assert(bounds.object(changed.error))).code == "CONFLICT", "changed thread_message replay was accepted")
-    local contextual = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {action_id = "mcp-action"}}), "read MCP append")
+    local contextual = ok(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, filter = {action_id = "mcp-action"}}), "read MCP append")
     local message_records = 0
     for _, item in ipairs(assert(bounds.array(contextual.records))) do
         local item = assert(bounds.object(item))
@@ -619,7 +619,7 @@ local function main()
         local _, refused_field = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = addressed})
         assert(refused_field and refused_field.error and tostring((assert(bounds.object(refused_field.error))).message):find("unknown field " .. field, 1, true), "a note accepted " .. field)
     end
-    local settled = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"receipt"}, action_id = "mcp-action"}}), "read MCP receipts")
+    local settled = ok(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"receipt"}, action_id = "mcp-action"}}), "read MCP receipts")
     assert(#(assert(bounds.array(settled.records))) == 0, "thread_message settled an attempt")
     ok(call("bee.gateway.binding:revoke", {binding_id = mcp_binding}), "revoke MCP message binding")
     assert(select(1, rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = message_arguments})) == 401, "revoked thread_message token was accepted")
@@ -837,16 +837,16 @@ local function main()
     -- Commit the claimed hook through the actual fenced carrier API, then
     -- deliberately omit its gateway acknowledgment. This is the durable
     -- uncertainty retention must preserve across revocation.
-    ok(call("bee.threads.service:admit_action", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k",
+    ok(call("bee.threads.binding:admit_action", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k",
         admitted = {request_id = "act-k-request", principal_id = ACTOR, binding_ref = "act-k-binding", binding_digest = "act-k-digest", grant_refs = {}, budget_ref = "act-k-budget", input = {text = "hook recovery"}}}), "admit hook action")
-    ok(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k", attempt_id = "act-k-attempt",
+    ok(call("bee.threads.binding:prepare_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k", attempt_id = "act-k-attempt",
         prepared = {binding_ref = "act-k-binding", binding_digest = "act-k-digest", profile_id = "act-k-profile", profile_digest = "act-k-profile-digest", placement_binding = "act-k-placement", placement_attempt_id = "act-k-placement-attempt", plan_digest = "act-k-plan"}}), "prepare hook attempt")
-    ok(call("bee.threads.service:start_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k", attempt_id = "act-k-attempt",
+    ok(call("bee.threads.binding:start_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k", attempt_id = "act-k-attempt",
         started = {execution_kind = "process", execution_ref = "act-k-execution", owner_epoch = 1}}), "start hook attempt")
     -- The binding is at gateway epoch 4, so bring the thread carrier to the
     -- same fenced epoch before recording its hook.
     for epoch = 1, 4 do
-        local carrier = ok(call("bee.threads.carrier:claim", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt"}), "claim hook carrier")
+        local carrier = ok(call("bee.threads.binding:claim", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt"}), "claim hook carrier")
         assert(carrier.carrier_epoch == epoch, "hook carrier epoch " .. tostring(epoch))
     end
     local event_key = "hook:" .. binding_k4 .. ":" .. tostring(claimed_item.event) .. ":" .. tostring(claimed_item.occurrence)
@@ -854,7 +854,7 @@ local function main()
         provenance = claimed_item.provenance, sequence = claimed_item.sequence, fields = claimed_item.fields, binding_id = binding_k4}) or "{}"
     local hook_record = {source = "bee", body = {type = "extension", event_key = event_key,
         data = {type = "extension", event_name = "bee.harness.hook", event_revision = "1", payload_json = payload}}}
-    local first_commit = ok(call("bee.threads.carrier:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 0,
+    local first_commit = ok(call("bee.threads.binding:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 0,
         checkpoint = {schema_revision = "bee.carrier.checkpoint@1", phase = "hook-committed-before-ack"}, records = {hook_record}}), "commit claimed hook")
     assert(#(assert(bounds.object((assert(bounds.array(first_commit.records))) == 1 and (assert(bounds.array(first_commit.records)))[1]))).replayed == false, "the claimed hook committed once")
     ok(call("bee.gateway.binding:revoke", {binding_id = binding_k4}), "revoke the hook binding")
@@ -865,10 +865,10 @@ local function main()
         if item.event_id == header_of(revoke_headers, "X-Bee-Event") then assert(item.status == "rejected" and item.rejected_reason == "binding revoked", "revocation rejects an unclaimed row terminally") end
         if item.event_id == claimed_for_commit_id then assert(item.status == "queued" and item.claimed_epoch == 4, "revocation retains the claimed row after its thread commit") end
     end
-    local retry_commit = ok(call("bee.threads.carrier:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 1,
+    local retry_commit = ok(call("bee.threads.binding:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 1,
         checkpoint = {schema_revision = "bee.carrier.checkpoint@1", phase = "hook-recovered-before-ack"}, records = {hook_record}}), "retry committed hook")
     assert(#(assert(bounds.object((assert(bounds.array(retry_commit.records))) == 1 and (assert(bounds.array(retry_commit.records)))[1]))).replayed == true, "retry replays the retained hook record")
-    local committed_records = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}), "read retained hook record")
+    local committed_records = ok(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 64}), "read retained hook record")
     local retained_records = 0
     for _, item in ipairs(assert(bounds.array(committed_records.records))) do
         local item = assert(bounds.object(item))

@@ -5,7 +5,7 @@ local security = require("security")
 local bounds = require("bounds")
 local admission = require("admission")
 local profiles = require("profiles")
-local BACKEND = "bee.harness.launch:setup_backend"
+local BACKEND = "bee.harness.binding:setup_backend"
 local SCOPE = "bee.harness.launch:harness_setup_execution_scope"
 local function digest(value: unknown): string?
     local candidate = bounds.text(value, 64)

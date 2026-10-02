@@ -28,6 +28,17 @@ type resourcesModuleIndex struct {
 
 const resourcesProbe = `
 local funcs = require("funcs")
+local function object(value: unknown): {[string]: unknown}
+    assert(type(value) == "table", "fixture value must be an object")
+    return value
+end
+local function objects(value: unknown): {{[string]: unknown}}
+    assert(type(value) == "table", "fixture value must be an array")
+    local result: {{[string]: unknown}} = {}
+    for index, item in ipairs(value) do result[index] = object(item) end
+    return result
+end
+
 local security = require("security")
 local ACTOR = "bee.test.rmod"
 local WORKSPACE = "module-ws"
@@ -40,19 +51,19 @@ local function call(scope: security.Scope?, method: string, request: {[string]: 
     end
     local reply, err = executor:call("bee.resources.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
-    return reply :: {[string]: unknown}
+    return object(reply)
 end
 local function ok(reply: {[string]: unknown}, method: string): {[string]: unknown}
-    assert(reply.ok == true, method .. " failed: " .. tostring(type(reply.error) == "table" and (reply.error :: {[string]: unknown}).message))
-    return reply.value :: {[string]: unknown}
+    assert(reply.ok == true, method .. " failed: " .. tostring(type(reply.error) == "table" and object(reply.error).message))
+    return object(reply.value)
 end
 local function main(phase: string?)
     if phase == "changed" then
         local listed = ok(call(nil, "list", {workspace_id = WORKSPACE}), "list")
-        local grants = listed.grants :: {{[string]: unknown}}
+        local grants = objects(listed.grants)
         assert(#grants == 1, "changed-root probe lost its original grant")
         local refused = call(nil, "resolve", {grant_id = tostring(grants[1].grant_id), subject = ACTOR, audience = ACTOR})
-        assert(refused.ok == false and (refused.error :: {[string]: unknown}).code == "CONFLICT", "changed root did not fence the grant")
+        assert(refused.ok == false and object(refused.error).code == "CONFLICT", "changed root did not fence the grant")
         return
     end
     ok(call(nil, "associate", {workspace_id = WORKSPACE, name = "root", root_ref = "bee.placement.native:root", subpath = "", allowed_access = "write"}), "associate")
@@ -63,16 +74,27 @@ local function main(phase: string?)
     -- backed by an unrelated environment variable must remain inaccessible
     -- even though this probe's caller has a broad test scope.
     local unrelated = call(nil, "associate", {workspace_id = WORKSPACE, name = "unrelated", root_ref = "bee.placement.native:unrelated_env_root", subpath = "", allowed_access = "write", expected_revision = 0})
-    assert(unrelated.ok == false and (unrelated.error :: {[string]: unknown}).code == "INVALID", "unrelated environment variable was readable")
+    assert(unrelated.ok == false and object(unrelated.error).code == "INVALID", "unrelated environment variable was readable")
     -- An actor without the resolve policy cannot resolve a grant.
     local denied = call(security.new_scope({}), "resolve", {grant_id = grant_id, subject = ACTOR, audience = ACTOR})
-    assert(denied.ok == false and (denied.error :: {[string]: unknown}).code == "DENIED", "unauthorized resolve was not denied")
+    assert(denied.ok == false and object(denied.error).code == "DENIED", "unauthorized resolve was not denied")
 end
 return {main = main}
 `
 
 const credentialsProbe = `
 local funcs = require("funcs")
+local function object(value: unknown): {[string]: unknown}
+    assert(type(value) == "table", "fixture value must be an object")
+    return value
+end
+local function objects(value: unknown): {{[string]: unknown}}
+    assert(type(value) == "table", "fixture value must be an array")
+    local result: {{[string]: unknown}} = {}
+    for index, item in ipairs(value) do result[index] = object(item) end
+    return result
+end
+
 local security = require("security")
 local json = require("json")
 local ACTOR = "bee.test.cmod"
@@ -88,11 +110,11 @@ local function call(scope: security.Scope?, method: string, request: {[string]: 
     end
     local reply, err = executor:call("bee.credentials.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
-    return reply :: {[string]: unknown}
+    return object(reply)
 end
 local function ok(reply: {[string]: unknown}, method: string): {[string]: unknown}
-    assert(reply.ok == true, method .. " failed: " .. tostring(type(reply.error) == "table" and (reply.error :: {[string]: unknown}).message))
-    return reply.value :: {[string]: unknown}
+    assert(reply.ok == true, method .. " failed: " .. tostring(type(reply.error) == "table" and object(reply.error).message))
+    return object(reply.value)
 end
 local function main()
     local defined = ok(call(nil, "define", {workspace_id = WORKSPACE, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = "bee:module_secret"}}), "define")
@@ -106,7 +128,7 @@ local function main()
     -- An actor without the issue policy cannot take a projection.
     local denied = call(security.new_scope({}), "issue_projection", {workspace_id = WORKSPACE, name = "anthropic", audience = ACTOR, attempt_id = "attempt-2",
         profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = "issue-2"})
-    assert(denied.ok == false and (denied.error :: {[string]: unknown}).code == "DENIED", "unauthorized issue was not denied")
+    assert(denied.ok == false and object(denied.error).code == "DENIED", "unauthorized issue was not denied")
     -- A manager listing carries no secret bytes.
     local listed = ok(call(nil, "list", {workspace_id = WORKSPACE}), "list")
     assert(tostring(json.encode(listed)):find(SENTINEL, 1, true) == nil, "the secret leaked into a listing")

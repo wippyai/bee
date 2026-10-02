@@ -362,10 +362,3 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     service_reply: bee.protocol:reply
-- name: address
-  kind: function.lua
-  source: file://address_method.lua
-  method: handle
-  modules: [registry, system]
-  imports: {configuration: bee.gateway:configuration}
-  security: {policies: [bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy]}

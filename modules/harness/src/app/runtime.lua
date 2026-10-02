@@ -27,7 +27,7 @@ local restore_view = require("restore_view")
 local frame_ui = require("frame")
 local bounds = require("bounds")
 
-local THREADS = "bee.threads.service"
+local THREADS = "bee.threads.binding"
 type Fault = {code: string, message: string}
 local function placement_target(admitted: admission.Admitted, method: string): string?
     return admitted.plan.placement_methods[method]

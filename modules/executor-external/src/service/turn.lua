@@ -66,7 +66,7 @@ local function decode(value: unknown): (Request?, string?)
     if not attempt_id then return nil, "attempt_id is invalid" end
     local claim = id(request.claim)
     if not claim then return nil, "claim is invalid" end
-    if request.observation_target ~= "bee.threads.service:turn_observation" then
+    if request.observation_target ~= "bee.threads.binding:turn_observation" then
         return nil, "observation_target is not the Threads turn observation operation"
     end
     if type(request.generation) ~= "number" or math.floor(request.generation) ~= request.generation or request.generation < 1 then
@@ -143,7 +143,7 @@ local function decode(value: unknown): (Request?, string?)
     local sender_label = "[Bee sender " .. tostring(sender.kind) .. " " .. tostring(sender.id) .. "]\n"
     if #sender_label + #request.prompt > 16384 then return nil, "prompt and sender identity exceed 16384 bytes" end
     return {
-        attempt_id = attempt_id, claim = claim, observation_target = "bee.threads.service:turn_observation",
+        attempt_id = attempt_id, claim = claim, observation_target = "bee.threads.binding:turn_observation",
         generation = generation, recovery = request.recovery == true, prompt = sender_label .. prompt,
         sender = decoded_sender,
         driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = resolved_driver,

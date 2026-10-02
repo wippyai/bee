@@ -44,7 +44,7 @@ local function call(target: string, request: Object): (Object?, string?)
 end
 
 local function open_gateway()
-    local selected, address_error = funcs.call("bee.gateway:address", {})
+    local selected, address_error = funcs.call("bee.gateway.binding:address", {})
     local endpoint = object(selected)
     if address_error or not endpoint or type(endpoint.address) ~= "string" then
         error("resolve managed gateway: " .. tostring(address_error or "missing address"))
@@ -82,7 +82,7 @@ local function exact_request(request: Object, workspace_id: string, thread_id: s
 end
 
 local function carrier_report(): string
-    local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
+    local page = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
     local records = page and page.records
     if type(records) ~= "table" then return "no error" end
     for _, raw in ipairs(assert(bounds.array(records))) do
@@ -151,13 +151,13 @@ end
 
 local function start_agent(workspace_id: string, view_id: string, instance_id: string): Object
     open_gateway()
-    local created, create_error = call("bee.threads.service:create", {thread_id = THREAD,
+    local created, create_error = call("bee.threads.binding:create", {thread_id = THREAD,
         idempotency_key = "create-open-probe-thread", title = "Open Probe Thread"})
     if not created then error("create application thread: " .. tostring(create_error)) end
     if created.thread_id ~= THREAD or created.owner_id ~= "bee.app_open.operator" then
         error("application thread has the wrong owner")
     end
-    local owner_view, owner_error = funcs.call("bee.threads.service:get", {thread_id = THREAD})
+    local owner_view, owner_error = funcs.call("bee.threads.binding:get", {thread_id = THREAD})
     local application_actor = thread_binding.actor(workspace_id, instance_id)
     local head = application_actor and thread_binding.owner_get(owner_view, {instance_id = instance_id,
         thread_id = THREAD, actor_id = application_actor, role = "participant",
@@ -165,9 +165,9 @@ local function start_agent(workspace_id: string, view_id: string, instance_id: s
     if not head then
         error("application thread owner proof failed: " .. tostring(owner_error) .. " " .. json.encode(owner_view))
     end
-    local plan, plan_error = call("bee.harness.launch:resolve", {definition_ref = AGENT})
+    local plan, plan_error = call("bee.harness.binding:resolve", {definition_ref = AGENT})
     if not plan then error("resolve managed application opener: " .. tostring(plan_error)) end
-    local started, start_error = call("bee.harness.launch:start", {request_id = "managed-app-open",
+    local started, start_error = call("bee.harness.binding:start", {request_id = "managed-app-open",
         definition_ref = AGENT, workspace_id = workspace_id, thread_id = THREAD,
         brief = "Open the reviewed application through your scoped Bee MCP tools.",
         expected_plan_digest = plan.plan_digest, origin_view = {view_id = view_id, instance_id = instance_id}})
@@ -195,7 +195,7 @@ local function await_proofs(workspace_id: string, action_id: string, attempt_id:
     local managed: Object? = nil
     local applications: {[string]: Object} = {}
     for _ = 1, 200 do
-        local page, page_error = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
+        local page, page_error = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
         if not page then error("read application thread: " .. tostring(page_error)) end
         local records = page.records
         if type(records) ~= "table" then error("application thread records are missing") end
@@ -256,12 +256,12 @@ local function revoke_first_and_recheck(workspace_id: string, proof: Object): Ob
     if not first_instance or not second_instance or not first_pid or not second_pid then
         error("application recheck identities are missing")
     end
-    local owner = assert(call("bee.threads.service:get", {thread_id = THREAD}))
+    local owner = assert(call("bee.threads.binding:get", {thread_id = THREAD}))
     local summary = object(owner.summary)
     local revision = summary and bounds.count(summary.revision)
     if not revision or revision < 1 then error("application thread head is missing") end
     local actor = assert(thread_binding.actor(workspace_id, first_instance))
-    local left, leave_error = call("bee.threads.service:leave", {thread_id = THREAD,
+    local left, leave_error = call("bee.threads.binding:leave", {thread_id = THREAD,
         idempotency_key = "remove-first-application", member_id = actor, expected_revision = revision})
     if not left then error("remove first application member: " .. tostring(leave_error)) end
 

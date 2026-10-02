@@ -13,11 +13,11 @@ dispatches them through that same generic ceiling with no per-operation code.
 
 | Operation | Responsibility |
 |---|---|
-| `bee.hive.telemetry:presence` | Node presence: protocol revision, role, cluster size |
-| `bee.hive.telemetry:stats` | Runtime statistics: numeric memory, goroutines, CPU count |
-| `bee.hive.telemetry:catalog_list` | Public operation catalog in bounded pages |
-| `bee.hive.telemetry:holdings` | One bounded page of this node's live workspace holdings with each host phase and lease count |
-| `bee.hive.telemetry:cluster` | One holdings page from each named node (at most eight), with the local runtime's link state (`connected`, `outbound`/`inbound` direction and remote address) |
+| `bee.hive.telemetry.binding:presence` | Node presence: protocol revision, role, cluster size |
+| `bee.hive.telemetry.binding:stats` | Runtime statistics: numeric memory, goroutines, CPU count |
+| `bee.hive.telemetry.binding:catalog_list` | Public operation catalog in bounded pages |
+| `bee.hive.telemetry.binding:holdings` | One bounded page of this node's live workspace holdings with each host phase and lease count |
+| `bee.hive.telemetry.binding:cluster` | One holdings page from each named node (at most eight), with the local runtime's link state (`connected`, `outbound`/`inbound` direction and remote address) |
 
 `holdings` reads the node host manager's own read model through its owner
 request; a missing manager is an error, never an empty page. `cluster` fans

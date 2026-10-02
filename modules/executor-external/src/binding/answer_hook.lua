@@ -109,7 +109,7 @@ local function handle(raw: unknown): Reply
     end
     local refusal = revalidate()
     if refusal then return fail(refusal) end
-    local pulled, pull_error = value("bee.threads.service:turn_pull", {turn = turn, claim = claim})
+    local pulled, pull_error = value("bee.threads.binding:turn_pull", {turn = turn, claim = claim})
     if not pulled then return fail(tostring(pull_error)) end
     if pulled.phase ~= "accepted" or pulled.session ~= session then return fail("hook turn is no longer accepted by this session") end
     local saved = bounds.object(pulled.checkpoint)
@@ -136,7 +136,7 @@ local function handle(raw: unknown): Reply
             local next_checkpoint: Object = {}
             for name, field in pairs(saved) do next_checkpoint[name] = field end
             next_checkpoint.permission_checkpoint = point
-            local _, err = value("bee.threads.service:turn_observation", {turn = turn, claim = claim, operation_key = "hook-perm:" .. key,
+            local _, err = value("bee.threads.binding:turn_observation", {turn = turn, claim = claim, operation_key = "hook-perm:" .. key,
                 observation = body, checkpoint = next_checkpoint})
             if err then return false, err end
         end

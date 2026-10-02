@@ -44,3 +44,11 @@ entries:
           value: {}
           replayed: {type: boolean}
           commit: {type: boolean}
+- name: admit
+  kind: function.lua
+  source: file://admit.lua
+  method: handle
+  imports:
+    admission: bee.sync.hive:admission
+  security:
+    policies: []

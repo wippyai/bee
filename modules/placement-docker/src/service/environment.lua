@@ -195,7 +195,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
             end
             local deadline = time.after("15s")
             while true do
-                local address = funcs.call("bee.gateway:address", {})
+                local address = funcs.call("bee.gateway.binding:address", {})
                 local chosen = bounds.object(address)
                 if chosen and type(chosen.address) == "string" and chosen.address:match("^([^:]+):") == recorded.address:match("^([^:]+):") then return nil end
                 local selected = channel.select({time.after("50ms"):case_receive(), deadline:case_receive()})

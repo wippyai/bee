@@ -18,7 +18,7 @@ local function ask(target: string, request: Object): caller.Reply
         local folders = path == "" and {{name = "legacy"}} or {}
         return ok({root_ref = request.root_ref, path = path, access = "write", folders = folders})
     end
-    if target == "bee.threads.service:list" then
+    if target == "bee.threads.binding:list" then
         return ok({threads = {{thread_id = "thread-1", title = "Earlier work"}, {thread_id = "bad\27id", title = "x"}}})
     end
     return {ok = false, error = {code = "NOT_FOUND", message = target}, value = nil, replayed = false}

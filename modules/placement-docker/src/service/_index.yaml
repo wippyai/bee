@@ -50,17 +50,9 @@ entries:
   source: file://runner.lua
   method: main
   imports:
-    runner: bee.placement.native:process_runner
+    runner: bee.placement.native.service:process_runner
     execution: bee.placement.docker.service:execution
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_runner_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_materialize_policy
-    - bee.placement.docker.security:docker_policy
-    - bee.placement.docker.security:docker_socket_policy
+  security: {policies: []}
 - name: window
   kind: library.lua
   source: file://window.lua

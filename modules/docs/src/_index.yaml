@@ -39,3 +39,11 @@ entries:
   kind: library.lua
   source: file://resources.lua
   modules: [registry]
+- name: target_call_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.docs.binding:call
+    path: .security.policies

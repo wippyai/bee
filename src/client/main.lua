@@ -39,7 +39,7 @@ type Binding = {generation: string, tab_id: string}
 type TransferPending = {action: transfer_ui.Action, view_id: string, renderer_generation: string, presenter: string}
 type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
 
-local function run_client(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown, owner_monitored: boolean, terminal: launcher.Terminal?)
+local function run_client(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown, owner_monitored: boolean, terminal: launcher.Terminal?): nil
     local bootstrap = lifecycle.bootstrap(options)
     if not bootstrap then error("Invalid client bootstrap options") end
     local defaults_reader = node_appearance.new()
@@ -58,7 +58,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         subscriptions[#subscriptions + 1] = subscription
         return subscription
     end
-    local function boot()
+    local function boot(): nil
         local events = assert(process.events())
         local input = terminal and terminal.input or assert(tty.events())
         local admissions = listen("bee.host.admitted")
@@ -144,7 +144,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local launch_pending: {request_id: string, desktop_id: string, fullscreen: boolean}? = nil
         local attachment_state: unknown = nil
         local self = tostring(process.pid())
-        local function send(recipient: string, topic: string, value: unknown)
+        local function send(recipient: string, topic: string, value: unknown): nil
             local sent, err = process.send(recipient, topic, value)
             if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
         end
@@ -178,7 +178,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             end
             return selected
         end
-        local function publish_transfers()
+        local function publish_transfers(): nil
             local snapshot = assignment_snapshot
             if not active or not snapshot or not controls_apps then return end
             local items = assignment_layout.menu(snapshot, selected_targets())
@@ -194,12 +194,12 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             transfer_signature, transfer_presenter = signature, presenter
             send(presenter, "bee.display.transfers", {version = 1, revision = transfer_revision, items = items})
         end
-        local function transfer_result(action: transfer_ui.Action, code: string, message: string)
+        local function transfer_result(action: transfer_ui.Action, code: string, message: string): nil
             send(presenter, "bee.display.transfer_result", {version = 1, request_id = action.request_id,
                 id = action.id, instance_id = action.instance_id, target_display_id = action.target_display_id,
                 error_code = code, error = message})
         end
-        local function request_transfer(data: unknown)
+        local function request_transfer(data: unknown): nil
             local action = transfer_ui.action(data)
             if not action then return end
             local existing = transfer_pending[action.request_id]
@@ -239,17 +239,17 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 view_id = target.view_id, instance_id = target.instance_id, target_display_id = action.target_display_id,
                 expected_revision = action.expected_revision})
         end
-        local function publish()
+        local function publish(): nil
             publish_transfers()
             if active then send(presenter, "bee.desktop.scene", {scene = layout.scene, tabs = layout.tabs,
                 preferences = layout.preferences, catalog = catalog, status_surface = presentation}) end
         end
-        local function publish_questions()
+        local function publish_questions(): nil
             if active and inbox_state then
                 send(presenter, "bee.interaction.state", {version = 1, items = inbox_state.items, shutdown = shutdown_question})
             end
         end
-        local function select_targets()
+        local function select_targets(): nil
             if inbox_state and inbox.select(inbox_state, layout.targets) then
                 publish_questions()
                 send(host, "bee.host.selection", inbox.selection(inbox_state))
@@ -257,7 +257,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         end
         local status_revision = 0
         local status_fingerprint = ""
-        local function publish_bindings()
+        local function publish_bindings(): nil
             if connection_id == "" or views_revision < 0 then return end
             local items: {status_bindings.Binding} = {}
             local identity: {string} = {tostring(layout.scene.revision)}
@@ -283,7 +283,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             send(session, "bee.desktop.bindings", {version = 1, workspace_id = workspace_id, revision = status_revision, items = items})
             status_fingerprint = fingerprint
         end
-        local function adopt(value: unknown, mode: state.AppearanceMode?)
+        local function adopt(value: unknown, mode: state.AppearanceMode?): nil
             local incoming_status = status_surface.decode(value)
             local status_changed = incoming_status ~= nil and incoming_status.revision > presentation.revision
             if incoming_status and status_changed then presentation = incoming_status end
@@ -331,13 +331,13 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             select_targets()
             publish()
         end
-        local function remove(key: string)
+        local function remove(key: string): nil
             if retired[key] then return end
             local request_id = uuid.v7()
             retired[key], removals[request_id] = request_id, key
             send(session, "bee.desktop.command", {version = 1, op = "remove", id = key, request_id = request_id})
         end
-        local function save_before_exit()
+        local function save_before_exit(): nil
             -- The session command queue fences every command already accepted by
             -- this owner. Its acknowledgement carries the entire final projection.
             local request_id = uuid.v7()
@@ -380,7 +380,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             -- remains the authority and checks any request sent in that interval.
             return true
         end
-        local function bind(target: state.Target)
+        local function bind(target: state.Target): nil
             if not active or not assigned_here(target.view_id, target.instance_id, true) then return end
             local count = 0
             for _, pending_binding in pairs(bindings) do
@@ -394,7 +394,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 connection_id = connection_id, renderer_generation = renderer_generation,
                 id = target.view_id, instance_id = target.instance_id})
         end
-        local function announce_rendered()
+        local function announce_rendered(): nil
             if not render_ready_pending or render_binding_failed or not active or views_revision < 0
                 or next(bindings) ~= nil then return end
             render_ready_pending = false
@@ -417,7 +417,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 instance_id = instance_id, title = title, icon = icon})
             return key
         end
-        local function reconcile_assignments()
+        local function reconcile_assignments(): nil
             local snapshot = assignment_snapshot
             if not controls_apps or not snapshot or views_revision < 0 then return end
             local changes = assignment_layout.plan(workspace_id, database.client_id, selected_targets(), live, snapshot.items)
@@ -428,7 +428,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 if target then bind(target) end
             end
         end
-        local function observe(value: inventory.Views)
+        local function observe(value: inventory.Views): nil
             if value.workspace_id ~= workspace_id or value.connection_id ~= connection_id or value.revision <= views_revision then return end
             local first_inventory = views_revision < 0
             local previous: {[string]: boolean} = {}
@@ -456,7 +456,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             announce_rendered()
         end
         local updates = assert(display.view:updates())
-        local function spawn_presenter()
+        local function spawn_presenter(): nil
             waiting_presenter = true
             presenter_deadline = time.after("3s")
             local grant = assert(display.view:grant())
@@ -466,11 +466,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 ["bee.hive_supervisor"] = bootstrap.hive_supervisor}):with_scope(scope("bee.security.desktop:presenter_policy")):spawn_monitored(
                     "bee.terminal:main", "bee:workers", self, initial_application, bootstrap.secondary_application)))
         end
-        local function pause_presenter()
+        local function pause_presenter(): nil
             active, paused, waiting_presenter, bindings = false, true, false, {}
             physical.paused(display, bootstrap.quit_mode == "supervisor")
         end
-        local function restart_presenter()
+        local function restart_presenter(): nil
             active, paused, bindings = false, false, {}
             if retired_view then
                 if presenter ~= "" and presenter ~= retired_presenter then process.terminate(presenter) end
@@ -481,7 +481,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             updates = assert(display.view:updates())
             spawn_presenter()
         end
-        local function appearance_result(request: host_protocol.ClientAppearanceRequest, code: string, message: string)
+        local function appearance_result(request: host_protocol.ClientAppearanceRequest, code: string, message: string): nil
             local current = layout.preferences
             send(host, "bee.client.appearance.result", {version = 1, request_id = request.request_id,
                 action = request.action, workspace_id = request.workspace_id, connection_id = request.connection_id,
@@ -489,7 +489,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 revision = layout.scene.revision, theme = current.theme, background = current.background,
                 taskbar = current.taskbar, error_code = code, error = message})
         end
-        local function restart_session(failure: string)
+        local function restart_session(failure: string): nil
             if saved_for_exit or session_restarts >= 2 then
                 error("Desktop session recovery exhausted: " .. failure)
             end
@@ -543,7 +543,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             status_fingerprint = ""
             publish_bindings()
         end
-        local function run()
+        local function run(): nil
             send(owner, "bee.client.ready", {version = 1, workspace_id = workspace_id,
                 client_id = database.client_id, import_receipt = import_receipt})
             while true do
@@ -1074,21 +1074,21 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
     for _, subscription in ipairs(subscriptions) do process.unlisten(subscription) end
     if not completed then error(tostring(err)) end
 end
-local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown)
+local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown): nil
     if owner == "" or ctx.get("bee.client_owner") ~= owner or not contract.workspace_id(workspace_id)
         or host == "" or host == owner then error("Untrusted client bootstrap") end
     assert(process.set_options({upgradable = true}))
-    return run_client(owner, host, workspace_id, database_resource, initial_application, options, false)
+    run_client(owner, host, workspace_id, database_resource, initial_application, options, false)
 end
 -- Private terminal entry. The spawn boundary protects this constructor; it never
 -- makes an externally supplied owner acceptable to the ordinary client entry.
-local function local_entry(database_resource: string, initial_application: string?, options: unknown)
+local function local_entry(database_resource: string, initial_application: string?, options: unknown): nil
     local bootstrap = lifecycle.bootstrap(options)
     if not bootstrap then error("Invalid local launch options") end
     local boot = launcher.open()
     if not boot then return end
-    local function run()
-        return run_client(boot.supervisor, boot.host, boot.workspace_id, database_resource, initial_application,
+    local function run(): nil
+        run_client(boot.supervisor, boot.host, boot.workspace_id, database_resource, initial_application,
             {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop,
                 arguments = bootstrap.arguments, fullscreen = bootstrap.fullscreen,
                 secondary_application = bootstrap.secondary_application}, true, boot.terminal)
@@ -1098,30 +1098,31 @@ local function local_entry(database_resource: string, initial_application: strin
     if not ok then error(err) end
 end
 -- Private command entry used to prove normal handler semantics before promotion.
-local function local_command(database_resource: string, name: string?, ...: string)
+local function local_command(database_resource: string, name: string?, ...: string): nil
     local tail = arguments.decode({...})
     if not tail then error("Invalid application arguments") end
-    if not name or name == "" then return local_entry(database_resource, nil, nil) end
+    if not name or name == "" then local_entry(database_resource, nil, nil); return end
     if name:find(":", 1, true) then
         if #tail > 1 then error("Use bee-app for explicit application arguments") end
-        return local_entry(database_resource, name, {version = 1, secondary_application = tail[1]})
+        local_entry(database_resource, name, {version = 1, secondary_application = tail[1]})
+        return
     end
     local selected, err = command.resolve(name, tail)
     if not selected then error(err or "Command resolution failed") end
-    return local_entry(database_resource, selected.definition_id,
+    local_entry(database_resource, selected.definition_id,
         {version = 1, arguments = selected.arguments, fullscreen = selected.fullscreen})
 end
-local function local_application(database_resource: string, application: string, ...: string)
+local function local_application(database_resource: string, application: string, ...: string): nil
     local values = arguments.decode({...})
     if not values then error("Invalid application arguments") end
-    return local_entry(database_resource, application, {version = 1, arguments = values})
+    local_entry(database_resource, application, {version = 1, arguments = values})
 end
 -- Public argv never selects a database resource. Composition owns that binding.
-local function desktop(name: string?, ...: string)
-    return local_command("bee.env:client_db", name, ...)
+local function desktop(name: string?, ...: string): nil
+    local_command("bee.env:client_db", name, ...)
 end
-local function application(application_id: string, ...: string)
-    return local_application("bee.env:client_db", application_id, ...)
+local function application(application_id: string, ...: string): nil
+    local_application("bee.env:client_db", application_id, ...)
 end
 return {main = main, local_entry = local_entry, local_command = local_command, local_application = local_application,
     desktop = desktop, application = application}

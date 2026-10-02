@@ -84,5 +84,8 @@ path before a component transition. A full bounded scan cannot prove absence and
 Queued work and all session data remain in Threads. Missing scheduler readiness
 or an uncertain obligation leaves the Hub receipt recoverable. Ready identifies
 the exact scheduler boot definition after the existing supervisor restarts it.
+The worker registers only after its lifecycle inbox is initialized; the owner
+waits for registration before requesting that acknowledgement. Missing
+interactive drain evidence refuses the transition.
 Other process hosts and interactive placements have no component drain protocol
 here and keep their existing ownership and stop paths.

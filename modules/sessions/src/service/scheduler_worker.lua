@@ -48,8 +48,6 @@ type Pending = {future: funcs.Future, response: Channel<unknown>}
 local function main()
     local events = assert(process.events())
     local hints = assert(process.listen(M.TOPIC_WAKE, {message = true}))
-    local registered, register_error = process.registry.register(M.WORKER)
-    if not registered then error("register session scheduler: " .. tostring(register_error)) end
     local lifecycle_inbox = assert(process.listen(lifecycle.TOPIC, {message = true}))
     local definition = assert(lifecycle.definition(), "scheduler definition could not be captured")
     local waiting: {recipient: string, topic: string, request: lifecycle.Request}? = nil
@@ -72,6 +70,8 @@ local function main()
             end
         end
     end
+    local registered, register_error = process.registry.register(M.WORKER)
+    if not registered then error("register session scheduler: " .. tostring(register_error)) end
     scan()
     while true do
         local cases = {events:case_receive(), hints:case_receive(), ticker:channel():case_receive(), lifecycle_inbox:case_receive()}

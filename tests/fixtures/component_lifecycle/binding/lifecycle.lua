@@ -15,6 +15,15 @@ local function handle(raw: unknown): unknown
     local intent = assert(registry.snapshot()):get("bee.hub.operations:" .. digest)
     assert(intent, "owner was called before durable intent")
     local worker = process.registry.lookup("bee.files.fixture.worker")
+    if request.phase == "ready" then
+        local deadline = time.after("5s")
+        while not worker do
+            local poll = time.after("25ms")
+            local selected = channel.select({poll:case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel == poll, "new service registration is not ready")
+            worker = process.registry.lookup("bee.files.fixture.worker")
+        end
+    end
     if worker then
         local topic = "bee.files.fixture.reply." .. tostring(assert(uuid.v4()))
         local inbox = assert(process.listen(topic, {message = true}))

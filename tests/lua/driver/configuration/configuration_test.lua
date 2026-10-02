@@ -33,6 +33,16 @@ local function gateway(action: string): configuration.GatewayInput
 end
 local function define_tests()
     test.describe("Driver configuration delivery boundary", function()
+        test.it("decodes the host-selected renderer through the shared request boundary", function()
+            local request, failure = configuration.decode_request({fixture = true, configure_renderer = "fixture"})
+            test.is_nil(failure)
+            test.eq(request and request.configure_renderer, "fixture")
+            for _, invalid in ipairs({"", "contains space", string.rep("x", 257)}) do
+                local rejected, reason = configuration.decode_request({fixture = true, configure_renderer = invalid})
+                test.is_nil(rejected)
+                test.eq(reason, "configuration request.configure_renderer is not an identifier")
+            end
+        end)
         test.it("fills admitted private JSON fields without modifying the recorded template", function()
             local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-secret", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
             local output, output_error = configuration.decode_reply(agy.handle({

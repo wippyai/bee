@@ -165,6 +165,11 @@ unique safe-relative files with digests. Placement rechecks the host-selected
 inputs, materializes admitted secrets only into declared fields, and records the
 resulting delivery before starting the process.
 
+Custom configure targets decode the common request with
+`bee.driver.binding:configuration.decode_request`, including its optional
+host-selected `configure_renderer`. The universal driver uses this same decoder;
+an arbitrary target does not need a namespace-derived adapter.
+
 Provider-specific command syntax, profile options, authentication, hook wire
 formats, and MCP configuration belong in that provider's component guide and
 Lua package.

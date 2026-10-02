@@ -1,13 +1,16 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: startup_environment
+  kind: env.storage.memory
+- name: startup_error
+  kind: env.variable
+  storage: bee.launch:startup_environment
+  variable: error
+  default: ''
 - name: ownership
   kind: library.lua
   source: file://ownership.lua
-- name: startup_failure
-  kind: library.lua
-  source: file://startup_failure.lua
-  imports: {types: bee.hive:types, bounds: bee.values:bounds}
 - name: owner_handoff
   kind: library.lua
   source: file://owner_handoff.lua
@@ -35,6 +38,8 @@ entries:
   kind: library.lua
   source: file://retained_protocol.lua
   imports:
+    types: bee.hive:types
+    bounds: bee.values:bounds
     arguments: bee.app:arguments
     clipboard: bee.client:clipboard
     contract: bee.protocol:application
@@ -125,7 +130,6 @@ entries:
   imports: &owner_imports
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership
-    startup_failure: bee.launch:startup_failure
     startup_progress: bee.app.status:startup_progress
     decode: bee.protocol:decode
     workspaces: bee.workspace.types:selection

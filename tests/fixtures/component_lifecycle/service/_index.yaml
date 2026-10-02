@@ -1,0 +1,29 @@
+version: '1.0'
+namespace: bee.files.service
+entries:
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules: [process, registry, channel, time, fs, logger, hash]
+  imports: {bounds: bee.values:bounds, canonical: bee.values:canonical}
+- name: worker_service
+  kind: process.service
+  process: bee.files.service:worker
+  host: bee:workers
+  meta: {component_lifecycle: bee.files.binding:lifecycle}
+  lifecycle:
+    auto_start: true
+    security:
+      policies: [bee.files.service:worker_policy]
+- name: retained
+  kind: fs.directory
+  directory: component-retained
+  base: project
+  lifecycle: {auto_start: true}
+- name: worker_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, process.registry.register, process.listen, process.send, fs.get, fs.stat, fs.readfile, fs.writefile]
+    resources: '*'
+    effect: allow

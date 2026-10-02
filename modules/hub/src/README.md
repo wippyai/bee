@@ -99,8 +99,46 @@ review and confirmation. Unconverted hosts without the host selection refuse Bee
 component management. Required roots and the installer dependency closure refuse
 independent replacement or removal. Dependency constraints and entry collisions
 still apply. Removal retains owned data and uses the existing migration policies;
-service drain/revocation handoff remains a separate proposal. A first removal
+service transitions follow the owner lifecycle described below. A first removal
 with migration rollback requires root conversion through an update first.
+
+
+Independent component service transitions use the runtime's existing supervisor.
+Each changed `process.service` names an owner `function.lua` in
+`meta.component_lifecycle`; the host selects its exact call grant through
+`bee.hub.binding:target_lifecycle_owners`. Metadata grants no permission.
+Services without that owner protocol, changed service/process identities,
+and process hosts or HTTP services without supported drain evidence are refused.
+Hub itself remains protected; its code replacement uses the existing `bee/bee`
+self-update path.
+
+Before effects, the existing operation receipt records `prepared` plus optional
+`effect_digest` and version-one `lifecycle_work` (phases `prepared`, `quiesced`,
+`published`, `ready`). The owner derives its admission fence from that receipt,
+drains accepted obligations and acknowledges retained data, revoked grants and
+closed resources. Hub then stops the service through the runtime supervisor,
+rechecks captured process/handler fingerprints and the registry revision, and
+publishes the dependency change with its receipt. Update/install starts the
+selected service through that same supervisor and requires the owner's exact
+boot-definition readiness acknowledgement before `complete`. A lost reply or
+crash leaves recoverable intent; recovery uses the original request/digest and
+rechecks candidate definitions, current grants and installed versions.
+Unfinished lifecycle intent blocks another Hub operation.
+
+The current retention policy is `retain`: files and database rows stay at their
+host-owned locations, queued work stays in its owner journal, and removal never
+runs migration `down` for a service-bearing component. No data export or data
+rollback is claimed. Sessions implements the first production owner: it fences
+new admissions, lets accepted pull turns finish and checks Threads' durable
+journal before reporting a drain. Interactive Sessions must close through their
+existing proved-exit path first. Reserved/accepted or uncertain work after a
+crash prevents completion; it is never silently discarded or retried.
+
+Open applications continue their existing definition-change replacement on
+update. Removal withdraws their catalog bindings immediately and refuses while
+any departing process remains alive. The person closes those applications and
+recovers the same receipt before their definitions are removed; normal broker
+stop closes resources and revokes execution grants.
 
 A host that selects component management updates `bee/bee` using a core artifact
 that contains no Bee-component dependency declarations. The plan retains each
@@ -202,7 +240,8 @@ agent's status. The gateway performs the calls.
 `make hub-self-update-standalone-check` builds local sealed baseline and core artifacts and
 serves their artifacts through a disposable fixture Hub. `BEE_RUNTIME` selects
 the proof executable without changing the repository runtime pin. The acceptance
-checks an independent Files update, optional telemetry install/removal, protected Hub
+checks running-service Files updates, retained work/data on removal and reinstall,
+crash during drain followed by exact-receipt recovery, optional telemetry install/removal, protected Hub
 removal refusal, a core self-update, another independent Files update, the older
 wildcard dependency, exact digest approval, completed receipts, unchanged runtime
 owner PID, live Settings About rendering, and restart

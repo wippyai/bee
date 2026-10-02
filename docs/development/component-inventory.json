@@ -776,11 +776,6 @@
       "source": "modules/credentials/src/binding/_index.yaml"
     },
     {
-      "id": "bee.credentials.binding:broker",
-      "kind": "library.lua",
-      "source": "modules/credentials/src/binding/_index.yaml"
-    },
-    {
       "id": "bee.credentials.binding:capabilities",
       "kind": "function.lua",
       "source": "modules/credentials/src/binding/_index.yaml"
@@ -826,6 +821,11 @@
       "source": "modules/credentials/src/binding/_index.yaml"
     },
     {
+      "id": "bee.credentials.binding:sources",
+      "kind": "library.lua",
+      "source": "modules/credentials/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.credentials.binding:write_back",
       "kind": "function.lua",
       "source": "modules/credentials/src/binding/_index.yaml"
@@ -863,11 +863,6 @@
     {
       "id": "bee.credentials.env:node_identity_migration_source",
       "kind": "env.variable",
-      "source": "modules/credentials/src/env/_index.yaml"
-    },
-    {
-      "id": "bee.credentials.env:sources",
-      "kind": "library.lua",
       "source": "modules/credentials/src/env/_index.yaml"
     },
     {
@@ -16764,7 +16759,7 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1776,
+    "entry_count": 1775,
     "namespace_count": 272,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,

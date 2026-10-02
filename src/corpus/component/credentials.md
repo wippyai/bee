@@ -201,7 +201,7 @@ child cannot be scrubbed.
 | Slice | Responsibility |
 |---|---|
 | `bee.credentials` | Credential contract, bounded protocol and pure provider-format decoder |
-| `bee.credentials.binding` | Broker authorization, host-source validation, projection use and transient materialization/write-back; callable contract methods and `local` binding |
+| `bee.credentials.binding` | Broker authorization, source admission, projection use and transient materialization/write-back; contract methods call the broker implementation directly through `local` |
 | `bee.credentials.persist` | SQL metadata repository opened through `bee.persist`, generation receipts and owner-controlled node identity conversion; no credential bytes or caller authorization |
 | `bee.credentials.env` | Linked host-selected database, materializer and source allowlist |
 | `bee.credentials.migrations` | Immutable schema migrations |

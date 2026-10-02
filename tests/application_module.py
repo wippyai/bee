@@ -1,4 +1,4 @@
-"""Exercise the base SDK without Sessions, Threads or Harness in the composition."""
+"""Exercise the base SDK and UI without Sessions, Threads or Harness."""
 from pathlib import Path
 import shutil
 import tempfile
@@ -77,7 +77,7 @@ return {main = main}
             }}, sort_keys=False))
         run(folder, "lint", "--strict-any", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")
         run(folder, "run", "-x", "bee.app.check:probe")
-    print("Application SDK: isolated strict lint and caller/picker/client proof without Sessions, Threads or Harness")
+    print("Application SDK and UI: isolated strict lint and caller/picker/client proof without Sessions, Threads or Harness")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,12 @@ apply both shipped variants and the current `origin/main` history, then compare
 schema and owner data after the appended repair migrations. Each original ledger
 digest remains unchanged.
 
+`test_migration_histories.py` also checks all ten numbered owner stores for
+unique, ordered migration IDs and an unchanged `origin/main` prefix. The client
+prefix follows its source relocation from `src/client/store.lua` into
+`modules/client/src/migrations/migrations.lua`; its three applied migrations
+retain their SQL and IDs. Parallel component additions append after that prefix.
+
 The audit covers all 104 declared migration identities across the 999 first-parent
 commits of main through the installed baseline `893d1216`, following source moves
 by migration-1 identity. These are all SQL changes found under an existing ID/name:

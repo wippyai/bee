@@ -52,6 +52,8 @@ stamp() {
     mv "$file.release" "$file"
 }
 
+stamp "$destination/wippy.yaml" '/^version:/ { next } { print } END { print "version: " version }'
+
 # Selects every bee/* row of a lock at the release version.
 lock_program='
     $1 == "-" && $2 == "name:" { bee = ($3 ~ /^bee\//) }

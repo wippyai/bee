@@ -42,7 +42,9 @@ assert isinstance(modules, list)
 locked = {entry["name"]: entry["version"] for entry in modules}
 assert sys.argv[2] in locked
 assert "bee/agents" in locked
-assert len(set(locked.values())) == 1
+base, _, prerelease = locked["bee/agents"].partition("-")
+assert locked["bee/bee"] in {locked["bee/agents"], base + "-0.boot." + prerelease}
+assert len({version for module, version in locked.items() if module.startswith("bee/") and module != "bee/bee"}) == 1
 PY
         mkdir -p "$(dirname -- "$output")"
         printf '%s\n' "$module" > "$output"

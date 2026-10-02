@@ -83,9 +83,13 @@ describes the boundary between Bee and the selected runtime.
 
 `BEE_VERSION=0.1.0-dev make native-pack` stages the release source with
 `build/release-source.sh` (About metadata, and `bee/bee` plus every `bee/*`
-module and sibling `ns.dependency` at `BEE_VERSION`, the versions Hub
-publication uses), then runs `wippy pack --module` for `bee/bee` and every
-dependency selected by the staged lock. It writes immutable
+module and sibling `ns.dependency` at `BEE_VERSION`), then runs
+`wippy pack --module` for every dependency selected by the staged lock.
+The executable embeds a composed `bee/bee` boot root with a distinct
+`-0.boot` prerelease identity and the same full baseline component set. The Hub core at `BEE_VERSION`
+contains the root implementation without `bee.deps`; the generated Hub
+deployment at `dist/portable-deployment/hub` selects those exact components
+and requirement parameters through its host-authored `src/deps/_index.yaml`. It writes immutable
 pack generations under `dist/native-packs/`, a source-free lock/vendor deployment
 at `dist/portable-deployment/`, and seals every exact WAPP path and SHA-256 into
 `dist/bee.bundle.build.json`. The deployment has an empty source path and no
@@ -176,12 +180,13 @@ Modules offers **Update Bee** while Bee is running, including a standalone
 binary whose deployment root is selected by its embedded lock. The action updates the
 host `bee/bee` dependency root through the Hub plan, approval, publication,
 receipt and migration path. Hosts selecting component management use an
-independently identified core artifact without Bee-component dependency
+core artifact without dependency
 declarations; their explicit installed component roots and requirement values
 remain selected. Modules updates or removes optional components individually;
 boot and installer dependencies refuse independent removal or replacement.
-`make hub-core-pack BEE_CORE_VERSION=VERSION` builds the core update artifact,
-while `make native-pack` keeps the boot bundle's default composition. Existing
+`make native-pack` seals both artifacts in one generation. The local boot root
+uses the distinct `-0.boot` prerelease identity and is never published to Hub.
+`make hub-check` refuses any core artifact containing dependency declarations. Existing
 legacy authored Bee roots first convert through a core update. Third-party roots
 remain selected. It does not stop the current owner; new registry
 definitions are available to later calls, and an owner restart restores the
@@ -203,8 +208,10 @@ dependency declarations as independent version constraints during apply. A
 release that changes those nested versions together with `bee/bee` fails
 dependency resolution. `make hub-self-update-runtime-check` includes that
 regression; completing this update requires a runtime correction in a new
-executable. Legacy closure plans can be ready while this apply failure remains. Core update
-artifacts avoid that closure replacement by retaining the explicit host roots.
+executable. Core update artifacts retain the explicit host roots and avoid that closure
+replacement. The standalone fixture acceptance proves a legacy authored
+closure converts on its first core update, a later core update retains selected
+components and parameters, and the same state restarts offline.
 
 The opt-in published-pack acceptance runs on Linux:
 

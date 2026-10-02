@@ -110,13 +110,17 @@ it would reclaim host selection, collide with host-owned roots or reinstall a
 removed component. This applies to the initial self-update conversion as well as
 later updates. Legacy full-composition artifacts remain installation bundle
 inputs; independently updatable core artifacts require separate release identities.
-`make hub-core-pack BEE_CORE_VERSION=VERSION` stages the normal release source and
-packs `bee/bee` with its Bee dependency declarations excluded. It requires an
-identity distinct from the boot bundle; namespace definitions, native identity,
-resources and core code remain in the artifact. The standalone acceptance
-constructs distinct baseline and core release identities.
-Publishing those releases is a separate operation; this change does not publish
-artifacts or change the native bundle's boot composition.
+`make native-pack BEE_VERSION=VERSION` seals the full executable baseline and
+the dependency-free Hub core in one generation. The local boot root has a
+distinct `-0.boot` prerelease identity; Hub publishes the core at `VERSION`.
+The generated `dist/portable-deployment/hub/src/deps/_index.yaml` selects the
+same components and requirement parameters as host-owned roots. Namespace
+definitions, native identity, resources and core code remain in the core artifact.
+`make hub-core-artifact-check` verifies the baseline pack list, exact host
+parameters, core contents and every requirement target. Publication refuses a
+core WAPP containing dependencies. Packing does not publish artifacts.
+The standalone acceptance converts a legacy authored closure on its first core
+update, applies a second core update and restarts the selected graph offline.
 Hosts with an already authored legacy `bee/bee` selection must first convert using
 a core self-update; its old manifest constraints remain effective until then.
 Self-update also refuses a candidate that changes the active Hub installer code.

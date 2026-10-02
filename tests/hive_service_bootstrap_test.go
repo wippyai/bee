@@ -193,7 +193,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		}
 		// The startup assertions call security; the production supervisor entry
 		// already imports it, so the manifest is used as shipped.
-		modules := "modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash]"
+		modules := "modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash, events]"
 		if strings.Count(string(manifest), modules) != 1 {
 			t.Fatal("supervisor module assertion anchor changed")
 		}

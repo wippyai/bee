@@ -37,6 +37,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
     local lease: leases.Lease? = nil
     local workspace_id = ""
     local function report_startup_progress(phase: string)
+        log:info("Boot phase", {phase = "workspace_" .. phase, stage = "point"})
         if not retained_owner or announced then return end
         local sent, err = process.send(retained_owner, retained_protocol.TOPIC_PROGRESS,
             {version = 1, phase = phase})

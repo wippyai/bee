@@ -334,19 +334,181 @@ WHERE json_type(value, '$.applications') = 'array' AND EXISTS
      WHERE json_extract(item.value, '$.definition_id') IN ('bee.settings:app','bee.console:app','bee.host.processes:app','bee.gov.overlays:app','bee.threads.timeline:app','bee.workspace.manager:app','bee.hive.manager:app','bee.hive_manager:app','bee.inbox:app','bee.modules:app','bee.hub.modules:app','bee.overlays:app','bee.workspaces:app','bee.timeline:app','bee.processes:app'));
 ]]
 
+-- Migration 9 shipped with the inbox package identity before its app child.
+-- Both shipped texts remain immutable; applied rows retain their original digest.
+local ORIGINAL_NESTED_NAMES_SQL = [[
+UPDATE workspaces SET root_ref = 'bee.env:workspace_root'
+WHERE root_ref = 'bee.environment:workspace_root';
+UPDATE workspace_application_thread_bindings SET definition_id = CASE definition_id
+    WHEN 'bee.hive_manager:app' THEN 'bee.hive.manager:app'
+    WHEN 'bee.inbox:app' THEN 'bee.approvals.inbox:app'
+    WHEN 'bee.modules:app' THEN 'bee.hub.modules:app'
+    WHEN 'bee.overlays:app' THEN 'bee.gov.overlays:app'
+    WHEN 'bee.workspaces:app' THEN 'bee.workspace.manager:app'
+    WHEN 'bee.timeline:app' THEN 'bee.threads.timeline:app'
+    WHEN 'bee.processes:app' THEN 'bee.host.processes:app'
+    ELSE definition_id END;
+UPDATE workspace_state SET value =
+    replace(replace(replace(replace(replace(replace(replace(value,
+    '"definition_id":"bee.hive_manager:app"', '"definition_id":"bee.hive.manager:app"'),
+    '"definition_id":"bee.inbox:app"', '"definition_id":"bee.approvals.inbox:app"'),
+    '"definition_id":"bee.modules:app"', '"definition_id":"bee.hub.modules:app"'),
+    '"definition_id":"bee.overlays:app"', '"definition_id":"bee.gov.overlays:app"'),
+    '"definition_id":"bee.workspaces:app"', '"definition_id":"bee.workspace.manager:app"'),
+    '"definition_id":"bee.timeline:app"', '"definition_id":"bee.threads.timeline:app"'),
+    '"definition_id":"bee.processes:app"', '"definition_id":"bee.host.processes:app"')
+WHERE instr(value, '"definition_id":"bee.') > 0;
+]]
+
+local ORIGINAL_SQL_6 = [[
+CREATE TABLE workspaces (
+    workspace_id TEXT NOT NULL PRIMARY KEY CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    label TEXT NOT NULL CHECK (length(CAST(label AS BLOB)) <= 240),
+    root_ref TEXT NOT NULL CHECK (length(CAST(root_ref AS BLOB)) BETWEEN 1 AND 160),
+    subpath TEXT NOT NULL CHECK (length(CAST(subpath AS BLOB)) <= 1024),
+    state TEXT NOT NULL CHECK (state IN ('active', 'archived')),
+    created_at TEXT NOT NULL,
+    last_used_at TEXT NOT NULL,
+    UNIQUE (root_ref, subpath)
+);
+INSERT INTO workspaces (workspace_id, label, root_ref, subpath, state, created_at, last_used_at)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), '', 'bee:workspace_root', '', 'active',
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+CREATE TABLE workspace_state_v6 (
+    workspace_id TEXT NOT NULL PRIMARY KEY CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    generation INTEGER NOT NULL CHECK (generation >= 0),
+    value TEXT NOT NULL CHECK (length(CAST(value AS BLOB)) <= 2097152),
+    updated_at TEXT NOT NULL
+);
+INSERT INTO workspace_state_v6 (workspace_id, schema_version, generation, value, updated_at)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), schema_version, generation, value, updated_at
+FROM workspace_state;
+DROP TABLE workspace_state;
+ALTER TABLE workspace_state_v6 RENAME TO workspace_state;
+CREATE TABLE workspace_display_assignments_v6 (
+    workspace_id TEXT NOT NULL CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    view_id TEXT NOT NULL CHECK (length(CAST(view_id AS BLOB)) BETWEEN 1 AND 80 AND view_id NOT GLOB '*[^ -~]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    display_id TEXT NOT NULL CHECK (length(CAST(display_id AS BLOB)) BETWEEN 1 AND 160 AND display_id NOT GLOB '*[^ -~]*'),
+    revision INTEGER NOT NULL CHECK (revision >= 1 AND revision <= 9007199254740990),
+    PRIMARY KEY (workspace_id, view_id, instance_id)
+);
+INSERT INTO workspace_display_assignments_v6 (workspace_id, view_id, instance_id, display_id, revision)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), view_id, instance_id, display_id, revision
+FROM workspace_display_assignments;
+DROP TABLE workspace_display_assignments;
+ALTER TABLE workspace_display_assignments_v6 RENAME TO workspace_display_assignments;
+CREATE TABLE workspace_display_transfer_receipts_v6 (
+    workspace_id TEXT NOT NULL CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    request_id TEXT NOT NULL CHECK (length(CAST(request_id AS BLOB)) BETWEEN 1 AND 80 AND request_id NOT GLOB '*[^ -~]*'),
+    view_id TEXT NOT NULL CHECK (length(CAST(view_id AS BLOB)) BETWEEN 1 AND 80 AND view_id NOT GLOB '*[^ -~]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    source_display_id TEXT NOT NULL CHECK (length(CAST(source_display_id AS BLOB)) BETWEEN 1 AND 160 AND source_display_id NOT GLOB '*[^ -~]*'),
+    target_display_id TEXT NOT NULL CHECK (length(CAST(target_display_id AS BLOB)) BETWEEN 1 AND 160 AND target_display_id NOT GLOB '*[^ -~]*'),
+    expected_revision INTEGER NOT NULL CHECK (expected_revision >= 1 AND expected_revision <= 9007199254740990),
+    phase TEXT NOT NULL CHECK (phase IN ('prepared', 'committed', 'failed')),
+    error TEXT CHECK (error IS NULL OR length(CAST(error AS BLOB)) <= 1024),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, request_id)
+);
+INSERT INTO workspace_display_transfer_receipts_v6
+    (workspace_id, request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error, updated_at)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), request_id, view_id, instance_id,
+    source_display_id, target_display_id, expected_revision, phase, error, updated_at
+FROM workspace_display_transfer_receipts;
+DROP TABLE workspace_display_transfer_receipts;
+ALTER TABLE workspace_display_transfer_receipts_v6 RENAME TO workspace_display_transfer_receipts;
+CREATE UNIQUE INDEX workspace_display_one_prepared_transfer
+ON workspace_display_transfer_receipts (workspace_id, view_id, instance_id)
+WHERE phase = 'prepared';
+CREATE TABLE workspace_application_thread_bindings_v6 (
+    workspace_id TEXT NOT NULL CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    thread_id TEXT NOT NULL CHECK (length(CAST(thread_id AS BLOB)) BETWEEN 1 AND 160 AND thread_id NOT GLOB '*[^ -~]*'),
+    definition_id TEXT NOT NULL CHECK (length(CAST(definition_id AS BLOB)) BETWEEN 1 AND 160 AND definition_id NOT GLOB '*[^ -~]*'),
+    actor_id TEXT NOT NULL CHECK (length(CAST(actor_id AS BLOB)) BETWEEN 1 AND 160 AND actor_id NOT GLOB '*[^ -~]*'),
+    role TEXT NOT NULL CHECK (role = 'participant'),
+    binding_revision INTEGER NOT NULL CHECK (binding_revision >= 1 AND binding_revision <= 9007199254740990),
+    state TEXT NOT NULL CHECK (state IN ('pending', 'active', 'revoked')),
+    idempotency_key TEXT NOT NULL CHECK (length(CAST(idempotency_key AS BLOB)) BETWEEN 1 AND 160 AND idempotency_key NOT GLOB '*[^ -~]*'),
+    definition_revision TEXT NOT NULL CHECK (length(CAST(definition_revision AS BLOB)) BETWEEN 1 AND 80 AND definition_revision NOT GLOB '*[^ -~]*'),
+    initiating_owner_id TEXT NOT NULL CHECK (length(CAST(initiating_owner_id AS BLOB)) BETWEEN 1 AND 160 AND initiating_owner_id NOT GLOB '*[^ -~]*'),
+    gateway_binding_id TEXT NOT NULL CHECK (length(CAST(gateway_binding_id AS BLOB)) BETWEEN 1 AND 160 AND gateway_binding_id NOT GLOB '*[^ -~]*'),
+    gateway_approval_id TEXT NOT NULL CHECK (length(CAST(gateway_approval_id AS BLOB)) BETWEEN 1 AND 160 AND gateway_approval_id NOT GLOB '*[^ -~]*'),
+    gateway_proposal_digest TEXT NOT NULL CHECK (length(gateway_proposal_digest) = 64 AND gateway_proposal_digest NOT GLOB '*[^0-9a-f]*'),
+    access TEXT NOT NULL CHECK (access = 'observe_post'),
+    join_expected_revision INTEGER NOT NULL CHECK (join_expected_revision >= 1 AND join_expected_revision <= 9007199254740990),
+    membership_revision INTEGER CHECK (membership_revision IS NULL OR (membership_revision >= 1 AND membership_revision <= 9007199254740990)),
+    cleanup_pending INTEGER NOT NULL CHECK (cleanup_pending IN (0, 1)),
+    cleanup_expected_revision INTEGER CHECK (cleanup_expected_revision IS NULL OR (cleanup_expected_revision >= 1 AND cleanup_expected_revision <= 9007199254740990)),
+    PRIMARY KEY (workspace_id, instance_id),
+    UNIQUE (workspace_id, idempotency_key)
+);
+INSERT INTO workspace_application_thread_bindings_v6
+    (workspace_id, instance_id, thread_id, definition_id, actor_id, role, binding_revision, state, idempotency_key,
+     definition_revision, initiating_owner_id, gateway_binding_id, gateway_approval_id,
+     gateway_proposal_digest, access, join_expected_revision, membership_revision,
+     cleanup_pending, cleanup_expected_revision)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), instance_id, thread_id, definition_id, actor_id,
+    role, binding_revision, state, idempotency_key, definition_revision, initiating_owner_id, gateway_binding_id,
+    gateway_approval_id, gateway_proposal_digest, access, join_expected_revision, membership_revision,
+    cleanup_pending, cleanup_expected_revision
+FROM workspace_application_thread_bindings;
+DROP TABLE workspace_application_thread_bindings;
+ALTER TABLE workspace_application_thread_bindings_v6 RENAME TO workspace_application_thread_bindings;
+DROP TABLE workspace_identity;
+]]
+
+local ORIGINAL_SQL_8 = [[
+CREATE TABLE workspace_folder (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    created INTEGER NOT NULL CHECK (created IN (0, 1))
+);
+INSERT INTO workspace_folder (singleton, created)
+SELECT 1, 1 - (SELECT fresh FROM temp.workspace_migration_run);
+DELETE FROM workspaces
+WHERE root_ref = 'bee:workspace_root' AND subpath = ''
+    AND (SELECT fresh FROM temp.workspace_migration_run) = 1
+]]
+
+local INBOX_APPLICATION_NAME_SQL = [[
+UPDATE workspace_state SET value = replace(value,
+    '"definition_id":"bee.approvals.inbox:app"', '"definition_id":"bee.approvals.inbox.app:app"')
+WHERE instr(value, '"definition_id":"bee.approvals.inbox:app"') > 0;
+UPDATE workspace_application_thread_bindings SET definition_id = 'bee.approvals.inbox.app:app'
+WHERE definition_id = 'bee.approvals.inbox:app';
+UPDATE workspace_state SET value = json_set(value, '$.applications',
+    json((SELECT json_group_array(json(CASE json_extract(item.value, '$.definition_id')
+        WHEN 'bee.approvals.inbox:app' THEN json_set(item.value, '$.definition_id', 'bee.approvals.inbox.app:app')
+        ELSE item.value END))
+        FROM json_each(workspace_state.value, '$.applications') AS item)))
+WHERE json_type(value, '$.applications') = 'array' AND EXISTS
+    (SELECT 1 FROM json_each(workspace_state.value, '$.applications') AS item
+     WHERE json_extract(item.value, '$.definition_id') IN ('bee.approvals.inbox:app', 'bee.approvals.inbox.app:app'));
+]]
+
+local WORKSPACE_ROOT_NAMES_SQL = [[
+DELETE FROM workspaces WHERE root_ref IN ('bee:workspace_root', 'bee.environment:workspace_root')
+    AND subpath = '' AND (SELECT created FROM workspace_folder WHERE singleton = 1) = 0;
+UPDATE workspaces SET root_ref = 'bee.env:workspace_root' WHERE root_ref = 'bee:workspace_root';
+]]
+
 local migrations: {ledger.Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
     {id = 3, name = "workspace_display_assignments_v1", sql = DISPLAY_ASSIGNMENTS_TABLE_SQL},
     {id = 4, name = "workspace_application_thread_bindings_v1", sql = APPLICATION_THREAD_BINDINGS_TABLE_SQL},
     {id = 5, name = "workspace_application_thread_bindings_v2", sql = APPLICATION_THREAD_BINDINGS_V5_SQL},
-    {id = 6, name = "node_workspaces_v1", sql = NODE_WORKSPACES_SQL},
+    {id = 6, name = "node_workspaces_v1", historical_sql = {ORIGINAL_SQL_6}, sql = NODE_WORKSPACES_SQL},
     {id = 7, name = "workspace_catalog_order_v1", sql = CATALOG_ORDER_SQL},
-    {id = 8, name = "workspace_folder_on_open_v1", sql = FOLDER_ON_OPEN_SQL},
-    {id = 9, name = "nested_bee_names_v1", sql = NESTED_NAMES_SQL},
+    {id = 8, name = "workspace_folder_on_open_v1", historical_sql = {ORIGINAL_SQL_8}, sql = FOLDER_ON_OPEN_SQL},
+    {id = 9, name = "nested_bee_names_v1", sql = NESTED_NAMES_SQL, historical_sql = {ORIGINAL_NESTED_NAMES_SQL}},
     {id = 10, name = "application_child_names_v1", sql = APPLICATION_NAMES_SQL},
     {id = 11, name = "modules_application_child_names_v1", sql = MODULES_APPLICATION_NAMES_SQL},
     {id = 12, name = "app_child_names_v2", sql = APP_CHILD_NAMES_SQL},
+    {id = 13, name = "inbox_application_child_name_v1", sql = INBOX_APPLICATION_NAME_SQL},
+    {id = 14, name = "workspace_root_names_v1", sql = WORKSPACE_ROOT_NAMES_SQL},
 }
 
 return migrations

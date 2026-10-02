@@ -1,7 +1,7 @@
 -- MIT. Immutable schema for the governance-owned, node-local authoring store.
 local M = {}
 
-type Migration = {id: integer, name: string, sql: string, rebuild: boolean}
+type Migration = {id: integer, name: string, sql: string, rebuild: boolean, historical_sql: {string}?}
 
 -- Snapshot files deliberately duplicate workspace files.  A frozen candidate
 -- must survive both later edits and a service restart, and it must never be
@@ -532,6 +532,95 @@ local LEASE_RECEIPT_RESULT_SQL = [[
 ALTER TABLE bee_governance_lease_receipts ADD COLUMN result_json TEXT;
 ]]
 
+local ORIGINAL_SQL_14 = [[
+CREATE TABLE bee_governance_leases (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  lease_id TEXT NOT NULL,
+  target TEXT NOT NULL,
+  envelope_bytes BLOB NOT NULL CHECK(length(CAST(envelope_bytes AS BLOB)) BETWEEN 1 AND 65536),
+  envelope_digest TEXT NOT NULL CHECK(length(envelope_digest) = 64),
+  source_approval_id TEXT NOT NULL,
+  source_approval_proposal_digest TEXT NOT NULL CHECK(length(source_approval_proposal_digest) = 64),
+  source_approval_owner_incarnation INTEGER NOT NULL CHECK(source_approval_owner_incarnation >= 1),
+  granted_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT,
+  max_applies INTEGER CHECK(max_applies IS NULL OR max_applies >= 1),
+  applies_used INTEGER NOT NULL DEFAULT 0 CHECK(applies_used >= 0),
+  revision INTEGER NOT NULL CHECK(revision >= 1),
+  state TEXT NOT NULL CHECK(state IN ('active', 'revoked')),
+  revoked_by TEXT,
+  revoked_at TEXT,
+  PRIMARY KEY(owner_node, workspace_id, lease_id),
+  UNIQUE(owner_node, workspace_id, source_approval_id),
+  CHECK(expires_at IS NOT NULL OR max_applies IS NOT NULL)
+);
+CREATE INDEX bee_governance_leases_target ON bee_governance_leases (owner_node, workspace_id, target, state);
+CREATE TABLE bee_governance_lease_uses (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  lease_id TEXT NOT NULL,
+  intent_id TEXT NOT NULL,
+  proposal_snapshot_bytes BLOB NOT NULL CHECK(length(CAST(proposal_snapshot_bytes AS BLOB)) BETWEEN 1 AND 65536),
+  proposal_snapshot_digest TEXT NOT NULL CHECK(length(proposal_snapshot_digest) = 64),
+  applied_at TEXT NOT NULL,
+  PRIMARY KEY(owner_node, workspace_id, lease_id, intent_id),
+  FOREIGN KEY(owner_node, workspace_id, lease_id)
+    REFERENCES bee_governance_leases(owner_node, workspace_id, lease_id)
+);
+CREATE TABLE bee_governance_lease_receipts (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK(operation IN ('grant', 'use', 'revoke')),
+  request_digest TEXT NOT NULL CHECK(length(request_digest) = 64),
+  lease_id TEXT NOT NULL,
+  result_revision INTEGER NOT NULL CHECK(result_revision >= 1),
+  PRIMARY KEY(owner_node, workspace_id, idempotency_key)
+);
+]]
+
+local LEASE_USES_REPAIR_SQL = [[
+CREATE TABLE bee_governance_lease_uses_next (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  lease_id TEXT NOT NULL,
+  intent_id TEXT NOT NULL,
+  approval_id TEXT NOT NULL,
+  approval_proposal_digest TEXT NOT NULL CHECK(length(approval_proposal_digest) = 64),
+  proposal_snapshot_bytes BLOB NOT NULL CHECK(length(CAST(proposal_snapshot_bytes AS BLOB)) BETWEEN 1 AND 65536),
+  proposal_snapshot_digest TEXT NOT NULL CHECK(length(proposal_snapshot_digest) = 64),
+  state TEXT NOT NULL CHECK(state IN ('reserved', 'admitted', 'fenced')),
+  applied_at TEXT NOT NULL,
+  admitted_at TEXT,
+  PRIMARY KEY(owner_node, workspace_id, lease_id, intent_id),
+  UNIQUE(owner_node, workspace_id, intent_id),
+  FOREIGN KEY(owner_node, workspace_id, lease_id)
+    REFERENCES bee_governance_leases(owner_node, workspace_id, lease_id)
+);
+INSERT INTO bee_governance_lease_uses_next
+    (owner_node, workspace_id, lease_id, intent_id, approval_id, approval_proposal_digest,
+     proposal_snapshot_bytes, proposal_snapshot_digest, state, applied_at, admitted_at)
+SELECT owner_node, workspace_id, lease_id, intent_id,
+    CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('bee_governance_lease_uses') WHERE name = 'approval_id')
+         THEN "approval_id" ELSE (SELECT source_approval_id FROM bee_governance_leases lease
+          WHERE lease.owner_node = uses.owner_node AND lease.workspace_id = uses.workspace_id AND lease.lease_id = uses.lease_id) END,
+    CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('bee_governance_lease_uses') WHERE name = 'approval_proposal_digest')
+         THEN "approval_proposal_digest" ELSE (SELECT source_approval_proposal_digest FROM bee_governance_leases lease
+          WHERE lease.owner_node = uses.owner_node AND lease.workspace_id = uses.workspace_id AND lease.lease_id = uses.lease_id) END,
+    proposal_snapshot_bytes, proposal_snapshot_digest,
+    CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('bee_governance_lease_uses') WHERE name = 'state')
+         THEN "state" ELSE 'admitted' END,
+    applied_at,
+    CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('bee_governance_lease_uses') WHERE name = 'admitted_at')
+         THEN "admitted_at" ELSE applied_at END
+FROM bee_governance_lease_uses uses;
+DROP TABLE bee_governance_lease_uses;
+ALTER TABLE bee_governance_lease_uses_next RENAME TO bee_governance_lease_uses;
+]]
+
 function M.all(): {Migration}
     return {
         {id = 1, name = "governance_workspace_staging", sql = INITIAL, rebuild = false},
@@ -547,8 +636,9 @@ function M.all(): {Migration}
         {id = 11, name = "governance_activation_rollback", sql = ACTIVATION_ROLLBACK_SQL, rebuild = false},
         {id = 12, name = "governance_node_identity_migration", sql = NODE_IDENTITY_MIGRATION_SQL, rebuild = false},
         {id = 13, name = "governance_plan_identity_digest", sql = PLAN_IDENTITY_DIGEST_SQL, rebuild = false},
-        {id = 14, name = "governance_capability_leases", sql = LEASES_SQL, rebuild = false},
+        {id = 14, name = "governance_capability_leases", historical_sql = {ORIGINAL_SQL_14}, sql = LEASES_SQL, rebuild = false},
         {id = 15, name = "governance_lease_receipt_result", sql = LEASE_RECEIPT_RESULT_SQL, rebuild = false},
+        {id = 16, name = "governance_lease_use_admission_repair", sql = LEASE_USES_REPAIR_SQL, rebuild = true},
     }
 end
 

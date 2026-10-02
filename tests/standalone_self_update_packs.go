@@ -37,6 +37,7 @@ func main() {
 		Sources      map[string]string
 		Identity     map[string]any
 		Independent  map[string]bool
+		Parameters   map[string]any
 		Policies     map[string]fixturePolicy
 		Declarations map[string]codeDeclaration
 	}
@@ -105,11 +106,17 @@ func main() {
 					}
 				}
 			}
+			if parameters, selected := config.Parameters[entry.ID.String()]; selected {
+				fields["parameters"] = parameters
+			}
 			if source := config.Sources[entry.ID.String()]; source != "" {
 				code, err := os.ReadFile(source)
 				mustPack(err)
 				if entry.ID.String() == "bee.settings.app:view" {
 					code = bytes.ReplaceAll(code, []byte("BEE SETTINGS · ABOUT"), []byte("BEE SETTINGS · ABOUT proof marker "+pack.Version))
+				}
+				if entry.ID.String() == "bee.files.service:worker" {
+					code = bytes.ReplaceAll(code, []byte("__SERVICE_VERSION__"), []byte(pack.Version))
 				}
 				fields["source"] = string(code)
 			}

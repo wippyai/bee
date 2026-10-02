@@ -52,7 +52,7 @@ def main(binary, previous):
         fresh.mkdir()
         open_settings(binary, folder, fresh)
         first = snapshot(fresh)
-        assert len(first['workspace_schema_migrations']) == 12
+        assert len(first['workspace_schema_migrations']) == 14
         assert len(first['client_schema_migrations']) == 3
         assert len(first['client_columns']) == 3
         assert first['applications'] and first['layout']
@@ -64,9 +64,12 @@ def main(binary, previous):
         open_settings(previous, folder, upgrade)
         before = snapshot(upgrade)
         open_settings(binary, folder, upgrade)
-        assert snapshot(upgrade) == before
+        after = snapshot(upgrade)
+        assert after['workspace_schema_migrations'][:len(before['workspace_schema_migrations'])] == before['workspace_schema_migrations']
+        before['workspace_schema_migrations'] = after['workspace_schema_migrations']
+        assert after == before
         evidence = ROOT / '.wippy/work/standalone-state-evidence.json'
-        evidence.write_text(json.dumps({'baseline': 'origin/main', 'workspace_migrations': 12,
+        evidence.write_text(json.dumps({'baseline': 'origin/main', 'workspace_migrations': 14,
                                        'client_migrations': 3, 'client_columns': 3,
                                        'fresh_restart': True, 'baseline_restart': True}, indent=2) + '\n')
         print('origin/main-created state restarted: all ledger bytes, IDs, app checkpoints and qualified layouts unchanged', flush=True)

@@ -62,7 +62,7 @@ LEDGER_TABLE = re.compile(
 )
 HANDOFF_TARGET = re.compile(r"\bmake\s+([a-z][A-Za-z0-9_.-]*-check)\b")
 PROPOSAL_EVIDENCE = re.compile(
-    r"Hive supervisor and module service handoff and generation rollback remain\s+proposals\."
+    r"Hive supervisor handoff and generation rollback remain\s+proposals\."
 )
 
 
@@ -338,7 +338,7 @@ def handoff_evidence():
         raise ValueError("process handoff acceptance targets are missing from Makefile: " + ", ".join(missing))
     proposals = PROPOSAL_EVIDENCE.findall(text)
     if not proposals:
-        raise ValueError("process-handoff.md no longer states the proposed Hive/service handoff boundary")
+        raise ValueError("process-handoff.md no longer states the proposed Hive handoff boundary")
     return {
         "source": rel(path),
         "acceptance_targets": [{"make_target": target, "defined": True} for target in targets],

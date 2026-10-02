@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 4896,
+      "bytes": 5019,
       "id": "docs/readme",
-      "sha256": "afd3d7840b31c15c6023f225b8c4a1a24339fbde328c68217f9ec8c9392d55cf",
+      "sha256": "d8f10f334cfd6cf8c13d07ea5c1aceb79b57230d02152b2c9ede834699da156a",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -171,9 +171,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 14768,
+      "bytes": 15357,
       "id": "docs/hub_inspection",
-      "sha256": "42f9b616eeb8586d1c41aec900c4e36eaf0da648ab4ed406a1314e5ca7d99a75",
+      "sha256": "eaf3c3f4bd6a99495e23efad7b4e7239e040ace5f78a9192141ba86deb9c4130",
       "source": "docs/guides/hub.md",
       "title": "Hub installation and package reads",
       "topic": "registry"
@@ -235,9 +235,9 @@
       "topic": "approvals"
     },
     {
-      "bytes": 9256,
+      "bytes": 11503,
       "id": "docs/storage",
-      "sha256": "67e4f9f7b46f52c6bba99f65c5cbdabc56f664466b88bb40e76136a2372f3157",
+      "sha256": "649e1f0886e8b1d86cc98b80bc1d82d7bcc14dfeeac96a96e9ec4f3a42cef8d9",
       "source": "docs/reference/storage.md",
       "title": "Workspace storage",
       "topic": "storage"
@@ -451,9 +451,9 @@
       "topic": "component"
     },
     {
-      "bytes": 15272,
+      "bytes": 17970,
       "id": "component/hub",
-      "sha256": "1468fe048f3fa49db0fb2bdb7a0ef5e5fa569ec428088e2af9c04f4e8d0d50d3",
+      "sha256": "e67f0702f12b09e4ae886914cf640567698b78e890f4b96dccc34d806d241491",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -467,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3461,
+      "bytes": 4072,
       "id": "component/persist",
-      "sha256": "d9bbd631db575af2d045471f92d487df946b477d26d1d41a5beb02645ebe8807",
+      "sha256": "ef37a72b8f42deabf0b879fd66430b45f19f1836e1127b9f421683ac5f415d24",
       "source": "modules/persist/src/README.md",
       "title": "bee.persist",
       "topic": "component"
@@ -507,9 +507,9 @@
       "topic": "component"
     },
     {
-      "bytes": 6858,
+      "bytes": 8053,
       "id": "component/sessions",
-      "sha256": "28bf777953a64d832ad77c3a90c1c1ccdfb27050c1300fe908bf70557de606e5",
+      "sha256": "f7b56901e441b2f940217c89b302e315a7fd48fc81b998abfa5d2c971551cdd7",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -523,9 +523,9 @@
       "topic": "component"
     },
     {
-      "bytes": 10674,
+      "bytes": 11089,
       "id": "component/threads",
-      "sha256": "56dcdcb2ba4a61b30d0962afc329792047cb7426bc2b2d59c3a439739fbddb64",
+      "sha256": "571495a4489f58d355b8a1722c386a93be0eff9e817e77e0cc1af45d35ce4786",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -638,7 +638,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 746717,
+    "bytes": 754595,
     "documents": 79
   }
 }

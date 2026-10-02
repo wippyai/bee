@@ -60,8 +60,10 @@ entries:
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions.binding:threads_journal
     executors: bee.sessions.executor:executor_registry
+    lifecycle: bee.sessions.binding:control
 - name: scheduler_service
   kind: process.service
+  meta: {component_lifecycle: bee.sessions.binding:lifecycle}
   process: bee.sessions.service:scheduler_worker
   lifecycle:
     auto_start: true
@@ -79,6 +81,7 @@ entries:
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions.binding:threads_journal
     executors: bee.sessions.executor:executor_registry
+    lifecycle: bee.sessions.binding:control
   security: {policies: []}
 - name: owner
   kind: library.lua
@@ -93,6 +96,7 @@ entries:
     journal: bee.sessions.binding:threads_journal
     driver_route: bee.sessions.executor:driver_route
     cancellation: bee.sessions.service:cancellation
+    lifecycle: bee.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.sessions.service:catalog
     scheduler: bee.sessions.service:scheduler

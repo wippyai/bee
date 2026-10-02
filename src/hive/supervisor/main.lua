@@ -1,7 +1,6 @@
--- MIT. Bounded supervisor request routing. Execution stays in function workers;
--- the event loop owns validated supervisor identities, deadlines and reply correlation.
--- Native Wippy authenticates message:from(); Lua checks the established peer.
+-- MIT. Bounded supervisor request routing with execution in function workers.
 local process = require("process")
+local event_bus = require("events")
 local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
@@ -86,6 +85,7 @@ local function main(configuration: unknown)
     local started = time.now()
     local function elapsed(): integer return clock.elapsed_ms(started) end
     local log = logger:named("bee.hive.supervisor")
+    log:info("Boot phase", {phase = "hive_supervisor", stage = "begin"})
     local function send(recipient: string, topic: string, value: unknown): boolean
         local sent, err = process.send(recipient, topic, value)
         if not sent or err then log:warn("Hive delivery rejected", {topic = topic}) end
@@ -575,10 +575,9 @@ local function main(configuration: unknown)
         local named, name_error = process.registry.register(types.SUPERVISOR_NAME)
         if not named then error("Register local supervisor: " .. tostring(name_error)) end
         registered = true
-        -- A local client discovers this supervisor only through this eventual
-        -- name, so publish it whenever the node has a native identity. The
-        -- desktop bridge is not a condition: its failure must not remove the
-        -- only discovery path. Publishing grants no admission on its own.
+        local notified, notify_error = event_bus.send("bee.launch", "supervisor.ready", self)
+        if not notified then error("Notify local supervisor readiness: " .. tostring(notify_error)) end
+        log:info("Boot phase", {phase = "hive_supervisor", stage = "end"})
         local decision = registration.decide(native_node, distributed_name)
         if decision.publish then
             local published, publish_error = process.registry.register(decision.name, self, process.registry.EVENTUAL)

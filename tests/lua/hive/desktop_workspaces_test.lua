@@ -4,6 +4,7 @@
 -- its supervisor (releasing its host lease), and a leased supervisor that
 -- exits ends only its own sessions.
 local test = require("test")
+local env = require("env")
 local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
@@ -382,6 +383,37 @@ local function define_tests()
             request(h, protocol.ATTACH, "attach-2", {workspace_id = FOLDER, desktop_id = DISPLAY, mode = "control"})
             local refused = answer(h)
             test.eq(refused.error and refused.error.code, "CONFLICT")
+            close(h)
+        end)
+        test.it("forwards the real startup EXIT before stopping the bridge", function()
+            local h = harness("startup-failure")
+            local folder = h.state.folder
+            if not folder then error("missing folder") end
+            folder.ready = false
+            h.state.owner_name = "bee.test.startup.failure"
+            local failures = listen("bee.retained.failure")
+            assert(process.registry.register(h.state.owner_name))
+            local cause = "workspace migration 9 (nested_bee_names_v1) checksum changed: expected abc, found unknown"
+            assert(process.send(h.folder, "bee.test.retained.send", {error = cause}))
+            local deadline = time.after("3s")
+            while true do
+                local selected = channel.select({h.events:case_receive(), deadline:case_receive()})
+                if selected.channel == deadline then error("folder did not fail") end
+                local event = selected.value
+                if event.kind == process.event.EXIT and tostring(event.from) == h.folder then
+                    local ok, err = pcall(owner.event, h.state, event, 1)
+                    test.is_false(ok)
+                    owner.startup_failure(h.state, tostring(err))
+                    break
+                end
+            end
+            local failure = assert(bounds.object(next_message(failures, "startup failure"):payload():data()))
+            test.contains(tostring(failure.error), cause)
+            test.contains(tostring(env.get("bee.launch:startup_error")), cause)
+            test.is_true(h.state.stopped)
+            assert(env.set("bee.launch:startup_error", ""))
+            process.registry.unregister(h.state.owner_name)
+            process.unlisten(failures)
             close(h)
         end)
         test.it("ends only the sessions of a leased workspace whose supervisor exits", function()

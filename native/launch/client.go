@@ -229,6 +229,7 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 	}()
 	if !owned {
+		bootPhase(ctx, "owner_spawn", "begin")
 		previous, err := seams.waitDescriptor(ctx, directory)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
@@ -241,6 +242,8 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		if err != nil {
 			return err
 		}
+		bootPhase(ctx, "owner_spawn", "end")
+		bootPhase(ctx, "owner_wait", "begin")
 		launched = launchID
 		startup := ctx
 		if observe == nil {
@@ -257,6 +260,7 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 			return fmt.Errorf("Bee owner startup: %w", err)
 		}
 		started = published.Launch == launchID
+		bootPhase(ctx, "owner_wait", "end")
 	}
 	owner, err := seams.waitDescriptor(ctx, directory)
 	if err != nil {
@@ -289,11 +293,14 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		join.Public, join.Key = public, private
 	}
 	join.Node = clientNodeName(join.Public)
+	bootPhase(ctx, "client_enrollment", "begin")
+	bootPhase(ctx, "client_key_publish", "begin")
 	release, err := enrollClient(ctx, launch.State, join.Node, join.Public)
 	if err != nil {
 		return err
 	}
 	defer func() { result = errors.Join(result, release()) }()
+	bootPhase(ctx, "client_key_publish", "end")
 	// The owner registers the trusted key on its own bounded refresh, so wait
 	// until the enrollment lists this node with this key before the mesh
 	// handshake.
@@ -303,6 +310,8 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 	}
 	join.State = launch.State
+	bootPhase(ctx, "client_enrollment", "end")
+	bootPhase(ctx, "client_join", "begin")
 	if err := seams.join(ctx, join); err != nil {
 		// An owner this client started only for a command it refused retains no
 		// desktop. The owner itself declines when another local client uses it.

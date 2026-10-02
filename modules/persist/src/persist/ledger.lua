@@ -6,8 +6,10 @@
 local sql = require("sql")
 local hash = require("hash")
 local env = require("env")
+local time = require("time")
+local logger = require("logger")
 local M = {}
-type Migration = {id: integer, name: string, sql: string, rebuild: boolean?}
+type Migration = {id: integer, name: string, sql: string, rebuild: boolean?, historical_sql: {string}?}
 type Ledger = {
     table: string, label: string,
     transaction: "batch"?, applied_at: boolean?, freshness_table: string?,
@@ -77,7 +79,16 @@ local function read_ledger(db: Connection, ledger: Ledger, expected: {Migration}
         local expected_checksum, checksum_err = M.checksum(migration)
         if not expected_checksum then return nil, checksum_err end
         if row_name ~= migration.name then return nil, ledger.label .. " migration name changed" end
-        if checksum ~= expected_checksum then return nil, ledger.label .. " migration checksum changed" end
+        local matches = checksum == expected_checksum
+        if not matches then
+            for _, text in ipairs(migration.historical_sql or {}) do
+                local historical_checksum, historical_err = M.checksum({id = migration.id, name = migration.name, sql = text})
+                if not historical_checksum then return nil, historical_err end
+                if checksum == historical_checksum then matches = true; break end
+            end
+        end
+        if not matches then return nil, ledger.label .. " migration " .. tostring(id) .. " (" .. migration.name
+            .. ") checksum changed: expected " .. expected_checksum .. ", found " .. checksum end
         known[id] = true
         if reporting then env.set("bee.persist.env:startup_progress", "Checking data: " .. ledger.label:lower() .. " " .. tostring(id) .. "/" .. tostring(#expected)) end
         expected_id = expected_id + 1
@@ -164,7 +175,7 @@ local function apply_transaction(db: sql.DB, ledger: Ledger, expected: {Migratio
     return finish(true, nil)
 end
 
-function M.apply(db: sql.DB, ledger: Ledger, expected: {Migration}): (boolean, string?)
+local function apply(db: sql.DB, ledger: Ledger, expected: {Migration}): (boolean, string?)
     local shape_error = M.check(expected)
     if shape_error then return false, shape_error end
     local name, name_error = table_name(ledger)
@@ -193,6 +204,16 @@ function M.apply(db: sql.DB, ledger: Ledger, expected: {Migration}): (boolean, s
         end
     end
     return true, nil
+end
+function M.apply(db: sql.DB, ledger: Ledger, expected: {Migration}): (boolean, string?)
+    local log = logger:named("bee.persist")
+    local started = time.now()
+    local owner = ledger.label:lower()
+    log:info("Boot phase", {phase = "migration_check", stage = "begin", owner = owner})
+    local migrated, err = apply(db, ledger, expected)
+    log:info("Boot phase", {phase = "migration_check", stage = migrated and "end" or "failed", owner = owner,
+        elapsed_ms = math.floor(time.now():sub(started):milliseconds())})
+    return migrated, err
 end
 -- The ledger rows as stored: what a component reports as its schema state.
 function M.rows(db: sql.DB, ledger: Ledger): ({{id: integer, name: string, checksum: string}}?, string?)

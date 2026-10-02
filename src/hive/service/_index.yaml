@@ -35,6 +35,7 @@ entries:
       # The supervisor composes the retained desktop bridge, so it needs the
       # desktop host policy that authorizes desktop admission, and the bridge
       # reads the node's displays and one page of its workspace catalog.
+      - bee.security.desktop:startup_failure_policy
       - bee.hive.desktop:host_policy
       - bee.security.desktop:desktop_catalog_policy
       - bee.security.desktop:desktop_catalog_resource_policy

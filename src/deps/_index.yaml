@@ -70,6 +70,8 @@ entries:
     value: bee:workers
   - name: target_publish_configuration
     value: bee.hub.publication:hub_publication
+  - name: target_lifecycle_owners
+    value: [bee.sessions.binding:lifecycle]
 - name: gov
   kind: ns.dependency
   component: bee/gov
@@ -474,7 +476,10 @@ entries:
     - bee.security.threads:thread_node_policy
     - bee.security.threads:thread_sessions_owner_policy
     - bee.sessions.security:scheduler_policy
+    - bee.sessions.security:lifecycle_worker_policy
     - bee.sessions.security:scheduler_principal_policy
+  - name: bee.sessions.binding:target_lifecycle_policies
+    value: [bee.sessions.security:lifecycle_policy, bee.sessions.security:lifecycle_journal_policy, bee.security.threads:thread_sessions_owner_policy]
   - name: bee.sessions.binding:target_owner_policies
     value:
     - bee.security.threads:thread_sessions_owner_policy

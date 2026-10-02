@@ -106,8 +106,13 @@ version constrain compatibility; the active Hub installer code remains protected
 The review lists retained components with the dependency or compatibility reason.
 One digest, confirmation and receipt cover the core and component root changes.
 Removed optional components stay removed.
-Component service handoff remains a proposal; removal uses the existing data
-retention and migration choices.
+Changed component services require a host-granted owner drain/readiness callback,
+including component changes selected by Update Bee. The core retains its existing
+process lifecycles.
+Removal retains their owned data and refuses migration `down`; unsupported
+service and process-host owners are refused. Open applications reload through
+the existing broker on update; removal fences new launches and requires the
+person to close departing processes before recovering the receipt.
 
 A bare dependency parameter binds requirements of that name owned by that
 dependency. A qualified parameter binds its exact requirement in that
@@ -129,7 +134,7 @@ evidence.
 Apply requires management authority and the displayed `expected_digest`. The
 private worker serializes Bee Hub operations, replans against the current base
 and records a durable receipt. A changed plan or registry base requires another
-review. Receipts distinguish `published`, `complete`, `failed` and
+review. Receipts distinguish `prepared`, `published`, `complete`, `failed` and
 `recovery_required`; after an uncertain call, inspect its receipt rather than
 retrying blindly. `status` with a digest reads that receipt. Without one,
 `status` pages the authenticated caller's own receipt history.
@@ -141,8 +146,10 @@ its code and original diagnostic. Diagnostics over 4,096 bytes carry an explicit
 `[truncated]` marker. Replaying that confirmed request returns the recorded
 failure, including after restart.
 
-Apply records lifecycle intent but does not claim that an automatic service has
-become healthy. Package functions run only under host-selected exact database
+Apply records durable intent before drain. Service-bearing changes stop
+admission and wait for the owner before publication; update/install restarts
+through the existing runtime supervisor and verifies owner readiness before
+`complete`. Lost replies remain recoverable with the original request/digest. Package functions run only under host-selected exact database
 and function grants. They do not receive Bee's private publication, receipt,
 worker or scope-editing policies. Registry definitions are never restored after
 migration execution.

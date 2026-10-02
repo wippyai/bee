@@ -112,3 +112,21 @@ entries:
     actions: [registry.get, registry.snapshot]
     resources: ['*']
     effect: allow
+- name: lifecycle_policy
+  kind: security.policy
+  policy:
+    actions: [bee.sessions.lifecycle, registry.get, registry.snapshot, process.registry.lookup, process.send]
+    resources: [bee.sessions.service:scheduler_service, 'bee.hub.operations:*', bee.sessions.scheduler, bee.threads.binding:work_scan, '*']
+    effect: allow
+- name: lifecycle_worker_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.snapshot, process.listen, process.send]
+    resources: ['bee.hub.operations:*', bee.sessions.service:scheduler_worker, bee.sessions.lifecycle, '*']
+    effect: allow
+- name: lifecycle_journal_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.binding:work_scan]
+    effect: allow

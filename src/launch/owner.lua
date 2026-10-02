@@ -14,7 +14,6 @@ local decode = require("decode")
 local workspaces = require("workspaces")
 local command_stop = require("command_stop")
 local handoff = require("owner_handoff")
-local startup_failure = require("startup_failure")
 local startup_progress = require("startup_progress")
 local uuid = require("uuid")
 local env = require("env")
@@ -146,6 +145,8 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
         local heartbeats = heartbeat:channel()
         local startup_phase = "starting"
         local function observe_startup()
+            local failure = retained.stored_startup_failure(env.get("bee.launch:startup_error"))
+            if failure then error(failure) end
             local raw = env.get("bee.env:startup_sequence")
             local sequence = raw and tonumber(raw)
             if sequence and sequence > 0 and sequence == math.floor(sequence) then
@@ -176,8 +177,8 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                 if command_stop.accept(selected.value) then return end
             elseif selected.channel == failures then
                 local message = selected.value
-                local node = startup_failure.node_id(tostring(process.pid()))
-                local reason = node and startup_failure.decode(tostring(message:from()), message:payload():data(), node) or nil
+                local node = retained.startup_node(tostring(process.pid()))
+                local reason = node and retained.startup_failure(tostring(message:from()), message:payload():data(), node) or nil
                 if reason then error(reason) end
             elseif selected.channel == progress then
                 if not announced then

@@ -13,6 +13,24 @@ end
 
 local function define_tests()
     test.describe("Session scheduler", function()
+        test.it("checks durable obligations before acknowledging a component drain", function()
+            test.eq(scheduler.drain_problem({items = {}, interactive_active = false}), nil)
+            test.not_nil(scheduler.drain_problem({items = {}}))
+            test.not_nil(scheduler.drain_problem({items = {}, interactive_active = true}))
+            test.not_nil(scheduler.drain_problem({items = {}, interactive_active = "corrupt"}))
+            local queued = {work = "work-1", session = "session-1", state = "queued"}
+            test.eq(scheduler.drain_problem({interactive_active = false, items = {queued}}), nil)
+            test.not_nil(scheduler.drain_problem({interactive_active = false, items = {{work = "work-1", session = "session-1",
+                state = "accepted", turn = "turn-1", claim = "claim-1", owner_epoch = 1}}}))
+            test.not_nil(scheduler.drain_problem({interactive_active = false, items = {{work = "work-1", session = "session-1",
+                state = "reserved", turn = "turn-1", claim = "claim-1", owner_epoch = 1}}}))
+            test.not_nil(scheduler.drain_problem({interactive_active = false, items = {{work = "work-1", session = "session-1",
+                state = "queued", uncertainty = {reason = "lost reply"}}}}))
+            test.not_nil(scheduler.drain_problem({interactive_active = false, items = "corrupt"}))
+            local full: {{[string]: unknown}} = {}
+            for index = 1, scheduler.MAX_SCAN do full[index] = queued end
+            test.not_nil(scheduler.drain_problem({interactive_active = false, items = full}))
+        end)
         test.it("persists an executor failure as uncertainty without repeating the invocation", function()
             local owner = threads.new()
             local calls = 0

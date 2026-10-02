@@ -461,7 +461,7 @@ local function main(value: unknown)
             changed()
         elseif kind == "installed" then invalidate(); installed()
         elseif kind == "authoring" then
-            content.open = false; model.show(state, "authoring"); offset = 0; changed()
+            invalidate(); content.open = false; model.show(state, "authoring"); offset = 0; changed()
         elseif kind == "author_component" then begin_editor("publication_component")
         elseif kind == "author_version" then begin_editor("publication_version")
         elseif kind == "author_snapshot" then begin_editor("publication_snapshot_digest")

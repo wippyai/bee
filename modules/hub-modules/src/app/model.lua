@@ -889,7 +889,7 @@ function M.apply_catalog(state: State, reply: Reply)
         return a.component < b.component
     end)
     state.all_catalog = rows
-    state.total, state.phase, state.notice = total, "catalog", ""
+    state.total, state.notice = total, ""
     if update_catalog_visibility then update_catalog_visibility(state) end
 end
 

@@ -57,6 +57,30 @@ local function define_tests()
             test.eq(status.query({}, true), nil)
             test.eq(assert(status.query({node_id = "local"}, true)).node_id, "local")
         end)
+        test.it("routes status summaries through the real Hive dispatcher", function()
+            local raw = assert(funcs.call("bee.hive.telemetry.binding:node_summary", {}))
+            local summary = assert(bounds.object(raw))
+            local node = assert(bounds.id(summary.node_id))
+            local function call(owner: types.OwnerRef, target: types.Target, input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
+                local request = assert(types.decode_request({protocol_revision = types.REVISION,
+                    request_id = "status-dispatch", idempotency_key = "status-dispatch", caller_node_id = node,
+                    caller_incarnation = "inc-1", owner_ref = owner, operation_ref = target.operation_ref,
+                    operation_revision = "1", input = input, input_digest = assert(types.digest(input)),
+                    principal_ref = {issuer = "node:" .. node, subject_id = "status-reader"},
+                    principal_assertion = {method = types.ASSERTION_METHOD, audience = node,
+                        issued_at = "2026-09-08T10:00:00.000Z", expires_at = "2026-09-08T10:05:00.000Z"},
+                    delegation_refs = {}, deadline = "2026-09-08T10:05:00.000Z"}))
+                local reply, err = funcs.call("bee.hive.supervisor:execute", request)
+                if err then error(tostring(err)) end
+                local decoded = assert(types.decode_reply(reply))
+                if not decoded.ok then error(decoded.error and decoded.error.message or "dispatch failed") end
+                return decoded
+            end
+            local result = status.aggregate(call, {{node_id = node, online = true}})
+            test.eq(result[1].status, "ok")
+            test.eq(result[1].name, summary.name)
+            test.eq(result[1].running_sessions, summary.running_sessions)
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

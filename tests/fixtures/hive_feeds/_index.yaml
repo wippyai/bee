@@ -9,7 +9,6 @@ entries:
     bounds: bee.values:bounds
     client: bee.hive.binding:client
     types: bee.hive:types
-    principals: bee.hive.security:principals
 - name: policy
   kind: security.policy
   policy:
@@ -45,4 +44,3 @@ entries:
     bounds: bee.values:bounds
     client: bee.hive.binding:client
     types: bee.hive:types
-    principals: bee.hive.security:principals

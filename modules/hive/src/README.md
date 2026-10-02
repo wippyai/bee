@@ -16,7 +16,7 @@ Cluster telemetry lives in the optional `bee/hive-telemetry` package
 | `bee.hive.types` | Peer/enrollment/invite values, route selection, workspace queries and page decoding |
 | `bee.hive.binding` | Client, authenticated dispatch, policy admission, workspace operations and feature senders |
 | `bee.hive.exposure` | Operation exposure and interface catalog |
-| `bee.hive.security` | Principal identity and workspace-call policy template |
+| `bee.hive.security` | Workspace-call policy template |
 | `bee.hive.service` | Supervisor, display command and remote viewer processes |
 | `bee.hive.desktop` | Desktop bridge, catalog, grant/session handling and presentation helpers |
 
@@ -24,6 +24,21 @@ Hive workspace listing and desktop `list` share
 `bee.hive.types:workspace_query` for label, cursor and page-size validation.
 The listing handler validates a dense, bounded catalog page and requires the
 local node identity before returning results.
+
+## Public adapter protocol
+
+`bee.hive:types` is the public value boundary for feature-owned adapters.
+Alongside request/reply decoding, it exports `PrincipalMapping` and
+`PrincipalMappings`, `decode_principal_mappings`, `resolve_principal` and
+`principal_actor`. Principal mappings preserve the `bee.hive.member@1`
+encoding: the actor uses the first 128 bits of SHA-256 over the issuer, a
+newline and the subject. The host's existing principal mapping entry and schema
+remain unchanged. `exposure_action` supplies the existing exposure action name;
+`INVOKE_CHECK` names the callable check that runs under the mapped caller's own
+actor and scope. These values select no authority.
+
+Threads' destination adapter lives in `bee.threads.hive.binding` and imports
+this public protocol directly. It imports no Hive implementation children. Hive's own policy admission uses the same principal decoder.
 
 ## Host composition
 

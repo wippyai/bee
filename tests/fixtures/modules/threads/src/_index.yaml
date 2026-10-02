@@ -82,3 +82,7 @@ entries:
     value: bee:workers
   - name: waiter_policies
     value: [bee.security.threads:thread_waiter_policy]
+  - name: owner_policies
+    value: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
+  - name: target_append_policies
+    value: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]

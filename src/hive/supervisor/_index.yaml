@@ -38,6 +38,6 @@ entries:
     - operations: [bee.threads.binding:send, bee.threads.binding:send_status, bee.threads.binding:inbox_resolve,
         bee.threads.binding:inbox_describe, bee.threads.binding:inbox_send, bee.threads.binding:inbox_reply,
         bee.threads.binding:notify, bee.threads.binding:watch]
-      worker: bee.threads.hive:admit
+      worker: bee.threads.hive.binding:admit
     - operations: [bee.sync.binding:replica_receive]
       worker: bee.sync.binding:admit

@@ -818,6 +818,7 @@
     "bee.threads.env:environment",
     "bee.threads.hive:admission_policy",
     "bee.threads.hive:identity_policy",
+    "bee.threads.hive:target_admit_policies",
     "bee.threads.service:owner",
     "bee.threads.service:owner_service",
     "bee.threads.service:pump_worker",

@@ -96,7 +96,6 @@ entries:
     types: bee.hive:types
     bounds: bee.values:bounds
     catalog: bee.hive.exposure:catalog
-    principals: bee.hive.security:principals
     canonical: bee.values:canonical
 - name: admit_policy
   kind: function.lua
@@ -117,7 +116,6 @@ entries:
     types: bee.hive:types
     bounds: bee.values:bounds
     catalog: bee.hive.exposure:catalog
-    principals: bee.hive.security:principals
     canonical: bee.values:canonical
 - name: dispatch
   kind: library.lua

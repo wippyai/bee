@@ -18,7 +18,6 @@ entries:
     registration: bee.hive.types:registration
     admission: bee.hive.binding:admission
     policy_admission: bee.hive.binding:policy_admission
-    principals: bee.hive.security:principals
     desktop_owner: bee.hive.desktop:owner
     desktop_protocol: bee.hive.desktop:protocol
     catalog: bee.hive.exposure:catalog

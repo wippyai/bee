@@ -162,3 +162,25 @@ work and returns `interactive_active` when a nonclosed hook Session remains,
 even with no current Work. The ordinary pull scan retains its existing shape
 and filtering. This reads the existing session/work store in one transaction;
 no schema or persisted identity changes.
+
+## Hive adapter
+
+`bee.threads.hive.binding:admit` admits authenticated cross-node thread
+operations selected by the host's existing Hive adapter table. The adapter
+uses Hive's public `bee.hive:types` protocol, including principal mapping
+values and the mapped caller's invocation check. It keeps the exact operation,
+owner service, revision, payload, digest, deadline, caller-node and issuer
+checks before calling the thread owner under the mapped actor's policies.
+
+Threads adds no Hive dependency to its base composition. A host that composes
+Hive selects `bee.threads.hive:target_admit_policies` as the destination
+admission grants. The adapter imports the public protocol directly.
+Bee supplies these selections through its existing `bee.deps:threads` entry.
+The host retains `bee.threads.hive:admission_policy`,
+`bee.threads.hive:identity_policy` and the principal mapping table, with their
+existing IDs. The adapter's policy underlay is empty without host selection.
+
+The implementation move is M0/M4: stored thread identities, policy selections,
+member actor encoding, topics, schema tags and applied migrations are unchanged.
+Use a full node restart to load the adapter closure; Hive supervisor handoff
+remains a proposal.

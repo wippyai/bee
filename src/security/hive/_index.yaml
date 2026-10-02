@@ -208,7 +208,7 @@ entries:
     - bee.hive.binding:execute
     - bee.hive.binding:admit_policy
     - bee.hive.binding:advertise
-    - bee.threads.hive:admit
+    - bee.threads.hive.binding:admit
     - bee.sync.binding:admit
     effect: allow
 - name: hive_owner_stop_policy

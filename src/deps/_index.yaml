@@ -41,6 +41,11 @@ entries:
   component: bee/threads
   version: 0.1.0-dev
   parameters:
+  - name: bee.threads.hive:target_admit_policies
+    value:
+    - bee.threads.hive:admission_policy
+    - bee.threads.hive:identity_policy
+    - bee.security.hive:hive_thread_exposure_policy
   - name: process_host
     value: bee:workers
   - name: waiter_policies

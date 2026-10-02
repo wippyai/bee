@@ -37,7 +37,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.hive.binding:execute, bee.hive.binding:admit_policy,
-      bee.sync.binding:admit, bee.threads.hive:admit, bee.hive.binding:advertise]
+      bee.sync.binding:admit, bee.threads.hive.binding:admit, bee.hive.binding:advertise]
     effect: allow
 - name: replica_policy
   kind: security.policy

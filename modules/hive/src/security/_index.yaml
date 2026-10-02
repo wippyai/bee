@@ -1,14 +1,6 @@
 version: '1.0'
 namespace: bee.hive.security
 entries:
-- name: principals
-  kind: library.lua
-  source: file://principals.lua
-  modules: [hash]
-  imports:
-    types: bee.hive:types
-    bounds: bee.values:bounds
-
 - name: workspaces_policy
   kind: security.policy
   meta:

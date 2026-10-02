@@ -4771,11 +4771,6 @@
       "source": "modules/hive-manager/src/_index.yaml"
     },
     {
-      "id": "bee.hive.security:principals",
-      "kind": "library.lua",
-      "source": "modules/hive/src/security/_index.yaml"
-    },
-    {
       "id": "bee.hive.security:workspaces_policy",
       "kind": "security.policy",
       "source": "modules/hive/src/security/_index.yaml"
@@ -8541,9 +8536,14 @@
       "source": "modules/threads/src/env/_index.yaml"
     },
     {
-      "id": "bee.threads.hive:admission",
+      "id": "bee.threads.hive.binding:admission",
       "kind": "library.lua",
-      "source": "src/threads/hive/_index.yaml"
+      "source": "modules/threads/src/hive/binding/_index.yaml"
+    },
+    {
+      "id": "bee.threads.hive.binding:admit",
+      "kind": "function.lua",
+      "source": "modules/threads/src/hive/binding/_index.yaml"
     },
     {
       "id": "bee.threads.hive:admission_policy",
@@ -8551,14 +8551,14 @@
       "source": "src/threads/hive/_index.yaml"
     },
     {
-      "id": "bee.threads.hive:admit",
-      "kind": "function.lua",
-      "source": "src/threads/hive/_index.yaml"
-    },
-    {
       "id": "bee.threads.hive:identity_policy",
       "kind": "security.policy",
       "source": "src/threads/hive/_index.yaml"
+    },
+    {
+      "id": "bee.threads.hive:target_admit_policies",
+      "kind": "ns.requirement",
+      "source": "modules/threads/src/hive/_index.yaml"
     },
     {
       "id": "bee.threads.migrations:migrations",
@@ -11013,7 +11013,21 @@
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
       "path_namespace": "bee.threads.hive",
+      "source": "modules/threads/src/hive/_index.yaml"
+    },
+    {
+      "namespace": "bee.threads.hive",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.threads.hive",
       "source": "src/threads/hive/_index.yaml"
+    },
+    {
+      "namespace": "bee.threads.hive.binding",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.threads.hive.binding",
+      "source": "modules/threads/src/hive/binding/_index.yaml"
     },
     {
       "namespace": "bee.threads.migrations",
@@ -13908,6 +13922,11 @@
       "target": "bee.sync.service:distributor"
     },
     {
+      "requirement": "bee.threads.hive:target_admit_policies",
+      "resolved_by": "registry source",
+      "target": "bee.threads.hive.binding:admit"
+    },
+    {
       "requirement": "bee.threads:owner_policies",
       "resolved_by": "registry source",
       "target": "bee.threads.service:owner"
@@ -16465,6 +16484,17 @@
     },
     {
       "default_reference_ids": [],
+      "id": "bee.threads.hive:target_admit_policies",
+      "source": "modules/threads/src/hive/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.threads.hive.binding:admit",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
       "id": "bee.threads:owner_policies",
       "source": "modules/threads/src/_index.yaml",
       "targets": [
@@ -17311,7 +17341,7 @@
     },
     {
       "sources": [
-        "modules/hive/src/security/principals.lua"
+        "modules/hive/src/types.lua"
       ],
       "tag": "bee.hive.member@1"
     },
@@ -17493,17 +17523,17 @@
   "summary": {
     "dangling_requirement_target_count": 0,
     "entry_count": 1829,
-    "namespace_count": 274,
+    "namespace_count": 276,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 151,
-    "persisted_id_count": 865,
-    "requirement_count": 150,
-    "requirement_target_count": 347,
+    "persisted_id_count": 866,
+    "requirement_count": 151,
+    "requirement_target_count": 348,
     "root_src_lua_budget": 16341,
-    "root_src_lua_lines": 16341,
+    "root_src_lua_lines": 16155,
     "schema_tag_count": 70,
     "topic_count": 138
   },

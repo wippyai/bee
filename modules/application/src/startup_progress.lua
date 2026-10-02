@@ -1,4 +1,4 @@
--- MIT. Track the ten-second inactivity budget for verified retained startup progress.
+-- MIT. Retained startup progress values.
 local M = {}
 
 type State = {phase: string, deadline_ms: integer, timeout_ms: integer, revision: integer}
@@ -35,6 +35,18 @@ end
 
 function M.phase(state: State): string
     return state.phase
+end
+
+local STARTUP_PHASES: {[string]: boolean} = {
+    booting = true, host_leasing = true, host_attaching = true,
+    client_boot = true, admitting = true, rendering = true, running = true}
+function M.decode(value: unknown): string?
+    if type(value) ~= "table" or value.version ~= 1 or type(value.phase) ~= "string"
+        or not STARTUP_PHASES[value.phase] then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "phase" then return nil end
+    end
+    return value.phase
 end
 
 return M

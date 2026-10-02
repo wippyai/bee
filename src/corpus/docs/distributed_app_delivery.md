@@ -315,8 +315,8 @@ The opt-in application checkpoint of at most 65,536 bytes remains for small
 resume state. Closing the live view removes its resume record, while the
 database file persists.
 
-A person reviews the staged plan in Start › Tools › Overlays, selects and
-prepares it there, approves the request in Start › Tools › Approvals, and lets
+A person reviews the staged plan in Start › Apps › Advanced › Overlays, selects and
+prepares it there, approves the request in Needs you, and lets
 Overlays step the activation owner until it settles; the application then
 appears in the Start menu. `make workspace-app-delivery-check` proves this path
 on the unmodified composition with a scripted agent;

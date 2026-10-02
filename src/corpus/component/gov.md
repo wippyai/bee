@@ -161,7 +161,11 @@ recovery reconciles the same approval effect because it may already have been
 consumed. A verified receipt establishes the desired intent. Later recovery
 remeasures that exact intent, restores its absent process-local overlay with
 revision-fenced receipts, and never follows a newer plan selection. The
-resolver, approval executor, overlay owner, apply and exact-observation functions
+settled intent's measured application admission includes the exact generated
+policy bodies. Cold recovery regenerates absent capability records from that
+unchanged admission and the recorded approval; a conflicting live grant still
+blocks restoration.
+The resolver, approval executor, overlay owner, apply and exact-observation functions
 remain host-selected inputs; replicated content supplies none of them.
 
 Migration work stays inside the same durable `applying` effect. For the current

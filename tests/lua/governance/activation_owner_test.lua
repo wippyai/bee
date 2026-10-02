@@ -285,7 +285,7 @@ local function define_tests()
             local evidence = installed_capability(nil)
             if evidence.kind ~= "installed" then error("installed capability evidence is missing") end
             local world: ResolverWorld = {revision = 4, digest = SHA,
-                capability = evidence}
+                capability = evidence, application_admission = admission(exact.digest, SHA, nil, workspace)}
             local requests = 0
             local executor = {}
             function executor.call(self: owner.Executor, _method: string, _request: unknown): (unknown?, unknown?)
@@ -314,6 +314,11 @@ local function define_tests()
             test.eq(requests, 0)
             test.eq(ok(owner.step(config, "intent-contained", "contained")).phase, "applying")
             test.eq(ok(owner.step(config, "intent-contained", "contained")).outcome, "applied")
+            test.eq(requests, 0)
+            applied = false
+            world.capability = {kind = "new", proposal = evidence.proposal, review = evidence.review}
+            test.is_true(ok(owner.recover(config, "contained-cold")).recovered == true)
+            test.is_true(applied)
             test.eq(requests, 0)
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
@@ -633,7 +638,7 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
-        test.it("repairs a partial overlay when its installed capability grant matches the activation", function()
+        test.it("restores approved capability admission after partial and cold overlay loss", function()
             local workspace = "workspace-partial-grant-recovery"
             local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
             local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
@@ -646,7 +651,8 @@ local function define_tests()
             if not proposal then error(tostring(proposal_error)) end
             local review, review_error = capability_grants.diff(vocabulary, nil, proposal)
             if not review then error(tostring(review_error)) end
-            local world: ResolverWorld = {revision = 4, digest = SHA,
+            local frozen = admission(exact.digest, SHA, nil, workspace)
+            local world: ResolverWorld = {revision = 4, digest = SHA, application_admission = frozen,
                 capability = {kind = "new", proposal = proposal, review = review}}
             local application_entry_present, apply_count = false, 0
             local installed_evidence: preflight.CapabilityEvidence? = nil
@@ -688,6 +694,26 @@ local function define_tests()
             test.is_true(restored.recovered == true)
             test.is_true(application_entry_present)
             test.eq(apply_count, 2)
+            application_entry_present = false
+            local live = installed_evidence
+            if not live or live.kind ~= "installed" then error("installed grant evidence is missing") end
+            local approved_id = live.installed.approval_id
+            live.installed.approval_id = "another-approval"
+            test.eq(owner.recover(config, "cold-grant-conflicting").code, "CONFLICT")
+            test.eq(apply_count, 2)
+            live.installed.approval_id = approved_id
+            world.capability = {kind = "new", proposal = proposal, review = review}
+            world.application_admission = admission(exact.digest, SHA_B, nil, workspace)
+            test.eq(owner.recover(config, "cold-grant-changed").code, "CONFLICT")
+            test.eq(apply_count, 2)
+            world.application_admission = nil
+            test.eq(owner.recover(config, "cold-grant-unmeasured").code, "CONFLICT")
+            test.eq(apply_count, 2)
+            world.application_admission = frozen
+            local cold = ok(owner.recover(config, "cold-grant"))
+            test.is_true(cold.recovered == true)
+            test.is_true(application_entry_present)
+            test.eq(apply_count, 3)
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)

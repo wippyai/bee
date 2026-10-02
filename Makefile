@@ -26,6 +26,9 @@ setup: native-tools
 hive-status-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.hive.telemetry status_test
 .PHONY: hive-status-owner-check
+.PHONY: governance-activation-owner-check
+governance-activation-owner-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov activation_owner_test
 hive-status-owner-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.threads work_store_test
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.approvals service_test

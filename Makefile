@@ -302,6 +302,7 @@ gateway-container-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/gateway_container.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/gateway_container.go -runtime "$(abspath $(WIPPY))" -interface "$(GATEWAY_INTERFACE)" -image "$(DOCKER_IMAGE)"
 gateway-readiness-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go test -count=1 tests/gateway_container.go tests/gateway_container_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/gateway_container.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/gateway_container.go -runtime "$(abspath $(WIPPY))" -readiness-only
 check: gateway-readiness-check

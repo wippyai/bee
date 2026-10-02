@@ -75,7 +75,7 @@ entries:
     inspect: bee.hub.binding:inspect
     host_resources: bee.hub.activation:host_resources
     paths: bee.placement.profiles:paths
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
 - name: backend
   kind: function.lua
   source: file://backend.lua

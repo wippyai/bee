@@ -9,7 +9,7 @@ entries:
   source: file://claude_stream_json.lua
   modules: [json]
   imports:
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     types: bee.driver:types
     bounds: bee.values:bounds
     paths: bee.driver.codec:paths
@@ -18,7 +18,7 @@ entries:
   source: file://codex_jsonl.lua
   modules: [json]
   imports:
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     types: bee.driver:types
     bounds: bee.values:bounds
     paths: bee.driver.codec:paths
@@ -27,7 +27,7 @@ entries:
   source: file://opencode_json_events.lua
   modules: [json]
   imports:
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     types: bee.driver:types
     bounds: bee.values:bounds
     values: bee.threads.records:values
@@ -37,7 +37,7 @@ entries:
   source: file://agy_stream_json.lua
   modules: [json]
   imports:
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     types: bee.driver:types
     bounds: bee.values:bounds
     values: bee.threads.records:values
@@ -48,7 +48,7 @@ entries:
   source: file://grok_streaming_json.lua
   modules: [json]
   imports:
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     types: bee.driver:types
     bounds: bee.values:bounds
     values: bee.threads.records:values
@@ -58,7 +58,7 @@ entries:
   source: file://muse_record_jsonl.lua
   modules: [json]
   imports:
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     types: bee.driver:types
     bounds: bee.values:bounds
     values: bee.threads.records:values
@@ -69,10 +69,21 @@ entries:
   source: file://codec_registry.lua
   imports:
     bounds: bee.values:bounds
-    normalizer: bee.driver.kit:normalize
+    normalizer: bee.driver.codec:normalize
     claude_stream_json: bee.driver.codec:claude_stream_json
     codex_jsonl: bee.driver.codec:codex_jsonl
     opencode_json_events: bee.driver.codec:opencode_json_events
     agy_stream_json: bee.driver.codec:agy_stream_json
     grok_streaming_json: bee.driver.codec:grok_streaming_json
     muse_record_jsonl: bee.driver.codec:muse_record_jsonl
+- name: events
+  kind: library.lua
+  source: file://events.lua
+  imports:
+    bounds: bee.values:bounds
+    record_types: bee.threads:record_types
+- name: normalize
+  kind: library.lua
+  source: file://normalize.lua
+  imports:
+    bounds: bee.values:bounds

@@ -1456,11 +1456,6 @@
       "source": "modules/driver-agy/src/descriptor/_index.yaml"
     },
     {
-      "id": "bee.driver.agy.descriptor:locate",
-      "kind": "library.lua",
-      "source": "modules/driver-agy/src/descriptor/_index.yaml"
-    },
-    {
       "id": "bee.driver.agy.env:executable",
       "kind": "env.variable",
       "source": "modules/driver-agy/src/env/_index.yaml"
@@ -1526,7 +1521,27 @@
       "source": "modules/driver-agy/src/_index.yaml"
     },
     {
+      "id": "bee.driver.binding:configuration",
+      "kind": "library.lua",
+      "source": "modules/driver/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.driver.binding:option_render",
+      "kind": "library.lua",
+      "source": "modules/driver/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.driver.binding:quote",
+      "kind": "library.lua",
+      "source": "modules/driver/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.driver.binding:resolver",
+      "kind": "library.lua",
+      "source": "modules/driver/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.driver.binding:toml",
       "kind": "library.lua",
       "source": "modules/driver/src/binding/_index.yaml"
     },
@@ -1593,11 +1608,6 @@
     {
       "id": "bee.driver.claude.descriptor:command",
       "kind": "registry.entry",
-      "source": "modules/driver-claude/src/descriptor/_index.yaml"
-    },
-    {
-      "id": "bee.driver.claude.descriptor:locate",
-      "kind": "library.lua",
       "source": "modules/driver-claude/src/descriptor/_index.yaml"
     },
     {
@@ -1701,12 +1711,22 @@
       "source": "modules/driver/src/codec/_index.yaml"
     },
     {
+      "id": "bee.driver.codec:events",
+      "kind": "library.lua",
+      "source": "modules/driver/src/codec/_index.yaml"
+    },
+    {
       "id": "bee.driver.codec:grok_streaming_json",
       "kind": "library.lua",
       "source": "modules/driver/src/codec/_index.yaml"
     },
     {
       "id": "bee.driver.codec:muse_record_jsonl",
+      "kind": "library.lua",
+      "source": "modules/driver/src/codec/_index.yaml"
+    },
+    {
+      "id": "bee.driver.codec:normalize",
       "kind": "library.lua",
       "source": "modules/driver/src/codec/_index.yaml"
     },
@@ -1788,11 +1808,6 @@
     {
       "id": "bee.driver.codex.descriptor:default_provider",
       "kind": "registry.entry",
-      "source": "modules/driver-codex/src/descriptor/_index.yaml"
-    },
-    {
-      "id": "bee.driver.codex.descriptor:locate",
-      "kind": "library.lua",
       "source": "modules/driver-codex/src/descriptor/_index.yaml"
     },
     {
@@ -1881,16 +1896,6 @@
       "source": "modules/driver-codex/src/_index.yaml"
     },
     {
-      "id": "bee.driver.configuration:configuration",
-      "kind": "library.lua",
-      "source": "modules/driver/src/configuration/_index.yaml"
-    },
-    {
-      "id": "bee.driver.configuration:option_render",
-      "kind": "library.lua",
-      "source": "modules/driver/src/configuration/_index.yaml"
-    },
-    {
       "id": "bee.driver.descriptor:descriptor",
       "kind": "library.lua",
       "source": "modules/driver/src/descriptor/_index.yaml"
@@ -1966,11 +1971,6 @@
       "source": "modules/driver-grok/src/descriptor/_index.yaml"
     },
     {
-      "id": "bee.driver.grok.descriptor:locate",
-      "kind": "library.lua",
-      "source": "modules/driver-grok/src/descriptor/_index.yaml"
-    },
-    {
       "id": "bee.driver.grok.env:executable",
       "kind": "env.variable",
       "source": "modules/driver-grok/src/env/_index.yaml"
@@ -2034,31 +2034,6 @@
       "id": "bee.driver.grok:window_policy",
       "kind": "ns.requirement",
       "source": "modules/driver-grok/src/_index.yaml"
-    },
-    {
-      "id": "bee.driver.kit:events",
-      "kind": "library.lua",
-      "source": "modules/driver/src/kit/_index.yaml"
-    },
-    {
-      "id": "bee.driver.kit:framing",
-      "kind": "library.lua",
-      "source": "modules/driver/src/kit/_index.yaml"
-    },
-    {
-      "id": "bee.driver.kit:normalize",
-      "kind": "library.lua",
-      "source": "modules/driver/src/kit/_index.yaml"
-    },
-    {
-      "id": "bee.driver.kit:quote",
-      "kind": "library.lua",
-      "source": "modules/driver/src/kit/_index.yaml"
-    },
-    {
-      "id": "bee.driver.kit:toml",
-      "kind": "library.lua",
-      "source": "modules/driver/src/kit/_index.yaml"
     },
     {
       "id": "bee.driver.locate:locate",
@@ -2138,11 +2113,6 @@
     {
       "id": "bee.driver.muse.descriptor:command",
       "kind": "registry.entry",
-      "source": "modules/driver-muse/src/descriptor/_index.yaml"
-    },
-    {
-      "id": "bee.driver.muse.descriptor:locate",
-      "kind": "library.lua",
       "source": "modules/driver-muse/src/descriptor/_index.yaml"
     },
     {
@@ -2276,11 +2246,6 @@
       "source": "modules/driver-opencode/src/descriptor/_index.yaml"
     },
     {
-      "id": "bee.driver.opencode.descriptor:locate",
-      "kind": "library.lua",
-      "source": "modules/driver-opencode/src/descriptor/_index.yaml"
-    },
-    {
       "id": "bee.driver.opencode.env:executable",
       "kind": "env.variable",
       "source": "modules/driver-opencode/src/env/_index.yaml"
@@ -2369,6 +2334,11 @@
       "id": "bee.driver.profiles:profile_access",
       "kind": "library.lua",
       "source": "modules/driver/src/profiles/_index.yaml"
+    },
+    {
+      "id": "bee.driver.transport:framing",
+      "kind": "library.lua",
+      "source": "modules/driver/src/transport/_index.yaml"
     },
     {
       "id": "bee.driver.transport:stream_json",
@@ -9869,13 +9839,6 @@
       "source": "modules/driver-codex/src/security/_index.yaml"
     },
     {
-      "namespace": "bee.driver.configuration",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.driver.configuration",
-      "source": "modules/driver/src/configuration/_index.yaml"
-    },
-    {
       "namespace": "bee.driver.descriptor",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -9930,13 +9893,6 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.driver.grok.security",
       "source": "modules/driver-grok/src/security/_index.yaml"
-    },
-    {
-      "namespace": "bee.driver.kit",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.driver.kit",
-      "source": "modules/driver/src/kit/_index.yaml"
     },
     {
       "namespace": "bee.driver.locate",
@@ -18419,7 +18375,7 @@
     },
     {
       "sources": [
-        "modules/driver/src/configuration/option_render.lua"
+        "modules/driver/src/binding/option_render.lua"
       ],
       "tag": "bee.option-config@1"
     },
@@ -18533,8 +18489,8 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1867,
-    "namespace_count": 282,
+    "entry_count": 1861,
+    "namespace_count": 280,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,

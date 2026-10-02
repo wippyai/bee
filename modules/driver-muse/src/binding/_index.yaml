@@ -19,7 +19,7 @@ entries:
   method: handle
   imports:
     configuration: bee.driver.muse.binding:configuration
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
     universal: bee.driver.binding:universal
   security:
     policies:
@@ -62,8 +62,8 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    configure_protocol: bee.driver.configuration:configuration
-    quote: bee.driver.kit:quote
+    configure_protocol: bee.driver.binding:configuration
+    quote: bee.driver.binding:quote
 - name: launch
   kind: library.lua
   source: file://launch.lua

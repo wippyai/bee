@@ -6,7 +6,7 @@ entries:
   source: file://paths.lua
   modules: [exec]
   imports:
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
 - name: profiles
   kind: library.lua
   source: file://profiles.lua

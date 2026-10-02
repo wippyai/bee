@@ -19,14 +19,14 @@ entries:
   method: handle
   imports:
     bounds: bee.values:bounds
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration
 - name: normalize
   kind: function.lua
   source: file://normalize.lua
   method: handle
   imports:
     protocol: bee.driver.wippy:protocol
-    normalizer: bee.driver.kit:normalize
+    normalizer: bee.driver.codec:normalize
 - name: run
   kind: function.lua
   source: file://run_method.lua
@@ -48,7 +48,7 @@ entries:
   imports:
     types: bee.driver.wippy:types
     bounds: bee.values:bounds
-    framing: bee.driver.kit:framing
+    framing: bee.driver.transport:framing
 - name: binding
   kind: contract.binding
   contracts:

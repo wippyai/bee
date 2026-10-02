@@ -30,11 +30,15 @@ class AppLayout(unittest.TestCase):
                     entries[identity] = entry
         registered = {entry['id'] for entry in json.loads(subprocess.check_output(
             [str(ROOT / '.wippy/bin/bee-wippy'), 'registry', 'list', '--json'], cwd=ROOT, text=True))}
+        inventory = json.loads((ROOT / 'docs/development/component-inventory.json').read_text())
+        resolvable = registered | {
+            target for package in inventory['external_dependency_proofs'] for target in package['target_ids']
+        }
         targets = 0
         for identity, entry in entries.items():
             if entry['kind'] == 'ns.requirement':
                 for target in entry.get('targets', []):
-                    self.assertTrue(target['entry'] in registered, identity + ' -> ' + target['entry'])
+                    self.assertTrue(target['entry'] in resolvable, identity + ' -> ' + target['entry'])
                     targets += 1
             for ref in entry.get('imports', {}).values():
                 if ref.startswith('bee.') or ref.startswith('bee:'):

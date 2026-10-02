@@ -59,9 +59,14 @@ uploads (see the publication section of the Hub guide).
 Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. The planner uses the runtime selection rule: preserve a live installed
-version when every incoming constraint permits it, otherwise choose the highest
+version's captured definitions when that component is unchanged; inspect the
+requested component and changed versions as candidate artifacts. This also keeps
+unrelated package planning independent of local development artifact publication.
+The version solver preserves a live installed
+version, including a selected prerelease, when every incoming constraint permits
+it; otherwise it chooses the highest
 compatible stable release (or a compatible prerelease when no stable release
-matches). Changed selections retract their old dependencies and re-evaluate
+matches and the range explicitly admits that prerelease). Changed selections retract their old dependencies and re-evaluate
 intersections; a parent is never downgraded to satisfy its children. Exact pins
 and compatible installed selections do not list release history; other ranges
 inspect the complete bounded catalog, whose pages are ordered by publication time.

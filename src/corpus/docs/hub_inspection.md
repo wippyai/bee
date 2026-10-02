@@ -85,6 +85,10 @@ nor parameters. Planning resolves the dependency closure against the current
 installed base, preserves unrelated roots and refuses changes to host-configured
 roots. It reports requirements, migrations, automatic starts and declared
 capabilities. A capability declaration does not grant the capability.
+Unchanged installed components use the captured registry definitions and live
+digest; the requested component and changed versions use inspected artifacts.
+An already selected development prerelease can satisfy wildcard dependencies;
+catalog selection still excludes prereleases unless the range admits them.
 
 Bee selects independently managed optional components with `meta.independent`
 on its existing `bee.deps` dependencies. The first operation transfers Bee

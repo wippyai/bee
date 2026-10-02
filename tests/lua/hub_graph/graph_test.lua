@@ -181,6 +181,43 @@ local function define_tests()
             test.is_nil(problem); test.not_nil(result); test.eq(calls, 0)
             if result then test.eq(result.packages[1].version, "1.0.0") end
         end)
+        test.it("retains an installed prerelease for wildcard dependencies without listing releases", function()
+            local calls = 0
+            local result, problem = graph.resolve({edge("acme/app", "*")}, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?)
+                    calls = calls + 1; return nil, nil, "must not list"
+                end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    return artifact(name, version, {}), nil
+                end,
+            }, {["acme/app"] = "1.0.0-beta.1"})
+            test.is_nil(problem); test.not_nil(result); test.eq(calls, 0)
+            if result then test.eq(result.packages[1].version, "1.0.0-beta.1") end
+        end)
+        test.it("still applies range bounds to installed prereleases", function()
+            local result, problem = graph.resolve({edge("acme/app", ">=1.0.0")}, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?)
+                    return {"1.0.0", "2.0.0-beta.1"}, false, nil
+                end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    return artifact(name, version, {}), nil
+                end,
+            }, {["acme/app"] = "1.0.0-beta.1"})
+            test.is_nil(problem); test.not_nil(result)
+            if result then test.eq(result.packages[1].version, "1.0.0") end
+        end)
+        test.it("excludes unsolicited prereleases from wildcard catalog selection", function()
+            local result, problem = graph.resolve({edge("acme/app", "*")}, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?)
+                    return {"1.0.0", "2.0.0-beta.1"}, false, nil
+                end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    return artifact(name, version, {}), nil
+                end,
+            })
+            test.is_nil(problem); test.not_nil(result)
+            if result then test.eq(result.packages[1].version, "1.0.0") end
+        end)
         test.it("selects the highest compatible candidate across the complete catalog", function()
             local calls = 0
             local result, problem = graph.resolve({edge("acme/app", "^1.0.0")}, {

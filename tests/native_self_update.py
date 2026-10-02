@@ -51,7 +51,9 @@ def exercise(args, scratch, phase):
         ui.open_start()
         ui.choose("Settings")
         ui.wait("BEE SETTINGS", timeout=30)
-        ui.key(b"\x1b[23~")
+        if any("╭─ Settings " in line and "□" in line for line in ui.screen.display):
+            ui.window_control("□")
+        ui.wait_until(lambda: "▣ Settings" in ui.screen.display[0], "Settings maximized")
         tab("About", "Themes")
         ui.wait("BEE SETTINGS · ABOUT", timeout=30)
         ui.wait("bee/bee  installed", timeout=180)
@@ -81,7 +83,9 @@ def exercise(args, scratch, phase):
             for item in ("Apps", "Advanced", "Modules"):
                 ui.choose(item)
             ui.wait("MODULES", timeout=30)
-            ui.key(b"\x1b[23~")
+            if any("╭─ Modules " in line and "□" in line for line in ui.screen.display):
+                ui.window_control("□")
+            ui.wait_until(lambda: "▣ Modules" in ui.screen.display[0], "Modules maximized")
             tab("Installed", "Installed")
             ui.wait("MODULES  INSTALLED", timeout=30)
             ui.wait("Update Bee", timeout=180)
@@ -106,13 +110,8 @@ def exercise(args, scratch, phase):
             (args.evidence / "live.pids.json").write_text(json.dumps(pids) + "\n")
             print(f"Apply returned: owner PID before {pid}; after {after[0]}", flush=True)
             assert "Completed:" in ui.text() and "Receipt state: complete" in ui.text(), ui.text()
-            # The desktop's global controls can belong to a different window.
-            # Close Modules using its own title bar while retaining About.
-            y, title = next((y, line) for y, line in enumerate(ui.screen.display, 1)
-                            if "╭─ Modules" in line and "×" in line)
-            x = title.index("×") + 1
-            ui.mouse(0, x, y)
-            ui.mouse(0, x, y, True)
+            assert "▣ Modules" in ui.screen.display[0], ui.text()
+            ui.window_control("×")
             ui.wait("BEE SETTINGS · ABOUT", timeout=30)
             ui.key(b"r")
             ui.wait(f"installed {args.to_version}", timeout=180)

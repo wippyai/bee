@@ -27,6 +27,9 @@ Resolver rejection returns `FAILED` with the original diagnostic bounded to
 `failed` receipt with the same code and message; replay returns that failure.
 A malformed diagnostic does not turn a definite failure into `UNCERTAIN`.
 Uncertain worker delivery still requires a receipt lookup.
+Completed-operation replay validates the caller and request through the same
+receipt path without acquiring the publication lock. Pending effects and
+recovery retain that lock.
 
 Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`,
 `installed`, `installed_source` and `updates`. `updates` returns installed Bee
@@ -190,7 +193,7 @@ agent's status. The gateway performs the calls.
 `make hub-self-update-standalone-check` builds local sealed baseline and core artifacts and
 serves their artifacts through a disposable fixture Hub. `BEE_RUNTIME` selects
 the proof executable without changing the repository runtime pin. The acceptance
-checks an independent Files update, optional telemetry removal, protected Hub
+checks an independent Files update, optional telemetry install/removal, protected Hub
 removal refusal, a core self-update, another independent Files update, the older
 wildcard dependency, exact digest approval, completed receipts, unchanged runtime
 owner PID, live Settings About rendering, and restart

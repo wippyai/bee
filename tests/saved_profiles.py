@@ -8,10 +8,6 @@ from fixture_lint import environment, fixture_lint
 from workspace import ROOT, RUNTIME, fixture_workspace
 
 
-def setup(folder):
-    shutil.copytree(ROOT / "tests/fixtures/saved_profiles", folder / "src/saved/profiles/probe")
-
-
 def boot(folder, phase, node=None):
     args = [str(RUNTIME), "run", "--verbose", "--host", "bee.saved.profiles.probe:workers",
             "--", "saved-profiles-probe", phase]
@@ -27,7 +23,7 @@ def boot(folder, phase, node=None):
 
 def main():
     with fixture_workspace(unit_tests=False) as folder:
-        setup(folder)
+        shutil.copytree(ROOT / "tests/fixtures/saved_profiles", folder / "src/saved/profiles/probe")
         fixture_lint(folder)
         first = boot(folder, "first")
         match = re.search(r"SAVED_PROFILE_FIRST_BOOT_PASS node=([\w.-]+)", first)

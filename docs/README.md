@@ -10,6 +10,7 @@ generator when the corpus is intentionally updated.
 | Runtime modules and Bee contracts available offline | [Agent documentation corpus](../modules/docs/src/README.md) |
 | Running Bee and local development | [Repository README](../README.md), [agent guide](development/agent-guide.md), [development conventions](development/conventions.md), [layout audit](development/layout.md) |
 | Ownership and boundaries | [System map](development/ownership.md), [package boundaries](development/package-boundaries.md) |
+| Current namespaces, registry IDs, requirement targets, topics, owned stores and handoff evidence | [Generated component inventory](development/component-inventory.json) |
 | Framework-shaped agents, Bee execution and Dataflow composition (proposal; the framework closure and CLI admission are implemented) | [Agent definitions](development/agent-definitions.md) |
 | Contributions and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |

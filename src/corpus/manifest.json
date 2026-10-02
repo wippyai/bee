@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 4541,
+      "bytes": 4714,
       "id": "docs/readme",
-      "sha256": "d80fbcbbdfb4d025c3147404aa5144784be66cac0f3d10641d147043e4399fc0",
+      "sha256": "5d8b5137c2629f10022384ad84824b2906d3b0737d3fb07426270122fc4e7919",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -131,17 +131,17 @@
       "topic": "platform"
     },
     {
-      "bytes": 8327,
+      "bytes": 9001,
       "id": "docs/system_map",
-      "sha256": "de6c5838761bcffa5cbb2d609db43de77463ee51a2151ab7385c6a15a851ea40",
+      "sha256": "6ae08f05547daf6254bfeb483511d1af9704db2f18b520f84bc0a997437a564b",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
     },
     {
-      "bytes": 6255,
+      "bytes": 6709,
       "id": "docs/package_boundaries",
-      "sha256": "cc8defe1971f909a4255ae1a84fb42ac22ccd35e8a0f152185a03ddef3d880cc",
+      "sha256": "6e5e49d478b7f56dc216916df0afad4919345361e66dd5d5daf13af6e410dd96",
       "source": "docs/development/package-boundaries.md",
       "title": "Package boundaries",
       "topic": "platform"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 732901,
+    "bytes": 734202,
     "documents": 77
   }
 }

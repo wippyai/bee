@@ -47,7 +47,7 @@ local function define_tests()
             assert(cleanup:delete(ref)); assert(cleanup:apply())
             assert(ok, tostring(failure))
         end)
-        test.it("resolves configuration renderers from the driver's binding child", function()
+        test.it("resolves configuration renderers from the selected binding metadata", function()
             local pinned = assert(registry.snapshot())
             for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode"}) do
                 local namespace = "bee.driver." .. provider .. ".binding"

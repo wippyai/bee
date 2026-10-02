@@ -315,8 +315,6 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
     end
     local configure_target = binding.methods.configure
     if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
-    local configure_renderer, configure_renderer_error = driver_resolver.configure_renderer(pinned, request.binding_ref, configure_target)
-    if configure_renderer_error then return nil, configure_renderer_error end
     local provider_entry: Object? = nil
     if launch_policy.provider_ref then
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)

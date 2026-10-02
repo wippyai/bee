@@ -32,7 +32,7 @@ local function define_tests()
             test.eq(resolved and resolved.configure, PREFIX .. "configure")
         end)
 
-        test.it("resolves every shipped driver in its own binding namespace", function()
+        test.it("preserves every shipped driver's declared targets", function()
             for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode", "wippy"}) do
                 local prefix = "bee.driver." .. provider .. ".binding:"
                 local resolved, failure = route.resolve(prefix .. "binding")

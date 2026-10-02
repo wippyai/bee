@@ -11,31 +11,26 @@ type Object = {[string]: unknown}
 type Lookup = (string) -> (unknown?, string?)
 type Methods = {prepare: string, dispatch: string, normalize: string, configure: string}
 
-local function object(value: unknown): Object?
-    if type(value) ~= "table" then return nil end
-    return value
-end
-
 function M.decode(binding_ref: string, raw_binding: unknown, lookup: Lookup): (Methods?, string?)
-    local binding = object(raw_binding)
-    local data = binding and object(binding.data)
+    local binding = bounds.object(raw_binding)
+    local data = binding and bounds.object(binding.data)
     local contracts = data and bounds.dense_list(data.contracts, resolver.MAX_CONTRACTS, "driver contracts")
     if not binding or binding.kind ~= "contract.binding" or not contracts then
         return nil, "selected driver binding is malformed"
     end
-    local meta = object(binding.meta)
+    local meta = bounds.object(binding.meta)
     if not bounds.id(binding_ref) or not meta or meta.type ~= "harness.driver" or not bounds.id(meta.driver_id) then
         return nil, "selected binding is not an agent driver"
     end
     local selected: Object? = nil
     for _, raw_contract in ipairs(contracts) do
-        local contract = object(raw_contract)
+        local contract = bounds.object(raw_contract)
         if not contract or bounds.fields(contract, {"contract", "methods"}) then
             return nil, "selected driver binding has a malformed contract"
         end
-        if contract and contract.contract == M.CONTRACT then
+        if contract.contract == M.CONTRACT then
             if selected then return nil, "selected driver binding declares its contract twice" end
-            selected = object(contract.methods)
+            selected = bounds.object(contract.methods)
             if not selected or bounds.fields(selected, M.METHODS) then
                 return nil, "selected driver binding has malformed methods"
             end
@@ -44,10 +39,10 @@ function M.decode(binding_ref: string, raw_binding: unknown, lookup: Lookup): (M
     if not selected then return nil, "selected binding does not implement " .. M.CONTRACT end
     local resolved: {[string]: string} = {}
     for _, name in ipairs(M.METHODS) do
-        local target = bounds.id((selected)[name])
+        local target = bounds.id(selected[name])
         if not target then return nil, "selected driver binding omits its " .. name .. " method" end
         local entry, entry_error = lookup(target)
-        local target_entry = object(entry)
+        local target_entry = bounds.object(entry)
         if entry_error or not target_entry or target_entry.kind ~= "function.lua" then
             return nil, "selected driver target " .. name .. " is unavailable"
         end

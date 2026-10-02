@@ -36,8 +36,8 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_policy,
-      bee.sync.binding:admit, bee.threads.hive:admit, bee.hive.supervisor:advertise]
+    resources: [bee.hive.binding:execute, bee.hive.binding:admit_policy,
+      bee.sync.binding:admit, bee.threads.hive.binding:admit, bee.hive.binding:advertise]
     effect: allow
 - name: replica_policy
   kind: security.policy
@@ -61,7 +61,7 @@ entries:
     bounds: bee.values:bounds
     types: bee.hive:types
     client: bee.hive.binding:client
-    sender: bee.hive.service:replica_sender
+    sender: bee.hive.binding:replica_sender
     replicas: bee.sync.persist:replicas
     version: bee.sync.values:version
     canonical: bee.sync.values:canonical

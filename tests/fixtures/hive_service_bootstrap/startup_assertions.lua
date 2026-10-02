@@ -4,7 +4,7 @@
     local actor = security.actor()
     assert(actor and actor:id() == "bee.hive.supervisor", "wrong service actor")
     assert(security.can("process.registry.register", "bee.hive.supervisor"), "missing own-name authority")
-    assert(security.can("funcs.call", "bee.hive.supervisor:execute"), "missing dispatch authority")
+    assert(security.can("funcs.call", "bee.hive.binding:execute"), "missing dispatch authority")
     assert(not security.can("process.registry.register", "unrelated.name"), "foreign-name authority")
     -- The supervisor composes the retained desktop bridge, so it holds exactly
     -- the desktop host authority: the retained launcher on the worker host.
@@ -17,6 +17,6 @@
     assert(security.can("funcs.call", "bee.workspace.binding:list"), "missing workspace catalog call authority")
     assert(security.can("hive.owner.stop", "bee.hive.owner:stop"), "missing owner stop authority")
     assert(not security.can("process.host", "bee.hive.service:supervisor_host"), "unexpected supervisor host authority")
-    assert(not security.can("process.spawn", "bee.hive.supervisor:main"), "unexpected spawn authority")
+    assert(not security.can("process.spawn", "bee.hive.service:supervisor"), "unexpected spawn authority")
     assert(not security.can("funcs.call", "unrelated:operation"), "unrelated function authority")
     assert(not security.can("db.get", "bee.env:workspace_db"), "unexpected database authority")

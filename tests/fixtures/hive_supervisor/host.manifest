@@ -15,7 +15,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_sender
-    value: bee.hive.service:replica_sender
+    value: bee.hive.binding:replica_sender
   - name: target_exports
     value: bee:sync_exports
 - name: dependency_threads

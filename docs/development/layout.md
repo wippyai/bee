@@ -8,7 +8,9 @@ folders match their namespace. `src/host` is the host's documented desktop-owner
 component, not a module wiring folder. No component index lives under `host/`.
 
 The audit corrects `bee.git_worktree` to `bee.git.worktree` and moves
-`src/threads_hive` to `src/threads/hive` without changing that host namespace.
+the Threads/Hive adapter into `modules/threads/src/hive/binding` as
+`bee.threads.hive.binding`. `src/threads/hive` retains the host-selected
+admission and identity policies with their existing IDs.
 Threads' owner and waiter actors and Harness's carrier actor live in `service/`.
 Callable method sources for Threads, Harness, drivers, Gateway, Hive, telemetry,
 Sync and Git worktree live in
@@ -30,7 +32,7 @@ live destinations. Main’s startup progress helper and environment field now li
 in `bee.app.status` and `bee.persist.env`. The persisted identity conversions
 are also explicit in `build/component-inventory-migrations.json`; the generated
 component inventory has no dangling requirement targets and caps root Lua at
-20,851 lines. Topics and schema tags retain their baseline identities.
+16,155 lines. Topics and schema tags retain their baseline identities.
 The persisted map covers exactly the 234 persisted identities removed from
 main. Step 2 adds only nonpersisted helper relocations to the cumulative map;
 the step 1 persisted map and applied migration definitions remain unchanged.
@@ -53,6 +55,11 @@ bindings, policies, resource defaults and profile declarations move to
 helpers join the owning concept's child, including driver configuration,
 Hive exposure, governance delivery and activation, and Hub package inspection.
 No forwarding implementations are introduced.
+Hive principal mapping decoding and the member actor encoding live in the
+existing public `bee.hive:types` library. Its consumers use that value boundary
+directly; the private principal helper and exposure-action forwarding function
+are removed. Threads' Hive adapter imports no Hive implementation children, and
+its admission grants enter through the host-selected requirement.
 
 Driver role correction places shared configuration calls and option rendering
 in `bee.driver.binding`, observation helpers in `bee.driver.codec`, and framing
@@ -408,8 +415,7 @@ conventions and `build/layout_roots.json`.
 | `bee.hive.telemetry` | `bee.hive.telemetry.binding` | `sampling` |
 | `bee.hive` | `bee.hive.exposure` | `catalog` |
 | `bee.hive` | `bee.hive.binding` | `client`, `output` |
-| `bee.hive` | `bee.hive.security` | `principals` |
-| `bee.hive` | `bee.hive.workspace` | `workspace_query` |
+| `bee.hive` | `bee.hive.types` | `workspace_query` |
 | `bee.host.processes` | `bee.host.processes.app` | `probe` |
 | `bee.hub.modules` | `bee.hub.modules.security` | `client_policy`, `hub_policy`, `publication_policy`, `self_update_policy` |
 | `bee.hub` | `bee.hub.package` | `binary_identity`, `graph`, `inspection`, `inventory`, `inventory_reader`, `native_compat`, `plan`, `requirements`, `result`, `semver` |

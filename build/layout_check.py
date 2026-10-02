@@ -74,7 +74,7 @@ def audit(root):
                 errors.append(f"{identity}: component definition belongs in its source root")
             if module and entry.get("meta", {}).get("type") == "bee.app" and children != ("app",):
                 errors.append(f"{identity}: application identity belongs in src/app")
-            if module and entry["kind"] == "function.lua" and children not in {("app",), ("binding",), ("api",), ("service",), ("traits",)}:
+            if module and entry["kind"] == "function.lua" and children != ("app",) and children[-1:] not in {("binding",), ("api",), ("service",), ("traits",)}:
                 errors.append(f"{identity}: callable implementations belong in src/binding, api, service or traits")
             if module and entry["kind"] in {"process.lua", "process.service"} and children not in {("app",), ("service",)}:
                 errors.append(f"{identity}: long-running processes belong in src/service")

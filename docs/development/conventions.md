@@ -48,8 +48,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/deps` | One `bee.deps:<module>` dependency per composed module with the host-selected requirement parameters |
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
 | `src/env` | Host environment and selected resources as `bee.env` |
-| `src/hive/service`, `src/hive/api`, `src/hive/security` | App-owned Hive supervisor, open workspaces operation and its policy |
-| `src/hive/supervisor`, `src/hive/desktop` | Generic Hive routing, host-selected adapter table, supervisor lifecycle and desktop bridge |
+| `src/hive/service`, `src/hive/supervisor`, `src/hive/desktop` | Native-known process hosts, supervisor service selection, protected adapter/audience/principal tables and host-selected admission policies |
 | `modules/hive-manager/src` | Hive management app as an installable package |
 | `modules/workspace/src` | Workspace catalog contracts, authorized bindings, SQL repositories, immutable migrations and checkpoint/selection values as `bee.workspace` and its `.catalog`, `.binding`, `.persist`, `.migrations` and `.types` children |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
@@ -72,8 +71,9 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `modules/host-processes/src` | Host process inspection app as an installable package |
 | `modules/hub-modules/src` | Hub Modules package policies and dependencies; UI in `src/app` as `bee.hub.modules.app` |
 | `modules/gov-overlays/src` | Governance Overlays app as an installable package |
-| `modules/hive/src` | Cross-node protocol envelopes, client, exposure catalog, shared principal identity and the `hive.invoke` check |
-| `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
+| `modules/hive/src` | Cross-node protocol envelopes, routing/admission and workspace functions in `.binding`, value decoders in `.types`, supervisor/display/viewer actors in `.service`, desktop bridge/helpers in `.desktop`, exposure catalog and security templates |
+| `src/threads/hive` | Host-selected Threads/Hive admission and identity policies with their existing IDs |
+| `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store, with the optional Hive adapter in `hive/binding` |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |
 | `modules/driver/src` | Driver contracts and shared types at the root; configuration, option rendering, quoting and TOML helpers in `.binding`, observations and normalization in `.codec`, and framing in `.transport` |
@@ -271,7 +271,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 13,706 Lua line ceiling under `src/`, recorded in
+The root has a 9,010 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

@@ -35,7 +35,7 @@ entries:
     - tty.viewport
     resources: '*'
     expression: ((action == "process.spawn" || action == "process.spawn.monitored")
-      && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource
+      && resource == "bee.hive.service:viewer") || (action == "process.host" && resource
       == "bee.hive.desktop:display_host") || (action == "process.registry.lookup"
       && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor"
       || action == "tty.attach" || action == "tty.read" || action == "tty.write" ||

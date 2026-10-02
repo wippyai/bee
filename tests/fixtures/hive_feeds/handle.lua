@@ -4,7 +4,6 @@ local registry = require("registry")
 local client = require("client")
 local types = require("types")
 local funcs = require("funcs")
-local principals = require("principals")
 local function object(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("expected object") end
     return assert(bounds.object(value))
@@ -20,7 +19,7 @@ local function handle(raw: unknown): string
         if command ~= "approval-revoke" then
             local subject = command:match("^approval%-create (.+)$")
             if not subject or types.pid_parts(subject) ~= remote then error("bad approval subject") end
-            approvers[1] = principals.actor_of(remote, subject)
+            approvers[1] = types.principal_actor(remote, subject)
         end
         entry.data = command == "approval-revoke" and {policies = {}}
             or {policies = {{name = "feed-approval", approvers = approvers, max_ttl_ms = 60000}}}

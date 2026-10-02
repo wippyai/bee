@@ -8,8 +8,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    reader: bee.app:status_reader
-    surface: bee.app:status_surface
+    reader: bee.app.threads.client:status_reader
+    surface: bee.app.threads.types:status_surface
 - name: session_test
   kind: function.lua
   source: file://session_test.lua
@@ -30,7 +30,7 @@ entries:
     bindings: bee.session:bindings
     model: bee.desktop:model
     statuses: bee.session:statuses
-    reader: bee.app:status_reader
+    reader: bee.app.threads.client:status_reader
 - name: model_test
   kind: function.lua
   source: file://model_test.lua
@@ -38,7 +38,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    reader: bee.app:status_reader
+    reader: bee.app.threads.client:status_reader
     bounds: bee.values:bounds
 - name: surface_test
   kind: function.lua
@@ -48,7 +48,7 @@ entries:
   modules: [funcs, security]
   imports:
     test: wippy.test:test
-    reader: bee.app:status_reader
+    reader: bee.app.threads.client:status_reader
     caller: bee.app:caller
     harness: bee.threads:harness
 - name: async_test
@@ -60,5 +60,5 @@ entries:
   imports:
     test: wippy.test:test
     driver: bee.session:status
-    reader: bee.app:status_reader
+    reader: bee.app.threads.client:status_reader
     harness: bee.threads:harness

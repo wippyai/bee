@@ -91,7 +91,17 @@
       "source": "modules/application/src/status/_index.yaml"
     },
     {
+      "id": "bee.app.threads.client:status_reader",
+      "kind": "library.lua",
+      "source": "modules/application-threads/src/client/_index.yaml"
+    },
+    {
       "id": "bee.app.threads.types:protocol",
+      "kind": "library.lua",
+      "source": "modules/application-threads/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.app.threads.types:status_surface",
       "kind": "library.lua",
       "source": "modules/application-threads/src/types/_index.yaml"
     },
@@ -141,11 +151,6 @@
       "source": "modules/application/src/_index.yaml"
     },
     {
-      "id": "bee.app:dependency_threads",
-      "kind": "ns.dependency",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
       "id": "bee.app:dependency_ui",
       "kind": "ns.dependency",
       "source": "modules/application/src/_index.yaml"
@@ -171,37 +176,12 @@
       "source": "modules/application/src/_index.yaml"
     },
     {
-      "id": "bee.app:host_leases",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
       "id": "bee.app:interaction",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
     },
     {
       "id": "bee.app:names",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:sessions",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:sessions_protocol",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:status_reader",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:status_surface",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
     },
@@ -3231,6 +3211,11 @@
       "source": "modules/gateway/src/_index.yaml"
     },
     {
+      "id": "bee.gateway:dependency_sessions",
+      "kind": "ns.dependency",
+      "source": "modules/gateway/src/_index.yaml"
+    },
+    {
       "id": "bee.gateway:dependency_threads",
       "kind": "ns.dependency",
       "source": "modules/gateway/src/_index.yaml"
@@ -4561,6 +4546,11 @@
       "source": "modules/harness/src/_index.yaml"
     },
     {
+      "id": "bee.harness:dependency_sessions",
+      "kind": "ns.dependency",
+      "source": "modules/harness/src/_index.yaml"
+    },
+    {
       "id": "bee.harness:dependency_sync",
       "kind": "ns.dependency",
       "source": "modules/harness/src/_index.yaml"
@@ -4577,6 +4567,11 @@
     },
     {
       "id": "bee.harness:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/harness/src/_index.yaml"
+    },
+    {
+      "id": "bee.harness:dependency_workspace",
       "kind": "ns.dependency",
       "source": "modules/harness/src/_index.yaml"
     },
@@ -5042,6 +5037,11 @@
     },
     {
       "id": "bee.hive.telemetry:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry:dependency_workspace",
       "kind": "ns.dependency",
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
@@ -7606,6 +7606,11 @@
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
+      "id": "bee.sessions.client:sessions",
+      "kind": "library.lua",
+      "source": "modules/sessions/src/client/_index.yaml"
+    },
+    {
       "id": "bee.sessions.env:threads_journal_ref",
       "kind": "registry.entry",
       "source": "modules/sessions/src/env/_index.yaml"
@@ -7699,6 +7704,11 @@
       "id": "bee.sessions.service:turn_run",
       "kind": "function.lua",
       "source": "modules/sessions/src/service/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.types:protocol",
+      "kind": "library.lua",
+      "source": "modules/sessions/src/types/_index.yaml"
     },
     {
       "id": "bee.sessions:catalog",
@@ -9011,6 +9021,11 @@
       "source": "modules/workspace/src/catalog/_index.yaml"
     },
     {
+      "id": "bee.workspace.client:host_leases",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/client/_index.yaml"
+    },
+    {
       "id": "bee.workspace.manager.app:app",
       "kind": "process.lua",
       "source": "modules/workspace-manager/src/app/_index.yaml"
@@ -9052,6 +9067,11 @@
     },
     {
       "id": "bee.workspace.manager:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/workspace-manager/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.manager:dependency_workspace",
       "kind": "ns.dependency",
       "source": "modules/workspace-manager/src/_index.yaml"
     },
@@ -9294,6 +9314,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.app.threads",
       "source": "modules/application-threads/src/_index.yaml"
+    },
+    {
+      "namespace": "bee.app.threads.client",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.app.threads.client",
+      "source": "modules/application-threads/src/client/_index.yaml"
     },
     {
       "namespace": "bee.app.threads.types",
@@ -10864,6 +10891,13 @@
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
+      "namespace": "bee.sessions.client",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.sessions.client",
+      "source": "modules/sessions/src/client/_index.yaml"
+    },
+    {
       "namespace": "bee.sessions.env",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -10890,6 +10924,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.sessions.service",
       "source": "modules/sessions/src/service/_index.yaml"
+    },
+    {
+      "namespace": "bee.sessions.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.sessions.types",
+      "source": "modules/sessions/src/types/_index.yaml"
     },
     {
       "namespace": "bee.settings",
@@ -11135,6 +11176,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.workspace.catalog",
       "source": "modules/workspace/src/catalog/_index.yaml"
+    },
+    {
+      "namespace": "bee.workspace.client",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.workspace.client",
+      "source": "modules/workspace/src/client/_index.yaml"
     },
     {
       "namespace": "bee.workspace.manager",
@@ -17281,8 +17329,8 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1835,
-    "namespace_count": 274,
+    "entry_count": 1839,
+    "namespace_count": 278,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
@@ -18163,43 +18211,43 @@
     },
     {
       "sources": [
-        "modules/application/src/host_leases.lua"
+        "modules/workspace/src/client/host_leases.lua"
       ],
       "topic": "bee.workspace.hosts.acquire"
     },
     {
       "sources": [
-        "modules/application/src/host_leases.lua"
+        "modules/workspace/src/client/host_leases.lua"
       ],
       "topic": "bee.workspace.hosts.attach"
     },
     {
       "sources": [
-        "modules/application/src/host_leases.lua"
+        "modules/workspace/src/client/host_leases.lua"
       ],
       "topic": "bee.workspace.hosts.attached"
     },
     {
       "sources": [
-        "modules/application/src/host_leases.lua"
+        "modules/workspace/src/client/host_leases.lua"
       ],
       "topic": "bee.workspace.hosts.holdings"
     },
     {
       "sources": [
-        "modules/application/src/host_leases.lua"
+        "modules/workspace/src/client/host_leases.lua"
       ],
       "topic": "bee.workspace.hosts.holdings_result"
     },
     {
       "sources": [
-        "modules/application/src/host_leases.lua"
+        "modules/workspace/src/client/host_leases.lua"
       ],
       "topic": "bee.workspace.hosts.release"
     },
     {
       "sources": [
-        "modules/application/src/host_leases.lua"
+        "modules/workspace/src/client/host_leases.lua"
       ],
       "topic": "bee.workspace.hosts.result"
     },

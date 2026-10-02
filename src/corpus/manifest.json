@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 24694,
+      "bytes": 24718,
       "id": "docs/application_contracts",
-      "sha256": "ac6687262f7f6669e68d971ef720eb86fb4fcc4a49d7f1fb759154ab3324dd1d",
+      "sha256": "37e4f49e8e5457ef167c4669c6ee49b51378c97836bda11b984cc6685287a22f",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 21828,
+      "bytes": 21841,
       "id": "docs/workspace_catalog",
-      "sha256": "9e43cd2f0ca12177971ac98512f637fe38fdfbe4c791d5702bf24679bd8c7335",
+      "sha256": "939ef20b9a27d4f145cd1f79e3b725d6f0680905bf82d5c2208994438307ae9a",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -283,17 +283,17 @@
       "topic": "component"
     },
     {
-      "bytes": 10150,
+      "bytes": 10162,
       "id": "component/application",
-      "sha256": "5792e36940a35a8da7697f362534ffca599dcaa00dc82533c7732a288f737f07",
+      "sha256": "b0770d657759a60ea3ea8c21ef3b1a36a77cca0ed06e36e207e76f161cef542f",
       "source": "modules/application/src/README.md",
       "title": "bee.app",
       "topic": "component"
     },
     {
-      "bytes": 1318,
+      "bytes": 1700,
       "id": "component/application:threads",
-      "sha256": "95955694e43db41c36d8f2151d1d64e03d8c057e677b3ba1474ffb3b6ee21e30",
+      "sha256": "5a058de97185115d0bc9ad7922ec5b8a2f0e06d0e864f66658681d55d7baa471",
       "source": "modules/application-threads/src/README.md",
       "title": "Application Threads client",
       "topic": "component"
@@ -515,9 +515,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8523,
+      "bytes": 13946,
       "id": "component/sessions",
-      "sha256": "66600d683e56f2de0b54e0dccdd675aa58cdd90731d9c0f51a792abc2b83e84d",
+      "sha256": "7841fb885d3b9e611dc2ada245cfdfb4be5b2121259ec604dd94da93af773f10",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -555,9 +555,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2277,
+      "bytes": 2841,
       "id": "component/workspace",
-      "sha256": "82358259d7394127aadb9acc7baa6826f3145118a8a5abd673eb31dccbec2f47",
+      "sha256": "5d9712ef00fa09276db1ca08fb53351b1aa963d10c11b8666a6aa3b98df78870",
       "source": "modules/workspace/src/README.md",
       "title": "Workspace component",
       "topic": "component"
@@ -654,7 +654,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 763652,
+    "bytes": 770070,
     "documents": 81
   }
 }

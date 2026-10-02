@@ -8,10 +8,6 @@ entries:
   meta:
     title: Bee application SDK
     comment: Public application-side values and presentation helpers; helpers grant no application, workspace, or thread authority
-- name: dependency_threads
-  kind: ns.dependency
-  component: bee/threads
-  version: '*'
 - name: client
   kind: library.lua
   source: file://client.lua
@@ -22,24 +18,6 @@ entries:
     arguments: bee.app:arguments
     interaction: bee.app:interaction
     bounds: bee.values:bounds
-- name: sessions_protocol
-  kind: library.lua
-  source: file://sessions_protocol.lua
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    record_values: bee.threads.records:values
-    record_types: bee.threads:record_types
-    budget_values: bee.threads.records:budgets
-    profile_values: bee.harness.profiles:protocol
-- name: sessions
-  kind: library.lua
-  source: file://sessions.lua
-  modules:
-  - contract
-  imports:
-    bounds: bee.values:bounds
-    protocol: bee.app:sessions_protocol
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
@@ -47,8 +25,7 @@ entries:
   kind: library.lua
   source: file://caller.lua
   imports:
-    bounds: bee.values:bounds
-    record_bounds: bee.threads.records:bounds
+    reply: bee.values:reply
 - name: folder_picker
   kind: library.lua
   source: file://folder_picker.lua
@@ -56,29 +33,6 @@ entries:
     text: bee.ui:text
     caller: bee.app:caller
     frame: bee.ui:frame
-    bounds: bee.values:bounds
-- name: host_leases
-  kind: library.lua
-  source: file://host_leases.lua
-  modules:
-  - process
-  - channel
-  - time
-  - uuid
-  imports:
-    bounds: bee.values:bounds
-- name: status_reader
-  kind: library.lua
-  source: file://status_reader.lua
-  imports:
-    bounds: bee.values:bounds
-    caller: bee.app:caller
-    text: bee.ui:text
-    record_bounds: bee.threads.records:bounds
-- name: status_surface
-  kind: library.lua
-  source: file://status_surface.lua
-  imports:
     bounds: bee.values:bounds
 - name: interaction
   kind: library.lua

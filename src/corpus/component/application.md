@@ -41,7 +41,7 @@ caller fault bounds and status projection helpers.
 
 ## Sessions client
 
-`sessions` (`bee.app:sessions`) calls the `bee.sessions:contract` and
+`sessions` (`bee.sessions.client:sessions`) calls the `bee.sessions:contract` and
 `bee.sessions:catalog` owner contracts through their default bindings, as the
 calling process's own actor. It grants nothing; the host admits the caller and
 the owner authorizes every operation. Each function returns `value, Fault?`;

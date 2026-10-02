@@ -19,3 +19,9 @@ The decoder lives at `bee.app.threads.types:protocol`; request/reply schemas,
 `bee.app.thread.*` topics, application principals and durable bindings retain
 their existing identities. Consumers refresh through their supported process
 lifecycle; publishing a library does not replace active closures.
+
+`bee.app.threads.client:status_reader` maintains bounded status projections from
+the existing Threads status bindings, fencing stale generations and owner
+incarnations. `bee.app.threads.types:status_surface` decodes their desktop badge
+and presenter values. Desktop consumers import these libraries directly; neither
+library grants thread access or changes the status wire format.

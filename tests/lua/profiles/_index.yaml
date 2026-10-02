@@ -45,12 +45,12 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    protocol: bee.app:sessions_protocol
+    protocol: bee.sessions.types:protocol
     fixtures: bee.tests.sessions:fixtures
     bounds: bee.values:bounds
     test: wippy.test:test
     agents: bee.harness.app:agents
-    sessions: bee.app:sessions
+    sessions: bee.sessions.client:sessions
 
 - name: context_probe
   kind: function.lua
@@ -87,11 +87,11 @@ entries:
   imports:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
-    protocol: bee.app:sessions_protocol
+    protocol: bee.sessions.types:protocol
     fixtures: bee.tests.sessions:fixtures
     test: wippy.test:test
     agents: bee.harness.app:agents
-    sessions: bee.app:sessions
+    sessions: bee.sessions.client:sessions
 - name: observations_test
   kind: function.lua
   source: file://observations_test.lua
@@ -102,8 +102,8 @@ entries:
     test: wippy.test:test
     harness: bee.threads:harness
     agents: bee.harness.app:agents
-    sessions: bee.app:sessions
-    protocol: bee.app:sessions_protocol
+    sessions: bee.sessions.client:sessions
+    protocol: bee.sessions.types:protocol
     bounds: bee.values:bounds
 - name: observations_probe
   kind: function.lua
@@ -115,8 +115,8 @@ entries:
     test: wippy.test:test
     harness: bee.threads:harness
     agents: bee.harness.app:agents
-    sessions: bee.app:sessions
-    protocol: bee.app:sessions_protocol
+    sessions: bee.sessions.client:sessions
+    protocol: bee.sessions.types:protocol
     bounds: bee.values:bounds
 - name: agent_view_test
   kind: function.lua
@@ -128,7 +128,7 @@ entries:
     fixtures: bee.tests.sessions:fixtures
     test: wippy.test:test
     directory_view: bee.harness.app:directory_view
-    protocol: bee.app:sessions_protocol
+    protocol: bee.sessions.types:protocol
     picker_view: bee.harness.app:picker_view
     session_view: bee.harness.app:session_view
     agents: bee.harness.app:agents
@@ -185,5 +185,5 @@ entries:
   imports:
     test: wippy.test:test
     agents: bee.harness.app:agents
-    sessions: bee.app:sessions
-    protocol: bee.app:sessions_protocol
+    sessions: bee.sessions.client:sessions
+    protocol: bee.sessions.types:protocol

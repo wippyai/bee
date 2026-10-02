@@ -140,7 +140,7 @@ does not mutate thread obligations or delivery history.
 
 ## Running managed agents
 
-An application opens and drives managed agents with `bee.app:sessions`,
+An application opens and drives managed agents with `bee.sessions.client:sessions`,
 which calls the `bee.sessions` owner contracts as the application's own actor.
 The SDK grants nothing: the host admits the caller and the owner authorizes
 every operation. The flow is catalog, open, send, await, close. `send` is the
@@ -148,7 +148,7 @@ only way to give a session work, and its receipt proves intake only; the result
 comes from `await`.
 
 ```lua
-local sessions = require("sessions")   -- imports: sessions: bee.app:sessions
+local sessions = require("sessions")   -- imports: sessions: bee.sessions.client:sessions
 
 local ready = sessions.catalog{}                        -- definitions whose executor is ready
 local s, fault = sessions.open{definition = "bee.driver.codex.profiles:research_batch", operation_key = "research/open"}

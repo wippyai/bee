@@ -48,7 +48,7 @@ entries:
     appearance: bee.ui:appearance
     names: bee.app:names
     display_transfer: bee.protocol:display_transfer
-    status_surface: bee.app:status_surface
+    status_surface: bee.app.threads.types:status_surface
 - name: workspace_menu
   kind: library.lua
   source: file://workspace_menu.lua
@@ -75,7 +75,7 @@ entries:
     window_chrome: bee.terminal:window_chrome
     menu: bee.terminal:menu
     selection: bee.terminal:selection
-    surface: bee.app:status_surface
+    surface: bee.app.threads.types:status_surface
     display_transfer: bee.protocol:display_transfer
 - name: bindings
   kind: library.lua
@@ -103,7 +103,7 @@ entries:
   imports:
     model: bee.desktop:model
     appearance: bee.ui:appearance
-    surface: bee.app:status_surface
+    surface: bee.app.threads.types:status_surface
 - name: window_chrome
   kind: library.lua
   source: file://window_chrome.lua
@@ -112,7 +112,7 @@ entries:
     model: bee.desktop:model
     layout: bee.desktop:layout
     appearance: bee.ui:appearance
-    surface: bee.app:status_surface
+    surface: bee.app.threads.types:status_surface
 - name: title_editor
   kind: library.lua
   source: file://title_editor.lua

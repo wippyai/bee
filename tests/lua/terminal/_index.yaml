@@ -38,7 +38,7 @@ entries:
     selection: bee.terminal:selection
     connection: bee.terminal:connection
     appearance: bee.ui:appearance
-    surface: bee.app:status_surface
+    surface: bee.app.threads.types:status_surface
     names: bee.app:names
 - name: title_editor_test
   kind: function.lua

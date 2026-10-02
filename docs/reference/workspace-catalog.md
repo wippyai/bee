@@ -118,7 +118,7 @@ served (`managed = false`) instead of starting a second one.
 
 A lease is a process-registry name `bee.workspace.lease/<id>` its holder
 registers under the host-named policy `bee.security.desktop:workspace_host_lease_policy`.
-`bee.app:host_leases.acquire(workspace_id, timeout)` registers the name,
+`bee.workspace.client:host_leases.acquire(workspace_id, timeout)` registers the name,
 sends `bee.workspace.hosts.acquire` to the registered manager
 `bee.workspace.hosts` and waits for `bee.workspace.hosts.result`
 (`{host, managed}` or `error_code` `busy`, `unavailable`,

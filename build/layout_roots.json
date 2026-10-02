@@ -11,13 +11,8 @@
     "diagram": "library.lua",
     "folder_picker": "library.lua",
     "forms": "library.lua",
-    "host_leases": "library.lua",
     "interaction": "library.lua",
     "names": "library.lua",
-    "sessions": "library.lua",
-    "sessions_protocol": "library.lua",
-    "status_reader": "library.lua",
-    "status_surface": "library.lua",
     "viz": "library.lua"
   },
   "bee.app.threads": {

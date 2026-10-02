@@ -58,7 +58,7 @@ entries:
     contract: bee.protocol:application
     inventory: bee.host:inventory
     status_bindings: bee.session:bindings
-    status_surface: bee.app:status_surface
+    status_surface: bee.app.threads.types:status_surface
     host_protocol: bee.host:protocol
     transfer: bee.host:transfer
     transfer_ui: bee.protocol:display_transfer

@@ -38,7 +38,7 @@ def main():
                                             "bee.test.loginlinks:probe_policy"]},
                  "imports": {"test": "wippy.test:test", "bounds": "bee.values:bounds", "principals": "bee.test.principals:bound",
                              "locator": "bee.harness.launch:locate", "agents": "bee.harness.app:agents",
-                             "sessions": "bee.app:sessions", "sessions_fixtures": "bee.tests.sessions:fixtures"}},
+                             "sessions": "bee.sessions.client:sessions", "sessions_fixtures": "bee.tests.sessions:fixtures"}},
                 {"name": "probe_policy", "kind": "security.policy", "policy": {"actions": ["env.get"], "resources": ["bee.test.loginlinks:expected", "bee.test.loginlinks:target"], "effect": "allow"}},
             ]
             # The proof explicitly copies only the production machine source's

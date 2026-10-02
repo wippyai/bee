@@ -152,6 +152,28 @@ local function define_tests()
             test.is_true(table.concat(frame.rows, "\n"):find("Usage instructions", 1, true) ~= nil)
             test.is_true(table.concat(frame.rows, "\n"):find("    enabled = false", 1, true) ~= nil)
         end)
+        test.it("shows why Update Bee retains a selected component", function()
+            local state = model.new()
+            model.select(state, "bee/bee")
+            model.select_version(state, "2.0.0")
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {}, roots = {}}})
+            model.set_action(state, "update")
+            model.apply_plan(state, {ok = true, replayed = false, value = {
+                digest = string.rep("a", 64), ready = true, base_revision = 1,
+                modules = {{component = "bee/bee", version = "2.0.0", change = "update"},
+                    {component = "bee/settings", version = "1.0.0", change = "keep", reason = "pinned by acme/app"}},
+                missing = {}, migrations = {}, starts = {}, capabilities = {},
+                request = {action = "update", component = "bee/bee", version = "2.0.0", parameters = {}, migration_policy = "none"},
+            }})
+            local drawn = view.draw(120, 28, appearance.defaults(), state, 0, "")
+            local shown = table.concat(drawn.rows, "\n")
+            test.is_true(shown:find("bee/settings", 1, true) ~= nil)
+            test.is_true(shown:find("pinned by acme/app", 1, true) ~= nil)
+            test.is_nil(model.confirm(state))
+            local intent = model.confirm_intent(state)
+            test.not_nil(intent)
+            if intent then test.eq(intent.expected_digest, string.rep("a", 64)) end
+        end)
         test.it("scrolls every plan effect without changing confirmation", function()
             local state = model.new()
             model.select(state, "bee/example")

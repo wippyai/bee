@@ -41,6 +41,16 @@ local function succeed(value: unknown): Reply
     return {ok = true, value = value}
 end
 
+local function request_input(request: unknown, admits: boolean): (Object?, Reply?)
+    if admits then
+        local fenced, problem = lifecycle.fenced()
+        if fenced then return nil, fail("BUSY", problem or "Sessions admission is fenced") end
+    end
+    local input = object(request)
+    if not input then return nil, fail("INVALID", "request must be an object", nil) end
+    return input, nil
+end
+
 local function identity(): (string?, string?)
     local caller = security.actor()
     if not caller then return nil, nil end
@@ -125,7 +135,9 @@ local function describe(session: string): (Object?, string?)
     return snapshot(value)
 end
 
-local function open(request: Object): Reply
+function M.open(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, true)
+    if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
     if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "presentation", "budgets", "supervision", "placement"}) then
@@ -276,7 +288,9 @@ local function open(request: Object): Reply
     return succeed({session = session, operation = operation, snapshot = current})
 end
 
-local function attach(request: Object): Reply
+function M.attach(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, true)
+    if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     local definition, thread = ref(request.definition), bounds.id(request.thread_id)
     if not operation_key or not definition or not thread or bounds.fields(request, {"operation_key", "definition", "thread_id", "plan_digest", "saved_profile_id", "saved_profile_revision", "attempt_id"}) then return fail("INVALID", "interactive attach identities are incomplete", operation_key) end
@@ -335,7 +349,9 @@ local function attach(request: Object): Reply
     return succeed(created)
 end
 
-local function detach(request: Object): Reply
+function M.detach(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local session, attempt, operation_key = ref(request.session), bounds.id(request.attempt_id), key(request.operation_key)
     if not session or not attempt or not operation_key or bounds.fields(request, {"session", "attempt_id", "operation_key"}) then
         return fail("INVALID", "interactive detach identities are incomplete", operation_key)
@@ -376,7 +392,9 @@ local function detach(request: Object): Reply
     return succeed({session = session, attempt_id = attempt})
 end
 
-local function hook_boundary(request: Object): Reply
+function M.hook_boundary(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local caller = identity()
     local session, event, event_key = ref(request.session), request.event, key(request.operation_key)
     local attempt = bounds.id(request.attempt_id)
@@ -457,7 +475,9 @@ local function hook_boundary(request: Object): Reply
     return succeed({additional_context = "[Bee message from " .. tostring(sender.id) .. "]\n" .. prompt})
 end
 
-local function send(request: Object): Reply
+function M.send(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, true)
+    if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
     if not operation_key or not session or request.input == nil
@@ -538,7 +558,9 @@ end
 
 local operation_state: (string) -> (Object?, string?)
 
-local function session_get(request: Object): Reply
+function M.get(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     if bounds.fields(request, {"session", "work", "operation"}) then return fail("INVALID", "get accepts one exact ref") end
     if request.session ~= nil then
         local session = ref(request.session)
@@ -667,7 +689,9 @@ operation_state = function(subject: string): (Object?, string?)
         revision = 1, receipt = receipt, observation = observation}, nil
 end
 
-local function await(request: Object): Reply
+function M.await(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local subject = ref(request.subject)
     if not subject or bounds.fields(request, {"subject", "timeout_ms"}) then return fail("INVALID", "await needs a work or operation ref") end
     if subject:sub(1, 3) == "bw:" then
@@ -682,7 +706,9 @@ local function await(request: Object): Reply
     return fail("INVALID", "await needs a work or operation ref")
 end
 
-local function catalog(request: Object): Reply
+function M.catalog(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local _, workspace = identity()
     if not workspace then return fail("DENIED", "the authenticated caller has no workspace", nil) end
     local page, catalog_error = catalog_service.list(request, workspace)
@@ -766,7 +792,9 @@ local function control_receipt(operation: string, subject: string, effect: "canc
     return {operation = operation, subject = subject, state = "requested", effect = effect}
 end
 
-local function close(request: Object): Reply
+function M.close(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
     if not operation_key or not session
@@ -792,7 +820,9 @@ local function close(request: Object): Reply
     return succeed(control_receipt(operation, session, "close"))
 end
 
-local function cancel(request: Object): Reply
+function M.cancel(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     local work = ref(request.work)
     local reason = request.reason == nil and nil or bounds.text(request.reason, 16384)
@@ -855,7 +885,9 @@ local function cancel(request: Object): Reply
     return succeed(raw)
 end
 
-local function join(request: Object): Reply
+function M.join(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     if not operation_key or bounds.fields(request, {"works", "policy", "quorum", "timeout_ms", "operation_key"}) then
         return fail("INVALID", "join requires works and operation_key", operation_key)
@@ -936,7 +968,9 @@ local function join(request: Object): Reply
     return succeed(base)
 end
 
-local function list(request: Object): Reply
+function M.list(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     if bounds.fields(request, {"filter", "cursor"}) then return fail("INVALID", "list accepts only filter and cursor") end
     local filter = object(request.filter)
     if request.filter ~= nil and (not filter or bounds.fields(filter, {"lifecycle", "activity", "workspace", "definition"})) then
@@ -974,14 +1008,16 @@ local function list(request: Object): Reply
 end
 
 -- Read-only display summary for the caller's workspace. No control actions.
-local function attention_count(request: Object): Reply
+function M.attention_count(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request, false)
+    if not request then return assert(refused) end
     local actor, workspace = identity()
     if not actor or not workspace or request.workspace_id ~= workspace
         or bounds.fields(request, {"workspace_id"}) then return fail("DENIED", "attention summary requires the caller's workspace") end
     local count = 0
     local cursor: string? = nil
     for _ = 1, 16 do
-        local page = list({filter = {workspace = workspace}, cursor = cursor})
+        local page = M.list({filter = {workspace = workspace}, cursor = cursor})
         if not page.ok then return page end
         local value = object(page.value)
         local items = value and value.items
@@ -996,46 +1032,29 @@ local function attention_count(request: Object): Reply
     return unavailable("session summary exceeds the display page limit", nil)
 end
 
-function M.call(method: string, request: unknown): Reply
-    if method == "open" or method == "run" or method == "send" or method == "attach" then
-        local fenced, problem = lifecycle.fenced()
-        if fenced then return fail("BUSY", problem or "Sessions admission is fenced") end
-    end
-    local input = object(request)
-    if not input then return fail("INVALID", "request must be an object", nil) end
-    if method == "attention_count" then return attention_count(input) end
-    if method == "attach" then return attach(input) end
-    if method == "hook_boundary" then return hook_boundary(input) end
-    if method == "detach" then return detach(input) end
-    if method == "open" then return open(input) end
-    if method == "run" then
-        local operation_key = key(input.operation_key)
-        if not operation_key then return fail("INVALID", "run requires operation_key", nil) end
-        local digest, hash_error = hash.sha256("bee.sessions.run.session\n" .. operation_key)
-        if not digest then return unavailable("cannot derive the run session key: " .. tostring(hash_error), operation_key) end
-        local opened = open({spec = input.spec, operation_key = "run-session:" .. digest})
-        if not opened.ok then return opened end
-        local receipt = object(opened.value)
-        if not receipt then return unavailable("open returned no session receipt", operation_key) end
-        return send({session = receipt.session, input = input.input, output = input.output,
-            expected_incarnation = 1, operation_key = operation_key, budgets = input.budgets})
-    end
-    if method == "history" then
-        local session = ref(input.session)
-        if not session or bounds.fields(input, {"session", "cursor", "limit"}) then return fail("INVALID", "history requires a session") end
-        local page, page_error = journal.invoke("work_history", input)
-        if page_error or not page then return unavailable(page_error or "history unavailable", nil) end
-        return succeed(page)
-    end
-    if method == "send" then return send(input) end
-    if method == "get" then return session_get(input) end
-    if method == "await" then return await(input) end
-    if method == "list" then return list(input) end
-    if method == "catalog" then return catalog(input) end
-    if method == "join" then return join(input) end
-    if method == "close" then return close(input) end
-    if method == "cancel" then return cancel(input) end
-    return fail("UNSUPPORTED", "unknown sessions operation", nil)
+function M.run(raw_request: unknown): Reply
+    local input, refused = request_input(raw_request, true)
+    if not input then return assert(refused) end
+    local operation_key = key(input.operation_key)
+    if not operation_key then return fail("INVALID", "run requires operation_key", nil) end
+    local digest, hash_error = hash.sha256("bee.sessions.run.session\n" .. operation_key)
+    if not digest then return unavailable("cannot derive the run session key: " .. tostring(hash_error), operation_key) end
+    local opened = M.open({spec = input.spec, operation_key = "run-session:" .. digest})
+    if not opened.ok then return opened end
+    local receipt = object(opened.value)
+    if not receipt then return unavailable("open returned no session receipt", operation_key) end
+    return M.send({session = receipt.session, input = input.input, output = input.output,
+        expected_incarnation = 1, operation_key = operation_key, budgets = input.budgets})
+end
+
+function M.history(raw_request: unknown): Reply
+    local input, refused = request_input(raw_request, false)
+    if not input then return assert(refused) end
+    local session = ref(input.session)
+    if not session or bounds.fields(input, {"session", "cursor", "limit"}) then return fail("INVALID", "history requires a session") end
+    local page, page_error = journal.invoke("work_history", input)
+    if page_error or not page then return unavailable(page_error or "history unavailable", nil) end
+    return succeed(page)
 end
 
 return M

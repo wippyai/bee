@@ -20,9 +20,9 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
-- name: dependency_application
+- name: dependency_ui
   kind: ns.dependency
-  component: bee/application
+  component: bee/ui
   version: '*'
 - name: target_db
   kind: ns.requirement
@@ -38,7 +38,7 @@ entries:
   source: file://protocol.lua
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: contract
   kind: contract.definition
   methods:

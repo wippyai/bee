@@ -14,8 +14,8 @@ entries:
   - json
   - funcs
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     view: bee.settings.app:view
     build_info: bee.settings.app:build_info
     client: bee.app:client
@@ -40,8 +40,8 @@ entries:
   modules:
   - tty
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     build_info: bee.settings.app:build_info
     live_updates: bee.settings.app:live_updates
 - name: live_updates

@@ -490,7 +490,10 @@ local function effect(displayed: plan.Plan): string?
     return encoded and hash.sha256(encoded) or nil
 end
 local function service_work(prepared: plan.Prepared): (lifecycle.Work?, string?)
-    if prepared.plan.request.component == "bee/bee" then return {version = 1, phase = "prepared", services = {}}, nil end
+    local changes: {lifecycle.Change} = {}
+    for _, item in ipairs(prepared.plan.modules) do
+        if item.component ~= "bee/bee" then changes[#changes + 1] = {component = item.component, change = item.change} end
+    end
     local snapshot, problem = registry.snapshot()
     local state = snapshot and snapshot:state()
     if not state then return nil, tostring(problem) end
@@ -500,7 +503,7 @@ local function service_work(prepared: plan.Prepared): (lifecycle.Work?, string?)
             entries[#entries + 1] = {id = entry.id, kind = entry.kind, meta = entry.meta, data = entry.data, owner = package.component}
         end
     end
-    return lifecycle.capture(state, prepared.plan.modules, entries)
+    return lifecycle.capture(state, changes, entries)
 end
 local function publish_intent(receipt: Receipt): Result
     local request = receipt.request and plan.decode(receipt.request)
@@ -541,7 +544,7 @@ local function publish_intent(receipt: Receipt): Result
         for _, root in ipairs(prepared.installed.roots) do
             if selected_roots[root.id] and root.id ~= displayed.root_id then
                 local selected: string? = nil
-                for _, item in ipairs(prepared.installed.modules) do
+                for _, item in ipairs(displayed.modules) do
                     if item.component == root.component then selected = item.version; break end
                 end
                 if not selected or selected == "" then return transaction.failure("INVALID", "selected root has no installed version: " .. root.id) end
@@ -551,6 +554,24 @@ local function publish_intent(receipt: Receipt): Result
                 if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
                 local created_root, root_error = changes:create({id = root.id, kind = "ns.dependency", dependency_root = true, meta = root.meta, data = root_data})
                 if not created_root then return transaction.failure("FAILED", tostring(root_error)) end
+            end
+        end
+    end
+    if request.component == "bee/bee" then
+        local converted: {[string]: boolean} = {}
+        for _, root in ipairs(displayed.conversion and displayed.conversion.roots or {}) do converted[root.id] = true end
+        for _, root in ipairs(prepared.installed.roots) do
+            if inventory.host_component(root) and not converted[root.id] then
+                for _, item in ipairs(displayed.modules) do
+                    if item.component == root.component and item.change == "update" then
+                        local root_data: {[string]: unknown} = {component = root.component, version = item.version}
+                        if #root.parameters > 0 then root_data.parameters = root.parameters end
+                        local updated, update_error = changes:update({id = root.id, kind = "ns.dependency",
+                            dependency_root = true, meta = root.meta, data = root_data})
+                        if not updated then return transaction.failure("FAILED", tostring(update_error)) end
+                        break
+                    end
+                end
             end
         end
     end

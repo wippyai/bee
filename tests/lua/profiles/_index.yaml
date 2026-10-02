@@ -132,7 +132,7 @@ entries:
     picker_view: bee.harness.app:picker_view
     session_view: bee.harness.app:session_view
     agents: bee.harness.app:agents
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: view_test
   kind: function.lua
   source: file://view_test.lua
@@ -142,7 +142,7 @@ entries:
     test: wippy.test:test
     view: bee.harness.app:profile_view
     editor: bee.harness.app:profile_editor
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     caller: bee.app:caller
 - name: codex_effort_test
   kind: function.lua

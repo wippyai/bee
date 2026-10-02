@@ -21,15 +21,15 @@ entries:
   kind: library.lua
   source: file://restore_view.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
 - name: runtime
   kind: library.lua
   source: file://runtime.lua
   modules: [tty, exec, process, channel, time, funcs, uuid, json]
   imports:
     client: bee.app:client
-    text: bee.app:text
+    text: bee.ui:text
     bounds: bee.values:bounds
     window_request: bee.harness.app:request
     input_event: bee.harness.app:input
@@ -40,9 +40,9 @@ entries:
     hooks: bee.harness.carrier:hooks
     delivery: bee.harness.carrier:delivery
     records: bee.harness.carrier:hook_records
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     restore_view: bee.harness.app:restore_view
-    frame: bee.app:frame
+    frame: bee.ui:frame
 - name: app
   kind: process.lua
   source: file://app.lua
@@ -82,18 +82,18 @@ entries:
   kind: library.lua
   source: file://picker_view.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
-    text: bee.app:text
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    text: bee.ui:text
     agents: bee.harness.app:agents
 - name: session_view
   kind: library.lua
   source: file://session_view.lua
   modules: [tty]
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
-    text: bee.app:text
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    text: bee.ui:text
     agents: bee.harness.app:agents
     protocol: bee.app:sessions_protocol
 - name: picker
@@ -101,11 +101,11 @@ entries:
   source: file://picker.lua
   modules: [tty, process, channel, time, uuid, funcs]
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     bounds: bee.values:bounds
     client: bee.app:client
     caller: bee.app:caller
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     input_event: bee.harness.app:input
     sessions: bee.app:sessions
     agents: bee.harness.app:agents
@@ -151,9 +151,9 @@ entries:
     canonical: bee.values:canonical
     settings: bee.harness.app:profile_settings
     bounds: bee.values:bounds
-    frame: bee.app:frame
-    appearance: bee.app:appearance
-    text: bee.app:text
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    text: bee.ui:text
     caller: bee.app:caller
     folder_picker: bee.app:folder_picker
     editor: bee.harness.app:profile_editor
@@ -163,9 +163,9 @@ entries:
   kind: library.lua
   source: file://directory_view.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
-    text: bee.app:text
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    text: bee.ui:text
     protocol: bee.app:sessions_protocol
     agents: bee.harness.app:agents
 

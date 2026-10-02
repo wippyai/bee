@@ -7,9 +7,9 @@ entries:
   method: main
   modules: [tty, process, channel, time, uuid, json, funcs, registry]
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     client: bee.app:client
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     model: bee.approvals.inbox.app:model
     view: bee.approvals.inbox.app:view
     inbox: bee.approvals.inbox.app:client
@@ -38,7 +38,7 @@ entries:
   source: file://model.lua
   modules: [json]
   imports:
-    text: bee.app:text
+    text: bee.ui:text
     bounds: bee.values:bounds
     caller: bee.app:caller
 - name: leases
@@ -53,8 +53,8 @@ entries:
   source: file://lease_form.lua
   modules: [tty]
   imports:
-    appearance: bee.app:appearance
-    frame: bee.app:frame
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
     forms: bee.app:forms
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
@@ -72,8 +72,8 @@ entries:
   source: file://view.lua
   modules: [tty]
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
     names: bee.app:names

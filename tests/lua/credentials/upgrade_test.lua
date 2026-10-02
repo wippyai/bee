@@ -3,7 +3,7 @@ local test = require("test")
 local principals = require("principals")
 local persist = require("persist")
 local migrations = require("migrations")
-local broker = require("broker")
+local store = require("store")
 local canonical = require("canonical")
 local sql = require("sql")
 local json = require("json")
@@ -13,7 +13,7 @@ local function opened(count: integer): sql.DB
     local all = migrations.all()
     local selected: {migrations.Migration} = {}
     for index = 1, count do selected[index] = all[index] end
-    local db, err = persist.open({resource = RESOURCE, ledger = broker.LEDGER, migrations = selected})
+    local db, err = persist.open({resource = RESOURCE, ledger = store.LEDGER, migrations = selected})
     if not db then error(tostring(err)) end
     return db
 end
@@ -47,7 +47,7 @@ local function define_tests()
                 "SELECT workspace_id,name,definition_id,revision,provider,source_kind,source_ref,projection_kind,destination,digest,owner_node,created_at,updated_at FROM bee_credential_definitions ORDER BY definition_id",
                 "SELECT * FROM bee_credential_projections ORDER BY projection_id",
                 "SELECT * FROM bee_credential_generations ORDER BY projection_id, generation_key",
-                "SELECT * FROM " .. broker.LEDGER.table .. " WHERE id = 1",
+                "SELECT * FROM " .. store.LEDGER.table .. " WHERE id = 1",
             }
             local before: {string} = {}
             for index, statement in ipairs(statements) do before[index] = rows(old, statement) end
@@ -82,7 +82,7 @@ local function define_tests()
             test.is_true(bad_optional ~= nil)
 
             -- Verify migration ledger records all migrations and stores no secrets
-            local ledger_rows, ledger_err = again:query("SELECT * FROM " .. broker.LEDGER.table .. " ORDER BY id")
+            local ledger_rows, ledger_err = again:query("SELECT * FROM " .. store.LEDGER.table .. " ORDER BY id")
             test.is_nil(ledger_err)
             test.is_true(ledger_rows ~= nil)
             test.eq(#(principals.items(ledger_rows)), 3)
@@ -95,11 +95,11 @@ local function define_tests()
 
             test.eq(rows(again, statements[3]), before[3])
             local full_definitions = rows(again, "SELECT * FROM bee_credential_definitions ORDER BY definition_id")
-            local old_ledger = rows(again, "SELECT * FROM " .. broker.LEDGER.table .. " WHERE id <= 3 ORDER BY id")
+            local old_ledger = rows(again, "SELECT * FROM " .. store.LEDGER.table .. " WHERE id <= 3 ORDER BY id")
             again:release()
             local declared = opened(4)
             test.eq(rows(declared, "SELECT * FROM bee_credential_definitions ORDER BY definition_id"), full_definitions)
-            test.eq(rows(declared, "SELECT * FROM " .. broker.LEDGER.table .. " WHERE id <= 3 ORDER BY id"), old_ledger)
+            test.eq(rows(declared, "SELECT * FROM " .. store.LEDGER.table .. " WHERE id <= 3 ORDER BY id"), old_ledger)
             for index = 2, 3 do test.eq(rows(declared, statements[index]), before[index]) end
             execute(declared, [[INSERT INTO bee_credential_definitions VALUES
                 ('workspace','new-login','new-definition',1,'fixture.harness','fs_directory','host:fixture',
@@ -130,7 +130,7 @@ local function define_tests()
             test.eq(rows(frozen, statements[1]), original_definitions)
             test.eq(rows(frozen, original_projection), before[2])
             test.eq(rows(frozen, statements[3]), before[3])
-            test.eq(rows(frozen, "SELECT * FROM " .. broker.LEDGER.table .. " WHERE id <= 3 ORDER BY id"), old_ledger)
+            test.eq(rows(frozen, "SELECT * FROM " .. store.LEDGER.table .. " WHERE id <= 3 ORDER BY id"), old_ledger)
             local saved, saved_error = frozen:query("SELECT provider,format_json FROM bee_credential_definitions ORDER BY definition_id")
             if not saved then error(tostring(saved_error)) end
             for _, row in ipairs(saved) do
@@ -157,7 +157,7 @@ local function define_tests()
             test.eq(rows(restored, "SELECT definition_id,format_json FROM bee_credential_definitions ORDER BY definition_id"), snapshots)
             test.eq(rows(restored, "SELECT projection_id,format_json FROM bee_credential_projections ORDER BY projection_id"), projected)
             restored:release()
-            local downgraded, err = persist.open({resource = RESOURCE, ledger = broker.LEDGER, migrations = {migrations.all()[1]}})
+            local downgraded, err = persist.open({resource = RESOURCE, ledger = store.LEDGER, migrations = {migrations.all()[1]}})
             test.is_nil(downgraded)
             test.eq(err, "credential database schema is newer")
         end)

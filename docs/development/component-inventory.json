@@ -936,6 +936,11 @@
       "source": "modules/credentials/src/binding/_index.yaml"
     },
     {
+      "id": "bee.credentials.binding:sources",
+      "kind": "library.lua",
+      "source": "modules/credentials/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.credentials.binding:write_back",
       "kind": "function.lua",
       "source": "modules/credentials/src/binding/_index.yaml"
@@ -976,11 +981,6 @@
       "source": "modules/credentials/src/env/_index.yaml"
     },
     {
-      "id": "bee.credentials.env:sources",
-      "kind": "library.lua",
-      "source": "modules/credentials/src/env/_index.yaml"
-    },
-    {
       "id": "bee.credentials.env:sources_ref",
       "kind": "registry.entry",
       "source": "modules/credentials/src/env/_index.yaml"
@@ -991,12 +991,12 @@
       "source": "modules/credentials/src/migrations/_index.yaml"
     },
     {
-      "id": "bee.credentials.persist:broker",
+      "id": "bee.credentials.persist:identity_migration",
       "kind": "library.lua",
       "source": "modules/credentials/src/persist/_index.yaml"
     },
     {
-      "id": "bee.credentials.persist:identity_migration",
+      "id": "bee.credentials.persist:store",
       "kind": "library.lua",
       "source": "modules/credentials/src/persist/_index.yaml"
     },
@@ -12153,9 +12153,9 @@
       "table": "bee_credential_projections"
     },
     {
-      "line": 28,
+      "line": 7,
       "owner_namespace": "bee.credentials.persist",
-      "source": "modules/credentials/src/persist/broker.lua",
+      "source": "modules/credentials/src/persist/store.lua",
       "table": "bee_credential_schema_migrations"
     },
     {

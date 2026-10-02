@@ -8,6 +8,7 @@ local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")
 local placement_decode = require("placement_decode")
+local placement_protocol = require("placement_protocol")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -299,6 +300,14 @@ local function await_request(workspace: string): Object
     end
     error("no pending approval request in workspace " .. workspace)
 end
+local function pending_request(workspace: string): Object
+    local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
+    for _, change in ipairs(principals.objects(page.changes)) do
+        local view = assert(bounds.object(change.request))
+        if view.state == "pending" then return view end
+    end
+    error("no pending approval request in workspace " .. workspace)
+end
 local function decide(view: Object, decision: string)
     approve_call("bee.approvals.binding:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest})
 end
@@ -467,13 +476,30 @@ local function define_tests()
             for _, crash in ipairs({"permission_intended", "approval_created", "permission_requested", "permission_consumed", "write_intended", "write_dispatched"}) do
                 local thread_id, workspace = thread(), fresh("ws")
                 local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
-                local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash)
+                local paused = assert(process.listen("bee.carrier.paused", {message = true}))
                 local decided_before = crash == "permission_consumed" or crash == "write_intended" or crash == "write_dispatched"
-                if decided_before then decide(await_request(workspace), "approved") end
+                local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash, decided_before and "approval_created" or nil)
+                if decided_before then
+                    await_paused(paused, first, "approval_created")
+                    decide(pending_request(workspace), "approved")
+                    process.send(first, "bee.carrier.continue", {go = true})
+                end
                 local crashed = await_carrier(first, crash)
                 test.is_true(tostring(crashed.error):find("crash after " .. crash, 1, true) ~= nil)
-                local resumed = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
-                if not decided_before then decide(await_request(workspace), "approved") end
+                if not decided_before and crash ~= "permission_intended" then
+                    decide(pending_request(workspace), "approved")
+                end
+                local resumed = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil,
+                    crash == "permission_intended" and "checkpoint_read,approval_created" or nil)
+                if crash == "permission_intended" then
+                    await_paused(paused, resumed, "checkpoint_read")
+                    test.eq(approvals_in(workspace), 0)
+                    process.send(resumed, "bee.carrier.continue", {go = true})
+                    await_paused(paused, resumed, "approval_created")
+                    decide(pending_request(workspace), "approved")
+                    process.send(resumed, "bee.carrier.continue", {go = true})
+                end
+                process.unlisten(paused)
                 local settlement = settlement_of(await_carrier(resumed, crash .. " resume"), crash)
                 local records = records_of(thread_id)
                 if settlement.outcome ~= "succeeded" then
@@ -652,7 +678,19 @@ local function define_tests()
             local status = assert(placement_decode.status(call("bee.placement.native.binding:status", {attempt_id = launch.attempt_id})))
             local runner = assert(status.attempt.runner)
             assert(process.monitor(runner))
+            local exits = assert(process.listen(placement_protocol.TOPIC_EXIT, {message = true}))
+            local generation = status.attempt.attachment_generation + 1
+            call("bee.placement.native.binding:attach", {attempt_id = launch.attempt_id, recipient = process.pid(), generation = generation})
             call("bee.placement.native.binding:stop", {attempt_id = launch.attempt_id, mode = "forced"})
+            local deadline = time.after("60s")
+            local selected = channel.select({exits:case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel == exits, "placement child did not exit")
+            local message = selected.value
+            test.eq(tostring(message:from()), runner)
+            local child_exit = assert(placement_protocol.decode_exit(message:payload():data()))
+            test.eq(child_exit.attempt_id, launch.attempt_id)
+            test.eq(child_exit.generation, generation)
+            process.unlisten(exits)
             assert(process.terminate(runner))
             await_carrier(runner, "placement runner loss")
             process.unmonitor(runner)

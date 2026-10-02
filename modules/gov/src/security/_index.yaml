@@ -102,8 +102,23 @@ entries:
     actions: [bee.gov.delivery.execute]
     resources: [bee.gov.binding:destination_backend_call]
     effect: allow
+- name: publication_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.gov.security:publication_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:publication_backend_call")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.gov.security:publication_execution_scope, bee.gov.binding:publication_backend_call]
+    effect: allow
+- name: publication_execution_policy
+  kind: security.policy
+  groups: [publication_execution_scope]
+  policy:
+    actions: [bee.gov.publication.execute, funcs.call]
+    resources: [bee.gov.binding:publication_backend_call]
+    effect: allow
 - name: publication_service_policy
   kind: security.policy.expr
+  groups: [publication_execution_scope]
   meta: {comment: Private host resources for publishing one configured local overlay as immutable Sync content}
   policy:
     expression: (resource != "bee.persist:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")

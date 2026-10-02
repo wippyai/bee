@@ -307,6 +307,8 @@
     "bee.gov.security:gateway_callee_policy",
     "bee.gov.security:gateway_policy",
     "bee.gov.security:overlay_facade_policy",
+    "bee.gov.security:publication_execution_policy",
+    "bee.gov.security:publication_facade_policy",
     "bee.gov.security:publication_profiles_read_policy",
     "bee.gov.security:publication_service_policy",
     "bee.gov.security:recovery_command_policy",

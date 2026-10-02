@@ -138,7 +138,7 @@ entries:
   source: file://publication_service_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [base64]
+  modules: [base64, funcs, security]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -538,3 +538,12 @@ entries:
     capability_grants: bee.gov:capability_grants
     application_admission: bee.gov:governed_application_admission
     preflight: bee.gov:preflight
+
+- name: publication_test_policy
+  kind: security.policy.expr
+  meta: {type: test_support}
+  policy:
+    expression: '(action == "funcs.call" && resource in ["bee.gov.binding:publication_call", "bee.gov.binding:publication_backend_call"]) || (action == "bee.gov.delivery.manage" && resource == actor.meta.workspace_id)'
+    actions: [funcs.call, bee.gov.delivery.manage]
+    resources: '*'
+    effect: allow

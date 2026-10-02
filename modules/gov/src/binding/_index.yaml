@@ -19,8 +19,19 @@ entries:
   kind: function.lua
   source: file://publication_method.lua
   method: handle
-  imports: {service: bee.gov.binding:publication_service}
-  security: {policies: [bee.gov.security:publication_service_policy]}
+  modules: [funcs, security]
+  imports: &publication_imports
+    service: bee.gov.binding:publication_service
+    bounds: bee.values:bounds
+    transaction: bee.persist:transaction
+  security: {policies: [bee.gov.security:publication_facade_policy]}
+- name: publication_backend_call
+  kind: function.lua
+  source: file://publication_method.lua
+  method: backend
+  modules: [funcs, security]
+  imports: *publication_imports
+  meta: {type: internal}
 - name: super_edit_call
   kind: function.lua
   source: file://super_edit_method.lua

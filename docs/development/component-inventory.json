@@ -3401,6 +3401,11 @@
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
+      "id": "bee.gov.binding:publication_backend_call",
+      "kind": "function.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.gov.binding:publication_call",
       "kind": "function.lua",
       "source": "modules/gov/src/binding/_index.yaml"
@@ -3557,6 +3562,16 @@
     },
     {
       "id": "bee.gov.security:overlay_facade_policy",
+      "kind": "security.policy.expr",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.gov.security:publication_execution_policy",
+      "kind": "security.policy",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.gov.security:publication_facade_policy",
       "kind": "security.policy.expr",
       "source": "modules/gov/src/security/_index.yaml"
     },
@@ -15992,14 +16007,14 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1785,
+    "entry_count": 1788,
     "namespace_count": 177,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 80,
     "owned_table_declaration_count": 138,
-    "persisted_id_count": 814,
+    "persisted_id_count": 816,
     "requirement_count": 130,
     "requirement_target_count": 306,
     "root_src_lua_budget": 23987,

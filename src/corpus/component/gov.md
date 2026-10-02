@@ -70,6 +70,12 @@ list of complete registry entries and freezes it with the other source files.
 The publication preparation service parses that exact frozen file and uses
 `bee.gov:artifact` to create the canonical measured envelope. It executes
 no code and does not mutate the overlay or frozen snapshot.
+`bee.gov.binding:publication_call` checks `bee.gov.delivery.manage` for prepare
+or `bee.gov.delivery.publish` for publish against the caller's exact workspace
+before entering `bee.gov.security:publication_execution_scope`. Its private
+backend requires that scope's execution marker. The caller's actor remains the
+recorded identity, while ordinary applications retain their direct-store deny.
+Publication still verifies the host profile and exact applied artifact.
 
 The host links `target_db`; `BEE_GOVERNANCE_DB` selects the default SQLite path.
 Checked migration 1 owns the private workspace rows, files, frozen copies and

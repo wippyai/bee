@@ -1,7 +1,8 @@
 # bee.app
 
 The public application SDK. It provides bounded launch arguments, application
-client and interaction values, caller helpers and naming values. These libraries carry values only: they do not admit an
+client and interaction values, caller helpers and naming values. These libraries
+carry values only: they do not admit an
 application, select a workspace, open a store, or grant access to a thread.
 
 | Entry | Responsibility |
@@ -11,8 +12,10 @@ application, select a workspace, open a store, or grant access to a thread.
 | `names` | Shared naming values for applications and desktop consumers |
 | `bee.app.status:startup_progress` | Pure retained-startup phase decoding and inactivity deadline values shared by launch and desktop clients; callers authenticate progress senders and select and enforce timeout bounds |
 
-Shared frame, appearance and bounded text are owned by [bee.ui](../../ui/src/README.md).
-Import `bee.ui:frame`, `bee.ui:appearance` and `bee.ui:text` directly.
+Shared frame, appearance, bounded text and presentation kits are owned by
+[bee.ui](../../ui/src/README.md). Import `bee.ui:frame`, `bee.ui:appearance`,
+`bee.ui:text`, `bee.ui.forms:forms`, `bee.ui.viz:viz`, `bee.ui.diagram:diagram`
+and `bee.ui.picker:folder` directly.
 
 Proven reference screens for each application class (deploy board, CI board,
 inbox, log viewer, topology, workflow, live metrics, deploy wizard with forms,

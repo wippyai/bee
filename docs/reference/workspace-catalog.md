@@ -306,7 +306,7 @@ first page.
 
 The selected workspace's detail shows its folder, last use, creation and
 identity, whether a host serves it, the applications its checkpoint keeps
-open, up to ten of its threads (`bee.threads.service:list_workspace`) and one
+open, up to ten of its threads (`bee.threads.binding:list_workspace`) and one
 section per workspace extension (resources and agent sessions in the default
 composition), each with its count or the reason it could not be read. From
 120x36 the detail sits beside a 40-cell list (48 from 160x48); below that Enter

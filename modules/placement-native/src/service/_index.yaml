@@ -164,13 +164,7 @@ entries:
     quote: bee.driver.kit:quote
     types: bee.placement:types
     process_backend: bee.placement.native:process_backend
-  security:
-    policies:
-    - bee.placement.native.security:placement_store_policy
-    - bee.placement.native.security:placement_exec_policy
-    - bee.placement.native.security:placement_runner_policy
-    - bee.credentials.security:credential_materialize_policy
-    - bee.security.gateway:gateway_materialize_policy
+  security: {policies: []}
 - name: window
   kind: library.lua
   source: file://window.lua
@@ -214,3 +208,26 @@ entries:
     bounds: bee.threads.records:bounds
     formats: bee.credentials:formats
     types: bee.driver:types
+- name: process_runner
+  kind: library.lua
+  source: file://runner.lua
+  modules:
+  - process
+  - channel
+  - time
+  - sql
+  - exec
+  - funcs
+  imports:
+    service: bee.placement.native.service:service
+    materialization: bee.placement.native.service:materialization
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    resources: bee.placement.native:resources
+    identity: bee.placement.native.service:identity
+    output_buffer: bee.placement.native.service:output_buffer
+    protocol: bee.placement.native:protocol
+    quote: bee.driver.kit:quote
+    types: bee.placement:types
+    process_backend: bee.placement.native:process_backend
+    bounds: bee.protocol:bounds

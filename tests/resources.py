@@ -16,6 +16,17 @@ from workspace import ROOT, RUNTIME, database_environment
 
 PROBE = r'''
 local funcs = require("funcs")
+local function object(value: unknown): {[string]: unknown}
+    assert(type(value) == "table", "fixture value must be an object")
+    return value
+end
+local function objects(value: unknown): {{[string]: unknown}}
+    assert(type(value) == "table", "fixture value must be an array")
+    local result: {{[string]: unknown}} = {}
+    for index, item in ipairs(value) do result[index] = object(item) end
+    return result
+end
+
 local registry = require("registry")
 local fs = require("fs")
 local ROOT_REF = "bee.placement.native:root"
@@ -27,27 +38,27 @@ local SENTINEL = "probe-secret-4b8f2a"
 local function call(method: string, request: {[string]: unknown}): {[string]: unknown}
     local reply, err = funcs.new():call("bee.resources.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
-    local value = reply :: {[string]: unknown}
-    assert(value.ok == true, method .. " failed: " .. tostring(type(value.error) == "table" and (value.error :: {[string]: unknown}).message))
-    return value.value :: {[string]: unknown}
+    local value = object(reply)
+    assert(value.ok == true, method .. " failed: " .. tostring(type(value.error) == "table" and object(value.error).message))
+    return object(value.value)
 end
 local function credential(method: string, request: {[string]: unknown}): {[string]: unknown}
     local reply, err = funcs.new():call("bee.credentials.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
-    local value = reply :: {[string]: unknown}
-    assert(value.ok == true, method .. " failed: " .. tostring(type(value.error) == "table" and (value.error :: {[string]: unknown}).message))
-    return value.value :: {[string]: unknown}
+    local value = object(reply)
+    assert(value.ok == true, method .. " failed: " .. tostring(type(value.error) == "table" and object(value.error).message))
+    return object(value.value)
 end
 local function admit()
     local roots_entry = registry.get("bee.placement.native:placement_admitted_roots")
     assert(roots_entry, "admitted roots entry")
-    local roots = (roots_entry.data :: {[string]: unknown}).roots :: {{[string]: unknown}}
+    local roots = objects(object(roots_entry.data).roots)
     local has_root = false
     for _, root in ipairs(roots) do if tostring(root.root_ref) == ROOT_REF then has_root = true end end
     if not has_root then roots[#roots + 1] = {root_ref = ROOT_REF, access = "write"} end
     local sources_entry = registry.get("bee.credentials:credential_sources")
     assert(sources_entry, "credential sources entry")
-    local sources_data = sources_entry.data :: {[string]: unknown}
+    local sources_data = object(sources_entry.data)
     sources_data.sources = {{ref = CRED_SOURCE, workspace_id = "*", audience = ACTOR, provider = "claude", projection_kinds = {"environment"}}}
     local changes = registry.snapshot():changes()
     changes:update(roots_entry)
@@ -65,7 +76,7 @@ local function main(phase: string?)
     elseif phase == "verify" then
         -- The association survived the restart: a manager still lists it.
         local listed = call("list", {workspace_id = WORKSPACE})
-        local associations = listed.associations :: {{[string]: unknown}}
+        local associations = objects(listed.associations)
         local found = false
         for _, association in ipairs(associations) do if tostring(association.name) == "root" then found = true end end
         assert(found, "association did not survive the restart")
@@ -91,7 +102,7 @@ local function main(phase: string?)
         -- The credential definition survived the restart, and neither the
         -- listing nor its stored digest carries the secret bytes.
         local credentials = credential("list", {workspace_id = WORKSPACE})
-        local definitions = credentials.definitions :: {{[string]: unknown}}
+        local definitions = objects(credentials.definitions)
         local defined = false
         for _, definition in ipairs(definitions) do if tostring(definition.name) == "anthropic" then defined = true end end
         assert(defined, "credential definition did not survive the restart")
@@ -140,7 +151,7 @@ def main():
 
         def run(phase):
             registry = folder / f"registry-{phase}.db"
-            result = subprocess.run([str(RUNTIME), "run", "resource-probe", phase, "--set", f"registry.history_path={registry}"],
+            result = subprocess.run([str(RUNTIME), "run", "--host", "bee:terminal", "resource-probe", phase, "--set", f"registry.history_path={registry}"],
                                     cwd=folder, env=environment, capture_output=True, text=True, timeout=60)
             assert result.returncode == 0, result.stdout + result.stderr
             return result.stdout + result.stderr

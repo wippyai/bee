@@ -112,3 +112,21 @@ exists and the app SDK exposes workspace-qualified logical view references.
 Desktop snapshots preserve workspace identity for newly opened windows.
 Client layout separation and admitted local attachments are implemented. Mixed-workspace
 composition and remote routing remain unimplemented.
+
+## Layout reference migrations
+
+Placement migration 8 moves the Git worktree binding and its saved `plan`,
+`setup` and `cleanup` callable identities to `bee.git.worktree` and
+`bee.git.worktree.binding`. It changes only those top-level record fields and
+exact worktree setup/cleanup markers. Nested preparer state, attempt identities,
+positions and unrelated evidence remain unchanged. The migration runs before
+recovery reads the plans; a restarted sweeper uses the new callable targets
+and recognizes cleanup completed by the previous build. If old and new binding
+keys collide for one attempt, the owning migration transaction refuses the
+collision and preserves both records with the migration unapplied.
+
+Sync migration 8 and Gateway migration 16 move complete registry-reference
+scalars for the layout changes in their owned projections/events/receipts and
+surfaces/active selections/trait grants. Embedded prose, actor instance strings
+and escaped opaque JSON remain unchanged. Existing migration SQL and checksums
+are preserved; each owner applies its additive migration through `bee.persist`.

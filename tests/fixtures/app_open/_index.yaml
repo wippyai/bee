@@ -87,10 +87,10 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.gateway:address, bee.gateway.binding:open,
-      bee.harness.launch:resolve, bee.harness.launch:start,
-      bee.threads.service:create, bee.threads.service:get, bee.threads.service:leave,
-      bee.threads.service:read_after]
+    resources: [bee.gateway.binding:address, bee.gateway.binding:open,
+      bee.harness.binding:resolve, bee.harness.binding:start,
+      bee.threads.binding:create, bee.threads.binding:get, bee.threads.binding:leave,
+      bee.threads.binding:read_after]
     effect: allow
 - name: recheck_policy
   kind: security.policy

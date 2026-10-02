@@ -55,7 +55,7 @@ local function define_tests()
     test.describe("Fixture-provider managed terminal", function()
         test.it("opens a real native terminal for the fixture provider and leaves launch evidence on the thread", function()
             local thread = "fixture_terminal_thread"
-            call("bee.threads.service:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open fixture provider window"})
+            call("bee.threads.binding:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open fixture provider window"})
             local owner = tostring(process.pid())
             local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -94,7 +94,7 @@ local function define_tests()
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "fixture-close", op = "close", workspace_id = WORKSPACE, id = id}))
             local closed = receive_reply(replies, "fixture-close", "close")
             assert(closed.error_code == "", "fixture provider window close failed")
-            local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32})
+            local records = call("bee.threads.binding:read_after", {thread_id = thread, cursor = 0, limit = 32})
             local kinds: {[string]: boolean} = {}
             local value = assert(bounds.object(records.value))
             for _, item in ipairs(assert(bounds.array(value.records))) do

@@ -231,7 +231,7 @@ local function open(request: Object): Reply
     end
     if presentation == "window" then
         if placement then return fail("UNSUPPORTED_CAPABILITY", "Window placement overrides require a saved profile", operation_key) end
-        local raw, call_error = funcs.call("bee.harness.launch:present", {spec = {definition = definition, profile = profile, workdir = workdir, presentation = presentation}, operation_key = operation_key})
+        local raw, call_error = funcs.call("bee.harness.binding:present", {spec = {definition = definition, profile = profile, workdir = workdir, presentation = presentation}, operation_key = operation_key})
         local reply = object(raw)
         if call_error or not reply or reply.ok ~= true then
             local fault = reply and object(reply.error)
@@ -247,7 +247,7 @@ local function open(request: Object): Reply
     if type(plan_value.session_resource) ~= "string" or plan_value.session_resource == "" then
         return fail("UNAVAILABLE", "the selected definition has no retained session resource", operation_key)
     end
-    local setup_raw, setup_error = funcs.call("bee.harness.launch:setup", {workspace_id = workspace,
+    local setup_raw, setup_error = funcs.call("bee.harness.binding:setup", {workspace_id = workspace,
         definition_ref = definition, expected_plan_digest = plan_value.plan_digest,
         saved_profile_id = profile_id, saved_profile_revision = profile_revision, session_turn = true, placement_override = placement})
     local setup = object(setup_raw)

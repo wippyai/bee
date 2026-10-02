@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.git_worktree
+namespace: bee.git.worktree
 entries:
 - name: definition
   kind: ns.definition
@@ -12,7 +12,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Add the git-worktree namespace to the host trust map
-  default: bee.git_worktree
+  default: bee.git.worktree
   targets:
   - entry: bee:protected_kernel
     path: .data.namespaces +=
@@ -36,43 +36,10 @@ entries:
   source: file://worktree.lua
   modules: [exec, fs, registry, hash, channel]
   imports:
-    git_roots: bee.git_worktree:git_roots
+    git_roots: bee.git.worktree:git_roots
     paths: bee.placement:paths
     bounds: bee.threads.records:bounds
     quote: bee.driver.kit:quote
-- name: plan
-  kind: function.lua
-  source: file://setup_method.lua
-  method: plan
-  modules: [security]
-  imports:
-    worktree: bee.git_worktree:worktree
-    bounds: bee.threads.records:bounds
-    types: bee.placement:types
-  security:
-    policies: [bee.git_worktree:worktree_policy]
-- name: setup
-  kind: function.lua
-  source: file://setup_method.lua
-  method: handle
-  modules: [security]
-  imports:
-    worktree: bee.git_worktree:worktree
-    bounds: bee.threads.records:bounds
-    types: bee.placement:types
-  security:
-    policies: [bee.git_worktree:worktree_policy]
-- name: cleanup
-  kind: function.lua
-  source: file://cleanup_method.lua
-  method: handle
-  modules: [security]
-  imports:
-    worktree: bee.git_worktree:worktree
-    bounds: bee.threads.records:bounds
-    types: bee.placement:types
-  security:
-    policies: [bee.git_worktree:worktree_policy]
 - name: binding
   kind: contract.binding
   meta:
@@ -80,9 +47,9 @@ entries:
   contracts:
   - contract: bee.placement:workdir_preparer
     methods:
-      plan: bee.git_worktree:plan
-      setup: bee.git_worktree:setup
-      cleanup: bee.git_worktree:cleanup
+      plan: bee.git.worktree.binding:plan
+      setup: bee.git.worktree.binding:setup
+      cleanup: bee.git.worktree.binding:cleanup
 - name: worktree_policy
   kind: security.policy
   policy:
@@ -101,9 +68,9 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected native executor for git commands
-  default: bee.git_worktree:git_executor
+  default: bee.git.worktree:git_executor
   targets:
-  - entry: bee.git_worktree:executor_ref
+  - entry: bee.git.worktree:executor_ref
     path: .resource_ref
 - name: executor_ref
   kind: registry.entry
@@ -120,9 +87,9 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected filesystem volume for git metadata reading
-  default: bee.git_worktree:host_files
+  default: bee.git.worktree:host_files
   targets:
-  - entry: bee.git_worktree:host_files_ref
+  - entry: bee.git.worktree:host_files_ref
     path: .resource_ref
 - name: host_files_ref
   kind: registry.entry

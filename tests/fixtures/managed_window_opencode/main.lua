@@ -53,7 +53,7 @@ local function run()
     local data = assert(bounds.object(expected.data))
     local marker = tostring(data.marker)
     local thread = "managed_opencode_thread"
-    call("bee.threads.service:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open OpenCode window"})
+    call("bee.threads.binding:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open OpenCode window"})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -111,7 +111,7 @@ local function run()
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "opencode-close", op = "close", workspace_id = WORKSPACE, id = id}))
     local closed = receive_reply(replies, "opencode-close", "close")
     assert(closed.error_code == "", "managed OpenCode close failed")
-    local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32})
+    local records = call("bee.threads.binding:read_after", {thread_id = thread, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
     local value = assert(bounds.object(records.value))
     local receipts = 0

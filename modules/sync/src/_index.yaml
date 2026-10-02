@@ -104,3 +104,11 @@ entries:
   kind: library.lua
   source: file://resources.lua
   modules: [registry]
+- name: target_admit_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.sync.binding:admit
+    path: .security.policies

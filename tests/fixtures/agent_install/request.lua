@@ -6,14 +6,14 @@ local agent = require("agent")
 
 local function run()
     local suffix = tostring(time.now():unix_nano())
-    local thread = agent.call("bee.threads.service:create", {thread_id = "install-" .. suffix,
+    local thread = agent.call("bee.threads.binding:create", {thread_id = "install-" .. suffix,
         idempotency_key = "create-" .. suffix, title = "Agent installation"}).thread_id
     local attempt = "attempt-" .. suffix
     local action = "action-" .. suffix
-    agent.call("bee.threads.service:admit_action", {thread_id = thread, action_id = action, idempotency_key = "admit-" .. suffix,
+    agent.call("bee.threads.binding:admit_action", {thread_id = thread, action_id = action, idempotency_key = "admit-" .. suffix,
         admitted = {request_id = "request-" .. suffix, principal_id = agent.SUBJECT, binding_ref = "probe-binding",
             binding_digest = "probe-digest", grant_refs = {}, budget_ref = "probe-budget", input = {text = "install"}}})
-    agent.call("bee.threads.service:prepare_attempt", {thread_id = thread, action_id = action, attempt_id = attempt,
+    agent.call("bee.threads.binding:prepare_attempt", {thread_id = thread, action_id = action, attempt_id = attempt,
         idempotency_key = "prepare-" .. suffix, prepared = {binding_ref = "probe-binding", binding_digest = "probe-digest",
             profile_id = "probe-profile", profile_digest = "probe-profile-digest", placement_binding = "probe-placement",
             placement_attempt_id = attempt, plan_digest = "probe-plan"}})

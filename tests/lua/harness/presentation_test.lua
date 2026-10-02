@@ -27,7 +27,7 @@ local function define_tests()
                     assert(security.policy("bee.security:scope_managing_app_boundary")),
                     assert(security.policy("bee.harness.security:profile_context_boundary"))})
                 test.eq(scope:evaluate(actor, "process.context", "context"), "deny")
-                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.harness.launch:present", {})
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.harness.binding:present", {})
                 if err then error(tostring(err)) end
                 local reply = raw
                 test.is_true(reply.ok)

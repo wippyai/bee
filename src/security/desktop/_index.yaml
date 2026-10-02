@@ -99,9 +99,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.threads.projection:status_read
-    - bee.threads.projection:status_update
-    - bee.threads.delivery:watch
+    - bee.threads.binding:status_read
+    - bee.threads.binding:status_update
+    - bee.threads.binding:watch
     effect: allow
 - name: host_policy
   kind: security.policy.expr

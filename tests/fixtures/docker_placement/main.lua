@@ -51,11 +51,11 @@ end
 local function profile(provider: string, mode: string): (string, string, admission.Plan)
     local definition = "bee.driver." .. provider .. (mode == "window" and ":default_window" or ":research_batch")
     local id = provider .. "-docker-" .. mode
-    call("bee.harness.profiles:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
+    call("bee.harness.binding:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
         expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = definition, driver_binding_ref = "bee.driver." .. provider .. ":binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = {}}}})
     local plan, refused = admission.resolve(definition, mode == "window" and "window" or "batch", WORKSPACE, id, 1)
     assert(plan, tostring(refused and refused.error and refused.error.message))
-    call("bee.harness.launch:setup", {workspace_id = WORKSPACE, definition_ref = definition,
+    call("bee.harness.binding:setup", {workspace_id = WORKSPACE, definition_ref = definition,
         saved_profile_id = id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
     return definition, id, plan
 end
@@ -285,7 +285,7 @@ local function scheduled(mode: string)
     for _, tool in ipairs(tools) do mcp[#mcp + 1] = {tool = tool, scope = {}} end
     for _, provider in ipairs({"claude", "codex"}) do
         local id = provider .. "-docker-scheduler"
-        call("bee.harness.profiles:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
+        call("bee.harness.binding:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
             expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = "bee.driver." .. provider .. ":default_window", driver_binding_ref = "bee.driver." .. provider .. ":binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = mcp}}})
     end
     local function open(provider: string): Object
@@ -342,7 +342,7 @@ local function scheduled(mode: string)
     end
 end
 function M.proof()
-    local endpoint = object(assert(funcs.call("bee.gateway:address", {})))
+    local endpoint = object(assert(funcs.call("bee.gateway.binding:address", {})))
     call("bee.gateway.binding:open", {address = endpoint.address})
     local expected = object(assert(registry.get("bee.docker.proof:expectation")).data)
     local provider, mode = tostring(expected.provider), tostring(expected.mode)

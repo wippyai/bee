@@ -142,7 +142,7 @@ run:
 .PHONY: idle-cpu-check
 idle-cpu-check:
 	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
-lint:
+lint: layout-check lua-boundary-check
 	$(WIPPY) lint $(LINT_FLAGS) --strict-any --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
@@ -154,7 +154,7 @@ fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
-fixture-lint:
+fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 .PHONY: compile-cache-check
 compile-cache-check:
@@ -675,3 +675,21 @@ persist-migration-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
 check: persist-migration-check
 check-shard-services-storage: persist-migration-check
+.PHONY: layout-check
+layout-check:
+	python3 build/layout_check.py
+
+.PHONY: lua-boundary-check
+lua-boundary-check:
+	python3 build/lua_boundary_check.py
+
+.PHONY: layout-upgrade-check
+layout-upgrade-check:
+	@test -n "$(LAYOUT_PREVIOUS_BEE)" -a -n "$(LAYOUT_PREVIOUS_SOURCE)" || { echo 'Set LAYOUT_PREVIOUS_BEE and LAYOUT_PREVIOUS_SOURCE to origin/main build and source.'; exit 1; }
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/layout_upgrade.py --previous "$(abspath $(LAYOUT_PREVIOUS_BEE))" --binary "$(abspath $(BEE_BINARY))" --previous-source "$(abspath $(LAYOUT_PREVIOUS_SOURCE))"
+
+.PHONY: login-links-check
+# Explicit proof against the local runtime PR build; the production pin stays unchanged.
+login-links-check:
+	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
+	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)

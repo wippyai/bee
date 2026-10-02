@@ -32,18 +32,18 @@ local function define_tests()
                 local node = types.pid_parts(tostring(process.pid()))
                 if not node then error("native node") end
                 if node == "" then node = "local" end
-                local owner: types.OwnerRef = {node_id = node, service_id = "bee.hive.telemetry"}
-                local target: types.Target = {operation_ref = "bee.hive.telemetry:stats"}
+                local owner: types.OwnerRef = {node_id = node, service_id = "bee.hive.telemetry.binding"}
+                local target: types.Target = {operation_ref = "bee.hive.telemetry.binding:stats"}
                 local result = handle:call(owner, target, {}, {timeout = "3s"})
                 if not result.ok then error("supervisor stats failed: " .. tostring(result.error and result.error.message)) end
                 test.is_true(type(result.value) == "table")
                 local wrong = handle:call({node_id = node, service_id = "wrong"}, target, {}, {timeout = "3s"})
                 test.eq(wrong.error and wrong.error.code, "INVALID_ARGUMENT")
-                local foreign = handle:call({node_id = "not-enrolled", service_id = "bee.hive.telemetry"}, target, {}, {timeout = "3s"})
+                local foreign = handle:call({node_id = "not-enrolled", service_id = "bee.hive.telemetry.binding"}, target, {}, {timeout = "3s"})
                 test.eq(foreign.error and foreign.error.code, "UNAVAILABLE")
                 local invalid = handle:call(owner, target, {extra = true}, {timeout = "3s"})
                 test.is_false(invalid.ok)
-                local again = handle:call(owner, {operation_ref = "bee.hive.telemetry:presence"}, {}, {timeout = "3s"})
+                local again = handle:call(owner, {operation_ref = "bee.hive.telemetry.binding:presence"}, {}, {timeout = "3s"})
                 test.is_true(again.ok)
                 -- Only an enrolled local client stops its owner; this caller
                 -- is neither, and a malformed stop is refused before that.

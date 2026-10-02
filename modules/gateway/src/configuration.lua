@@ -31,7 +31,7 @@ function M.configured(): (string?, string?)
     return address, nil
 end
 function M.current(): (Listener?, string?)
-    local value, err = funcs.call("bee.gateway:address", {})
+    local value, err = funcs.call("bee.gateway.binding:address", {})
     if err then return nil, tostring(err) end
     if type(value) ~= "table" then return nil, "gateway listener address is unavailable" end
     local data = value

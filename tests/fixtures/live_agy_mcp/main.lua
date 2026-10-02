@@ -49,20 +49,20 @@ local function main()
     if not applied then error(tostring(apply_error)) end
     local listener: Object? = nil
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.binding:address", {})
         if not address_error then listener = bounds.object(raw) end
         if listener and type(listener.address) == "string" then break end
         time.sleep("100ms")
     end
     if not listener or type(listener.address) ~= "string" then error("native MCP listener did not become ready") end
-    local plan = call("bee.harness.launch:resolve", {definition_ref = definition})
-    reply("bee.harness.launch:setup", {workspace_id = "research-workspace", definition_ref = definition, expected_plan_digest = plan.plan_digest})
-    call("bee.threads.service:create", {thread_id = thread, idempotency_key = "create-live", title = "Live Gemini MCP proof"})
+    local plan = call("bee.harness.binding:resolve", {definition_ref = definition})
+    reply("bee.harness.binding:setup", {workspace_id = "research-workspace", definition_ref = definition, expected_plan_digest = plan.plan_digest})
+    call("bee.threads.binding:create", {thread_id = thread, idempotency_key = "create-live", title = "Live Gemini MCP proof"})
     local args = {idempotency_key = marker, message_id = marker, message_kind = "progress", recipient_ids = {actor}, content = {text = marker}}
     local brief = "Use only Bee MCP tools for this task. Read session. Use session request_access to request research:record with idempotency_key live-record and reason Record the probe result. The test operator will approve it through the inbox. Call session access_status with the returned approval_id until granted. Then read session and select both research:read and research:record traits with the current revision and context {experiment: baseline}. "
         .. "Then use call_tool to call thread_message with these exact arguments: " .. tostring(json.encode(args))
         .. ". Do not use shell or change files. After the tool succeeds, answer DONE."
-    local started = call("bee.harness.launch:start", {request_id = "live-agent", definition_ref = definition, workspace_id = "research-workspace", thread_id = thread, brief = brief})
+    local started = call("bee.harness.binding:start", {request_id = "live-agent", definition_ref = definition, workspace_id = "research-workspace", thread_id = thread, brief = brief})
     local pid = tostring(started.carrier)
     local monitored, monitor_error = process.monitor(pid)
     if not monitored then error(tostring(monitor_error)) end
@@ -114,7 +114,7 @@ local function main()
     local cursor = 0
     local found = false
     for _ = 1, 64 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread, cursor = cursor, limit = 64})
         local records = page.records
         if type(records) ~= "table" then error("thread page records missing") end
         for _, raw_record in ipairs(records) do

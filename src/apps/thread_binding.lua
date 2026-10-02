@@ -262,12 +262,12 @@ local function run_effect(engine: Engine, context: Context, coordinator: Coordin
     elseif effect.kind == "membership" then
         local request = M.get_request(binding, context.workspace_id)
         if effect.principal == "application" then
-            local reply = request and context.thread_call(binding.actor_id, "bee.threads.service:get", request) or nil
+            local reply = request and context.thread_call(binding.actor_id, "bee.threads.binding:get", request) or nil
             local status = M.application_status(reply, binding, context.workspace_id)
             M.drive(engine, context, coordinator, {kind = "membership", principal = "application", purpose = effect.purpose,
                 state = status.state, head_revision = status.head_revision, membership_revision = status.membership_revision})
         else
-            local reply = request and context.thread_call(binding.initiating_owner_id, "bee.threads.service:get", request) or nil
+            local reply = request and context.thread_call(binding.initiating_owner_id, "bee.threads.binding:get", request) or nil
             local raw_purpose = effect.purpose
             if not raw_purpose then error("Reducer membership effect has no purpose") end
             local purpose: reducer.Purpose = raw_purpose
@@ -281,13 +281,13 @@ local function run_effect(engine: Engine, context: Context, coordinator: Coordin
     elseif effect.kind == "join" then
         local request = M.join_request(binding, context.workspace_id, binding.idempotency_key, effect.expected_revision)
         local reply, err = nil, nil
-        if request then reply, err = context.thread_call(binding.initiating_owner_id, "bee.threads.service:join", request) end
+        if request then reply, err = context.thread_call(binding.initiating_owner_id, "bee.threads.binding:join", request) end
         local status = outcome(M.reply(reply))
         if err then status = "unknown" end
         M.drive(engine, context, coordinator, {kind = "join", outcome = status})
     else
         local request = M.leave_request(binding, context.workspace_id, binding.idempotency_key .. "-leave", effect.expected_revision)
-        local reply = request and context.thread_call(binding.initiating_owner_id, "bee.threads.service:leave", request) or nil
+        local reply = request and context.thread_call(binding.initiating_owner_id, "bee.threads.binding:leave", request) or nil
         M.drive(engine, context, coordinator, {kind = "leave", outcome = outcome(M.reply(reply))})
     end
 end

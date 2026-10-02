@@ -126,7 +126,7 @@ stale definition bytes. The old launch token and generation cannot authenticate
 after replacement.
 
 Timeline is a read-only owner viewer. It lists and reads through its own
-subscription cursor and uses `bee.threads.delivery:watch` for wakeups;
+subscription cursor and uses `bee.threads.binding:watch` for wakeups;
 `wait` claims an obligation and is not a viewing operation. Page acknowledgment
 records consumer progress, not proof that rows were seen. If the app loses
 unsaved rows after acknowledging a page, it resumes past that cursor and shows

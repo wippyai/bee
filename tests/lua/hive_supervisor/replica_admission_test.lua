@@ -45,7 +45,7 @@ local function request(source: string, descriptor_owner: string): types.Request
 end
 
 local function call(value: types.Request): types.Reply
-    local result, err = funcs.call("bee.sync.hive:admit", value)
+    local result, err = funcs.call("bee.sync.binding:admit", value)
     if err then error(tostring(err)) end
     return assert(types.decode_reply(result))
 end

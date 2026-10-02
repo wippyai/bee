@@ -6,7 +6,7 @@ local funcs = require("funcs")
 local bounds = require("bounds")
 local M = {}
 local function read(workspace: string, id: string): {[string]: unknown}
-    local raw, err = funcs.call("bee.harness.profiles:call", {operation = "get", workspace_id = workspace, profile_id = id})
+    local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
     if err then error(tostring(err)) end
     local reply = bounds.object(raw)
     if not reply or reply.ok ~= true then error("read profile failed") end

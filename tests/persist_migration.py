@@ -16,7 +16,7 @@ from workspace import ROOT, RUNTIME, database_environment, fixture_workspace
 OWNERS = {
     'workspace': ('bee.workspace.db:runner', 'workspace_schema_migrations', 12),
     'client': ('bee.client.db:runner', 'client_schema_migrations', 3),
-    'sync': ('bee.sync:runner', 'bee_sync_schema_migrations', 7),
+    'sync': ('bee.sync:runner', 'bee_sync_schema_migrations', len(re.findall(r'\bid = \d+, name =', (ROOT / 'modules/sync/src/migrations/migrations.lua').read_text()))),
 }
 PROBE = '''local workspace = require("workspace")
 local client = require("client")
@@ -48,7 +48,10 @@ def bytes_check():
         prior = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
         current = (ROOT / path).read_text()
         assert declared_migrations(current) == declared_migrations(prior), path
-    print('Workspace 1–12 and client 1–3 migration bytes/checksums unchanged', flush=True)
+    for path in sorted((ROOT / 'modules').glob('*/src/migrations/*.lua')):
+        prior = subprocess.check_output(['git', 'show', 'origin/main:' + str(path.relative_to(ROOT))], cwd=ROOT)
+        assert path.read_bytes() == prior, path
+    print('Workspace 1–12, client 1–3 and all owner migration bytes/checksums unchanged', flush=True)
 
 
 def seed(path, owner):

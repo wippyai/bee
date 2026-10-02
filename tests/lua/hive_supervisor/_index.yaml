@@ -108,7 +108,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call, system.read]
-    resources: [node, bee.sync.hive:admit]
+    resources: [node, bee.sync.binding:admit]
     effect: allow
 - name: replica_admission_test
   kind: function.lua

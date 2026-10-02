@@ -27,6 +27,9 @@ Resolver rejection returns `FAILED` with the original diagnostic bounded to
 `failed` receipt with the same code and message; replay returns that failure.
 A malformed diagnostic does not turn a definite failure into `UNCERTAIN`.
 Uncertain worker delivery still requires a receipt lookup.
+Completed-operation replay validates the caller and request through the same
+receipt path without acquiring the publication lock. Pending effects and
+recovery retain that lock.
 
 Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`,
 `installed`, `installed_source` and `updates`. `updates` returns installed Bee
@@ -56,9 +59,14 @@ uploads (see the publication section of the Hub guide).
 Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. The planner uses the runtime selection rule: preserve a live installed
-version when every incoming constraint permits it, otherwise choose the highest
+version's captured definitions when that component is unchanged; inspect the
+requested component and changed versions as candidate artifacts. This also keeps
+unrelated package planning independent of local development artifact publication.
+The version solver preserves a live installed
+version, including a selected prerelease, when every incoming constraint permits
+it; otherwise it chooses the highest
 compatible stable release (or a compatible prerelease when no stable release
-matches). Changed selections retract their old dependencies and re-evaluate
+matches and the range explicitly admits that prerelease). Changed selections retract their old dependencies and re-evaluate
 intersections; a parent is never downgraded to satisfy its children. Exact pins
 and compatible installed selections do not list release history; other ranges
 inspect the complete bounded catalog, whose pages are ordered by publication time.
@@ -190,7 +198,7 @@ agent's status. The gateway performs the calls.
 `make hub-self-update-standalone-check` builds local sealed baseline and core artifacts and
 serves their artifacts through a disposable fixture Hub. `BEE_RUNTIME` selects
 the proof executable without changing the repository runtime pin. The acceptance
-checks an independent Files update, optional telemetry removal, protected Hub
+checks an independent Files update, optional telemetry install/removal, protected Hub
 removal refusal, a core self-update, another independent Files update, the older
 wildcard dependency, exact digest approval, completed receipts, unchanged runtime
 owner PID, live Settings About rendering, and restart

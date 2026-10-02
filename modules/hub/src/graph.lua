@@ -149,9 +149,9 @@ function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?
         end
         children[name] = nil
     end
-    local function allowed(version: string, constraints: {string}): (boolean?, string?)
+    local function allowed(version: string, constraints: {string}, selected_prerelease: boolean?): (boolean?, string?)
         for _, constraint in ipairs(constraints) do
-            local matches, problem = semver.matches(version, constraint)
+            local matches, problem = semver.matches(version, constraint, selected_prerelease)
             if matches == nil then return nil, problem end
             if not matches then return false, nil end
         end
@@ -160,7 +160,7 @@ function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?
     local function choose(name: string, constraints: {string}): (string?, string?)
         local retained = installed and installed[name] or nil
         if retained then
-            local matches, problem = allowed(retained, constraints)
+            local matches, problem = allowed(retained, constraints, true)
             if matches == nil then return nil, problem end
             if matches then return retained, nil end
         end

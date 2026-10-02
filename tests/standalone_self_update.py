@@ -69,8 +69,10 @@ local function component_change(request: unknown): string
     local result = call("apply", request, digest)
     local receipt = bounds.object(result.value)
     assert(result.ok == true and receipt and receipt.state == "complete", tostring(result.message))
+    assert(process.registry.register("bee.hub.publisher"), "could not hold publisher name during completed replay")
     local replayed = call("apply", request, digest)
-    assert(replayed.ok == true and replayed.replayed == true, "component operation is not idempotent")
+    process.registry.unregister("bee.hub.publisher")
+    assert(replayed.ok == true and replayed.replayed == true, "component operation replay failed: " .. tostring(replayed.code) .. ": " .. tostring(replayed.message) .. "; replayed=" .. tostring(replayed.replayed))
     return digest
 end
 local function components()
@@ -316,6 +318,9 @@ def run_probe(folder, environment, command, marker, offline=False):
         try:
             while owner.poll() is None and time.monotonic() < deadline:
                 evidence = log.read_text()
+                if "STANDALONE_SELF_UPDATE_FAILURE" in evidence:
+                    failure = next(line for line in evidence.splitlines() if "STANDALONE_SELF_UPDATE_FAILURE" in line)
+                    raise AssertionError(f"{failure}\nOwner log: {log}")
                 if marker in evidence:
                     assert owner.pid == pid, "runtime owner PID changed"
                 time.sleep(0.1)
@@ -388,13 +393,15 @@ def exercise(folder, baseline, target, explicit):
                     "actions": ["registry.get", "registry.resolution.get", "bee.hub.read"], "resources": "*", "effect": "allow"}},
                 {"name": "call", "kind": "security.policy", "policy": {
                     "actions": ["funcs.call"], "resources": ["bee.hub.binding:call"], "effect": "allow"}},
+                {"name": "replay_holder", "kind": "security.policy", "policy": {
+                    "actions": ["process.registry.register", "process.registry.unregister"], "resources": ["bee.hub.publisher"], "effect": "allow"}},
                 {"name": "manage", "kind": "security.policy", "policy": {
                     "actions": ["bee.hub.manage", "bee.hub.self_update"], "resources": ["bee/bee", "bee/files", "bee/hive-telemetry", "bee/hub"], "effect": "allow"}},
             ]
             for name, method in (("standalone-self-update", "main"), ("standalone-self-update-offline", "offline")):
                 entries.append({"name": method, "kind": "process.lua", "source": "file://main.lua", "method": method,
                                 "modules": ["registry", "process", "funcs", "logger"], "imports": imports,
-                                "security": {"policies": [f"selfroot.probe:{policy}" for policy in ("read", "call", "manage")]},
+                                "security": {"policies": [f"selfroot.probe:{policy}" for policy in ("read", "call", "manage", "replay_holder")]},
                                 "meta": {"command": {"name": name, "security": {"actor": {"id": "selfroot.probe"}}}}})
             (probe / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "selfroot.probe", "entries": entries}, sort_keys=False))
             (project / ".wippy.yaml").write_text(yaml.safe_dump({"version": "1.0", "registry": {
@@ -437,6 +444,8 @@ def main(deployment=None):
             baseline = Path(deployment).resolve()
             target = Path(os.environ["BEE_SELF_UPDATE_TARGET_DEPLOYMENT"]).resolve()
             explicit = Path(os.environ["BEE_SELF_UPDATE_EXPLICIT_DEPLOYMENT"]).resolve()
+            for component_version in (COMPONENT, NEXT_COMPONENT):
+                shutil.copy2(baseline.parent / f"files-{component_version}.wapp", folder / f"files-{component_version}.wapp")
         else:
             seed = Path(deployment).resolve() if deployment and Path(deployment).is_dir() else RUNTIME.parents[2] / "dist/portable-deployment"
             assert seed.is_dir(), "build a sealed deployment with make native-pack and pass BEE_DEPLOYMENT"

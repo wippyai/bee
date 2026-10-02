@@ -25,6 +25,7 @@ type fixturePolicy struct {
 	Resources []string `json:"resources"`
 	Effect    string   `json:"effect"`
 }
+
 func main() {
 	var config struct {
 		Packs       []fixturePack
@@ -54,12 +55,14 @@ func main() {
 			}
 		}
 		entries = filtered
-        for i := range entries {
-            if config.Independent[entries[i].ID.String()] {
-                if entries[i].Meta == nil { mustPack(json.Unmarshal([]byte(`{}`), &entries[i].Meta)) }
-                entries[i].Meta["independent"] = true
-            }
-        }
+		for i := range entries {
+			if config.Independent[entries[i].ID.String()] {
+				if entries[i].Meta == nil {
+					mustPack(json.Unmarshal([]byte(`{}`), &entries[i].Meta))
+				}
+				entries[i].Meta["independent"] = true
+			}
+		}
 		if pack.Explicit && strings.HasPrefix(filepath.Base(pack.Output), "bee-") {
 			retained := entries[:0]
 			for _, entry := range entries {

@@ -273,7 +273,7 @@ function M.open(raw_request: unknown): Reply
     if not placement_methods then return unavailable("admission omitted placement operations", operation_key) end
     local route: Object = {budget_capabilities = coverage, effective_profile = effective_profile, profile_digest = effective_profile_digest, definition = definition, plan_digest = plan_value.plan_digest,
         saved_profile_id = profile_id, saved_profile_revision = profile_revision, workdir = workdir, placement_override = placement,
-        driver_binding_ref = driver_binding_ref, provider = driver_binding_ref:match("^bee%.driver%.([^:]+):"), profile_id = profile_ref, driver_methods = methods,
+        driver_binding_ref = driver_binding_ref, provider = bounds.id(plan_value.driver_id), profile_id = profile_ref, driver_methods = methods,
         placement_methods = placement_methods, supervision = supervision or {quiet_period_ms = quiet_period, on_stall = "report"}}
     if session_budgets then route.budgets = session_budgets end
     local created, create_error = journal.invoke("session_create", {operation_key = operation_key,
@@ -324,7 +324,7 @@ function M.attach(raw_request: unknown): Reply
     else
         created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
             title = plan.title or definition, route = {definition = definition, plan_digest = plan.plan_digest,
-                delivery = "hook", driver_binding_ref = driver, provider = driver:match("^bee%.driver%.([^:]+):"),
+                delivery = "hook", driver_binding_ref = driver, provider = bounds.id(plan.driver_id),
                 saved_profile_id = profile_id, saved_profile_revision = revision, profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
         if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
     end

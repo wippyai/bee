@@ -19,8 +19,8 @@ local function define_tests()
     test.describe("Descriptor option delivery", function()
         test.it("measures omitted and empty option selections as the same configuration", function()
             local target = "bee.driver.claude.binding:configure"
-            test.eq(configuration.digest({fixture = false, context = "window"}, target),
-                (configuration.digest({fixture = false, context = "window", option_values = {}}, target)))
+            test.eq(configuration.digest("bee.driver.claude.binding:binding", {fixture = false, context = "window"}, target),
+                (configuration.digest("bee.driver.claude.binding:binding", {fixture = false, context = "window", option_values = {}}, target)))
         end)
         test.it("decodes bounded structured values and rejects undeclared children", function()
             local spec: Object = {value_schema = {type = "object", additionalProperties = false, required = {"enabled"},
@@ -108,7 +108,7 @@ local function define_tests()
         end)
         test.it("launches and configures newly declared options without changing templates", function()
             local ref = "bee.driver.claude.descriptor:cli"
-            local original_digest = assert(configuration.digest({fixture = false}, "bee.driver.claude.binding:configure"))
+            local original_digest = assert(configuration.digest("bee.driver.claude.binding:binding", {fixture = false}, "bee.driver.claude.binding:configure"))
             local entry = assert(registry.get(ref))
             local original = assert(json.encode(entry.data))
             local data = assert(bounds.object(entry.data))
@@ -125,7 +125,7 @@ local function define_tests()
             local changes = registry.snapshot():changes()
             assert(changes:update(entry)); assert(changes:apply())
             local selected, err = descriptor.load(ref)
-            local changed_digest = configuration.digest({fixture = false}, "bee.driver.claude.binding:configure")
+            local changed_digest = configuration.digest("bee.driver.claude.binding:binding", {fixture = false}, "bee.driver.claude.binding:configure")
             local launch: unknown
             local reply: Object = {}
             if selected then

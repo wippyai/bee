@@ -131,7 +131,7 @@ end
 local function provider_configuration_digest(): string
     local provider = registry.get(PROVIDER)
     if not provider then error("provider entry") end
-    local digest, digest_error = configuration_protocol.digest({provider_ref = PROVIDER, provider = provider, fixture = true}, "bee.placement.native:fixture_agent_configure")
+    local digest, digest_error = configuration_protocol.digest(nil, {provider_ref = PROVIDER, provider = provider, fixture = true}, "bee.placement.native:fixture_agent_configure")
     if not digest then error(tostring(digest_error)) end
     return digest
 end
@@ -140,7 +140,7 @@ local function assert_provider_argument_isolated()
     if not provider then error("provider entry") end
     local held_data = provider.data
     if type(held_data) ~= "table" then error("provider data") end
-    local delivery, delivery_error = configuration_protocol.call("bee.placement.native:fixture_agent_configure", {provider_ref = PROVIDER, provider = provider, fixture = true})
+    local delivery, delivery_error = configuration_protocol.call(nil, "bee.placement.native:fixture_agent_configure", {provider_ref = PROVIDER, provider = provider, fixture = true})
     if not delivery then error(tostring(delivery_error or "fixture configuration failed")) end
     test.is_true(#delivery.files == 1)
     -- The fixture mutates request.provider.data. Check the exact table held by

@@ -167,6 +167,16 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.ui:appearance
+- name: close_race_test
+  kind: function.lua
+  source: file://close_race_test.lua
+  method: run
+  modules: [process, channel, security, time]
+  meta: {type: test, suite: bee}
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    appearance: bee.ui:appearance
 - name: broker_reopen_test
   kind: function.lua
   source: file://broker_reopen_test.lua

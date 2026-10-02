@@ -565,7 +565,7 @@ function M.admitted_action(request: Request, binding_ref: string, binding_digest
 end
 local function placement_observation(io: IO, session: Session, attempt: placement_types.Attempt): (boolean, string?)
     local payload = json.encode({placement_attempt_id = attempt.attempt_id, execution_state = attempt.execution_state, cleanup_state = attempt.cleanup_state,
-        exit_source = attempt.exit_source, evidence_count = attempt.evidence_count, capability = attempt.capability})
+        exit_source = attempt.exit_source, start_failure = attempt.start_failure, evidence_count = attempt.evidence_count, capability = attempt.capability})
     local record = {source = "bee", body = {type = "extension", event_key = "placement:" .. attempt.attempt_id .. ":" .. tostring(attempt.evidence_count),
         data = {type = "extension", event_name = "bee.placement.attempt", event_revision = "1", payload_json = payload}}}
     return M.commit(io, session, {record})
@@ -1012,6 +1012,7 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     local status, status_decode_error = placement_decode.status(status_value)
     if not status then return nil, "placement status is malformed: " .. tostring(status_decode_error) end
     local attempt = status.attempt
+    if attempt.start_failure then return nil, "failed start: " .. attempt.start_failure end
     -- Before placement starts, a plan that no longer digests as recorded
     -- refuses: nothing was materialized under it. A started attempt is
     -- still carried, and revalidation refuses any dispatch under it.

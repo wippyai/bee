@@ -84,6 +84,15 @@ local function define_tests()
         end)
     end)
     test.describe("Sessions list", function()
+        test.it("shows the create operation and exact deadline cause as a failed launch", function()
+            local cause = 'containers/create: context deadline exceeded: daemon create refused'
+            local conv = conversation("idle", {{input = "start Docker session", state = "failed", text = "failed start: " .. cause,
+                work = fixtures.fixture_work("bw:docker-start", {})}})
+            local shown = screen(session_view.draw(120, 24, appearance.defaults(), conv, "", "").rows)
+            test.is_true(shown:find(cause, 1, true) ~= nil)
+            test.is_true(shown:find("failed start:", 1, true) ~= nil)
+            test.is_nil((shown:find("exited", 1, true)))
+        end)
         test.it("shows stalled activity in the list and its quiet evidence in the session", function()
             local evidence: protocol.ActivityEvidence = {kind = "quiet", turn = "bt:n:w:t1",
                 last_progress_at_ms = 1000, quiet_period_ms = 45000, quiet_for_ms = 51000}

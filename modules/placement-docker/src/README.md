@@ -34,6 +34,14 @@ that exact ID. Missing post-dispatch containers are uncertain and never silently
 invoked again. Daemon exit evidence precedes removal; automatic removal is
 disabled so a lost owner can still observe the outcome.
 
+A failed create or start records `child.start_failed` with the original runtime
+operation, deadline or daemon error. Status projects that evidence as
+`start_failure`; placement events carry it and Sessions reports the same cause
+as a failed launch. A failed start remains `uncertain` without an invented exit
+code or exit source. Cancellation before runner claim records that no container
+was dispatched. After dispatch, cleanup requires an observed container exit;
+failed or missing observations report uncertainty and cleanup errors explicitly.
+
 The Agent application lives in `bee.harness.app`; its placement constructor
 uses the existing terminal lifecycle and hook processing. The Docker sweeper
 reconciles live attempts and enforces revoked resource projections.

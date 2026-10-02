@@ -77,11 +77,14 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local child_created = false
     local function refuse(reason: string)
         if claimed and not child_created then
-            store.transition(db, attempt_id, {execution = "exited", fields = {exit_source = "runner"},
-                evidence = {kind = "child.not_started", detail = reason}})
+            local recorded = materialization.fail_start(db, attempt_id, reason, backend ~= nil)
+            if not recorded.ok then reason = reason .. "; record failed start: " .. tostring(recorded.message) end
             local attempt = store.attempt(db, attempt_id)
             if attempt then
-                local cleaned, cleanup_error = cleanup(attempt)
+                local cleaned: boolean
+                local cleanup_error: string?
+                if backend then cleaned, cleanup_error = backend.cleanup(attempt)
+                else cleaned, cleanup_error = cleanup(attempt) end
                 if not cleaned then reason = reason .. "; cleanup: " .. tostring(cleanup_error) end
             end
         end
@@ -141,6 +144,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     if not executor then return refuse("placement executor unavailable") end
     if not proc then
+        if backend then executor:release(); return refuse("executor refused the command") end
         -- The executor's own text is not recorded: it may quote the command
         -- or the environment it refused.
         evidence(db, attempt_id, "child.refused", "executor refused the command", {execution = "exited"})
@@ -153,6 +157,11 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     if not creating.ok then executor:release(); return refuse(creating.message or "attempt stopped before start") end
     local started, start_error = proc:start()
     if not started then
+        if backend then
+            proc:close(true)
+            executor:release()
+            return refuse(tostring(start_error))
+        end
         evidence(db, attempt_id, "child.start_failed", "the child did not start", {execution = "exited"})
         executor:release()
         return refuse("the child did not start")

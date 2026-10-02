@@ -116,7 +116,21 @@ function M.attempt(db: sql.DB, attempt_id: string): (types.Attempt?, string?)
     local row, err = M.row(db, attempt_id)
     if err then return nil, err end
     if not row then return nil, nil end
-    return project(row)
+    local attempt, project_error = project(row)
+    if not attempt then return nil, project_error end
+    if row.placement_kind ~= "docker" then return attempt, nil end
+    local failures, failure_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'child.start_failed' ORDER BY sequence DESC LIMIT 1", {attempt_id})
+    if not failures or failure_error then return nil, "read start failure: " .. tostring(failure_error or "query returned no rows") end
+    if #failures > 0 then
+        local reason = bounds.text(failures[1].detail, 4096)
+        if not reason then return nil, "start failure evidence is corrupt" end
+        attempt.start_failure = reason
+        if attempt.exit_source == "runner" and attempt.exit == nil then
+            attempt.execution_state = "uncertain"
+            attempt.exit_source = nil
+        end
+    end
+    return attempt, nil
 end
 function M.by_key(db: sql.DB, owner_id: string, key: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_placement_attempts WHERE owner_id = ? AND idempotency_key = ?", {owner_id, key})

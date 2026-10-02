@@ -6,6 +6,7 @@ local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local hash = require("hash")
+local sqlerrors = require("sqlerrors")
 local canonical = require("canonical")
 local artifact = require("artifact")
 local plan_store = require("plan_store")
@@ -45,6 +46,12 @@ local function blob(bytes: string): {[string]: string}
     return {bytes = bytes, digest = digest}
 end
 
+local function expect_code(result: {[string]: unknown}, expected: string)
+    local failure = bounds.object(result.error)
+    test.is_true(result.code == expected, "expected " .. expected .. ", got "
+        .. tostring(result.code or (failure and failure.code)) .. ": "
+        .. tostring(result.message or (failure and failure.message)))
+end
 local function ok(result: {[string]: unknown}): {[string]: unknown}
     if result.ok ~= true then
         local failure = bounds.object(result.error)
@@ -275,6 +282,65 @@ end
 
 local function define_tests()
     test.describe("Governance activation owner", function()
+        for _, phase in ipairs({"statement", "commit"}) do
+            test.it("reports the SQLite " .. phase .. " cause through the owner", function()
+                local workspace = "workspace-sql-cause-" .. phase
+                local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+                local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
+                local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+                local exact = assert(artifact.create({entry}))
+                selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+                local config: owner.Config = {plans = plans, activations = activations,
+                    resolver = shifting_resolver(entry, {revision = 4, digest = SHA}),
+                    approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                    overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return false, nil end,
+                    apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
+                        error("failed activation must never reach apply")
+                    end}
+                local function execute(statement: string)
+                    local _, err = activations.db:execute(statement)
+                    if err then error(sqlerrors.describe(err)) end
+                end
+                local cause, sqlite_code: string, string
+                if phase == "statement" then
+                    execute([[CREATE TRIGGER bee_test_activation_cause BEFORE INSERT ON bee_governance_activation_intents
+                        WHEN NEW.workspace_id = 'workspace-sql-cause-statement'
+                        BEGIN SELECT RAISE(ABORT, 'injected activation SQLite step'); END]])
+                    cause, sqlite_code = "injected activation SQLite step", "1811"
+                else
+                    execute("CREATE TABLE bee_test_activation_parent (id INTEGER PRIMARY KEY)")
+                    execute([[CREATE TABLE bee_test_activation_child (parent_id INTEGER REFERENCES bee_test_activation_parent(id)
+                        DEFERRABLE INITIALLY DEFERRED)]])
+                    execute([[CREATE TRIGGER bee_test_activation_cause AFTER INSERT ON bee_governance_activation_intents
+                        WHEN NEW.workspace_id = 'workspace-sql-cause-commit'
+                        BEGIN INSERT INTO bee_test_activation_child VALUES (1); END]])
+                    cause, sqlite_code = "FOREIGN KEY constraint failed", "787"
+                end
+                local result = owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                    version = "v1", intent_id = "intent-sql-cause", receipt_key = "sql-cause"})
+                execute("DROP TRIGGER bee_test_activation_cause")
+                if phase == "commit" then
+                    execute("DROP TABLE bee_test_activation_child")
+                    execute("DROP TABLE bee_test_activation_parent")
+                end
+                expect_code(activation_store.get(activations, "intent-sql-cause"), "NOT_FOUND")
+                assert(activation_store.close(activations))
+                assert(plan_store.close(plans))
+                expect_code(result, "INTERNAL")
+                test.is_true(tostring(result.message):find(cause, 1, true) ~= nil, tostring(result.message))
+                test.is_true(tostring(result.message):find(sqlite_code, 1, true) ~= nil, tostring(result.message))
+                local succeeded, output = pcall(function() ok(result) end)
+                test.is_false(succeeded)
+                test.is_true(tostring(output):find(cause, 1, true) ~= nil, tostring(output))
+                test.is_true(tostring(output):find(sqlite_code, 1, true) ~= nil, tostring(output))
+                local matched, diagnostic = pcall(function() expect_code(result, "UNEXPECTED") end)
+                test.is_false(matched)
+                test.is_true(tostring(diagnostic):find(cause, 1, true) ~= nil, tostring(diagnostic))
+                test.is_true(tostring(diagnostic):find(sqlite_code, 1, true) ~= nil, tostring(diagnostic))
+            end)
+        end
+
         test.it("reuses a contained live grant without requesting a permission decision", function()
             local workspace = "workspace-contained-grant"
             local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
@@ -362,7 +428,7 @@ local function define_tests()
             test.eq((principals.strings(payload.permission_changes))[1], "widened: Read owned threads")
             test.eq((principals.strings(payload.resolved_capabilities))[1], "Read owned threads")
             test.eq(ok(owner.step(config, "intent-widened", "widened")).phase, "consuming")
-            test.eq(owner.step(config, "intent-widened", "widened").code, "DENIED")
+            expect_code(owner.step(config, "intent-widened", "widened"), "DENIED")
             test.is_false(applied)
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
@@ -403,7 +469,7 @@ local function define_tests()
                 lease_id = "lease-1", expected_revision = reserved.revision, revoked_by = "person-a"}))
             test.eq((principals.strings(revoked.fenced_intents))[1], "intent-fenced")
             test.eq(#(principals.strings(revoked.started_effects)), 0)
-            test.eq(owner.step(config, "intent-fenced", "fenced").code, "DENIED")
+            expect_code(owner.step(config, "intent-fenced", "fenced"), "DENIED")
             test.is_false(flags.applied)
             assert(lease_store.close(leases))
             assert(activation_store.close(activations))
@@ -458,8 +524,9 @@ local function define_tests()
             grant_lease(leases, 3)
             ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-mismatch", receipt_key = "mismatch"}))
-            assert(leases.db:execute("UPDATE bee_governance_lease_uses SET approval_id = 'another-approval'"))
-            test.eq(owner.step(config, "intent-mismatch", "mismatch").code, "CONFLICT")
+            local _, update_error = leases.db:execute("UPDATE bee_governance_lease_uses SET approval_id = 'another-approval'")
+            if update_error then error(sqlerrors.describe(update_error)) end
+            expect_code(owner.step(config, "intent-mismatch", "mismatch"), "CONFLICT")
             test.is_false(flags.applied)
             assert(lease_store.close(leases))
             assert(activation_store.close(activations))
@@ -584,7 +651,7 @@ local function define_tests()
             world.application_admission = admission(exact.digest, string.rep("b", 64), nil, workspace)
             local refused = owner.step(config, "intent-admission-drift", "admission-drift")
             test.is_false(refused.ok)
-            test.eq(refused.code, "CONFLICT")
+            expect_code(refused, "CONFLICT")
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
@@ -709,8 +776,8 @@ local function define_tests()
             local refused = owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-admission-owner", receipt_key = "admission-owner"})
             test.is_false(refused.ok)
-            test.eq(refused.code, "CONFLICT")
-            test.eq(activation_store.get(activations, "intent-admission-owner").code, "NOT_FOUND")
+            expect_code(refused, "CONFLICT")
+            expect_code(activation_store.get(activations, "intent-admission-owner"), "NOT_FOUND")
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
@@ -738,13 +805,13 @@ local function define_tests()
             ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-crash", receipt_key = "activation-crash"}))
             test.eq(ok(owner.step(config, "intent-crash", "activation-crash")).phase, "consuming")
-            test.eq(owner.step(config, "intent-crash", "activation-crash").code, "UNAVAILABLE")
+            expect_code(owner.step(config, "intent-crash", "activation-crash"), "UNAVAILABLE")
             local v2 = assert(artifact.create({{id = "demo:run", kind = "function.lua", data = {source = "return 'v2'"}}}))
             selected_plan(plans, "v2", {bytes = v2.bytes, digest = v2.digest})
             test.eq(ok(owner.step(config, "intent-crash", "activation-crash")).phase, "authorized")
             test.eq(ok(owner.recover(config, "activation-crash")).phase, "applying")
             local uncertain = owner.recover(config, "activation-crash")
-            test.eq(uncertain.code, "UNCERTAIN")
+            expect_code(uncertain, "UNCERTAIN")
             local settled = ok(owner.recover(config, "activation-crash"))
             test.eq(settled.outcome, "applied")
             test.eq(settled.version, "v1")
@@ -753,7 +820,7 @@ local function define_tests()
             test.is_true(restored.recovered == true)
             test.is_true(applied)
             applied, fail_restore = false, true
-            test.eq(owner.recover(config, "activation-crash").code, "UNCERTAIN")
+            expect_code(owner.recover(config, "activation-crash"), "UNCERTAIN")
             fail_restore = false
             local recovered_again = ok(owner.recover(config, "activation-crash"))
             test.eq(recovered_again.outcome, "applied")
@@ -792,7 +859,7 @@ local function define_tests()
                 version = "v2", intent_id = "intent-fenced-v2", receipt_key = "fenced-v2"}))
             test.eq(ok(owner.step(config, "intent-fenced-v2", "fenced-v2")).phase, "consuming")
             local overlap = owner.step(config, "intent-fenced-v2", "fenced-v2")
-            test.eq(overlap.code, "CONFLICT")
+            expect_code(overlap, "CONFLICT")
             test.eq(ok(owner.desired(config)).intent_id, "intent-fenced-v1")
 
             test.eq(ok(owner.step(config, "intent-fenced-v1", "fenced-v1")).outcome, "applied")
@@ -805,7 +872,7 @@ local function define_tests()
 
             applied = false
             local historical = owner.step(config, "intent-fenced-v1", "fenced-v1")
-            test.eq(historical.code, "CONFLICT")
+            expect_code(historical, "CONFLICT")
             test.is_false(applied)
             test.eq(apply_count, 2)
             test.eq(ok(owner.desired(config)).intent_id, "intent-fenced-v2")
@@ -840,7 +907,7 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-composed", "composed-v1")).phase, "authorized")
             world.revision, world.digest = 5, SHA_B
             local refused = owner.step(config, "intent-composed", "composed-v1")
-            test.eq(refused.code, "CONFLICT")
+            expect_code(refused, "CONFLICT")
             test.is_true(tostring(refused.message):find("composed registry base", 1, true) ~= nil)
             test.is_false(applied)
             test.eq(apply_count, 0)
@@ -882,12 +949,12 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-composed-apply", "composed-apply-v1")).phase, "authorized")
             test.eq(ok(owner.step(config, "intent-composed-apply", "composed-apply-v1")).phase, "applying")
             local outcome = owner.step(config, "intent-composed-apply", "composed-apply-v1")
-            test.eq(outcome.code, "UNCERTAIN")
+            expect_code(outcome, "UNCERTAIN")
             test.is_true(tostring(outcome.message):find("composed registry base", 1, true) ~= nil)
             test.is_true(applied)
             test.eq(apply_count, 1)
             local later = owner.recover(config, "composed-apply-v1")
-            test.eq(later.code, "CONFLICT")
+            expect_code(later, "CONFLICT")
             test.is_true(tostring(later.message):find("composed registry base", 1, true) ~= nil)
             test.eq(apply_count, 1)
             assert(activation_store.close(activations))
@@ -950,7 +1017,7 @@ local function define_tests()
             applied = false
             world.blocked = true
             local blocked = owner.recover(config_with(again_plans, again_activations), "composed-restart-v1")
-            test.eq(blocked.code, "BLOCKED")
+            expect_code(blocked, "BLOCKED")
             test.eq(apply_count, 2)
             assert(activation_store.close(again_activations))
             assert(plan_store.close(again_plans))
@@ -999,7 +1066,7 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-migration", "migration")).phase, "applying")
             state.policy_digest = SHA_B
             local changed_policy = owner.step(config, "intent-migration", "migration")
-            test.eq(changed_policy.code, "CONFLICT")
+            expect_code(changed_policy, "CONFLICT")
             test.is_true(tostring(changed_policy.message):find("database policy", 1, true) ~= nil)
             test.is_false(state.executed == true)
             state.policy_digest = SHA

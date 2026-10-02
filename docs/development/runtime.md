@@ -8,7 +8,9 @@ runtime. Bee does not vendor a runtime source directory.
 Bee builds from unpatched runtime main; the manifest lists no patches. `make setup` and standalone builds use the same builder
 and manifest. Wippy owns application deployment, Hub resolution, command
 dispatch, state opening and shutdown; Bee registers its native components
-through Wippy boot.
+through Wippy boot. The Bee-owned `sqlerrors` component formats SQL errors for
+owned stores, preserving SQLite result and extended result codes from the
+retained native error chain without modifying runtime SQL behavior.
 
 ## Toolchain currency
 

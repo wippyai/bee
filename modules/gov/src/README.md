@@ -317,3 +317,8 @@ only the host profile's capability ceilings to preflight. Existing definitions
 from the selected destination overlay may be replaced; definitions outside it
 remain collision inputs. Migration definitions are measured from the exact
 artifact and admitted only through the activation barrier described above.
+
+Activation and selected-plan storage failures include the failing SQL operation
+and native SQLite message and result codes. The activation owner propagates
+these failures before applying an overlay; a failed commit never reports a
+prepared or authorized activation.

@@ -38,7 +38,10 @@ and retains dirty, untracked, ignored, detached, switched or unmerged work.
 Index flags that suppress change detection (`assume-unchanged` or
 `skip-worktree`) also retain the worktree.
 It uses non-forced worktree removal and safe branch deletion; command and
-storage failures surface as placement evidence and failed cleanup replies.
+storage failures surface as placement evidence and failed cleanup replies. Failed
+Git commands include their command, exit status and native stderr. Inspection
+accepts only the documented predicate statuses (absent branch or detached HEAD);
+other failures stop planning, setup or cleanup instead of being treated as absence.
 An already removed worktree or branch is handled idempotently. Missing or
 changed ownership evidence refuses deletion. Locked worktrees remain intact.
 

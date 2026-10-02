@@ -4,6 +4,7 @@
 -- changed name or checksum, a gap, or a newer schema refuses the store
 -- before any table is touched.
 local sql = require("sql")
+local sqlerrors = require("sqlerrors")
 local hash = require("hash")
 local M = {}
 type Migration = {id: integer, name: string, sql: string, rebuild: boolean}
@@ -14,8 +15,11 @@ local function integer(value: unknown): integer?
     if value ~= result then return nil end
     return result
 end
-local function rollback(tx: sql.Transaction)
-    tx:rollback()
+local function rollback(tx: sql.Transaction, message: string?): string?
+    local rolled_back, err = tx:rollback()
+    if rolled_back == true and not err then return message end
+    local cause = "rollback migration: " .. sqlerrors.describe(err or "no reason given")
+    return message and (message .. "; " .. cause) or cause
 end
 local function table_name(ledger: Ledger): (string?, string?)
     if not ledger.table:match("^[a-z][a-z0-9_]*$") then return nil, ledger.label .. " migration ledger table name is invalid" end
@@ -46,9 +50,9 @@ local function read_ledger(db: sql.DB, ledger: Ledger, expected: {Migration}): (
     applied_at TEXT NOT NULL,
     UNIQUE (name)
 )]])
-    if create_err then return nil, "create " .. ledger.label .. " migration ledger" end
+    if create_err then return nil, "create " .. ledger.label .. " migration ledger: " .. sqlerrors.describe(create_err) end
     local rows, query_err = db:query("SELECT id, name, checksum FROM " .. name .. " ORDER BY id")
-    if query_err or not rows then return nil, "read " .. ledger.label .. " migration ledger" end
+    if query_err or not rows then return nil, "read " .. ledger.label .. " migration ledger: " .. sqlerrors.describe(query_err) end
     local by_id: {[integer]: Migration} = {}
     for _, migration in ipairs(expected) do by_id[migration.id] = migration end
     local known: {[integer]: boolean} = {}
@@ -82,57 +86,55 @@ local function apply_one(db: sql.DB, ledger: Ledger, migration: Migration): (boo
     if not checksum then return false, checksum_err end
     if migration.rebuild then
         local _, off_err = db:execute("PRAGMA foreign_keys = OFF")
-        if off_err then return false, "disable foreign keys for rebuild" end
+        if off_err then return false, "disable foreign keys for rebuild: " .. sqlerrors.describe(off_err) end
     end
     local function finish(ok: boolean, err: string?): (boolean, string?)
         if migration.rebuild then
             local _, on_err = db:execute("PRAGMA foreign_keys = ON")
-            if on_err and ok then return false, "restore foreign keys after rebuild" end
+            if on_err then
+                local cause = "restore foreign keys after rebuild: " .. sqlerrors.describe(on_err)
+                return false, err and (err .. "; " .. cause) or cause
+            end
         end
         return ok, err
     end
     local tx, begin_err = db:begin({isolation = sql.isolation.SERIALIZABLE})
-    if not tx then return finish(false, "begin " .. ledger.label .. " migration") end
+    if not tx then return finish(false, "begin " .. ledger.label .. " migration: " .. sqlerrors.describe(begin_err)) end
     -- Another opener may have applied this step between the ledger read and
     -- this transaction; the row decides, not the earlier read.
     local existing, existing_err = tx:query("SELECT name, checksum FROM " .. name .. " WHERE id = ?", {migration.id})
     if existing_err or not existing then
-        rollback(tx)
-        return finish(false, "read " .. ledger.label .. " migration ledger")
+        return finish(false, rollback(tx, "read " .. ledger.label .. " migration ledger: " .. sqlerrors.describe(existing_err)))
     end
     if #existing == 1 then
-        rollback(tx)
+        local rollback_error = rollback(tx, nil)
+        if rollback_error then return finish(false, rollback_error) end
         if existing[1].name ~= migration.name then return finish(false, ledger.label .. " migration name changed") end
         if existing[1].checksum ~= checksum then return finish(false, ledger.label .. " migration checksum changed") end
         return finish(true, nil)
     end
     local _, apply_err = tx:execute(migration.sql)
     if apply_err then
-        rollback(tx)
-        return finish(false, "apply " .. ledger.label .. " migration " .. migration.name)
+        return finish(false, rollback(tx, "apply " .. ledger.label .. " migration " .. migration.name .. ": " .. sqlerrors.describe(apply_err)))
     end
     if migration.rebuild then
         local violations, check_err = tx:query("PRAGMA foreign_key_check")
         if check_err or not violations then
-            rollback(tx)
-            return finish(false, "check foreign keys after rebuild")
+            return finish(false, rollback(tx, "check foreign keys after rebuild: " .. sqlerrors.describe(check_err)))
         end
         if #violations > 0 then
-            rollback(tx)
-            return finish(false, ledger.label .. " migration " .. migration.name .. " leaves broken references")
+            return finish(false, rollback(tx, ledger.label .. " migration " .. migration.name .. " leaves broken references"))
         end
     end
     local _, record_err = tx:execute(
         "INSERT INTO " .. name .. " (id, name, checksum, applied_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
         {migration.id, migration.name, checksum})
     if record_err then
-        rollback(tx)
-        return finish(false, "record " .. ledger.label .. " migration")
+        return finish(false, rollback(tx, "record " .. ledger.label .. " migration: " .. sqlerrors.describe(record_err)))
     end
     local committed, commit_err = tx:commit()
     if commit_err or committed ~= true then
-        rollback(tx)
-        return finish(false, "commit " .. ledger.label .. " migration")
+        return finish(false, rollback(tx, "commit " .. ledger.label .. " migration: " .. sqlerrors.describe(commit_err)))
     end
     return finish(true, nil)
 end
@@ -156,7 +158,7 @@ function M.rows(db: sql.DB, ledger: Ledger): ({{id: integer, name: string, check
     local name, name_error = table_name(ledger)
     if not name then return nil, name_error end
     local rows, query_err = db:query("SELECT id, name, checksum FROM " .. name .. " ORDER BY id")
-    if query_err or not rows then return nil, "read " .. ledger.label .. " migration ledger" end
+    if query_err or not rows then return nil, "read " .. ledger.label .. " migration ledger: " .. sqlerrors.describe(query_err) end
     local result: {{id: integer, name: string, checksum: string}} = {}
     for index, row in ipairs(rows) do
         local id = integer(row.id)

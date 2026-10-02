@@ -58,6 +58,6 @@ entries:
 - name: identity_migration
   kind: library.lua
   source: file://identity_migration.lua
-  modules: [sql, env]
+  modules: [sql, env, sqlerrors]
   imports:
     bounds: bee.threads.records:bounds

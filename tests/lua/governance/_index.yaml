@@ -227,7 +227,7 @@ entries:
   kind: function.lua
   source: file://activation_owner_test.lua
   method: run
-  modules: [hash]
+  modules: [hash, sqlerrors]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:

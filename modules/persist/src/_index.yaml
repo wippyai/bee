@@ -11,14 +11,14 @@ entries:
 - name: ledger
   kind: library.lua
   source: file://ledger.lua
-  modules: [sql, hash]
+  modules: [sql, hash, sqlerrors]
 - name: database
   kind: library.lua
   source: file://database.lua
-  modules: [sql]
+  modules: [sql, sqlerrors]
   imports:
     ledger: bee.persist:ledger
 - name: transaction
   kind: library.lua
   source: file://transaction.lua
-  modules: [sql, time]
+  modules: [sql, time, sqlerrors]

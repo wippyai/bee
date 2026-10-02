@@ -1,7 +1,7 @@
 # Repository layout audit
 
 `make lint` runs the permanent placement check in `build/layout_check.py`.
-Production consists of the host `src/` and 43 component `modules/*/src/` roots.
+Production consists of the host `src/` and 47 component `modules/*/src/` roots.
 The only root spelling exception is the public SDK: `application` exports
 `bee.app`. Hyphenated component names expand into namespace nesting; all child
 folders match their namespace. `src/host` is the host's documented desktop-owner

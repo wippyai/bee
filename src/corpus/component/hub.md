@@ -68,13 +68,16 @@ artifacts. The planner uses the runtime selection rule: preserve a live installe
 version's captured definitions when that component is unchanged; inspect the
 requested component and changed versions as candidate artifacts. This also keeps
 unrelated package planning independent of local development artifact publication.
-The version solver preserves a live installed
+The version solver ordinarily preserves a live installed
 version, including a selected prerelease, when every incoming constraint permits
 it; otherwise it chooses the highest
 compatible stable release (or a compatible prerelease when no stable release
-matches and the range explicitly admits that prerelease). Changed selections retract their old dependencies and re-evaluate
+matches and the range explicitly admits that prerelease). Update Bee instead
+selects the newest compatible host-root releases; an explicitly admitted newer
+prerelease can take precedence over an older stable release.
+Changed selections retract their old dependencies and re-evaluate
 intersections; a parent is never downgraded to satisfy its children. Exact pins
-and compatible installed selections do not list release history; other ranges
+and ordinary compatible installed selections do not list release history; other ranges
 inspect the complete bounded catalog, whose pages are ordered by publication time.
 Standalone inventory identifies the deployment root from
 `snapshot:state().resolution.lock.root_module`, under the Hub execution scope's
@@ -92,7 +95,7 @@ from those dependencies and the live resolution/lock; there is no second list.
 The first operation transfers package-owned Bee dependency roots to host
 ownership in the same Registry transaction as its existing operation receipt,
 without changing dependency IDs or requirement values. Converted roots pin the
-live version and retain their metadata. Third-party roots remain unchanged.
+planned version and retain their metadata. Third-party roots remain unchanged.
 Inventory derives `managed`; the plan and operation receipt's optional
 `conversion` (version 1, roots with `id` and `component`) records only the
 conversion effect for confirmation and interrupted-operation verification.
@@ -109,8 +112,9 @@ service drain/revocation handoff remains a separate proposal. A first removal
 with migration rollback requires root conversion through an update first.
 
 A host that selects component management updates `bee/bee` using a core artifact
-that contains no Bee-component dependency declarations. The plan retains each
-explicit component root and its requirement parameters alongside the core update.
+that contains no Bee-component dependency declarations. The plan selects the
+newest compatible version for each explicit component root and retains its
+requirement parameters alongside the core update.
 A candidate that declares Bee-component dependencies is refused with its entry ID:
 it would reclaim host selection, collide with host-owned roots or reinstall a
 removed component. This applies to the initial self-update conversion as well as

@@ -331,7 +331,7 @@ def build_native(folder, baseline):
 
 
 def native_attached(folder, baseline, explicit, url):
-    """Apply through Modules on a PTY, then navigate About and detach."""
+    """Apply through Modules on a PTY, verify the open About window and detach."""
     binary = build_native(folder, baseline)
     scratch = folder / "native"
     for name in ("project", "tmp", "home/.config"):

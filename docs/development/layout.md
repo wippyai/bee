@@ -31,6 +31,9 @@ in `bee.app.status` and `bee.persist.env`. The persisted identity conversions
 are also explicit in `build/component-inventory-migrations.json`; the generated
 component inventory has no dangling requirement targets and caps root Lua at
 23,643 lines. Topics and schema tags retain their baseline identities.
+The persisted map covers exactly the 234 persisted identities removed from
+main. Step 2 adds only nonpersisted helper relocations to the cumulative map;
+the step 1 persisted map and applied migration definitions remain unchanged.
 Shared root declarations and the exact library set are
 specified in the conventions and `build/layout_roots.json`. Lint rejects new
 root entries outside that set and known composition names with the wrong kind,
@@ -78,7 +81,11 @@ selects its backend; it does not duplicate the native facade. Retained
 presentation's executor selects the admitted application loop under its owner
 lifetime and terminal grant. These adapters have actual boundary roles.
 
-The shared clock is registered once as `bee.values:clock`. The audit removes
+Shared bounds, canonical JSON, clock conversions and reply decoding are
+registered once in `bee.values`; production and fixture consumers import them
+directly. Threads retains its domain bounds and Sync retains its own canonical
+limits. The obsolete Threads canonical forwarding source is removed.
+The audit removes
 three dead sources: the unregistered Sessions worker forwards an unused
 superseded journal protocol; the unreferenced JSONL alias only returns
 `stream_json`; the unreferenced application launch decoder predates the used
@@ -260,6 +267,7 @@ The following paths group overlays rather than production namespace children:
 | `tests/lua/terminal/_index.yaml` | `bee.terminal` |
 | `tests/lua/threads/_index.yaml` | `bee.threads` |
 | `tests/lua/timeline/_index.yaml` | `bee.threads.timeline` |
+| `tests/lua/values/_index.yaml` | `bee.values` |
 | `tests/lua/workspace_catalog/_index.yaml` | `bee.workspace.catalog` |
 | `tests/lua/workspaces/_index.yaml` | `bee.workspace.manager` |
 
@@ -402,6 +410,8 @@ conventions and `build/layout_roots.json`.
 | `bee` | `bee.security.approvals` | `approver_policies` |
 | `bee` | `bee.security.capability` | `capability_catalog` |
 | `bee` | `bee.values` | `clock` |
+| `bee.protocol` | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
+| `bee.threads.records` | `bee.values` | `canonical` |
 | `bee` | `bee.env` | `docs_corpus` |
 | `bee` | `bee.gateway.api` | `gateway_endpoint`, `gateway_listener`, `gateway_mcp`, `gateway_ready`, `gateway_router` |
 | `bee` | `bee.gateway.service` | `gateway_installation_service`, `gateway_publication_service` |

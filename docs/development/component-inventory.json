@@ -6716,6 +6716,11 @@
       "source": "src/security/hive/_index.yaml"
     },
     {
+      "id": "bee.security.hive:hive_readiness_policy",
+      "kind": "security.policy",
+      "source": "src/security/hive/_index.yaml"
+    },
+    {
       "id": "bee.security.hive:hive_replica_admission_policy",
       "kind": "security.policy",
       "source": "src/security/hive/_index.yaml"
@@ -11303,103 +11308,103 @@
       "table": "bee_threads"
     },
     {
-      "line": 34,
+      "line": 35,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_desktops"
     },
     {
-      "line": 43,
+      "line": 44,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_layouts"
     },
     {
-      "line": 265,
+      "line": 268,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_schema_migrations"
     },
     {
-      "line": 22,
+      "line": 23,
       "owner_namespace": "bee.client",
       "source": "src/client/store.lua",
       "table": "client_state"
     },
     {
-      "line": 85,
+      "line": 86,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_application_thread_bindings"
     },
     {
-      "line": 102,
+      "line": 103,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_application_thread_bindings_v5"
     },
     {
-      "line": 203,
+      "line": 204,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_application_thread_bindings_v6"
     },
     {
-      "line": 58,
+      "line": 59,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_assignments"
     },
     {
-      "line": 167,
+      "line": 168,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_assignments_v6"
     },
     {
-      "line": 65,
+      "line": 66,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_transfer_receipts"
     },
     {
-      "line": 180,
+      "line": 181,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_display_transfer_receipts_v6"
     },
     {
-      "line": 260,
+      "line": 261,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_folder"
     },
     {
-      "line": 43,
+      "line": 44,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_identity"
     },
     {
-      "line": 27,
+      "line": 28,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_schema_migrations"
     },
     {
-      "line": 31,
+      "line": 32,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_state"
     },
     {
-      "line": 155,
+      "line": 156,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspace_state_v6"
     },
     {
-      "line": 142,
+      "line": 143,
       "owner_namespace": "bee.storage",
       "source": "src/storage/store.lua",
       "table": "workspaces"
@@ -15589,18 +15594,18 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1723,
+    "entry_count": 1724,
     "namespace_count": 176,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 80,
     "owned_table_declaration_count": 138,
-    "persisted_id_count": 800,
+    "persisted_id_count": 801,
     "requirement_count": 127,
     "requirement_target_count": 299,
     "root_src_lua_budget": 23987,
-    "root_src_lua_lines": 23975,
+    "root_src_lua_lines": 23987,
     "schema_tag_count": 70,
     "topic_count": 137
   },

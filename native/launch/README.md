@@ -201,7 +201,11 @@ by thirty seconds without advancing progress. The retained Lua owner uses the
 same sequence for its ten-second inactivity bound; repeated or regressing
 counters do not renew either wait. Repeated or regressing ledger checkpoints
 and repeated reads of a verified cache file do not advance the sequence.
-Enrollment waits for retained readiness before starting the desktop handshake. A failed startup kills only the owner
+The supervisor sends a readiness event after local name registration, waking
+enrollment without its one-second retry delay. The event grants no authority:
+the publisher rechecks the exact local supervisor and preserves overlay,
+descriptor and client-list publication order. Enrollment waits for retained
+readiness before starting the desktop handshake. A failed startup kills only the owner
 started by that invocation and waits for its exact process to exit; operating
 system locks and SQLite transactions recover on the next start. Normal desktop
 detachment retains the owner. The host environment keeps launch facts read-only

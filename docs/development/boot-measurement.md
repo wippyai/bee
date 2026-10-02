@@ -48,7 +48,13 @@ owner, Hive supervisor and retained workspace progress, and client enrollment.
 Workspace and client ledgers emit their own checks. Enrollment separates key
 publication, authority overlay application and bootstrap publication. Its
 supervisor readiness lookup selects exactly the node-local name table and
-checks the current node, protected host and execution address.
+checks the current node, protected host and execution address. The supervisor
+emits a `bee.launch` / `supervisor.ready` event after registering its local
+name. Enrollment subscribes before its initial check and treats the event only
+as a wakeup: every attempt checks the live local name again, writes the host
+overlay, publishes the supervisor address, then lists clients locally. A failed
+publication retains its bounded retry timer; successful idle enrollment does
+not poll.
 Work pending at the first frame remains explicitly listed in the result.
 
 The current runtime exposes no application-runner phase logs for deployment

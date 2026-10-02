@@ -19,6 +19,7 @@ import (
 	"github.com/wippyai/bee/native/internal/privatefile"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	ctxapi "github.com/wippyai/runtime/api/context"
 	eventapi "github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/registry"
@@ -641,16 +642,27 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheSupervisorIsPublished(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	component, err := enrollmentPublisher(state)
+	secret, err := readMembershipSecret(state)
 	if err != nil {
 		t.Fatal(err)
 	}
+	component := &enrollmentPublisherComponent{state: state, directory: ownerDirectory(state),
+		trusted: ownerTrustedDirectory(state), execution: execution, secret: secret, node: ownerNodeName(state), retryInterval: time.Hour}
 	reg := &flakyRegistry{}
-	if err := component.(boot.Starter).Start(topapi.WithRegistry(registry.WithRegistry(base, reg), names)); err != nil {
+	bus := eventapi.GetBus(base)
+	if err := component.Start(topapi.WithRegistry(registry.WithRegistry(base, reg), names)); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
-	unpublished := time.Now().Add(1500 * time.Millisecond)
+	defer func() {
+		if err := component.Stop(context.Background()); err != nil {
+			t.Error(err)
+		}
+		if bus.HasSubscribers("bee.launch", "supervisor.ready") {
+			t.Error("readiness subscription survived Stop")
+		}
+	}()
+	bus.Send(context.Background(), eventapi.Event{System: "bee.launch", Kind: "supervisor.ready", Path: "forged"})
+	unpublished := time.Now().Add(100 * time.Millisecond)
 	for time.Now().Before(unpublished) {
 		if reg.applied.Load() != 0 {
 			t.Fatal("enrollment overlay published before deployment readiness")
@@ -664,6 +676,7 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheSupervisorIsPublished(t *tes
 	if _, err := names.Register("bee.hive.supervisor", supervisor); err != nil {
 		t.Fatal(err)
 	}
+	bus.Send(context.Background(), eventapi.Event{System: "bee.launch", Kind: "supervisor.ready", Path: supervisor.String()})
 	deadline := time.Now().Add(5 * time.Second)
 	for !resolved() && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
@@ -723,5 +736,46 @@ func TestEnrollmentSupervisorUsesOnlyThisNodesLocalReadiness(t *testing.T) {
 	cancel()
 	if _, err := publisher.supervisor(cancelled); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled readiness: %v", err)
+	}
+}
+
+type refusingEnrollmentBus struct {
+	eventapi.Bus
+	kind eventapi.Kind
+}
+
+func (b refusingEnrollmentBus) SubscribeP(ctx context.Context, system eventapi.System, kind eventapi.Kind, events chan<- eventapi.Event) (eventapi.SubscriberID, error) {
+	if kind == b.kind {
+		return "", errors.New("subscription refused")
+	}
+	return b.Bus.SubscribeP(ctx, system, kind, events)
+}
+
+func TestEnrollmentPublisherCleansUpRefusedSubscriptions(t *testing.T) {
+	for _, kind := range []eventapi.Kind{"supervisor.ready", clusterapi.NodeLeft} {
+		t.Run(kind, func(t *testing.T) {
+			state := t.TempDir()
+			prepareOwnerState(t, state)
+			base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			bus := eventapi.GetBus(base)
+			component, err := enrollmentPublisher(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := ctxapi.WithAppContext(base, ctxapi.NewAppContext())
+			ctx = eventapi.WithBus(registry.WithRegistry(ctx, &flakyRegistry{}), refusingEnrollmentBus{Bus: bus, kind: kind})
+			if err := component.(boot.Starter).Start(ctx); err == nil {
+				t.Fatal("publisher accepted a refused subscription")
+			}
+			if err := component.(boot.Stopper).Stop(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if bus.HasSubscribers("bee.launch", "supervisor.ready") {
+				t.Fatal("failed startup retained its readiness subscription")
+			}
+		})
 	}
 }

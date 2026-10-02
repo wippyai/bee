@@ -216,6 +216,7 @@ func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) er
 
 type enrollmentPublisherComponent struct {
 	state              string
+	retryInterval      time.Duration
 	directory          string
 	trusted            string
 	execution          string
@@ -441,19 +442,17 @@ func watchEnrollmentDirectories(ctx context.Context, directories ...string) (<-c
 	return changed, done, nil
 }
 
-func subscribeDepartures(lifetime, ctx context.Context) (<-chan struct{}, <-chan struct{}) {
-	departures := make(chan struct{}, 1)
+func subscribeEnrollmentEvent(lifetime, ctx context.Context, system eventapi.System, kind eventapi.Kind) (<-chan struct{}, <-chan struct{}, error) {
+	wakeups := make(chan struct{}, 1)
 	done := make(chan struct{})
 	bus := eventapi.GetBus(ctx)
 	if bus == nil {
-		close(done)
-		return departures, done
+		return nil, nil, errors.New("enrollment publisher requires the event bus")
 	}
 	events := make(chan eventapi.Event, 16)
-	subscriber, err := bus.SubscribeP(lifetime, clusterapi.System, clusterapi.NodeLeft, events)
+	subscriber, err := bus.SubscribeP(lifetime, system, kind, events)
 	if err != nil {
-		close(done)
-		return departures, done
+		return nil, nil, err
 	}
 	go func() {
 		defer close(done)
@@ -467,13 +466,13 @@ func subscribeDepartures(lifetime, ctx context.Context) (<-chan struct{}, <-chan
 					return
 				}
 				select {
-				case departures <- struct{}{}:
+				case wakeups <- struct{}{}:
 				default:
 				}
 			}
 		}
 	}()
-	return departures, done
+	return wakeups, done, nil
 }
 
 // Start arms the publisher and returns. Publication waits for the supervisor's
@@ -500,15 +499,34 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 		p.cancel = nil
 		return fmt.Errorf("watch enrollment directories: %w", err)
 	}
-	departures, departuresDone := subscribeDepartures(lifetime, ctx)
+	readiness, readinessDone, err := subscribeEnrollmentEvent(lifetime, ctx, "bee.launch", "supervisor.ready")
+	if err != nil {
+		cancel()
+		<-changesDone
+		p.cancel = nil
+		return fmt.Errorf("watch supervisor readiness: %w", err)
+	}
+	departures, departuresDone, err := subscribeEnrollmentEvent(lifetime, ctx, clusterapi.System, clusterapi.NodeLeft)
+	if err != nil {
+		cancel()
+		<-changesDone
+		<-readinessDone
+		p.cancel = nil
+		return fmt.Errorf("watch client departures: %w", err)
+	}
 	p.done = make(chan struct{})
 	go func() {
 		defer close(p.done)
 		defer func() {
 			<-changesDone
 			<-departuresDone
+			<-readinessDone
 		}()
-		ticker := time.NewTicker(time.Second)
+		interval := p.retryInterval
+		if interval == 0 {
+			interval = time.Second
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		published := false
 		// A refused publication is retried on the ticker until one succeeds,
@@ -521,7 +539,7 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 				} else {
 					log.Debug("enrollment entry not yet writable", zap.Error(err))
 				}
-				ticker.Reset(time.Second)
+				ticker.Reset(interval)
 			} else {
 				published = true
 				ticker.Stop()
@@ -535,6 +553,8 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 			case <-changes:
 				publish()
 			case <-departures:
+				publish()
+			case <-readiness:
 				publish()
 			case <-ticker.C:
 				publish()

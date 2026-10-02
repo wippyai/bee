@@ -474,7 +474,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     if request.launch.stdin_eof == true and not measured.stdin_close then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime cannot close a child's stdin; the launch reads its input until end of file")
     end
-    local selected_digest, selected_error = configuration_protocol.digest(configuration, configure_target, configure_renderer)
+    local selected_digest, selected_error = configuration_protocol.digest(request.binding_ref, configuration, configure_target)
     if not selected_digest then return fail("DENIED", selected_error or "configuration inputs are not measurable") end
     if request.configuration_digest then
         if request.configuration_digest ~= selected_digest then return fail("CONFLICT", "host configuration inputs changed since the launch plan") end
@@ -548,7 +548,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     -- private delivery. It is excluded from the host configuration digest and
     -- cannot be selected by the caller or saved profile.
     configuration.attempt_id = request.attempt_id
-    local delivery, delivery_error = configuration_protocol.call(configure_target, configuration, configure_renderer)
+    local delivery, delivery_error = configuration_protocol.call(request.binding_ref, configure_target, configuration)
     if not delivery then db:release(); return fail("DENIED", delivery_error or "configuration rendering failed") end
     delivery.git_writable_roots_adapter = git_writable_roots_adapter
     -- Keep the admitted request unchanged: its digest excludes this private

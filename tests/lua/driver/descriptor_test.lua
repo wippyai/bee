@@ -16,6 +16,37 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("resolves an admitted binding's renderer after its configure target is replaced", function()
+            local ref = "bee.driver.claude.binding:binding"
+            local pinned = assert(registry.snapshot())
+            local original = assert(pinned:get(ref))
+            local data = assert(bounds.object(original.data))
+            local contracts = assert(bounds.dense_list(data.contracts, 16, "contracts"))
+            local replaced: {unknown} = {}
+            for _, raw in ipairs(contracts) do
+                local contract = assert(bounds.object(raw))
+                if contract.contract == "bee.driver:driver" then
+                    local mapped = assert(bounds.object(contract.methods))
+                    local changed: Object = {}
+                    for name, target in pairs(mapped) do changed[name] = target end
+                    changed.configure = "bee.driver.codex.binding:configure"
+                    replaced[#replaced + 1] = {contract = contract.contract, methods = changed}
+                else replaced[#replaced + 1] = contract end
+            end
+            local overlay = assert(registry.overlay("bee.driver.tests:configure-overlay"))
+            local changes = overlay:changes()
+            assert(changes:update({id = ref, kind = original.kind, meta = original.meta, data = {contracts = replaced}}))
+            assert(changes:apply())
+            local ok, failure = pcall(function()
+                local renderer, err, selected = resolver.configure_renderer(assert(registry.snapshot()), ref, "bee.driver.codex.binding:configure")
+                test.is_nil(err)
+                test.eq(renderer, "claude")
+                test.eq(selected and selected.provider, "claude")
+            end)
+            local cleanup = assert(registry.overlay("bee.driver.tests:configure-overlay")):changes()
+            assert(cleanup:delete(ref)); assert(cleanup:apply())
+            assert(ok, tostring(failure))
+        end)
         test.it("resolves configuration renderers from the driver's binding child", function()
             local pinned = assert(registry.snapshot())
             for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode"}) do
@@ -24,11 +55,32 @@ local function define_tests()
                 test.is_nil(err)
                 test.eq(renderer, provider)
                 test.eq(selected and selected.provider, provider)
-                local inferred, inferred_error = resolver.configure_renderer_for_target(pinned, namespace .. ":configure")
-                test.is_nil(inferred_error)
-                test.eq(inferred, provider)
                 test.is_nil(resolver.configure_renderer(pinned, namespace .. ":binding", "bee.driver.other.binding:configure"))
             end
+        end)
+        test.it("uses descriptor metadata after an authorized cross-namespace configure update", function()
+            local ref = "bee.driver.claude.binding:binding"
+            local original = assert(registry.get(ref))
+            local changed = assert(registry.get(ref))
+            local contracts: {unknown} = {}
+            for _, raw in ipairs(assert(bounds.dense_list(assert(bounds.object(original.data)).contracts, 16, "contracts"))) do
+                local contract = assert(bounds.object(raw))
+                if contract.contract == "bee.driver:driver" then
+                    local mapped = copy_object(assert(bounds.object(contract.methods)))
+                    mapped.configure = "bee.driver.codex.binding:configure"
+                    contracts[#contracts + 1] = {contract = contract.contract, methods = mapped}
+                else contracts[#contracts + 1] = contract end
+            end
+            changed.data = {contracts = contracts}
+            local changes = registry.snapshot():changes()
+            assert(changes:update(changed)); assert(changes:apply())
+            local ok, failure = pcall(function()
+                local renderer, err = resolver.configure_renderer(assert(registry.snapshot()), ref, "bee.driver.codex.binding:configure")
+                test.is_nil(err); test.eq(renderer, "claude")
+            end)
+            local cleanup = registry.snapshot():changes()
+            assert(cleanup:update(original)); assert(cleanup:apply())
+            assert(ok, tostring(failure))
         end)
         test.it("declares permission answer transports for the launch context without provider dispatch", function()
             local expected: {[string]: {string}} = {

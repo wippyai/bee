@@ -506,16 +506,18 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
     end
     return delivery, nil
 end
-function M.digest(request_value: unknown, target: string, configure_renderer: string?): (string?, string?)
+function M.digest(binding_ref: string?, request_value: unknown, target: string): (string?, string?)
     local request, request_error = M.decode_request(request_value)
     if not request then return nil, request_error end
     local selected = bounds.id(target)
     if not selected then return nil, "configuration target is not an identifier" end
-    if configure_renderer ~= nil and not bounds.id(configure_renderer) then return nil, "configuration renderer is not an identifier" end
+    if binding_ref ~= nil and not bounds.id(binding_ref) then return nil, "driver binding is not an identifier" end
+    local configure_renderer: string? = nil
     local descriptor_digest: string? = nil
     local pinned, pin_error = registry.snapshot()
-    if pinned and not pin_error then
-        local resolved, resolve_error, declaration = driver_resolver.configure_renderer_for_target(pinned, selected)
+    if binding_ref then
+        if not pinned or pin_error then return nil, "configuration registry snapshot is unavailable" end
+        local resolved, resolve_error, declaration = driver_resolver.configure_renderer(pinned, binding_ref, selected)
         if resolve_error then return nil, resolve_error end
         if configure_renderer == nil then configure_renderer = resolved end
         if declaration then
@@ -533,14 +535,16 @@ function M.digest(request_value: unknown, target: string, configure_renderer: st
     if hash_error or not digest then return nil, "configuration digest failed" end
     return digest, nil
 end
-function M.call(target: string, request_value: unknown, configure_renderer: string?): (Delivery?, string?)
+function M.call(binding_ref: string?, target: string, request_value: unknown): (Delivery?, string?)
     local request, request_error = M.decode_request(request_value)
     if not request then return nil, request_error end
-    if configure_renderer ~= nil and not bounds.id(configure_renderer) then return nil, "configuration renderer is not an identifier" end
+    if binding_ref ~= nil and not bounds.id(binding_ref) then return nil, "driver binding is not an identifier" end
+    local configure_renderer: string? = nil
     local option_fields: Object? = nil
     local pinned, pin_error = registry.snapshot()
-    if pinned and not pin_error then
-        local resolved, resolve_error, selected = driver_resolver.configure_renderer_for_target(pinned, target)
+    if binding_ref then
+        if not pinned or pin_error then return nil, "configuration registry snapshot is unavailable" end
+        local resolved, resolve_error, selected = driver_resolver.configure_renderer(pinned, binding_ref, target)
         if resolve_error then return nil, resolve_error end
         if configure_renderer == nil then configure_renderer = resolved end
         if selected then option_fields = bounds.object(selected.options.fields) end

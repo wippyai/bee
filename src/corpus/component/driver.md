@@ -40,11 +40,36 @@ OptionSpec value schemas, form labels, contexts, capability evidence and renders
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
 
-Each provider exposes one `.binding` child. Sessions resolves every driver
-method in the selected binding's namespace and requires a callable target;
-the external executor checks that the turn uses that same namespace. Binding
-operations specialize the universal implementation with their fixed descriptor.
-Provider configuration renderers retain their own formats and permissions.
+Agents discovers `contract.binding` entries with `meta.type: harness.driver`.
+Each declares `driver_id`, `profiles_ref` and the four `bee.driver:driver`
+methods. CLI bindings also name `descriptor_ref`. The profiles entry has
+`meta.type: harness.profile` and `meta.driver_ref` naming that exact binding.
+The binding ID and method targets may belong to different namespaces and use
+different entry names. Sessions resolves the declared targets from one pinned
+registry snapshot and requires `function.lua` entries. Configuration resolves
+the selected binding's descriptor explicitly; it never infers a binding from
+a configure target's name. Provider renderers retain their formats and permissions.
+
+The person selects the exact binding in the host-owned
+`bee.harness.launch:harness_activation` declaration and admits the launch
+definition, policy, executable, placement, credentials, resources and gateway
+ceiling. Metadata discovery, installation and a matching name confer no launch
+authority. An unselected binding returns `binding <id> is not activated`.
+External turns re-admit through the host and use its planned normalize target.
+
+An agent authors typed method functions, binding metadata, profiles and, for a
+CLI, a descriptor plus provider configuration renderer. A change to a declared
+target takes effect for new routes after authorized registry publication;
+existing executions keep their pinned route and follow their existing lifecycle.
+Descriptor changes are measured in configuration and launch plans.
+
+Governed overlays require the person's existing destination-local approval of
+the exact candidate and host-selected profile; a changed candidate requires
+review again. An approved overlay can update a shipped binding's declared
+method targets or descriptor configuration through the owner's ordinary
+overlay update operation. Removing that overlay restores the durable entry.
+The host's exact binding activation and launch permissions still apply; an
+unapproved overlay has no publication or launch authority.
 
 Shared configuration calls, option rendering, shell quoting and TOML literals
 live in `bee.driver.binding`. Observation builders and the normalizer boundary

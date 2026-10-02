@@ -91,13 +91,10 @@ local function decode(value: unknown): (Request?, string?)
     local driver_methods = object(request.driver_methods)
     if not driver_methods then return nil, "driver_methods must be an object" end
     local resolved_driver: {[string]: string} = {}
-    local binding_prefix = driver_binding_ref:match("^(bee[.]driver[.][A-Za-z0-9_.-]+[.]binding:)binding$")
-    if not binding_prefix then return nil, "driver_binding_ref is invalid" end
     for _, method in ipairs({"prepare", "dispatch", "normalize"}) do
         local target = id(driver_methods[method])
-        if not target or target:sub(1, #binding_prefix) ~= binding_prefix
-            or not target:match("^bee[.]driver[.][A-Za-z0-9_.-]+[.]binding:" .. method .. "$") then
-            return nil, "driver_methods." .. method .. " is not an operation of the selected bee.driver binding"
+        if not target then
+            return nil, "driver_methods." .. method .. " is invalid"
         end
         resolved_driver[method] = target
     end

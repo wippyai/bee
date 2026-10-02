@@ -53,6 +53,7 @@ type Plan = {
     launch_id: string,
     binding_ref: string,
     binding_digest: string,
+    driver_id: string,
     profile_id: string,
     profile_digest: string,
     session_resource: string?,
@@ -240,6 +241,11 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     end
     local snapshot, snapshot_error = catalog.read(pinned, nil)
     if not snapshot then return nil, fail("UNAVAILABLE", snapshot_error or "catalog") end
+    for _, candidate in ipairs(snapshot.bindings) do
+        if candidate.binding_id == launch.binding_ref and not candidate.activated then
+            return nil, fail("FORBIDDEN", "binding " .. launch.binding_ref .. " is not activated")
+        end
+    end
     local usable, usable_error = catalog.usable(snapshot)
     if not usable then return nil, fail("UNAVAILABLE", usable_error or "catalog") end
     local binding_digest, profile_digest = "", ""
@@ -468,7 +474,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     if budget_error then return nil, fail("UNSUPPORTED_CAPABILITY", budget_error) end
     return {budget_capabilities = descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile = effective_profile,
         effective_profile_digest = digest_of(effective_profile),
-        title = selected and selected.profile.name or launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
+        title = selected and selected.profile.name or launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest, driver_id = binding.driver_id,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest, permission_answers = launch_policy.permission_answers,
         placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
         session_resource = launch.session_resource,

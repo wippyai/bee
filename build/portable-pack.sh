@@ -44,6 +44,13 @@ output_dir=$(
 version=${BEE_VERSION:-$(awk -F'"' '/"module": "bee\/bee"/{seen=1} seen && /"version":/{print $4; exit}' "$input_manifest")}
 [ -n "$version" ] || fail 'could not determine bee/bee version'
 version=${version#v}
+boot_version=$(python3 - "$version" <<'PYBOOT'
+import sys
+release, _, metadata = sys.argv[1].partition("+")
+base, _, prerelease = release.partition("-")
+print(base + "-0.boot" + ("." + prerelease if prerelease else "") + ("+" + metadata if metadata else ""))
+PYBOOT
+)
 
 stage=$(mktemp -d "$output_dir/.bee-portable-pack.XXXXXXXX")
 manifest_stage=
@@ -62,6 +69,19 @@ mkdir -p "$stage/artifacts/packs/bee"
 # bee/bee and every Bee module at this version.
 WIPPY=$runtime BEE_BUILD_MANIFEST=$input_manifest BEE_VERSION=$version "$root/build/release-source.sh" "$stage/source"
 mkdir -p "$stage/source/.portable-packs/bee"
+python3 - "$stage/source/wippy.lock" "$boot_version" <<'PY'
+from pathlib import Path
+import sys
+import yaml
+path = Path(sys.argv[1])
+lock = yaml.safe_load(path.read_text())
+for row in lock["modules"]:
+    if row["name"] == "bee/bee":
+        row["version"] = sys.argv[2]
+path.write_text(yaml.safe_dump(lock, sort_keys=False))
+PY
+sed "s/^version: $version$/version: $boot_version/" "$stage/source/wippy.yaml" > "$stage/source/wippy.yaml.boot"
+mv "$stage/source/wippy.yaml.boot" "$stage/source/wippy.yaml"
 
 awk '
     $1 == "-" && $2 == "name:" { name = $3; next }
@@ -82,6 +102,16 @@ while read -r module module_version; do
         *) cp "$root/.wippy/vendor/$organization/$name-$module_version.wapp" "$pack" ;;
     esac
 done < "$stage/modules.tsv"
+
+# Only the executable's local boot root carries the initial host selections.
+# The Hub core uses the same source and leaves those selections to bee.deps.
+mkdir -p "$stage/artifacts/core"
+sed "s/version: $boot_version$/version: $version/" "$stage/source/wippy.lock" > "$stage/source/wippy.lock.core"
+mv "$stage/source/wippy.lock.core" "$stage/source/wippy.lock"
+sed "s/^version: $boot_version$/version: $version/" "$stage/source/wippy.yaml" > "$stage/source/wippy.yaml.core"
+mv "$stage/source/wippy.yaml.core" "$stage/source/wippy.yaml"
+(cd "$stage/source" && "$runtime" pack --module bee/bee --exclude-ns bee.deps ".portable-packs/bee/bee-$version.wapp" --silent)
+mv "$stage/source/.portable-packs/bee/bee-$version.wapp" "$stage/artifacts/core/bee-$version.wapp"
 
 # Runtime patches remain byte-for-byte inputs to the pinned builder and travel
 # beside the packs in the immutable generation.
@@ -113,6 +143,28 @@ while read -r module module_version; do
 done < "$stage/modules.tsv"
 printf '%s\n' "version: '1.0'" 'registry:' '  enable_history: true' '  history_type: sqlite' \
     '  history_path: .wippy/registry.db' 'shutdown:' '  timeout: 3s' > "$stage/deployment/.wippy.yaml"
+
+hub=$stage/deployment/hub
+mkdir -p "$hub/src/deps" "$hub/.wippy/vendor"
+cp "$stage/source/src/deps/_index.yaml" "$hub/src/deps/_index.yaml"
+cp "$stage/deployment/.wippy.yaml" "$hub/.wippy.yaml"
+cp -R "$stage/deployment/.wippy/vendor/." "$hub/.wippy/vendor/"
+rm "$hub/.wippy/vendor/bee/bee-$boot_version.wapp"
+cp "$generation_dir/core/bee-$version.wapp" "$hub/.wippy/vendor/bee/bee-$version.wapp"
+python3 - "$stage/deployment/wippy.lock" "$hub/wippy.lock" "$version" "$generation_dir/core/bee-$version.wapp" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+import yaml
+source, destination, version, core = sys.argv[1:]
+lock = yaml.safe_load(Path(source).read_text())
+lock["directories"]["src"] = "./src"
+for row in lock["modules"]:
+    if row["name"] == "bee/bee":
+        row["version"] = version
+        row["hash"] = "sha256:" + hashlib.sha256(Path(core).read_bytes()).hexdigest()
+Path(destination).write_text(yaml.safe_dump(lock, sort_keys=False))
+PY
 
 deployment_dir=$output_dir/portable-deployments/$generation
 if [ -e "$deployment_dir" ]; then
@@ -149,7 +201,7 @@ awk -v packs="$packs" -v generation="native-packs/$generation/" '
     { print }
 ' "$input_manifest" > "$manifest_stage"
 
-(cd "$root" && env GOWORK=off GOTOOLCHAIN=go1.27.0 go run build/bootstrap.go seal "$manifest_stage" --version "$version")
+(cd "$root" && env GOWORK=off GOTOOLCHAIN=go1.27.0 go run build/bootstrap.go seal "$manifest_stage" --version "$boot_version")
 (cd "$root" && env GOWORK=off GOTOOLCHAIN=go1.27.0 go run build/bootstrap.go validate "$manifest_stage")
 mv "$manifest_stage" "$output_manifest"
 staged_pointer=$output_dir/.portable-deployment-$generation

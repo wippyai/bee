@@ -47,6 +47,10 @@ hub-self-update-runtime-check:
 .PHONY: hub-self-update-standalone-check
 hub-self-update-standalone-check:
 	BEE_RUNTIME="$(or $(BEE_RUNTIME),$(abspath $(WIPPY)))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
+.PHONY: hub-core-artifact-check
+hub-core-artifact-check: native-pack
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/core_artifact.py "$(abspath $(BEE_DEPLOYMENT))" "$(abspath $(BEE_BUNDLE_MANIFEST))"
+check: hub-core-artifact-check
 .PHONY: hub-core-pack
 hub-core-pack: $(TOOLCHAIN_CURRENT)
 	WIPPY="$(abspath $(WIPPY))" BEE_CORE_VERSION="$(BEE_CORE_VERSION)" build/core-pack.sh
@@ -294,7 +298,7 @@ CHECK_JOBS ?= 4
 .PHONY: check-parallel
 check-parallel:
 	python3 build/parallel_check.py --jobs "$(CHECK_JOBS)"
-check-shard-foundation: $(TOOLCHAIN_CURRENT) check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
+check-shard-foundation: $(TOOLCHAIN_CURRENT) check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check hub-core-artifact-check
 check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check kernel-bare-check package-drop-check retained-owner-check hive-supervisor-check
 check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check thread-storage-check resources-check
 check-shard-services-storage: workspace-storage-check

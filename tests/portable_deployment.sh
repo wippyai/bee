@@ -32,6 +32,7 @@ ip link set lo up
 fixture=$(mktemp -d "${TMPDIR:-/tmp}/bee-portable-deployment.XXXXXXXX")
 cleanup() { rm -rf "$fixture"; }
 trap cleanup EXIT HUP INT TERM
+mkdir -p "$fixture/home"
 cp -RL "$deployment" "$fixture/deploy"
 deploy=$fixture/deploy
 
@@ -53,8 +54,7 @@ awk '
 cp -RL "$deployment" "$fixture/tampered"
 sed -n '2p' "$fixture/modules.tsv" | { read -r module version _; printf '%s %s\n' "$module" "$version"; } > "$fixture/tampered-module.txt"
 read -r module version < "$fixture/tampered-module.txt"
-name=${module#bee/}
-tampered_pack=$fixture/tampered/.wippy/vendor/bee/$name-$version.wapp
+tampered_pack=$fixture/tampered/.wippy/vendor/$module-$version.wapp
 # The installer verifies the lock digest before parsing the WAPP body. Alter
 # the leading byte, as the portable runtime contract permits that check first.
 printf '\001' | dd of="$tampered_pack" bs=1 seek=0 conv=notrunc status=none
@@ -68,29 +68,32 @@ grep -Eq '(actual|got) sha256:[0-9a-f]{64}' "$fixture/tamper.out" || { cat "$fix
 expected_entries=0
 : > "$fixture/expected-vendor.txt"
 while read -r module version expected_hash; do
-    name=${module#bee/}
-    pack=$deploy/.wippy/vendor/bee/$name-$version.wapp
+    organization=${module%/*}
+    name=${module#*/}
+    pack=$deploy/.wippy/vendor/$module-$version.wapp
     [ -f "$pack" ] || fail "missing pack: $module@$version"
-    printf '.wippy/vendor/bee/%s-%s.wapp\n' "$name" "$version" >> "$fixture/expected-vendor.txt"
+    printf '.wippy/vendor/%s-%s.wapp\n' "$module" "$version" >> "$fixture/expected-vendor.txt"
     actual_hash=sha256:$(sha256sum "$pack" | awk '{print $1}')
     [ "$actual_hash" = "$expected_hash" ] || fail "hash does not match lock: $module"
 
-    single=$fixture/$(printf '%s' "$name" | tr / _)
-    mkdir -p "$single/empty" "$single/.wippy/vendor/bee"
-    cp "$pack" "$single/.wippy/vendor/bee/$name-$version.wapp"
+    single=$fixture/$(printf '%s' "$module" | tr / _)
+    mkdir -p "$single/empty" "$single/.wippy/vendor/$organization"
+    cp "$pack" "$single/.wippy/vendor/$module-$version.wapp"
     printf '%s\n' 'directories:' '  modules: .wippy' '  src: ./empty' 'modules:' \
         "  - name: $module" "    version: $version" "    hash: $expected_hash" '    root: true' > "$single/wippy.lock"
     (cd "$single" && "$runtime" registry list --json > "$single/entries.json")
     definitions=$(grep -c '"kind": "ns.definition"' "$single/entries.json" || true)
     [ "$definitions" = 1 ] || fail "$module has $definitions namespace definitions"
-    case "$module" in
-        bee/bee) source=$root/src/_index.yaml ;;
-        bee/gov) source=$root/modules/gov/src/_index.yaml ;;
-        *) source=$root/modules/$name/src/_index.yaml ;;
-    esac
-    expected_namespace=$(awk -F': ' '/^namespace:/{print $2; exit}' "$source")
-    actual_namespace=$(awk -F'"' '/^    "id":/{id=$4} /"kind": "ns.definition"/{print id}' "$single/entries.json" | cut -d: -f1)
-    [ "$actual_namespace" = "$expected_namespace" ] || fail "$module definition is $actual_namespace, expected $expected_namespace"
+    if [ "$organization" = bee ]; then
+        case "$module" in
+            bee/bee) source=$root/src/_index.yaml ;;
+            bee/gov) source=$root/modules/gov/src/_index.yaml ;;
+            *) source=$root/modules/$name/src/_index.yaml ;;
+        esac
+        expected_namespace=$(awk -F': ' '/^namespace:/{print $2; exit}' "$source")
+        actual_namespace=$(awk -F'"' '/^    "id":/{id=$4} /"kind": "ns.definition"/{print id}' "$single/entries.json" | cut -d: -f1)
+        [ "$actual_namespace" = "$expected_namespace" ] || fail "$module definition is $actual_namespace, expected $expected_namespace"
+    fi
     test_entries=$(cd "$single" && "$runtime" registry list --meta 'type=test' --json)
     support_entries=$(cd "$single" && "$runtime" registry list --meta 'test_support=true' --json)
     [ "$test_entries" = '[]' ] || fail "$module contains test entries"
@@ -111,7 +114,7 @@ identities=$(awk -F'"' '/^    "id":/{print $4}' "$fixture/all-entries.json")
 
 boot() {
     log=$1
-    (cd "$deploy" && exec env -i HOME="$fixture/home" PATH=/usr/bin:/bin TERM=xterm-256color LC_ALL=C.UTF-8 "$runtime" run --verbose --host bee:workers -- bee-host > "$log" 2>&1) &
+    (cd "$deploy" && exec env -i HOME="$fixture/home" TMPDIR="$fixture" WIPPY_CACHE_DIR="$root/.wippy/test-cache/portable" PATH=/usr/bin:/bin TERM=xterm-256color LC_ALL=C.UTF-8 "$runtime" run --verbose --host bee:workers -- bee-host > "$log" 2>&1) &
     pid=$!
     ready=
     for _ in $(seq 1 300); do

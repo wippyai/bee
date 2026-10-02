@@ -5486,8 +5486,13 @@
       "source": "src/launch/_index.yaml"
     },
     {
-      "id": "bee.launch:startup_failure",
-      "kind": "library.lua",
+      "id": "bee.launch:startup_environment",
+      "kind": "env.storage.memory",
+      "source": "src/launch/_index.yaml"
+    },
+    {
+      "id": "bee.launch:startup_error",
+      "kind": "env.variable",
       "source": "src/launch/_index.yaml"
     },
     {
@@ -6807,6 +6812,11 @@
     },
     {
       "id": "bee.security.desktop:session_status_policy",
+      "kind": "security.policy",
+      "source": "src/security/desktop/_index.yaml"
+    },
+    {
+      "id": "bee.security.desktop:startup_failure_policy",
       "kind": "security.policy",
       "source": "src/security/desktop/_index.yaml"
     },
@@ -11423,6 +11433,18 @@
       "source": "modules/hub/src/publication/_index.yaml"
     },
     {
+      "id": "bee.launch:startup_environment",
+      "kind": "env.storage.memory",
+      "source": "src/launch/_index.yaml"
+    },
+    {
+      "id": "bee.launch:startup_error",
+      "kind": "env.variable",
+      "source": "src/launch/_index.yaml",
+      "storage": "bee.launch:startup_environment",
+      "variable": "error"
+    },
+    {
       "file": "${env:bee.node.env:db_path}",
       "id": "bee.node.env:db",
       "kind": "db.sql.sqlite",
@@ -11804,13 +11826,37 @@
       "table": "bee_governance_lease_receipts"
     },
     {
+      "line": 572,
+      "owner_namespace": "bee.gov",
+      "source": "modules/gov/src/migrations/schema.lua",
+      "table": "bee_governance_lease_receipts"
+    },
+    {
       "line": 499,
       "owner_namespace": "bee.gov",
       "source": "modules/gov/src/migrations/schema.lua",
       "table": "bee_governance_lease_uses"
     },
     {
+      "line": 560,
+      "owner_namespace": "bee.gov",
+      "source": "modules/gov/src/migrations/schema.lua",
+      "table": "bee_governance_lease_uses"
+    },
+    {
+      "line": 586,
+      "owner_namespace": "bee.gov",
+      "source": "modules/gov/src/migrations/schema.lua",
+      "table": "bee_governance_lease_uses_next"
+    },
+    {
       "line": 475,
+      "owner_namespace": "bee.gov",
+      "source": "modules/gov/src/migrations/schema.lua",
+      "table": "bee_governance_leases"
+    },
+    {
+      "line": 536,
       "owner_namespace": "bee.gov",
       "source": "modules/gov/src/migrations/schema.lua",
       "table": "bee_governance_leases"
@@ -11984,7 +12030,13 @@
       "table": "bee_sessions"
     },
     {
-      "line": 1122,
+      "line": 527,
+      "owner_namespace": "bee.sync",
+      "source": "modules/sync/src/migrations/migrations.lua",
+      "table": "bee_sync_distribution_cursors"
+    },
+    {
+      "line": 1603,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_distribution_cursors"
@@ -12002,7 +12054,7 @@
       "table": "bee_sync_feeds"
     },
     {
-      "line": 1131,
+      "line": 1612,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_projection_migrations"
@@ -12014,7 +12066,7 @@
       "table": "bee_sync_projections"
     },
     {
-      "line": 1140,
+      "line": 1621,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_projections_next"
@@ -12026,25 +12078,25 @@
       "table": "bee_sync_receipts"
     },
     {
-      "line": 1106,
+      "line": 1587,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_chunks"
     },
     {
-      "line": 1075,
+      "line": 1556,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_sources"
     },
     {
-      "line": 1092,
+      "line": 1573,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_transfers"
     },
     {
-      "line": 1081,
+      "line": 1562,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_versions"
@@ -12084,6 +12136,18 @@
       "owner_namespace": "bee.threads",
       "source": "modules/threads/src/migrations/migrations.lua",
       "table": "bee_thread_cancel_intents"
+    },
+    {
+      "line": 852,
+      "owner_namespace": "bee.threads",
+      "source": "modules/threads/src/migrations/migrations.lua",
+      "table": "bee_thread_cancel_intents"
+    },
+    {
+      "line": 869,
+      "owner_namespace": "bee.threads",
+      "source": "modules/threads/src/migrations/migrations.lua",
+      "table": "bee_thread_cancel_intents_next"
     },
     {
       "line": 356,
@@ -12344,6 +12408,12 @@
       "table": "workspace_application_thread_bindings_v6"
     },
     {
+      "line": 425,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
+      "table": "workspace_application_thread_bindings_v6"
+    },
+    {
       "line": 32,
       "owner_namespace": "bee.workspace",
       "source": "modules/workspace/src/migrations/migrations.lua",
@@ -12351,6 +12421,12 @@
     },
     {
       "line": 141,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
+      "table": "workspace_display_assignments_v6"
+    },
+    {
+      "line": 389,
       "owner_namespace": "bee.workspace",
       "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_display_assignments_v6"
@@ -12368,7 +12444,19 @@
       "table": "workspace_display_transfer_receipts_v6"
     },
     {
+      "line": 402,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
+      "table": "workspace_display_transfer_receipts_v6"
+    },
+    {
       "line": 234,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
+      "table": "workspace_folder"
+    },
+    {
+      "line": 464,
       "owner_namespace": "bee.workspace",
       "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_folder"
@@ -12398,7 +12486,19 @@
       "table": "workspace_state_v6"
     },
     {
+      "line": 377,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
+      "table": "workspace_state_v6"
+    },
+    {
       "line": 116,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
+      "table": "workspaces"
+    },
+    {
+      "line": 364,
       "owner_namespace": "bee.workspace",
       "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspaces"
@@ -16858,14 +16958,14 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1787,
+    "entry_count": 1789,
     "namespace_count": 273,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
-    "owned_store_count": 80,
-    "owned_table_declaration_count": 138,
-    "persisted_id_count": 818,
+    "owned_store_count": 82,
+    "owned_table_declaration_count": 151,
+    "persisted_id_count": 821,
     "requirement_count": 136,
     "requirement_target_count": 322,
     "root_src_lua_budget": 20851,

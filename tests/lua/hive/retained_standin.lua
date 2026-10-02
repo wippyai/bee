@@ -17,6 +17,7 @@ local function main(test: string)
             if selected.value.kind == process.event.CANCEL then break end
         elseif selected.channel == commands then
             local command: unknown = selected.value:payload():data()
+            if type(command) == "table" and type(command.error) == "string" then error(command.error) end
             if type(command) == "table" and type(command.topic) == "string" then process.send(test, command.topic, command.value) end
         else
             for index, subscription in ipairs(subscriptions) do

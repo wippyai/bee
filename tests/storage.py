@@ -517,7 +517,7 @@ def main():
             migration = connection.execute(
                 "SELECT id, name, checksum FROM workspace_schema_migrations"
             ).fetchall()
-            assert [row[0] for row in migration] == list(range(1, 13))
+            assert [row[0] for row in migration] == list(range(1, 15))
             checksum = migration[0][2]
             state = connection.execute(
                 "SELECT generation, value FROM workspace_state WHERE workspace_id = (SELECT workspace_id FROM workspaces WHERE root_ref = 'bee.env:workspace_root' AND subpath = '')"
@@ -545,12 +545,12 @@ def main():
         with sqlite3.connect(database) as connection:
             connection.execute(
                 "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) "
-                "VALUES (13, 'future_schema', 'future', 'now')"
+                "VALUES (15, 'future_schema', 'future', 'now')"
             )
             connection.commit()
         assert "workspace database schema is newer" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
-            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 13")
+            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 15")
             connection.commit()
         run_probe(project, folder)
 
@@ -645,7 +645,7 @@ return {main = main}
         (probe / "main.lua").write_text(migration4_probe)
         run_probe(project, migration4)
         with sqlite3.connect(migration4 / "workspace.db") as db:
-            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 13))
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 15))
             assert db.execute(
                 "SELECT count(*) FROM workspace_application_thread_bindings WHERE state='revoked' AND cleanup_pending=0"
             ).fetchone()[0] == 3
@@ -680,7 +680,7 @@ return {main = main}
         with sqlite3.connect(legacy / "workspace.db") as db:
             assert db.execute("SELECT generation, value FROM workspace_state").fetchone() == (7, '{"version":1,"probe":"legacy"}')
             assert db.execute("SELECT checksum FROM workspace_schema_migrations WHERE id=1").fetchone()[0] == checksum
-            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 13))
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 15))
         assert len(identity(legacy / "workspace.db")) == 32
 
         # A catalog without the classic row cannot silently mint another ID.
@@ -804,7 +804,8 @@ def client_storage():
                 assert db.execute("SELECT c.client_id, l.workspace_id, l.import_receipt FROM client_state AS c JOIN client_layouts AS l ON l.desktop_id = c.client_id").fetchone() == original
                 ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
                 db.execute("UPDATE client_schema_migrations SET checksum='changed' WHERE id=1")
-            probe(folder, "open", packed, "Client migration checksum changed")
+            probe(folder, "open", packed,
+                  f"Client migration 1 (client_layout_v1) checksum changed: expected {ledger}, found changed")
             with sqlite3.connect(database) as db:
                 db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
                 db.execute("INSERT INTO client_schema_migrations VALUES (4, 'future', 'future')")

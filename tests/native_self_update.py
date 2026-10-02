@@ -17,6 +17,8 @@ def exercise(args, scratch, phase):
     environment = dict(HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"),
                        TMPDIR=str(scratch / "tmp"), TERM="xterm-256color",
                        LC_ALL="C.UTF-8", PATH="/usr/bin:/bin:/usr/sbin")
+    if getattr(args, "hub_url", None):
+        environment["WIPPY_REGISTRY"] = args.hub_url
     if phase == "offline":
         interfaces = subprocess.check_output(["ip", "-o", "link"], text=True)
         assert len(interfaces.splitlines()) == 1 and ": lo:" in interfaces, interfaces
@@ -66,14 +68,15 @@ def exercise(args, scratch, phase):
         assert len(owners) == 1, owners
         pid = owners[0]
         owner = hold_owner(pid, args.binary, state)
-        pids = {"owner_before": pid, "client": ui.process.pid}
+        pids = {"owner_before": pid, "client_before": ui.process.pid}
         (args.evidence / f"{phase}.pids.json").write_text(json.dumps(pids) + "\n")
         print(f"{phase}: owner PID {pid}; client PID {ui.process.pid}", flush=True)
         if phase == "live":
             about("01-baseline-about", "update available")
             assert f"installed {args.from_version}" in ui.text(), ui.text()
             assert f"Hub {args.to_version}" in ui.text(), ui.text()
-            ui.window_control("×")
+            # Keep this Settings/About application across the update. Modules
+            # opens above it; closing Modules returns to the retained window.
             ui.open_start()
             for item in ("Apps", "Advanced", "Modules"):
                 ui.choose(item)
@@ -98,16 +101,31 @@ def exercise(args, scratch, phase):
             after = live_owners(args.binary, state)
             assert after == [pid] and not owner.exited(), after
             pids["owner_after"] = after[0]
+            pids["client_after"] = ui.process.pid
+            assert ui.process.poll() is None
             (args.evidence / "live.pids.json").write_text(json.dumps(pids) + "\n")
             print(f"Apply returned: owner PID before {pid}; after {after[0]}", flush=True)
             assert "Completed:" in ui.text() and "Receipt state: complete" in ui.text(), ui.text()
-            ui.window_control("×")
-            about("06-live-about", f"installed {args.to_version}", marker=True)
+            # The desktop's global controls can belong to a different window.
+            # Close Modules using its own title bar while retaining About.
+            y, title = next((y, line) for y, line in enumerate(ui.screen.display, 1)
+                            if "╭─ Modules" in line and "×" in line)
+            x = title.index("×") + 1
+            ui.mouse(0, x, y)
+            ui.mouse(0, x, y, True)
+            ui.wait("BEE SETTINGS · ABOUT", timeout=30)
+            ui.key(b"r")
+            ui.wait(f"installed {args.to_version}", timeout=180)
+            frame("06-live-about")
             assert live_owners(args.binary, state) == [pid] and not owner.exited()
         else:
             about("07-offline-about", f"installed {args.to_version}", marker=True)
         (args.evidence / f"{phase}.pids.json").write_text(json.dumps(pids) + "\n")
         ui.quit()
+        assert b"Bee is still running; bee stop ends it" in ui.raw, bytes(ui.raw[-1600:])
+        assert b"detach desktop:" not in ui.raw, bytes(ui.raw[-1600:])
+        assert not owner.exited(), "detach stopped the owner"
+        frame(f"{phase}-quit")
         ui.close()
         ui = None
         stopped = subprocess.run([str(args.binary), "--state", str(state), "stop"],
@@ -120,6 +138,7 @@ def exercise(args, scratch, phase):
     except Exception:
         if ui is not None:
             frame(f"{phase}-failure")
+            (args.evidence / f"{phase}.terminal.log").write_bytes(ui.raw)
         errors = []
         for log in state.glob("owner-*.log"):
             for line in log.read_text(errors="replace").splitlines():

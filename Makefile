@@ -45,7 +45,7 @@ hub-self-update-runtime-check:
 	python3 tests/runtime_self_update_check.py
 .PHONY: hub-self-update-standalone-check
 hub-self-update-standalone-check:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
+	BEE_RUNTIME="$(or $(BEE_RUNTIME),$(abspath $(WIPPY)))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
 .PHONY: settings-unit-check capability-grants-unit-check
 settings-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.settings view_test
@@ -676,3 +676,9 @@ app-layout-standalone-check:
 app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
+
+.PHONY: login-links-check
+# Explicit proof against the local runtime PR build; the production pin stays unchanged.
+login-links-check:
+	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
+	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)

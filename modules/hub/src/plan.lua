@@ -18,7 +18,7 @@ type Migration = {id: string, component: string, target_db: string, timestamp: s
 -- removes with its departing package, summarized from the policy definition.
 type PolicyChange = {id: string, component: string, change: string, actions: {string}, resources: {string},
     expression: boolean}
-type Plan = {request: Request, base_revision: integer, root_id: string, digest: string,
+type Plan = {request: Request, base_revision: integer, root_id: string, root_operation: string, digest: string,
     modules: {Module}, missing: {string}, migrations: {Migration}, starts: {string}, capabilities: {string},
     policy_changes: {PolicyChange}, ready: boolean}
 type Prepared = {plan: Plan, resolved: graph.Result, installed: inventory.Result}
@@ -105,13 +105,15 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             existing = root
         end
     end
+    local standalone_selection = self_update and not existing and installed.deployment == request.component
     if self_update then
-        if not existing then return nil, "Bee deployment root is not installed" end
-        root_id = existing.id
-        if #request.parameters > 0 and canonical.encode(request.parameters) ~= canonical.encode(existing.parameters) then
+        if not existing and not standalone_selection then return nil, "Bee deployment root is not installed" end
+        if existing then root_id = existing.id end
+        local parameters: {requirements.Parameter} = existing and existing.parameters or {}
+        if #request.parameters > 0 and canonical.encode(request.parameters) ~= canonical.encode(parameters) then
             return nil, "self-update must preserve the host deployment parameters"
         end
-        if #request.parameters == 0 and #existing.parameters > 0 then
+        if #request.parameters == 0 and #parameters > 0 then
             return nil, "self-update requires the host deployment parameters"
         end
     end
@@ -122,7 +124,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     end
     if existing and existing.id ~= root_id then return nil, "component is managed by host configuration at " .. existing.id end
     if request.action == "install" and existing then return nil, "component already has an installed root; choose update" end
-    if request.action ~= "install" and not existing then return nil, "component has no installed Hub root" end
+    if request.action ~= "install" and not existing and not standalone_selection then return nil, "component has no installed Hub root" end
     if request.action == "uninstall" then
         for _, item in ipairs(installed.modules) do
             if item.component == request.component and #item.used_by > 0 then
@@ -147,7 +149,11 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             roots[#roots + 1] = reference
         end
     end
-    local resolved, graph_error = graph.resolve(roots, source)
+    local selections: {[string]: string} = {}
+    for _, item in ipairs(installed.modules) do
+        if item.version ~= "" then selections[item.component] = item.version end
+    end
+    local resolved, graph_error = graph.resolve(roots, source, selections)
     if not resolved then return nil, graph_error end
     if self_update then
         local compatibility_error = native_compat.check(resolved.packages, baked_identity)
@@ -252,7 +258,9 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     table.sort(policy_changes, function(a: PolicyChange, b: PolicyChange): boolean return a.id < b.id end)
     table.sort(starts); table.sort(capabilities)
     table.sort(missing)
-    local plan: Plan = {request = request, base_revision = revision, root_id = root_id, digest = "", modules = modules,
+    local root_operation = request.action == "uninstall" and "delete" or (existing and "update" or "create")
+    local plan: Plan = {request = request, base_revision = revision, root_id = root_id, root_operation = root_operation,
+        digest = "", modules = modules,
         missing = missing, migrations = migrations, starts = starts, capabilities = capabilities,
         policy_changes = policy_changes, ready = #missing == 0}
     local encoded, encode_error = canonical.encode(plan, 1048576)

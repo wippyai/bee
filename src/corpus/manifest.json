@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 10892,
+      "bytes": 11648,
       "id": "docs/agent_guide",
-      "sha256": "6260765e3190bba8c26f40996e4d673a92ed8020c676c8c18778dbf29128ea0c",
+      "sha256": "92a981d64929c9cd57b39f0f05eff4894f8f46c4ce32f1717003b31d03e29c9f",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -307,9 +307,9 @@
       "topic": "component"
     },
     {
-      "bytes": 15352,
+      "bytes": 16962,
       "id": "component/credentials",
-      "sha256": "b4e8c21dd078a1aa73ecf1c3e2a7b76adcd3cda36de77a8c48211cddf3b1c551",
+      "sha256": "c60ae996247a3ae2dca54578160f33dee7f28073e75d6b8f73bb000d2aabf929",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
@@ -427,17 +427,17 @@
       "topic": "component"
     },
     {
-      "bytes": 11795,
+      "bytes": 11881,
       "id": "component/harness",
-      "sha256": "14007584d3f7ff821693941db306114d9b09829d07344c74a96385813bb88979",
+      "sha256": "6d093c7ed21a18fddc387b1a85cddbd4b36bd0b69ab948cfd97f5c32285f028e",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
     },
     {
-      "bytes": 11312,
+      "bytes": 11669,
       "id": "component/hive",
-      "sha256": "1547501cfa60a0d1276958b86d6c5bdf59bafe441b3c36abce98169becd1b0ee",
+      "sha256": "63aabb7a8158dc62e612394579622a8c2a9b38d5d2fe1bbed8ee0f87a788846f",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -451,9 +451,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9559,
+      "bytes": 10845,
       "id": "component/hub",
-      "sha256": "c7754767e5184b6cf63a99cf2662394733599a1807b445ebdd5626ab9b0297e5",
+      "sha256": "7c2b177d9b618c09c14a9bccb5e841444ba1387dc3849a3361cacdb1eee48965",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -622,11 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-<<<<<<< HEAD
-    "bytes": 728363,
-=======
-    "bytes": 722240,
->>>>>>> parent of d1327b85 (fix: support host-selected provider login symlinks)
+    "bytes": 730920,
     "documents": 77
   }
 }

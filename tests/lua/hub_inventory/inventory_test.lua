@@ -36,9 +36,9 @@ local function define_tests()
             local state = {entries = {}, resolution = {modules = {{name = "bee/bee", version = "1.1.0", digest = "sha256:" .. string.rep("a", 64)}},
                 lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "1.0.0"}}}}}
             local result = assert(inventory.decode(state, 1))
-            test.eq(result.roots[1].id, "bee:deployment")
-            test.eq(result.roots[1].owner, "")
-            test.eq(result.roots[1].version, "1.1.0")
+            test.eq(#result.roots, 0)
+            test.eq(result.deployment, "bee/bee")
+            test.eq(#result.modules[1].roots, 0)
             test.eq(result.modules[1].locked_version, "1.0.0")
             test.eq(result.modules[1].digest, string.rep("a", 64))
             test.is_true(result.modules[1].direct)

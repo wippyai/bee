@@ -21,7 +21,7 @@ local function prepared(entry: {[string]: unknown}, displayed: plan.Migration?):
     local metadata: {[string]: unknown} = {}
     for key, value in pairs(entry_meta) do metadata[key] = value end
     return {
-        plan = {request = {action = "install", component = COMPONENT, version = "1.0.0", parameters = {}, migration_policy = "review"}, base_revision = 1, root_id = "bee.hub.deps:test", digest = "", modules = {},
+        plan = {request = {action = "install", component = COMPONENT, version = "1.0.0", parameters = {}, migration_policy = "review"}, base_revision = 1, root_id = "bee.hub.deps:test", root_operation = "create", digest = "", modules = {},
             missing = {}, migrations = {migration}, starts = {}, capabilities = {}, policy_changes = {}, ready = true},
         resolved = {packages = {{component = COMPONENT, version = "1.0.0", digest = "", entries = {{id = entry.id, kind = entry.kind, meta = metadata, data = entry.data}},
             dependencies = {}, requirements = {requirements = {}, missing = {}}}}, missing = {}},

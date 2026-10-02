@@ -30,6 +30,7 @@ import (
 	eventapi "github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/logs"
 	"github.com/wippyai/runtime/api/payload"
+	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/registry"
 )
 
@@ -38,10 +39,12 @@ const (
 	// reconciles (src/hive/supervisor/enrollment.lua). The owner rewrites it
 	// from its trusted and peers directories, so a local client or Hive peer is
 	// admitted exactly while its public key file exists.
-	enrollmentEntry = "bee.hive.supervisor:enrollment_nodes"
+	enrollmentEntry = "bee.hive.host:enrollment"
 	// enrollmentEntryKind must match the entry's declared kind, so the update is
 	// a same-kind replacement the registry accepts.
 	enrollmentEntryKind = "registry.entry"
+	// Live admission belongs to this native owner, not to package history.
+	enrollmentOverlayOwner = "bee.launch.enrollment"
 )
 
 // enrollmentChangeSet builds the one-entry update that publishes the enrolled
@@ -58,9 +61,7 @@ func enrollmentChangeSet(state string) (registry.ChangeSet, error) {
 	return enrollmentChange(clients, peers), nil
 }
 
-// enrollmentChange follows the runtime's own host-entry write path
-// (cmd/internal/entries/loader.go ApplyToRegistry -> Registry.Apply with an
-// EntryUpdate operation); only validated keys are named.
+// enrollmentChange publishes only validated keys through the owner's overlay.
 func enrollmentChange(clients, peers []trustedKey) registry.ChangeSet {
 	names := func(keys []trustedKey) []any {
 		result := make([]any, 0, len(keys))
@@ -178,14 +179,22 @@ var errSupervisorPending = errors.New("the owner supervisor is not published yet
 // addresses the supervisor by this address, so the owner lists no client
 // before it is published: an eventual name can still carry the owner's
 // previous boot on a Hive peer.
-func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) error {
+func (p *enrollmentPublisherComponent) supervisor(ctx context.Context) (pid.PID, error) {
 	pidRegistry := topapi.GetRegistry(ctx)
 	if pidRegistry == nil {
-		return errors.New("enrollment publisher requires the process names")
+		return pid.PID{}, errors.New("enrollment publisher requires the process names")
 	}
 	supervisor, found := pidRegistry.Lookup("bee.hive.supervisor")
 	if !found || supervisor.Node != p.node || supervisor.Host != "bee.hive.service:supervisor_host" || supervisor.UniqID == "" {
-		return errSupervisorPending
+		return pid.PID{}, errSupervisorPending
+	}
+	return supervisor, nil
+}
+
+func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) error {
+	supervisor, err := p.supervisor(ctx)
+	if err != nil {
+		return err
 	}
 	store, err := rendezvous.New(filepath.Join(p.state, rendezvous.DirectoryName))
 	if err != nil {
@@ -203,19 +212,20 @@ func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) er
 }
 
 type enrollmentPublisherComponent struct {
-	state           string
-	directory       string
-	trusted         string
-	execution       string
-	node            string
-	secret          []byte
-	cancel          context.CancelFunc
-	done            chan struct{}
-	registryClients []string
-	registryPeers   []string
-	registryApplied bool
-	seededClients   []trustedKey
-	seeded          bool
+	state              string
+	directory          string
+	trusted            string
+	execution          string
+	node               string
+	secret             []byte
+	cancel             context.CancelFunc
+	done               chan struct{}
+	registryClients    []string
+	registryPeers      []string
+	registryApplied    bool
+	registryGeneration uint64
+	seededClients      []trustedKey
+	seeded             bool
 }
 
 // seedEnrollment initializes the owner's local enrollment from its membership
@@ -290,6 +300,11 @@ func retireDepartedClients(ctx context.Context, trusted string) error {
 // written first, the supervisor address is published next, and the local
 // enrollment lists only the nodes that write named.
 func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry.Registry, enrollment *rendezvous.Enrollment) error {
+	// The service's name is the existing readiness barrier: before it runs the
+	// deployment's initial LoadState can still clear process-local overlays.
+	if _, err := p.supervisor(ctx); err != nil {
+		return err
+	}
 	if err := retireDepartedClients(ctx, p.trusted); err != nil {
 		return err
 	}
@@ -303,9 +318,28 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 	}
 	clientNames, peerNames := trustedNames(keys), trustedNames(peers)
 	if !p.registryApplied || !slices.Equal(clientNames, p.registryClients) || !slices.Equal(peerNames, p.registryPeers) {
-		if _, err := reg.Apply(ctx, enrollmentChange(keys, peers)); err != nil {
+		writer, ok := reg.(registry.OverlayWriter)
+		if !ok {
+			return errors.New("enrollment publisher requires registry overlays")
+		}
+		changes := enrollmentChange(keys, peers)
+		if !p.registryApplied {
+			entries, generation, err := writer.GetOverlay(enrollmentOverlayOwner)
+			if err != nil {
+				return err
+			}
+			p.registryGeneration = generation
+			if len(entries) == 0 {
+				changes[0].Kind = registry.EntryCreate
+			} else if len(entries) != 1 || entries[0].ID.String() != enrollmentEntry {
+				return errors.New("unexpected enrollment overlay contents")
+			}
+		}
+		generation, err := writer.ApplyOverlay(ctx, enrollmentOverlayOwner, p.registryGeneration, changes)
+		if err != nil {
 			return err
 		}
+		p.registryGeneration = generation
 		p.registryClients, p.registryPeers, p.registryApplied = clientNames, peerNames, true
 	}
 	if err := p.publishSupervisor(ctx); err != nil {
@@ -427,15 +461,16 @@ func subscribeDepartures(lifetime, ctx context.Context) (<-chan struct{}, <-chan
 	return departures, done
 }
 
-// Start arms the publisher and returns. It must not publish yet: the runtime
-// starts boot components before it applies the deployment's registry entries,
-// so the enrollment entry does not exist at this point. Each refresh publishes
-// one snapshot; until the entry exists the write is refused and nothing is
-// listed locally.
+// Start arms the publisher and returns. Publication waits for the supervisor's
+// existing readiness name, after deployment loading. Each refresh publishes
+// one process-local snapshot; until it succeeds no client is listed locally.
 func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 	reg := registry.GetRegistry(ctx)
 	if reg == nil {
 		return errors.New("enrollment publisher requires the registry")
+	}
+	if _, ok := reg.(registry.OverlayWriter); !ok {
+		return errors.New("enrollment publisher requires registry overlays")
 	}
 	log := logs.GetLogger(ctx).Named("bee.launch.enrollment")
 	enrollment, err := rendezvous.NewEnrollment(p.directory)

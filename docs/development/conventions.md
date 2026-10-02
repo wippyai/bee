@@ -245,6 +245,9 @@ make standalone
 
 `make test TEST_JOBS=1` runs the same four isolated Lua shards sequentially
 on a loaded host. The default runs all four in parallel.
+Tests declaring `meta.resources: [docker_daemon]` share one shard so a run
+does not issue container creates from separate test processes against the same
+host daemon. The remaining entries retain their balanced parallel shards.
 
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's

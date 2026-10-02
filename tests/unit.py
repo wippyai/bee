@@ -1,4 +1,4 @@
-"""Run every registered Lua test entry in four isolated, balanced processes."""
+"""Balance Lua entries across four processes while keeping shared-daemon suites together."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack
 import os

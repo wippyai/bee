@@ -1,4 +1,4 @@
-"""A failed Lua shard keeps its selected IDs and complete assertion output."""
+"""Lua shard grouping, metadata discovery and complete failure reporting."""
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -10,7 +10,7 @@ from unit import report_shard, split, test_entries
 from workspace import ROOT
 
 
-class UnitRunnerReportTest(unittest.TestCase):
+class UnitRunnerTest(unittest.TestCase):
     def test_shared_daemon_entries_run_in_one_shard_with_complete_coverage(self):
         entries = [f"fixture:{index}" for index in range(20)]
         shared = [entries[1], entries[7], entries[15]]
@@ -24,7 +24,9 @@ class UnitRunnerReportTest(unittest.TestCase):
             split([f"fixture:{index}" for index in range(8)], ["fixture:missing"])
 
     def test_shared_daemon_discovery_uses_declared_metadata(self):
-        with TemporaryDirectory(dir=ROOT / ".wippy/fixtures") as temporary:
+        fixtures = ROOT / ".wippy/fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(dir=fixtures) as temporary:
             root = Path(temporary)
             tests = root / "tests/lua/arbitrary"
             tests.mkdir(parents=True)

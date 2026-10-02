@@ -251,6 +251,7 @@ entries:
     drain_ms: 2000
     runner_drain_ms: 1000
     fixture: true
+    prepare_options: {}
     executables: {}
     environment: {}
 - name: test_non_native_launch_policy
@@ -285,6 +286,7 @@ entries:
     muse_launch: bee.driver.muse:launch
     opencode_launch: bee.driver.opencode:launch
     configuration_protocol: bee.driver:configuration
+    preferences: bee.driver:preferences
     test: wippy.test:test
     runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service

@@ -137,7 +137,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     policy: bee.harness.carrier:policy
     preferences: bee.driver:preferences
 - name: authoring_policy_test
@@ -148,7 +148,7 @@ entries:
   modules: [registry]
   imports:
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     definitions: bee.harness.launch:definitions
     policy: bee.harness.carrier:policy
 - name: window_hooks_test
@@ -277,7 +277,7 @@ entries:
     machine: bee.harness.carrier:machine
     driver_types: bee.driver:types
     placement_decode: bee.placement:decode
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     policy: bee.harness.carrier:policy
     placement_types: bee.placement:types
     classify: bee.harness.catalog:classify
@@ -1325,7 +1325,7 @@ entries:
     carrier_fixtures: bee.harness.catalog:carrier_fixtures
     principals: bee.test.principals:bound
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions
     launch_policy: bee.harness.carrier:policy
@@ -1631,7 +1631,7 @@ entries:
     principals: bee.test.principals:bound
     test: wippy.test:test
     capability: bee.gov:capability_request
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: elevation_client_policy
   kind: security.policy
   meta:
@@ -2358,7 +2358,7 @@ entries:
     type: test_support
   imports:
     managed_run: bee.harness.launch:managed_run
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: presentation_scope_probe
   kind: function.lua
   source: file://presentation_scope_probe.lua
@@ -2444,7 +2444,7 @@ entries:
     test: wippy.test:test
     exchange: bee.harness.permission:exchange
     adapter: bee.harness.permission:adapter
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     canonical: bee.values:canonical
     harness: bee.threads:harness
 

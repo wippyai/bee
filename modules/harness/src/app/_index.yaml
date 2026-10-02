@@ -82,7 +82,7 @@ entries:
       icon: A
       lifetime: view
       revision: '1'
-      instance_policy: singleton
+      instance_policy: multiple
       group: ''
       role: sessions
       resume_schema: bee.agent.window@1

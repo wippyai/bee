@@ -84,6 +84,7 @@ local function run()
     local data = assert(bounds.object(activation.data))
     local bindings = assert(bounds.ids(data.bindings))
     bindings[#bindings + 1] = "bee.window.native:binding"
+    data.bindings = bindings
     local changes = registry.snapshot():changes()
     changes:update(activation)
     local applied, apply_error = changes:apply()

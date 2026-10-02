@@ -58,6 +58,7 @@ entries:
   imports:
     test: wippy.test:test
     canonical: bee.sync:canonical
+    encoder: bee.values:canonical
     bounds: bee.sync:bounds
     scalar: bee.values:bounds
 - name: protocol_test

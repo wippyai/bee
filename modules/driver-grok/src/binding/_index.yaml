@@ -19,7 +19,7 @@ entries:
   method: handle
   imports:
     configuration: bee.driver.grok.binding:configuration
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
     universal: bee.driver.binding:universal
   security:
     policies:
@@ -61,9 +61,9 @@ entries:
   - hash
   imports:
     canonical: bee.values:canonical
-    quote: bee.driver.kit:quote
-    toml: bee.driver.kit:toml
-    configure_protocol: bee.driver.configuration:configuration
+    quote: bee.driver.binding:quote
+    toml: bee.driver.binding:toml
+    configure_protocol: bee.driver.binding:configuration
 - name: launch
   kind: library.lua
   source: file://launch.lua

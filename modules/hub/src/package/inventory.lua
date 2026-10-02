@@ -183,6 +183,11 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     return {version = version, modules = modules, roots = roots, deployment = deployment, conversion = #conversion > 0 and {version = 1, roots = conversion} or nil, selected = selected}, nil
 end
 
+function M.host_component(root: Root): boolean
+    return root.id:sub(1, 9) == "bee.deps:" and root.component:match("^bee/") ~= nil
+        and (root.owner == "" or root.owner == "bee/bee")
+end
+
 -- Explicit host selections and Hub-authored roots enter planning. Other
 -- host declarations retain their resident closure and cannot be replaced.
 function M.dependency_members(state: Result, self_update: boolean?): {[string]: boolean}
@@ -190,7 +195,7 @@ function M.dependency_members(state: Result, self_update: boolean?): {[string]: 
     for _, root in ipairs(state.roots) do
         local bee_root_child = self_update == true and not state.selected and root.owner == "bee/bee"
         local bee_deployment_root = self_update == true and root.component == "bee/bee" and root.owner == ""
-        if not root.managed and not bee_root_child and not bee_deployment_root then
+        if not root.managed and not bee_root_child and not bee_deployment_root and not (self_update and M.host_component(root)) then
             host_members[root.component] = true
         end
     end
@@ -209,7 +214,7 @@ function M.dependency_members(state: Result, self_update: boolean?): {[string]: 
     end
     local members: {[string]: boolean} = {}
     for _, root in ipairs(state.roots) do
-        if root.managed and not host_members[root.component] then members[root.component] = true end
+        if (root.managed or (self_update and M.host_component(root))) and not host_members[root.component] then members[root.component] = true end
     end
     changed = true
     while changed do

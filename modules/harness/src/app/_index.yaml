@@ -17,29 +17,6 @@ entries:
   modules: [json]
   imports:
     bounds: bee.values:bounds
-- name: hooks
-  kind: library.lua
-  source: file://hooks.lua
-  imports:
-    checkpoint: bee.harness.carrier:checkpoint
-    bounds: bee.values:bounds
-- name: delivery
-  kind: library.lua
-  source: file://delivery.lua
-  modules: [funcs, channel]
-  imports:
-    hooks: bee.harness.app:hooks
-- name: interrupted
-  kind: library.lua
-  source: file://interrupted.lua
-  modules: [funcs, channel, time, uuid]
-  imports:
-    continuation: bee.harness.carrier:continuation
-    checkpoint: bee.harness.carrier:checkpoint
-    bounds: bee.values:bounds
-    hooks: bee.harness.app:hooks
-    delivery: bee.harness.app:delivery
-    records: bee.harness.carrier:hook_records
 - name: restore_view
   kind: library.lua
   source: file://restore_view.lua
@@ -60,8 +37,8 @@ entries:
     machine: bee.harness.carrier:machine
     picker: bee.harness.app:picker
     recovery: bee.harness.app:recovery
-    hooks: bee.harness.app:hooks
-    delivery: bee.harness.app:delivery
+    hooks: bee.harness.carrier:hooks
+    delivery: bee.harness.carrier:delivery
     records: bee.harness.carrier:hook_records
     appearance: bee.ui:appearance
     restore_view: bee.harness.app:restore_view
@@ -73,7 +50,7 @@ entries:
   modules: []
   imports:
     runtime: bee.harness.app:runtime
-    windows: bee.harness.app:windows
+    windows: bee.harness.binding:windows
   meta:
     type: bee.app
     application:
@@ -90,12 +67,6 @@ entries:
       commands:
       - name: agent
         fullscreen: false
-- name: windows
-  kind: library.lua
-  source: file://windows.lua
-  imports:
-    window: bee.placement.native.service:window
-    docker_window: bee.placement.docker.service:window
 - name: agents
   kind: library.lua
   source: file://agents.lua

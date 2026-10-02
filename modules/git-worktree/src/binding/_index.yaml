@@ -45,7 +45,7 @@ entries:
     git_roots: bee.git.worktree.binding:git_roots
     paths: bee.placement.profiles:paths
     bounds: bee.values:bounds
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
 - name: binding
   kind: contract.binding
   meta:

@@ -117,14 +117,19 @@ themselves.
 
 ## Namespaces
 
-`bee.gateway` keeps the component's shared resources and values, including the
-stable database, listener, address, and hook-executable entries. The callable
-lifecycle and hook operations are in `bee.gateway.binding`; the HTTP handlers
-are in `bee.gateway.api`; and endpoint lookup is
+`bee.gateway` declares the component, dependencies and host requirements, and
+exports the shared `protocol` values. Resource references, database configuration
+and the hook-executable entry live in `bee.gateway.env`. Tool catalogs, schemas
+and profile scope values live in `bee.gateway.catalog`; hook normalization lives
+in `bee.gateway.hooks`.
+
+The callable lifecycle and hook operations are in `bee.gateway.binding`; the
+HTTP handlers are in `bee.gateway.api`; and endpoint lookup is
 `bee.gateway.binding:address`. `bee.gateway.migrations`,
 `bee.gateway.persist`, `bee.gateway.security`, and `bee.gateway.service` contain
-the component's migration, storage, policy, and background worker implementation.
-There are no root-namespace forwarding functions for the lifecycle operations.
+the component's migration, storage, authorization, policy and background worker
+implementation. The host-owned listener, router and routes are composed beside
+the handlers in `src/gateway/api`.
 
 The `catalog.from_framework` projection exposes an admitted agent closure's
 selected function tools and traits through the gateway: each function id

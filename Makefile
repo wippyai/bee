@@ -185,6 +185,11 @@ fixture-lint: lua-boundary-check
 .PHONY: values-module
 values-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py
+.PHONY: sessions-unit-check
+sessions-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.tests.sessions interactive_test executor_registry_test locate_test catalog_service_test scheduler_test protocol_test client_test wiring_test attention_test driver_route_test owner_boundary_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gateway sessions_test session_tools_test session_boundary_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py tests.hub.lifecycle lifecycle_test
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py
@@ -292,8 +297,7 @@ workspace-manager-module:
 host-processes-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/control_delivery.py
 saved-profiles-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/saved_profiles.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/saved_profiles.go -runtime "$(abspath $(WIPPY))"
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/saved_profiles.py
 check: saved-profiles-check
 gateway-check:
 	BEE_GOVERNANCE_DB=governance.db BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/gateway.py
@@ -302,6 +306,7 @@ gateway-container-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/gateway_container.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/gateway_container.go -runtime "$(abspath $(WIPPY))" -interface "$(GATEWAY_INTERFACE)" -image "$(DOCKER_IMAGE)"
 gateway-readiness-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go test -count=1 tests/gateway_container.go tests/gateway_container_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/gateway_container.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/gateway_container.go -runtime "$(abspath $(WIPPY))" -readiness-only
 check: gateway-readiness-check

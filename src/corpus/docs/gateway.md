@@ -10,8 +10,10 @@ lifecycle.
 ## Component boundary
 
 Gateway is the `bee/gateway` component, loaded from `modules/gateway/src`.
-Its root namespace keeps shared resources and values. Lifecycle and hook queue
-calls use `bee.gateway.binding:*`; HTTP route handlers use
+Its root namespace declares the component, dependencies and host requirements,
+and exports shared `protocol` values. Resource references and configuration live
+in `bee.gateway.env`. Lifecycle and hook queue calls use
+`bee.gateway.binding:*`; HTTP route handlers use
 `bee.gateway.api:*`; endpoint discovery uses
 `bee.gateway.binding:address`. The root namespace has no forwarding functions
 for those calls.

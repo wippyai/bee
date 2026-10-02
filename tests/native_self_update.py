@@ -108,7 +108,6 @@ def exercise(args, scratch, phase):
             assert "Completed:" in ui.text() and "Receipt state: complete" in ui.text(), ui.text()
             ui.key(b"\x17")
             ui.wait("BEE SETTINGS · ABOUT", timeout=30)
-            ui.key(b"r")
             ui.wait(f"installed {args.to_version}", timeout=180)
             ui.wait(getattr(args, "code_marker", args.marker), timeout=30)
             frame("06-live-about")

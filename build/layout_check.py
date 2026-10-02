@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SDK = {"application": "bee.app"}
 NATIVE_ENTRIES = {"bee.harness.host:environment"}
 ROOT_ENTRIES = json.loads((ROOT / "build/layout_roots.json").read_text())
+REGISTRY_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_][A-Za-z0-9_.-]*(?![A-Za-z0-9_.:-])")
 ROOT_DECLARATIONS = {"ns.definition", "ns.dependency", "ns.requirement", "contract.definition"}
 
 
@@ -55,7 +56,7 @@ def audit(root):
             entries[identity] = (index, entry)
             for group in entry.get("groups", []):
                 groups[namespace + ":" + group].add(identity)
-            graph[identity].update(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", yaml.safe_dump(entry)))
+            graph[identity].update(REGISTRY_REFERENCE.findall(yaml.safe_dump(entry)))
             source = entry.get("source", "")
             if source.startswith("file://"):
                 path = index.parent / source[7:]
@@ -63,7 +64,7 @@ def audit(root):
                     errors.append(f"{identity}: source must exist beside its declaring index: {source}")
                 sources.add(path.resolve())
                 if path.is_file():
-                    graph[identity].update(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", path.read_text()))
+                    graph[identity].update(REGISTRY_REFERENCE.findall(path.read_text()))
                 if module and module != "application" and path.name in {"app.lua", "view.lua"} and children != ("app",):
                     errors.append(f"{identity}: application entry/rendering source belongs in src/app")
             if module and source == "file://types.lua" and children:
@@ -122,11 +123,11 @@ def audit(root):
             ):
                 errors.append(f"{identity}: append requirement cannot default to an array element")
         for ref in refs:
-            if (ref.startswith("bee:") or ref.startswith("bee.")) and ref not in entries and ref not in NATIVE_ENTRIES:
+            if ":" in ref and ref not in entries and ref not in NATIVE_ENTRIES and ref not in external_targets:
                 errors.append(f"{identity}: dangling linker/import target {ref}")
                 dangling += 1
         if index.relative_to(root).parts[0] == "modules" and entry["kind"] == "ns.requirement":
-            for ref in re.findall(r"bee(?:\.[a-z_]+)*:[a-z_]+", str(entry.get("default", ""))):
+            for ref in REGISTRY_REFERENCE.findall(str(entry.get("default", ""))):
                 if ref in entries and entries[ref][0].relative_to(root).parts[0] != "modules":
                     errors.append(f"{identity}: module requirement default names host entry {ref}")
     for edges in graph.values():
@@ -138,7 +139,7 @@ def audit(root):
         for path in folder.rglob("*"):
             if path.is_file() and path.suffix in {".lua", ".yaml", ".py", ".go", ".md", ".sh"}:
                 text = path.read_text()
-                roots.update(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", text))
+                roots.update(REGISTRY_REFERENCE.findall(text))
                 for reference in set(re.findall(r"modules/[a-z-]+/src/[A-Za-z0-9_./-]+\.lua", text)):
                     if not (root / reference).is_file():
                         errors.append(f"{path.relative_to(root)}: dangling production source reference {reference}")

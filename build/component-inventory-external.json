@@ -6,9 +6,10 @@
       "sha256": "ac04ada5befd174f81773606f7ffc14cdc70874002375c04370a541a58fae204",
       "source_module": "modules/placement-docker",
       "target_ids": [
+        "userspace.docker.service:root.service",
         "userspace.docker:database",
-        "userspace.docker:process_host",
-        "userspace.docker.service:root.service"
+        "userspace.docker:docker_client",
+        "userspace.docker:process_host"
       ]
     },
     {

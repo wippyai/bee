@@ -83,7 +83,7 @@ function M.decode(raw: unknown): Status
         local locked = item and version(item.locked_version == nil and "" or item.locked_version, true)
         local available = item and version(item.available_version, true)
         if not item or bounds.fields(item, {"component", "installed_version", "locked_version", "available_version", "update_available"})
-            or not name or seen[name] or not installed or not available or not locked
+            or not name or not name:match("^[%w_.-]+/[%w_.-]+$") or seen[name] or not installed or not available or not locked
             or type(item.update_available) ~= "boolean" then
             return error_status("Invalid Bee pack update row")
         end

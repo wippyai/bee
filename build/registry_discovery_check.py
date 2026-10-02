@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Preserve quoted strings used as patterns, but ignore comments and long examples.
 CALL = re.compile(r'(\(?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\)?)\s*:\s*(match|find|sub|gsub)\s*\(')
 STRINGS = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'')
-IDENTITY = re.compile(r'(?:^|[._])(?:id|ref|target|entry|binding|namespace|component|destination|value|raw|owner|name|token|actor|checked|resource)(?:$|[._])')
+IDENTITY = re.compile(r'(?:^|[._])(?:id|ref|target|entry|binding|namespace|component|comp|destination|value|raw|owner|name|token|actor|checked|resource)(?:$|[._])')
 
 
 def production_paths(root):

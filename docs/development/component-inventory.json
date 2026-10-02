@@ -9169,6 +9169,7 @@
       "target_ids": [
         "userspace.docker.service:root.service",
         "userspace.docker:database",
+        "userspace.docker:docker_client",
         "userspace.docker:process_host"
       ],
       "version": "0.5.17"

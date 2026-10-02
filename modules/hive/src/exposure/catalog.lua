@@ -96,10 +96,6 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
     if entry.kind ~= "function.lua" then return nil, entry_id .. ": exposure requires a function.lua entry" end
     local meta = bounds.object(entry.meta) or {}
     local mode: unknown = meta.hive
-    local supported = false
-    for _, candidate in ipairs(types.MODES) do
-        if candidate == mode then supported = true end
-    end
     if mode ~= "open" and mode ~= "approval" and mode ~= "policy" then return nil, entry_id .. ": meta.hive must be open, approval or policy" end
     local service_id = bounds.id(meta.hive_service)
     if not service_id then return nil, entry_id .. ": meta.hive_service is required" end

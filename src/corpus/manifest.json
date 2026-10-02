@@ -171,23 +171,17 @@
       "topic": "ui"
     },
     {
-      "bytes": 16118,
+      "bytes": 16504,
       "id": "docs/hub_inspection",
-      "sha256": "c7a2be9b5f3e028f98c5a807882af49e93ccc1728bb0598d87bdaa2774863d0b",
+      "sha256": "9e8f1e2fd995c282f0149ef6dbe58a8c8436fa617ec15aab94af11e8bc68bc9f",
       "source": "docs/guides/hub.md",
       "title": "Hub installation and package reads",
       "topic": "registry"
     },
     {
-<<<<<<< HEAD
-      "bytes": 23793,
+      "bytes": 23778,
       "id": "docs/distributed_app_delivery",
-      "sha256": "2ebaffd347d12adc2b60be08b46a6cc9cb9fcaa7f50256373fa02c8eb9af22b4",
-=======
-      "bytes": 23400,
-      "id": "docs/distributed_app_delivery",
-      "sha256": "979435bdf3f891013a3d363615fc1bd35e50290a8ef4d20d9baeb326a107edb4",
->>>>>>> origin/main
+      "sha256": "b538ee05c9999041bfe229eff980e60942c46e30b7932e9c3d1bcfd9e93dcaae",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -660,16 +654,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-<<<<<<< HEAD
-<<<<<<< HEAD
-    "bytes": 768968,
-=======
-    "bytes": 771423,
->>>>>>> origin/main
-    "documents": 80
-=======
-    "bytes": 773620,
+    "bytes": 775445,
     "documents": 81
->>>>>>> origin/main
   }
 }

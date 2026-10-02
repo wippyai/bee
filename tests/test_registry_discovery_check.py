@@ -12,6 +12,7 @@ class DiscoveryCheckTest(unittest.TestCase):
         sources = [
             'if entry.id:sub(1, #prefix) == prefix then return true end',
             'if ref:match("^vendor%.drivers:") then return true end',
+            'if comp:match("^vendor/") then return true end',
             'if entry.id:find("bee.", 1, true) then return true end',
             'local ref = namespace .. ":" .. "configure"',
             'local ref = binding_ref:gsub(":", ".")',
@@ -87,3 +88,27 @@ class DiscoveryCheckTest(unittest.TestCase):
                 {'path': 'src/owner.lua', 'expression': expression, 'count': 1,
                  'reason': 'M0 persisted identity decoder'}]))
             self.assertTrue(any('occurrence count' in item for item in check.audit(tree)))
+
+    def test_unknown_imports_are_checked_without_a_namespace_prefix(self):
+        import tempfile
+        import layout_check
+        import yaml
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(dir=root / '.wippy', prefix='discovery-import-') as folder:
+            tree = Path(folder)
+            index = tree / 'src/wiring/_index.yaml'
+            index.parent.mkdir(parents=True)
+            (index.parent / 'helper.lua').write_text('return {}')
+            index.write_text(yaml.safe_dump({'namespace': 'bee.wiring', 'entries': [
+                {'name': 'helper', 'kind': 'library.lua', 'source': 'file://helper.lua',
+                 'imports': {'foreign': 'vendor.library:missing'}}]}))
+            errors, _, _, _, dangling = layout_check.audit(tree)
+            self.assertEqual(dangling, 1)
+            self.assertTrue(any('vendor.library:missing' in item for item in errors))
+
+    def test_static_references_include_nested_environment_targets(self):
+        import layout_check
+        self.assertEqual(layout_check.REGISTRY_REFERENCE.findall('${env:vendor.resources:database}.client'),
+                         ['vendor.resources:database'])
+        self.assertEqual(layout_check.REGISTRY_REFERENCE.findall('"vendor.binding:root.service"'),
+                         ['vendor.binding:root.service'])

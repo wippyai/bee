@@ -44,8 +44,8 @@ ownership; host admission still authorizes each operation.
 
 A failed create or start records `child.start_failed` with the original runtime
 error, including its operation, deadline or daemon cause. Public attempts expose
-that evidence as `start_failure`; Sessions reports a failed launch with the same
-cause. `exited` requires an observed container exit. Existing false runner exits
+that evidence as `start_failure`; placement events carry it and Sessions reports
+a failed launch with the same cause. `exited` requires an observed container exit. Existing false runner exits
 without an exit result are projected as uncertain when start-failure evidence
 exists; stored rows and schemas remain unchanged.
 
@@ -56,14 +56,6 @@ Created containers after owner loss and restart, including containers that appea
 after an earlier cleanup observation. Recovery errors are logged. Legacy
 unlabelled containers cannot be selected or removed by this ownership mechanism.
 Automatic removal is disabled for attempts so a lost owner can observe outcomes.
-
-A failed create or start records `child.start_failed` with the original runtime
-operation, deadline or daemon error. Status projects that evidence as
-`start_failure`; placement events carry it and Sessions reports the same cause
-as a failed launch. A failed start remains `uncertain` without an invented exit
-code or exit source. Cancellation before runner claim records that no container
-was dispatched. After dispatch, cleanup requires an observed container exit;
-failed or missing observations report uncertainty and cleanup errors explicitly.
 
 The Agent application lives in `bee.harness.app`; its placement constructor
 uses the existing terminal lifecycle and hook processing. The Docker sweeper

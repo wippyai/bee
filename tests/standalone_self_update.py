@@ -16,7 +16,6 @@ from workspace import ROOT, RUNTIME, database_environment
 from native_self_update import exercise as native_exercise
 
 PROBE = r'''
-local canonical = require("canonical")
 local json = require("json")
 local channel = require("channel")
 local time = require("time")
@@ -74,33 +73,6 @@ local function component_change(request: unknown): string
     assert(digest, "component plan has no digest")
     local result = call("apply", request, digest)
     local receipt = bounds.object(result.value)
-    if receipt and receipt.state ~= "complete" then
-        local again = call("plan", request)
-        local refreshed = bounds.object(again.value)
-        if refreshed then
-            for key, value in pairs(plan) do
-                if key ~= "base_revision" and key ~= "digest" and canonical.encode(value, 1048576) ~= canonical.encode(refreshed[key], 1048576) then
-                    logger:info("COMPONENT_PLAN_DRIFT", {field = key})
-                    if key == "modules" then
-                        local original = bounds.array(value, 512)
-                        local changed = bounds.array(refreshed[key], 512)
-                        if original and changed then
-                            for index, raw in ipairs(original) do
-                                local left, right = bounds.object(raw), bounds.object(changed[index])
-                                if left and right then
-                                    for field, item in pairs(left) do
-                                        if canonical.encode(item, 1048576) ~= canonical.encode(right[field], 1048576) then
-                                            logger:info("COMPONENT_MODULE_DRIFT", {component = left.component, field = field})
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
     assert(result.ok == true and receipt and receipt.state == "complete", tostring(result.message or (receipt and receipt.message)))
     assert(process.registry.register("bee.hub.publisher"), "could not hold publisher name during completed replay")
     local replayed = call("apply", request, digest)
@@ -552,7 +524,7 @@ def exercise(folder, baseline, target, explicit):
             (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version).replace("__COMPONENT__", COMPONENT).replace("__NEXT_COMPONENT__", NEXT_COMPONENT))
             imports = {"bounds": "bee.threads.records:bounds", "inventory": "bee.hub:inventory",
                        "view": "bee.settings.app:view", "appearance": "bee.app:appearance",
-                       "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog", "canonical": "bee.protocol:canonical"}
+                       "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog"}
             entries = [
                 {"name": "read", "kind": "security.policy", "policy": {
                     "actions": ["registry.get", "registry.resolution.get", "bee.hub.read"], "resources": "*", "effect": "allow"}},

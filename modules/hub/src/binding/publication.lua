@@ -172,10 +172,9 @@ local function decode_receipt(raw: unknown): Receipt?
         for _, item in ipairs(before) do if item.change ~= "keep" or item.version == "" then return nil end end
         removal = {root_digest = root_digest, before_modules = before, published = supplied.published}
     end
-    local result: Receipt = {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
+    return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
         baseline_revision = baseline, message = message, action = action, code = code, expected_modules = expected, migration_work = work,
         request = request, removal = removal, root_id = root_id, conversion = conversion, lifecycle_work = lifecycle_work, effect_digest = effect_digest}
-    return result
 end
 
 function M.status(raw: unknown, options: unknown?): Result

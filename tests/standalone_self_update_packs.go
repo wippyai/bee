@@ -115,7 +115,9 @@ func main() {
 				}
 			}
 			if declaration, found := config.Declarations[entry.ID.String()]; found {
-				if parameters, selected := declaration.Data["parameters"]; selected { fields["parameters"] = parameters }
+				if parameters, selected := declaration.Data["parameters"]; selected {
+					fields["parameters"] = parameters
+				}
 			}
 			if source := config.Sources[entry.ID.String()]; source != "" {
 				code, err := os.ReadFile(source)

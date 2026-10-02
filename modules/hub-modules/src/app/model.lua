@@ -466,7 +466,7 @@ function M.recover(state: State): string?
     local operation = state.selected_operation
     if not operation then return "select an operation first" end
     if operation.state ~= "prepared" and operation.state ~= "published" and operation.state ~= "recovery_required" then
-        return "only published or recovery-required operations can be recovered"
+        return "only prepared, published or recovery-required operations can be recovered"
     end
     if not operation.request then return "this operation has no stored request for recovery" end
     local preserved = clone(operation.request)

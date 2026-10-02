@@ -39,7 +39,7 @@ local function handle(raw: unknown): {[string]: unknown}
         return {ok = true, replayed = false, value = {modules = {{component = "acme/example", version = "1.0.0",
             source = "hub", direct = true, used_by = {}}}, roots = {{
             id = "bee.hub.deps:cc95b0f7498a74222c0f5db968f6ff26b78e569d19ce551d4c052d26139818b1",
-            component = "acme/example", version = "1.0.0", parameters = {
+            component = "acme/example", version = "1.0.0", managed = true, parameters = {
                 {name = "example:enabled", value = stale and false or true},
                 {name = "example:name", value = stale and "stale" or "saved"},
                 {name = "example:config", value = {mode = stale and "stale" or "saved", retries = stale and 99 or 3}},
@@ -97,7 +97,7 @@ local function handle(raw: unknown): {[string]: unknown}
         return {ok = true, replayed = false, value = {version = 1, modules = {
             {component = "bee/bee", version = "1.0.0", source = "hub", direct = true, used_by = {}},
             {component = "bee/application", version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}},
-        }, roots = {{id = "bee:deployment", component = "bee/bee", version = "1.0.0", parameters = {
+        }, roots = {{id = "bee:deployment", component = "bee/bee", version = "1.0.0", managed = false, parameters = {
             {name = "bee:target", value = {channel = "stable"}},
         }}}}}
     elseif raw.operation == "updates" then

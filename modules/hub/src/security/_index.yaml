@@ -35,7 +35,7 @@ entries:
 - name: dependency_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [registry.create.ns.dependency, registry.update.ns.dependency, registry.delete.ns.dependency], resources: ['bee.hub.deps:*', 'bee:deployment'], effect: allow}
+  policy: {actions: [registry.create.ns.dependency, registry.update.ns.dependency, registry.delete.ns.dependency], resources: ['bee.hub.deps:*', 'bee:deployment', 'bee.deps:*'], effect: allow}
 - name: receipt_policy
   kind: security.policy
   groups: [execution_scope]

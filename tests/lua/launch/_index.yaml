@@ -42,7 +42,7 @@ entries:
   imports:
     test: wippy.test:test
     retained_protocol: bee.launch:retained_protocol
-    startup_watchdog: bee.launch:startup_watchdog
+    startup_progress: bee.app:startup_progress
     workspaces: bee.storage:binding
 - name: hosts_test
   kind: function.lua

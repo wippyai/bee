@@ -67,6 +67,9 @@ entries:
     caller: bee.app:caller
     frame: bee.app:frame
     bounds: bee.values:bounds
+- name: startup_progress
+  kind: library.lua
+  source: file://startup_progress.lua
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua

@@ -2206,6 +2206,15 @@ UPDATE bee_gateway_bindings SET policy_ref = 'bee.launch.service:workspace_hosts
 
 
 ]]
+local DESKTOP_REFERENCES_SQL = [[
+UPDATE bee_gateway_surfaces SET surface_json = replace(surface_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(surface_json) AND instr(surface_json, '"bee.session:main"') > 0;
+UPDATE bee_gateway_surfaces SET active_json = replace(active_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(active_json) AND instr(active_json, '"bee.session:main"') > 0;
+UPDATE bee_gateway_access_grants SET traits_json = replace(traits_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(traits_json) AND instr(traits_json, '"bee.session:main"') > 0;
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.desktop.service:main' WHERE policy_ref = 'bee.session:main';
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},
         {id = 3, name = "credentials", sql = CREDENTIALS_SQL, rebuild = true}, {id = 4, name = "materialization", sql = MATERIALIZATION_SQL, rebuild = false},
@@ -2221,6 +2230,7 @@ function M.all(): {Migration}
         {id = 15, name = "app_sdk_references", sql = APP_SDK_SQL, rebuild = false},
         {id = 16, name = "layout_registry_references", historical_sql = {ORIGINAL_SQL_16}, sql = LAYOUT_REFERENCES_SQL, rebuild = false},
         {id = 17, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
-        {id = 18, name = "telemetry_owner_reference_repair", sql = TELEMETRY_OWNER_REPAIR_SQL, rebuild = false}}
+        {id = 18, name = "telemetry_owner_reference_repair", sql = TELEMETRY_OWNER_REPAIR_SQL, rebuild = false},
+        {id = 19, name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false}}
 end
 return M

@@ -19,7 +19,7 @@ entries:
   method: handle
   imports:
     configuration: bee.driver.opencode.binding:configuration
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
     universal: bee.driver.binding:universal
   security:
     policies:
@@ -61,7 +61,7 @@ entries:
   - hash
   imports:
     canonical: bee.values:canonical
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
 - name: launch
   kind: library.lua
   source: file://launch.lua

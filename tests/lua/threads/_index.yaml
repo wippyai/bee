@@ -133,6 +133,7 @@ entries:
     - bee.threads.binding:operation_lookup
     - bee.threads.binding:operation_describe
     - bee.threads.binding:feed_read
+    - bee.threads.binding:node_summary
     effect: allow
 - name: session_owner_test_policy
   kind: security.policy
@@ -142,6 +143,13 @@ entries:
     actions:
     - bee.threads.sessions_owner
     resources: '*'
+    effect: allow
+- name: summary_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.threads.sessions.summary]
+    resources: [node]
     effect: allow
 - name: sessions_other_workspace_test_policy
   kind: security.policy
@@ -418,6 +426,7 @@ entries:
   - sql
   - uuid
   imports:
+    events: bee.driver.codec:events
     test: wippy.test:test
     harness: bee.threads:harness
     owner: bee.threads.persist:owner

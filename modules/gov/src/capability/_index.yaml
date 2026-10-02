@@ -32,3 +32,13 @@ entries:
     canonical: bee.values:canonical
     capability_model: bee.capability:model
     capability_grants: bee.gov.capability:capability_grants
+
+- name: capability_access
+  kind: library.lua
+  source: file://capability_access.lua
+  modules: [registry, security, hash]
+  imports:
+    capability_gateway: bee.gov.capability:capability_gateway
+    capability_grants: bee.gov.capability:capability_grants
+    capability_model: bee.capability:model
+    workspace_applications: bee.gov.workspace:workspace_applications

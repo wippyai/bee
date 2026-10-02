@@ -24,3 +24,7 @@ entries:
   source: file://protocol.lua
   imports:
     arguments: bee.app:arguments
+- name: dependency_ui
+  kind: ns.dependency
+  component: bee/ui
+  version: '*'

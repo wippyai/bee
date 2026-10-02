@@ -8,7 +8,7 @@ entries:
   modules: [process, channel, time, logger]
   imports:
     installation: bee.gateway.security:installation
-    approval_service: bee.approvals.service:service
+    approval_service: bee.approvals.binding:service
 - name: publication_worker
   kind: process.lua
   source: file://publication_worker.lua
@@ -16,4 +16,4 @@ entries:
   modules: [process, channel, time, logger]
   imports:
     publish: bee.gateway.security:publish
-    approval_service: bee.approvals.service:service
+    approval_service: bee.approvals.binding:service

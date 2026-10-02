@@ -119,8 +119,8 @@ def answer_entries():
     return [{"id": DEFINITION_ID, "kind": "process.lua",
              "data": {"source": source, "method": "main",
                       "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql"],
-                      "imports": {"client": "bee.app:client", "appearance": "bee.app:appearance",
-                                  "frame": "bee.app:frame", "sessions": "bee.app:sessions"}},
+                      "imports": {"client": "bee.app:client", "appearance": "bee.ui:appearance",
+                                  "frame": "bee.ui:frame", "sessions": "bee.app:sessions"}},
              "meta": {"type": "bee.app", "application": {
                  "api_version": 1, "lifetime": "view", "revision": "1", "title": TITLE,
                  "instance_policy": "singleton", "resume_schema": "tally.v1", "restart_policy": "automatic"}}},

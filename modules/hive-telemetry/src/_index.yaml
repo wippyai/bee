@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee hive telemetry
-    comment: Optional cluster telemetry; host composition and policy selection remain in Bee
+    comment: Optional cluster telemetry; host composition and policy selection remain
+      in Bee
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
@@ -21,10 +22,16 @@ entries:
   meta:
     capability: hive.expose
     parameters:
-      operations: [bee.hive.telemetry.binding:presence, bee.hive.telemetry.binding:stats, bee.hive.telemetry.binding:catalog_list,
-        bee.hive.telemetry.binding:holdings, bee.hive.telemetry.binding:cluster]
+      operations:
+      - bee.hive.telemetry.binding:presence
+      - bee.hive.telemetry.binding:stats
+      - bee.hive.telemetry.binding:catalog_list
+      - bee.hive.telemetry.binding:holdings
+      - bee.hive.telemetry.binding:cluster
+      - bee.hive.telemetry.binding:node_summary
       mode: open
-      audiences: ['*']
+      audiences:
+      - '*'
     reason: Expose the package open telemetry operations to Hive peers
     value_kind: security.policy
   targets:
@@ -63,6 +70,53 @@ entries:
     comment: Host-selected grants for these package operations
   targets:
   - entry: bee.hive.telemetry.binding:cluster
+    path: .security.policies
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: dependency_approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: '*'
+- name: dependency_node
+  kind: ns.dependency
+  component: bee/node
+  version: '*'
+- name: target_peers
+  kind: ns.requirement
+  default: bee.hive.telemetry.env:empty_peers
+  targets:
+  - entry: bee.hive.telemetry.env:peer_source
+    path: .resource_ref
+  - entry: bee.hive.telemetry.security:peer_source_policy
+    path: .policy.resources
+- name: status_contract
+  kind: contract.definition
+  methods:
+  - name: snapshot
+    description: Read bounded live Hive node names, connectivity and owner-reported
+      running session and pending approval counts
+  - name: detail
+    description: Read one enrolled Hive node by node_id with the same counts-only
+      status fields
+- name: dependency_gov
+  kind: ns.dependency
+  component: bee/gov
+  version: '*'
+- name: target_status_policies
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: bee.hive.telemetry.binding:snapshot
+    path: .security.policies
+  - entry: bee.hive.telemetry.binding:detail
+    path: .security.policies
+- name: target_summary_policies
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: bee.hive.telemetry.binding:node_summary
     path: .security.policies
 - name: dependency_values
   kind: ns.dependency

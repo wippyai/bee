@@ -30,8 +30,9 @@ authorize them. Component services own their domain protocol and state.
 
 | Layer | Owns | Boundary |
 |---|---|---|
-| Core | Workspace/session lifetime, composition, focus, geometry, admission and application lifecycle | Runtime primitives and shared value contracts; no default-app implementation imports |
-| Application SDK UI values | Appearance and reusable presentation helpers, currently exported by `bee/application` | Value contracts only; a separate UI package remains a proposal |
+| Core | Workspace/client lifetime, composition, admission and application lifecycle | Runtime primitives and shared value contracts; no default-app implementation imports |
+| Desktop component | Pure scene, focus, geometry and committed projection | Host-selected policies and client lifetime; preserved topics and handoff checkpoints |
+| Shared UI values | Frame, semantic appearance and bounded text in `bee/ui`; presentation kits in `bee/application` | Value contracts only; UI has no application SDK or owner-service dependencies |
 | Default apps | Terminal, Settings, Process Manager and other bundled apps | Standalone processes with explicit grants and core protocols |
 | Optional packages | Installed applications, coding tools, harnesses, models and services | Published contracts and host admission |
 | Independent subsystems | Workspace catalog/checkpoints, Threads, Hub reads/planning/local apply, governed overlay authoring/review/apply/recovery, approvals, sync and scoped MCP | Authenticated operation contracts; each owns its state and migrations |
@@ -50,8 +51,9 @@ gateway hook endpoints and harness policies. Placement, credentials and
 resources own their corresponding roots, host requirements and policies.
 Driver components own their launch policies and default host requirements.
 Requirements use package defaults that an assembly can replace. The Gateway
-component owns the MCP listener, tool routes and tool policies; the harness
-package adds only the hook endpoints used by managed agents.
+component supplies MCP handlers, tool catalogs and tool policies; the host owns
+the listener, router and routes. The harness hook endpoints call the Gateway's
+hook handlers under host-selected policies.
 
 The Agent application's public definition ID and driver definition IDs remain
 unchanged when their source moves into these packages. Saved workspace state

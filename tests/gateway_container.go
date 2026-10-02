@@ -118,6 +118,19 @@ func copyTree(from, to string) error {
 	})
 }
 
+func configureGatewayListener(root, address string) error {
+	manifestPath := filepath.Join(root, "src/gateway/api/_index.yaml")
+	manifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	if strings.Count(string(manifest), "127.0.0.1:0") != 2 {
+		return fmt.Errorf("gateway listener fixture seam changed")
+	}
+	changed := strings.ReplaceAll(string(manifest), "127.0.0.1:0", address+":0")
+	return os.WriteFile(manifestPath, []byte(changed), 0600)
+}
+
 func run() error {
 	runtime := flag.String("runtime", "", "selected Bee runtime")
 	address := flag.String("interface", "", "explicit local Docker bridge IPv4 address")
@@ -133,11 +146,18 @@ func run() error {
 		!regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(*image))) {
 		return fmt.Errorf("runtime, private IPv4 interface and immutable local Node image are required")
 	}
-	root, err := os.MkdirTemp("", "bee-gateway-container-")
+	if err := os.MkdirAll(".wippy/fixtures", 0700); err != nil {
+		return err
+	}
+	root, err := os.MkdirTemp(".wippy/fixtures", "bee-gateway-container-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(root)
+	root, err = filepath.Abs(root)
+	if err != nil {
+		return err
+	}
 	if err := copyTree("src", filepath.Join(root, "src")); err != nil {
 		return err
 	}
@@ -159,24 +179,15 @@ func run() error {
 	if err := os.MkdirAll(filepath.Join(root, ".wippy"), 0700); err != nil {
 		return err
 	}
-	manifestPath := filepath.Join(root, "src", "_index.yaml")
+	if err := configureGatewayListener(root, *address); err != nil {
+		return err
+	}
+	manifestPath := filepath.Join(root, "modules/gateway/src/security/_index.yaml")
 	manifest, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return err
 	}
-	changed := strings.ReplaceAll(string(manifest), "127.0.0.1:0", *address+":0")
-	if strings.Count(string(manifest), "127.0.0.1:0") != 2 {
-		return fmt.Errorf("gateway listener fixture seam changed")
-	}
-	if err := os.WriteFile(manifestPath, []byte(changed), 0600); err != nil {
-		return err
-	}
-	manifestPath = filepath.Join(root, "modules/gateway/src/security/_index.yaml")
-	manifest, err = os.ReadFile(manifestPath)
-	if err != nil {
-		return err
-	}
-	changed = string(manifest)
+	changed := string(manifest)
 	readinessExpression := func(ip string) string {
 		return fmt.Sprintf(`(action == "http_client.private_ip" && resource == %q) || (action == "http_client.request" && resource matches %q)`, ip, "^http://"+regexp.QuoteMeta(ip)+":[0-9]+/ready$")
 	}
@@ -276,31 +287,32 @@ func run() error {
 	served := make(chan struct{})
 	go func() { defer close(served); _ = server.Serve(listener) }()
 	defer func() { _ = server.Close(); <-served }()
+	environment := map[string]string{"BEE_CONTAINER_CALLBACK": callbackURL}
+	for _, name := range []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance", "client"} {
+		environment["BEE_"+strings.ToUpper(name)+"_DB"] = filepath.Join(root, name+".db")
+	}
+	var fixtureEnvironment []string
+	for _, item := range os.Environ() {
+		key, _, _ := strings.Cut(item, "=")
+		if _, overridden := environment[key]; !overridden {
+			fixtureEnvironment = append(fixtureEnvironment, item)
+		}
+	}
+	for key, value := range environment {
+		fixtureEnvironment = append(fixtureEnvironment, key+"="+value)
+	}
+	lint := exec.Command(*runtime, "lint", "--strict-any", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")
+	lint.Dir, lint.Env = root, fixtureEnvironment
+	if output, err := lint.CombinedOutput(); err != nil {
+		return fmt.Errorf("container fixture lint: %v\n%s", err, output)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, *runtime, "--console", "run", "gateway-container-probe", "--host", "bee:workers", "--set", "registry.history_path="+filepath.Join(root, "registry.db"))
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Cancel = func() error { return syscall.Kill(-command.Process.Pid, syscall.SIGKILL) }
 	command.WaitDelay = 5 * time.Second
-	command.Dir = root
-	environment := map[string]string{"BEE_CONTAINER_CALLBACK": callbackURL}
-	for _, name := range []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance", "client"} {
-		environment["BEE_"+strings.ToUpper(name)+"_DB"] = filepath.Join(root, name+".db")
-	}
-	for _, item := range os.Environ() {
-		key, _, _ := strings.Cut(item, "=")
-		if _, overridden := environment[key]; !overridden {
-			command.Env = append(command.Env, item)
-		}
-	}
-	for key, value := range environment {
-		command.Env = append(command.Env, key+"="+value)
-	}
-	lint := exec.CommandContext(ctx, *runtime, "lint")
-	lint.Dir, lint.Env = root, command.Env
-	if output, err := lint.CombinedOutput(); err != nil {
-		return fmt.Errorf("container fixture lint: %v\n%s", err, output)
-	}
+	command.Dir, command.Env = lint.Dir, lint.Env
 	output, runError := command.CombinedOutput()
 	mu.Lock()
 	defer mu.Unlock()

@@ -89,6 +89,8 @@ entries:
   meta:
     comment: Host-selected grants for these package operations
   targets:
+  - entry: bee.approvals.binding:node_summary
+    path: .security.policies
   - entry: bee.approvals.binding:request
     path: .security.policies
   - entry: bee.approvals.binding:feed_snapshot

@@ -356,9 +356,10 @@ local function remeasure_restoration(config: Config, intent: Object): Result?
     local proposal = object(current.capability_proposal)
     local installed = object(current.capability_installed)
     if proposal or installed or intent.grant_predecessor_digest ~= nil then
-        if not proposal or not installed or installed.digest ~= proposal.digest
-            or installed.artifact_digest ~= intent.artifact_digest or installed.version ~= intent.version
-            or installed.approval_id ~= intent.approval_id then
+        if not proposal or (not installed and intent.application_admission_digest == nil)
+            or (installed and (installed.digest ~= proposal.digest
+                or installed.artifact_digest ~= intent.artifact_digest or installed.version ~= intent.version
+                or installed.approval_id ~= intent.approval_id)) then
             return failure("CONFLICT", "settled activation grant no longer matches its artifact, version and approval")
         end
     end

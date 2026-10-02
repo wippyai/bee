@@ -42,7 +42,7 @@ output:close(); tty.stop()             -- on process.event.CANCEL
 ## Layout, styles and input
 
 * A frame is plain rows. Bee's apps draw every frame through
-  `bee.app:frame` (below), which reads the theme from
+  `bee.ui:frame` (below), which reads the theme from
   `require("appearance").theme(preferences.theme)` and styles each run with a
   semantic role; the view interprets nothing.
 * Layout is arithmetic on `width`/`height`; the frame bounds each run by display
@@ -57,8 +57,8 @@ output:close(); tty.stop()             -- on process.event.CANCEL
 
 ## Application frame
 
-`bee.app:frame` is the shared toolkit every Bee application draws with.
-Import it as `frame = "bee.app:frame"` next to `appearance`. One frame
+`bee.ui:frame` is the shared toolkit every Bee application draws with.
+Import it as `frame = "bee.ui:frame"` next to `appearance`. One frame
 reads top to bottom: row 1 header (uppercase title, muted summary at the right),
 optional tabs, the work area (tables, rows, empty states), the action bar on the
 penultimate row with one primary button, and the footer on the final row with the
@@ -306,7 +306,7 @@ frame.table(rows, 1, 4, {columns = {{title = "Process", width = 0}, {title = "St
 ```text
  PROCESS                       STEPS
  bee.host:main                 ████████████    96
- bee.desktop.service:main              ██              16
+ bee.desktop.service:main      ██              16
  bee.apps:broker               ████████▊       70
 ```
 

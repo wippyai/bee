@@ -40,6 +40,20 @@ OptionSpec value schemas, form labels, contexts, capability evidence and renders
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
 
+Each provider exposes one `.binding` child. Sessions resolves every driver
+method in the selected binding's namespace and requires a callable target;
+the external executor checks that the turn uses that same namespace. Binding
+operations specialize the universal implementation with their fixed descriptor.
+Provider configuration renderers retain their own formats and permissions.
+
+Shared configuration calls, option rendering, shell quoting and TOML literals
+live in `bee.driver.binding`. Observation builders and the normalizer boundary
+live in `bee.driver.codec`; framing and stream decoding live in
+`bee.driver.transport`. Consumers import these helpers directly. Helper moves
+preserve provider binding and profile IDs, descriptor schemas and codec IDs
+(M0/M5); they do not change owner stores or migrate rows. Active consumers use
+their existing process lifecycle to load changed imports.
+
 `login_evidence` declares a display-only `command` and one to eight `any_of`
 alternatives. One positive observation makes the login ready. If all checks
 are negative it is unconfigured; if none is positive and a check cannot run,
@@ -144,3 +158,8 @@ the exact directories against host-admitted write roots before asking the CLI
 to use its provider-specific option.
 
 Descriptor config renders encode bounded declared objects, arrays, numbers and booleans as JSON/TOML values, or text files in the admitted private home. Set and append operations extend the existing placement composition recipes, preserving ambient configuration. Literal tokens and canonical field tokens use the same renderer. The owner-derived `provider.system_prompt_files` token supplies the prompt-file array for OpenCode; it is not a saved option. Configuration delivery may contain a bounded `environment` map of nonreserved literal variables, persisted with files and arguments. Credential values remain broker references and are never stringified or returned by the driver.
+
+Driver observation builders bound text by its encoded size through the nested
+session journal envelopes. Long text splits at Unicode character boundaries;
+tool previews and error messages remain bounded, and oversized extension
+payloads retain an omission-size object rather than invalid partial JSON.

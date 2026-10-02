@@ -8,7 +8,7 @@ entries:
   meta:
     type: test_support
   imports:
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration
 - name: activation_test
   kind: function.lua
   source: file://activation_test.lua
@@ -162,7 +162,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    hooks: bee.harness.app:hooks
+    hooks: bee.harness.carrier:hooks
     checkpoint: bee.harness.carrier:checkpoint
 - name: window_ready_policy
   kind: registry.entry
@@ -258,7 +258,7 @@ entries:
     test: wippy.test:test
     recovery: bee.harness.app:recovery
     restore_view: bee.harness.app:restore_view
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua
@@ -557,8 +557,8 @@ entries:
     codex_launch: bee.driver.codex.binding:launch
     codex_configuration: bee.driver.codex.binding:configuration
     placement_fixture: bee.harness.catalog:placement_fixture
-    configuration: bee.driver.configuration:configuration
-    quote: bee.driver.kit:quote
+    configuration: bee.driver.binding:configuration
+    quote: bee.driver.binding:quote
 - name: gateway_client_policy
   kind: security.policy
   meta:
@@ -1470,7 +1470,7 @@ entries:
     test: wippy.test:test
     adapter: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
 - name: permission_fixture_adapter
   kind: registry.entry
   meta:
@@ -1799,7 +1799,7 @@ entries:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
-    approvals: bee.approvals.service:service
+    approvals: bee.approvals.binding:service
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: codex_auth_test
   kind: function.lua
@@ -1821,7 +1821,7 @@ entries:
     test: wippy.test:test
     launch: bee.driver.codex.binding:launch
     driver_types: bee.driver:types
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
 - name: codex_sentinel_storage
   kind: env.storage.memory
   meta:
@@ -1987,7 +1987,7 @@ entries:
     adapter: bee.harness.permission:adapter
     stream_json: bee.driver.transport:stream_json
     protocol: bee.driver.claude.binding:protocol
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
 - name: claude_control_fixture_policy
   kind: registry.entry
   meta:
@@ -2050,7 +2050,7 @@ entries:
     principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
-    approvals: bee.approvals.service:service
+    approvals: bee.approvals.binding:service
     policy: bee.harness.carrier:policy
     launch: bee.driver.claude.binding:launch
     driver_types: bee.driver:types
@@ -2152,8 +2152,8 @@ entries:
     claude: bee.driver.claude.binding:launch
     machine: bee.harness.carrier:machine
     catalog: bee.harness.catalog:catalog
-    hooks: bee.harness.app:hooks
-    interrupted: bee.harness.app:interrupted
+    hooks: bee.harness.carrier:hooks
+    interrupted: bee.harness.carrier:interrupted
 - name: scope_probe_allow
   kind: security.policy
   meta:

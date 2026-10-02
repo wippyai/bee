@@ -4,8 +4,7 @@ entries:
 - name: input
   kind: library.lua
   source: file://input.lua
-  modules:
-  - tty
+  modules: [tty]
 - name: decode
   kind: library.lua
   source: file://decode.lua

@@ -62,6 +62,15 @@ local function has(report: preflight.Report, code: string): boolean
 end
 local function define_tests()
     test.describe("Governance preflight", function()
+        test.it("blocks an application restart policy without a checkpoint schema", function()
+            local candidate, context = fixture()
+            candidate.entries[1].application_checkpoint_invalid = true
+            local report = checked(candidate, context)
+            test.is_false(report.ready)
+            test.is_true(has(report, "APPLICATION_CHECKPOINT"))
+            candidate.entries[1].application_checkpoint_invalid = false
+            test.is_true(checked(candidate, context).ready)
+        end)
         test.it("requires explicit child namespace ownership and host admission", function()
             local candidate, context = fixture()
             candidate.entries[1].id = "demo.child:run"
@@ -175,7 +184,7 @@ local function define_tests()
             local manifest = assert(protected_kernel.decode(entry))
             local shipped = {"bee.gateway", "bee.harness", "bee.credentials", "bee.placement",
                 "bee.placement.native", "bee.resources", "bee.threads", "bee.hive", "bee.env", "bee.sync",
-                "bee.host", "bee.session", "bee.client", "bee.desktop", "bee.terminal", "bee.node",
+                "bee.host", "bee.client", "bee.desktop", "bee.terminal", "bee.node",
                 "bee.workspace"}
             for _, namespace in ipairs(shipped) do
                 local shadowed: preflight.Candidate, shadow_context: preflight.Context = fixture()

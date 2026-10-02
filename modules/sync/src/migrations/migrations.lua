@@ -1550,6 +1550,14 @@ UPDATE bee_sync_receipts SET request_json = (
 
 
 ]]
+local DESKTOP_REFERENCES_SQL = [[
+UPDATE bee_sync_projections SET value_json = replace(value_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(value_json) AND instr(value_json, '"bee.session:main"') > 0;
+UPDATE bee_sync_events SET payload_json = replace(payload_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(payload_json) AND instr(payload_json, '"bee.session:main"') > 0;
+UPDATE bee_sync_receipts SET request_json = replace(request_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(request_json) AND instr(request_json, '"bee.session:main"') > 0;
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "owner_local_feed", sql = INITIAL, rebuild = false},
         {id = 2, name = "source_qualified_version_replicas", rebuild = false, sql = [[
@@ -1644,6 +1652,7 @@ UPDATE bee_sync_receipts SET request_json = replace(replace(replace(replace(repl
 ]]},
         {id = 8, name = "layout_registry_references", historical_sql = {ORIGINAL_SQL_8}, sql = LAYOUT_REFERENCES_SQL, rebuild = false},
         {id = 9, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
-        {id = 10, name = "telemetry_owner_reference_repair", sql = TELEMETRY_OWNER_REPAIR_SQL, rebuild = false}}
+        {id = 10, name = "telemetry_owner_reference_repair", sql = TELEMETRY_OWNER_REPAIR_SQL, rebuild = false},
+        {id = 11, name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false}}
 end
 return M

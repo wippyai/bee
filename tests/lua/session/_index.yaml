@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.session
+namespace: bee.desktop.service
 entries:
 - name: handoff_test
   kind: function.lua
@@ -25,6 +25,6 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [process, channel, registry, time]
   security:
-    policies: [bee.session:handoff_apply_policy]
+    policies: [bee.desktop.service:handoff_apply_policy]
   imports:
     test: wippy.test:test

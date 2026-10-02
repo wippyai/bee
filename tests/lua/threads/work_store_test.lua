@@ -1,5 +1,6 @@
 -- MIT. Launch work remains in the thread journal and settles per WorkRef.
 local test = require("test")
+local events = require("events")
 local harness = require("harness")
 local owner_store = require("owner")
 local WORKSPACE = string.rep("a", 32)
@@ -17,6 +18,29 @@ end
 
 local function define_tests()
     test.describe("Threads canonical session work store", function()
+        test.it("reports executing sessions across workspaces only to an admitted summary reader", function()
+            local reader = harness.principal("summary-reader", {"bee.threads:summary_test_policy"})
+            local sessions = harness.session_owner(WORKSPACE)
+            test.eq(harness.code(sessions:call("node_summary", {})), "DENIED")
+            test.eq(harness.code(reader:call("node_summary", {workspace_id = WORKSPACE})), "INVALID_ARGUMENT")
+            local before = harness.value(reader:call("node_summary", {}))
+            local baseline = before.running_sessions
+            if type(baseline) ~= "number" then error("invalid running session count") end
+            local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
+            harness.value(sessions:call("work_send", {session = opened.session, input = "private fixture input", operation_key = harness.key()}))
+            local reserved = harness.value(sessions:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            test.eq(harness.value(reader:call("node_summary", {})).running_sessions, before.running_sessions)
+            local pulled = harness.value(sessions:call("turn_pull", {turn = reserved.turn, claim = reserved.claim}))
+            harness.value(sessions:call("turn_accept", {turn = reserved.turn, claim = reserved.claim,
+                input_digest = pulled.input_digest, checkpoint = {}, operation_key = harness.key()}))
+            local running = harness.value(reader:call("node_summary", {}))
+            test.eq(running.running_sessions, baseline + 1)
+            test.eq(running.items, nil)
+            test.eq(running.input, nil)
+            harness.value(sessions:call("work_settle", {turn = reserved.turn, claim = reserved.claim,
+                result = result("succeeded"), operation_key = harness.key()}))
+            test.eq(harness.value(reader:call("node_summary", {})).running_sessions, before.running_sessions)
+        end)
         test.it("attaches an admitted participant to its workspace thread while refusing outsiders", function()
             local owner = harness.principal("thread-owner", harness.ALL, WORKSPACE)
             local thread = harness.thread(owner, "host-shared interactive thread")
@@ -276,10 +300,18 @@ local function define_tests()
             test.is_true(replay.replayed)
             test.eq(replay.value.turn, claim.turn)
 
+            local reader = harness.principal("summary-restart-reader", {"bee.threads:summary_test_policy"})
+            local pulled = harness.value(sessions:call("turn_pull", {turn = claim.turn, claim = claim.claim}))
+            harness.value(sessions:call("turn_accept", {turn = claim.turn, claim = claim.claim,
+                input_digest = pulled.input_digest, checkpoint = {}, operation_key = harness.key()}))
+            local active = harness.value(reader:call("node_summary", {})).running_sessions
+            if type(active) ~= "number" then error("invalid running count") end
+            test.is_true(active >= 1)
             local before = harness.open()
             local _, restart_error = owner_store.establish(before)
             before:release()
             test.is_nil(restart_error)
+            test.eq(harness.value(reader:call("node_summary", {})).running_sessions, 0)
             local stale = sessions:call("turn_pull", {turn = claim.turn, claim = claim.claim})
             test.eq(harness.code(stale), "STALE")
             test.eq(harness.code(sessions:call("turn_accept", {turn = claim.turn, claim = claim.claim,
@@ -315,6 +347,39 @@ local function define_tests()
                 result = result("failed"), operation_key = harness.key()})), "CONFLICT")
         end)
 
+        test.it("rolls back the journal event, turn and receipt when persisting settlement fails", function()
+            local sessions = harness.session_owner(WORKSPACE)
+            local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
+            local sent = harness.value(sessions:call("work_send", {session = opened.session,
+                input = "atomic settlement", operation_key = harness.key()}))
+            local reserved = harness.value(sessions:call("turn_reserve", {session = opened.session,
+                operation_key = harness.key()}))
+            harness.value(sessions:call("turn_accept", {turn = reserved.turn, claim = reserved.claim,
+                input_digest = reserved.input_digest, checkpoint = {}, operation_key = harness.key()}))
+            local before = harness.value(sessions:call("feed_read", {session = opened.session, after_sequence = 0}))
+            local db = harness.open()
+            harness.execute(db, "CREATE TRIGGER journal_reject_settlement BEFORE UPDATE OF phase ON bee_session_work " ..
+                "WHEN NEW.phase = 'settled' BEGIN SELECT RAISE(ABORT, 'fixture settlement failure'); END", {})
+            db:release()
+            local operation_key = harness.key()
+            local request = {turn = reserved.turn, claim = reserved.claim, result = result("succeeded"),
+                operation_key = operation_key}
+            local refused = sessions:call("work_settle", request)
+            local cleanup_db = harness.open()
+            harness.execute(cleanup_db, "DROP TRIGGER journal_reject_settlement", {})
+            cleanup_db:release()
+            test.eq(harness.code(refused), "CONFLICT")
+            test.eq(harness.value(sessions:call("work_describe", {work = sent.work})).phase, "accepted")
+            test.eq(harness.value(sessions:call("turn_pull", {turn = reserved.turn, claim = reserved.claim})).phase, "accepted")
+            test.is_false(harness.value(sessions:call("operation_lookup", {operation_key = operation_key})).found)
+            local after = harness.value(sessions:call("feed_read", {session = opened.session, after_sequence = 0}))
+            test.eq(#after.events, #before.events)
+            local committed = sessions:call("work_settle", request)
+            test.is_true(committed.ok)
+            test.is_false(committed.replayed)
+            test.eq(harness.value(sessions:call("work_describe", {work = sent.work})).phase, "settled")
+        end)
+
         test.it("appends normalized observations only while the current turn claim is accepted", function()
             local sessions = harness.session_owner(WORKSPACE)
             local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
@@ -326,6 +391,14 @@ local function define_tests()
                 input_digest = envelope.input_digest, checkpoint = {}, operation_key = harness.key()}))
             local event = {type = "text", event_key = "claude:1:assistant", data = {type = "text", segment_id = "answer",
                 operation = "append", text = "live text", channel = "answer"}}
+            local escaped = string.rep('"\\\n', 5000)
+            local large = events.tool_result("large-doc-reply", "docs-call", "succeeded", escaped, nil)
+            harness.value(sessions:call("turn_observation", {turn = reservation.turn, claim = reservation.claim,
+                operation_key = harness.key(), observation = large}))
+            for _, piece in ipairs(events.text("large-text", "answer", "replace", escaped, "answer")) do
+                harness.value(sessions:call("turn_observation", {turn = reservation.turn, claim = reservation.claim,
+                    operation_key = harness.key(), observation = piece}))
+            end
             local operation_key = harness.key()
             local request = {turn = reservation.turn, claim = reservation.claim, operation_key = operation_key, observation = event, checkpoint = {permission_checkpoint = {phase = "requested"}}}
             local appended = harness.value(sessions:call("turn_observation", request))
@@ -338,7 +411,7 @@ local function define_tests()
             local page = harness.value(sessions:call("feed_read", {session = opened.session, after_sequence = 0, limit = 64}))
             local found = false
             for _, row in ipairs(page.events) do
-                if row.kind == "turn.observation" then
+                if row.kind == "turn.observation" and row.data.observation.event_key == event.event_key then
                     found = true
                     test.eq(row.data.observation.event_key, event.event_key)
                     test.eq(row.data.observation.data.text, "live text")

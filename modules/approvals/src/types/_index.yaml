@@ -1,0 +1,8 @@
+version: '1.0'
+namespace: bee.approvals.types
+entries:
+- name: runtime_lease
+  kind: library.lua
+  source: file://runtime_lease.lua
+  imports:
+    bounds: bee.values:bounds

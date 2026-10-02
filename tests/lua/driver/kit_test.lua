@@ -64,6 +64,17 @@ local function define_tests()
             local payload = large.data.payload_json
             test.eq(payload, '{"omitted_bytes":' .. tostring(events.MAX_TEXT_BYTES * 2 + 14) .. '}')
         end)
+        test.it("budgets escaped text and preserves Unicode across segments", function()
+            local text = string.rep('"\\\n🙂', 5000)
+            local restored = ""
+            for _, piece in ipairs(events.text("escaped", "answer", "replace", text, "answer")) do
+                local data = piece.data
+                if type(data) ~= "table" or type(data.text) ~= "string" then error("missing segment text") end
+                restored = restored .. data.text
+                test.not_nil(observation.decode(piece))
+            end
+            test.eq(restored, text)
+        end)
         test.it("decodes stream-json envelopes and reports undecodable frames", function()
             local decoder = stream_json.new()
             local envelopes, problems = stream_json.feed(decoder, '{"type":"a"}\nnot json\n{"type":"b"}\n{"tail":')

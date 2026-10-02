@@ -6,7 +6,7 @@ entries:
   source: file://connection.lua
   modules: [tty]
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
 - name: selection
   kind: library.lua
@@ -18,7 +18,7 @@ entries:
   modules: [tty]
   imports:
     chrome: bee.terminal:chrome
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
@@ -30,7 +30,7 @@ entries:
   modules: [funcs, tty, process, channel, time, uuid, ctx, logger]
   imports:
     help_view: bee.terminal:help
-    app_frame: bee.app:frame
+    app_frame: bee.ui:frame
     connection: bee.terminal:connection
     workspace_menu: bee.terminal:workspace_menu
     delivery: bee.terminal:delivery
@@ -45,7 +45,7 @@ entries:
     bindings: bee.terminal:bindings
     menu: bee.terminal:menu
     selection: bee.terminal:selection
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
     display_transfer: bee.protocol:display_transfer
     status_surface: bee.app:status_surface
@@ -55,7 +55,7 @@ entries:
   source: file://workspace_menu.lua
   modules: [tty]
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
     contract: bee.protocol:application
 - name: render
@@ -63,12 +63,12 @@ entries:
   source: file://render.lua
   modules: [tty]
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     title_editor: bee.terminal:title_editor
     dialog: bee.terminal:dialog
     model: bee.desktop:model
     layout: bee.desktop:layout
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     connection: bee.terminal:connection
     workspace_menu: bee.terminal:workspace_menu
     chrome: bee.terminal:chrome
@@ -86,15 +86,15 @@ entries:
   source: file://chrome.lua
   modules: [tty]
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
 - name: menu
   kind: library.lua
   source: file://menu.lua
   modules: [tty]
   imports:
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
     display_transfer: bee.protocol:display_transfer
 - name: bar
@@ -103,7 +103,7 @@ entries:
   modules: [tty]
   imports:
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     surface: bee.app:status_surface
 - name: window_chrome
   kind: library.lua
@@ -112,23 +112,23 @@ entries:
   imports:
     model: bee.desktop:model
     layout: bee.desktop:layout
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     surface: bee.app:status_surface
 - name: title_editor
   kind: library.lua
   source: file://title_editor.lua
   modules: [tty]
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: dialog
   kind: library.lua
   source: file://dialog.lua
   modules: [tty]
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: help
   kind: library.lua
   source: file://help.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance

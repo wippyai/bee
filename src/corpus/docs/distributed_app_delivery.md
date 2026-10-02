@@ -55,7 +55,7 @@ host-selected security scope lives in or is reached from (`bee.gov`,
 `bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`,
 `bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
 `bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
-`bee.sync`, `bee.host`, `bee.session`, `bee.client`, `bee.desktop`,
+`bee.sync`, `bee.host`, `bee.client`, `bee.desktop`,
 `bee.terminal`, `bee.node` and `bee.workspace`, which cover their child
 namespaces. The legacy `bee.governance` prefix remains protected for old
 application admission records. The kernel also names the exact host selectors
@@ -133,7 +133,33 @@ Delivery requests retain `workspace_id` for the destination runtime target and
 `source_overlay_id` for the authoring identity. Internal services may use other
 storage fields, but those are not public authoring vocabulary.
 
+A normal saved-profile session may lack the separately gated `publish` tool.
+That does not prevent delivery or Hive sharing: after local review, approval
+and successful apply, the person opens **Modules**, selects **Authored**,
+prepares the same authored overlay/version/frozen snapshot, then publishes the
+locally applied version. This uses Governance's publication owner, not a direct
+registry write. The destination sees it in Overlays and reviews, selects,
+prepares and approves its own activation. Content travels; grants and decisions
+remain destination-local.
+
+In Authored, enter the workspace application's component `app.<overlay_id>`,
+its explicit version and the frozen snapshot digest. The pane also accepts
+package components in `namespace/name` form; neither name grants publication
+authority. Governance verifies the exact host-selected profile and applied
+content before publishing.
+
+For a Hive dashboard, the implemented counts-only status binding is
+`bee.hive.telemetry.binding:status` (`snapshot`, `detail`). Request that exact
+`contract.call` binding and methods using the capability requirement format
+below, and call it through `bee.gov.binding:contract_call`. The Hive telemetry
+component document describes its input and output fields and live refresh.
+
 ## Workspace applications
+
+Use `restart_policy: never` for an application without checkpoints. `automatic`
+or `manual` requires a nonempty `resume_schema` of at most 80 characters without
+control characters. Preflight reports `APPLICATION_CHECKPOINT` when this
+metadata would prevent the desktop from opening the application.
 
 A fresh install delivers an application a workspace's own agent authors to
 that workspace without host configuration, and still only after the person
@@ -179,6 +205,34 @@ revisions in the measured candidate, and includes the catalog definition in
 the candidate's external-base digest. The request grants no policy. Preflight
 refuses app-shipped `security.actor` and `security.groups` on every entry with
 `SECURITY_DENIED`.
+
+For the shipped `contract.call` capability, `meta.parameters` contains an exact
+`binding` and a nonempty `methods` list. For example, an application requests
+the counts-only Hive status methods with this registry entry in `entries.json`:
+
+```json
+{
+  "id": "app.example:status_read",
+  "kind": "ns.requirement",
+  "meta": {
+    "value_kind": "security.policy",
+    "capability": "contract.call",
+    "parameters": {
+      "binding": "bee.hive.telemetry.binding:status",
+      "methods": ["snapshot", "detail"]
+    },
+    "reason": "Show live node names and session and approval counts."
+  },
+  "data": {
+    "targets": [{"entry": "app.example:app", "path": ".security.policies +="}]
+  }
+}
+```
+
+Replace `app.example` with the application's admitted namespace. The components
+tool can read the destination's `bee.security.capability:capability_catalog`; its host-selected
+parameter schema remains authoritative. This declaration requests permission;
+the person still reviews and approves the exact binding and methods locally.
 
 The catalog currently describes `workspace.files.read`, `app.database`,
 `threads.read`, `threads.message`, `agents.launch`, `contract.call`, `http.api`,
@@ -294,8 +348,8 @@ The opt-in application checkpoint of at most 65,536 bytes remains for small
 resume state. Closing the live view removes its resume record, while the
 database file persists.
 
-A person reviews the staged plan in Start › Tools › Overlays, selects and
-prepares it there, approves the request in Start › Tools › Approvals, and lets
+A person reviews the staged plan in Start › Apps › Advanced › Overlays, selects and
+prepares it there, approves the request in Needs you, and lets
 Overlays step the activation owner until it settles; the application then
 appears in the Start menu. `make workspace-app-delivery-check` proves this path
 on the unmodified composition with a scripted agent;

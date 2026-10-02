@@ -5,13 +5,13 @@ entries:
   kind: library.lua
   source: file://commands.lua
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: projection
   kind: library.lua
   source: file://projection.lua
   imports:
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: bindings
   kind: library.lua
   source: file://bindings.lua

@@ -145,7 +145,7 @@ var resourcesModuleProbeActions = []string{
 var resourcesModuleForbidden = []string{
 	"bee.desktop", "bee.terminal", "bee.harness", "bee.harness.catalog", "bee.harness.carrier",
 	"bee.harness.launch", "bee.harness.permission", "bee.hive", "bee.hive.supervisor", "bee.hive.telemetry",
-	"bee.hive.desktop", "bee.session", "bee.apps", "bee.client", "bee.launch", "bee.driver",
+	"bee.hive.desktop", "bee.apps", "bee.client", "bee.launch", "bee.driver",
 }
 
 func resourcesModuleCommandEnvironment(overrides []string) []string {

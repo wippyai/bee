@@ -52,14 +52,6 @@ entries:
   imports:
     bounds: bee.values:bounds
     record_bounds: bee.threads.records:bounds
-- name: folder_picker
-  kind: library.lua
-  source: file://folder_picker.lua
-  imports:
-    text: bee.ui:text
-    caller: bee.app:caller
-    frame: bee.ui:frame
-    bounds: bee.values:bounds
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua
@@ -99,31 +91,6 @@ entries:
     record: bee.threads.records:record
     record_types: bee.threads:record_types
     record_bounds: bee.threads.records:bounds
-- name: viz
-  kind: library.lua
-  source: file://viz.lua
-  modules:
-  - tty
-  imports:
-    appearance: bee.ui:appearance
-    frame: bee.ui:frame
-- name: forms
-  kind: library.lua
-  source: file://forms.lua
-  modules:
-  - tty
-  imports:
-    appearance: bee.ui:appearance
-    frame: bee.ui:frame
-- name: diagram
-  kind: library.lua
-  source: file://diagram.lua
-  modules:
-  - tty
-  imports:
-    appearance: bee.ui:appearance
-    frame: bee.ui:frame
-    viz: bee.app:viz
 - name: dependency_values
   kind: ns.dependency
   component: bee/values

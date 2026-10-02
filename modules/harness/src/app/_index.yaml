@@ -184,7 +184,7 @@ entries:
     appearance: bee.ui:appearance
     text: bee.ui:text
     caller: bee.app:caller
-    folder_picker: bee.app:folder_picker
+    folder_picker: bee.ui.picker:folder
     editor: bee.harness.app:profile_editor
     forms: bee.harness.app:profile_form
 

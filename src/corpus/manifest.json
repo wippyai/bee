@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 12059,
+      "bytes": 12062,
       "id": "docs/agent_guide",
-      "sha256": "1a3eed7f6cd1555a0a495f0b00b2280d363f3b7ed7663d381702e7afe6e26372",
+      "sha256": "6fa494fc6b470a5a57ab5489858a33df552ebb7638e532a88d46a83c6bc3b569",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -155,9 +155,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 19815,
+      "bytes": 19818,
       "id": "docs/app_style",
-      "sha256": "d4e5bd629412b4112ba0ddafdffbcdd1c4fb3f5828d348cfc04a34a86a12e812",
+      "sha256": "7fced7fc14895fe159a5ad1cf6ada868835dc450ce320b594d56bfa76a68d851",
       "source": "docs/guides/app-style.md",
       "title": "Application visual style",
       "topic": "ui"
@@ -187,9 +187,9 @@
       "topic": "application"
     },
     {
-      "bytes": 8869,
+      "bytes": 8875,
       "id": "docs/ui_brand_book",
-      "sha256": "375324a69baea8851a0456dd122e47837720b18ff220448bddca732ed870d218",
+      "sha256": "26500d2f6fef9b3c63e96b17d89a767aaa15cc18ae09892707fbfbba5bfe138b",
       "source": "docs/guides/ui.md",
       "title": "Bee UI brand book",
       "topic": "ui"
@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 21828,
+      "bytes": 21827,
       "id": "docs/workspace_catalog",
-      "sha256": "9e43cd2f0ca12177971ac98512f637fe38fdfbe4c791d5702bf24679bd8c7335",
+      "sha256": "520cefbabb6903c4570c1877bd33f62641643b243feaaa42556df7322de129ce",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 10012,
+      "bytes": 8815,
       "id": "component/application",
-      "sha256": "319c3f3f9d919ea78953213dc7e9566355a4ae94baf52d3e3f61eec59f1eb98e",
+      "sha256": "e07de8c18d49b1565e806230dcf2423b2622e8c2fa90bbaa49dc94ab8f57d955",
       "source": "modules/application/src/README.md",
       "title": "bee.app",
       "topic": "component"
@@ -531,9 +531,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2171,
+      "bytes": 3677,
       "id": "component/ui",
-      "sha256": "417d12959b805b275d3306faff276072c92a697ab2aec73820b52381b563c5a3",
+      "sha256": "c271568eb2c78e93fbf073673bee201c9adfaa6bfb9ed9295f7d6885190f29e4",
       "source": "modules/ui/src/README.md",
       "title": "bee.ui",
       "topic": "component"
@@ -635,9 +635,9 @@
       "topic": "reference_apps"
     },
     {
-      "bytes": 41511,
+      "bytes": 41517,
       "id": "toolkit",
-      "sha256": "9e63ad52ddbb37af6339cca0789012b8bc9e8d343a8ae893bd98f0dc28431d37",
+      "sha256": "79d50ece2921a6265314176cc83a78330d09c6fd056d4b1348389f9fb4ed3d35",
       "source": "generated: modules/ui/src, modules/application/src, module app views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -646,7 +646,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 761549,
+    "bytes": 761875,
     "documents": 80
   }
 }

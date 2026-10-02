@@ -3,7 +3,7 @@
 -- treemap of sized items and an icicle (flame) chart of a value tree. Pure:
 -- every drawing function paints inside the rectangle it is given through the
 -- application frame, reads colors from semantic roles and keeps no state
--- between frames. `bee.app:viz` still owns the layered node-edge
+-- between frames. `bee.ui.viz:viz` still owns the layered node-edge
 -- graph (`viz.graph`); this module is for the diagrams that graph does not
 -- shape, sharing its node and edge vocabulary where they overlap.
 local tty = require("tty")

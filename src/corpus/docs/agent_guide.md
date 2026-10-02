@@ -21,7 +21,7 @@ core desktop shell remains in `src/desktop` and `src/terminal`.
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples
-for `bee.ui:frame` and `bee.app:viz`. Apps use
+for `bee.ui:frame` and `bee.ui.viz:viz`. Apps use
 public contracts such as `bee.app:client` and
 `bee.threads.binding:authority_local`;
 they do not import private broker or store modules.

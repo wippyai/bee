@@ -126,21 +126,6 @@
       "source": "modules/application/src/_index.yaml"
     },
     {
-      "id": "bee.app:diagram",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:folder_picker",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:forms",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
       "id": "bee.app:host_leases",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
@@ -177,11 +162,6 @@
     },
     {
       "id": "bee.app:thread_protocol",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:viz",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
     },
@@ -8861,6 +8841,26 @@
       "source": "modules/threads/src/_index.yaml"
     },
     {
+      "id": "bee.ui.diagram:diagram",
+      "kind": "library.lua",
+      "source": "modules/ui/src/diagram/_index.yaml"
+    },
+    {
+      "id": "bee.ui.forms:forms",
+      "kind": "library.lua",
+      "source": "modules/ui/src/forms/_index.yaml"
+    },
+    {
+      "id": "bee.ui.picker:folder",
+      "kind": "library.lua",
+      "source": "modules/ui/src/picker/_index.yaml"
+    },
+    {
+      "id": "bee.ui.viz:viz",
+      "kind": "library.lua",
+      "source": "modules/ui/src/viz/_index.yaml"
+    },
+    {
       "id": "bee.ui:appearance",
       "kind": "library.lua",
       "source": "modules/ui/src/_index.yaml"
@@ -8868,6 +8868,11 @@
     {
       "id": "bee.ui:definition",
       "kind": "ns.definition",
+      "source": "modules/ui/src/_index.yaml"
+    },
+    {
+      "id": "bee.ui:dependency_values",
+      "kind": "ns.dependency",
       "source": "modules/ui/src/_index.yaml"
     },
     {
@@ -11089,6 +11094,34 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.ui",
       "source": "modules/ui/src/_index.yaml"
+    },
+    {
+      "namespace": "bee.ui.diagram",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.ui.diagram",
+      "source": "modules/ui/src/diagram/_index.yaml"
+    },
+    {
+      "namespace": "bee.ui.forms",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.ui.forms",
+      "source": "modules/ui/src/forms/_index.yaml"
+    },
+    {
+      "namespace": "bee.ui.picker",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.ui.picker",
+      "source": "modules/ui/src/picker/_index.yaml"
+    },
+    {
+      "namespace": "bee.ui.viz",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.ui.viz",
+      "source": "modules/ui/src/viz/_index.yaml"
     },
     {
       "namespace": "bee.values",
@@ -17263,8 +17296,8 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1830,
-    "namespace_count": 275,
+    "entry_count": 1831,
+    "namespace_count": 279,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,

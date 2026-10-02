@@ -1686,6 +1686,27 @@
       "migration": "M2",
       "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
       "to": "bee.client.service:application"
+    },
+    {
+      "category": "ids",
+      "from": "bee.terminal:main",
+      "migration": "M2",
+      "reason": "Presenter actor relocation; no actor definition is stored in desktop/client layouts or owner tables. Preserve existing topics, qualified layouts and viewport grants; restart composition and replace the presenter through F12. No persisted row rewrite.",
+      "to": "bee.terminal.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:target_terminal_display",
+      "migration": "M0",
+      "reason": "Host-selected requirement renamed to its owning component; all dependency parameters and linker targets are updated in the same composition. No stored row rewrite; historic registry artifacts remain immutable.",
+      "to": "bee.client:target_launch_display"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:target_protocol_input",
+      "migration": "M0",
+      "reason": "Host-selected requirement renamed to its owning component; all dependency parameters and linker targets are updated in the same composition. No stored row rewrite; historic registry artifacts remain immutable.",
+      "to": "bee.client:target_terminal_input"
     }
   ]
 }

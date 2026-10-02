@@ -30,7 +30,7 @@ def run():
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "modules", project / "modules")
-        presenter = project / "src/terminal/main.lua"
+        presenter = project / "modules/terminal/src/service/main.lua"
         code = presenter.read_text()
         anchor = 'local action = bindings.action('
         assert code.count(anchor) == 1

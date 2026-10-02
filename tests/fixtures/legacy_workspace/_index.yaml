@@ -19,9 +19,9 @@ entries:
     interaction: bee.app:interaction
     model: bee.desktop:model
     decode: bee.protocol:decode
-    decode_input: bee.protocol:input
+    decode_input: bee.terminal.types:input
     appearance: bee.app:appearance
-    physical: bee.terminal:display
+    physical: bee.launch:display
     persistence: bee.workspace.persist:checkpoint
     recovery: bee.workspace.types:recovery
     projection: bee.desktop.types:projection
@@ -43,9 +43,9 @@ entries:
     interaction: bee.app:interaction
     model: bee.desktop:model
     decode: bee.protocol:decode
-    decode_input: bee.protocol:input
+    decode_input: bee.terminal.types:input
     appearance: bee.app:appearance
-    physical: bee.terminal:display
+    physical: bee.launch:display
     persistence: bee.workspace.persist:checkpoint
     recovery: bee.workspace.types:recovery
     projection: bee.desktop.types:projection
@@ -60,5 +60,5 @@ entries:
     - bee.host:main
     - bee.desktop.service:main
     - bee.apps:broker
-    - bee.terminal:main
+    - bee.terminal.service:main
     effect: allow

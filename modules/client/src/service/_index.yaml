@@ -26,7 +26,7 @@ entries:
     store: bee.client.persist:store
     state: bee.client.types:state
     decode: bee.protocol:decode
-    input_decode: bee.protocol:input
+    input_decode: bee.terminal.types:input
     contract: bee.protocol:application
     inventory: bee.host:inventory
     status_bindings: bee.desktop.types:bindings
@@ -39,7 +39,7 @@ entries:
     lifecycle: bee.client.types:lifecycle
     handoff: bee.client.types:handoff
     interaction: bee.app:interaction
-    physical: bee.terminal:display
+    physical: bee.launch:display
     appearance: bee.app:appearance
     projection: bee.desktop.types:projection
 - name: local

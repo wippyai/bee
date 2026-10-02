@@ -104,7 +104,9 @@ second registry or restart path for core updates.
 
 The desktop session and workspace host already use same-PID handoff; desktop
 clients, application brokers and the owner controller already use acknowledged
-supervised replacement. The terminal presenter changes through explicit F12.
+supervised replacement. The `bee/terminal` presenter at
+`bee.terminal.service:main` changes through explicit F12; `bee.launch:display` retains the physical surface and viewport
+lifetime. Presenter delivery attachments use their existing retirement path.
 Direct Registry changes to a `process.service` registration follow the runtime
 supervisor's own stop/start lifecycle; direct code-only changes with equal
 service configuration do not replace that controller. Hub transitions below

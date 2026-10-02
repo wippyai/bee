@@ -181,7 +181,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             # The disposable presenter copy stamps each frame with its PID.
             # This lets the fixture distinguish an F12 replacement from the
             # retained output of the viewport it replaced.
-            presenter = project / "src/terminal/main.lua"
+            presenter = project / "modules/terminal/src/service/main.lua"
             source = presenter.read_text()
             label = '"Workspace " .. (workspace_label or names.label(workspace_id))'
             assert source.count(label) == 1, "unexpected terminal presenter label anchor"

@@ -75,6 +75,19 @@
     "replica_protocol": "library.lua",
     "types": "library.lua"
   },
+  "bee.terminal": {
+    "bar": "library.lua",
+    "chrome": "library.lua",
+    "connection": "library.lua",
+    "dialog": "library.lua",
+    "help": "library.lua",
+    "menu": "library.lua",
+    "render": "library.lua",
+    "selection": "library.lua",
+    "title_editor": "library.lua",
+    "window_chrome": "library.lua",
+    "workspace_menu": "library.lua"
+  },
   "bee.threads": {
     "record_types": "library.lua",
     "types": "library.lua"

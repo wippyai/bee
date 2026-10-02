@@ -199,6 +199,13 @@ client-desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
 local-launcher-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
+.PHONY: terminal-component-unit-check
+terminal-component-unit-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.terminal selection_test delivery_test render_test title_editor_test dialog_test workspace_menu_test help_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.client clipboard_test lifecycle_test inbox_test state_test handoff_test assignments_test store_test workspace_pages_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.launch startup_failure_test ownership_test owner_handoff_test protocol_test retained_protocol_test hosts_test holdings_test desktop_lifecycle_test boot_fallback_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.desktop.service handoff_test handoff_process_test
+
 .PHONY: terminal-scroll-check terminal-selection-check
 terminal-selection-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_selection.py

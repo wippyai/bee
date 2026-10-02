@@ -246,7 +246,7 @@ entries:
     - bee.host:main
     - bee.desktop.service:main
     - bee.apps:broker
-    - bee.terminal:main
+    - bee.terminal.service:main
     effect: allow
 - name: actor_policy
   kind: security.policy

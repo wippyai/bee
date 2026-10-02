@@ -7,7 +7,7 @@ entries:
   method: main
   modules: [tty, process, channel, time]
   imports:
-    input_decode: bee.protocol:input
+    input_decode: bee.terminal.types:input
 - name: root_policy
   kind: security.policy
   policy:

@@ -139,7 +139,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.desktop.service:main
-    - bee.terminal:main
+    - bee.terminal.service:main
     effect: allow
 - name: host_spawn_policy
   kind: security.policy

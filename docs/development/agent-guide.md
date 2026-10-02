@@ -18,7 +18,8 @@ public application helpers and appearance values in
 `modules/application/src`, and application UI in `modules/<module>/src/app` child namespaces. The
 desktop values and projection live in `modules/desktop/src`; client actors,
 attachment/catalog bindings and qualified layout storage live in
-`modules/client/src`. The terminal shell remains in `src/terminal`.
+`modules/client/src`. The terminal shell and delivery live in
+`modules/terminal/src`; `bee.launch:display` owns the physical display.
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples

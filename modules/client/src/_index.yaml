@@ -121,7 +121,7 @@ entries:
     path: .imports.decode
   - entry: bee.client.service:application
     path: .imports.decode
-- name: target_protocol_input
+- name: target_terminal_input
   kind: ns.requirement
   targets:
   - entry: bee.client.service:main
@@ -200,7 +200,7 @@ entries:
     path: .imports.transfer_ui
   - entry: bee.client.service:application
     path: .imports.transfer_ui
-- name: target_terminal_display
+- name: target_launch_display
   kind: ns.requirement
   targets:
   - entry: bee.client.service:main

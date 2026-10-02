@@ -57,7 +57,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/apps` | Admission, application lifecycle, producer capabilities and routing as `bee.apps` |
 | `modules/desktop/src` | Pure scene, reducer and layout values as `bee.desktop`; shared decoders in `.types`, committed projection and status observation in `.service` |
 | `src/protocol` | Private core message decoders |
-| `src/terminal` | Replaceable presenter, input and composition |
+| `modules/terminal/src` | Replaceable presenter and asynchronous delivery in `.service`, input values in `.types`, desktop shell view helpers at `bee.terminal`; physical display ownership stays in `src/launch` |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
@@ -119,6 +119,7 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.placement` | `decode`, `request`, `transitions`, `types` |
 | `bee.placement.native` | `protocol` |
 | `bee.sync` | `protocol`, `replica_protocol`, `types` |
+| `bee.terminal` | `bar`, `chrome`, `connection`, `dialog`, `help`, `menu`, `render`, `selection`, `title_editor`, `window_chrome`, `workspace_menu` |
 | `bee.threads` | `record_types`, `types` |
 | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
 
@@ -166,7 +167,8 @@ Application entries, renderers, screen models and view helpers live in
 `bee.files.app` import its helpers and own their separate application entries.
 Desktop values and the projection actor live in `modules/desktop/src`; desktop
 client actors and qualified layouts live in `modules/client/src`. The terminal
-shell remains in `src/terminal`.
+shell and delivery live in `modules/terminal/src`; root launch owns the physical
+display.
 
 Within a module, keep shared domain types and contracts at the root. Public contract
 bindings live in `binding`. Workspace catalog contracts retain their existing

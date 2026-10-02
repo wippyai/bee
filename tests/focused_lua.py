@@ -3,6 +3,7 @@ import subprocess
 import sys
 import yaml
 
+from fixture_lint import environment
 from workspace import RUNTIME, fixture_workspace
 
 
@@ -23,7 +24,7 @@ def main(namespace, selected_names):
         if len(selected) != len(selected_names):
             raise SystemExit(f"expected {len(selected_names)} tests in {namespace}, found {selected}")
         subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal", "test", *selected],
-                       cwd=folder, check=True, timeout=180)
+                       cwd=folder, env=environment(folder), check=True, timeout=180)
 
 
 if __name__ == "__main__":

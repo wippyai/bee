@@ -462,7 +462,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         local presenter_pid = tostring(assert(process.with_options({terminal = grant})
             :with_context({["bee.workspace_owner"] = self, ["bee.workspace_id"] = workspace_id})
             :with_scope(pres_scope)
-            :spawn_monitored("bee.terminal:main", "bee:workers", self, "bee.console.app:app", nil)))
+            :spawn_monitored("bee.terminal.service:main", "bee:workers", self, "bee.console.app:app", nil)))
 
         local ready_timer = time.after("3s")
         local ready_sel = channel.select({controls:case_receive(), ready_timer:case_receive()})

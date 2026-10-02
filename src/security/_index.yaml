@@ -72,7 +72,7 @@ entries:
     - bee.launch:headless
     - bee.desktop.service:main
     - bee.apps:broker
-    - bee.terminal:main
+    - bee.terminal.service:main
     - bee.hive:supervisor
     - bee.hive.supervisor:main
     - bee.hive.service:supervisor_host

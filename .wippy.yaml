@@ -7,6 +7,7 @@ shutdown:
   timeout: 3s
 workspace:
   replacements:
+    bee/terminal: ./modules/terminal
     bee/workspace: ./modules/workspace
     bee/values: ./modules/values
     bee/persist: ./modules/persist

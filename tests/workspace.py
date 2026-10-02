@@ -190,7 +190,7 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         if presenter_probe:
             # Test-only incarnation marker proves an identical screen was drawn
             # by a fresh process. No diagnostics or test flags enter the core pack.
-            presenter = folder / "src/terminal/main.lua"
+            presenter = folder / "modules/terminal/src/service/main.lua"
             text = presenter.read_text()
             label = '"Workspace " .. names.label(workspace_id)'
             assert label in text

@@ -40,7 +40,7 @@ entries:
     handoff: bee.client.types:handoff
     interaction: bee.app:interaction
     physical: bee.launch:display
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     projection: bee.desktop.types:projection
 - name: local
   kind: process.lua

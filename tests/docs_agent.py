@@ -49,9 +49,10 @@ def main():
         print("Docs agent: an admitted fixture agent answered the terminal toolkit, "
               "cross-node sync and the SQL module from the embedded corpus")
         print(answered[:400])
-        # The corpus must also travel inside a real pack: the same source, packed
-        # with the test entries excluded, serves the manifest and a document from
-        # the embedded read-only volume and refuses a write to it.
+    # Pack the production composition without unit-test dependency injection.
+    # The authenticated source probe above owns its separate managed listener.
+    with fixture_workspace(unit_tests=False) as folder:
+        shutil.copytree(ROOT / "tests/fixtures/docs_agent", folder / "src/docs_agent")
         pack = folder / "deployment"
         # Production embeds the corpus through wippy.yaml's embed list; carry the
         # same declaration into the fixture so the packed probe exercises the

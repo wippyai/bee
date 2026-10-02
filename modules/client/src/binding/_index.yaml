@@ -56,4 +56,4 @@ entries:
   - funcs
   - channel
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance

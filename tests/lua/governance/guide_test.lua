@@ -130,8 +130,8 @@ local function define_tests()
             test.eq(modules[3], "channel")
             test.eq(modules[4], "json")
             test.eq(imports.client, "bee.app:client")
-            test.eq(imports.appearance, "bee.app:appearance")
-            test.eq(imports.frame, "bee.app:frame")
+            test.eq(imports.appearance, "bee.ui:appearance")
+            test.eq(imports.frame, "bee.ui:frame")
             test.is_true(#source < 10000)
             for _, fragment in ipairs({
                 "local appearance = require(\"appearance\")", "appearance.defaults()",

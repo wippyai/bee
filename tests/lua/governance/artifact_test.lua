@@ -14,6 +14,23 @@ end
 
 local function define_tests()
     test.describe("Governance resolved registry artifact", function()
+        test.it("measures the desktop checkpoint metadata invariant", function()
+            local function invalid(restart: unknown, schema: unknown): boolean
+                return artifact.application_checkpoint_invalid({meta = {type = "bee.app",
+                    application = {restart_policy = restart, resume_schema = schema}}})
+            end
+            test.is_false(invalid(nil, nil))
+            test.is_false(invalid("never", nil))
+            test.is_false(invalid("automatic", "demo.v1"))
+            test.is_false(invalid("manual", "demo.v1"))
+            test.is_true(invalid("automatic", nil))
+            test.is_true(invalid("manual", ""))
+            test.is_true(invalid("invalid", "demo.v1"))
+            test.is_true(invalid("automatic", 1))
+            test.is_true(invalid("automatic", string.rep("s", 81)))
+            test.is_true(invalid("automatic", "schema\n"))
+            test.is_false(artifact.application_checkpoint_invalid({meta = {type = "other"}}))
+        end)
         test.it("requires native configuration data rather than YAML shorthand", function()
             local flat, flat_error = artifact.create({{id = "demo:run", kind = "function.lua", source = "return true"}})
             test.is_nil(flat)

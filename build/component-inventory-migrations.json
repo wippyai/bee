@@ -1697,15 +1697,15 @@
     {
       "category": "ids",
       "from": "bee.client:target_terminal_display",
-      "migration": "M0",
-      "reason": "Host-selected requirement renamed to its owning component; all dependency parameters and linker targets are updated in the same composition. No stored row rewrite; historic registry artifacts remain immutable.",
+      "migration": "M2",
+      "reason": "Client component requirement relocation; all dependency parameters and linker targets are updated in the same composition. Preserve stored references and immutable applied SQL; no stored row rewrite. Historic registry artifacts remain immutable; restart composition and reissue host grants.",
       "to": "bee.client:target_launch_display"
     },
     {
       "category": "ids",
       "from": "bee.client:target_protocol_input",
-      "migration": "M0",
-      "reason": "Host-selected requirement renamed to its owning component; all dependency parameters and linker targets are updated in the same composition. No stored row rewrite; historic registry artifacts remain immutable.",
+      "migration": "M2",
+      "reason": "Client component requirement relocation; all dependency parameters and linker targets are updated in the same composition. Preserve stored references and immutable applied SQL; no stored row rewrite. Historic registry artifacts remain immutable; restart composition and reissue host grants.",
       "to": "bee.client:target_terminal_input"
     }
   ]

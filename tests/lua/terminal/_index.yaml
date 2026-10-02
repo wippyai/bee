@@ -37,7 +37,7 @@ entries:
     menu: bee.terminal:menu
     selection: bee.terminal:selection
     connection: bee.terminal:connection
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     surface: bee.app:status_surface
     names: bee.app:names
 - name: title_editor_test
@@ -47,10 +47,10 @@ entries:
   modules: [tty]
   meta: {type: test, suite: bee}
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     test: wippy.test:test
     editor: bee.terminal:title_editor
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: dialog_test
   kind: function.lua
   source: file://dialog_test.lua
@@ -58,10 +58,10 @@ entries:
   modules: [tty]
   meta: {type: test, suite: bee}
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     test: wippy.test:test
     dialog: bee.terminal:dialog
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: workspace_menu_test
   kind: function.lua
   source: file://workspace_menu_test.lua
@@ -70,7 +70,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     workspace_menu: bee.terminal:workspace_menu
 - name: help_test
   kind: function.lua
@@ -81,5 +81,5 @@ entries:
   imports:
     test: wippy.test:test
     help: bee.terminal:help
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance

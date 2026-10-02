@@ -13,8 +13,22 @@ readiness descriptors.
 | `bee.harness.carrier` | Runs one admitted CLI attempt, persists its checkpoint and settles its thread receipt through the typed driver and placement contracts. |
 | `bee.harness.permission` | Decodes permission requests and runs the shared durable approval exchange for carriers, external turns and interactive hooks. Host-selected acceptance pins the adapter and executable; driver descriptors declare answer transports. |
 | `bee.harness.launch` | Decodes `bee.launch_definition` entries, measures admission plans, admits the authenticated caller, prepares declared workspace resources and resolves component-owned CLI command names. The `locate_probe` entry measures activated descriptor drivers for the Sessions catalog; it reads login-file existence only. Runtime login-link refusal reasons reach the login-needed state in the Agent catalog. |
-| `bee.harness.profiles` | Stores bounded workspace preferences in the node-owned profile feed. Reads and writes still require the caller's workspace authority. |
+| `bee.harness.profiles` | Defines the typed saved-profile protocol and host-selected node database reference. |
+| `bee.harness.profiles.binding` | Validates saved profiles against the pinned driver definitions and descriptors. The existing `bee.harness.binding:call` facade authenticates the caller and checks workspace authority before opening the store. |
+| `bee.harness.profiles.persist` | Reads and changes the existing Sync profile feed, retaining CAS revisions, tombstones, receipt replay and transactional legacy-profile conversion. |
 | `bee.harness.app` | Runs the Sessions application. Its list reads the public sessions contract and reopens stable addresses, including closed sessions. Its new-session picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit PTY attach path. |
+
+Carrier hook state, asynchronous hook delivery and interrupted-attempt recovery live
+in `bee.harness.carrier`. Placement window constructors live in
+`bee.harness.binding`; application rendering and input remain in `.app`.
+Harness imports no other module's private application children.
+
+The public profile contract and `bee.harness.binding:profiles_local` binding retain
+their IDs. Profiles keep the `harness.profiles:<workspace digest>` Sync feed,
+`harness.profile.changed` events and existing schema tags; these implementation
+moves require no stored-record migration. `make saved-profiles-check` boots the
+production composition twice and checks the callable facade's authorization,
+saved revisions, values, tombstones and historical receipt replay.
 
 Each Sessions window is a separate application instance, so another controlling
 display can open `bee agent` while the first display keeps its Sessions window.

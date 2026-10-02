@@ -20,7 +20,7 @@ entries:
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.terminal.types:input
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     physical: bee.launch:display
     persistence: bee.workspace.persist:checkpoint
     recovery: bee.workspace.types:recovery
@@ -44,7 +44,7 @@ entries:
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.terminal.types:input
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     physical: bee.launch:display
     persistence: bee.workspace.persist:checkpoint
     recovery: bee.workspace.types:recovery

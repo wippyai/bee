@@ -162,7 +162,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    hooks: bee.harness.app:hooks
+    hooks: bee.harness.carrier:hooks
     checkpoint: bee.harness.carrier:checkpoint
 - name: window_ready_policy
   kind: registry.entry
@@ -258,7 +258,7 @@ entries:
     test: wippy.test:test
     recovery: bee.harness.app:recovery
     restore_view: bee.harness.app:restore_view
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua
@@ -2152,8 +2152,8 @@ entries:
     claude: bee.driver.claude.binding:launch
     machine: bee.harness.carrier:machine
     catalog: bee.harness.catalog:catalog
-    hooks: bee.harness.app:hooks
-    interrupted: bee.harness.app:interrupted
+    hooks: bee.harness.carrier:hooks
+    interrupted: bee.harness.carrier:interrupted
 - name: scope_probe_allow
   kind: security.policy
   meta:

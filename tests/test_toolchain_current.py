@@ -51,6 +51,25 @@ def write(root, manifest_data, provenance_manifest):
 
 
 class ToolchainCurrentTest(unittest.TestCase):
+    def test_local_build_rejects_the_pinned_binary_and_accepts_its_own_manifest(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pinned = manifest()
+            local = copy.deepcopy(pinned)
+            local["native"] = [{"module": "example/native", "version": "local-version"}]
+            write(root, pinned, pinned)
+            folder = root / ".wippy/local-native"
+            folder.mkdir(parents=True)
+            (folder / "bee.build.json").write_text(json.dumps(local))
+            with self.assertRaises(ValueError):
+                verifier.check_current(root, local=True)
+            write(root, pinned, local)
+            verifier.check_current(root, local=True)
+            with self.assertRaises(ValueError):
+                verifier.check_current(root)
+
     def test_matching_provenance_needs_no_rebuild(self):
         import tempfile
 

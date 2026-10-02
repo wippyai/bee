@@ -112,3 +112,5 @@ modules:
   version: 0.1.0-dev
 - name: bee/console
   version: 0.1.0-dev
+- name: bee/ui
+  version: 0.1.0-dev

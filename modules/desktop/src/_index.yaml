@@ -39,7 +39,7 @@ entries:
   source: file://state.lua
   imports:
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     commands: bee.desktop.types:commands
 - name: layout
   kind: library.lua

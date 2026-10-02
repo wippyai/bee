@@ -44,7 +44,7 @@ entries:
   modules:
   - tty
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
 - name: selection
   kind: library.lua
@@ -57,7 +57,7 @@ entries:
   modules:
   - tty
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
     contract: bee.protocol:application
 - name: render
@@ -66,12 +66,12 @@ entries:
   modules:
   - tty
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     title_editor: bee.terminal:title_editor
     dialog: bee.terminal:dialog
     model: bee.desktop:model
     layout: bee.desktop:layout
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     connection: bee.terminal:connection
     workspace_menu: bee.terminal:workspace_menu
     chrome: bee.terminal:chrome
@@ -87,8 +87,8 @@ entries:
   modules:
   - tty
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
 - name: menu
   kind: library.lua
   source: file://menu.lua
@@ -96,7 +96,7 @@ entries:
   - tty
   imports:
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
     display_transfer: bee.protocol:display_transfer
 - name: bar
@@ -106,7 +106,7 @@ entries:
   - tty
   imports:
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     surface: bee.app:status_surface
 - name: window_chrome
   kind: library.lua
@@ -116,7 +116,7 @@ entries:
   imports:
     model: bee.desktop:model
     layout: bee.desktop:layout
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     surface: bee.app:status_surface
 - name: title_editor
   kind: library.lua
@@ -124,17 +124,17 @@ entries:
   modules:
   - tty
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: dialog
   kind: library.lua
   source: file://dialog.lua
   modules:
   - tty
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: help
   kind: library.lua
   source: file://help.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance

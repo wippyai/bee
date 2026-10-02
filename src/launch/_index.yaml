@@ -192,4 +192,4 @@ entries:
   modules: [tty]
   imports:
     chrome: bee.terminal:chrome
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance

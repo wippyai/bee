@@ -7,7 +7,7 @@ rendering, chrome, menus, selection and dialogs at `bee.terminal`.
 
 The host selects the component through `bee.deps:terminal` and supplies its
 application, decoding and display-transfer boundary imports. The component
-imports the public application SDK and desktop values directly. Host policies
+imports the public application SDK, shared UI helpers and desktop values directly. Host policies
 select presenter spawning and viewport authority; metadata grants no authority.
 
 The physical display remains in root launch at `bee.launch:display`. It owns the
@@ -22,6 +22,6 @@ failed or uncertain input is never retried automatically. Retiring a presenter
 closes its delivery attachments through the existing cleanup lifecycle.
 
 No store, applied migration, schema, topic or saved application definition changes
-with extraction. M0/M2 records the presenter and host requirement renames; a
+with extraction. M2 records the presenter and client requirement renames; a
 composition restart selects the new definitions and host grants are reissued.
 Presenter updates use F12; removal follows the host's required-root policy.

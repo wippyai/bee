@@ -1,10 +1,9 @@
 """Run selected Lua test entries in Bee's disposable composition."""
-import subprocess
 import sys
 import yaml
 
-from fixture_lint import environment
-from workspace import RUNTIME, fixture_workspace
+from workspace import fixture_workspace
+from unit import run_shard
 
 
 def main(namespace, selected_names):
@@ -23,8 +22,10 @@ def main(namespace, selected_names):
             manifest.write_text(yaml.safe_dump(document, sort_keys=False))
         if len(selected) != len(selected_names):
             raise SystemExit(f"expected {len(selected_names)} tests in {namespace}, found {selected}")
-        subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal", "test", *selected],
-                       cwd=folder, env=environment(folder), check=True, timeout=180)
+        _, _, _, _, passed, _, output = run_shard(0, folder, selected)
+        print(output, end="")
+        if not passed:
+            raise SystemExit("focused Lua suite failed")
 
 
 if __name__ == "__main__":

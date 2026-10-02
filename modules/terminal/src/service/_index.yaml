@@ -21,7 +21,7 @@ entries:
   - logger
   imports:
     help_view: bee.terminal:help
-    app_frame: bee.app:frame
+    app_frame: bee.ui:frame
     connection: bee.terminal:connection
     workspace_menu: bee.terminal:workspace_menu
     delivery: bee.terminal.service:delivery
@@ -36,7 +36,7 @@ entries:
     bindings: bee.terminal.types:bindings
     menu: bee.terminal:menu
     selection: bee.terminal:selection
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     names: bee.app:names
     display_transfer: bee.protocol:display_transfer
     status_surface: bee.app:status_surface

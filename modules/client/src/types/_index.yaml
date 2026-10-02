@@ -32,7 +32,7 @@ entries:
     decode: bee.desktop.types:projection
     contract: bee.protocol:application
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: assignments
   kind: library.lua
   source: file://assignments.lua

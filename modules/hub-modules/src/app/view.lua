@@ -482,7 +482,11 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     end
     local unchanged = 0
     for _, item in ipairs(plan.modules) do
-        if item.change == "keep" then unchanged = unchanged + 1
+        if item.change == "keep" then
+            unchanged = unchanged + 1
+            if type(item.reason) == "string" then
+                review[#review + 1] = "keep  " .. model.text(item.component, 160) .. "  " .. model.text(item.reason, 4096)
+            end
         else
             review[#review + 1] = model.text(item.change, 12) .. "  " .. model.text(item.component, 160) .. "  " .. model.text(item.version, 128)
         end

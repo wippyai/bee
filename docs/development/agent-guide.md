@@ -14,8 +14,8 @@ them. Native Terminal runs with the operating system user's authority.
 
 Keep host lifetime and admission in the `src/` component folders (`src/host`,
 `src/launch` and their siblings, one namespace per folder),
-public application helpers and appearance values in
-`modules/application/src`, and application UI in `modules/<module>/src/app` child namespaces. The
+public application helpers in `modules/application/src`, shared frame, appearance
+and text helpers in `modules/ui/src`, and application UI in `modules/<module>/src/app` child namespaces. The
 desktop values and projection live in `modules/desktop/src`; client actors,
 attachment/catalog bindings and qualified layout storage live in
 `modules/client/src`. The terminal shell and delivery live in
@@ -23,7 +23,7 @@ attachment/catalog bindings and qualified layout storage live in
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples
-for `bee.app:frame` and `bee.app:viz`. Apps use
+for `bee.ui:frame` and `bee.app:viz`. Apps use
 public contracts such as `bee.app:client` and
 `bee.threads.binding:authority_local`;
 they do not import private broker or store modules.

@@ -37,6 +37,14 @@ function M.route(spec: spec_codec.Spec): (string?, string?)
     end
     local ambient = bounds.object(config.default_env or {})
     if not ambient or next(ambient) ~= nil then return nil, "interactive executor has an ambient environment" end
+    local labels = bounds.object(config.labels_from_env)
+    if not labels then return nil, "Docker executor requires creation-time ownership labels" end
+    for key, name in pairs(spec_codec.LABEL_ENV) do
+        if labels[key] ~= name then return nil, "Docker executor has another ownership label mapping" end
+    end
+    for key in pairs(labels) do
+        if not spec_codec.LABEL_ENV[key] then return nil, "Docker executor has an unadmitted ownership label" end
+    end
     local drops = bounds.array(config.cap_drop, 1)
     local volumes = bounds.array(config.volumes or {}, 0)
     local additions = bounds.array(config.cap_add or {}, 0)
@@ -100,6 +108,11 @@ function M.prepare(_db: sql.DB, request: types.LaunchRequest, prepared: material
     local executor, executor_error = exec.get(ref)
     if not executor then return nil, nil, nil, "Docker executor unavailable: " .. tostring(executor_error) end
     prepared.environment.BEE_ATTEMPT_ID = request.attempt_id
+    local ownership, ownership_error = service.ownership()
+    if not ownership then executor:release(); return nil, nil, nil, ownership_error end
+    prepared.environment.BEE_CONTAINER_OWNER = spec_codec.BINDING
+    prepared.environment.BEE_NODE_ID = ownership.node_id
+    prepared.environment.BEE_STATE_ID = ownership.state_id
     return executor, argv, {work_dir = workdir, env = prepared.environment, mounts = mounts, stdin_materialized = stdin_materialized}, nil
 end
 function M.identity(request: types.LaunchRequest): ({[string]: unknown}?, string?)

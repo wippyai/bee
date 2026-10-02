@@ -120,6 +120,7 @@ type Attempt = {
     required_cleanup: Capability,
     exit_observation: ExitObservation,
     exit_source: string?,
+    start_failure: string?,
     attachment_generation: integer,
     exit: Exit?,
     session_ref: string?,

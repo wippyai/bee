@@ -13,6 +13,7 @@ local resources = require("resources")
 local homes = require("homes")
 local quote = require("quote")
 local docker_client = require("docker_client")
+local spec = require("spec")
 local channel = require("channel")
 local uuid = require("uuid")
 local security = require("security")
@@ -262,7 +263,7 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
         if not image then return nil, nil, "built runtime image has no immutable digest" end
     end
     progress("Runtime image ready: " .. image)
-    local identity = hash.sha256(assert(canonical.encode({profile = profile, image = image})))
+    local identity = hash.sha256(assert(canonical.encode({profile = profile, image = image, ownership_labels = spec.LABEL_ENV})))
     if not identity then return nil, nil, "runtime executor identity failed" end
     local name = "runtime-" .. identity
     local executor_id = "bee.placement.docker:" .. name .. "-executor"
@@ -276,6 +277,7 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
         local changes = overlay:changes()
         changes:create({id = executor_id, kind = "exec.docker", data = {host = "unix:///var/run/docker.sock", image = image,
             user = selected.user, network_mode = selected.network, memory_limit = limits.memory, cpu_quota = limits.cpu, pids_limit = limits.pids,
+            labels_from_env = spec.LABEL_ENV,
             read_only_rootfs = true, no_new_privileges = true, auto_remove = false, cap_drop = {"ALL"}, tmpfs = {["/tmp"] = "rw,nosuid,nodev,size=128m"}}})
         changes:create({id = route_id, kind = "registry.entry", meta = {type = "docker.interactive_executor"}, data = {image_ref = image, executor_ref = executor_id}})
         local _, apply_error = changes:apply()

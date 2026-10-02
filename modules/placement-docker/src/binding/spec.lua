@@ -8,6 +8,23 @@ M.HOME = "/home/bee"
 type Spec = {profile_ref: string, profile_digest: string, image: string, user: string, network: string, limits: profiles.Limits,
     mounts: {profiles.Mount}, interactive_route_ref: string?, attempt_id: string}
 type Observation = {backend_ref: string, state: string, attempt_id: string, home_source: string, observed_image_digest: string, exit_code: integer?}
+type Ownership = {node_id: string, state_id: string}
+M.LABEL_ENV = {["bee.owner"] = "BEE_CONTAINER_OWNER", ["bee.node_id"] = "BEE_NODE_ID", ["bee.state_id"] = "BEE_STATE_ID", ["bee.attempt_id"] = "BEE_ATTEMPT_ID"}
+function M.labels(ownership: Ownership, attempt_id: string?): {[string]: string}
+    local result = {["bee.owner"] = M.BINDING, ["bee.node_id"] = ownership.node_id, ["bee.state_id"] = ownership.state_id}
+    if attempt_id then result["bee.attempt_id"] = attempt_id end
+    return result
+end
+function M.owned(value: unknown, ownership: Ownership, attempt_id: string?): boolean
+    local raw = bounds.object(value)
+    local config = raw and bounds.object(raw.Config)
+    local labels = config and bounds.object(config.Labels) or (raw and bounds.object(raw.Labels))
+    if not labels then return false end
+    for key, expected in pairs(M.labels(ownership, attempt_id)) do
+        if labels[key] ~= expected then return false end
+    end
+    return bounds.id(labels["bee.attempt_id"]) ~= nil
+end
 function M.admit(profile: profiles.Resolved, request: types.LaunchRequest): string?
     local value = profile.profile
     if value.placement_binding ~= M.BINDING or not value.user or not value.network or not value.limits then
@@ -66,7 +83,8 @@ function M.attempt(value: unknown): (string?, string?)
     end
     return found, nil
 end
-function M.inspect(value: unknown, spec: Spec, home_source: string, image_id: string): (Observation?, string?)
+function M.inspect(value: unknown, spec: Spec, home_source: string, image_id: string, ownership: Ownership): (Observation?, string?)
+    if not M.owned(value, ownership, spec.attempt_id) then return nil, "container has another ownership identity" end
     local raw = bounds.object(value)
     local config = raw and bounds.object(raw.Config) or nil
     local state = raw and bounds.object(raw.State) or nil

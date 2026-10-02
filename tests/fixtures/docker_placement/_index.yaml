@@ -45,6 +45,11 @@ entries:
   cpu_quota: 200000
   pids_limit: 256
   auto_remove: false
+  labels_from_env:
+    bee.owner: BEE_CONTAINER_OWNER
+    bee.node_id: BEE_NODE_ID
+    bee.state_id: BEE_STATE_ID
+    bee.attempt_id: BEE_ATTEMPT_ID
   read_only_rootfs: true
   no_new_privileges: true
   cap_drop:
@@ -112,6 +117,7 @@ entries:
     machine: bee.harness.carrier:machine
     protocol: bee.placement.native:protocol
     placement_store: bee.placement.native.persist:store
+    docker_service: bee.placement.docker.service:service
   security:
     policies: &id001
     - bee.security.desktop:desktop_policy

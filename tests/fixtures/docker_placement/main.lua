@@ -14,6 +14,7 @@ local machine = require("machine")
 local protocol = require("protocol")
 local bounds = require("bounds")
 local placement_store = require("placement_store")
+local docker_service = require("docker_service")
 local WORKSPACE = string.rep("a", 32)
 local M = {}
 type Object = {[string]: unknown}
@@ -342,6 +343,7 @@ local function scheduled(mode: string)
     end
 end
 function M.proof()
+    save("ownership.json", assert(json.encode(assert(docker_service.ownership()))))
     local endpoint = object(assert(funcs.call("bee.gateway.binding:address", {})))
     call("bee.gateway.binding:open", {address = endpoint.address})
     local expected = object(assert(registry.get("bee.docker.proof:expectation")).data)

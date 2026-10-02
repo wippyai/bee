@@ -2,6 +2,7 @@
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
+local logger = require("logger")
 local service = require("service")
 local function main()
     local registered, register_error = process.registry.register(service.SWEEPER_NAME)
@@ -14,7 +15,10 @@ local function main()
         if selected.channel == events then
             if selected.value.kind == process.event.CANCEL then return end
         else
-            service.sweep()
+            local result = service.sweep()
+            if not result.ok then
+                logger:error("Docker placement recovery failed", {cause = result.error and result.error.message or "no recovery result"})
+            end
         end
     end
 end

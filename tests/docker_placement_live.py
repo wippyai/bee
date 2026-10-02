@@ -1,6 +1,7 @@
 """Opt-in real Docker PTY and provider-turn acceptance; no credential output."""
 from pathlib import Path
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -13,6 +14,33 @@ import workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 PROVIDERS = ('claude', 'codex', 'agy', 'grok', 'muse', 'opencode')
+
+
+
+def owned_containers(evidence, state):
+    ownership_file = evidence / 'ownership.json'
+    if not ownership_file.exists():
+        return []
+    ownership = json.loads(ownership_file.read_text())
+    state_id = hashlib.sha256(str((state / 'placement').resolve()).encode()).hexdigest()
+    assert ownership['state_id'] == state_id, 'proof ownership names another state directory'
+    labels = {'bee.owner': 'bee.placement.docker.binding:binding',
+              'bee.node_id': ownership['node_id'], 'bee.state_id': state_id}
+    assert all(isinstance(value, str) and value for value in labels.values())
+    if not (state / 'placement.db').exists():
+        return []
+    with sqlite3.connect('file:' + str(state / 'placement.db') + '?mode=ro', uri=True) as database:
+        attempts = {row[0] for row in database.execute("SELECT attempt_id FROM bee_placement_attempts WHERE placement_kind = 'docker'")}
+    command = ['docker', 'ps', '-aq', '--no-trunc']
+    for key, value in labels.items():
+        command.extend(['--filter', 'label=' + key + '=' + value])
+    owned = []
+    for ref in subprocess.check_output(command, text=True).split():
+        assert len(ref) == 64 and all(character in '0123456789abcdef' for character in ref), 'invalid immutable container ID'
+        observed = json.loads(subprocess.check_output(['docker', 'inspect', '--format', '{{json .Config.Labels}}', ref], text=True))
+        if isinstance(observed, dict) and all(observed.get(key) == value for key, value in labels.items()) and observed.get('bee.attempt_id') in attempts:
+            owned.append(ref)
+    return owned
 
 
 def audit_scheduler(state, evidence, mode):
@@ -156,7 +184,7 @@ def main():
                     while result.poll() is None:
                         if time.monotonic() > deadline:
                             raise TimeoutError('provider proof exceeded its deadline')
-                        ids = subprocess.check_output(['docker', 'ps', '-aq', '--no-trunc', '--filter', 'network=' + network], text=True).split()
+                        ids = owned_containers(args.evidence, state)
                         for container_id in ids:
                             with (args.evidence / ('container-' + container_id[:12] + '.log')).open('w') as logs:
                                 subprocess.run(['docker', 'logs', container_id], stdout=logs, stderr=subprocess.STDOUT, check=False)
@@ -169,7 +197,7 @@ def main():
                                 time.sleep(2)
                                 continue
                             identity = json.loads(recorded)
-                            ids = subprocess.check_output(['docker', 'ps', '-aq', '--no-trunc', '--filter', 'network=' + network], text=True).split()
+                            ids = owned_containers(args.evidence, state)
                             assert len(ids) == 1, 'restart proof does not own exactly one container'
                             assert identity['backend_ref'] == ids[0], 'persisted container ID differs from daemon ID'
                             (args.evidence / 'killed-owner.json').write_text(json.dumps({'owner_pid': result.pid, 'container_id': ids[0], 'signal': 9}) + '\n')
@@ -185,15 +213,15 @@ def main():
                 edit('src/docker_proof/_index.yaml', 'expectation', lambda e: e['data'].update(mode='crash-recover'))
                 with (args.evidence / 'restart.log').open('w') as output:
                     result = subprocess.run(command + ['run', 'docker-proof', '--host', 'bee:terminal'], cwd=folder, env=environment, stdout=output, stderr=subprocess.STDOUT, timeout=120)
-                assert not subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split(), 'cancel/cleanup left a container'
+                assert not owned_containers(args.evidence, state), 'cancel/cleanup left a container'
             if result.returncode:
                 raise RuntimeError('Docker provider acceptance failed; see ' + str(args.evidence / 'runtime.log'))
             if args.mode in ('scheduler', 'child'):
                 audit_scheduler(state, args.evidence, args.mode)
-            assert not subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split(), 'provider acceptance left a container before fixture cleanup'
+            assert not owned_containers(args.evidence, state), 'provider acceptance left a container before fixture cleanup'
             print(args.provider + ' Docker ' + args.mode + ' passed', flush=True)
     finally:
-        ids = subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split()
+        ids = owned_containers(args.evidence, state)
         for id in ids:
             with (args.evidence / ('container-' + id[:12] + '.log')).open('w') as output:
                 subprocess.run(['docker', 'logs', id], stdout=output, stderr=subprocess.STDOUT, check=False)

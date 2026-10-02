@@ -10,6 +10,8 @@ entries:
   - registry
   - funcs
   - json
+  - system
+  - hash
   imports:
     bounds: bee.values:bounds
     request_codec: bee.placement:request
@@ -67,6 +69,7 @@ entries:
   - process
   - channel
   - time
+  - logger
   imports:
     service: bee.placement.docker.service:service
 - name: sweeper_service
@@ -101,6 +104,7 @@ entries:
     homes: bee.placement.native.service:homes
     quote: bee.driver.binding:quote
     docker_client: userspace.docker:docker_client
+    spec: bee.placement.docker.binding:spec
 - name: image_owner
   kind: process.lua
   source: file://image_owner.lua
@@ -153,3 +157,4 @@ entries:
     resources: bee.placement.native.env:resources
     capture: bee.driver.locate:probe_capture
     docker_client: userspace.docker:docker_client
+    spec: bee.placement.docker.binding:spec

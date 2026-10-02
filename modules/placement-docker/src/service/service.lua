@@ -19,11 +19,52 @@ local resources = require("resources")
 local image_service = require("image")
 local environment = require("environment")
 local runtime_probe = require("runtime_probe")
+local system = require("system")
+local hash = require("hash")
 local M = {}
 local DOCKER_SOCKET_PATH = "/var/run/docker.sock"
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
 type Loaded = {row: store.Row, request: types.LaunchRequest, spec: spec_codec.Spec, attempt: types.Attempt}
+type Daemon = {
+    list_containers: (self: unknown, {[string]: {string}}) -> (unknown, unknown?),
+    inspect_container: (self: unknown, string) -> (unknown, unknown?),
+    inspect_image: (self: unknown, string) -> (unknown, unknown?),
+    remove_container: (self: unknown, string, boolean?) -> (boolean?, unknown?),
+    stop_container: (self: unknown, string, number?) -> (boolean?, unknown?),
+}
+function M.ownership(): (spec_codec.Ownership?, string?)
+    local node, node_error = system.node.id()
+    if not node or node_error then return nil, "Docker node identity unavailable: " .. tostring(node_error) end
+    local root, root_error = homes.os_path("/")
+    local executor, executor_error = resources.executor()
+    if not root or not executor then return nil, root_error or executor_error end
+    local physical, path_error = paths.resolve(root, executor)
+    if not physical then return nil, path_error end
+    local digest, digest_error = hash.sha256(physical)
+    if not digest then return nil, tostring(digest_error) end
+    return {node_id = node, state_id = digest}, nil
+end
+local function daemon(selected: Daemon?): (Daemon?, string?)
+    if selected then return selected, nil end
+    local client, client_error = docker_client.new(DOCKER_SOCKET_PATH)
+    if not client then return nil, "Docker connection unavailable: " .. tostring(client_error) end
+    return client, nil
+end
+function M.inventory(ownership: spec_codec.Ownership, attempt_id: string?, client: Daemon): ({unknown}?, string?)
+    local labels: {string} = {}
+    for key, value in pairs(spec_codec.labels(ownership, attempt_id)) do labels[#labels + 1] = key .. "=" .. value end
+    table.sort(labels)
+    local raw, list_error = client:list_containers({label = labels})
+    if list_error then return nil, "containers/list: " .. tostring(list_error) end
+    local values = bounds.array(raw, 1024)
+    if not values then return nil, "Docker container inventory is malformed or exceeds its bound" end
+    local owned: {unknown} = {}
+    for _, value in ipairs(values) do
+        if spec_codec.owned(value, ownership, attempt_id) then owned[#owned + 1] = value end
+    end
+    return owned, nil
+end
 local function fail(code: string, message: string): Reply return {ok = false, value = nil, error = {code = code, message = message}} end
 local function succeed(value: unknown): Reply return {ok = true, value = value} end
 local function actor(): string?
@@ -65,14 +106,14 @@ function M.ensure_image(spec: spec_codec.Spec): (boolean, string?)
     if not client then return false, "Docker connection unavailable" end
     local inspected, inspect_error = client:inspect_image(spec.image)
     if inspected and not inspect_error then return true, nil end
-    if type(inspect_error) ~= "string" or inspect_error:sub(1, 9) ~= "HTTP 404:" then return false, "Docker runtime image inspection did not answer" end
+    if type(inspect_error) ~= "string" or inspect_error:sub(1, 9) ~= "HTTP 404:" then return false, "images/inspect: " .. tostring(inspect_error or "no image observation") end
     if not spec.image:find("@sha256:", 1, true) then return false, "local runtime image is missing; build it with make docker-runtime-image" end
     local fetching = M.change(spec.attempt_id, {evidence = {kind = "docker.image_fetching", detail = "fetching the admitted digest-pinned runtime image"}})
     if not fetching.ok then return false, "image fetch intent could not be recorded" end
     local _, pull_error = client:pull_image(spec.image)
-    if pull_error then return false, "Docker runtime image fetch failed" end
+    if pull_error then return false, "images/create: " .. tostring(pull_error) end
     local pulled, verify_error = client:inspect_image(spec.image)
-    if not pulled or verify_error then return false, "Docker runtime image fetch did not produce the admitted digest" end
+    if not pulled or verify_error then return false, "images/inspect: " .. tostring(verify_error or "fetch did not produce the admitted digest") end
     local fetched = M.change(spec.attempt_id, {evidence = {kind = "docker.image_ready", detail = "admitted runtime image is available"}})
     return fetched.ok, fetched.error and fetched.error.message or nil
 end
@@ -91,9 +132,11 @@ local function provider_home(loaded: Loaded): (string?, string?)
     if not executor then return nil, executor_error end
     return paths.resolve(path, executor)
 end
-function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
-    local client, client_error = docker_client.new(DOCKER_SOCKET_PATH)
-    if not client then return nil, "Docker connection unavailable" end
+function M.find(loaded: Loaded, selected: Daemon?): (spec_codec.Observation?, string?, boolean?)
+    local client, client_error = daemon(selected)
+    if not client then return nil, client_error end
+    local ownership, ownership_error = M.ownership()
+    if not ownership then return nil, ownership_error end
     local known: string? = nil
     local known_image: string? = nil
     local recorded_identity = loaded.row.placement_identity_json
@@ -110,21 +153,20 @@ function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
     if known and known_image then
         local inspected, inspect_error = client:inspect_container(known)
         if type(inspect_error) == "string" and (inspect_error == "HTTP 404" or inspect_error:sub(1, 9) == "HTTP 404:") then return nil, nil, true end
-        if inspect_error or not inspected then return nil, "Docker container inspection did not answer" end
-        local verified, verify_error = spec_codec.inspect(inspected, loaded.spec, home, known_image)
+        if inspect_error or not inspected then return nil, "containers/inspect: " .. tostring(inspect_error) end
+        local verified, verify_error = spec_codec.inspect(inspected, loaded.spec, home, known_image, ownership)
         return verified, verify_error, false
     end
     local image, image_error = client:inspect_image(loaded.spec.image)
+    if image_error then return nil, "images/inspect: " .. tostring(image_error) end
     local image_object = bounds.object(image)
     local image_id = image_object and bounds.line(image_object.Id, 71) or nil
     if not image_id then return nil, "Docker image digest inspection did not answer" end
-    if image_error or not image_id:match("^sha256:[0-9a-f]+$") or #image_id ~= 71 then
+    if not image_id:match("^sha256:[0-9a-f]+$") or #image_id ~= 71 then
         return nil, "Docker image digest inspection did not answer"
     end
-    local raw, list_error = client:list_containers({ancestor = {image_id}})
-    if list_error then return nil, "Docker container inventory did not answer" end
-    local values = bounds.array(raw, 1024)
-    if not values then return nil, "Docker container inventory is malformed or exceeds its bound" end
+    local values, list_error = M.inventory(ownership, loaded.attempt.attempt_id, client)
+    if not values then return nil, list_error end
     local found: spec_codec.Observation? = nil
     for _, value in ipairs(values) do
         local item = bounds.object(value)
@@ -132,11 +174,11 @@ function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
         if not ref then return nil, "Docker inventory has an invalid container ID" end
         if not known or ref == known then
             local inspected, inspect_error = client:inspect_container(ref)
-            if inspect_error or not inspected then return nil, "Docker container inspection did not answer" end
+            if inspect_error or not inspected then return nil, "containers/inspect: " .. tostring(inspect_error) end
             local attempt, attempt_error = spec_codec.attempt(inspected)
             if known or attempt == loaded.spec.attempt_id then
                 if attempt_error then return nil, attempt_error end
-                local verified, verify_error = spec_codec.inspect(inspected, loaded.spec, home, image_id)
+                local verified, verify_error = spec_codec.inspect(inspected, loaded.spec, home, image_id, ownership)
                 if not verified then return nil, verify_error end
                 if found then return nil, "multiple containers have this attempt identity" end
                 found = verified
@@ -232,14 +274,15 @@ function M.reconcile(value: unknown): Reply
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
     return M.reconcile_loaded(loaded)
 end
-function M.reconcile_loaded(loaded: Loaded): Reply
+function M.reconcile_loaded(loaded: Loaded, selected: Daemon?): Reply
     if loaded.attempt.execution_state == "intended" then return succeed(loaded.attempt) end
     if loaded.attempt.execution_state == "starting" then
         local present, presence_error = local_attempts.runner_present(loaded.row)
         if present == true then return succeed(loaded.attempt) end
         if present == nil then return fail("UNAVAILABLE", presence_error or "Docker creator presence is unknown") end
     end
-    local found, find_error, absent = M.find(loaded)
+    if loaded.attempt.start_failure then return M.cleanup_loaded(loaded, selected) end
+    local found, find_error, absent = M.find(loaded, selected)
     if find_error then
         if loaded.attempt.execution_state == "exited" then return fail("UNAVAILABLE", find_error) end
         return M.change(loaded.attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.unobserved", detail = find_error}})
@@ -250,6 +293,14 @@ function M.reconcile_loaded(loaded: Loaded): Reply
         return M.change(loaded.attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.missing", detail = "attempt container is absent; terminal outcome is unknown"}})
     end
     if not found then return fail("UNAVAILABLE", "Docker observation is missing") end
+    if found.state == "created" then
+        local recorded = M.change(loaded.attempt.attempt_id, {execution = "uncertain",
+            evidence = {kind = "child.start_failed", detail = "containers/start: creator abandoned the container before an observed start"}})
+        if not recorded.ok then return recorded end
+        local refreshed, refresh_error = M.load({attempt_id = loaded.attempt.attempt_id}, true)
+        if not refreshed then return fail("STORAGE", refresh_error or "reload failed start") end
+        return M.cleanup_loaded(refreshed, selected)
+    end
     local fields: {[string]: unknown} = {placement_identity_json = json.encode(found)}
     if found.state == "exited" or found.state == "stopped" then
         if loaded.attempt.execution_state == "exited" then return succeed(loaded.attempt) end
@@ -279,12 +330,13 @@ end
 function M.stop(value: unknown): Reply
     local loaded, load_error = M.load(value)
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
+    if loaded.attempt.start_failure then return M.cleanup_loaded(loaded) end
     return M.stop_loaded(loaded, value)
 end
-function M.stop_loaded(loaded: Loaded, value: unknown): Reply
+function M.stop_loaded(loaded: Loaded, value: unknown, selected: Daemon?): Reply
     if loaded.attempt.execution_state == "intended" then
-        return M.change(loaded.attempt.attempt_id, {expected_execution = "intended", execution = "exited", cleanup = "complete",
-            evidence = {kind = "stop.before_start", detail = "stopped before Docker runner claim; no container exists"}})
+        return M.change(loaded.attempt.attempt_id, {expected_execution = "intended", execution = "uncertain", cleanup = "complete",
+            evidence = {kind = "child.start_failed", detail = "containers/create: cancelled before Docker runner claim; no container dispatched"}})
     end
     if loaded.attempt.execution_state == "exited" then return succeed(loaded.attempt) end
     local stopping: types.ExecutionState? = nil
@@ -295,20 +347,28 @@ function M.stop_loaded(loaded: Loaded, value: unknown): Reply
         if current and current.attempt.execution_state == "exited" then return succeed(current.attempt) end
         return requested
     end
-    local found, find_error, absent = M.find(loaded)
+    local found, find_error, absent = M.find(loaded, selected)
     if find_error then return fail("UNAVAILABLE", find_error) end
     if not found then
         if absent and loaded.attempt.execution_state == "starting" then return requested end
         return fail("UNAVAILABLE", "container outcome is unknown")
     end
-    if found.state == "exited" then return M.reconcile_loaded(loaded) end
+    if found.state == "created" then
+        local recorded = M.change(loaded.attempt.attempt_id, {execution = "uncertain",
+            evidence = {kind = "child.start_failed", detail = "containers/start: cancelled before an observed container start"}})
+        if not recorded.ok then return recorded end
+        local refreshed, refresh_error = M.load({attempt_id = loaded.attempt.attempt_id}, true)
+        if not refreshed then return fail("STORAGE", refresh_error or "reload cancellation") end
+        return M.cleanup_loaded(refreshed, selected)
+    end
+    if found.state == "exited" then return M.reconcile_loaded(loaded, selected) end
     local object = bounds.object(value) or {}
     local grace = object.mode == "forced" and 0 or math.floor(loaded.request.timeouts.stop_grace_ms / 1000)
-    local client = docker_client.new(DOCKER_SOCKET_PATH)
+    local client = daemon(selected)
     if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
     local stopped_ok, stop_error = client:stop_container(found.backend_ref, grace)
-    if stop_error or stopped_ok ~= true then return fail("UNAVAILABLE", "Docker stop did not answer") end
-    local stopped, verify_error = M.find(loaded)
+    if stop_error or stopped_ok ~= true then return fail("UNAVAILABLE", "containers/stop: " .. tostring(stop_error)) end
+    local stopped, verify_error = M.find(loaded, selected)
     if not stopped or stopped.state ~= "exited" then return fail("UNAVAILABLE", verify_error or "Docker stop is unproven") end
     local_attempts.retire_gateway(loaded.attempt, "container stopped")
     return M.change(loaded.attempt.attempt_id, {execution = "exited", fields = {exit_source = "reconcile", exit_code = stopped.exit_code, placement_identity_json = json.encode(stopped)},
@@ -320,6 +380,7 @@ function M.cleanup_preparers(value: unknown): Reply
     return M.cleanup_preparers_loaded(loaded)
 end
 function M.cleanup_preparers_loaded(loaded: Loaded): Reply
+    if loaded.attempt.start_failure then return M.cleanup_loaded(loaded) end
     if loaded.attempt.execution_state ~= "exited" then return fail("CONFLICT", "cleanup requires proven exit") end
     local found, find_error, absent = M.find(loaded)
     if find_error then return fail("UNAVAILABLE", find_error) end
@@ -333,27 +394,88 @@ function M.cleanup(value: unknown): Reply
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
     return M.cleanup_loaded(loaded)
 end
-function M.cleanup_loaded(loaded: Loaded): Reply
+function M.remove_abandoned(ownership: spec_codec.Ownership, attempt_id: string, selected: Daemon?): (boolean, string?, boolean?)
+    local client, client_error = daemon(selected)
+    if not client then return false, client_error end
+    local values, inventory_error = M.inventory(ownership, attempt_id, client)
+    if not values then return false, inventory_error end
+    for _, value in ipairs(values) do
+        local item = bounds.object(value)
+        local ref = item and spec_codec.container_id(item.Id)
+        if not ref then return false, "owned container has an invalid ID" end
+        local inspected, inspect_error = client:inspect_container(ref)
+        if inspect_error then return false, "containers/inspect: " .. tostring(inspect_error) end
+        if not spec_codec.owned(inspected, ownership, attempt_id) then return false, "container ownership changed before removal" end
+        local raw = bounds.object(inspected)
+        local state = raw and bounds.object(raw.State)
+        if not state or state.Status ~= "created" then return false, "owned container may have run; exit observation is required", true end
+        local removed, remove_error = client:remove_container(ref, false)
+        if not removed or remove_error then return false, "containers/remove: " .. tostring(remove_error) end
+        local remaining, absence_error = client:inspect_container(ref)
+        if remaining ~= nil or type(absence_error) ~= "string" or (absence_error ~= "HTTP 404" and absence_error:sub(1, 9) ~= "HTTP 404:") then
+            return false, "containers/remove: exact container absence is unproven: " .. tostring(absence_error)
+        end
+    end
+    return true, nil
+end
+function M.cleanup_loaded(loaded: Loaded, selected: Daemon?): Reply
+    if loaded.attempt.start_failure then
+        local ownership, ownership_error = M.ownership()
+        if not ownership then return fail("UNAVAILABLE", ownership_error or "Docker ownership unavailable") end
+        local removed, remove_error, ran = M.remove_abandoned(ownership, loaded.attempt.attempt_id, selected)
+        if not removed and not ran then return fail("UNAVAILABLE", remove_error or "failed-start removal is unproven") end
+        if ran then
+            local found, find_error = M.find(loaded, selected)
+            if not found then return fail("UNAVAILABLE", find_error or "failed-start container is unobserved") end
+            if found.state == "running" then
+                local stopped = M.stop_loaded(loaded, {mode = "forced"}, selected)
+                if not stopped.ok then return stopped end
+                local refreshed, refresh_error = M.load({attempt_id = loaded.attempt.attempt_id}, true)
+                if not refreshed then return fail("STORAGE", refresh_error or "reload stopped container") end
+                return M.cleanup_loaded(refreshed, selected)
+            end
+            if found.state ~= "exited" then return fail("UNAVAILABLE", "container state changed during cleanup") end
+            if loaded.attempt.execution_state ~= "exited" then
+                local observed = M.change(loaded.attempt.attempt_id, {execution = "exited", fields = {exit_source = "reconcile", exit_code = found.exit_code},
+                    evidence = {kind = "docker.exited", detail = "container " .. found.backend_ref .. " exited after the start call failed"}})
+                if not observed.ok then return observed end
+                local refreshed, refresh_error = M.load({attempt_id = loaded.attempt.attempt_id}, true)
+                if not refreshed then return fail("STORAGE", refresh_error or "reload container exit") end
+                loaded = refreshed
+            end
+        else
+        if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
+        local cleaned, cleanup_error = workdir_preparers.cleanup(loaded.attempt)
+        if not cleaned then return fail("UNAVAILABLE", cleanup_error or "workdir cleanup failed") end
+        local home_key = bounds.id(loaded.row.home_key)
+        if home_key then
+            local home_error = homes.remove_attempt(home_key)
+            if home_error then return fail("UNAVAILABLE", home_error) end
+        end
+        return M.change(loaded.attempt.attempt_id, {cleanup = "complete",
+            evidence = {kind = "cleanup.complete", detail = "failed start; owned Created containers absent; attempt scratch removed"}})
+        end
+    end
     if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
     if loaded.attempt.execution_state ~= "exited" then return fail("CONFLICT", "cleanup requires proven container exit") end
-    local found, find_error, absent = M.find(loaded)
+    local found, find_error, absent = M.find(loaded, selected)
     if find_error then return fail("UNAVAILABLE", find_error) end
     if found then
         if found.state ~= "stopped" and found.state ~= "exited" then return fail("CONFLICT", "owned container is still live") end
         local verified = M.change(loaded.attempt.attempt_id, {fields = {exit_source = "reconcile", exit_code = found.exit_code},
             evidence = {kind = "docker.exit_verified", detail = "exact container " .. found.backend_ref .. " is stopped before removal"}})
         if not verified.ok then return verified end
-        local client = docker_client.new(DOCKER_SOCKET_PATH)
+        local client = daemon(selected)
         if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
         local removed, remove_error = client:remove_container(found.backend_ref, false)
-        if remove_error or removed ~= true then return fail("UNAVAILABLE", "Docker removal did not answer") end
-        local remaining, verify_error, missing = M.find(loaded)
+        if remove_error or removed ~= true then return fail("UNAVAILABLE", "containers/remove: " .. tostring(remove_error)) end
+        local remaining, verify_error, missing = M.find(loaded, selected)
         if verify_error or not missing then return fail("UNAVAILABLE", verify_error or "container removal is unproven") end
         local recorded = M.change(loaded.attempt.attempt_id, {evidence = {kind = "docker.removed", detail = "removed container " .. found.backend_ref .. " after exit evidence"}})
         if not recorded.ok then return recorded end
     elseif not absent then return fail("UNAVAILABLE", "container absence is unproven") end
-    local preparers = M.cleanup_preparers_loaded(loaded)
-    if not preparers.ok then return preparers end
+    local preparers, preparer_error = workdir_preparers.cleanup(loaded.attempt)
+    if not preparers then return fail("UNAVAILABLE", preparer_error or "workdir cleanup failed") end
     local home_key = bounds.id(loaded.row.home_key)
     if home_key then
         local home_error = homes.remove_attempt(home_key)
@@ -363,23 +485,67 @@ function M.cleanup_loaded(loaded: Loaded): Reply
 end
 M.SWEEP_INTERVAL_MS = 30000
 M.SWEEPER_NAME = "bee.placement.docker.sweeper"
-function M.sweep(): Reply
+function M.sweep(selected: Daemon?): Reply
     local db, open_error = store.open()
     if not db then return fail("STORAGE", open_error or "receipt store unavailable") end
     local rows, read_error = db:query("SELECT attempt_id FROM bee_placement_attempts WHERE placement_kind = 'docker' AND (execution_state IN ('starting', 'running', 'stopping', 'uncertain') OR (execution_state = 'exited' AND cleanup_state != 'complete')) ORDER BY updated_at LIMIT 64", {})
     db:release()
     if not rows or read_error then return fail("STORAGE", "read Docker attempts") end
+    local ownership, ownership_error = M.ownership()
+    if not ownership then return fail("UNAVAILABLE", ownership_error or "Docker ownership unavailable") end
+    local client, client_error = daemon(selected)
+    if not client then return fail("UNAVAILABLE", client_error or "Docker daemon unavailable") end
+    local owned, inventory_error = M.inventory(ownership, nil, client)
+    if not owned then return fail("UNAVAILABLE", inventory_error or "Docker inventory unavailable") end
+    for _, item in ipairs(owned) do
+        local raw = bounds.object(item)
+        local labels = raw and bounds.object(raw.Labels)
+        local id = labels and bounds.id(labels["bee.attempt_id"])
+        if id and raw and raw.State == "created" then
+            local receipt_db, open_error = store.open()
+            if not receipt_db then return fail("STORAGE", open_error or "open orphan receipt") end
+            local receipt, receipt_error = store.row(receipt_db, id)
+            receipt_db:release()
+            if receipt_error then return fail("STORAGE", receipt_error) end
+            local loaded: Loaded? = nil
+            if receipt then
+                local load_error: string?
+                loaded, load_error = M.load({attempt_id = id}, true)
+                if not loaded then return fail("STORAGE", load_error or "owned container receipt is unreadable") end
+            end
+            local present: boolean? = false
+            if receipt then
+                local presence_error: string?
+                present, presence_error = local_attempts.runner_present(receipt)
+                if present == nil then return fail("UNAVAILABLE", presence_error or "Docker creator presence is unknown") end
+            end
+            if present == false and (not loaded or loaded.attempt.start_failure or loaded.attempt.execution_state ~= "intended") then
+                if loaded and not loaded.attempt.start_failure then
+                    local recorded = M.change(id, {evidence = {kind = "child.start_failed", detail = "containers/start: creator abandoned the container before an observed start"}})
+                    if not recorded.ok then return recorded end
+                end
+                local removed, remove_error = M.remove_abandoned(ownership, id, client)
+                if not removed then return fail("UNAVAILABLE", remove_error or "orphan removal failed") end
+                if loaded then
+                    local noted = M.change(id, {evidence = {kind = "docker.created_removed", detail = "removed owned Created container " .. tostring(raw.Id)}})
+                    if not noted.ok then return noted end
+                end
+            end
+        end
+    end
     local count = 0
     for _, row in ipairs(rows) do
-        local loaded = M.load({attempt_id = row.attempt_id}, true)
+        local loaded, load_error = M.load({attempt_id = row.attempt_id}, true)
+        if not loaded then return fail("STORAGE", load_error or "Docker attempt is unreadable") end
         if loaded then
             local result: Reply
             if loaded.attempt.execution_state == "exited" then
                 local present = local_attempts.runner_present(loaded.row)
-                if present == false then result = M.cleanup_loaded(loaded)
+                if present == false then result = M.cleanup_loaded(loaded, client)
                 else result = succeed(loaded.attempt) end
-            else result = M.reconcile_loaded(loaded) end
+            else result = M.reconcile_loaded(loaded, client) end
             if result.ok then count = count + 1 end
+            if not result.ok then return result end
         end
     end
     return succeed({reconciled = count})
@@ -434,7 +600,9 @@ function M.capabilities(value: unknown): Reply
             local image_ref = bounds.line(readiness.image_ref, 128)
             if request.probe_argv ~= nil then
                 if not image_ref then return fail("UNAVAILABLE", "Docker image is not cached; launch once to build it before option help is available") end
-                local output, err = runtime_probe.run(DOCKER_SOCKET_PATH, image_ref, runtime_name, request.probe_argv)
+                local ownership, ownership_error = M.ownership()
+                if not ownership then return fail("UNAVAILABLE", ownership_error or "Docker ownership unavailable") end
+                local output, err = runtime_probe.run(client, image_ref, runtime_name, request.probe_argv, ownership)
                 if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
                 report.probe_output = output
             end
@@ -449,7 +617,9 @@ function M.capabilities(value: unknown): Reply
         local immutable = object and bounds.line(object.Id, 128)
         if request.probe_argv ~= nil then
             if not immutable or not digest then return fail("UNAVAILABLE", "Docker image is missing or has no runtime evidence") end
-            local output, err = runtime_probe.run(DOCKER_SOCKET_PATH, immutable, runtime_name, request.probe_argv)
+            local ownership, ownership_error = M.ownership()
+            if not ownership then return fail("UNAVAILABLE", ownership_error or "Docker ownership unavailable") end
+            local output, err = runtime_probe.run(client, immutable, runtime_name, request.probe_argv, ownership)
             if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
             report.probe_output = output
         end

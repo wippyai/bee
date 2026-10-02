@@ -27,6 +27,7 @@ workspace:
     bee/approvals: ./modules/approvals
     bee/approvals-inbox: ./modules/approvals-inbox
     bee/application: ./modules/application
+    bee/ui: ./modules/ui
     bee/node: ./modules/node
     bee/resources: ./modules/resources
     bee/capability: ./modules/capability

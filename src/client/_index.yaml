@@ -68,7 +68,7 @@ entries:
     handoff: bee.client:handoff
     interaction: bee.app:interaction
     physical: bee.terminal:display
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     projection: bee.desktop.types:projection
 - name: local
   kind: process.lua
@@ -138,7 +138,7 @@ entries:
     decode: bee.desktop.types:projection
     contract: bee.protocol:application
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: list_desktops
   kind: function.lua
   source: file://desktop_storage.lua
@@ -170,7 +170,7 @@ entries:
   source: file://node_appearance.lua
   modules: [funcs, channel]
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: assignments
   kind: library.lua
   source: file://assignments.lua

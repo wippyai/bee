@@ -62,6 +62,15 @@ local function has(report: preflight.Report, code: string): boolean
 end
 local function define_tests()
     test.describe("Governance preflight", function()
+        test.it("blocks an application restart policy without a checkpoint schema", function()
+            local candidate, context = fixture()
+            candidate.entries[1].application_checkpoint_invalid = true
+            local report = checked(candidate, context)
+            test.is_false(report.ready)
+            test.is_true(has(report, "APPLICATION_CHECKPOINT"))
+            candidate.entries[1].application_checkpoint_invalid = false
+            test.is_true(checked(candidate, context).ready)
+        end)
         test.it("requires explicit child namespace ownership and host admission", function()
             local candidate, context = fixture()
             candidate.entries[1].id = "demo.child:run"

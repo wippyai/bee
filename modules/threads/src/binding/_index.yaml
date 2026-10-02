@@ -761,6 +761,15 @@ entries:
                     type: boolean
                   caller_may_extend:
                     type: boolean
+- name: node_summary
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: node_summary
+  imports:
+    boundary: bee.threads.service:boundary
+    work_store: bee.threads.service:work_store
+    types: bee.threads:types
+  security: {policies: []}
 - name: capabilities_report
   kind: library.lua
   source: file://capabilities.lua

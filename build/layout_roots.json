@@ -5,14 +5,12 @@
     "workers": "process.host"
   },
   "bee.app": {
-    "appearance": "library.lua",
     "arguments": "library.lua",
     "caller": "library.lua",
     "client": "library.lua",
     "diagram": "library.lua",
     "folder_picker": "library.lua",
     "forms": "library.lua",
-    "frame": "library.lua",
     "host_leases": "library.lua",
     "interaction": "library.lua",
     "names": "library.lua",
@@ -20,7 +18,6 @@
     "sessions_protocol": "library.lua",
     "status_reader": "library.lua",
     "status_surface": "library.lua",
-    "text": "library.lua",
     "thread_protocol": "library.lua",
     "viz": "library.lua"
   },
@@ -78,6 +75,11 @@
   "bee.threads": {
     "record_types": "library.lua",
     "types": "library.lua"
+  },
+  "bee.ui": {
+    "appearance": "library.lua",
+    "frame": "library.lua",
+    "text": "library.lua"
   },
   "bee.values": {
     "bounds": "library.lua",

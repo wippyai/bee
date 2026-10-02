@@ -1147,6 +1147,10 @@ UPDATE bee_credential_definitions SET source_ref = 'bee.persist.env:startup_prog
 UPDATE bee_credential_projections SET materializer = 'bee.app.status:startup_progress' WHERE materializer = 'bee.app:startup_progress';
 UPDATE bee_credential_projections SET materializer = 'bee.persist.env:startup_progress' WHERE materializer = 'bee.persist:startup_progress';
 ]]
+local DESKTOP_REFERENCES_SQL = [[
+UPDATE bee_credential_definitions SET source_ref = 'bee.desktop.service:main' WHERE source_ref = 'bee.session:main';
+UPDATE bee_credential_projections SET materializer = 'bee.desktop.service:main' WHERE materializer = 'bee.session:main';
+]]
 local list: {Migration} = {
     {id = 1, name = "credentials", sql = CREDENTIALS_SQL, rebuild = false},
     {id = 2, name = "file_sources", sql = FILE_SOURCES_SQL, rebuild = true},
@@ -1155,6 +1159,7 @@ local list: {Migration} = {
     {id = 5, name = "frozen_formats", sql = FROZEN_FORMATS_SQL, rebuild = false},
     {id = 6, name = "credentials_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
     {id = 7, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
+    {id = 8, name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

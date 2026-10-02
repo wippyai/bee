@@ -62,6 +62,9 @@ end
 function M.may_manage_sessions(): boolean
     return security.can(M.SESSIONS_OWNER, "*")
 end
+function M.may_summarize_sessions(): boolean
+    return security.can("bee.threads.sessions.summary", "node")
+end
 function M.may_project_approvals(thread_id: string): boolean
     return security.can(M.APPROVAL, thread_id)
 end

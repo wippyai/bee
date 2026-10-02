@@ -13,6 +13,10 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
+- name: dependency_ui
+  kind: ns.dependency
+  component: bee/ui
+  version: '*'
 - name: target_application_protocol
   kind: ns.requirement
   targets:
@@ -39,7 +43,7 @@ entries:
   source: file://state.lua
   imports:
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     commands: bee.desktop.types:commands
 - name: layout
   kind: library.lua

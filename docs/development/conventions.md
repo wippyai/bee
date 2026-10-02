@@ -59,7 +59,8 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
-| `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
+| `modules/application/src` | Public SDK namespace `bee.app`: application client, owner clients and presentation kits |
+| `modules/ui/src` | Shared frame, appearance and bounded text helpers as `bee.ui` |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
 | `modules/approvals-inbox/src` | Approvals inbox app as an installable package |
@@ -104,7 +105,7 @@ entry: host wiring cannot leak implementations into a component root.
 
 | Component namespace | Shared root libraries |
 |---|---|
-| `bee.app` | `appearance`, `arguments`, `caller`, `client`, `diagram`, `folder_picker`, `forms`, `frame`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `text`, `thread_protocol`, `viz` |
+| `bee.app` | `arguments`, `caller`, `client`, `diagram`, `folder_picker`, `forms`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `thread_protocol`, `viz` |
 | `bee.capability` | `model` |
 | `bee.credentials` | `formats`, `protocol` |
 | `bee.desktop` | `model`, `state`, `layout` |
@@ -120,10 +121,12 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.placement.native` | `protocol` |
 | `bee.sync` | `protocol`, `replica_protocol`, `types` |
 | `bee.threads` | `record_types`, `types` |
+| `bee.ui` | `appearance`, `frame`, `text` |
 | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
 
-The SDK `bee.app` owns its documented public application helpers and rendering
-values at its root. Those entries are included in the same explicit set. New
+The SDK `bee.app` owns its documented public application helpers and presentation
+kits at its root. Shared frame, appearance and text values belong to `bee.ui`.
+Those entries are included in the same explicit set. New
 shared root libraries require a documented responsibility and a reviewed update
 to the set; a new implementation does not qualify simply because it is shared.
 

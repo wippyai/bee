@@ -70,6 +70,12 @@ list of complete registry entries and freezes it with the other source files.
 The publication preparation service parses that exact frozen file and uses
 `bee.gov.delivery:artifact` to create the canonical measured envelope. It executes
 no code and does not mutate the overlay or frozen snapshot.
+`bee.gov.binding:publication_call` checks `bee.gov.delivery.manage` for prepare
+or `bee.gov.delivery.publish` for publish against the caller's exact workspace
+before entering `bee.gov.security:publication_execution_scope`. Its private
+backend requires that scope's execution marker. The caller's actor remains the
+recorded identity, while ordinary applications retain their direct-store deny.
+Publication still verifies the host profile and exact applied artifact.
 
 The host links `target_db`; `BEE_GOVERNANCE_DB` selects the default SQLite path.
 Checked migration 1 owns the private workspace rows, files, frozen copies and
@@ -161,7 +167,11 @@ recovery reconciles the same approval effect because it may already have been
 consumed. A verified receipt establishes the desired intent. Later recovery
 remeasures that exact intent, restores its absent process-local overlay with
 revision-fenced receipts, and never follows a newer plan selection. The
-resolver, approval executor, overlay owner, apply and exact-observation functions
+settled intent's measured application admission includes the exact generated
+policy bodies. Cold recovery regenerates absent capability records from that
+unchanged admission and the recorded approval; a conflicting live grant still
+blocks restoration.
+The resolver, approval executor, overlay owner, apply and exact-observation functions
 remain host-selected inputs; replicated content supplies none of them.
 
 Migration work stays inside the same durable `applying` effect. For the current
@@ -262,6 +272,10 @@ requests a new permission approval. File grants root in the destination
 workspace's folder from the node catalog; contract and HTTP grants authorize
 only the capability gateway (`bee.gov.binding:contract_call`,
 `bee.gov.binding:http_request`), which checks the caller's own live record.
+An approved contract call retains the original application actor and enters the
+private `bee.gov.security:gateway_callee_scope`, whose policy grants nothing.
+Only the callee's declared policies apply; caller and gateway permissions do not
+flow into it, and the application retains its custom-scope creation denial.
 Preflight also refuses edits to the host `bee.security.gov:protected_kernel` trust map, its
 transitive code dependencies and requirement selectors aimed at it. That map
 names every shipped namespace a host-selected scope lives in or is reached from

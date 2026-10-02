@@ -1236,6 +1236,15 @@ local function op_attention_count(tx: sql.Transaction, actor: string, object: Ob
     if count_error or count == nil then return storage(count_error or "count attention") end
     return success({count = count}, false)
 end
+local function op_node_summary(tx: sql.Transaction, _: string, object: Object, now: integer, _prepared: Object?): Result
+    if next(object) ~= nil then return failure("INVALID_ARGUMENT", "node summary accepts an empty object") end
+    if not security.can("bee.approvals.summary", "node") then return failure("DENIED", "caller may not summarize node approvals") end
+    local current, node_error = node()
+    if not current then return failure("UNAVAILABLE", node_error or "node identity is unavailable") end
+    local count, count_error = store.node_pending_count(tx, current, now)
+    if count == nil then return storage(count_error or "count node pending approvals") end
+    return success({pending_approvals = count}, false)
+end
 local function op_runtime_lease(tx: sql.Transaction, actor: string, request: Object, now: integer, prepared: Object?): Result
     if bounds.fields(request, {"operation", "lease_ref", "workspace_id", "tool", "input_digest", "effect_key"}) then return failure("INVALID_ARGUMENT", "runtime lease request has unknown fields") end
     local operation = bounds.member(request.operation, {"grant", "check", "use", "revoke", "list"})
@@ -1309,6 +1318,7 @@ end
 
 operations.runtime_lease = op_runtime_lease
 operations.attention_count = op_attention_count
+operations.node_summary = op_node_summary
 operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
@@ -1329,6 +1339,7 @@ function M.complete_publication_effect(value: unknown): Reply return run(value, 
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.attention_count(value: unknown): Reply return run(value, "attention_count") end
+function M.node_summary(value: unknown): Reply return run(value, "node_summary") end
 function M.inbox(value: unknown): Reply return run(value, "inbox") end
 function M.feed_snapshot(value: unknown): Reply return run(value, "feed_snapshot") end
 function M.feed_read_after(value: unknown): Reply return run(value, "feed_read_after") end

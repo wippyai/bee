@@ -562,7 +562,7 @@ def exercise(folder, baseline, target, explicit):
             target_version = next(row["version"] for row in explicit_lock["modules"] if row.get("root"))
             (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version).replace("__COMPONENT__", COMPONENT).replace("__NEXT_COMPONENT__", NEXT_COMPONENT).replace("__FIRST_CORE__", TARGET))
             imports = {"bounds": "bee.values:bounds", "inventory": "bee.hub.package:inventory",
-                       "view": "bee.settings.app:view", "appearance": "bee.app:appearance",
+                       "view": "bee.settings.app:view", "appearance": "bee.ui:appearance",
                        "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog", "canonical": "bee.values:canonical"}
             entries = [
                 {"name": "read", "kind": "security.policy", "policy": {

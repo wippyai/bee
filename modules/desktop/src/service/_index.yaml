@@ -15,7 +15,7 @@ entries:
   imports:
     commands: bee.desktop.types:commands
     state: bee.desktop:state
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     decode: bee.desktop.types:projection
     status_bindings: bee.desktop.types:bindings
     statuses: bee.desktop.service:statuses

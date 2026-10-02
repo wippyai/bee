@@ -15,7 +15,7 @@ entries:
   modules: [process, time, security, tty, io]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
   security:
     policies: [bee.hive.manager.probe:policy]
   meta:

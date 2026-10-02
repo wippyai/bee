@@ -19,6 +19,16 @@ def sql_block(path, name):
 
 
 class AppLayout(unittest.TestCase):
+    def test_harness_uses_public_boundaries_outside_its_module(self):
+        for index in (ROOT / "modules/harness/src").rglob("_index.yaml"):
+            document = yaml.safe_load(index.read_text())
+            for entry in document.get("entries", []):
+                for target in entry.get("imports", {}).values():
+                    namespace = target.split(":", 1)[0]
+                    if namespace == "bee.app" or namespace.startswith("bee.harness."):
+                        continue
+                    self.assertNotIn("app", namespace.split("."), f"{index}: {entry['name']} imports {target}")
+
     def test_requirement_targets_and_imports(self):
         entries = {}
         for root in [ROOT / 'src', *sorted((ROOT / 'modules').glob('*/src'))]:

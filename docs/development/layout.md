@@ -297,6 +297,14 @@ the documented examples. Agent-author probes point at Timeline's `app/` sources.
 | `tests/fixtures/hub_manage/sync/env/_index.yaml` | `bee.sync.env` |
 | `tests/fixtures/hub_preview/sync/env/_index.yaml` | `bee.sync.env` |
 
+Sessions admission and catalog implementations live in `bee.sessions.binding`;
+its pull scheduler and turn workers live in `bee.sessions.service`, and selected
+executor/driver routing lives in `bee.sessions.executor`. Threads remains the
+journal owner. Sessions has no empty persistence, migrations or traits children.
+The former Sessions owner library and its nonpersisted move-map entries are
+removed; existing public function and binding IDs resolve directly to the owner
+source without a forwarding layer.
+
 ## Component root placement map
 
 Every name in a row moves from the source namespace to the owning child shown.
@@ -411,7 +419,6 @@ conventions and `build/layout_roots.json`.
 | `bee.resources` | `bee.resources.env` | `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `resource_roots`, `resources`, `roots_ref` |
 | `bee.resources` | `bee.resources.binding` | `local`, `resources_workspace_extension` |
 | `bee.sessions` | `bee.sessions.executor` | `driver_route`, `executor_registry`, `executor_selection` |
-| `bee.sessions` | `bee.sessions.service` | `owner` |
 | `bee.sessions` | `bee.sessions.binding` | `threads_journal` |
 | `bee.sessions` | `bee.sessions.env` | `threads_journal_ref` |
 | `bee.settings` | `bee.settings.app` | `build_info` |

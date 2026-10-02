@@ -47,12 +47,12 @@ entries:
   modules: [tty]
   imports:
     bounds: bee.values:bounds
-    frames: bee.app:frame
+    frames: bee.ui:frame
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
     view: bee.approvals.inbox.app:view
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: surface_test
   kind: function.lua
   source: file://surface_test.lua
@@ -69,7 +69,7 @@ entries:
     model: bee.approvals.inbox.app:model
     inbox: bee.approvals.inbox.app:client
     view: bee.approvals.inbox.app:view
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: admission_probe
   kind: process.lua
   source: file://admission_probe.lua
@@ -137,7 +137,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form

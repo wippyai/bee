@@ -4,8 +4,8 @@ Durable threads in a SQLite store owned by this module. The `authority`,
 `lifecycle`, `delivery`, `projection` and `carrier` contracts commit typed
 records, membership and work lifecycle for rich threads. The private `journal`
 contract stores Sessions state, immutable work, fenced turns, receipts and feed
-events in the same record stream and transaction boundary. Its caller must
-hold `bee.threads.sessions_owner`; the Threads inbox remains a separate legacy
+events in the same record stream and transaction boundary. Session/work callers
+must hold `bee.threads.sessions_owner`; the Threads inbox remains a separate legacy
 delivery contract and does not schedule work.
 
 ## Slices
@@ -15,11 +15,20 @@ delivery contract and does not schedule work.
 | `bee.threads` | Contracts (`authority`, `lifecycle`, `delivery`, `projection`, `carrier`, `approvals`, `journal`), local bindings, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
 | `bee.threads.records` | Pure typed decoders for the seven record families, thread-specific capacity and sequence checks, and canonical record envelopes encoded through `bee.values`; no I/O |
 | `bee.threads.binding` | Callable implementations of the authority, lifecycle, delivery, projection, carrier, approvals and journal contracts; domain-qualified method names resolve collisions |
-| `bee.threads.service` | The owner and delivery waiter processes; the authority: access facade, authority, action inbox and lifecycle operations, canonical session/work store, one-shot notices, and owner methods |
+| `bee.threads.service` | The owner and delivery waiter processes; the authority: access facade, authority, action inbox and lifecycle operations, Sessions journal authorization and domain transitions, one-shot notices, and owner methods |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (28 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
+| `bee.threads.persist` | The owned store: checked migration ledger (29 migrations), owner incarnation, connection settings, typed readers, write transactions, Sessions journal SQL and stored-row decoders, and forwarding outbox repository |
+
+The journal bindings call `bee.threads.service:work_store` for request validation,
+owner and summary-reader permission checks, workspace selection and domain
+transitions.
+That service calls `bee.threads.persist:journal` through typed functions for all
+Sessions journal queries and writes, including scan SQL and stored-row decoding.
+The repository uses the caller's existing Threads transaction; it opens no
+connection and selects no authority. Journal records, work indexes, turn fences
+and operation receipts commit or roll back together.
 
 ## Dependency interface
 
@@ -137,7 +146,12 @@ sequence-bearing indexes without changing retained records), and 21
 `sessions_work_store` (canonical sessions, work, turns and operation receipts), 22
 `sessions_work_sender` (owner-stamped sender identity), 23 `sessions_turn_context`
 (resumable executor context), 24 `sessions_work_uncertainty` (uncertain work evidence),
-and 25 `sessions_work_cancellation` (durable cancellation requests).
+25 `sessions_work_cancellation` (durable cancellation requests), 26
+`sessions_progress_supervision` (work budgets and live-turn progress), 27
+`profile_budget_names_and_session_accounting` (budget field conversion and
+session consumption counters), 28 `app_child_definition_data` (the definition
+migration marker), and 29 `cancel_intent_admission_repair` (rebuild retained
+cancellation intents under the current admission constraints).
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and

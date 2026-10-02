@@ -89,7 +89,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -103,7 +103,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -116,7 +116,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -171,7 +171,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -221,7 +221,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:

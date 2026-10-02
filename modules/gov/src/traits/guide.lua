@@ -212,8 +212,8 @@ function M.example(): {{[string]: unknown}}
     return {{id = M.DEFINITION_ID, kind = "process.lua",
         data = {source = M.SOURCE, method = "main",
             modules = {"tty", "process", "channel", "json"},
-            imports = {client = "bee.app:client", appearance = "bee.app:appearance",
-                frame = "bee.app:frame"}},
+            imports = {client = "bee.app:client", appearance = "bee.ui:appearance",
+                frame = "bee.ui:frame"}},
         meta = {type = "bee.app", application = {api_version = 1, lifetime = "view",
             revision = "1", title = M.TITLE, instance_policy = "multiple",
             resume_schema = "guide-counter.v1", restart_policy = "automatic"}}}}
@@ -268,14 +268,14 @@ function M.rendering(): string
     return "The process entry carries its Lua source inline and renders with the terminal"
         .. " toolkit: tty.events, tty.start, tty.surface, tty.screen_size, tty.canvas with one-based"
         .. " canvas:put, output:present, client.launch, client.ready, and client.checkpoint when the"
-        .. " metadata declares a resume_schema. Draw every frame through bee.app:frame, the"
+        .. " metadata declares a resume_schema. Draw every frame through bee.ui:frame, the"
         .. " toolkit Bee's own applications use: frame.new, then frame.header for the uppercase title"
         .. " and a muted summary, frame.tabs, frame.table or frame.row for selectable rows (a › marker"
         .. " shows selection without color), frame.empty for an empty or failed list with its next"
         .. " action, frame.actions on the penultimate row with one primary button, and frame.footer on"
         .. " the final row for the status and the frame.hints key help; resolve mouse input with"
         .. " frame.hit over the hits the frame recorded. Use semantic appearance roles from"
-        .. " bee.app:appearance, authenticate appearance messages by their broker sender, and"
+        .. " bee.ui:appearance, authenticate appearance messages by their broker sender, and"
         .. " declare exactly the native modules and library imports the source uses."
 end
 function M.transport(): string
@@ -445,7 +445,7 @@ function M.platform_documentation(): string
         .. " UI) and the terminal toolkit. For an application that works across every node, search the "
         .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
         .. " matches. The authored UI rules are in docs/guides/ui.md, and the toolkit reference gives compact"
-        .. " examples built on bee.app:frame. For"
+        .. " examples built on bee.ui:frame. For"
         .. " a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
         .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every"
         .. " question up in the corpus rather than guessing a signature."

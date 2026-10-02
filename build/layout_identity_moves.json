@@ -374,7 +374,6 @@
   "bee.sessions:driver_route": "bee.sessions.executor:driver_route",
   "bee.sessions:executor_registry": "bee.sessions.executor:executor_registry",
   "bee.sessions:executor_selection": "bee.sessions.executor:executor_selection",
-  "bee.sessions:owner": "bee.sessions.service:owner",
   "bee.sessions:threads_journal": "bee.sessions.binding:threads_journal",
   "bee.sessions:threads_journal_ref": "bee.sessions.env:threads_journal_ref",
   "bee.settings:build_info": "bee.settings.app:build_info",

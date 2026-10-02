@@ -59,10 +59,56 @@ local function check(expected: string)
     end
     assert(bee and terminal, "missing Bee/terminal inventory")
 end
+local function component_change(request: unknown): string
+    local prepared = call("plan", request)
+    assert(prepared.ok == true, tostring(prepared.message))
+    local plan = bounds.object(prepared.value)
+    assert(plan and plan.ready == true, "component plan is not ready")
+    local digest = bounds.line(plan.digest, 64)
+    assert(digest, "component plan has no digest")
+    local result = call("apply", request, digest)
+    local receipt = bounds.object(result.value)
+    assert(result.ok == true and receipt and receipt.state == "complete", tostring(result.message))
+    local replayed = call("apply", request, digest)
+    assert(replayed.ok == true and replayed.replayed == true, "component operation is not idempotent")
+    return digest
+end
+local function components()
+    local installed = captured()
+    local files: inventory.Root? = nil
+    for _, root in ipairs(installed.roots) do if root.component == "bee/files" then files = root; break end end
+    assert(files, "Files has no installed root")
+    component_change({action = "update", component = "bee/files", version = "__COMPONENT__",
+        parameters = files.parameters, migration_policy = "none"})
+    for _, root in ipairs(captured().roots) do
+        if root.id:sub(1, 9) == "bee.deps:" then assert(root.owner == "", "converted dependency is not host-owned") end
+    end
+    logger:info("STANDALONE_SELF_UPDATE_COMPONENT_UPDATED")
+    local telemetry: inventory.Root? = nil
+    for _, root in ipairs(installed.roots) do if root.component == "bee/hive-telemetry" then telemetry = root; break end end
+    assert(telemetry, "Telemetry has no installed root")
+    component_change({action = "uninstall", component = "bee/hive-telemetry", migration_policy = "leave"})
+    component_change({action = "install", component = "bee/hive-telemetry", version = "__BASELINE__", parameters = telemetry.parameters})
+    logger:info("STANDALONE_SELF_UPDATE_OPTIONAL_INSTALLED")
+    component_change({action = "uninstall", component = "bee/hive-telemetry", migration_policy = "leave"})
+    logger:info("STANDALONE_SELF_UPDATE_OPTIONAL_REMOVED")
+    local refused = call("plan", {action = "uninstall", component = "bee/hub"})
+    assert(refused.ok == false and type(refused.message) == "string" and refused.message:find("protected boot/installer", 1, true), "Hub removal was not refused precisely")
+    logger:info("STANDALONE_SELF_UPDATE_PROTECTED_REFUSED")
+end
+local function selected_components(expected: string)
+    local files = false
+    for _, item in ipairs(captured().modules) do
+        assert(item.component ~= "bee/hive-telemetry", "self-update reinstalled the removed optional component")
+        if item.component == "bee/files" then assert(item.version == expected, "component selection was reset"); files = true end
+    end
+    assert(files, "Files disappeared")
+end
 local function live(): integer
     local pid = process.pid()
     check("__BASELINE__")
     about("__BASELINE__", "baseline")
+    components()
     for _, root in ipairs(captured().roots) do assert(root.component ~= "bee/bee", "invented standalone registry root") end
     local prepared = call("plan", REQUEST)
     assert(prepared.ok == true, tostring(prepared.message))
@@ -98,12 +144,21 @@ local function live(): integer
     assert(saved.ok == true and persisted and persisted.state == "complete", "completed receipt was not persisted")
     check("__TARGET__")
     about("__TARGET__", "live")
+    selected_components("__COMPONENT__")
+    local files: inventory.Root? = nil
+    for _, root in ipairs(captured().roots) do if root.component == "bee/files" then files = root; break end end
+    assert(files, "Files has no independent root after self-update")
+    component_change({action = "update", component = "bee/files", version = "__NEXT_COMPONENT__",
+        parameters = files.parameters, migration_policy = "none"})
+    selected_components("__NEXT_COMPONENT__")
+    logger:info("STANDALONE_SELF_UPDATE_POST_ROOT_COMPONENT_UPDATED")
     logger:info("STANDALONE_SELF_UPDATE_APPLIED", {owner_before = tostring(pid), owner_after = tostring(process.pid())})
     return 0
 end
 local function offline(): integer
     check("__TARGET__")
     about("__TARGET__", "offline")
+    selected_components("__NEXT_COMPONENT__")
     logger:info("STANDALONE_SELF_UPDATE_OFFLINE_PASS")
     return 0
 end
@@ -118,22 +173,28 @@ return {main = main, offline = offline}
 
 BASELINE = "0.1.0-selfupdate.fixture.1"
 TARGET = "0.1.0-selfupdate.fixture.2"
+EXPLICIT = "0.1.0-selfupdate.fixture.3"
+COMPONENT = "0.1.0-selfupdate.component.2"
+NEXT_COMPONENT = "0.1.0-selfupdate.component.3"
 
 
 def build_deployments(folder, seed):
     # Reuse sealed artifact resources and registrations while packing current
     # production Lua into both versions. No runtime pin or publication changes.
     lock, paths = artifact_paths(seed)
-    sources = {}
+    sources, imports, modules = {}, {}, {}
     for root in (ROOT / "src", ROOT / "modules"):
         for index in root.rglob("_index.yaml"):
             document = yaml.safe_load(index.read_text())
             for entry in document.get("entries", []):
                 source = entry.get("source", "")
                 if entry.get("kind") in {"library.lua", "function.lua", "process.lua"} and source.startswith("file://"):
-                    sources[f"{document['namespace']}:{entry['name']}"] = str(index.parent / source.removeprefix("file://"))
+                    entry_id = f"{document['namespace']}:{entry['name']}"
+                    sources[entry_id] = str(index.parent / source.removeprefix("file://"))
+                    imports[entry_id] = entry.get("imports", {})
+                    modules[entry_id] = entry.get("modules", [])
     packs, deployments = [], []
-    for name, version in (("baseline", BASELINE), ("target", TARGET)):
+    for name, version in (("baseline", BASELINE), ("target", TARGET), ("explicit", EXPLICIT)):
         deployment = folder / name
         deployment.mkdir()
         copied = json.loads(json.dumps(lock))
@@ -144,7 +205,13 @@ def build_deployments(folder, seed):
             if org == "bee":
                 row["version"] = version
                 destination = deployment / ".wippy/vendor" / org / f"{module}-{version}.wapp"
-                packs.append({"Input": str(path), "Output": str(destination), "Version": version})
+                packs.append({"Input": str(path), "Output": str(destination), "Version": version,
+                              "DependencyVersion": BASELINE if name != "baseline" else version, "Explicit": name != "baseline"})
+                if row["name"] == "bee/files" and name == "baseline":
+                    for component_version in (COMPONENT, NEXT_COMPONENT):
+                        component_path = folder / f"files-{component_version}.wapp"
+                        packs.append({"Input": str(path), "Output": str(component_path), "Version": component_version,
+                                      "DependencyVersion": BASELINE, "Explicit": False})
             else:
                 destination = deployment / ".wippy/vendor" / org / path.name
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -158,7 +225,15 @@ def build_deployments(folder, seed):
     identity = {"runtime": manifest["runtime"]["repository"], "runtime_commit": manifest["runtime"]["commit"],
                 "native": native[0]["module"], "native_version": native[0]["version"],
                 "native_components": [{"package": item["package"], "version": item["version"]} for item in native]}
-    config.write_text(json.dumps({"Packs": packs, "Sources": sources, "Identity": identity}))
+    dependencies = yaml.safe_load((ROOT / "src/deps/_index.yaml").read_text())
+    independent = {f"bee.deps:{entry['name']}": True for entry in dependencies["entries"]
+                   if entry.get("meta", {}).get("independent") is True}
+    policies = yaml.safe_load((ROOT / "modules/hub/src/security/_index.yaml").read_text())
+    policy_updates = {f"bee.hub.security:{entry['name']}": entry["policy"]
+                      for entry in policies["entries"] if entry["name"] in {"dependency_policy", "receipt_policy"}}
+    config.write_text(json.dumps({"Packs": packs, "Sources": sources, "Identity": identity, "Imports": imports, "Modules": modules,
+                                 "Independent": independent,
+                                 "Policies": policy_updates}))
     result = subprocess.run(["go", "-C", str(ROOT / "native"), "run", "-mod=readonly",
                              str(ROOT / "tests/standalone_self_update_packs.go"), str(config)],
                             check=True, capture_output=True, text=True, timeout=120,
@@ -213,14 +288,14 @@ def build_native(folder, baseline):
     return binary
 
 
-def native_attached(folder, baseline, target, url):
+def native_attached(folder, baseline, explicit, url):
     """Apply through Modules on a PTY, then navigate About and detach."""
     binary = build_native(folder, baseline)
     scratch = folder / "native"
     for name in ("project", "tmp", "home/.config"):
         (scratch / name).mkdir(parents=True, exist_ok=True)
     baseline_lock, _ = artifact_paths(baseline)
-    target_lock, _ = artifact_paths(target)
+    target_lock, _ = artifact_paths(explicit)
     versions = [next(row["version"] for row in lock["modules"] if row.get("root"))
                 for lock in (baseline_lock, target_lock)]
     args = SimpleNamespace(binary=binary, from_version=versions[0], to_version=versions[1],
@@ -263,10 +338,14 @@ def run_probe(folder, environment, command, marker, offline=False):
     return pid
 
 
-def exercise(folder, baseline, target):
+def exercise(folder, baseline, target, explicit):
     lock, paths = artifact_paths(baseline)
     target_lock, target_paths = artifact_paths(target)
     paths.update(target_paths)
+    explicit_lock, explicit_paths = artifact_paths(explicit)
+    paths.update(explicit_paths)
+    for component_version in (COMPONENT, NEXT_COMPONENT):
+        paths[f"bee/files@{component_version}"] = str(folder / f"files-{component_version}.wapp")
     # Advertise a newer wildcard candidate while retaining the actual installed
     # terminal artifact. The solver must not download this unselected candidate.
     assert "wippy/terminal@0.4.5" in paths
@@ -299,8 +378,8 @@ def exercise(folder, baseline, target):
             probe = project / lock["directories"].get("src", "src") / "probe"
             probe.mkdir(parents=True)
             baseline_version = next(row["version"] for row in lock["modules"] if row.get("root"))
-            target_version = next(row["version"] for row in target_lock["modules"] if row.get("root"))
-            (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version))
+            target_version = next(row["version"] for row in explicit_lock["modules"] if row.get("root"))
+            (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version).replace("__COMPONENT__", COMPONENT).replace("__NEXT_COMPONENT__", NEXT_COMPONENT))
             imports = {"bounds": "bee.threads.records:bounds", "inventory": "bee.hub:inventory",
                        "view": "bee.settings.app:view", "appearance": "bee.app:appearance",
                        "live_updates": "bee.settings.app:live_updates"}
@@ -310,7 +389,7 @@ def exercise(folder, baseline, target):
                 {"name": "call", "kind": "security.policy", "policy": {
                     "actions": ["funcs.call"], "resources": ["bee.hub.binding:call"], "effect": "allow"}},
                 {"name": "manage", "kind": "security.policy", "policy": {
-                    "actions": ["bee.hub.manage", "bee.hub.self_update"], "resources": ["bee/bee"], "effect": "allow"}},
+                    "actions": ["bee.hub.manage", "bee.hub.self_update"], "resources": ["bee/bee", "bee/files", "bee/hive-telemetry", "bee/hub"], "effect": "allow"}},
             ]
             for name, method in (("standalone-self-update", "main"), ("standalone-self-update-offline", "offline")):
                 entries.append({"name": method, "kind": "process.lua", "source": "file://main.lua", "method": method,
@@ -329,7 +408,7 @@ def exercise(folder, baseline, target):
                                   cwd=project, env=environment, text=True, capture_output=True, timeout=120)
             assert lint.returncode == 0, lint.stdout + lint.stderr
             run_probe(project, environment, "standalone-self-update", "STANDALONE_SELF_UPDATE_APPLIED")
-            native_args, native_scratch = native_attached(folder, baseline, target, url)
+            native_args, native_scratch = native_attached(folder, baseline, explicit, url)
             server.terminate()
             server.wait(timeout=10)
             # The same registry/history and cached artifacts boot with no Hub
@@ -357,11 +436,12 @@ def main(deployment=None):
         if os.environ.get("BEE_SELF_UPDATE_TARGET_DEPLOYMENT"):
             baseline = Path(deployment).resolve()
             target = Path(os.environ["BEE_SELF_UPDATE_TARGET_DEPLOYMENT"]).resolve()
+            explicit = Path(os.environ["BEE_SELF_UPDATE_EXPLICIT_DEPLOYMENT"]).resolve()
         else:
             seed = Path(deployment).resolve() if deployment and Path(deployment).is_dir() else RUNTIME.parents[2] / "dist/portable-deployment"
             assert seed.is_dir(), "build a sealed deployment with make native-pack and pass BEE_DEPLOYMENT"
-            baseline, target = build_deployments(folder, seed)
-        exercise(folder, baseline, target)
+            baseline, target, explicit = build_deployments(folder, seed)
+        exercise(folder, baseline, target, explicit)
     except Exception:
         print(f"Standalone fixture retained: {folder}", flush=True)
         raise

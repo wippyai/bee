@@ -3,6 +3,26 @@ local test = require("test")
 local inventory = require("inventory")
 local function define_tests()
     test.describe("Hub installed inventory", function()
+        test.it("derives independent selection from the host dependency without a second record", function()
+            local result = assert(inventory.decode({entries = {
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/files", version = "1.0.0", parameters = {{name = "folder", value = "selected"}}}},
+                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/hub", version = "1.0.0"}},
+            }}, 4))
+            test.eq(#result.roots, 2)
+            test.eq(result.roots[1].managed, true)
+            test.eq(result.roots[1].parameters[1].value, "selected")
+            test.eq(result.roots[2].managed, false)
+            test.eq(#result.modules[1].used_by, 0)
+        end)
+        test.it("does not grant independent management to another package's selection", function()
+            local result = assert(inventory.decode({entries = {
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "acme/app", root = true},
+                    data = {component = "bee/files", version = "1.0.0"}},
+            }}, 1))
+            test.eq(result.roots[1].managed, false)
+        end)
         test.it("uses registry ownership and one resolution for roots and shared dependencies", function()
             local result, problem = inventory.decode({resolution = {modules = {
                 {name = "acme/app", version = "1.2.0", source = "hub"},

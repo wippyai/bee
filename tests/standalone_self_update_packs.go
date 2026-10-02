@@ -16,14 +16,24 @@ import (
 )
 
 type fixturePack struct {
-	Input, Output, Version string
+	Input, Output, Version, DependencyVersion string
+	Explicit                                  bool
 }
 
+type fixturePolicy struct {
+	Actions   []string `json:"actions"`
+	Resources []string `json:"resources"`
+	Effect    string   `json:"effect"`
+}
 func main() {
 	var config struct {
-		Packs    []fixturePack
-		Sources  map[string]string
-		Identity map[string]any
+		Packs       []fixturePack
+		Sources     map[string]string
+		Imports     map[string]map[string]string
+		Modules     map[string][]string
+		Identity    map[string]any
+		Independent map[string]bool
+		Policies    map[string]fixturePolicy
 	}
 	data, err := os.ReadFile(os.Args[1])
 	mustPack(err)
@@ -44,21 +54,47 @@ func main() {
 			}
 		}
 		entries = filtered
+        for i := range entries {
+            if config.Independent[entries[i].ID.String()] {
+                if entries[i].Meta == nil { mustPack(json.Unmarshal([]byte(`{}`), &entries[i].Meta)) }
+                entries[i].Meta["independent"] = true
+            }
+        }
+		if pack.Explicit && strings.HasPrefix(filepath.Base(pack.Output), "bee-") {
+			retained := entries[:0]
+			for _, entry := range entries {
+				if entry.Kind != "ns.dependency" || !strings.HasPrefix(entry.ID.String(), "bee.deps:") {
+					retained = append(retained, entry)
+				}
+			}
+			entries = retained
+		}
 		for i := range entries {
 			entry := &entries[i]
 			fields, ok := entry.Data.(map[string]any)
 			if !ok {
 				continue
 			}
+			if policy := config.Policies[entry.ID.String()]; policy.Effect != "" {
+				fields["policy"] = policy
+			}
 			if source := config.Sources[entry.ID.String()]; source != "" {
 				code, err := os.ReadFile(source)
 				mustPack(err)
 				fields["source"] = string(code)
+				delete(fields, "imports")
+				if imports := config.Imports[entry.ID.String()]; len(imports) > 0 {
+					fields["imports"] = imports
+				}
+				delete(fields, "modules")
+				if modules := config.Modules[entry.ID.String()]; len(modules) > 0 {
+					fields["modules"] = modules
+				}
 			}
 			if entry.Kind == "ns.dependency" {
 				component, _ := fields["component"].(string)
 				if strings.HasPrefix(component, "bee/") {
-					fields["version"] = pack.Version
+					fields["version"] = pack.DependencyVersion
 				}
 			}
 			if entry.ID.String() == "bee.env:binary_identity" {

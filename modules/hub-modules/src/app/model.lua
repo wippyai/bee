@@ -27,9 +27,10 @@ type Module = {component: string, version: string, source: string, direct: boole
 type PackUpdate = {component: string, installed_version: string, available_version: string, update_available: boolean}
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
 type Parameter = {name: string, value: unknown, json: string}
-type Root = {id: string, component: string, version: string, parameters: {Parameter}}
+type Root = {id: string, component: string, version: string, parameters: {Parameter}, managed: boolean?}
 type Requirement = {id: string, json: string, origin: string, targets: {string}}
-type Plan = {digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, starts: {string}, capabilities: {string}}
+type RootSelection = {id: string, component: string}
+type Plan = {conversion: {roots: {RootSelection}}?, digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, starts: {string}, capabilities: {string}}
 type Result = {ok: boolean, code: string, message: string, replayed: boolean, state: string}
 type Operation = {digest: string, component: string, action: string, state: string, message: string, baseline_revision: integer, request: Object?, migration_work: {Object}}
 type Recovery = {digest: string, request: Object, operation: Operation}
@@ -187,7 +188,7 @@ local function root_rows(raw: unknown): ({Root}?, string?)
         local parameters, parameter_error = parameter_rows(item.parameters)
         if not parameters then return nil, parameter_error end
         seen[id] = true
-        roots[index] = {id = id, component = name, version = selected, parameters = parameters}
+        roots[index] = {id = id, component = name, version = selected, parameters = parameters, managed = item.managed == true}
     end
     table.sort(roots, function(a: Root, b: Root): boolean return a.id < b.id end)
     return roots, nil
@@ -205,7 +206,7 @@ end
 
 local function managed_root(root: Root): boolean
     local measured = hash.sha256(root.component)
-    return root.component == "bee/bee" or (measured ~= nil and root.id == "bee.hub.deps:" .. measured)
+    return root.managed == true or root.component == "bee/bee" or (measured ~= nil and root.id == "bee.hub.deps:" .. measured)
 end
 
 local function migration_rows(raw: unknown): ({Object}?, string?)
@@ -1044,8 +1045,22 @@ function M.apply_plan(state: State, reply: Reply)
             or "Hub returned malformed plan details"
         return
     end
+    local conversion: {roots: {RootSelection}}? = nil
+    if value.conversion ~= nil then
+        local supplied = object(value.conversion)
+        local roots = supplied and object_list(supplied.roots, "component root conversion", 128) or nil
+        if not supplied or supplied.version ~= 1 or not roots then state.notice = "Hub returned malformed root conversion"; return end
+        local selected: {RootSelection} = {}
+        for _, root in ipairs(roots) do
+            local name = component(root.component)
+            local id = bounds.id(root.id)
+            if not name or not id then state.notice = "Hub returned malformed root conversion"; return end
+            selected[#selected + 1] = {id = id, component = name}
+        end
+        conversion = {roots = selected}
+    end
     state.plan = {digest = measured_digest, ready = value.ready, base_revision = base_revision, modules = modules,
-        missing = missing, migrations = migrations, starts = starts, capabilities = capabilities}
+        missing = missing, migrations = migrations, starts = starts, capabilities = capabilities, conversion = conversion}
     state.selected_operation, state.recovery = nil, nil
     state.phase, state.notice = "plan", ""
 end

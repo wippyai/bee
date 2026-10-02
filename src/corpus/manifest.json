@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 21674,
+      "bytes": 22006,
       "id": "docs/distributed_app_delivery",
-      "sha256": "ef7f6bdaa6ceac7e6fc2618d8b13c26a0d1df3f171570ee1bdf6d5a84da2f434",
+      "sha256": "7ee95ed2a631e987555fd9f278ee47c79fb0e7f44a05775c221336ad6d7ebab7",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 728031,
+    "bytes": 728363,
     "documents": 77
   }
 }

@@ -142,6 +142,12 @@ registry write. The destination sees it in Overlays and reviews, selects,
 prepares and approves its own activation. Content travels; grants and decisions
 remain destination-local.
 
+In Authored, enter the workspace application's component `app.<overlay_id>`,
+its explicit version and the frozen snapshot digest. The pane also accepts
+package components in `namespace/name` form; neither name grants publication
+authority. Governance verifies the exact host-selected profile and applied
+content before publishing.
+
 For a Hive dashboard, the implemented counts-only status binding is
 `bee.hive.telemetry.binding:status` (`snapshot`, `detail`). Request that exact
 `contract.call` binding and methods using the capability requirement format

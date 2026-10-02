@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import yaml
 from workspace import ROOT, RUNTIME, database_environment
+from core_artifact import entries as pack_entries
 from native_self_update import exercise as native_exercise
 
 PROBE = r'''
@@ -405,7 +406,6 @@ def build_deployments(folder, seed):
             if row["name"].startswith("bee/"):
                 row["hash"] = "sha256:" + digests[artifacts[f"{row['name']}@{row['version']}"]]
         (deployment / "wippy.lock").write_text(yaml.safe_dump(copied, sort_keys=False))
-    from core_artifact import entries as pack_entries
     for deployment in deployments:
         _, artifacts = artifact_paths(deployment)
         core = next(path for key, path in artifacts.items() if key.startswith("bee/bee@"))

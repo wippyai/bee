@@ -3,7 +3,6 @@
 import argparse
 from contextlib import contextmanager
 import json
-import os
 import shutil
 import sqlite3
 import subprocess

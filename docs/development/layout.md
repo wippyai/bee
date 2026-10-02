@@ -23,8 +23,8 @@ telemetry `owner_ref.service_id` values. The service remains the operation's exa
 namespace; unrelated namespace strings and opaque state remain intact.
 
 The root follow-up audits all entries in `bee` and every physical component
-root. `bee` retains only `definition`, `workers` and `terminal`. The original 376 moved
-identities (143 Lua sources) are enumerated in `build/layout_root_moves.json`;
+root. `bee` retains only `definition`, `workers` and `terminal`. The 378 moved
+identities (144 Lua sources) are enumerated in `build/layout_root_moves.json`;
 `build/layout_identity_moves.json` also resolves earlier moves to these final
 live destinations. Main’s startup progress helper and environment field now live
 in `bee.app.status` and `bee.persist.env`. The persisted identity conversions
@@ -51,9 +51,11 @@ Placement 9 migrates the remaining saved binding identity and exact cleanup
 markers, plus request/grant references. Sync 9 and Gateway 17 migrate stored
 reference scalars, including Gateway's policy column. Resources 4 and
 Credentials 7 move owner-local root/source/materializer columns. These new
-blocks cover all 506 cumulative moves, including identities from before the
-first layout refactor. Migration 8/16
-and all older SQL remain byte-for-byte intact. Digests, incarnations and grants
+blocks cover all 508 cumulative moves, including identities from before the
+first layout refactor. Shared identity literals keep the captured migration
+definitions within the existing artifact size bound; their expanded SQL and
+checksums remain unchanged. Migration 8/16 and all older SQL remain
+byte-for-byte intact. Digests, incarnations and grants
 are preserved; migrations do not select additional authority. Cleanup state
 remains opaque, and a colliding binding key refuses the entire owner transaction.
 
@@ -283,6 +285,7 @@ conventions and `build/layout_roots.json`.
 |---|---|---|
 | `bee.approvals.inbox` | `bee.approvals.inbox.app` | `client`, `source_config`, `sources`, `workspaces` |
 | `bee.approvals.inbox` | `bee.approvals.inbox.security` | `client_policy` |
+| `bee.app` | `bee.app.status` | `startup_progress` |
 | `bee.approvals` | `bee.approvals.env` | `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `policies_ref`, `resources` |
 | `bee.approvals` | `bee.approvals.migrations` | `identity_migration` |
 | `bee.approvals` | `bee.approvals.binding` | `local` |
@@ -374,6 +377,7 @@ conventions and `build/layout_roots.json`.
 | `bee.hub` | `bee.hub.env` | `process_host_ref`, `publish_configuration_ref`, `publish_executor_ref` |
 | `bee.hub` | `bee.hub.publication` | `publish_executor`, `publishing` |
 | `bee.node` | `bee.node.env` | `database_ref`, `db`, `db_path`, `environment`, `resources` |
+| `bee.persist` | `bee.persist.env` | `startup_progress` |
 | `bee.persist` | `bee.persist.persist` | `database`, `ledger`, `transaction` |
 | `bee.placement.docker` | `bee.placement.docker.env` | `boot_environment`, `environment`, `environment_configuration` |
 | `bee.placement.docker` | `bee.placement.docker.profiles` | `coding`, `coding_recipe` |

@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 5117,
+      "bytes": 5202,
       "id": "docs/readme",
-      "sha256": "e240dea02d2540607a500c57274a84afd65e89a8655b6eacf63a9da2b3b174da",
+      "sha256": "8a5f2c908d3a8aab5ec08bf1c9ecfc94474363c3f1cf8200adb2e490b6e3d803",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 24603,
+      "bytes": 24694,
       "id": "docs/application_contracts",
-      "sha256": "7a0b71ec0633451bde3545f159ee5d55a36e5d3146a3e38c695930cf69d1003c",
+      "sha256": "ac6687262f7f6669e68d971ef720eb86fb4fcc4a49d7f1fb759154ab3324dd1d",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 25899,
+      "bytes": 25900,
       "id": "docs/threads",
-      "sha256": "1247a944d6c5ecca490aa0bd8de89ddf107c30459788eeeecbb510374157ff84",
+      "sha256": "eaf03cf1d4b8a2ec028efe867fab9035e720d0d7c6d691b01fb75b5634f5c7b9",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -283,11 +283,19 @@
       "topic": "component"
     },
     {
-      "bytes": 10012,
+      "bytes": 10150,
       "id": "component/application",
-      "sha256": "319c3f3f9d919ea78953213dc7e9566355a4ae94baf52d3e3f61eec59f1eb98e",
+      "sha256": "5792e36940a35a8da7697f362534ffca599dcaa00dc82533c7732a288f737f07",
       "source": "modules/application/src/README.md",
       "title": "bee.app",
+      "topic": "component"
+    },
+    {
+      "bytes": 1318,
+      "id": "component/application:threads",
+      "sha256": "95955694e43db41c36d8f2151d1d64e03d8c057e677b3ba1474ffb3b6ee21e30",
+      "source": "modules/application-threads/src/README.md",
+      "title": "Application Threads client",
       "topic": "component"
     },
     {
@@ -646,7 +654,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 761549,
-    "documents": 80
+    "bytes": 763182,
+    "documents": 81
   }
 }

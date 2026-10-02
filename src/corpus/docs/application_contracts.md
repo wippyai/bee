@@ -188,7 +188,8 @@ an authorization list; `catalog` lists the ones that are ready, and the host
 still decides admission when `open` runs. The Agent app manages saved profiles;
 a caller must obtain an exact ID and revision from the person.
 
-`client.thread_request` routes operations for an authenticated initiating
+Applications explicitly select `bee/application-threads` and import
+`bee.app.threads:client`. Its `request` helper routes operations for an authenticated initiating
 thread through the broker when a host grants that thread access. The shipped
 workspace-application rule sets `thread_access: none`. A UI may show its own
 work statuses and the results `await` returns, but cannot claim a live

@@ -2,8 +2,7 @@
 
 The public application SDK. It provides bounded launch arguments, application
 client and interaction values, caller and status helpers, presentation kits
-and naming values, and the wire decoder used by an application's authenticated
-thread facade. These libraries carry values only: they do not admit an
+and naming values. These libraries carry values only: they do not admit an
 application, select a workspace, open a store, or grant access to a thread.
 
 | Entry | Responsibility |
@@ -14,7 +13,6 @@ application, select a workspace, open a store, or grant access to a thread.
 | `viz` | The visualization kit on the frame: sparklines, line and area charts, bars, columns, stacked bars, histograms, heatmaps, status grids, gauges, progress, stat tiles, inline table bars, timelines, small graphs, scatter plots, candlestick and range charts, a braille radial gauge, a spinner, 100% stacked bars, progress with ETA and bounded live series with a redraw cadence |
 | `forms` | The input kit on the frame: a text field (cursor, word and line motions, select-all, paste, placeholder, `max_length`, masked mode), a bounded number field, a scrolling multi-line text area, a select/dropdown, a checkbox, a radio group and a toggle, plus a form container that owns focus order (Tab/Shift-Tab/click), per-field validation, dirty tracking and a disabled state |
 | `diagram` | Layout diagrams on the frame: `mesh` (nodes at chosen or ringed positions, braille-routed edges, node hits), `treemap` (squarified tiles of sized items) and `flame` (icicle chart of a value tree); pure painters with hit targets, in the same node and bar vocabulary as `viz` |
-| `thread_protocol` | Exact bounded requests and replies for the authenticated application-to-broker thread facade |
 | `folder_picker` | A folder picker over the roots the host admits through the workspace catalog's `roots` and `folders` operations: the pure paging and navigation model and its table on the frame |
 | `sessions`, `sessions_protocol` | The typed `sessions` client: `call`, `open`, `send`, `await`, `join`, `cancel`, `close`, `get`, `work`, `history`, `list` and `catalog` over the `bee.sessions` owner contracts, with Session, Work and Operation handles; `sessions_protocol` holds the closed reply types and their decoders |
 | `startup_progress` | Pure retained-startup phase decoding and inactivity deadline values shared by launch and desktop clients; callers authenticate progress senders and select and enforce timeout bounds |
@@ -34,6 +32,12 @@ Applications still run as standalone processes. The host admits their exact
 definition and policies; the broker supplies execution identity and durable
 thread bindings. Registry metadata and SDK imports do not authorize an
 application or a thread operation.
+
+The authenticated Threads facade is opt-in through
+[bee/application-threads](../../application-threads/src/README.md). Import
+`bee.app.threads:client` directly for its `request` and `result` helpers.
+The base package still selects `bee/threads` for its Sessions value decoding,
+caller fault bounds and status projection helpers.
 
 ## Sessions client
 

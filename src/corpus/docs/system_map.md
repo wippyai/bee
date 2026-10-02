@@ -17,6 +17,15 @@ A PID is an execution address, not a credential. An attachment grants a
 recipient explicit observation, input and resize rights over an existing view;
 multiple presentations must not duplicate execution.
 
+The generated [component inventory](component-inventory.json) records current
+namespaces and entry IDs, every `ns.requirement` target and its resolver,
+message topics, owned stores and tables, native-known IDs, and checked handoff
+evidence. It reports zero dangling requirement targets. Run
+`make component-inventory-check` to verify the source snapshot, its persisted
+identity baseline and the root source budget. A persisted ID, topic or schema
+removal needs an entry in `build/component-inventory-migrations.json` naming
+one of the proposal's M0–M7 migrations.
+
 There is no central Bee SQL catalog. Registry definitions and configuration
 history, workspace application state, approval records, thread records,
 resources, credentials and client presentation state retain their respective
@@ -30,7 +39,7 @@ and caches are projections that owners can rebuild.
 | Native runtime | Processes, supervision, transport, storage, terminal surfaces, filesystem events and lifecycle | Implemented platform foundation; Bee policy remains above runtime primitives |
 | Workspace owner | Workspace identity, the node workspace catalog, application data, resources, instances and recovery | Implemented: any number of logical workspaces per node, catalog operations, extensions, hosts started on a lease, desktops attached through the host manager, a daemon without a folder workspace and a paged Hive workspace listing; presenting another node's workspace needs that node to admit the display client |
 | Host and attachments | Application admission, producer lifetime, view sharing, control/observation and retained execution | Implemented for local host/client attachment |
-| Client shell | Start, windows, layout, presenter replacement, Timeline, Inbox and local commands | Presentation consumes owner data; it does not own execution or authorization |
+| Client shell | Start, windows, layout, presenter replacement and local commands | Presentation consumes owner data; Timeline and Inbox are standalone apps; it does not own execution or authorization |
 | Registry/catalog | Stable definitions, dependency closure, versions and discovery projections | Metadata is descriptive; admission and policy are separate |
 | Application definition service | Service-owned editable application records projected into admitted runtime definitions | Proposal; these records are not registry overlays or workspace tables |
 | Hub | Search, provenance, local planning, host-authorized apply and receipts | Local path implemented; destination transfer/install is a proposal |

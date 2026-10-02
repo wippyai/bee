@@ -51,7 +51,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `modules/hive-manager/src` | Hive management app as an installable package |
 | `modules/workspace/src` | Workspace catalog contracts, authorized bindings, SQL repositories, immutable migrations and checkpoint/selection values as `bee.workspace` and its `.catalog`, `.binding`, `.persist`, `.migrations` and `.types` children |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
-| `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
+| `src/launch` | Local startup, presenter selection, physical display ownership, coordinated exit and the node host manager |
 | `modules/client/src` | Desktop attachment actors and commands in `.service`, catalog and attachment operations in `.binding`, qualified layouts and handoff values in `.types`, SQL in `.persist`, immutable migrations in `.migrations` |
 | `src/interaction` | Bounded host/client questions and delivery state |
 | `src/apps` | Admission, application lifecycle, producer capabilities and routing as `bee.apps` |
@@ -259,7 +259,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 17,045 Lua line ceiling under `src/`, recorded in
+The root has a 13,706 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

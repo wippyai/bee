@@ -42,6 +42,7 @@ and caches are projections that owners can rebuild.
 | Host and attachments | Application admission, producer lifetime, view sharing, control/observation and retained execution | Implemented for local host/client attachment |
 | Desktop component | Scene, layout, reducer and committed desktop projection | Implemented in `bee/desktop`; host selects policies, client lifetime and attachment authority |
 | Client component | Desktop attachments, qualified layouts, local catalog and presenter/session replacement | Implemented in `bee/client`; consumes owner data and host grants; host retains lifetime, execution and authorization |
+| Terminal component | Presenter, desktop shell rendering, input values and asynchronous attachment delivery | Implemented in `bee/terminal`; root launch retains the physical display, client lifetime and host-selected viewport authority |
 | Registry/catalog | Stable definitions, dependency closure, versions and discovery projections | Metadata is descriptive; admission and policy are separate |
 | Application definition service | Service-owned editable application records projected into admitted runtime definitions | Proposal; these records are not registry overlays or workspace tables |
 | Hub | Search, provenance, local planning, host-authorized apply and receipts | Local path implemented; destination transfer/install is a proposal |

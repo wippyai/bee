@@ -74,7 +74,8 @@ reviewed binding, and the application journey fixture edits that host selection.
 
 Application entries, renderers, screen models and rendering helpers live under
 component `app/` namespaces. The public rendering kit remains in `application`;
-the desktop component and core terminal sources implement the desktop shell. Placement's
+the desktop and terminal components implement the desktop shell. Root launch
+retains physical display ownership. Placement's
 process-local native terminal facade is an executor contract, not an application
 screen: it consumes the caller's terminal grant. Docker's short window adapter
 selects its backend; it does not duplicate the native facade. Retained

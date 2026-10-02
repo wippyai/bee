@@ -66,20 +66,20 @@ func startCutoverOwner(ctx context.Context, state, dir, executable string) error
 	if err != nil {
 		return err
 	}
+	baseline, _ := readStartup(state)
 	command := execOwnerCommand(executable, app.Launch{State: state, Dir: dir}, log)
-	command.Env = append(os.Environ(), ownerLaunchVariable+"="+launchID)
+	command.Env = append(os.Environ(), ownerLaunchVariable+"="+launchID, ownerProgressLogVariable+"="+log.Name())
 	done, wait, err := startDetachedCommand(ctx, command)
 	if err != nil {
 		_ = log.Close()
 		return err
 	}
 	releaseLog := func() error { return errors.Join(wait(), log.Close()) }
-	startup, cancel := context.WithTimeout(ctx, waitOwnerTimeout)
-	defer cancel()
+	observe := observeStartup(state, baseline, os.Stderr)
 	held := func() (bool, error) { return app.Owned(state) }
-	published, err := waitDescriptorOrExit(startup, readDescriptor, directory, previous, done, releaseLog, held)
+	published, err := waitDescriptorOrExit(ctx, readDescriptor, directory, previous, done, releaseLog, held, observe)
 	if err != nil {
-		return fmt.Errorf("cutover owner did not publish its readiness: %w", err)
+		return errors.Join(fmt.Errorf("cutover owner did not publish its readiness: %w", err), abortStartedOwner(state, launchID))
 	}
 	if published.Launch != launchID {
 		return errors.New("another Bee owner holds the state after the cutover start")

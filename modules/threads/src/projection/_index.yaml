@@ -9,7 +9,7 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     record: bee.threads.records:record
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
@@ -19,7 +19,7 @@ entries:
   source: file://recap.lua
   modules: [sql]
   imports:
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
     transaction: bee.threads.persist:transaction
     engine: bee.threads.projection:engine
     bounds: bee.threads.records:bounds
@@ -28,67 +28,7 @@ entries:
   source: file://status.lua
   modules: [sql]
   imports:
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
     transaction: bee.threads.persist:transaction
     bounds: bee.threads.records:bounds
     engine: bee.threads.projection:engine
-- name: recap_read
-  kind: function.lua
-  source: file://recap_read_method.lua
-  method: handle
-  imports:
-    boundary: bee.threads.service:boundary
-    recap: bee.threads.projection:recap
-    types: bee.threads.service:types
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: recap_update
-  kind: function.lua
-  source: file://recap_update_method.lua
-  method: handle
-  imports:
-    boundary: bee.threads.service:boundary
-    recap: bee.threads.projection:recap
-    types: bee.threads.service:types
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: recap_rebuild
-  kind: function.lua
-  source: file://recap_rebuild_method.lua
-  method: handle
-  imports:
-    boundary: bee.threads.service:boundary
-    recap: bee.threads.projection:recap
-    types: bee.threads.service:types
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: status_read
-  kind: function.lua
-  source: file://status_read_method.lua
-  method: handle
-  imports:
-    boundary: bee.threads.service:boundary
-    status: bee.threads.projection:status
-    types: bee.threads.service:types
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: status_update
-  kind: function.lua
-  source: file://status_update_method.lua
-  method: handle
-  imports:
-    boundary: bee.threads.service:boundary
-    status: bee.threads.projection:status
-    types: bee.threads.service:types
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: status_rebuild
-  kind: function.lua
-  source: file://status_rebuild_method.lua
-  method: handle
-  imports:
-    boundary: bee.threads.service:boundary
-    status: bee.threads.projection:status
-    types: bee.threads.service:types
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]

@@ -20,7 +20,7 @@ type PolicyChange = {id: string, component: string, change: string, actions: {st
     expression: boolean}
 type Plan = {request: Request, base_revision: integer, root_id: string, root_operation: string, digest: string,
     modules: {Module}, missing: {string}, migrations: {Migration}, starts: {string}, capabilities: {string},
-    policy_changes: {PolicyChange}, ready: boolean}
+    policy_changes: {PolicyChange}, ready: boolean, conversion: inventory.Conversion?}
 type Prepared = {plan: Plan, resolved: graph.Result, installed: inventory.Result}
 
 local POLICY_KINDS: {[string]: boolean} = {["security.policy"] = true, ["security.policy.expr"] = true}
@@ -76,24 +76,67 @@ function M.root_id(component: string): (string?, string?)
     return "bee.hub.deps:" .. digest, nil
 end
 
+local function target_error(holes: requirements.Result, targets: {[string]: boolean}): string?
+    for _, hole in ipairs(holes.requirements) do
+        local namespace = hole.id:match("^([^:]+):")
+        if not namespace then return "requirement has no namespace: " .. hole.id end
+        for _, target in ipairs(hole.targets) do
+            local destination = target.entry
+            if not destination:find(":", 1, true) then destination = namespace .. ":" .. destination end
+            if not targets[destination] then return "requirement target does not resolve: " .. hole.id .. " -> " .. destination end
+        end
+    end
+    return nil
+end
+
 function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source,
 	 baked_identity: binary_identity.Baked?): (Prepared?, string?)
     local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, inventory_error end
     local self_update = request.component == "bee/bee"
     if self_update and request.action ~= "update" then return nil, "the Bee deployment root can only be updated" end
-    if request.component:match("^bee/") and not self_update then
-        return nil, "Bee packs update through the bee/bee deployment root"
+    if request.component:match("^bee/") and not self_update and not installed.selected then
+        return nil, "Bee component management requires explicit host-selected roots"
     end
-    local controlled = inventory.dependency_members(installed, self_update)
     local raw_state = bounds.object(state)
     if not raw_state or type(raw_state.entries) ~= "table" then return nil, "invalid captured registry" end
+    local controlled = inventory.dependency_members(installed, self_update)
+    local protected: {[string]: string} = {["bee/hub"] = "bee/hub"}
+    for _, root in ipairs(installed.roots) do
+        if not root.managed and root.component ~= "bee/bee" then protected[root.component] = root.id end
+    end
+    local changed = true
+    while changed do
+        changed = false
+        for _, item in ipairs(installed.modules) do
+            if not protected[item.component] then
+                for _, owner in ipairs(item.used_by) do
+                    if protected[owner] then
+                        local dependent = owner
+                        for _, raw in ipairs(raw_state.entries) do
+                            local entry = bounds.object(raw)
+                            local ownership = entry and bounds.object(entry.registry)
+                            local data = entry and bounds.object(entry.data)
+                            local id = entry and bounds.id(entry.id) or nil
+                            if entry and id and ownership and data and entry.kind == "ns.dependency"
+                                and ownership.owner == owner and data.component == item.component then dependent = id; break end
+                        end
+                        protected[item.component] = dependent; changed = true; break
+                    end
+                end
+            end
+        end
+    end
+    if not self_update and protected[request.component] and request.action ~= "install" and request.component:match("^bee/") then
+        return nil, "protected boot/installer component cannot be " .. (request.action == "uninstall" and "removed" or "updated")
+            .. " independently: " .. request.component .. "; required by " .. protected[request.component]
+    end
     local root_id, root_error = M.root_id(request.component)
     if not root_id then return nil, root_error end
     local existing: inventory.Root? = nil
     local roots: {graph.Edge} = {}
     for _, root in ipairs(installed.roots) do
-        if root.id:sub(1, 13) == "bee.hub.deps:" then
+        if root.managed then
             if root.component == request.component then
                 if existing then return nil, "component has multiple roots; host configuration needs review" end
                 existing = root
@@ -122,6 +165,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             return nil, "component is managed by the host deployment"
         end
     end
+    if existing and existing.managed then root_id = existing.id end
     if existing and existing.id ~= root_id then return nil, "component is managed by host configuration at " .. existing.id end
     if request.action == "install" and existing then return nil, "component already has an installed root; choose update" end
     if request.action ~= "install" and not existing and not standalone_selection then return nil, "component has no installed Hub root" end
@@ -141,7 +185,13 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         local entry = bounds.object(raw_entry)
         local owned = entry and bounds.object(entry.registry)
         local data = entry and bounds.object(entry.data)
-        if entry and owned and data and entry.kind == "ns.dependency" and type(owned.owner) == "string"
+        local selected_root = false
+        if entry then
+            for _, root in ipairs(installed.roots) do
+                if root.id == entry.id and root.managed then selected_root = true; break end
+            end
+        end
+        if not selected_root and entry and owned and data and entry.kind == "ns.dependency" and type(owned.owner) == "string"
             and owned.owner ~= "" and not controlled[owned.owner] and type(data.component) == "string"
             and controlled[data.component] then
             local reference, reference_error = graph.edge(data)
@@ -153,9 +203,52 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     for _, item in ipairs(installed.modules) do
         if item.version ~= "" then selections[item.component] = item.version end
     end
+    if self_update and installed.selected then
+        local artifact, artifact_error = source.artifact(request.component, request.version)
+        if not artifact then return nil, artifact_error end
+        for _, entry in ipairs(artifact.entries) do
+            if entry.kind == "ns.dependency" then
+                local edge, edge_error = graph.edge(entry.data)
+                if not edge then return nil, edge_error end
+                if edge.component:match("^bee/") then
+                    return nil, "Bee self-update must leave component selection to host roots: " .. entry.id
+                end
+            end
+        end
+    end
     local resolved, graph_error = graph.resolve(roots, source, selections)
     if not resolved then return nil, graph_error end
+    if request.action == "uninstall" then
+        local required_by: {string} = {}
+        for _, item in ipairs(resolved.packages) do
+            for _, dependency in ipairs(item.dependencies) do
+                if dependency.component == request.component then required_by[#required_by + 1] = item.component; break end
+            end
+        end
+        if #required_by > 0 then
+            table.sort(required_by)
+            return nil, "component is still required by " .. table.concat(required_by, ", ")
+        end
+    end
     if self_update then
+        for _, item in ipairs(resolved.packages) do
+            if item.component == "bee/hub" then
+                local candidate: {[string]: {id: string, kind: string, data: unknown}} = {}
+                for _, entry in ipairs(item.entries) do candidate[entry.id] = entry end
+                for _, raw in ipairs(raw_state.entries) do
+                    local entry = bounds.object(raw)
+                    local owned = entry and bounds.object(entry.registry)
+                    local id = entry and bounds.id(entry.id) or nil
+                    if entry and owned and id and owned.owner == "bee/hub"
+                        and (entry.kind == "library.lua" or entry.kind == "function.lua" or entry.kind == "process.lua") then
+                        local proposed = candidate[id]
+                        if not proposed or proposed.kind ~= entry.kind or canonical.encode(proposed.data) ~= canonical.encode(entry.data) then
+                            return nil, "Bee self-update would replace the active Hub installer: " .. id
+                        end
+                    end
+                end
+            end
+        end
         local compatibility_error = native_compat.check(resolved.packages, baked_identity)
         if compatibility_error then return nil, compatibility_error end
     end
@@ -197,7 +290,12 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         end
         modules[#modules + 1] = {component = item.component, version = item.version, previous_version = previous,
             digest = item.digest, change = change, entries = #item.entries, requirements = item.requirements}
-        if change ~= "keep" then changed_components[item.component] = true end
+        if change ~= "keep" then
+            if not self_update and protected[item.component] and old then
+                return nil, "dependency would replace protected boot/installer component: " .. item.component .. "; required by " .. protected[item.component]
+            end
+            changed_components[item.component] = true
+        end
         for _, entry in ipairs(item.entries) do
             local owner = owners[entry.id]
             if owner ~= nil and owner ~= item.component then return nil, "package would replace another owner's entry: " .. entry.id end
@@ -226,7 +324,10 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             local remove = controlled[item.component] == true
             modules[#modules + 1] = {component = item.component, version = remove and "" or item.version, previous_version = item.version,
                 digest = "", change = remove and "remove" or "keep", entries = item.entries, requirements = {requirements = {}, missing = {}}}
-            if remove then changed_components[item.component] = true end
+            if remove then
+                if protected[item.component] then return nil, "dependency change would remove protected boot/installer component: " .. item.component end
+                changed_components[item.component] = true
+            end
         end
     end
     for _, raw_entry in ipairs(raw_state.entries) do
@@ -236,6 +337,30 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         if entry and id and owner and changed_components[owner] and POLICY_KINDS[tostring(entry.kind)]
             and not proposed_policies[id] then
             policy_changes[#policy_changes + 1] = policy_change(id, owner, "remove", entry.data)
+        end
+    end
+    local targets: {[string]: boolean} = {}
+    for _, raw in ipairs(raw_state.entries) do
+        local entry = bounds.object(raw)
+        local id = entry and bounds.id(entry.id) or nil
+        if id and not changed_components[owners[id]] then targets[id] = true end
+    end
+    for _, item in ipairs(resolved.packages) do for _, entry in ipairs(item.entries) do targets[entry.id] = true end end
+    for _, root in ipairs(installed.conversion and installed.conversion.roots or {}) do
+        if request.action ~= "uninstall" or root.id ~= root_id then targets[root.id] = true end
+    end
+    for _, item in ipairs(resolved.packages) do
+        local problem = target_error(item.requirements, targets)
+        if problem then return nil, problem end
+    end
+    for _, raw in ipairs(raw_state.entries) do
+        local entry = bounds.object(raw)
+        local id = entry and bounds.id(entry.id) or nil
+        if entry and id and entry.kind == "ns.requirement" and not changed_components[owners[id]] then
+            local holes, problem = requirements.read({{id = id, kind = "ns.requirement", data = entry.data}}, {})
+            if not holes then return nil, problem end
+            local target_problem = target_error(holes, targets)
+            if target_problem then return nil, target_problem end
         end
     end
     if request.action == "uninstall" then
@@ -262,7 +387,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     local plan: Plan = {request = request, base_revision = revision, root_id = root_id, root_operation = root_operation,
         digest = "", modules = modules,
         missing = missing, migrations = migrations, starts = starts, capabilities = capabilities,
-        policy_changes = policy_changes, ready = #missing == 0}
+        policy_changes = policy_changes, ready = #missing == 0, conversion = installed.conversion}
     local encoded, encode_error = canonical.encode(plan, 1048576)
     if not encoded then return nil, encode_error end
     local digest, digest_error = hash.sha256(encoded)

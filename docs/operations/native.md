@@ -175,8 +175,15 @@ has an exclusive process-lifetime lock.
 Modules offers **Update Bee** while Bee is running, including a standalone
 binary whose deployment root is selected by its embedded lock. The action updates the
 host `bee/bee` dependency root through the Hub plan, approval, publication,
-receipt and migration path, resolving the Bee-owned `bee/*` pack closure while
-preserving third-party roots. It does not stop the current owner; new registry
+receipt and migration path. Hosts selecting component management use an
+independently identified core artifact without Bee-component dependency
+declarations; their explicit installed component roots and requirement values
+remain selected. Modules updates or removes optional components individually;
+boot and installer dependencies refuse independent removal or replacement.
+`make hub-core-pack BEE_CORE_VERSION=VERSION` builds the core update artifact,
+while `make native-pack` keeps the boot bundle's default composition. Existing
+legacy authored Bee roots first convert through a core update. Third-party roots
+remain selected. It does not stop the current owner; new registry
 definitions are available to later calls, and an owner restart restores the
 selected pack graph from registry history and verified cached artifacts. A
 newer Bee executable baseline takes precedence through the runtime's normal
@@ -196,7 +203,8 @@ dependency declarations as independent version constraints during apply. A
 release that changes those nested versions together with `bee/bee` fails
 dependency resolution. `make hub-self-update-runtime-check` includes that
 regression; completing this update requires a runtime correction in a new
-executable. The plan can be ready while this apply failure remains.
+executable. Legacy closure plans can be ready while this apply failure remains. Core update
+artifacts avoid that closure replacement by retaining the explicit host roots.
 
 The opt-in published-pack acceptance runs on Linux:
 

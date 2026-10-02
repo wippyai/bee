@@ -45,8 +45,9 @@ def literal_boot():
     with tempfile.TemporaryDirectory(prefix="bee-fresh-literal-") as directory:
         ui = Literal(directory)
         try:
-            ui.wait("No applications open", timeout=30)
-            ui.wait("╰──╲ ╱──╯", timeout=10)
+            ui.wait("No sessions yet", timeout=30)
+            assert "0 sessions" in ui.text(), ui.text()
+            assert "N new session" in ui.text(), ui.text()
             assert "Test Status" not in ui.text()
             elapsed = ui.quit()
         finally:

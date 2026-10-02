@@ -12,7 +12,26 @@ upstream licenses.
 Folder nesting mirrors namespace nesting: each folder holding an
 `_index.yaml` file is one namespace, so `src/a/b` is `<root>.a.b`, and no
 folder re-declares its parent's namespace. There are no `host/` folders;
-host wiring lives in the app root or beside its component.
+host wiring lives in the app root or beside its component. The host component
+`src/host` is the documented desktop-owner namespace, not an installable
+component wiring subfolder. Module source roots map hyphen-separated package
+names to dotted namespaces (`git-worktree` → `bee.git.worktree`). The only
+package-root spelling exception is `modules/application/src` → `bee.app`, the
+public SDK. Namespace segments and mapped folders contain no underscores.
+No child production `src/` path diverges from its namespace.
+
+`make lint` runs `build/layout_check.py` before typed Lua lint. It checks namespace
+paths, component roots, local sources, application entries, process placement,
+host-free requirement defaults, duplicate Lua sources, orphan files and
+requirement/import targets. Domain ownership, dynamic registry discovery and
+public API reachability also require review.
+
+The generated [component inventory](component-inventory.json) records current
+namespace and entry IDs, requirement targets, topics, owner resources and
+tables, native-known IDs and process handoff evidence. Run
+`make component-inventory-check` to verify the source-derived snapshot and the
+persisted identity baseline. A persisted ID, topic or schema change must name an
+M0–M7 migration in `build/component-inventory-migrations.json`.
 
 | Location | Owns |
 |---|---|
@@ -33,7 +52,7 @@ host wiring lives in the app root or beside its component.
 | `src/desktop` | Pure scene, reducer and layout values |
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
-| `src/storage` | Workspace database, catalog rows and migration ledger |
+| `src/storage` | Workspace database, catalog rows and immutable migrations; shared runner in `bee.persist` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
@@ -53,12 +72,16 @@ host wiring lives in the app root or beside its component.
 | `modules/placement-native/src` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `modules/node/src` | Authorized native-node descriptions and metadata |
 
-The app keeps its entries in the root package even when a feature child uses
-the module's namespace prefix. It overrides module entries only through
-`bee.deps` requirement parameters. Module requirement defaults
-never point at app ids. Module `process.service` entries take their host and
-policy grants through requirements (`process_host`, per-service policy lists);
-their entries keep empty underlays the host fills.
+Bee's root index owns host composition and root process wiring. Module-owned
+application entries and their UI live in `modules/<module>/src/app` as
+`<module namespace>.app`. The host selects module entries through `bee.deps`
+requirement parameters. Module requirement defaults never point at host app
+IDs. Module `process.service` entries take their host and policy grants through
+requirements (`process_host`, per-service policy lists); their entries keep
+empty underlays the host fills.
+
+An append requirement (`+=`) contributes one element. It has no array default;
+an absent host selection contributes nothing instead of a nested empty array.
 
 `bee.harness.host:environment` is not composed: Bee's native host component
 registers it at boot (`native/launch/component.go`) with the `home`, `cwd`
@@ -161,6 +184,9 @@ make portable-deployment-check
 make standalone
 ```
 
+`make test TEST_JOBS=1` runs the same four isolated Lua shards sequentially
+on a loaded host. The default runs all four in parallel.
+
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's
 `check-shard-*` targets; a new `check` member joins one shard, and
@@ -175,7 +201,16 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-Fixtures use disposable test workspaces and remain outside `src/`. Inspect
+The root has a 23,987 Lua line ceiling under `src/`, recorded in
+`build/root-src-lua-budget.txt`. Shared retained-startup progress values live
+in `modules/application/src` as `bee.app:startup_progress`. Run
+`make root-src-budget-check`; it fails if the count grows beyond that ceiling.
+Lower the ceiling as later component moves reduce root code.
+
+Fixtures use disposable test workspaces and remain outside production `src/`.
+Test scenario folders are independent overlay roots, not namespace children;
+their indexes augment the identities under test. The complete overlay inventory
+is in [the layout audit](layout.md). Inspect
 source and assembled packs for test registrations, fixture data, test-library
 dependencies and embedded filesystem assets. Production loads only the root
 and selected modules' `src/` directories.

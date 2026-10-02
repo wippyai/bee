@@ -171,8 +171,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                         if item.component == "bee/bee" and state.bee_update and state.bee_update.needs_new_binary then
                             description = description .. " · needs a newer Bee binary"
                         elseif item.component == "bee/bee" and state.bee_update and state.bee_update.update_available then
-                            description = description .. " · U updates the Bee packs together"
-                        elseif update.update_available then description = description .. " · updates with bee/bee" end
+                            description = description .. " · U updates the Bee deployment"
+                        elseif update.update_available then description = description .. " · component update available" end
                     elseif state.update_status == "pending" then description = description .. " · checking Hub version…" end
                 end
                 frame.line(painter, y + 1, " " .. description, theme.muted)
@@ -183,7 +183,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     for _, candidate in ipairs(state.pack_updates) do
                         if candidate.component == item.component and candidate.available_version ~= "" then
                             label = label .. " · Hub " .. candidate.available_version
-                            if candidate.update_available then label = label .. " · update with Bee" end
+                            if candidate.update_available then label = label .. " · update available" end
                             break
                         end
                     end
@@ -474,6 +474,12 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     frame.line(painter, 4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
     local review: {string} = {}
     local required: {[integer]: string} = {}
+    if plan.conversion then
+        review[#review + 1] = "Transfer component roots to host ownership"
+        for _, root in ipairs(plan.conversion.roots) do
+            review[#review + 1] = root.component
+        end
+    end
     local unchanged = 0
     for _, item in ipairs(plan.modules) do
         if item.change == "keep" then unchanged = unchanged + 1

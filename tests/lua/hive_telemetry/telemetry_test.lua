@@ -20,14 +20,14 @@ end
 local function define_tests()
     test.describe("Hive telemetry", function()
         test.it("reports presence with only the declared fields", function()
-            local presence = call("bee.hive.telemetry:presence", {})
+            local presence = call("bee.hive.telemetry.binding:presence", {})
             test.eq(table.concat(keys(presence), ","), "cluster_size,node_id,protocol_revision,role,sampled_at")
             test.eq(presence.protocol_revision, types.REVISION)
             test.is_true(type(presence.cluster_size) == "number")
             test.not_nil(bounds.timestamp(presence.sampled_at))
         end)
         test.it("reports numeric statistics only", function()
-            local stats = call("bee.hive.telemetry:stats", {})
+            local stats = call("bee.hive.telemetry.binding:stats", {})
             test.eq(table.concat(keys(stats), ","), "cpu_count,goroutines,memory,sampled_at")
             test.is_true(type(stats.goroutines) == "number" and stats.goroutines > 0)
             for name, value in pairs(assert(bounds.object(stats.memory))) do
@@ -75,21 +75,21 @@ local function define_tests()
             test.not_nil(counter_error)
         end)
         test.it("lists the public catalog in bounded pages", function()
-            local page = call("bee.hive.telemetry:catalog_list", {})
+            local page = call("bee.hive.telemetry.binding:catalog_list", {})
             test.is_nil(page.unavailable)
             local found = false
             for _, raw in ipairs(assert(bounds.array(page.operations))) do
                 local summary = assert(bounds.object(raw))
                 test.eq(table.concat(keys(summary), ","), "mode,operation_ref,revision,title")
-                if summary.operation_ref == "bee.hive.telemetry:stats" then found = true end
+                if summary.operation_ref == "bee.hive.telemetry.binding:stats" then found = true end
             end
             test.is_true(found)
-            local rest = call("bee.hive.telemetry:catalog_list", {after_operation_ref = "bee.hive.telemetry:presence"})
+            local rest = call("bee.hive.telemetry.binding:catalog_list", {after_operation_ref = "bee.hive.telemetry.binding:presence"})
             local capabilities = false
             for _, raw in ipairs(assert(bounds.array(rest.operations))) do
                 local summary = assert(bounds.object(raw))
-                test.is_true(tostring(summary.operation_ref) > "bee.hive.telemetry:presence")
-                if summary.operation_ref == "bee.threads:capabilities" then
+                test.is_true(tostring(summary.operation_ref) > "bee.hive.telemetry.binding:presence")
+                if summary.operation_ref == "bee.threads.binding:capabilities" then
                     capabilities = true
                     test.eq(summary.mode, "open")
                 end

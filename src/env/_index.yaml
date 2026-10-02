@@ -175,3 +175,15 @@ entries:
         capabilities: [workspace.files.read]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.files:read_policy]
         thread_access: observe_post
+
+- name: startup_sequence
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: startup_sequence
+  default: '0'
+  readonly: true
+- name: startup_phase
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: startup_phase
+  default: starting

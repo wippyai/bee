@@ -36,6 +36,7 @@ type Host struct {
 	// ownerState is the state directory selected for a retained owner launch. It
 	// is set during planning so Load can add the owner's enrollment publisher.
 	ownerState string
+	startup    *startupMonitor
 	// ownerLaunch is the launch identity the starting client handed this owner.
 	ownerLaunch        string
 	nodeIdentity       string
@@ -178,7 +179,7 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			return app.Plan{}, err
 		}
 		host.ownerState, host.ownerLaunch = state, launched
-		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
+		plan.Prepare = func(ctx context.Context) (boot.Config, func() error, error) {
 			host.bootLog.phase("owner_prepare", "begin")
 			config, release, err := prepareOwnerForProject(state, launch.Dir, owner)
 			if err != nil {
@@ -193,7 +194,12 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			if host.bootLog != nil {
 				config = bootLoggingConfig(config)
 			}
-			return config, release, nil
+			monitor, err := beginStartup(ctx, state, launched, os.Getenv(ownerProgressLogVariable))
+			if err != nil {
+				return nil, nil, errors.Join(err, release())
+			}
+			host.startup = monitor
+			return config, func() error { return errors.Join(monitor.stop(), release()) }, nil
 		}
 		return plan, nil
 	}
@@ -259,8 +265,8 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 	if err := host.bootLog.subscribe(ctx); err != nil {
 		return ctx, err
 	}
-	registry := envapi.GetRegistry(ctx)
-	if registry == nil {
+	environment := envapi.GetRegistry(ctx)
+	if environment == nil {
 		return ctx, errors.New("environment registry is unavailable")
 	}
 	storage, err := newHostEnvironment(host.resolver)
@@ -273,7 +279,11 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 	if host.nodeIdentity != "" {
 		storage.facts["node_identity"] = host.nodeIdentity
 	}
-	registry.RegisterStorage(registryID(), storage)
+	environment.RegisterStorage(registryID(), storage)
+	if host.startup != nil {
+		host.startup.advance("Starting services")
+		storage.startup = host.startup
+	}
 	return ctx, nil
 }
 

@@ -40,12 +40,12 @@ end
 -- thread instead), so the broker never sees it; the thread owner joins the
 -- exact instance the open reported, before driving any input.
 local function admit_app(thread_id: string, instance_id: string, idempotency_key: string)
-    local thread = call("bee.threads.service:get", {thread_id = thread_id})
+    local thread = call("bee.threads.binding:get", {thread_id = thread_id})
     local value = assert(bounds.object(thread.value))
     local summary = assert(bounds.object(value.summary))
     local revision = summary.revision
     if type(revision) ~= "number" or revision < 1 then error("admit application thread: thread head is unavailable") end
-    call("bee.threads.service:join", {thread_id = thread_id, idempotency_key = idempotency_key,
+    call("bee.threads.binding:join", {thread_id = thread_id, idempotency_key = idempotency_key,
         member_id = "bee.application:" .. WORKSPACE .. ":" .. instance_id, role = "participant", expected_revision = revision})
 end
 local function apply(entry: {[string]: unknown})
@@ -77,7 +77,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     if retained_id then THREAD = "managed-window-thread:" .. retained_id end
     local definition_ref = retained_id and "bee.managed.window.fixture:retained_definition" or "bee.managed.window.fixture:definition"
     local request_id = retained_id or (natural and "managed-window-natural-request" or "managed-window-request")
-    call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
+    call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -110,7 +110,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local plan, refused = admission.resolve(definition_ref, "window")
     if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
     if not selected and not retained_id then
-        call("bee.harness.launch:setup", {workspace_id = WORKSPACE, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
+        call("bee.harness.binding:setup", {workspace_id = WORKSPACE, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
     end
     local request = assert(json.encode({request_id = request_id, definition_ref = definition_ref, brief = retained_id or "managed window",
         thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
@@ -207,7 +207,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             local escaped_result = channel.select({escaped:case_receive(), time.after("2s"):case_receive()})
             assert(escaped_result.ok and escaped_result.channel == escaped and escaped_result.value == true,
                 "activating picker did not finish close after admission cleanup")
-            local after = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+            local after = reply(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
             for _, record in ipairs(assert(bounds.array(after.records))) do
         local record = assert(bounds.object(record))
                 assert(record.kind ~= "action.admitted" and record.kind ~= "attempt.prepared"
@@ -246,14 +246,14 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             assert(view:send({type = "key", key = "n", key_type = "rune", action = "press"}))
             wait_for("Selected agent fixture")
         end
-        local before = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+        local before = reply(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
         assert(#(assert(bounds.array(before.records))) == 0, "selector created work before selection")
         assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
     end
     if selected then
         local launched = false
         for _ = 1, 160 do
-            local page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+            local page = reply(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
             for _, record in ipairs(assert(bounds.array(page.records))) do
         local record = assert(bounds.object(record))
                 if record.kind == "attempt.started" then launched = true; break end
@@ -294,7 +294,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         error_code = natural and "persistence_refused" or "", error = natural and "Fixture refused Agent save" or ""}))
     -- The native process is already accepting input. Recovery metadata must
     -- exist while it runs, rather than first appearing in the close path.
-    local live_records = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+    local live_records = reply(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
     local live_attempt: string? = nil
     for _, record in ipairs(assert(bounds.array(live_records.records))) do
         local record = assert(bounds.object(record))
@@ -305,7 +305,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     end
     assert(live_attempt, "running native window has no started attempt")
     assert(application_state.previous_attempt_id == live_attempt, "Agent checkpoint did not advance to its started attempt")
-    local saved = reply(call("bee.threads.carrier:checkpoint", {thread_id = THREAD, attempt_id = live_attempt}).value)
+    local saved = reply(call("bee.threads.binding:checkpoint", {thread_id = THREAD, attempt_id = live_attempt}).value)
     assert(type(saved.checkpoint_revision) == "number" and saved.checkpoint_revision >= 1,
         "running native window has no committed carrier checkpoint")
     local point = reply(saved.checkpoint)
@@ -350,7 +350,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     else
         local settled = false
         for _ = 1, 160 do
-            local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
+            local page = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
             local page_value = reply(page.value)
             for _, record in ipairs(assert(bounds.array(page_value.records))) do
         local record = assert(bounds.object(record))
@@ -374,7 +374,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             end
         end
     end
-    local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
+    local records = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
     local value = assert(bounds.object(records.value))
     local receipts = 0
@@ -541,7 +541,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     assert(type(updated_data.source) == "string", "checkpoint app lost its executable source")
     local updated_meta = assert(bounds.object(updated_app.meta))
     local application = assert(bounds.object(updated_meta.application))
-    application.revision = "2"
+    updated_data.source = updated_data.source:gsub("CHECKPOINT APP ", "CHECKPOINT APP 2 CODE ")
     apply(updated_app)
     local replacement_pid = ""
     local replacement_ready = false
@@ -555,7 +555,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
             local data: unknown = message:payload():data()
             assert(type(data) == "table" and type(data.pid) == "string", "invalid replacement readiness")
             assert(tostring(message:from()) == data.pid, "replacement readiness sender mismatch")
-            assert(data.definition_revision == "2", "replacement launched the old definition")
+            assert(data.definition_revision == "1", "code update changed the metadata revision")
             assert(data.resume_state == acknowledged, "replacement lost the last acknowledged checkpoint")
             replacement_pid = data.pid
             replacement_ready = true
@@ -593,11 +593,43 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     assert(replacement_snapshot.width == 36 and replacement_snapshot.height == 12,
         "replacement lost the controller viewport geometry")
 
-    -- Drain the replacement's startup checkpoint before creating the exact
-    -- shutdown race: a later pending checkpoint fences v3 after v2 exits.
     local replacement_initial = receive_sent(initial, replacement_pid)
     receive_checkpoint(initial, "accept")
     receive_receipt(replacement_initial, "", replacement_pid)
+    -- An unrelated registry transition must leave this execution in place.
+    apply(updated_app)
+    local unchanged = time.after("1500ms")
+    local unchanged_result = channel.select({app_ready:case_receive(), unchanged:case_receive()})
+    assert(unchanged_result.ok and unchanged_result.channel == unchanged, "unchanged definition restarted the application")
+    local incompatible = clone_entry(updated_app)
+    local incompatible_meta = assert(bounds.object(incompatible.meta))
+    local incompatible_application = assert(bounds.object(incompatible_meta.application))
+    incompatible_application.resume_schema = "checkpoint-fixture.v2"
+    incompatible_application.revision = "2"
+    apply(incompatible)
+    local fresh_message = wait_message(app_ready, "incompatible replacement", "7s")
+    local fresh: unknown = fresh_message:payload():data()
+    assert(type(fresh) == "table" and type(fresh.pid) == "string" and fresh.resume_state == "", "incompatible schema received saved state")
+    assert(fresh.pid ~= replacement_pid and fresh.definition_revision == "2", "incompatible schema did not restart fresh")
+    replacement_pid = fresh.pid
+    assert(view:handle() == view_handle, "incompatible replacement changed the window mount")
+    local notice = ""
+    while notice == "" do
+        local message = wait_message(replies, "fresh replacement notice")
+        local reply: unknown = message:payload():data()
+        if type(reply) == "table" and reply.op == "title" and reply.id == view_id then
+            assert(reply.instance_id == instance_id, "incompatible replacement changed instance identity")
+            assert(reply.notice == "Updated; saved state is incompatible. Restarted fresh.", "fresh restart lost its visible notice")
+            notice = reply.notice
+        end
+    end
+    updated_app = incompatible
+
+    -- Drain the replacement's startup checkpoint before creating the exact
+    -- shutdown race: a later pending checkpoint fences v3 after v2 exits.
+    local fresh_initial = receive_sent(initial, replacement_pid)
+    receive_checkpoint(initial, "accept")
+    receive_receipt(fresh_initial, "", replacement_pid)
     assert(process.send(replacement_pid, "bee.fixture.checkpoint.command", "lose"))
     receive_sent("lost-newer", replacement_pid)
     local pending_shutdown_write = receive_checkpoint("lost-newer", "lose")

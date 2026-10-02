@@ -39,7 +39,7 @@ end
 local function previous(bound: Binding, actor: string, message_id: string): (Object?, Object?)
     local cursor = 0
     for _ = 1, 16 do
-        local page, failure = call("bee.threads.service:read_after", {thread_id = bound.thread_id,
+        local page, failure = call("bee.threads.binding:read_after", {thread_id = bound.thread_id,
             cursor = cursor, limit = 64, filter = {kinds = {"observation"}, action_id = bound.action_id}})
         if not page then return nil, failure end
         if type(page.records) ~= "table" then return nil, fail("INVALID", "missing thread records") end
@@ -118,7 +118,7 @@ local function run(raw: unknown): Object
     if not producer then return fail("DENIED", tostring(producer_error)) end
     local writer, writer_error = funcs.new():with_actor(producer)
     if not writer then return fail("DENIED", tostring(writer_error)) end
-    local recorded, record_error = call("bee.threads.service:record", {thread_id = bound.thread_id,
+    local recorded, record_error = call("bee.threads.binding:record", {thread_id = bound.thread_id,
         idempotency_key = message_id, kind = "observation", source = "mcp",
         body = {type = "extension", event_key = message_id, data = {type = "extension",
             event_name = "bee.research.measurement", event_revision = "1", payload_json = encoded}},

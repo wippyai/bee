@@ -1,0 +1,45 @@
+version: '1.0'
+namespace: bee.layout.fixture
+entries:
+- name: policy
+  kind: security.policy
+  policy:
+    effect: allow
+    actions: [db.get, registry.get]
+    resources: [bee.placement.native:db, bee.placement.native:database_ref, bee.sync:db, bee.gateway:db]
+- name: seed
+  kind: process.lua
+  source: file://main.lua
+  method: seed
+  modules: [io, json]
+  imports: &imports
+    placement: bee.placement.native.persist:store
+    request: bee.placement:request
+    types: bee.placement:types
+    preparers: bee.placement.native.service:workdir_preparers
+    sync: bee.sync.persist:store
+    persist: bee.persist:database
+    gateway_migrations: bee.gateway.migrations:migrations
+    bindings: bee.gateway.persist:binding_store
+    surfaces: bee.gateway.persist:surface_store
+    bounds: bee.threads.records:bounds
+  meta:
+    command:
+      name: layout-seed
+      host: bee:terminal
+      security:
+        actor: {id: bee.layout.fixture}
+        policies: [bee.layout.fixture:policy]
+- name: verify
+  kind: process.lua
+  source: file://main.lua
+  method: verify
+  modules: [io, json]
+  imports: *imports
+  meta:
+    command:
+      name: layout-verify
+      host: bee:terminal
+      security:
+        actor: {id: bee.layout.fixture}
+        policies: [bee.layout.fixture:policy]

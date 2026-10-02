@@ -127,7 +127,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [time, exec, json, funcs, sql, registry, env, process, channel]
   security:
-    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.placement.native.security:placement_runner_policy, bee.git_worktree:worktree_policy]
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.placement.native.security:placement_runner_policy, bee.git.worktree:worktree_policy]
   imports:
     test: wippy.test:test
     workdir_preparers: bee.placement.native.service:workdir_preparers

@@ -42,7 +42,7 @@ local function define_tests()
             local attempt: {[string]: unknown} = {attempt_id = "previous", action_id = "action", owner_id = "alice", session_ref = "session", execution_state = "exited"}
             local placement_calls = 0
             local function call(target: string, input: unknown): (unknown, string?)
-                if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
+                if target == "bee.threads.binding:checkpoint" then return {ok = true, value = stored}, nil end
                 test.eq(target, PLACEMENT_METHODS.status)
                 placement_calls = placement_calls + 1
                 return {ok = true, value = {attempt = attempt}}, nil
@@ -114,14 +114,14 @@ local function define_tests()
             local cleanup_calls = 0
             local cleanup_reply: unknown = {ok = false, error = {code = "CONFLICT"}}
             local function call(target: string, input: unknown): (unknown, string?)
-                if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
+                if target == "bee.threads.binding:checkpoint" then return {ok = true, value = stored}, nil end
                 if target == PLACEMENT_METHODS.status then return {ok = true, value = {attempt = attempt, private_home = true}}, nil end
                 if target == PLACEMENT_METHODS.cleanup then
                     test.eq((assert(bounds.object(input))).attempt_id, "previous")
                     cleanup_calls = cleanup_calls + 1
                     return cleanup_reply, nil
                 end
-                test.eq(target, "bee.threads.service:read_after")
+                test.eq(target, "bee.threads.binding:read_after")
                 reads = reads + 1
                 if denied then return {ok = false, error = {code = "DENIED"}}, nil end
                 local request = assert(bounds.object(input))
@@ -308,14 +308,14 @@ local function define_tests()
             local receipt: {[string]: unknown}? = nil
             local captured: hooks.Config? = nil
             local function fake_call(target: string, input: unknown): (unknown, string?)
-                if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
+                if target == "bee.threads.binding:checkpoint" then return {ok = true, value = stored}, nil end
                 if target == PLACEMENT_METHODS.status then return {ok = true, value = {attempt = attempt, private_home = true}}, nil end
                 if target == PLACEMENT_METHODS.reconcile then return {ok = true, value = attempt}, nil end
-                if target == "bee.threads.carrier:claim" then
+                if target == "bee.threads.binding:claim" then
                     return {ok = true, value = {attempt_id = "previous", action_id = "action", carrier_epoch = 2,
                         checkpoint_revision = 1, checkpoint = point}}, nil
                 end
-                if target == "bee.threads.service:receipt" then
+                if target == "bee.threads.binding:receipt" then
                     receipt = assert(bounds.object(input))
                     return {ok = true, value = {}}, nil
                 end
@@ -383,12 +383,12 @@ local function define_tests()
             local io: machine.IO = {
                 call = function(target: string, input: unknown): (unknown, string?)
                     calls = calls + 1
-                    if target == "bee.threads.carrier:checkpoint" then
+                    if target == "bee.threads.binding:checkpoint" then
                         return {ok = true, value = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "cancelled", placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}}, nil
                     elseif target == PLACEMENT_METHODS.status then
                         return {ok = true, value = {private_home = true, attempt = {attempt_id = "previous", action_id = "action", owner_id = "alice",
                             session_ref = "session", execution_state = "exited", cleanup_state = "complete"}}}, nil
-                    elseif target == "bee.threads.service:read_after" then
+                    elseif target == "bee.threads.binding:read_after" then
                         return {ok = true, value = {records = {observation(1, "provider-session", "old-binding", false, "previous")}, scanned_through = 1, has_more = false}}, nil
                     end
                     test.eq(target, "bee.driver.claude.binding:dispatch")

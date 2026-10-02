@@ -12,9 +12,3 @@ entries:
     catalog: bee.hive:catalog
     version: bee.sync:version
     output: bee.hive:output
-- name: admit
-  kind: function.lua
-  source: file://admit.lua
-  method: handle
-  imports: {admission: bee.sync.hive:admission}
-  security: {policies: [bee.security.hive:hive_replica_admission_policy]}

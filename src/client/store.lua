@@ -5,8 +5,8 @@
 -- belongs to adopts.
 local sql = require("sql")
 local json = require("json")
-local hash = require("hash")
 local logger = require("logger")
+local ledger = require("ledger")
 local state = require("state")
 local contract = require("contract")
 local binding = require("binding")
@@ -19,7 +19,6 @@ type Store = {
 -- The node's desktop identities, independent of any workspace layout.
 type Desktops = {db: sql.DB, closed: boolean, client_id: string}
 local M = {}
-type Migration = {id: integer, name: string, sql: string}
 local SCHEMA = [[
 CREATE TABLE client_state (
     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -51,49 +50,11 @@ CREATE TABLE client_layouts (
     PRIMARY KEY (desktop_id, workspace_id)
 )
 ]]
-local migrations: {Migration} = {
+local migrations: {ledger.Migration} = {
     {id = 1, name = "client_layout_v1", sql = SCHEMA},
     {id = 2, name = "independent_desktops_v1", sql = DESKTOPS},
     {id = 3, name = "workspace_layouts_v1", sql = LAYOUTS},
 }
-local LEDGER = [[
-CREATE TABLE IF NOT EXISTS client_schema_migrations (
-    id INTEGER PRIMARY KEY CHECK (id > 0),
-    name TEXT NOT NULL UNIQUE,
-    checksum TEXT NOT NULL
-)
-]]
-local function migrate(db: sql.DB): (boolean, string?)
-    local tx, begin_error = db:begin()
-    if not tx then return false, tostring(begin_error) end
-    local function fail(message: string): (boolean, string?)
-        tx:rollback()
-        return false, message
-    end
-    local _, create_error = tx:execute(LEDGER)
-    if create_error then return fail(tostring(create_error)) end
-    local rows, read_error = tx:query("SELECT id, name, checksum FROM client_schema_migrations ORDER BY id")
-    if not rows then return fail(tostring(read_error)) end
-    if #rows > #migrations then return fail("Client database schema is newer than this Bee build") end
-    for index, migration in ipairs(migrations) do
-        local checksum, hash_error = hash.sha256(migration.name .. "\n" .. migration.sql)
-        if not checksum then return fail(tostring(hash_error)) end
-        if index <= #rows then
-            local applied = rows[index]
-            if applied.id ~= migration.id or applied.name ~= migration.name or applied.checksum ~= checksum then
-                return fail("Client migration ledger is newer or has changed")
-            end
-        else
-            local _, apply_error = tx:execute(migration.sql)
-            if apply_error then return fail(tostring(apply_error)) end
-            local _, record_error = tx:execute("INSERT INTO client_schema_migrations (id, name, checksum) VALUES (?, ?, ?)", {migration.id, migration.name, checksum})
-            if record_error then return fail(tostring(record_error)) end
-        end
-    end
-    local _, commit_error = tx:commit()
-    if commit_error then return fail(tostring(commit_error)) end
-    return true, nil
-end
 local function row(db: sql.DB, desktop_id: string?): (Row?, string?)
     local query = "SELECT singleton, client_id, generation, value, import_workspace, import_receipt FROM client_state"
     local params: {string} = {}
@@ -296,9 +257,16 @@ local function acquire(resource: string?): (sql.DB?, string?)
     if db:type() ~= sql.type.SQLITE then return fail("Client database must be SQLite") end
     local _, wal_error = db:execute("PRAGMA journal_mode = WAL")
     if wal_error then return fail(tostring(wal_error)) end
+    local _, busy_error = db:execute("PRAGMA busy_timeout = 5000")
+    if busy_error then
+        db:release()
+        return nil, "configure migration busy timeout: " .. tostring(busy_error)
+    end
     local log = logger:named("bee.client")
     log:info("Boot phase", {phase = "migration_check", stage = "begin", owner = "client"})
-    local migrated, migration_error = migrate(db)
+    local migrated, migration_error = ledger.apply(db, {
+        table = "client_schema_migrations", label = "Client", transaction = "batch", applied_at = false,
+    }, migrations)
     log:info("Boot phase", {phase = "migration_check", stage = migrated and "end" or "failed", owner = "client"})
     if not migrated then return fail(migration_error or "Client migration failed") end
     return db, nil

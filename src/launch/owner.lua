@@ -15,8 +15,9 @@ local workspaces = require("workspaces")
 local command_stop = require("command_stop")
 local handoff = require("owner_handoff")
 local startup_failure = require("startup_failure")
-local startup_watchdog = require("startup_watchdog")
+local startup_progress = require("startup_progress")
 local uuid = require("uuid")
+local env = require("env")
 
 -- The terminal.host command retains the route and supervisor. This ordinary
 -- process receives definition invalidation and can be replaced under that
@@ -135,22 +136,40 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
         local function startup_now_ms(): integer
             return math.floor(time.now():sub(startup_started):milliseconds())
         end
-        local startup = startup_watchdog.new(startup_now_ms(), 10000)
+        local startup = startup_progress.new(startup_now_ms(), 10000)
         local function startup_deadline()
-            local remaining = math.max(1, startup_watchdog.remaining(startup, startup_now_ms()))
+            local remaining = math.max(1, startup_progress.remaining(startup, startup_now_ms()))
             return time.after(tostring(remaining) .. "ms")
         end
         local deadline = startup_deadline()
+        local heartbeat = time.ticker("250ms")
+        local heartbeats = heartbeat:channel()
+        local startup_phase = "starting"
+        local function observe_startup()
+            local raw = env.get("bee.env:startup_sequence")
+            local sequence = raw and tonumber(raw)
+            if sequence and sequence > 0 and sequence == math.floor(sequence) then
+                local phase = env.get("bee.env:startup_phase")
+                if phase and phase ~= "" then startup_phase = phase end
+                if startup_progress.advance(startup, startup_progress.phase(startup), startup_now_ms(), math.floor(sequence)) then
+                    deadline = startup_deadline()
+                end
+            end
+        end
+        observe_startup()
         while true do
             local cases = {ready:case_receive(), progress:case_receive(), controller_ready:case_receive(), replacing:case_receive(),
                 events:case_receive(), stops.channel:case_receive(), failures:case_receive()}
-            if not announced then cases[#cases + 1] = deadline:case_receive() end
+            if not announced then cases[#cases + 1] = deadline:case_receive(); cases[#cases + 1] = heartbeats:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Retained owner channel closed") end
-            if selected.channel == deadline then
+            if selected.channel == heartbeats then
+                observe_startup()
+            elseif selected.channel == deadline then
+                observe_startup()
                 local now_ms = startup_now_ms()
-                if startup_watchdog.expired(startup, now_ms) then
-                    error("Retained workspace startup timed out during " .. startup_watchdog.phase(startup))
+                if startup_progress.expired(startup, now_ms) then
+                    error("Retained workspace startup stalled during " .. startup_phase .. ": no progress for 10s")
                 end
                 deadline = startup_deadline()
             elseif selected.channel == stops.channel then
@@ -168,11 +187,13 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                         local bridge = process.registry.lookup(bridge_name)
                         announcer = bridge and tostring(bridge) or ""
                     end
-                    local phase = sender == announcer and retained.progress(selected.value:payload():data()) or nil
-                    if phase and startup_watchdog.advance(startup, phase,
+                    local phase = sender == announcer and startup_progress.decode(selected.value:payload():data()) or nil
+                    if phase and startup_progress.advance(startup, phase,
                         startup_now_ms()) then
                         deadline = startup_deadline()
                         logger:info("Retained workspace startup progressed", {phase = phase})
+                        startup_phase = phase
+                        env.set("bee.env:startup_phase", phase)
                     end
                 end
             elseif selected.channel == events then
@@ -223,6 +244,8 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                         local value = retained.ready(message:payload():data())
                         if not value then error("Invalid retained workspace readiness") end
                         announced = true
+                        heartbeat:stop()
+                        env.set("bee.env:startup_phase", "running")
                         local node = system.node.id()
                         local seed = system.node.addr()
                         if not node or node == "" or not seed or seed == "" then
@@ -246,7 +269,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
     process.unlisten(progress)
     process.unlisten(controller_ready); process.unlisten(replacing)
     process.unlisten(failures)
-    if not ok then error(err) end
+    if not ok then io.print("BEE_STARTUP_FAILED " .. tostring(err):gsub("%c", " ")); error(err) end
 end
 
 return {main = main}

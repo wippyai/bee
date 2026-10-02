@@ -41,7 +41,7 @@ entries:
     actions: [funcs.call, registry.get]
     resources: [bee.research.measurement:run, bee.research.measurement:measure,
       bee.research.measurement:inputs, bee.research.benchmark.probe:canonical,
-      bee.research.demo:canonical, bee.research.demo:measure, bee.threads.service:read_after, bee.threads.service:record]
+      bee.research.demo:canonical, bee.research.demo:measure, bee.threads.binding:read_after, bee.threads.binding:record]
     effect: allow
 - name: attribution_policy
   kind: security.policy

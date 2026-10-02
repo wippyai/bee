@@ -29,8 +29,8 @@ entries:
     comment: The admitting worker reads the host principal mapping and calls the forwarded thread operations; the mapped actor's own scope remains the mapping's policies
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:inbox_resolve,
-      bee.threads.service:inbox_reply, bee.threads.service:notify, bee.threads.delivery:watch,
+    resources: [bee.threads.binding:send, bee.threads.binding:send_status, bee.threads.binding:inbox_resolve,
+      bee.threads.binding:inbox_reply, bee.threads.binding:notify, bee.threads.binding:watch,
       bee.hive.supervisor:principal_mappings]
     effect: allow
 - name: identity_policy

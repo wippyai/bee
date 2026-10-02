@@ -27,15 +27,15 @@ local thread_binding_reducer = require("thread_binding_reducer")
 local thread_binding = require("thread_binding")
 local thread_protocol = require("thread_protocol")
 type Admission = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor},
-    descriptors: {[string]: contract.Descriptor}, scopes: {[string]: security.Scope}}
+    descriptors: {[string]: contract.Descriptor}, codes: {[string]: string}, scopes: {[string]: security.Scope}}
 type AliasBackfill = {instance_id: string, definition_id: string}
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
 type Checkpoint = {request_id: string, pid: string, deadline: number, resume_state: string}
-type Replacement = {revision: string, exited: boolean}
+type Replacement = {revision: string, code: string, exited: boolean}
 type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
-    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string, failure_detail: string?,
+    descriptor: contract.Descriptor, code: string, notice: string?, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string, failure_detail: string?,
     producer_generation: integer, arguments: {string}, replacement: Replacement?, client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 type BindingCoordinator = thread_binding.Coordinator
 -- Time an execution has to stop what it owns after CANCEL before the broker
@@ -162,12 +162,12 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if not actor_id then return false, "permission_denied", "Application identity is invalid" end
         -- Prove the app's own membership through the app's own authority, so
         -- a reopened or already-bound instance is never joined twice.
-        local member_reply = thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id})
+        local member_reply = thread_call(actor_id, "bee.threads.binding:get", {thread_id = thread_id})
         if active_principal(member_reply, actor_id) == true then return true, nil, nil end
         if member_reply == nil then
             return false, "permission_denied", "Application thread membership could not be read"
         end
-        local read, read_error = funcs.new():with_scope(membership_scope):call("bee.threads.service:get", {thread_id = thread_id})
+        local read, read_error = funcs.new():with_scope(membership_scope):call("bee.threads.binding:get", {thread_id = thread_id})
         if read_error or type(read) ~= "table" then
             return false, "permission_denied", "Application thread membership could not be read"
         end
@@ -183,7 +183,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local head = bounds.object(value.summary)
         local revision = head and bounds.integer(head.revision) or nil
         if not revision or revision < 1 then return false, "permission_denied", "the thread head is unavailable" end
-        local joined, join_error = funcs.new():with_scope(membership_scope):call("bee.threads.service:join", {thread_id = thread_id,
+        local joined, join_error = funcs.new():with_scope(membership_scope):call("bee.threads.binding:join", {thread_id = thread_id,
             idempotency_key = "open:" .. instance_id .. ":join", member_id = actor_id, role = "participant", expected_revision = revision})
         if join_error or type(joined) ~= "table" then
             return false, "permission_denied", "Application thread membership could not be admitted"
@@ -201,7 +201,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             -- The row may already exist from a reopened or bound instance, or
             -- the head moved under a concurrent join. Re-prove through the
             -- app's own authority instead of assuming either outcome.
-            if active_principal(thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id}), actor_id) == true then
+            if active_principal(thread_call(actor_id, "bee.threads.binding:get", {thread_id = thread_id}), actor_id) == true then
                 return true, nil, nil
             end
             return false, "thread_conflict", "Application thread changed while opening"
@@ -220,7 +220,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if not thread_id then return true end
         local actor_id = thread_binding.actor(workspace_id, item.instance_id)
         if not actor_id then return true end
-        local member_reply = thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id})
+        local member_reply = thread_call(actor_id, "bee.threads.binding:get", {thread_id = thread_id})
         if active_principal(member_reply, actor_id) ~= true then return true end
         local head_revision: integer? = nil
         if type(member_reply) == "table" then
@@ -234,7 +234,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             actor_id = actor_id, role = "participant", initiating_owner_id = actor_id},
             workspace_id, "fence:" .. item.instance_id, head_revision)
         if not request then return false end
-        local left = funcs.new():with_scope(membership_scope):call("bee.threads.service:leave", request)
+        local left = funcs.new():with_scope(membership_scope):call("bee.threads.binding:leave", request)
         return type(left) == "table" and (left).ok == true
     end
     -- Every opened instance receives a live authorization for its app's
@@ -252,7 +252,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if not scoped then return false, "permission_denied", tostring(scope_error or "set application alias scope") end
             local instance_actor = thread_binding.actor(workspace_id, instance_id)
             if not instance_actor then return false, "permission_denied", "Application identity is invalid" end
-            local reply, call_error = scoped:call("bee.threads.service:register_app_alias", {stable = stable_id,
+            local reply, call_error = scoped:call("bee.threads.binding:register_app_alias", {stable = stable_id,
                 instance = instance_actor, workspace_id = workspace_id, definition_id = definition_id})
             if call_error then
                 return false, "permission_denied", "Application alias attestation call failed: " .. tostring(call_error):sub(1, 300)
@@ -277,7 +277,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         local scoped, scope_error = funcs.new():with_scope(alias_scope)
         if not scoped then return false, tostring(scope_error or "set application alias scope") end
-        local reply, call_error = scoped:call("bee.threads.service:retire_app_alias", {stable = stable.id,
+        local reply, call_error = scoped:call("bee.threads.binding:retire_app_alias", {stable = stable.id,
             instance = instance_actor, workspace_id = workspace_id, definition_id = item.descriptor.definition_id})
         if call_error then return false, "Application alias retirement call failed: " .. tostring(call_error):sub(1, 300) end
         if type(reply) ~= "table" or (reply).ok ~= true then
@@ -295,7 +295,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local stable_id: string = stable.id
         local scoped = funcs.new():with_scope(alias_scope)
         if not scoped then return false end
-        local reply, call_error = scoped:call("bee.threads.service:fence_app", {stable = stable_id})
+        local reply, call_error = scoped:call("bee.threads.binding:fence_app", {stable = stable_id})
         return not call_error and type(reply) == "table" and (reply).ok == true
     end
     local function backfill_retained_aliases(records: {AliasBackfill})
@@ -359,8 +359,19 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local find_instance: (string) -> Instance?
     local find_pid: (string) -> Instance?
     local settle_exited_replacement: (Instance, boolean) -> boolean
-    -- Reconcile one protected registry snapshot. Compatible automatic
-    -- producers may follow a later revision through the replacement path below.
+    local function follow_definition(item: Instance, selected: Admission)
+        local replacement = selected.descriptors[item.descriptor.definition_id]
+        local replacement_binding: contract.Binding? = nil
+        for _, candidate in ipairs(selected.bindings) do
+            if candidate.definition_id == item.descriptor.definition_id then replacement_binding = candidate; break end
+        end
+        if cleanup_request == "" and not item.replacement and item.state.phase == "ready" and replacement and replacement_binding
+            and catalog.replaces(item.descriptor, replacement, item.code, selected.codes[item.descriptor.definition_id]) then
+            item.replacement = {revision = replacement.definition_revision, code = assert(selected.codes[item.descriptor.definition_id]), exited = false}
+            transition(item, "force_stop")
+        end
+    end
+    -- Reconcile admitted definitions through the existing execution replacement.
     -- The last admission this broker applied. A failed refresh withdraws
     -- admission.current, but the families it admitted stay fenceable until a
     -- later refresh reads a consistent catalog.
@@ -398,7 +409,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             local next_descriptors: {[string]: contract.Descriptor} = {}
             for _, item in ipairs(next_items) do next_descriptors[item.definition_id] = item end
             return {revision = revision, evidence = selected.evidence, bindings = next_bindings,
-                descriptors = next_descriptors, scopes = next_scopes, items = next_items}
+                descriptors = next_descriptors, codes = assert(selected.codes), scopes = next_scopes, items = next_items}
         end)
         if ok then
             local selected: Admission = loaded
@@ -419,22 +430,13 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             end
             admission.current, admission.error, applied = selected, "", selected
             assert(process.send(owner, "bee.app.catalog", {version = 1, items = selected.items}))
-            -- A compatible automatic application follows its applied
+            -- A running application follows its applied
             -- definition behind the same viewport. Once an exit has been
             -- observed, its exact requested revision is a fence: a later
             -- catalog refresh fails closed rather than changing that target.
             for _, value in pairs(instances) do
                 local item: Instance = value
-                local replacement = selected.descriptors[item.descriptor.definition_id]
-                local replacement_binding: contract.Binding? = nil
-                for _, candidate in ipairs(selected.bindings) do
-                    if candidate.definition_id == item.descriptor.definition_id then replacement_binding = candidate; break end
-                end
-                if cleanup_request == "" and not item.replacement and item.state.phase == "ready" and replacement and replacement_binding
-                    and catalog.replaces(item.descriptor, replacement) then
-                    item.replacement = {revision = replacement.definition_revision, exited = false}
-                    transition(item, "force_stop")
-                end
+                follow_definition(item, selected)
             end
             return true
         else
@@ -466,6 +468,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, attachment.reference(item.attachment)
         reply.thread_id = item.thread_id
         reply.icon = item.descriptor.icon
+        reply.notice = item.notice
         reply.definition_id, reply.resume_schema = item.descriptor.definition_id, item.descriptor.resume_schema
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
         return reply
@@ -501,11 +504,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 emit(contract.reply(req.request_id, "open", "thread_conflict", "Application instance has another thread delegation"), true)
             elseif existing and existing.state.phase == "ready" then
                 local get = thread_binding.get_request(stored, workspace_id)
-                local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.service:get", get) or nil
+                local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.binding:get", get) or nil
                 if not thread_binding.owner_get(owner_reply, stored, workspace_id) then
                     emit(contract.reply(req.request_id, "open", "permission_denied", "Only the current thread owner may open the bound application"), true)
                 else
-                    local member_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
+                    local member_reply = get and thread_call(stored.actor_id, "bee.threads.binding:get", get) or nil
                     local membership = thread_binding.application_status(member_reply, stored, workspace_id)
                     if membership.state == "unknown" then
                         emit(contract.reply(req.request_id, "open", "uncertain", "Application thread membership could not be verified"), true)
@@ -533,7 +536,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local get = thread_binding.get_request(provisional, workspace_id)
         local owner_reply
         if get then
-            owner_reply = thread_call(provenance.initiating_owner, "bee.threads.service:get", get)
+            owner_reply = thread_call(provenance.initiating_owner, "bee.threads.binding:get", get)
         end
         local head_revision = thread_binding.owner_get(owner_reply, provisional, workspace_id)
         if not head_revision then
@@ -583,7 +586,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             launch_token = token, resume_schema = descriptor.resume_schema, resume_state = open.request.resume_state, arguments = open.request.arguments})
         if not started.pid then view:close(); thread_binding.fail(binding_engine, binding_context, coordinator, started.error_code, started.error); return end
         instances[open.view_id] = {view_id = open.view_id, instance_id = open.instance_id, thread_id = stored.thread_id,
-            execution_pid = started.pid, view = view, descriptor = descriptor, binding = binding, launch_token = token, observers = {},
+            execution_pid = started.pid, view = view, descriptor = descriptor, code = assert(assert(admission.current).codes[descriptor.definition_id]), binding = binding, launch_token = token, observers = {},
             state = lifecycle.start(now()), open_request = open.request.request_id, opened = false, resume_state = open.request.resume_state,
             arguments = open.request.arguments, replacement = nil, waiters = {}, attempts = 0, producer_generation = 1}
         coordinator.open = nil
@@ -633,7 +636,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 and stored.definition_revision == item.descriptor.definition_revision
                 and stored.access == "observe_post"
                 and current_descriptor.definition_revision == item.replacement.revision
-                and catalog.replaces(item.descriptor, current_descriptor) then
+                and admission.current and admission.current.codes[item.descriptor.definition_id] == item.replacement.code
+                and catalog.replaces(item.descriptor, current_descriptor, item.code, item.replacement.code) then
                 send_thread_result(sender, request, nil, "UNCERTAIN", "Application replacement is in progress")
                 return
             end
@@ -651,7 +655,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             return
         end
         local get = thread_binding.get_request(stored, workspace_id)
-        local membership_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
+        local membership_reply = get and thread_call(stored.actor_id, "bee.threads.binding:get", get) or nil
         local membership = thread_binding.application_status(membership_reply, stored, workspace_id)
         if membership.state == "unknown" then
             send_thread_result(sender, request, nil, "UNCERTAIN", "Application thread membership could not be verified")
@@ -666,10 +670,10 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local call: {[string]: unknown} = {thread_id = stored.thread_id}
         local target = ""
         if request.operation == "read" then
-            target = "bee.threads.service:read_after"
+            target = "bee.threads.binding:read_after"
             call.cursor, call.limit, call.filter = args.cursor or 0, args.limit, {kinds = {"message"}}
         elseif request.operation == "post" then
-            target = "bee.threads.service:record"
+            target = "bee.threads.binding:record"
             local body: {[string]: unknown} = {sender_id = stored.actor_id, message_id = args.message_id,
                 message_kind = args.message_kind, recipient_ids = args.recipient_ids, content = args.content,
                 outcome = args.outcome}
@@ -678,16 +682,16 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             end
             call.idempotency_key, call.kind, call.body, call.context = args.idempotency_key, "message", body, {}
         elseif request.operation == "subscribe" then
-            target = "bee.threads.delivery:subscribe"
+            target = "bee.threads.binding:subscribe"
             call.idempotency_key, call.consumer_id = args.idempotency_key, stored.actor_id
             call.after_sequence, call.filter, call.durability = args.after_sequence, {kinds = {"message"}}, "durable"
         elseif request.operation == "page" then
-            target = "bee.threads.delivery:page"
+            target = "bee.threads.binding:page"
             call.subscription_id, call.limit = args.subscription_id, args.limit
         else
-            target = request.operation == "ack_page" and "bee.threads.delivery:ack_page"
-                or request.operation == "resume" and "bee.threads.delivery:resume"
-                or "bee.threads.delivery:unsubscribe"
+            target = request.operation == "ack_page" and "bee.threads.binding:ack_page"
+                or request.operation == "resume" and "bee.threads.binding:resume"
+                or "bee.threads.binding:unsubscribe"
             call.idempotency_key, call.subscription_id = args.idempotency_key, args.subscription_id
             if request.operation == "ack_page" then
                 call.page_id, call.scanned_through = args.page_id, args.scanned_through
@@ -806,7 +810,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         return false
     end
-    -- A compatible revision replaces only the execution behind the existing
+    -- A definition change replaces only the execution behind the existing
     -- viewport. Controller and observer mounts, geometry, page, logical IDs
     -- and the last acknowledged checkpoint therefore remain continuous.
     local function start_replacement(item: Instance)
@@ -822,7 +826,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         local scope = current and current.scopes[item.descriptor.definition_id]
         if not replacement or replacement.definition_revision ~= pending.revision
-            or not replacement_binding or not scope or not catalog.replaces(item.descriptor, replacement) then
+            or not current or current.codes[item.descriptor.definition_id] ~= pending.code
+            or not replacement_binding or not scope or not catalog.replaces(item.descriptor, replacement, item.code, pending.code) then
             item.replacement = nil
             item.state = {phase = "stopped", deadline = 0, failure = "replacement_definition_changed"}
             finish(item, true)
@@ -832,7 +837,12 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         for id, waiter in pairs(preference_waiters) do
             if waiter.recipient == item.execution_pid then preference_waiters[id] = nil end
         end
-        item.descriptor, item.binding = replacement, replacement_binding
+        if replacement.resume_schema ~= item.descriptor.resume_schema
+            or replacement.restart_policy == "never" and item.resume_state ~= "" then
+            item.resume_state = ""
+            item.notice = "Updated; saved state is incompatible. Restarted fresh."
+        end
+        item.descriptor, item.binding, item.code = replacement, replacement_binding, pending.code
         item.announced_title, item.title_dirty, item.negotiate_close = nil, nil, nil
         item.close_request_id, item.attempts = nil, 0
         item.state = lifecycle.start(now())
@@ -898,6 +908,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             else emit(identified(item, "open", item.open_request), true) end
             item.title_dirty = false
             appearance_state(item)
+            if admission.current then follow_definition(item, admission.current) end
             if attachment_error then
                 emit(identified(item, "attached", item.open_request, "attachment_failed", attachment_error))
             end
@@ -1762,7 +1773,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                                         if not started.pid then view:close(); emit(contract.reply(req.request_id, "open", started.error_code, started.error), true)
                                         else
                                             local instance: Instance = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = started.pid, view = view,
-                                                descriptor = selected_descriptor, binding = selected_binding, launch_token = token, observers = {},
+                                                descriptor = selected_descriptor, code = assert(assert(admission.current).codes[selected_descriptor.definition_id]), binding = selected_binding, launch_token = token, observers = {},
                                                 state = lifecycle.start(now()), open_request = req.request_id, opened = false,
                                                 resume_state = req.resume_state, arguments = req.arguments, replacement = nil,
                                                 waiters = {}, attempts = 0, producer_generation = 1}

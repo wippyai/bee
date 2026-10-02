@@ -96,7 +96,7 @@ local function main(value: unknown)
         if type(raw) ~= "table" then error(label .. " reply value is not an object") end
         local result: Object = {}
         for key, value in pairs(raw) do
-            if type(key) ~= "string" then error(label .. " reply has a nonstring field") end
+            if type(key) ~= "string" then error(label .. " reply value has a non-string key") end
             result[key] = value
         end
         return result
@@ -132,6 +132,7 @@ local function main(value: unknown)
     end
     local function records(raw: unknown, label: string, thread_id: string): {Object}
         if type(raw) ~= "table" then error(label .. " records are not a list") end
+        local list = raw
         local result: {Object} = {}
         for index, item in ipairs(raw) do
             local record = object(item, label .. " record")

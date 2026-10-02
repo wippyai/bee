@@ -15,7 +15,7 @@ local function caller(id: string, grant: string?): funcs.Executor
     return funcs.new():with_actor(security.new_actor(id)):with_scope(security.new_scope(policies))
 end
 local function call(client: funcs.Executor, request: unknown): {[string]: unknown}
-    local raw, err = client:call("bee.harness.profiles:call", request)
+    local raw, err = client:call("bee.harness.binding:call", request)
     if err then error(tostring(err)) end
     local reply = bounds.object(raw)
     if not reply then error("malformed reply") end

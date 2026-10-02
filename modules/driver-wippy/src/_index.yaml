@@ -59,15 +59,6 @@ entries:
     canonical: bee.threads.records:canonical
     driver_configuration: bee.driver:configuration
     agent_resolver: bee.harness.launch:agent_resolver
-- name: run
-  kind: function.lua
-  source: file://run_method.lua
-  method: handle
-  imports:
-    bounds: bee.threads.records:bounds
-    runner: bee.driver.wippy:runner
-    managed_run: bee.harness.launch:managed_run
-    types: bee.driver.wippy:types
 - name: binding
   kind: contract.binding
   contracts:

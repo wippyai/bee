@@ -8,6 +8,7 @@ local plan = require("plan")
 local catalog = require("catalog")
 local inspect = require("inspect")
 local inspection = require("inspection")
+local requirements = require("requirements")
 local transaction = require("transaction")
 local hub_result = require("hub_result")
 local inventory = require("inventory")
@@ -23,17 +24,40 @@ type ExpectedModule = {component: string, version: string, change: string}
 type Removal = {root_digest: string, before_modules: {ExpectedModule}, published: boolean}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
     baseline_revision: integer, message: string, action: string, code: string?, expected_modules: {ExpectedModule}?,
-    migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?, root_id: string?}
+    migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?, root_id: string?, conversion: inventory.Conversion?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
 local function digest(raw: unknown): string?
     if type(raw) ~= "string" or #raw ~= 64 or not raw:match("^[0-9a-f]+$") then return nil end
     return raw
 end
-local function source(): {versions: (string, integer) -> ({string}?, boolean?, string?),
+local function source(state: unknown, installed: inventory.Result, target: string): {versions: (string, integer) -> ({string}?, boolean?, string?),
     artifact: (string, string) -> (inspection.Inspection?, string?)}
     return {versions = catalog.available,
         artifact = function(component: string, version: string): (inspection.Inspection?, string?)
+            if component ~= target then
+                for _, item in ipairs(installed.modules) do
+                    if item.component == component and item.version == version and item.entries > 0 then
+                        local captured = bounds.object(state)
+                        if not captured or type(captured.entries) ~= "table" then return nil, "invalid captured registry" end
+                        local entries: {inspection.Entry} = {}
+                        for _, raw in ipairs(captured.entries) do
+                            local entry = bounds.object(raw)
+                            local owned = entry and bounds.object(entry.registry)
+                            if entry and owned and owned.owner == component then
+                                local id, kind = bounds.id(entry.id), bounds.id(entry.kind)
+                                if not id or not kind then return nil, "invalid resident package entry" end
+                                if #entries >= 4096 then return nil, "resident package entry count exceeds planning bound" end
+                                entries[#entries + 1] = {id = id, kind = kind, meta = bounds.object(entry.meta) or {}, data = entry.data}
+                            end
+                        end
+                        local holes, problem = requirements.read(entries, {})
+                        if not holes then return nil, problem end
+                        return {component = component, version = version, digest = item.digest, requirements = holes,
+                            entries = entries, next_offset = nil, eof = true}, nil
+                    end
+                end
+            end
             -- Dependency planning reads every entry payload, so it walks all
             -- summary pages with data explicitly; agent-facing reads stop at
             -- the first summary page.
@@ -64,7 +88,9 @@ function M.prepare(raw: unknown): (plan.Prepared?, string?)
     if not state then return nil, tostring(state_error) end
     local revision = bounds.count(snapshot:version():id())
     if revision == nil then return nil, "invalid registry revision" end
-    return plan.prepare(state, revision, request, source())
+    local installed, inventory_error = inventory.decode(state, revision)
+    if not installed then return nil, inventory_error end
+    return plan.prepare(state, revision, request, source(state, installed, request.component))
 end
 
 local function expected_modules(raw: unknown): {ExpectedModule}?
@@ -124,6 +150,11 @@ local function decode_receipt(raw: unknown): Receipt?
         if not encoded or hash.sha256(encoded) ~= request_digest then return nil end
         request = request_value(decoded)
     end
+    local conversion: inventory.Conversion? = nil
+    if value.conversion ~= nil then
+        conversion = inventory.conversion(value.conversion)
+        if not conversion then return nil end
+    end
     local removal: Removal? = nil
     if value.removal ~= nil then
         local supplied = bounds.object(value.removal)
@@ -137,7 +168,7 @@ local function decode_receipt(raw: unknown): Receipt?
     end
     return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
         baseline_revision = baseline, message = message, action = action, code = code, expected_modules = expected, migration_work = work,
-        request = request, removal = removal, root_id = root_id}
+        request = request, removal = removal, root_id = root_id, conversion = conversion}
 end
 
 function M.status(raw: unknown, options: unknown?): Result
@@ -251,7 +282,8 @@ end
 local function remove_with_migrations(receipt: Receipt): Result
     local removal, work, expected = receipt.removal, receipt.migration_work, receipt.expected_modules
     if not removal or not work or not expected then return transaction.failure("INTERNAL", "missing removal recovery evidence") end
-    local root_id, root_error = plan.root_id(receipt.component)
+    local root_id, root_error = receipt.root_id, nil
+    if not root_id then root_id, root_error = plan.root_id(receipt.component) end
     if not root_id then return incomplete_removal(receipt, tostring(root_error)) end
     local snapshot, snapshot_error = registry.snapshot()
     if not snapshot then return transaction.failure("UNAVAILABLE", tostring(snapshot_error)) end
@@ -409,6 +441,17 @@ local function reconcile(receipt: Receipt, request: plan.Request): Result
     end
     local actual, inventory_error = inventory.decode(state, snapshot:version():id())
     if not actual then return transaction.failure("UNAVAILABLE", tostring(inventory_error)) end
+    if receipt.conversion then
+        for _, converted in ipairs(receipt.conversion.roots) do
+            local found = false
+            for _, root in ipairs(actual.roots) do
+                if root.id == converted.id and root.component == converted.component and root.owner == "" then found = true; break end
+            end
+            if not found and not (request.action == "uninstall" and receipt.root_id == converted.id) then
+                mismatch = mismatch or "converted dependency is absent or not host-owned: " .. converted.id
+            end
+        end
+    end
     mismatch = mismatch or verify(expected, actual)
     receipt.state = mismatch and "recovery_required" or "complete"
     receipt.message = mismatch or "Published dependency change verified after interruption"
@@ -462,6 +505,9 @@ function M.apply(raw: unknown, expected: unknown): Result
     if not baseline then return transaction.failure("UNAVAILABLE", tostring(baseline_error)) end
     if baseline:version():id() ~= displayed.base_revision then return transaction.failure("STALE", "registry changed while preparing the operation") end
     local request = displayed.request
+    if displayed.conversion and request.migration_policy == "down" and #displayed.migrations > 0 then
+        return transaction.failure("BLOCKED", "convert installed roots with an update before removing a component with migration rollback")
+    end
     local work: migration_work.Work? = nil
     if request.migration_policy == "up" and #displayed.migrations > 0 then
         local captured, capture_error = migration_work.capture(prepared)
@@ -541,13 +587,38 @@ function M.apply(raw: unknown, expected: unknown): Result
     end
     local changes, changes_error = baseline:changes()
     if not changes then return transaction.failure("UNAVAILABLE", tostring(changes_error)) end
+    if displayed.conversion then
+        local selected_roots: {[string]: boolean} = {}
+        for _, root in ipairs(displayed.conversion.roots) do selected_roots[root.id] = true end
+        for _, root in ipairs(prepared.installed.roots) do
+            if selected_roots[root.id] and root.id ~= displayed.root_id then
+                local selected: string? = nil
+                for _, item in ipairs(prepared.installed.modules) do
+                    if item.component == root.component then selected = item.version; break end
+                end
+                if not selected or selected == "" then return transaction.failure("INVALID", "selected root has no installed version: " .. root.id) end
+                local root_data: {[string]: unknown} = {component = root.component, version = selected}
+                if #root.parameters > 0 then root_data.parameters = root.parameters end
+                local deleted, delete_error = changes:delete(root.id)
+                if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
+                local created_root, root_error = changes:create({id = root.id, kind = "ns.dependency", dependency_root = true, meta = root.meta, data = root_data})
+                if not created_root then return transaction.failure("FAILED", tostring(root_error)) end
+            end
+        end
+    end
     local data: {[string]: unknown} = {component = request.component, version = request.version}
     -- Empty Lua tables encode as objects; omit the optional native slice when
     -- no bindings are supplied.
     if #request.parameters > 0 then data.parameters = request.parameters end
-    local entry = {id = displayed.root_id, kind = "ns.dependency", dependency_root = true, data = data}
+    local meta: {[string]: unknown} = {}
+    for _, root in ipairs(prepared.installed.roots) do if root.id == displayed.root_id then meta = root.meta; break end end
+    local entry = {id = displayed.root_id, kind = "ns.dependency", dependency_root = true, meta = meta, data = data}
     local staged, stage_error
-    if displayed.root_operation == "create" then staged, stage_error = changes:create(entry)
+    if displayed.conversion and displayed.root_operation == "update" and request.component ~= "bee/bee" then
+        local deleted, delete_error = changes:delete(displayed.root_id)
+        if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
+        staged, stage_error = changes:create(entry)
+    elseif displayed.root_operation == "create" then staged, stage_error = changes:create(entry)
     elseif displayed.root_operation == "update" then staged, stage_error = changes:update(entry)
     else staged, stage_error = changes:delete(displayed.root_id) end
     if not staged then return transaction.failure("FAILED", tostring(stage_error)) end
@@ -557,7 +628,7 @@ function M.apply(raw: unknown, expected: unknown): Result
     end
     local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest, component = request.component, action = request.action,
         baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected,
-        migration_work = work, request = request_value(request), root_id = displayed.root_id}
+        migration_work = work, request = request_value(request), root_id = displayed.root_id, conversion = displayed.conversion}
     local recorded, record_error = changes:create({id = receipt_id(measured), kind = "registry.entry", data = receipt})
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()

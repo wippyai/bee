@@ -171,10 +171,10 @@ local function define_tests()
             end
             local input = send_payload(dest_thread, sender_thread, "action-a", WORKSPACE, 1, tostring(delivery.idempotency_key), "m-9", content)
             -- A lost reply repeats the delivery; the destination replays instead of duplicating.
-            local first = value(admitted(forwarded("bee.threads.service:inbox_send", input, ALPHA)))
+            local first = value(admitted(forwarded("bee.threads.binding:inbox_send", input, ALPHA)))
             test.eq(first.state, "committed")
             local record_id = tostring(first.record_id)
-            local replay = value(admitted(forwarded("bee.threads.service:inbox_send", input, ALPHA)))
+            local replay = value(admitted(forwarded("bee.threads.binding:inbox_send", input, ALPHA)))
             test.eq(replay.record_id, record_id)
             local items = harness.value(owner:call("inbox_list", {thread_id = dest_thread, action_id = "action-b", after_sequence = 0}))
             test.eq(#items.items, 1)
@@ -198,44 +198,44 @@ local function define_tests()
             harness.value(owner:call("inbox_accept", {thread_id = dest_thread, action_id = "resolve-target", sender_id = ALPHA_ACTOR, allow = true,
                 expected_epoch = 0, idempotency_key = harness.key()}))
             local address = {action_id = "resolve-target", node_id = local_node()}
-            local resolved = value(admitted(forwarded("bee.threads.service:inbox_resolve", address, ALPHA)))
+            local resolved = value(admitted(forwarded("bee.threads.binding:inbox_resolve", address, ALPHA)))
             test.eq(resolved.thread_id, dest_thread)
             test.eq(resolved.action_id, "resolve-target")
             test.eq(resolved.workspace_id, WORKSPACE)
             test.eq(resolved.grant_epoch, 1)
             -- A mapped principal resolves an action the host send policy admits;
             -- an unmapped principal is denied, and an unknown action is not found.
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_resolve", address, subject("a9")))), "DENIED")
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_resolve",
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_resolve", address, subject("a9")))), "DENIED")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_resolve",
                 {action_id = "no-such-action", node_id = local_node()}, ALPHA))), "NOT_FOUND")
         end)
         test.it("looks up a node-qualified action through admission and denies strangers", function()
             local _, dest_thread = threads()
             both()
-            local lookup = value(admitted(forwarded("bee.threads.service:inbox_describe",
+            local lookup = value(admitted(forwarded("bee.threads.binding:inbox_describe",
                 {thread_id = dest_thread, action_id = "action-b", node_id = local_node()}, ALPHA)))
             test.eq(lookup.node_id, local_node())
             test.eq(lookup.action_id, "action-b")
             test.eq(lookup.workspace_id, WORKSPACE)
             test.eq(lookup.grant_epoch, 1)
             test.eq(lookup.sendable, true)
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_describe",
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_describe",
                 {thread_id = dest_thread, action_id = "action-b", node_id = local_node()}, subject("a9")))), "DENIED")
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_describe",
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_describe",
                 {thread_id = dest_thread, action_id = "missing", node_id = local_node()}, ALPHA))), "NOT_FOUND")
             local stray_input = {thread_id = dest_thread, action_id = "action-b", node_id = local_node(), actor = "owner-node-b"}
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_describe", stray_input, ALPHA))), "INVALID_ARGUMENT")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_describe", stray_input, ALPHA))), "INVALID_ARGUMENT")
         end)
         test.it("re-authorizes workspace, grant, action and epoch at the destination", function()
             local sender_thread, dest_thread = threads()
             both()
             local content = {text = "checked"}
             local input = send_payload(dest_thread, sender_thread, "remote-action", WORKSPACE, 1, harness.key(), "m-7", content)
-            local committed = value(admitted(forwarded("bee.threads.service:inbox_send", input, ALPHA)))
+            local committed = value(admitted(forwarded("bee.threads.binding:inbox_send", input, ALPHA)))
             test.eq(committed.state, "committed")
             -- An unaccepted principal is denied.
             local beta_input = send_payload(dest_thread, sender_thread, "remote-action", WORKSPACE, 1, harness.key(), "m-beta", content)
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_send", beta_input, BETA))), "DENIED")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_send", beta_input, BETA))), "DENIED")
             -- A stale epoch conflicts: accept a new sender to bump the epoch, then send at the old epoch.
             harness.value(owner:call("inbox_accept", {thread_id = dest_thread, action_id = "action-b", sender_id = BETA_ACTOR, allow = true,
                 expected_epoch = 1, idempotency_key = harness.key()}))
@@ -244,7 +244,7 @@ local function define_tests()
             stale.idempotency_key = harness.key()
             stale.message_id = "m-stale"
             stale.payload_digest = assert(sends.payload_digest({message_id = "m-stale", content = content}))
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_send", stale, ALPHA))), "CONFLICT")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_send", stale, ALPHA))), "CONFLICT")
             -- A different workspace is denied.
             local foreign: {[string]: unknown} = {}
             for name, item in pairs(input) do foreign[name] = item end
@@ -252,7 +252,7 @@ local function define_tests()
             foreign.idempotency_key = harness.key()
             foreign.message_id = "m-foreign"
             foreign.payload_digest = assert(sends.payload_digest({message_id = "m-foreign", content = content}))
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_send", foreign, ALPHA))), "DENIED")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_send", foreign, ALPHA))), "DENIED")
             -- A local actor naming a foreign caller is denied.
             local local_spoof = send_payload(dest_thread, sender_thread, "action-a", WORKSPACE, 1, harness.key(), "m-spoof", content)
             local_spoof.caller_node_id = REMOTE
@@ -260,17 +260,17 @@ local function define_tests()
             -- An unknown action is not found, and a tampered digest is invalid.
             local missing = send_payload(dest_thread, sender_thread, "remote-action", WORKSPACE, 1, harness.key(), "m-missing", content)
             missing.target_action_id = "no-such-action"
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_send", missing, ALPHA))), "NOT_FOUND")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_send", missing, ALPHA))), "NOT_FOUND")
             local tampered: {[string]: unknown} = {}
             for name, item in pairs(input) do tampered[name] = item end
             tampered.payload_digest = string.rep("0", 64)
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_send", tampered, ALPHA))), "INVALID_ARGUMENT")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_send", tampered, ALPHA))), "INVALID_ARGUMENT")
         end)
         test.it("forwards a reply, a notice and a bounded watch to the destination owner", function()
             local sender_thread, dest_thread = threads()
             local content = {text = "reply me"}
             local input = send_payload(dest_thread, sender_thread, "remote-action", WORKSPACE, 1, harness.key(), "m-r1", content)
-            value(admitted(forwarded("bee.threads.service:inbox_send", input, ALPHA)))
+            value(admitted(forwarded("bee.threads.binding:inbox_send", input, ALPHA)))
             local page = harness.value(owner:call("inbox_list", {thread_id = dest_thread, action_id = "action-b", after_sequence = 0}))
             local record_id = tostring((assert(bounds.object(page.items[1]))).record_id)
             -- The destination re-checks the reply correlation and commits the
@@ -279,7 +279,7 @@ local function define_tests()
                 sender_action_id = "remote-action", node_id = local_node(), workspace_id = WORKSPACE, grant_epoch = 1, idempotency_key = harness.key(),
                 message_id = "m-r2", content = {text = "answer"}, payload_digest = assert(sends.payload_digest({message_id = "m-r2", content = {text = "answer"}})),
                 in_reply_to = {thread_id = dest_thread, record_id = record_id}, outcome = "succeeded"}
-            local replied = value(admitted(forwarded("bee.threads.service:inbox_reply", reply_payload, ALPHA)))
+            local replied = value(admitted(forwarded("bee.threads.binding:inbox_reply", reply_payload, ALPHA)))
             test.eq(replied.state, "committed")
             -- The destination still re-authorizes the mapped principal: a reply
             -- at a stale epoch or naming another workspace is denied, whatever
@@ -291,7 +291,7 @@ local function define_tests()
             stale.message_id = "m-r3"
             stale.payload_digest = assert(sends.payload_digest({message_id = "m-r3", content = {text = "answer"}}))
             stale.grant_epoch = 9
-            test.eq(code(admitted(forwarded("bee.threads.service:inbox_reply", stale, ALPHA))), "CONFLICT")
+            test.eq(code(admitted(forwarded("bee.threads.binding:inbox_reply", stale, ALPHA))), "CONFLICT")
             -- A forwarded notice registers the mapped principal's watch on a
             -- thread it is a member of; a principal the destination has not
             -- admitted as a member is denied, whatever the payload says.
@@ -299,14 +299,14 @@ local function define_tests()
             local watcher = harness.thread(member, "Watcher")
             harness.value(member:call("admit_action", {thread_id = watcher, idempotency_key = harness.key(), action_id = "watch-action", admitted = admitted_for(ALPHA_ACTOR)}))
             local notify = {thread_id = watcher, idempotency_key = harness.key(), target_thread_id = dest_thread, target_action_id = "action-b", watcher_action_id = "watch-action"}
-            test.eq(code(admitted(forwarded("bee.threads.service:notify", notify, ALPHA))), "DENIED")
+            test.eq(code(admitted(forwarded("bee.threads.binding:notify", notify, ALPHA))), "DENIED")
             -- Once the owner admits the member on the destination thread, the
             -- same forwarded notice registers a pending watch.
             harness.value(owner:call("join", {thread_id = dest_thread, idempotency_key = harness.key(), member_id = ALPHA_ACTOR, role = "participant", expected_revision = 1}))
-            local accepted = value(admitted(forwarded("bee.threads.service:notify", notify, ALPHA)))
+            local accepted = value(admitted(forwarded("bee.threads.binding:notify", notify, ALPHA)))
             test.eq(accepted.state, "pending")
             -- A forwarded bounded watch reads one page of the destination thread.
-            local watch = value(admitted(forwarded("bee.threads.delivery:watch",
+            local watch = value(admitted(forwarded("bee.threads.binding:watch",
                 {thread_id = dest_thread, after_sequence = 0, wait_ms = 0, transport_budget_ms = 0}, ALPHA, nil, "bee.threads.delivery")))
             test.not_nil(watch.status)
         end)
@@ -320,7 +320,7 @@ local function define_tests()
             test.eq(registered.state, "pending")
             local content = {text = "watched"}
             local input = send_payload(dest_thread, sender_thread, "remote-action", WORKSPACE, 1, harness.key(), "m-5", content)
-            value(admitted(forwarded("bee.threads.service:inbox_send", input, ALPHA)))
+            value(admitted(forwarded("bee.threads.binding:inbox_send", input, ALPHA)))
             local watched = harness.value(owner:call("watch", {thread_id = dest_thread, after_sequence = 0, wait_ms = 0}))
             test.eq(watched.status, "ready")
             harness.value(owner:call("receipt", {thread_id = dest_thread, action_id = "action-b", idempotency_key = harness.key(),

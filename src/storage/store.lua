@@ -5,12 +5,11 @@
 -- this library and their database boundary denies the reserved store namespaces.
 local sql = require("sql")
 local json = require("json")
-local hash = require("hash")
 local logger = require("logger")
+local ledger = require("ledger")
 local binding = require("binding")
 local contract = require("contract")
 
-type Migration = {id: integer, name: string, sql: string}
 type Store = {
     db: sql.DB,
     closed: boolean,
@@ -28,19 +27,6 @@ local STATE_VERSION = 1
 local MAX_STATE_BYTES = 2097152
 local MIGRATION_TABLE = "workspace_schema_migrations"
 local STATE_TABLE = "workspace_state"
-
--- This table is an append-only ledger from the library's point of view.  The
--- name and checksum are checked on every open, so editing an applied
--- migration cannot silently reinterpret an existing workspace.
-local MIGRATION_TABLE_SQL = [[
-CREATE TABLE IF NOT EXISTS workspace_schema_migrations (
-    id INTEGER PRIMARY KEY CHECK (id > 0),
-    name TEXT NOT NULL,
-    checksum TEXT NOT NULL,
-    applied_at TEXT NOT NULL,
-    UNIQUE (name)
-)
-]]
 
 local STATE_TABLE_SQL = [[
 CREATE TABLE IF NOT EXISTS workspace_state (
@@ -375,7 +361,7 @@ WHERE json_type(value, '$.applications') = 'array' AND EXISTS
      WHERE json_extract(item.value, '$.definition_id') IN ('bee.settings:app','bee.console:app','bee.host.processes:app','bee.gov.overlays:app','bee.threads.timeline:app','bee.workspace.manager:app','bee.hive.manager:app','bee.hive_manager:app','bee.inbox:app','bee.modules:app','bee.hub.modules:app','bee.overlays:app','bee.workspaces:app','bee.timeline:app','bee.processes:app'));
 ]]
 
-local migrations: {Migration} = {
+local migrations: {ledger.Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
     {id = 3, name = "workspace_display_assignments_v1", sql = DISPLAY_ASSIGNMENTS_TABLE_SQL},
@@ -409,14 +395,6 @@ local function rollback(tx: sql.Transaction)
     tx:rollback()
 end
 
-local function migration_checksum(migration: Migration): (string?, string?)
-    local digest, err = hash.sha256(migration.name .. "\n" .. migration.sql)
-    if err or not digest then
-        return nil, error_text("calculate migration checksum", err)
-    end
-    return digest, nil
-end
-
 local function validate_state(encoded: string): (boolean, string?)
     if #encoded == 0 then return false, "workspace state must not be empty" end
     if #encoded > MAX_STATE_BYTES then
@@ -428,114 +406,6 @@ local function validate_state(encoded: string): (boolean, string?)
     if type(value) ~= "table" then return false, "workspace state must be a JSON object" end
     if value.version ~= STATE_VERSION then
         return false, "unsupported workspace state version"
-    end
-    return true, nil
-end
-
-local function migration_map(): {[integer]: Migration}
-    local result: {[integer]: Migration} = {}
-    for _, migration in ipairs(migrations) do result[migration.id] = migration end
-    return result
-end
-
-local function migrate(db: sql.DB): (boolean, string?)
-    local tx, begin_err = db:begin()
-    if not tx then return false, error_text("begin workspace migration", begin_err) end
-
-    local _, create_err = tx:execute(MIGRATION_TABLE_SQL)
-    if create_err then
-        rollback(tx)
-        return false, error_text("create workspace migration ledger", create_err)
-    end
-
-    local rows, query_err = tx:query(
-        "SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id")
-    if query_err or not rows then
-        rollback(tx)
-        return false, error_text("read workspace migration ledger", query_err)
-    end
-
-    -- Migrations read whether this run starts a new database from a
-    -- connection-local table that never reaches the file.
-    local _, run_err = tx:execute("CREATE TEMP TABLE IF NOT EXISTS workspace_migration_run (fresh INTEGER NOT NULL CHECK (fresh IN (0, 1)))")
-    if not run_err then _, run_err = tx:execute("DELETE FROM temp.workspace_migration_run") end
-    if not run_err then _, run_err = tx:execute("INSERT INTO temp.workspace_migration_run (fresh) VALUES (?)", {#rows == 0 and 1 or 0}) end
-    if run_err then
-        rollback(tx)
-        return false, error_text("record workspace migration run", run_err)
-    end
-
-    local known: {[integer]: boolean} = {}
-    local by_id = migration_map()
-    local expected_id = 1
-    for _, row in ipairs(rows) do
-        local id = integer(row.id)
-        local name: unknown = row.name
-        local checksum: unknown = row.checksum
-        if not id or id < 1 then
-            rollback(tx)
-            return false, "workspace migration ledger contains an invalid id"
-        end
-        if id ~= expected_id then
-            rollback(tx)
-            if id > #migrations then
-                return false, "workspace database schema is newer than this Bee build"
-            end
-            return false, "workspace migration ledger has a missing migration"
-        end
-        if id > #migrations then
-            rollback(tx)
-            return false, "workspace database schema is newer than this Bee build"
-        end
-        local migration = by_id[id]
-        if not migration or type(name) ~= "string" or type(checksum) ~= "string" then
-            rollback(tx)
-            return false, "workspace migration ledger is invalid"
-        end
-        local expected_checksum, checksum_err = migration_checksum(migration)
-        if checksum_err or not expected_checksum then
-            rollback(tx)
-            return false, checksum_err or "workspace migration checksum is unavailable"
-        end
-        if name ~= migration.name then
-            rollback(tx)
-            return false, "workspace migration name changed for id " .. tostring(id)
-        end
-        if checksum ~= expected_checksum then
-            rollback(tx)
-            return false, "workspace migration checksum changed for id " .. tostring(id)
-        end
-        known[id] = true
-        expected_id = expected_id + 1
-    end
-
-    for _, migration in ipairs(migrations) do
-        if not known[migration.id] then
-            local checksum, checksum_err = migration_checksum(migration)
-            if checksum_err or not checksum then
-                rollback(tx)
-                return false, checksum_err or "workspace migration checksum is unavailable"
-            end
-            local _, apply_err = tx:execute(migration.sql)
-            if apply_err then
-                rollback(tx)
-                return false, error_text("apply workspace migration " .. migration.name, apply_err)
-            end
-            local _, record_err = tx:execute(
-                "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) " ..
-                "VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
-                {migration.id, migration.name, checksum})
-            if record_err then
-                rollback(tx)
-                return false, error_text("record workspace migration " .. migration.name, record_err)
-            end
-        end
-    end
-
-    local _, commit_err = tx:commit()
-    if commit_err then
-        rollback(tx)
-        return false, error_text("commit workspace migration", commit_err)
     end
     return true, nil
 end
@@ -692,9 +562,17 @@ local function acquire(resource: string?): (sql.DB?, string?)
         db:release()
         return nil, error_text("enable workspace WAL mode", wal_err)
     end
+    local _, busy_error = db:execute("PRAGMA busy_timeout = 5000")
+    if busy_error then
+        db:release()
+        return nil, "configure migration busy timeout: " .. tostring(busy_error)
+    end
     local log = logger:named("bee.storage")
     log:info("Boot phase", {phase = "migration_check", stage = "begin", owner = "workspace"})
-    local migrated, migration_err = migrate(db)
+    local migrated, migration_err = ledger.apply(db, {
+        table = MIGRATION_TABLE, label = "workspace", transaction = "batch",
+        freshness_table = "workspace_migration_run",
+    }, migrations)
     log:info("Boot phase", {phase = "migration_check", stage = migrated and "end" or "failed", owner = "workspace"})
     if not migrated then
         db:release()

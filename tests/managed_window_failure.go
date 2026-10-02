@@ -24,6 +24,17 @@ local time = require("time")
 local security = require("security")
 local tty = require("tty")
 local funcs = require("funcs")
+local function object(value: unknown): {[string]: unknown}
+    assert(type(value) == "table", "fixture value must be an object")
+    return value
+end
+local function objects(value: unknown): {{[string]: unknown}}
+    assert(type(value) == "table", "fixture value must be an array")
+    local result: {{[string]: unknown}} = {}
+    for index, item in ipairs(value) do result[index] = object(item) end
+    return result
+end
+
 local appearance = require("appearance")
 local admission = require("admission")
 local registry = require("registry")
@@ -32,7 +43,7 @@ local placement_store = require("placement_store")
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
-    return value :: {[string]: unknown}
+    return object(value)
 end
 local function apply(entry: {[string]: unknown})
     local changes = registry.snapshot():changes()
@@ -43,7 +54,7 @@ local function changed(entry: {[string]: unknown}): {[string]: unknown}
     local result: {[string]: unknown} = {}
     for key, value in pairs(entry) do result[key] = value end
     local data: {[string]: unknown} = {}
-    for key, value in pairs(entry.data :: {[string]: unknown}) do data[key] = value end
+    for key, value in pairs(object(entry.data)) do data[key] = value end
     result.data = data
     return result
 end
@@ -53,7 +64,7 @@ local function call(target: string, value: unknown): {[string]: unknown}
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
+        local fault = type(result.error) == "table" and object(result.error) or {}
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
     return result
@@ -64,7 +75,7 @@ local BEFORE_ADMISSION = STAGE == "plan" or STAGE == "component"
 
 local function run()
     local thread = "managed_window_selector"
-    call("bee.threads.service:create", {thread_id = thread, idempotency_key = "managed-window-failure-create", title = "Managed window failure fixture"})
+    call("bee.threads.binding:create", {thread_id = thread, idempotency_key = "managed-window-failure-create", title = "Managed window failure fixture"})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -102,7 +113,7 @@ local function run()
     local selector = assert(registry.get("bee.managed.window.fixture:selector_definition"))
     local found = assert(registry.find({["meta.type"] = "bee.launch_definition"}))
     for _, entry in ipairs(found) do
-        local meta = entry.meta :: {[string]: unknown}
+        local meta = object(entry.meta)
         if meta.test_support ~= true then
             local hidden = changed(entry)
             hidden.data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
@@ -129,8 +140,8 @@ local function run()
     assert(opened.error_code == "", tostring(opened.error))
     -- A picker open stays threadless, so the thread owner admits the
     -- host-issued principal of the exact instance the open reported.
-    local head = (call("bee.threads.service:get", {thread_id = thread}).value :: {[string]: unknown}).summary :: {[string]: unknown}
-    call("bee.threads.service:join", {thread_id = thread, idempotency_key = "managed-window-failure-join",
+    local head = object(object(call("bee.threads.binding:get", {thread_id = thread}).value).summary)
+    call("bee.threads.binding:join", {thread_id = thread, idempotency_key = "managed-window-failure-join",
         member_id = "bee.application:" .. WORKSPACE .. ":" .. tostring(opened.instance_id), role = "participant", expected_revision = head.revision})
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = WORKSPACE,
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
@@ -186,10 +197,10 @@ local function run()
         time.sleep("25ms")
     end
     assert(resized, "failure surface did not resize while settling")
-    local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32}).value.records
+    local records = call("bee.threads.binding:read_after", {thread_id = thread, cursor = 0, limit = 32}).value.records
     local admitted, prepared = 0, 0
     local attempt_id = ""
-    for _, record in ipairs(records :: {{[string]: unknown}}) do
+    for _, record in ipairs(objects(records)) do
         if record.kind == "action.admitted" then admitted = admitted + 1 end
         if record.kind == "attempt.prepared" then prepared = prepared + 1; attempt_id = tostring(record.attempt_id) end
         assert(record.kind ~= "attempt.started", "failed launch started a thread attempt")
@@ -402,21 +413,21 @@ func run() error {
 	if err := os.WriteFile(hostPath, []byte(rootIndex), 0600); err != nil {
 		return err
 	}
-	receiptPath := filepath.Join(dir, "modules", "threads", "src", "service", "receipt_method.lua")
+	receiptPath := filepath.Join(dir, "modules", "threads", "src", "binding", "receipt_method.lua")
 	receipt, err := os.ReadFile(receiptPath)
 	if err != nil {
 		return err
 	}
 	receiptText := string(receipt)
 	receiptText = strings.Replace(receiptText, "local types = require(\"types\")", "local types = require(\"types\")\nlocal time = require(\"time\")", 1)
-	receiptText = strings.Replace(receiptText, "    return boundary.run(lifecycle.receipt, request, true)", "    if type(request) == \"table\" and (request :: {[string]: unknown}).action_id ~= nil then time.sleep(\"2s\") end\n    return boundary.run(lifecycle.receipt, request, true)", 1)
+	receiptText = strings.Replace(receiptText, "    return boundary.run(lifecycle.receipt, request, true)", "    if type(request) == \"table\" and request.action_id ~= nil then time.sleep(\"2s\") end\n    return boundary.run(lifecycle.receipt, request, true)", 1)
 	if receiptText == string(receipt) {
 		return fmt.Errorf("receipt injection anchors missing")
 	}
 	if err := os.WriteFile(receiptPath, []byte(receiptText), 0600); err != nil {
 		return err
 	}
-	receiptIndexPath := filepath.Join(dir, "modules", "threads", "src", "service", "_index.yaml")
+	receiptIndexPath := filepath.Join(dir, "modules", "threads", "src", "binding", "_index.yaml")
 	receiptIndex, err := os.ReadFile(receiptIndexPath)
 	if err != nil {
 		return err

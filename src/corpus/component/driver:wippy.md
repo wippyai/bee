@@ -7,7 +7,7 @@ in-process with its traits, tools, and contracts, against an OpenAI-compatible c
 completions endpoint chosen by host config (no provider or key baked in; key by
 credential reference).
 
-`bee.driver.wippy:run` is the harness's in-process execution adapter. The harness
+`bee.driver.wippy.binding:run` is the harness's in-process execution adapter. The harness
 owns the carrier claim and checkpoint, terminal receipt, status, wait and
 durable cancel intent; this package owns the provider conversation, tool calls
 and inbox delivery as new turns. The adapter receives an admitted
@@ -17,7 +17,7 @@ fresh per-attempt actor narrowed to the tool's declared scopes.
 
 ## Host configuration
 
-`bee.driver.wippy:run` accepts `host_config`, defaulting to the
+`bee.driver.wippy.binding:run` accepts `host_config`, defaulting to the
 `bee.driver.wippy:host_config` registry entry. Fields:
 
 - `endpoint`: https URL, or plain http only for the 127.0.0.1 loopback fixture.
@@ -38,4 +38,4 @@ fences carrier commits by epoch and revision and checks each commit: a conflict
 fails the run instead of continuing unfenced.
 
 Placement `prepare` and `dispatch` are refused: the driver executes
-in-process through `bee.driver.wippy:run` and describes no launch binary.
+in-process through `bee.driver.wippy.binding:run` and describes no launch binary.

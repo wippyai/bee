@@ -127,10 +127,10 @@ local function main()
         return result
     end
     local thread_id = "desktop-status-" .. assert(uuid.v4())
-    thread_call("bee.threads.service:create", {thread_id = thread_id, idempotency_key = assert(uuid.v4()), title = "Desktop status"})
+    thread_call("bee.threads.binding:create", {thread_id = thread_id, idempotency_key = assert(uuid.v4()), title = "Desktop status"})
     -- A real owner record makes the same actor visibly wait. The session derives
     -- this from its own membership; no status envelope is ever sent by the test.
-    local waiting = thread_call("bee.threads.service:record", {thread_id = thread_id, idempotency_key = assert(uuid.v4()), kind = "message",
+    local waiting = thread_call("bee.threads.binding:record", {thread_id = thread_id, idempotency_key = assert(uuid.v4()), kind = "message",
         body = {message_id = "desktop-wait", message_kind = "request", recipient_ids = {ACTOR}, content = {text = "Please review"}}})
     local waiting_value: unknown = waiting.value
     if type(waiting_value) ~= "table" or type(waiting_value.record_id) ~= "string" then error("Thread record did not return its identity") end
@@ -234,7 +234,7 @@ local function main()
 
     -- This is a new committed owner record, not a replayed presenter frame. The
     -- fresh session must consume it through the original authenticated binding.
-    thread_call("bee.threads.service:record", {thread_id = thread_id, idempotency_key = assert(uuid.v4()), kind = "message",
+    thread_call("bee.threads.binding:record", {thread_id = thread_id, idempotency_key = assert(uuid.v4()), kind = "message",
         body = {message_id = "desktop-reply", message_kind = "reply", recipient_ids = {}, content = {text = "Reviewed"},
             in_reply_to = {thread_id = thread_id, record_id = waiting_record_id}, outcome = "succeeded"}})
     command(screen, "printf 'THREAD_%s_STATUS_UPDATED\\n' REPLY")

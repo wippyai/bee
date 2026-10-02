@@ -14,7 +14,7 @@ local M = {}
 M.PAGE_SIZE = 64
 M.MAX_DEFINITIONS = 64
 M.MAX_PROFILE_PAGES = 16
-M.PROFILE_CALL = "bee.harness.profiles:call"
+M.PROFILE_CALL = "bee.harness.binding:call"
 M.EXTERNAL_EXECUTOR = "bee.sessions.binding:external_executor_binding"
 
 type Object = {[string]: unknown}

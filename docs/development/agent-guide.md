@@ -15,7 +15,8 @@ them. Native Terminal runs with the operating system user's authority.
 Keep desktop responsibilities in the `src/` component folders (`src/host`,
 `src/client`, `src/launch` and their siblings, one namespace per folder),
 public application helpers in `modules/application/src`, shared frame, appearance
-and text helpers in `modules/ui/src`, and application UI in
+and text helpers and the forms, visualization, diagram and picker kits in
+`modules/ui/src`, and application UI in
 `modules/<module>/src/app` child namespaces. The
 core desktop shell remains in `src/desktop` and `src/terminal`.
 Use the [UI brand book](../guides/ui.md) and

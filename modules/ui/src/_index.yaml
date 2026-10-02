@@ -7,8 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee UI
-    comment: Shared frame, semantic appearance, and bounded text helpers without application
-      authority
+    comment: Shared frame, appearance, text and presentation kits without application authority
 - name: text
   kind: library.lua
   source: file://text.lua

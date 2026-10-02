@@ -7,8 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee application SDK
-    comment: Public application-side values, presentation helpers, and bounded thread
-      facade messages; helpers grant no application, workspace, or thread authority
+    comment: Public application-side values, owner clients, and bounded thread facade
+      messages; helpers grant no application, workspace, or thread authority
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads

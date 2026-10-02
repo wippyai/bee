@@ -60,8 +60,8 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
-| `modules/application/src` | Public SDK namespace `bee.app`: application client, owner clients and presentation kits |
-| `modules/ui/src` | Shared frame, appearance and bounded text helpers as `bee.ui` |
+| `modules/application/src` | Public SDK namespace `bee.app`: application client, owner clients and their bounded values |
+| `modules/ui/src` | Shared frame, appearance and bounded text as `bee.ui`; forms, visualization, diagrams and folder picker in `.forms`, `.viz`, `.diagram` and `.picker` |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
 | `modules/approvals-inbox/src` | Approvals inbox app as an installable package |
@@ -106,7 +106,7 @@ entry: host wiring cannot leak implementations into a component root.
 
 | Component namespace | Shared root libraries |
 |---|---|
-| `bee.app` | `arguments`, `caller`, `client`, `diagram`, `folder_picker`, `forms`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `thread_protocol`, `viz` |
+| `bee.app` | `arguments`, `caller`, `client`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `thread_protocol` |
 | `bee.capability` | `model` |
 | `bee.credentials` | `formats`, `protocol` |
 | `bee.docs` | `protocol` |
@@ -124,11 +124,12 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.ui` | `appearance`, `frame`, `text` |
 | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
 
-The SDK `bee.app` owns its documented public application helpers and presentation
-kits at its root. Shared frame, appearance and text values belong to `bee.ui`.
-Those entries are included in the same explicit set. New
-shared root libraries require a documented responsibility and a reviewed update
-to the set; a new implementation does not qualify simply because it is shared.
+The SDK `bee.app` owns its documented public application and owner-client
+helpers at its root. Shared frame, appearance and text values belong to
+`bee.ui`; the presentation kits live in `bee.ui.forms`, `bee.ui.viz`,
+`bee.ui.diagram` and `bee.ui.picker`. The listed root entries are included in
+the same explicit set. New shared root libraries require a documented
+responsibility and a reviewed update to the set; a new implementation does not qualify simply because it is shared.
 
 An append requirement (`+=`) contributes one element. It has no array default;
 an absent host selection contributes nothing instead of a nested empty array.

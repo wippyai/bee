@@ -31,7 +31,7 @@ authorize them. Component services own their domain protocol and state.
 | Layer | Owns | Boundary |
 |---|---|---|
 | Core | Workspace/session lifetime, composition, focus, geometry, admission and application lifecycle | Runtime primitives and shared value contracts; no default-app implementation imports |
-| Shared UI values | Frame, semantic appearance and bounded text in `bee/ui`; presentation kits in `bee/application` | Value contracts only; UI has no application SDK or owner-service dependencies |
+| Shared UI values | Frame, semantic appearance, bounded text and the forms, visualization, diagram and folder-picker kits in `bee/ui` | Value contracts only; UI has no application SDK or owner-service dependencies |
 | Default apps | Terminal, Settings, Process Manager and other bundled apps | Standalone processes with explicit grants and core protocols |
 | Optional packages | Installed applications, coding tools, harnesses, models and services | Published contracts and host admission |
 | Independent subsystems | Workspace catalog/checkpoints, Threads, Hub reads/planning/local apply, governed overlay authoring/review/apply/recovery, approvals, sync and scoped MCP | Authenticated operation contracts; each owns its state and migrations |

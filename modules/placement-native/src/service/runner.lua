@@ -2,8 +2,8 @@
 -- executor handle, materializes the home, starts the child, records its
 -- identity, pumps bounded output to the bound recipient, accepts
 -- acknowledged input, signals on request, and records the exit it
--- observed. When the runner is cancelled, the child is stopped; nothing
--- outlives the runner unobserved.
+-- observed. Docker start refusal remains uncertain until daemon exit
+-- evidence is available; runner cancellation alone does not prove absence.
 local process = require("process")
 local channel = require("channel")
 local time = require("time")

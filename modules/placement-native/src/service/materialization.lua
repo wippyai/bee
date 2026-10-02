@@ -1,4 +1,4 @@
--- MIT. Native attempt materialization shared by execution transports.
+-- MIT. Attempt materialization shared by native and Docker execution.
 -- Runs only inside the admitted placement owner after its starting transition.
 -- File credentials go only to the selected private home; receipts retain no
 -- credential bytes. The caller owns gateway retirement even

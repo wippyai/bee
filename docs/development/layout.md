@@ -74,7 +74,7 @@ reviewed binding, and the application journey fixture edits that host selection.
 
 Application entries, renderers, screen models and rendering helpers live under
 component `app/` namespaces. The public rendering kit remains in `application`;
-core desktop and terminal sources implement the desktop shell. Placement's
+the desktop component and core terminal sources implement the desktop shell. Placement's
 process-local native terminal facade is an executor contract, not an application
 screen: it consumes the caller's terminal grant. Docker's short window adapter
 selects its backend; it does not duplicate the native facade. Retained
@@ -267,7 +267,7 @@ The following paths group overlays rather than production namespace children:
 | `tests/lua/protocol/admission/_index.yaml` | `bee.protocol` |
 | `tests/lua/reference_apps/_index.yaml` | `bee.app.reference.test` |
 | `tests/lua/resources/_index.yaml` | `bee.resources` |
-| `tests/lua/session/_index.yaml` | `bee.session` |
+| `tests/lua/session/_index.yaml` | `bee.desktop.service` |
 | `tests/lua/sessions/_index.yaml` | `bee.tests.sessions` |
 | `tests/lua/settings/_index.yaml` | `bee.settings` |
 | `tests/lua/status_reader/_index.yaml` | `bee.status.reader` |

@@ -30,7 +30,8 @@ authorize them. Component services own their domain protocol and state.
 
 | Layer | Owns | Boundary |
 |---|---|---|
-| Core | Workspace/session lifetime, composition, focus, geometry, admission and application lifecycle | Runtime primitives and shared value contracts; no default-app implementation imports |
+| Core | Workspace/client lifetime, composition, admission and application lifecycle | Runtime primitives and shared value contracts; no default-app implementation imports |
+| Desktop component | Pure scene, focus, geometry and committed projection | Host-selected policies and client lifetime; preserved topics and handoff checkpoints |
 | Application SDK UI values | Appearance and reusable presentation helpers, currently exported by `bee/application` | Value contracts only; a separate UI package remains a proposal |
 | Default apps | Terminal, Settings, Process Manager and other bundled apps | Standalone processes with explicit grants and core protocols |
 | Optional packages | Installed applications, coding tools, harnesses, models and services | Published contracts and host admission |

@@ -15,13 +15,13 @@ from workspace import ROOT, database_environment, strip_dependencies  # noqa: E4
 REMOVED = ("Hive Manager", "Timeline", "Workspaces", "Process Manager", "Modules", "Overlays")
 ALLOWED_NAMESPACES = {
     "bee", "bee.deps", "bee.env", "bee.launch", "bee.desktop", "bee.terminal",
-    "bee.client", "bee.session", "bee.host", "bee.apps",
+    "bee.client", "bee.host", "bee.apps",
     "bee.protocol", "bee.interaction", "bee.settings", "bee.console", "bee.persist",
 }
 ALLOWED_NAMESPACE_TREES = (
     "bee.security", "bee.workspace", "bee.approvals", "bee.threads", "bee.hive",
     "bee.gov", "bee.hub", "bee.gateway", "bee.sync", "bee.node", "bee.app",
-    "bee.docs",
+    "bee.docs", "bee.desktop",
 )
 EXCLUDED_NAMESPACE_TREES = (
     "bee.hive.manager", "bee.threads.timeline", "bee.workspace.manager",

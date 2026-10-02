@@ -131,17 +131,17 @@
       "topic": "platform"
     },
     {
-      "bytes": 9001,
+      "bytes": 9177,
       "id": "docs/system_map",
-      "sha256": "6ae08f05547daf6254bfeb483511d1af9704db2f18b520f84bc0a997437a564b",
+      "sha256": "90607de59cf7a3d864240f149e8e4298a2086a21172862c44ed89902b45f060e",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
     },
     {
-      "bytes": 7136,
+      "bytes": 7282,
       "id": "docs/package_boundaries",
-      "sha256": "906e06c81cf071e9ea5a020a7d386b6a05a37695537bec5ba4e346b16389e032",
+      "sha256": "a92b13f370b53c8baace7e10cf9b1c16cd457a4cbb1631e5e002a68ed4aa3300",
       "source": "docs/development/package-boundaries.md",
       "title": "Package boundaries",
       "topic": "platform"
@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 20819,
+      "bytes": 20804,
       "id": "docs/distributed_app_delivery",
-      "sha256": "fc353b8283620a26a43e2afb4e7fbeb5e5d9f8c3fb4f023e33960c1787b3432f",
+      "sha256": "a5d4a4792a53d9840dccdab023a928302b7f5fd7e4e0472d107423c77ad7b0be",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -427,9 +427,9 @@
       "topic": "component"
     },
     {
-      "bytes": 21683,
+      "bytes": 21668,
       "id": "component/gov",
-      "sha256": "cea83c8623f4e214c5810c82f6f19dd13bf40d80534ae8d4772b772f529f3f51",
+      "sha256": "afccf75ba44a76bbb79ef6bb63e9addbba861ce101c56cd63afd872aaa2b863f",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -635,9 +635,9 @@
       "topic": "reference_apps"
     },
     {
-      "bytes": 41530,
+      "bytes": 41522,
       "id": "toolkit",
-      "sha256": "b9b4558c1c16f7f89f82d9caac38145c2aea84f8c34ef5c8a0f41209ae0ed1e0",
+      "sha256": "0f50fe0a78603b53932df12c27c1bef17f73da586d8175cbced669d5b50f6efc",
       "source": "generated: modules/application/src, module app views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -646,7 +646,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 754583,
+    "bytes": 754867,
     "documents": 80
   }
 }

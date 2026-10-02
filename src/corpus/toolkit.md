@@ -306,7 +306,7 @@ frame.table(rows, 1, 4, {columns = {{title = "Process", width = 0}, {title = "St
 ```text
  PROCESS                       STEPS
  bee.host:main                 ████████████    96
- bee.desktop.service:main              ██              16
+ bee.desktop.service:main      ██              16
  bee.apps:broker               ████████▊       70
 ```
 

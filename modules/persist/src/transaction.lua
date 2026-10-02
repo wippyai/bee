@@ -3,7 +3,6 @@
 -- holding one. SQLite serializes writers on the resource's single
 -- connection. The label names the store in failures.
 local sql = require("sql")
-local sqlerrors = require("sqlerrors")
 local time = require("time")
 local M = {}
 type Result = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean, commit: boolean?}
@@ -11,7 +10,7 @@ type Body = (sql.Transaction) -> Result
 M.MAX_ATTEMPTS = 5
 M.BACKOFF_MS = 20
 function M.busy(err: unknown): boolean
-    local text = string.lower(sqlerrors.describe(err))
+    local text = string.lower(tostring(err))
     return text:find("locked", 1, true) ~= nil or text:find("busy", 1, true) ~= nil
 end
 function M.storage_failure(message: string): Result
@@ -20,10 +19,9 @@ end
 function M.failure(code: string, message: string, value: unknown?): Result
     return {ok = false, code = code, message = message, value = value, replayed = false}
 end
--- The native adapter reads SQLite codes from the retained Go error chain.
--- Keep that text intact while adding the operation which failed.
+-- Keep the native error text intact while adding the failed operation.
 function M.error_message(action: string, err: unknown): string
-    return action .. ": " .. sqlerrors.describe(err or "no reason given")
+    return action .. ": " .. tostring(err or "no reason given")
 end
 function M.sql_failure(err: unknown, action: string): Result
     return M.failure(M.busy(err) and "BUSY" or "INTERNAL", M.error_message(action, err))

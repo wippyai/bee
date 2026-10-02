@@ -6,7 +6,6 @@ local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local hash = require("hash")
-local sqlerrors = require("sqlerrors")
 local canonical = require("canonical")
 local artifact = require("artifact")
 local plan_store = require("plan_store")
@@ -300,14 +299,14 @@ local function define_tests()
                     end}
                 local function execute(statement: string)
                     local _, err = activations.db:execute(statement)
-                    if err then error(sqlerrors.describe(err)) end
+                    if err then error(tostring(err)) end
                 end
-                local cause, sqlite_code: string, string
+                local cause: string
                 if phase == "statement" then
                     execute([[CREATE TRIGGER bee_test_activation_cause BEFORE INSERT ON bee_governance_activation_intents
                         WHEN NEW.workspace_id = 'workspace-sql-cause-statement'
                         BEGIN SELECT RAISE(ABORT, 'injected activation SQLite step'); END]])
-                    cause, sqlite_code = "injected activation SQLite step", "1811"
+                    cause = "injected activation SQLite step"
                 else
                     execute("CREATE TABLE bee_test_activation_parent (id INTEGER PRIMARY KEY)")
                     execute([[CREATE TABLE bee_test_activation_child (parent_id INTEGER REFERENCES bee_test_activation_parent(id)
@@ -315,7 +314,7 @@ local function define_tests()
                     execute([[CREATE TRIGGER bee_test_activation_cause AFTER INSERT ON bee_governance_activation_intents
                         WHEN NEW.workspace_id = 'workspace-sql-cause-commit'
                         BEGIN INSERT INTO bee_test_activation_child VALUES (1); END]])
-                    cause, sqlite_code = "FOREIGN KEY constraint failed", "787"
+                    cause = "FOREIGN KEY constraint failed"
                 end
                 local result = owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                     version = "v1", intent_id = "intent-sql-cause", receipt_key = "sql-cause"})
@@ -329,15 +328,12 @@ local function define_tests()
                 assert(plan_store.close(plans))
                 expect_code(result, "INTERNAL")
                 test.is_true(tostring(result.message):find(cause, 1, true) ~= nil, tostring(result.message))
-                test.is_true(tostring(result.message):find(sqlite_code, 1, true) ~= nil, tostring(result.message))
                 local succeeded, output = pcall(function() ok(result) end)
                 test.is_false(succeeded)
                 test.is_true(tostring(output):find(cause, 1, true) ~= nil, tostring(output))
-                test.is_true(tostring(output):find(sqlite_code, 1, true) ~= nil, tostring(output))
                 local matched, diagnostic = pcall(function() expect_code(result, "UNEXPECTED") end)
                 test.is_false(matched)
                 test.is_true(tostring(diagnostic):find(cause, 1, true) ~= nil, tostring(diagnostic))
-                test.is_true(tostring(diagnostic):find(sqlite_code, 1, true) ~= nil, tostring(diagnostic))
             end)
         end
 
@@ -525,7 +521,7 @@ local function define_tests()
             ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-mismatch", receipt_key = "mismatch"}))
             local _, update_error = leases.db:execute("UPDATE bee_governance_lease_uses SET approval_id = 'another-approval'")
-            if update_error then error(sqlerrors.describe(update_error)) end
+            if update_error then error(tostring(update_error)) end
             expect_code(owner.step(config, "intent-mismatch", "mismatch"), "CONFLICT")
             test.is_false(flags.applied)
             assert(lease_store.close(leases))

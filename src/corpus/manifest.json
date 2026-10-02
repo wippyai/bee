@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 4773,
+      "bytes": 4896,
       "id": "docs/readme",
-      "sha256": "b25bab50fc8b982fcca46539e15291bb7059c957b467b488ae1d539063ce9812",
+      "sha256": "afd3d7840b31c15c6023f225b8c4a1a24339fbde328c68217f9ec8c9392d55cf",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 25818,
+      "bytes": 25895,
       "id": "docs/threads",
-      "sha256": "e14e75cd717d0e8eeab6604936d1f1b04b9e950d3e4eebb0251fa9888c22a24b",
+      "sha256": "e00ecb13b3096c66783dd75987a47946137c290ab5300dc943b48311283f7dd0",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -427,9 +427,9 @@
       "topic": "component"
     },
     {
-      "bytes": 11881,
+      "bytes": 12193,
       "id": "component/harness",
-      "sha256": "6d093c7ed21a18fddc387b1a85cddbd4b36bd0b69ab948cfd97f5c32285f028e",
+      "sha256": "5d69a72bfaf9264f51252b8df31f016fcac274f75649ba1274608ada6e95e087",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -491,9 +491,9 @@
       "topic": "component"
     },
     {
-      "bytes": 24536,
+      "bytes": 24777,
       "id": "component/placement:native",
-      "sha256": "fc579e6f4b97d1627279e1059e6ebf5068ebf32fc6d8aad2cbd85dec973aa2d1",
+      "sha256": "4cdecad6b868376ffa871395cd541754efa353afb49ca750bfeace3bb3249ca4",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -523,11 +523,19 @@
       "topic": "component"
     },
     {
-      "bytes": 10633,
+      "bytes": 10662,
       "id": "component/threads",
-      "sha256": "f1544d1b6012ed82ba2c78f1a889a3c877cb27ba9b7631bd59be28ed0aeffcd3",
+      "sha256": "76ab08d6ac3b3b50c4b5375158de6f2e495898ffc742bbba30b0d6e81519d1f7",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
+      "topic": "component"
+    },
+    {
+      "bytes": 646,
+      "id": "component/values",
+      "sha256": "210cd83131475188b38e0dbbdfa8595ac0c2190fe0a35b72a00b9f3e8d54724a",
+      "source": "modules/values/src/README.md",
+      "title": "Bee values",
       "topic": "component"
     },
     {
@@ -630,7 +638,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 742020,
-    "documents": 78
+    "bytes": 743448,
+    "documents": 79
   }
 }

@@ -389,7 +389,11 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
             token_environment = gateway_configuration.DESTINATION,
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     end
-    return {option_values = bounds.object(data.prepare_options), context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
+    -- Use the same decoder as the carrier planner, including empty registry
+    -- maps: their raw allocation shape is not a host option selection.
+    local option_values, options_error = preferences.decode_prepare_options(data.prepare_options)
+    if not option_values then return nil, nil, options_error end
+    return {option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
         selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil, configure_renderer
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)

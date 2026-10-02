@@ -17,9 +17,9 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: dependency_threads
+- name: dependency_values
   kind: ns.dependency
-  component: bee/threads
+  component: bee/values
   version: '*'
 - name: target_decode
   kind: ns.requirement

@@ -188,7 +188,7 @@ entries:
   method: handle
   modules: [security]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     service: bee.approvals:service
     outbox: bee.approvals.persist:outbox
   security: {policies: []}

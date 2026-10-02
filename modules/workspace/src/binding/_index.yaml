@@ -7,7 +7,7 @@ entries:
   modules:
   - contract
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: catalog
   kind: function.lua
   source: file://catalog.lua

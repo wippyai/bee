@@ -706,9 +706,9 @@ def client_storage():
         shutil.copytree(ROOT / "tests/fixtures/client_storage", project / "src/client_storage_probe")
         host = project / "src/env/_index.yaml"
         configuration = yaml.safe_load(host.read_text())
-        next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee:client_db_path}"
+        next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee.env:client_db_path}"
         host.write_text(yaml.safe_dump(configuration, sort_keys=False))
-        root_index = project / "src/_index.yaml"
+        root_index = project / "src/env/_index.yaml"
         configuration = yaml.safe_load(root_index.read_text())
         configuration["entries"] += [
             {"name": "client_db_path", "kind": "env.variable", "storage": "bee.env:workspace_environment",
@@ -726,7 +726,7 @@ def client_storage():
             if packed:
                 deployment_copy(pack, folder)
             args = [str(RUNTIME), "--console", "run"]
-            args += [command, mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
+            args += [command, mode, "--host", "bee:terminal", "--set", f"registry.history_path={folder / 'registry.db'}"]
             result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=30,
                                     env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
             output = result.stdout + result.stderr
@@ -804,7 +804,7 @@ def client_storage():
                 assert db.execute("SELECT c.client_id, l.workspace_id, l.import_receipt FROM client_state AS c JOIN client_layouts AS l ON l.desktop_id = c.client_id").fetchone() == original
                 ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
                 db.execute("UPDATE client_schema_migrations SET checksum='changed' WHERE id=1")
-            probe(folder, "open", packed, "migration ledger")
+            probe(folder, "open", packed, "Client migration checksum changed")
             with sqlite3.connect(database) as db:
                 db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
                 db.execute("INSERT INTO client_schema_migrations VALUES (4, 'future', 'future')")

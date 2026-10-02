@@ -1,6 +1,7 @@
 -- MIT. Reads declared Hub requirement holes without resolving, linking, or
 -- mutating them. The caller supplies already-decoded configuration values.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local M = {}
 M.MAX_PACKAGE_ENTRIES = 512
@@ -8,7 +9,7 @@ M.MAX_REQUIREMENTS = 128
 M.MAX_PARAMETERS = 128
 M.MAX_TARGETS = 128
 M.MAX_TARGET_PATH_BYTES = 512
-M.MAX_PARAMETER_BYTES = bounds.MAX_RECORD_BYTES
+M.MAX_PARAMETER_BYTES = record_bounds.MAX_RECORD_BYTES
 type Parameter = {name: string, value: unknown}
 type Target = {entry: string, path: string}
 type Requirement = {

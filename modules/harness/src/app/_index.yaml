@@ -6,7 +6,7 @@ entries:
   source: file://request.lua
   modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: input
   kind: library.lua
   source: file://input.lua
@@ -16,13 +16,13 @@ entries:
   source: file://recovery.lua
   modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: hooks
   kind: library.lua
   source: file://hooks.lua
   imports:
     checkpoint: bee.harness.carrier:checkpoint
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
@@ -36,7 +36,7 @@ entries:
   imports:
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     hooks: bee.harness.app:hooks
     delivery: bee.harness.app:delivery
     records: bee.harness.carrier:hook_records
@@ -53,7 +53,7 @@ entries:
   imports:
     client: bee.app:client
     text: bee.app:text
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     window_request: bee.harness.app:request
     input_event: bee.harness.app:input
     admission: bee.harness.launch:admission
@@ -82,7 +82,7 @@ entries:
       icon: A
       lifetime: view
       revision: '1'
-      instance_policy: singleton
+      instance_policy: multiple
       group: ''
       role: sessions
       resume_schema: bee.agent.window@1
@@ -104,7 +104,7 @@ entries:
     sessions: bee.app:sessions
     sessions_protocol: bee.app:sessions_protocol
     thread_record: bee.threads.records:record
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     caller: bee.app:caller
 - name: picker_view
   kind: library.lua
@@ -130,7 +130,7 @@ entries:
   modules: [tty, process, channel, time, uuid, funcs]
   imports:
     frame: bee.app:frame
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     client: bee.app:client
     caller: bee.app:caller
     appearance: bee.app:appearance
@@ -151,8 +151,8 @@ entries:
   source: file://profile_editor.lua
   modules: [json]
   imports:
-    canonical: bee.threads.records:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     preferences: bee.driver:preferences
     budgets: bee.threads.records:budgets
     protocol: bee.harness.profiles:protocol
@@ -161,11 +161,11 @@ entries:
   source: file://profile_form.lua
   modules: [funcs, uuid, json]
   imports:
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
     descriptors: bee.driver:descriptor
     readiness: bee.harness.launch:readiness
     preferences: bee.driver:preferences
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
     budgets: bee.threads.records:budgets
@@ -176,9 +176,9 @@ entries:
   source: file://profile_view.lua
   modules: [tty]
   imports:
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
     settings: bee.harness.app:profile_settings
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     frame: bee.app:frame
     appearance: bee.app:appearance
     text: bee.app:text
@@ -203,7 +203,7 @@ entries:
   modules: [tty, process, channel]
   imports:
     presentation: bee.harness.service:presentation
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     client: bee.app:client
     input_event: bee.harness.app:input
 
@@ -212,5 +212,5 @@ entries:
   source: file://profile_settings.lua
   imports:
     budgets: bee.threads.records:budgets
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     editor: bee.harness.app:profile_editor

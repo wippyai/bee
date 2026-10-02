@@ -29,10 +29,16 @@ function M.integer(value: unknown): integer?
     return math.floor(value)
 end
 
-function M.count(value: unknown): integer?
+function M.count(value: unknown, maximum: integer?): integer?
     local number = M.integer(value)
-    if not number or number < 0 then return nil end
+    if not number or number < 0 or (maximum ~= nil and number > maximum) then return nil end
     return number
+end
+
+function M.member(value: unknown, variants: {string}): string?
+    if type(value) ~= "string" then return nil end
+    for _, variant in ipairs(variants) do if variant == value then return value end end
+    return nil
 end
 
 function M.timestamp(value: unknown): string?

@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee Claude driver
     comment: Optional harness binding; host activation and launch policies authorize its use
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver

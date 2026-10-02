@@ -12,6 +12,10 @@ entries:
   meta:
     title: Bee synchronized projections
     comment: Owner-local bounded ledger and projection reads; a host selects feed export, worker, and transport wiring
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_hive
   kind: ns.dependency
   component: bee/hive
@@ -64,30 +68,31 @@ entries:
   kind: library.lua
   source: file://bounds.lua
   imports:
-    shared: bee.protocol:bounds
+    values: bee.values:bounds
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
   imports:
     bounds: bee.sync:bounds
-    encoder: bee.threads.records:canonical
+    encoder: bee.values:canonical
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports:
     bounds: bee.sync:bounds
+    values: bee.values:bounds
 - name: version
   kind: library.lua
   source: file://version.lua
   modules: [hash]
   imports:
-    bounds: bee.sync:bounds
+    bounds: bee.values:bounds
     canonical: bee.sync:canonical
 - name: replica_protocol
   kind: library.lua
   source: file://replica_protocol.lua
   imports:
-    bounds: bee.sync:bounds
+    bounds: bee.values:bounds
     version: bee.sync:version
 - name: types
   kind: library.lua

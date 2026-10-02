@@ -17,7 +17,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     activation: bee.driver:resolver
 - name: fake_binding
@@ -88,7 +88,7 @@ entries:
     suite: bee
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     classify: bee.harness.catalog:classify
     permission: bee.harness.permission:adapter
@@ -106,7 +106,7 @@ entries:
     - bee.harness.catalog:apply_test_policy
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     classify: bee.harness.catalog:classify
@@ -118,7 +118,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     provenance: bee.harness.carrier:provenance
     checkpoint: bee.harness.carrier:checkpoint
@@ -127,7 +127,7 @@ entries:
     hook_records: bee.harness.carrier:hook_records
     gateway_hooks: bee.gateway:hooks
     gateway_protocol: bee.gateway:protocol
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
 - name: policy_test
   kind: function.lua
   source: file://policy_test.lua
@@ -137,7 +137,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     policy: bee.harness.carrier:policy
     preferences: bee.driver:preferences
 - name: authoring_policy_test
@@ -148,7 +148,7 @@ entries:
   modules: [registry]
   imports:
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     definitions: bee.harness.launch:definitions
     policy: bee.harness.carrier:policy
 - name: window_hooks_test
@@ -160,7 +160,7 @@ entries:
     suite: bee
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     hooks: bee.harness.app:hooks
     checkpoint: bee.harness.carrier:checkpoint
@@ -239,7 +239,7 @@ entries:
     policies:
     - bee.harness.catalog:apply_test_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
     recovery: bee.harness.app:recovery
@@ -254,7 +254,7 @@ entries:
   - json
   - tty
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     recovery: bee.harness.app:recovery
     restore_view: bee.harness.app:restore_view
@@ -277,7 +277,7 @@ entries:
     machine: bee.harness.carrier:machine
     driver_types: bee.driver:types
     placement_decode: bee.placement:decode
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     policy: bee.harness.carrier:policy
     placement_types: bee.placement:types
     classify: bee.harness.catalog:classify
@@ -548,7 +548,7 @@ entries:
     - bee.placement.native.security:placement_store_policy
     - bee.credentials.security:credential_store_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
@@ -614,7 +614,7 @@ entries:
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
@@ -758,7 +758,7 @@ entries:
   - time
   imports:
     carrier_types: bee.harness:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     placement_types: bee.placement:types
     placement_request: bee.placement:request
@@ -792,7 +792,7 @@ entries:
     - bee.harness.catalog:carrier_spawn_policy
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     exits: bee.harness.catalog:exits
@@ -819,7 +819,7 @@ entries:
     - bee.harness.catalog:carrier_spawn_policy
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     exits: bee.harness.catalog:exits
@@ -846,7 +846,7 @@ entries:
     - bee.harness.catalog:carrier_spawn_policy
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     exits: bee.harness.catalog:exits
@@ -1325,7 +1325,7 @@ entries:
     carrier_fixtures: bee.harness.catalog:carrier_fixtures
     principals: bee.test.principals:bound
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions
     launch_policy: bee.harness.carrier:policy
@@ -1356,7 +1356,7 @@ entries:
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
     capability_grants: bee.gov:capability_grants
@@ -1385,7 +1385,7 @@ entries:
     - bee.placement.native.security:placement_store_policy
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     policy: bee.harness.carrier:policy
     preferences: bee.driver:preferences
@@ -1452,7 +1452,7 @@ entries:
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
     admission: bee.harness.launch:admission
@@ -1466,7 +1466,7 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     adapter: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
@@ -1524,7 +1524,7 @@ entries:
     policies:
     - bee.placement.native.security:placement_exec_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
     protocol: bee.driver.claude:protocol
@@ -1631,7 +1631,7 @@ entries:
     principals: bee.test.principals:bound
     test: wippy.test:test
     capability: bee.gov:capability_request
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: elevation_client_policy
   kind: security.policy
   meta:
@@ -1696,7 +1696,7 @@ entries:
     - bee.gateway.security:access_policy_read_policy
     - bee.security.approvals:approval_installation_effects_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
     installation: bee.gateway.security:installation
@@ -1741,7 +1741,7 @@ entries:
     - bee.gateway.security:access_policy_read_policy
     - bee.security.approvals:approval_publication_effects_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
     publish: bee.gateway.security:publish
@@ -1763,7 +1763,7 @@ entries:
     policies:
     - bee.harness.catalog:elevation_client_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
 - name: permission_carrier_test
@@ -1795,7 +1795,7 @@ entries:
     placement_protocol: bee.placement.native:protocol
     placement_decode: bee.placement:decode
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
@@ -1817,7 +1817,7 @@ entries:
     policies:
     - bee.placement.native.security:placement_exec_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     launch: bee.driver.codex:launch
     driver_types: bee.driver:types
@@ -1956,7 +1956,7 @@ entries:
     - bee.placement.native.security:placement_store_policy
     - bee.credentials.security:credential_store_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
@@ -1981,7 +1981,7 @@ entries:
     policies:
     - bee.placement.native.security:placement_exec_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
@@ -2045,7 +2045,7 @@ entries:
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
@@ -2074,7 +2074,7 @@ entries:
     policies:
     - bee.placement.native.security:placement_exec_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
     protocol: bee.driver.claude:protocol
@@ -2118,7 +2118,7 @@ entries:
     - bee.placement.native.security:placement_store_policy
     - bee.credentials.security:credential_store_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
@@ -2142,7 +2142,7 @@ entries:
   - time
   - uuid
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint
@@ -2193,7 +2193,7 @@ entries:
   - security
   - funcs
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
 - name: saved_profiles_test
   kind: function.lua
@@ -2237,7 +2237,7 @@ entries:
     - bee.security.desktop:workspace_host_lease_policy
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     lease: bee.harness.carrier:lease
     leases: bee.app:host_leases
@@ -2327,7 +2327,7 @@ entries:
     - bee.harness.catalog:apply_test_policy
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     agent_resolver: bee.harness.launch:agent_resolver
 - name: fixture_placement_binding
@@ -2358,7 +2358,7 @@ entries:
     type: test_support
   imports:
     managed_run: bee.harness.launch:managed_run
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: presentation_scope_probe
   kind: function.lua
   source: file://presentation_scope_probe.lua
@@ -2387,7 +2387,7 @@ entries:
     policies:
     - bee.harness.catalog:apply_test_policy
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
 - name: presentation_viewer
   kind: process.lua
@@ -2444,8 +2444,8 @@ entries:
     test: wippy.test:test
     exchange: bee.harness.permission:exchange
     adapter: bee.harness.permission:adapter
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     harness: bee.threads:harness
 
 - name: carrier_fixtures
@@ -2453,13 +2453,13 @@ entries:
   source: file://carrier_faulted.lua
   meta: {type: test_support}
   modules: [process, time]
-  imports: {carrier_types: bee.harness:types, bounds: bee.protocol:bounds, principals: bee.test.principals:bound, placement_types: bee.placement:types, placement_request: bee.placement:request, preferences_codec: bee.driver:preferences, machine: bee.harness.carrier:machine, carrier_process: bee.harness.service:carrier}
+  imports: {carrier_types: bee.harness:types, bounds: bee.values:bounds, principals: bee.test.principals:bound, placement_types: bee.placement:types, placement_request: bee.placement:request, preferences_codec: bee.driver:preferences, machine: bee.harness.carrier:machine, carrier_process: bee.harness.service:carrier}
 - name: exits
   kind: library.lua
   source: file://exits.lua
   meta: {type: test_support}
   modules: [process]
-  imports: {bounds: 'bee.protocol:bounds'}
+  imports: {bounds: 'bee.values:bounds'}
 - name: exits_test
   kind: function.lua
   source: file://exits_test.lua

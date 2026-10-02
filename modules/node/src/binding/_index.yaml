@@ -10,8 +10,8 @@ entries:
     resources: bee.node:resources
     sync: bee.sync.persist:store
     transaction: bee.persist:transaction
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     appearance: bee.app:appearance
 - name: local
   kind: contract.binding

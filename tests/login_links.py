@@ -36,7 +36,7 @@ def main():
                  "modules": ["funcs", "security", "registry", "env", "fs"],
                  "security": {"policies": ["bee.harness.security:launch_locate_probe_policy", "bee.credentials.security:credential_file_policy",
                                             "bee.test.loginlinks:probe_policy"]},
-                 "imports": {"test": "wippy.test:test", "bounds": "bee.protocol:bounds", "principals": "bee.test.principals:bound",
+                 "imports": {"test": "wippy.test:test", "bounds": "bee.values:bounds", "principals": "bee.test.principals:bound",
                              "locator": "bee.harness.launch:locate", "agents": "bee.harness.app:agents",
                              "sessions": "bee.app:sessions", "sessions_fixtures": "bee.tests.sessions:fixtures"}},
                 {"name": "probe_policy", "kind": "security.policy", "policy": {"actions": ["env.get"], "resources": ["bee.test.loginlinks:expected", "bee.test.loginlinks:target"], "effect": "allow"}},

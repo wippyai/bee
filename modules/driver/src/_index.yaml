@@ -9,6 +9,10 @@ entries:
     title: Bee driver contract
     comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement
       owns execution
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -17,7 +21,8 @@ entries:
   kind: library.lua
   source: file://types.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
+    record_bounds: bee.threads.records:bounds
     login_evidence: bee.driver:login_evidence
     events: bee.driver.kit:events
     values: bee.threads.records:values
@@ -25,7 +30,7 @@ entries:
   kind: library.lua
   source: file://login_evidence.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: probe_capture
   kind: library.lua
   source: file://probe_capture.lua
@@ -34,32 +39,32 @@ entries:
   kind: library.lua
   source: file://profile_access.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: schema_values
   kind: library.lua
   source: file://schema_values.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: descriptor
   kind: library.lua
   source: file://descriptor.lua
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     login_evidence: bee.driver:login_evidence
     schema_values: bee.driver:schema_values
 - name: locate
   kind: library.lua
   source: file://locate.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     login_evidence: bee.driver:login_evidence
 - name: codec_registry
   kind: library.lua
   source: file://codec_registry.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     normalizer: bee.driver.kit:normalize
     claude_stream_json: bee.driver.codec:claude_stream_json
     codex_jsonl: bee.driver.codec:codex_jsonl
@@ -72,8 +77,8 @@ entries:
   source: file://option_render.lua
   modules: [json, toml, hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     configuration: bee.driver:configuration
 - name: universal
   kind: library.lua
@@ -81,8 +86,8 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     descriptor: bee.driver:descriptor
     configuration: bee.driver:configuration
     types: bee.driver:types
@@ -94,12 +99,12 @@ entries:
   kind: library.lua
   source: file://instructions.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: profile
   kind: library.lua
   source: file://profile.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     types: bee.driver:types
 - name: resolver
   kind: library.lua
@@ -107,7 +112,7 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     profile: bee.driver:profile
     descriptor: bee.driver:descriptor
     types: bee.driver:types
@@ -122,8 +127,8 @@ entries:
   - json
   - toml
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     driver_resolver: bee.driver:resolver
     types: bee.driver:types
     instructions: bee.driver:instructions
@@ -132,8 +137,8 @@ entries:
   source: file://preferences.lua
   imports:
     profile_access: bee.driver:profile_access
-    canonical: bee.threads.records:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     instructions: bee.driver:instructions
 - name: driver
   kind: contract.definition

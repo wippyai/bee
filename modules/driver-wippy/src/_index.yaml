@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.driver.wippy
 entries:
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: definition
   kind: ns.definition
   module: driver-wippy
@@ -30,7 +34,7 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     driver_types: bee.driver:types
 - name: client
   kind: library.lua
@@ -42,7 +46,7 @@ entries:
   - registry
   imports:
     types: bee.driver.wippy:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     framing: bee.driver.kit:framing
 - name: runner
   kind: library.lua
@@ -55,10 +59,11 @@ entries:
   imports:
     client: bee.driver.wippy:client
     types: bee.driver.wippy:types
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     driver_configuration: bee.driver:configuration
     agent_resolver: bee.harness.launch:agent_resolver
+    record_bounds: bee.threads.records:bounds
 - name: binding
   kind: contract.binding
   contracts:

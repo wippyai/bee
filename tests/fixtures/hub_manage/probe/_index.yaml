@@ -31,7 +31,7 @@ entries:
   method: main
   modules: [funcs, registry, security, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hub.manage.probe:policy, bee.hub.manage.probe:management_policy, bee.hub.manage.probe:reader_policy]
   meta:
@@ -44,7 +44,7 @@ entries:
   method: narrow
   modules: [funcs, registry, security, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hub.manage.probe:policy, bee.hub.manage.probe:component_reader_policy]
   meta:
@@ -57,7 +57,7 @@ entries:
   method: reader
   modules: [funcs, registry, security, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hub.manage.probe:policy, bee.hub.manage.probe:reader_policy]
   meta:
@@ -70,7 +70,7 @@ entries:
   method: wrong_host
   modules: [funcs, registry, security, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hub.manage.probe:policy, bee.hub.manage.probe:management_policy, bee.hub.manage.probe:reader_policy]
   meta:
@@ -83,7 +83,7 @@ entries:
   method: restart
   modules: [funcs, registry, security, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hub.manage.probe:policy, bee.hub.manage.probe:management_policy, bee.hub.manage.probe:reader_policy]
   meta:

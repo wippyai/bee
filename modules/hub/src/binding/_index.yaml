@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://catalog.lua
   modules: [hub]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: updates
   kind: library.lua
   source: file://updates.lua
@@ -20,12 +20,12 @@ entries:
   kind: library.lua
   source: file://inspect.lua
   modules: [hub]
-  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements, inspection: bee.hub:inspection}
+  imports: {bounds: bee.values:bounds, requirements: bee.hub:requirements, inspection: bee.hub:inspection}
 - name: preview
   kind: library.lua
   source: file://preview.lua
   modules: [hub, fs, base64]
-  imports: {bounds: bee.threads.records:bounds, inspection: bee.hub:inspection, requirements: bee.hub:requirements}
+  imports: {bounds: bee.values:bounds, inspection: bee.hub:inspection, requirements: bee.hub:requirements}
 - name: migration_runner
   kind: library.lua
   source: file://migration_runner.lua
@@ -36,8 +36,8 @@ entries:
   source: file://publication.lua
   modules: [registry, security, hash]
   imports:
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     plan: bee.hub:plan
     catalog: bee.hub.binding:catalog
     inspect: bee.hub.binding:inspect
@@ -55,7 +55,7 @@ entries:
   source: file://publish.lua
   modules: [registry, security, exec, channel]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     publishing: bee.hub:publishing
     transaction: bee.persist:transaction
     inspect: bee.hub.binding:inspect
@@ -68,7 +68,7 @@ entries:
   method: handle
   modules: [security, process, uuid, time, channel]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     catalog: bee.hub.binding:catalog
     updates: bee.hub.binding:updates
     inventory_reader: bee.hub:inventory_reader
@@ -84,7 +84,7 @@ entries:
   method: handle
   modules: [security, funcs]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     catalog: bee.hub.binding:catalog
     inspection: bee.hub:inspection
     plan: bee.hub:plan

@@ -3,7 +3,7 @@ local process = require("process")
 local uuid = require("uuid")
 local arguments = require("arguments")
 local interaction = require("interaction")
-local thread_bounds = require("thread_bounds")
+local bounds = require("bounds")
 local thread_protocol = require("thread_protocol")
 local M = {}
 type Launch = {version: integer, broker_pid: string, workspace_pid: string, workspace_id: string, instance_id: string,
@@ -24,7 +24,7 @@ function M.launch(value: unknown): Launch?
     if not workspace_id then return nil end
     local instance, view = field(value.instance_id, 80), field(value.view_id, 80)
     local definition, revision = field(value.definition_id, 160), field(value.definition_revision, 80)
-    local thread_id = value.thread_id == nil and nil or thread_bounds.id(value.thread_id)
+    local thread_id = value.thread_id == nil and nil or bounds.id(value.thread_id)
     if value.thread_id ~= nil and not thread_id then return nil end
     local generation = value.execution_generation
     if type(generation) ~= "number" or generation ~= math.floor(generation) or generation < 1
@@ -141,7 +141,7 @@ end
 
 -- Queue navigation through this application's authenticated broker execution.
 function M.navigate(launch: Launch, definition_id: string, target: {string}?): (string?, string?)
-    local definition = thread_bounds.id(definition_id)
+    local definition = bounds.id(definition_id)
     local args = arguments.decode(target)
     if not definition or not args then return nil, "Invalid navigation target" end
     local request_id = assert(uuid.v7())

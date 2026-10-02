@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://access_probe.lua
   modules: [funcs, http_client, json, registry]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: concurrent_call
   kind: function.lua
   source: file://concurrent_call.lua
@@ -34,7 +34,7 @@ entries:
 - name: main
   kind: process.lua
   source: file://main.lua
-  imports: {bounds: bee.protocol:bounds, access_probe: bee.gateway.probe:access_probe}
+  imports: {bounds: bee.values:bounds, access_probe: bee.gateway.probe:access_probe}
   method: main
   modules: [funcs, http_client, json, time, registry, security, base64, sql]
   meta:

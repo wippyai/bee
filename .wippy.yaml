@@ -8,6 +8,7 @@ shutdown:
 workspace:
   replacements:
     bee/workspace: ./modules/workspace
+    bee/values: ./modules/values
     bee/persist: ./modules/persist
     bee/sync: ./modules/sync
     bee/hub: ./modules/hub

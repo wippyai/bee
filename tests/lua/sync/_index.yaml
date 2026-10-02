@@ -46,7 +46,7 @@ entries:
   security:
     policies: [bee.sync:sync_test_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     store: bee.sync.persist:store
 - name: canonical_test
@@ -58,15 +58,16 @@ entries:
   imports:
     test: wippy.test:test
     canonical: bee.sync:canonical
+    encoder: bee.values:canonical
     bounds: bee.sync:bounds
-    scalar: bee.protocol:bounds
+    scalar: bee.values:bounds
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     protocol: bee.sync:protocol
 - name: version_test
@@ -86,7 +87,7 @@ entries:
   security:
     policies: [bee.sync:sync_test_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     replicas: bee.sync.persist:replicas
     version: bee.sync:version
@@ -98,7 +99,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.sync:sync_test_policy]}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     store: bee.sync.persist:distribution_store
 - name: distributor_test
@@ -140,6 +141,6 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, uuid, hash, base64]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     version: bee.sync:version

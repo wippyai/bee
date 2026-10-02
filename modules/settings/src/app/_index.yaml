@@ -48,5 +48,5 @@ entries:
   kind: library.lua
   source: file://live_updates.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     semver: bee.hub:semver

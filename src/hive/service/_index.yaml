@@ -56,4 +56,4 @@ entries:
     hive: bee.hive:client
     version: bee.sync:version
     transaction: bee.persist:transaction
-    bounds: bee.sync:bounds
+    bounds: bee.values:bounds

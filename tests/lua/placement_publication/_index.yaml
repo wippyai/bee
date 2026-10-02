@@ -18,14 +18,14 @@ entries:
     homes: bee.placement.publication.test:homes
     workdir_preparers: bee.placement.native.service:workdir_preparers
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     configuration: bee.placement.native:configuration
     provider_projection: bee.placement.native.service:provider_projection
     types: bee.placement:types
     paths: bee.placement:paths
     gateway_protocol: bee.gateway:protocol
     credential_protocol: bee.credentials:protocol
-    service_reply: bee.protocol:reply
+    service_reply: bee.values:reply
     formats: bee.credentials:formats
 - name: runner_observation
   kind: library.lua
@@ -43,7 +43,7 @@ entries:
     materialization: bee.placement.publication.test:materialization
     observe: bee.placement.publication.test:runner_observation
     types: bee.placement:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: materialization_runner_process
   kind: process.lua
   source: file://../placement/materialization_runner.lua
@@ -55,7 +55,7 @@ entries:
     materialization: bee.placement.publication.test:materialization
     observe: bee.placement.publication.test:runner_observation
     types: bee.placement:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: required_file_test
   kind: function.lua
   source: file://required_file_test.lua

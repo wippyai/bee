@@ -123,7 +123,7 @@ entries:
   method: main
   modules: [process, security, tty, time, channel, funcs, uuid, logger]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     desktops: bee.client:desktops
     store: bee.client:store
     state: bee.client:state

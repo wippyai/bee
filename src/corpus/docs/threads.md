@@ -42,7 +42,7 @@ The implementation is split into these Lua namespaces:
 | Namespace | Responsibility |
 | --- | --- |
 | `bee.threads` | Local bindings, resources and capability reporting. |
-| `bee.threads.records` | Typed decoders, bounds and canonical record encoding; no I/O. |
+| `bee.threads.records` | Typed decoders, thread-specific capacities and sequence checks, and canonical record envelopes using shared `bee.values` encoding; no I/O. |
 | `bee.threads.service` | Thread authority, membership, messages, action inboxes, lifecycle and owner-qualified send. |
 | `bee.threads.delivery` | Recipient obligations, claim batches, dispatch, waits and subscriptions. |
 | `bee.threads.projection` | Record-derived recap and status checkpoints. |

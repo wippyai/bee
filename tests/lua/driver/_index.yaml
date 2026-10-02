@@ -35,7 +35,7 @@ entries:
   imports:
     driver_types: bee.driver:types
     universal: bee.driver:universal
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
     claude: bee.driver.claude:protocol
@@ -54,7 +54,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     codex_launch: bee.driver.codex:launch
     claude_launch: bee.driver.claude:launch
@@ -92,14 +92,14 @@ entries:
     test: wippy.test:test
     descriptor: bee.driver:descriptor
     login_evidence: bee.driver:login_evidence
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: universal_test
   kind: function.lua
   source: file://universal_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     universal: bee.driver:universal
     codec_registry: bee.driver:codec_registry
@@ -130,7 +130,7 @@ entries:
   modules: [json]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     registry: registry
     configuration: bee.driver.muse:configuration
@@ -153,7 +153,7 @@ entries:
     descriptor: bee.driver:descriptor
     configuration: bee.driver:configuration
     materializer: bee.placement.native:configuration
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: budget_accounting_test
   kind: function.lua
   source: file://budget_accounting_test.lua
@@ -167,7 +167,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry, json]
   security: {policies: [bee.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy]}
-  imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.threads.records:bounds, locate: bee.harness.launch:locate}
+  imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.values:bounds, locate: bee.harness.launch:locate}
 - name: docker_probe_policy
   kind: security.policy
   meta: {type: test_support}
@@ -183,4 +183,4 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   security: {policies: [bee.driver:docker_probe_policy]}
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}

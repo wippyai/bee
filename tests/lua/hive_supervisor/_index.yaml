@@ -19,7 +19,7 @@ entries:
     test: wippy.test:test
     peers: bee.hive.supervisor:peers
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: registration_test
   kind: function.lua
   source: file://registration_test.lua
@@ -59,7 +59,7 @@ entries:
     test: wippy.test:test
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
 - name: audiences_probe
   kind: function.lua
@@ -68,7 +68,7 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
 - name: audiences_test
   kind: function.lua
@@ -118,7 +118,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.hive.supervisor:replica_admission_test_policy]}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     catalog: bee.hive:catalog
@@ -138,7 +138,7 @@ entries:
   modules: [funcs, security, registry, uuid]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     store: bee.workspace.persist:store
@@ -152,7 +152,7 @@ entries:
   modules: [funcs, security, registry, time]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     commands: bee.hive.supervisor:workspace_commands

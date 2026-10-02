@@ -83,7 +83,7 @@ entries:
   method: main
   modules: [process, channel, security, funcs, time, uuid, json, logger]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     store: bee.workspace.persist:store
     catalog: bee.workspace.persist:catalog
     decode: bee.protocol:decode
@@ -108,7 +108,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, json, logger]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     store: bee.workspace.persist:store
     catalog: bee.workspace.persist:catalog
     decode: bee.protocol:decode
@@ -134,7 +134,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, logger, registry]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     store: bee.workspace.persist:store
     catalog: bee.workspace.persist:catalog
     leases: bee.app:host_leases
@@ -153,7 +153,7 @@ entries:
   method: fallback
   modules: [process, channel, security, time, uuid, logger, registry]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     store: bee.workspace.persist:store
     catalog: bee.workspace.persist:catalog
     leases: bee.app:host_leases

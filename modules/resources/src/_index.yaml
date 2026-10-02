@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee resources
     comment: Owner-local resource authority; associations under a host ceiling, grants bound to subject, audience, revision, digest, scope and expiry
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_persist
   kind: ns.dependency
   component: bee/persist
@@ -122,7 +126,7 @@ entries:
   source: file://resources.lua
   modules: [registry, env, system]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: resource_roots
   kind: registry.entry
   meta:

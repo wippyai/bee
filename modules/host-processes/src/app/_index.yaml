@@ -17,7 +17,7 @@ entries:
     probe: bee.host.processes:probe
     view: bee.host.processes.app:view
     client: bee.app:client
-    clock: bee:clock
+    clock: bee.values:clock
     stop_request: bee.host.processes.app:stop_request
     history_values: bee.host.processes.app:history
   meta:

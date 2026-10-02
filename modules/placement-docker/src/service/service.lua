@@ -20,6 +20,7 @@ local image_service = require("image")
 local environment = require("environment")
 local runtime_probe = require("runtime_probe")
 local M = {}
+local DOCKER_SOCKET_PATH = "/var/run/docker.sock"
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
 type Loaded = {row: store.Row, request: types.LaunchRequest, spec: spec_codec.Spec, attempt: types.Attempt}
@@ -60,7 +61,7 @@ function M.change(id: string, update: store.Update): Reply
     return succeed(result.attempt)
 end
 function M.ensure_image(spec: spec_codec.Spec): (boolean, string?)
-    local client = docker_client.new("/var/run/docker.sock")
+    local client = docker_client.new(DOCKER_SOCKET_PATH)
     if not client then return false, "Docker connection unavailable" end
     local inspected, inspect_error = client:inspect_image(spec.image)
     if inspected and not inspect_error then return true, nil end
@@ -91,7 +92,7 @@ local function provider_home(loaded: Loaded): (string?, string?)
     return paths.resolve(path, executor)
 end
 function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
-    local client, client_error = docker_client.new("/var/run/docker.sock")
+    local client, client_error = docker_client.new(DOCKER_SOCKET_PATH)
     if not client then return nil, "Docker connection unavailable" end
     local known: string? = nil
     local known_image: string? = nil
@@ -178,7 +179,7 @@ function M.prepare(value: unknown): Reply
     local admission_error = spec_codec.admit(profile, request)
     if admission_error then return fail("DENIED", admission_error) end
     if profile.profile.network ~= "none" then
-        local client = docker_client.new("/var/run/docker.sock")
+        local client = docker_client.new(DOCKER_SOCKET_PATH)
         local network = client and client:inspect_network(profile.profile.network or "") or nil
         if not network then return fail("UNAVAILABLE", "host-selected Docker network is missing: " .. (profile.profile.network or "")) end
     end
@@ -207,7 +208,7 @@ function M.prepare_environment(value: unknown): Reply
     if not profile or profile.profile.placement_binding ~= spec_codec.BINDING then return fail("DENIED", "profile does not select Docker") end
     if input.revoke ~= true then
         if profile.profile.network == "none" then return succeed({}) end
-        local client = docker_client.new("/var/run/docker.sock")
+        local client = docker_client.new(DOCKER_SOCKET_PATH)
         local existing = client and client:inspect_network(profile.profile.network or "")
         local raw = funcs.call("bee.gateway.binding:address", {})
         local endpoint = bounds.object(raw)
@@ -303,7 +304,7 @@ function M.stop_loaded(loaded: Loaded, value: unknown): Reply
     if found.state == "exited" then return M.reconcile_loaded(loaded) end
     local object = bounds.object(value) or {}
     local grace = object.mode == "forced" and 0 or math.floor(loaded.request.timeouts.stop_grace_ms / 1000)
-    local client = docker_client.new("/var/run/docker.sock")
+    local client = docker_client.new(DOCKER_SOCKET_PATH)
     if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
     local stopped_ok, stop_error = client:stop_container(found.backend_ref, grace)
     if stop_error or stopped_ok ~= true then return fail("UNAVAILABLE", "Docker stop did not answer") end
@@ -342,7 +343,7 @@ function M.cleanup_loaded(loaded: Loaded): Reply
         local verified = M.change(loaded.attempt.attempt_id, {fields = {exit_source = "reconcile", exit_code = found.exit_code},
             evidence = {kind = "docker.exit_verified", detail = "exact container " .. found.backend_ref .. " is stopped before removal"}})
         if not verified.ok then return verified end
-        local client = docker_client.new("/var/run/docker.sock")
+        local client = docker_client.new(DOCKER_SOCKET_PATH)
         if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
         local removed, remove_error = client:remove_container(found.backend_ref, false)
         if remove_error or removed ~= true then return fail("UNAVAILABLE", "Docker removal did not answer") end
@@ -415,7 +416,7 @@ function M.capabilities(value: unknown): Reply
         local pinned = registry.snapshot()
         local selected = pinned and profiles.resolve(pinned, ref) or nil
         if not selected or selected.profile.placement_binding ~= spec_codec.BINDING then return fail("INVALID", "profile does not select Docker") end
-        local client = docker_client.new("/var/run/docker.sock")
+        local client = docker_client.new(DOCKER_SOCKET_PATH)
         if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
         local network = selected.profile.network
         local present = network == "none" or (network ~= nil and client:inspect_network(network) ~= nil)
@@ -433,7 +434,7 @@ function M.capabilities(value: unknown): Reply
             local image_ref = bounds.line(readiness.image_ref, 128)
             if request.probe_argv ~= nil then
                 if not image_ref then return fail("UNAVAILABLE", "Docker image is not cached; launch once to build it before option help is available") end
-                local output, err = runtime_probe.run(client, image_ref, runtime_name, request.probe_argv)
+                local output, err = runtime_probe.run(DOCKER_SOCKET_PATH, image_ref, runtime_name, request.probe_argv)
                 if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
                 report.probe_output = output
             end
@@ -448,7 +449,7 @@ function M.capabilities(value: unknown): Reply
         local immutable = object and bounds.line(object.Id, 128)
         if request.probe_argv ~= nil then
             if not immutable or not digest then return fail("UNAVAILABLE", "Docker image is missing or has no runtime evidence") end
-            local output, err = runtime_probe.run(client, immutable, runtime_name, request.probe_argv)
+            local output, err = runtime_probe.run(DOCKER_SOCKET_PATH, immutable, runtime_name, request.probe_argv)
             if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
             report.probe_output = output
         end

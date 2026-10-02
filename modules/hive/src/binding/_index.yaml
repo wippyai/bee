@@ -9,4 +9,4 @@ entries:
   - security
   imports:
     catalog: bee.hive:catalog
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds

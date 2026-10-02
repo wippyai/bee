@@ -440,7 +440,7 @@ func stageMeasurement(repo, root string, entries []interface{}) error {
 	if err := os.CopyFS(fixture, os.DirFS(filepath.Join(repo, "tests/fixtures/research_measurement"))); err != nil {
 		return err
 	}
-	baseline, err := os.ReadFile(filepath.Join(repo, "modules/threads/src/records/canonical.lua"))
+	baseline, err := os.ReadFile(filepath.Join(repo, "modules/values/src/canonical.lua"))
 	if err != nil {
 		return err
 	}

@@ -116,6 +116,11 @@
       "source": "modules/application/src/_index.yaml"
     },
     {
+      "id": "bee.app:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/application/src/_index.yaml"
+    },
+    {
       "id": "bee.app:diagram",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
@@ -361,6 +366,11 @@
       "source": "modules/approvals-inbox/src/_index.yaml"
     },
     {
+      "id": "bee.approvals.inbox:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/approvals-inbox/src/_index.yaml"
+    },
+    {
       "id": "bee.approvals.inbox:source_config",
       "kind": "library.lua",
       "source": "modules/approvals-inbox/src/_index.yaml"
@@ -457,6 +467,11 @@
     },
     {
       "id": "bee.approvals:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/approvals/src/_index.yaml"
+    },
+    {
+      "id": "bee.approvals:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/approvals/src/_index.yaml"
     },
@@ -588,6 +603,11 @@
     {
       "id": "bee.capability:definition",
       "kind": "ns.definition",
+      "source": "modules/capability/src/_index.yaml"
+    },
+    {
+      "id": "bee.capability:dependency_values",
+      "kind": "ns.dependency",
       "source": "modules/capability/src/_index.yaml"
     },
     {
@@ -891,6 +911,11 @@
       "source": "modules/credentials/src/_index.yaml"
     },
     {
+      "id": "bee.credentials:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/credentials/src/_index.yaml"
+    },
+    {
       "id": "bee.credentials:environment",
       "kind": "env.storage.os",
       "source": "modules/credentials/src/_index.yaml"
@@ -1096,6 +1121,11 @@
       "source": "src/deps/_index.yaml"
     },
     {
+      "id": "bee.deps:values",
+      "kind": "ns.dependency",
+      "source": "src/deps/_index.yaml"
+    },
+    {
       "id": "bee.deps:workspace",
       "kind": "ns.dependency",
       "source": "src/deps/_index.yaml"
@@ -1142,6 +1172,11 @@
     },
     {
       "id": "bee.docs:dependency_persist",
+      "kind": "ns.dependency",
+      "source": "modules/docs/src/_index.yaml"
+    },
+    {
+      "id": "bee.docs:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/docs/src/_index.yaml"
     },
@@ -1242,6 +1277,11 @@
     },
     {
       "id": "bee.driver.agy:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/driver-agy/src/_index.yaml"
+    },
+    {
+      "id": "bee.driver.agy:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/driver-agy/src/_index.yaml"
     },
@@ -1377,6 +1417,11 @@
     },
     {
       "id": "bee.driver.claude:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/driver-claude/src/_index.yaml"
+    },
+    {
+      "id": "bee.driver.claude:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/driver-claude/src/_index.yaml"
     },
@@ -1561,6 +1606,11 @@
       "source": "modules/driver-codex/src/_index.yaml"
     },
     {
+      "id": "bee.driver.codex:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/driver-codex/src/_index.yaml"
+    },
+    {
       "id": "bee.driver.codex:executable",
       "kind": "env.variable",
       "source": "modules/driver-codex/src/_index.yaml"
@@ -1702,6 +1752,11 @@
     },
     {
       "id": "bee.driver.grok:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/driver-grok/src/_index.yaml"
+    },
+    {
+      "id": "bee.driver.grok:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/driver-grok/src/_index.yaml"
     },
@@ -1861,6 +1916,11 @@
       "source": "modules/driver-muse/src/_index.yaml"
     },
     {
+      "id": "bee.driver.muse:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/driver-muse/src/_index.yaml"
+    },
+    {
       "id": "bee.driver.muse:executable",
       "kind": "env.variable",
       "source": "modules/driver-muse/src/_index.yaml"
@@ -1991,6 +2051,11 @@
       "source": "modules/driver-opencode/src/_index.yaml"
     },
     {
+      "id": "bee.driver.opencode:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/driver-opencode/src/_index.yaml"
+    },
+    {
       "id": "bee.driver.opencode:executable",
       "kind": "env.variable",
       "source": "modules/driver-opencode/src/_index.yaml"
@@ -2101,6 +2166,11 @@
       "source": "modules/driver-wippy/src/_index.yaml"
     },
     {
+      "id": "bee.driver.wippy:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/driver-wippy/src/_index.yaml"
+    },
+    {
       "id": "bee.driver.wippy:host_config",
       "kind": "registry.entry",
       "source": "modules/driver-wippy/src/_index.yaml"
@@ -2142,6 +2212,11 @@
     },
     {
       "id": "bee.driver:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/driver/src/_index.yaml"
+    },
+    {
+      "id": "bee.driver:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/driver/src/_index.yaml"
     },
@@ -2402,6 +2477,11 @@
     },
     {
       "id": "bee.executor.external:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/executor-external/src/_index.yaml"
+    },
+    {
+      "id": "bee.executor.external:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/executor-external/src/_index.yaml"
     },
@@ -2936,6 +3016,11 @@
       "source": "modules/gateway/src/_index.yaml"
     },
     {
+      "id": "bee.gateway:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/gateway/src/_index.yaml"
+    },
+    {
       "id": "bee.gateway:endpoint_ref",
       "kind": "registry.entry",
       "source": "modules/gateway/src/_index.yaml"
@@ -3196,6 +3281,11 @@
       "source": "modules/git-worktree/src/_index.yaml"
     },
     {
+      "id": "bee.git.worktree:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/git-worktree/src/_index.yaml"
+    },
+    {
       "id": "bee.git.worktree:executor_ref",
       "kind": "registry.entry",
       "source": "modules/git-worktree/src/_index.yaml"
@@ -3392,6 +3482,11 @@
     },
     {
       "id": "bee.gov.overlays:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/gov-overlays/src/_index.yaml"
+    },
+    {
+      "id": "bee.gov.overlays:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/gov-overlays/src/_index.yaml"
     },
@@ -3667,6 +3762,11 @@
     },
     {
       "id": "bee.gov:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/gov/src/_index.yaml"
+    },
+    {
+      "id": "bee.gov:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/gov/src/_index.yaml"
     },
@@ -4311,6 +4411,11 @@
       "source": "modules/harness/src/_index.yaml"
     },
     {
+      "id": "bee.harness:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/harness/src/_index.yaml"
+    },
+    {
       "id": "bee.harness:gateway_hook",
       "kind": "http.endpoint",
       "source": "modules/harness/src/_index.yaml"
@@ -4487,6 +4592,11 @@
     },
     {
       "id": "bee.hive.manager:dependency_hive",
+      "kind": "ns.dependency",
+      "source": "modules/hive-manager/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.manager:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/hive-manager/src/_index.yaml"
     },
@@ -4681,6 +4791,11 @@
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
     {
+      "id": "bee.hive.telemetry:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
       "id": "bee.hive.telemetry:sampling",
       "kind": "library.lua",
       "source": "modules/hive-telemetry/src/_index.yaml"
@@ -4723,6 +4838,11 @@
     {
       "id": "bee.hive:definition",
       "kind": "ns.definition",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:dependency_values",
+      "kind": "ns.dependency",
       "source": "modules/hive/src/_index.yaml"
     },
     {
@@ -4772,6 +4892,11 @@
     },
     {
       "id": "bee.host.processes:dependency_application",
+      "kind": "ns.dependency",
+      "source": "modules/host-processes/src/_index.yaml"
+    },
+    {
+      "id": "bee.host.processes:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/host-processes/src/_index.yaml"
     },
@@ -4921,6 +5046,11 @@
       "source": "modules/hub-modules/src/_index.yaml"
     },
     {
+      "id": "bee.hub.modules:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/hub-modules/src/_index.yaml"
+    },
+    {
       "id": "bee.hub.modules:hub_policy",
       "kind": "security.policy",
       "source": "modules/hub-modules/src/_index.yaml"
@@ -5052,6 +5182,11 @@
     },
     {
       "id": "bee.hub:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/hub/src/_index.yaml"
+    },
+    {
+      "id": "bee.hub:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/hub/src/_index.yaml"
     },
@@ -5356,6 +5491,11 @@
       "source": "modules/node/src/_index.yaml"
     },
     {
+      "id": "bee.node:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/node/src/_index.yaml"
+    },
+    {
       "id": "bee.node:environment",
       "kind": "env.storage.os",
       "source": "modules/node/src/_index.yaml"
@@ -5602,6 +5742,11 @@
     },
     {
       "id": "bee.placement.docker:dependency_placement",
+      "kind": "ns.dependency",
+      "source": "modules/placement-docker/src/_index.yaml"
+    },
+    {
+      "id": "bee.placement.docker:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/placement-docker/src/_index.yaml"
     },
@@ -5926,6 +6071,11 @@
       "source": "modules/placement-native/src/_index.yaml"
     },
     {
+      "id": "bee.placement.native:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/placement-native/src/_index.yaml"
+    },
+    {
       "id": "bee.placement.native:environment",
       "kind": "env.storage.os",
       "source": "modules/placement-native/src/_index.yaml"
@@ -6101,6 +6251,11 @@
       "source": "modules/placement/src/_index.yaml"
     },
     {
+      "id": "bee.placement:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/placement/src/_index.yaml"
+    },
+    {
       "id": "bee.placement:native",
       "kind": "registry.entry",
       "source": "modules/placement/src/_index.yaml"
@@ -6156,16 +6311,6 @@
       "source": "src/protocol/_index.yaml"
     },
     {
-      "id": "bee.protocol:bounds",
-      "kind": "library.lua",
-      "source": "src/protocol/_index.yaml"
-    },
-    {
-      "id": "bee.protocol:canonical",
-      "kind": "library.lua",
-      "source": "src/protocol/_index.yaml"
-    },
-    {
       "id": "bee.protocol:commands",
       "kind": "library.lua",
       "source": "src/protocol/_index.yaml"
@@ -6182,11 +6327,6 @@
     },
     {
       "id": "bee.protocol:input",
-      "kind": "library.lua",
-      "source": "src/protocol/_index.yaml"
-    },
-    {
-      "id": "bee.protocol:reply",
       "kind": "library.lua",
       "source": "src/protocol/_index.yaml"
     },
@@ -6332,6 +6472,11 @@
     },
     {
       "id": "bee.resources:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/resources/src/_index.yaml"
+    },
+    {
+      "id": "bee.resources:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/resources/src/_index.yaml"
     },
@@ -7196,6 +7341,11 @@
       "source": "modules/sessions/src/_index.yaml"
     },
     {
+      "id": "bee.sessions:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/sessions/src/_index.yaml"
+    },
+    {
       "id": "bee.sessions:driver_route",
       "kind": "library.lua",
       "source": "modules/sessions/src/_index.yaml"
@@ -7272,6 +7422,11 @@
     },
     {
       "id": "bee.settings:dependency_hub",
+      "kind": "ns.dependency",
+      "source": "modules/settings/src/_index.yaml"
+    },
+    {
+      "id": "bee.settings:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/settings/src/_index.yaml"
     },
@@ -7372,6 +7527,11 @@
     },
     {
       "id": "bee.sync:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/sync/src/_index.yaml"
+    },
+    {
+      "id": "bee.sync:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/sync/src/_index.yaml"
     },
@@ -8026,11 +8186,6 @@
       "source": "modules/threads/src/records/_index.yaml"
     },
     {
-      "id": "bee.threads.records:canonical",
-      "kind": "library.lua",
-      "source": "modules/threads/src/records/_index.yaml"
-    },
-    {
       "id": "bee.threads.records:delivery",
       "kind": "library.lua",
       "source": "modules/threads/src/records/_index.yaml"
@@ -8186,6 +8341,11 @@
       "source": "modules/threads-timeline/src/_index.yaml"
     },
     {
+      "id": "bee.threads.timeline:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/threads-timeline/src/_index.yaml"
+    },
+    {
       "id": "bee.threads:approvals",
       "kind": "contract.definition",
       "source": "modules/threads/src/_index.yaml"
@@ -8248,6 +8408,11 @@
     {
       "id": "bee.threads:delivery_local",
       "kind": "contract.binding",
+      "source": "modules/threads/src/_index.yaml"
+    },
+    {
+      "id": "bee.threads:dependency_values",
+      "kind": "ns.dependency",
       "source": "modules/threads/src/_index.yaml"
     },
     {
@@ -8334,6 +8499,31 @@
       "id": "bee.threads:waiter_policies",
       "kind": "ns.requirement",
       "source": "modules/threads/src/_index.yaml"
+    },
+    {
+      "id": "bee.values:bounds",
+      "kind": "library.lua",
+      "source": "modules/values/src/_index.yaml"
+    },
+    {
+      "id": "bee.values:canonical",
+      "kind": "library.lua",
+      "source": "modules/values/src/_index.yaml"
+    },
+    {
+      "id": "bee.values:clock",
+      "kind": "library.lua",
+      "source": "modules/values/src/_index.yaml"
+    },
+    {
+      "id": "bee.values:definition",
+      "kind": "ns.definition",
+      "source": "modules/values/src/_index.yaml"
+    },
+    {
+      "id": "bee.values:reply",
+      "kind": "library.lua",
+      "source": "modules/values/src/_index.yaml"
     },
     {
       "id": "bee.workspace.binding:archive",
@@ -8451,6 +8641,11 @@
       "source": "modules/workspace-manager/src/_index.yaml"
     },
     {
+      "id": "bee.workspace.manager:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/workspace-manager/src/_index.yaml"
+    },
+    {
       "id": "bee.workspace.migrations:migrations",
       "kind": "library.lua",
       "source": "modules/workspace/src/migrations/_index.yaml"
@@ -8511,7 +8706,7 @@
       "source": "modules/workspace/src/_index.yaml"
     },
     {
-      "id": "bee.workspace:dependency_threads",
+      "id": "bee.workspace:dependency_values",
       "kind": "ns.dependency",
       "source": "modules/workspace/src/_index.yaml"
     },
@@ -8558,11 +8753,6 @@
     {
       "id": "bee:capability_catalog",
       "kind": "registry.entry",
-      "source": "src/_index.yaml"
-    },
-    {
-      "id": "bee:clock",
-      "kind": "library.lua",
       "source": "src/_index.yaml"
     },
     {
@@ -9961,6 +10151,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.threads.timeline.app",
       "source": "modules/threads-timeline/src/app/_index.yaml"
+    },
+    {
+      "namespace": "bee.values",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.values",
+      "source": "modules/values/src/_index.yaml"
     },
     {
       "namespace": "bee.workspace",
@@ -15913,18 +16110,18 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1736,
-    "namespace_count": 179,
+    "entry_count": 1774,
+    "namespace_count": 180,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 80,
     "owned_table_declaration_count": 138,
-    "persisted_id_count": 808,
+    "persisted_id_count": 809,
     "requirement_count": 134,
     "requirement_target_count": 320,
-    "root_src_lua_budget": 21183,
-    "root_src_lua_lines": 21183,
+    "root_src_lua_budget": 20851,
+    "root_src_lua_lines": 20851,
     "schema_tag_count": 70,
     "topic_count": 137
   },

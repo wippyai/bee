@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee governance authoring
     comment: Caller-owned migrated staging, measured-closure checks and durable overlay activation
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_persist
   kind: ns.dependency
   component: bee/persist
@@ -45,20 +49,20 @@ entries:
   source: file://preflight.lua
   modules: [hash, json]
   imports:
-    canonical: bee.sync:canonical
+    canonical: bee.values:canonical
     lists: bee.gov:lists
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     protected_kernel: bee.gov:protected_kernel
     application_admission: bee.gov:governed_application_admission
     capability_grants: bee.gov:capability_grants
 - name: protected_kernel
   kind: library.lua
   source: file://protected_kernel.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: lists
   kind: library.lua
   source: file://lists.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: super_edit
   kind: library.lua
   source: file://super_edit.lua
@@ -68,8 +72,8 @@ entries:
   source: file://lease_model.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     super_edit: bee.gov:super_edit
 - name: headless_revert
@@ -77,8 +81,8 @@ entries:
   source: file://headless_revert.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     transaction: bee.persist:transaction
     activation_store: bee.gov.persist:activation_store
 - name: capability_files
@@ -86,20 +90,20 @@ entries:
   source: file://capability_files.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     capability_gateway: bee.gov:capability_gateway
 - name: capability_gateway
   kind: library.lua
   source: file://capability_gateway.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: capability_grants
   kind: library.lua
   source: file://capability_grants.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     capability_files: bee.gov:capability_files
     capability_gateway: bee.gov:capability_gateway
@@ -108,46 +112,46 @@ entries:
   source: file://capability_request.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     capability_grants: bee.gov:capability_grants
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: workspace
   kind: library.lua
   source: file://workspace.lua
   modules: [hash]
-  imports: {canonical: bee.sync:canonical}
+  imports: {canonical: bee.values:canonical}
 - name: workspace_protocol
   kind: library.lua
   source: file://workspace_protocol.lua
   modules: [base64]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: candidate
   kind: library.lua
   source: file://candidate.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical, workspace: bee.gov:workspace}
+  imports: {canonical: bee.values:canonical, workspace: bee.gov:workspace}
 - name: artifact
   kind: library.lua
   source: file://artifact.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical, bounds: bee.threads.records:bounds}
+  imports: {canonical: bee.values:canonical, bounds: bee.values:bounds}
 - name: governed_application_admission
   kind: library.lua
   source: file://application_admission.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical, bounds: bee.threads.records:bounds}
+  imports: {canonical: bee.values:canonical, bounds: bee.values:bounds}
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
   modules: [json, hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     artifact: bee.gov:artifact
     version: bee.sync:version
 - name: target_db
@@ -191,17 +195,17 @@ entries:
     migration_work: bee.gov:migration_work
     application_admission: bee.gov:governed_application_admission
     capability_grants: bee.gov:capability_grants
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
 - name: migration_work
   kind: library.lua
   source: file://migration_work.lua
   modules: [hash, json]
   imports:
     artifact: bee.gov:artifact
-    canonical: bee.sync:canonical
+    canonical: bee.values:canonical
     preflight: bee.gov:preflight
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: target_publication_profiles
   kind: ns.requirement
   meta: {comment: Host-selected publication profiles; the host supplies bee.env:gov_publication_profiles}
@@ -245,8 +249,8 @@ entries:
   source: file://activation_profiles.lua
   modules: [hash, time]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     application_admission: bee.gov:governed_application_admission
     workspace_applications: bee.gov:workspace_applications
     capability_grants: bee.gov:capability_grants
@@ -256,7 +260,7 @@ entries:
   source: file://application_admissions.lua
   modules: [registry, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     activation_store: bee.gov.persist:activation_store
     resources: bee.gov:staging_resources
     activation_profiles: bee.gov:activation_profile_decoder
@@ -271,7 +275,7 @@ entries:
   kind: library.lua
   source: file://publication_profiles.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     workspace_applications: bee.gov:workspace_applications
 - name: delivery_contract
   kind: contract.definition
@@ -302,8 +306,8 @@ entries:
     application_admission: bee.gov:governed_application_admission
     capability_grants: bee.gov:capability_grants
     capability_files: bee.gov:capability_files
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
@@ -315,8 +319,8 @@ entries:
   imports:
     resolution: bee.gov:resolver
     artifact: bee.gov:artifact
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     application_admission: bee.gov:governed_application_admission
     protected_kernel: bee.gov:protected_kernel
     preflight: bee.gov:preflight
@@ -328,8 +332,8 @@ entries:
   imports:
     resolution: bee.gov:resolver
     artifact: bee.gov:artifact
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     application_admission: bee.gov:governed_application_admission
     protected_kernel: bee.gov:protected_kernel
     capability_model: bee.capability:model
@@ -341,7 +345,7 @@ entries:
   kind: library.lua
   source: file://staging_resources.lua
   modules: [registry]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: publication_profiles_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Host-selected publication profiles; absent link fails closed}

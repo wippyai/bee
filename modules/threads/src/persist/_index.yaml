@@ -38,8 +38,8 @@ entries:
   - uuid
   - json
   imports:
-    bounds: bee.threads.records:bounds
-    clock: bee:clock
+    bounds: bee.values:bounds
+    clock: bee.values:clock
     transaction: bee.threads.persist:transaction
 - name: definition_migration
   kind: library.lua

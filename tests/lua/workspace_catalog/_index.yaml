@@ -44,7 +44,7 @@ entries:
   modules: [funcs, security, registry, process, time, fs]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
 - name: resources_call_test_policy
   kind: security.policy
@@ -75,7 +75,7 @@ entries:
   imports:
     app_caller: bee.app:caller
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     persistence: bee.workspace.persist:checkpoint
     model: bee.desktop:model

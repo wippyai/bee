@@ -7,7 +7,7 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: recovery
   kind: library.lua
   source: file://recovery.lua
@@ -19,5 +19,5 @@ entries:
   kind: library.lua
   source: file://catalog.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     catalog: bee.workspace.persist:catalog

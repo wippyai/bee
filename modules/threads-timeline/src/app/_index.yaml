@@ -49,9 +49,10 @@ entries:
     session: bee.threads.delivery:session
     record: bee.threads.records:record
     record_types: bee.threads:record_types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     format: bee.threads.timeline.app:format
+    record_bounds: bee.threads.records:bounds
 - name: view
   kind: library.lua
   source: file://view.lua

@@ -6,6 +6,7 @@
 local sql = require("sql")
 local time = require("time")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local values = require("values")
 local record_types = require("record_types")
@@ -122,8 +123,8 @@ function M.claim(db: sql.DB, actor: string, request: unknown): Result
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local consumer_id = bounds.id(object.consumer_id)
     if not consumer_id then return failure("INVALID_ARGUMENT", "consumer_id is not an identifier") end
-    local limit = bounds.page_limit(object.limit)
-    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
+    local limit = record_bounds.page_limit(object.limit)
+    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS)) end
     local channel = "wait"
     if object.channel ~= nil then
         local declared = bounds.member(object.channel, M.CHANNELS)

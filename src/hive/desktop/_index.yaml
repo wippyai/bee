@@ -38,7 +38,7 @@ entries:
     retained: bee.launch:retained_protocol
     catalog: bee.hive.desktop:catalog
     session_policy: bee.hive.desktop:session_policy
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
 - name: display
   kind: library.lua
   source: file://display.lua
@@ -88,7 +88,7 @@ entries:
     comment: The desktop bridge pages the node workspace catalog; the catalog authorizes the read under the host's catalog read policy
   policy:
     actions: [funcs.call]
-    resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
+    resources: [bee.workspace.binding:list, bee.workspace.binding:search]
     effect: allow
 - name: remote
   kind: library.lua

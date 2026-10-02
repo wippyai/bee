@@ -207,7 +207,7 @@ operations still check the caller through the destination principal mappings.
 A file grant installs a host-created
 `fs.directory` at a verified subroot of the destination workspace's own
 folder: the destination reads the workspace's root and subpath from the node
-workspace catalog (through `bee.workspace.catalog:read` under
+workspace catalog (through `bee.workspace.binding:read` under
 `bee.security.gov:workspace_folder_read_policy`), the grant record measures
 that folder, the pinned runtime confines traversal and symlinks below the
 volume, a read grant is read-only at the filesystem boundary, and private

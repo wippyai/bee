@@ -20,7 +20,7 @@ entries:
   imports:
     test: wippy.test:test
     recovery: bee.host:recovery
-    records: bee.workspace:recovery
+    records: bee.workspace.types:recovery
     inventory: bee.host:inventory
 - name: restores_test
   kind: function.lua
@@ -30,7 +30,7 @@ entries:
   imports:
     test: wippy.test:test
     restores: bee.host:restores
-    records: bee.workspace:recovery
+    records: bee.workspace.types:recovery
 - name: inventory_test
   kind: function.lua
   source: file://inventory_test.lua

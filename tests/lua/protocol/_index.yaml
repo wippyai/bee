@@ -37,7 +37,7 @@ entries:
   modules:
   - json
   imports:
-    recovery: bee.workspace:recovery
+    recovery: bee.workspace.types:recovery
     model: bee.desktop:model
     test: wippy.test:test
 - name: interaction_test

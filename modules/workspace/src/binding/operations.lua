@@ -4,10 +4,10 @@
 -- storage boundary denies it, and this facade is the only path to it.
 local funcs = require("funcs")
 local security = require("security")
+local registry = require("registry")
 local protocol = require("protocol")
 
-local SCOPE = "bee.security.storage:workspace_catalog_scope"
-local BACKEND = "bee.workspace.catalog:backend"
+local BACKEND = "bee.workspace.binding:catalog"
 
 local function run(operation: string, value: unknown): protocol.Reply
     local request, decode_error = protocol.decode(operation, value)
@@ -15,7 +15,11 @@ local function run(operation: string, value: unknown): protocol.Reply
     if not security.actor() then return protocol.fail("UNAUTHENTICATED", "the caller is not authenticated") end
     local action, resource = protocol.authority(request)
     if not security.can(action, resource) then return protocol.fail("DENIED", "the caller may not " .. operation .. " " .. resource) end
-    local scope, scope_error = security.named_scope(SCOPE)
+    local configuration = registry.get(BACKEND)
+    local data = configuration and configuration.data
+    local scope_id = type(data) == "table" and data.scope or nil
+    if type(scope_id) ~= "string" then return protocol.fail("UNAVAILABLE", "catalog execution scope is not linked") end
+    local scope, scope_error = security.named_scope(scope_id)
     if not scope then return protocol.fail("UNAVAILABLE", "catalog execution scope: " .. tostring(scope_error)) end
     local executor, executor_error = funcs.new():with_scope(scope)
     if not executor then return protocol.fail("UNAVAILABLE", "catalog executor: " .. tostring(executor_error)) end

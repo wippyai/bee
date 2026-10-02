@@ -20,7 +20,7 @@ type Object = {[string]: unknown}
 
 local M = {}
 M.PAGE = 50
-M.CATALOG = "bee.workspace.catalog:"
+M.CATALOG = "bee.workspace.binding:"
 M.NAME_LIMIT = 255
 M.PATH_LIMIT = 512
 local FIRST_PAGE = ""

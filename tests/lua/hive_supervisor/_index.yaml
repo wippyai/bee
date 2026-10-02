@@ -141,8 +141,8 @@ entries:
     bounds: bee.protocol:bounds
     test: wippy.test:test
     types: bee.hive:types
-    store: bee.storage:store
-    binding: bee.storage:binding
+    store: bee.workspace.persist:store
+    binding: bee.workspace.types:selection
     workspace_page: bee.hive.api:workspaces_page
 - name: workspace_commands_test
   kind: function.lua

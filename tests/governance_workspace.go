@@ -161,7 +161,7 @@ entries:
   - name: target_approval_consume_policy
     value: bee.security.approvals:approval_consume_policy
   - name: target_workspace_folder_read
-    value: bee.workspace.catalog:read
+    value: bee.workspace.binding:read
   - name: target_workspace_folder_policy
     value: bee.security.gov:workspace_folder_read_policy
 `

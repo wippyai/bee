@@ -5,6 +5,25 @@ entries:
   kind: ns.dependency
   component: bee/persist
   version: 0.1.0-dev
+- name: workspace
+  kind: ns.dependency
+  component: bee/workspace
+  version: 0.1.0-dev
+  parameters:
+  - name: target_decode
+    value: bee.protocol:decode
+  - name: target_model
+    value: bee.desktop:model
+  - name: target_application_protocol
+    value: bee.protocol:application
+  - name: target_db
+    value: bee.env:workspace_db
+  - name: target_roots
+    value: bee.resources:resource_roots
+  - name: target_scope
+    value: bee.security.storage:workspace_catalog_scope
+  - name: target_facade_policy
+    value: bee.security.storage:workspace_catalog_facade_policy
 - name: sync
   kind: ns.dependency
   component: bee/sync
@@ -67,7 +86,7 @@ entries:
   - name: target_approval_consume_policy
     value: bee.security.approvals:approval_consume_policy
   - name: target_workspace_folder_read
-    value: bee.workspace.catalog:read
+    value: bee.workspace.binding:read
   - name: target_workspace_folder_policy
     value: bee.security.gov:workspace_folder_read_policy
 - name: gateway
@@ -117,7 +136,8 @@ entries:
   version: 0.1.0-dev
 - name: hive_telemetry
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/hive-telemetry
   version: 0.1.0-dev
   parameters:
@@ -141,22 +161,26 @@ entries:
     - bee.security.hive:hive_telemetry_policy
 - name: hive_manager
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/hive-manager
   version: 0.1.0-dev
 - name: threads_timeline
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/threads-timeline
   version: 0.1.0-dev
 - name: workspace_manager
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/workspace-manager
   version: 0.1.0-dev
 - name: host_processes
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/host-processes
   version: 0.1.0-dev
 - name: hub_modules
@@ -165,17 +189,20 @@ entries:
   version: 0.1.0-dev
 - name: gov_overlays
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/gov-overlays
   version: 0.1.0-dev
 - name: approvals_inbox
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/approvals-inbox
   version: 0.1.0-dev
 - name: files
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/files
   version: 0.1.0-dev
   parameters:
@@ -341,7 +368,8 @@ entries:
     - bee.placement.docker.security:docker_socket_policy
 - name: settings
   kind: ns.dependency
-  meta: {independent: true}
+  meta:
+    independent: true
   component: bee/settings
   version: 0.1.0-dev
 - name: console

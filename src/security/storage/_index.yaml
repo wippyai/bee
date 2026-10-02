@@ -2,12 +2,15 @@ version: '1.0'
 namespace: bee.security.storage
 entries:
 - name: workspace_storage_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: '(action == "db.get" && resource == "bee.env:workspace_db") || (action == "registry.get" && resource == "bee.workspace.persist:store")'
     actions:
     - db.get
+    - registry.get
     resources:
     - bee.env:workspace_db
+    - bee.workspace.persist:store
     effect: allow
 - name: workspace_storage_boundary
   kind: security.policy
@@ -60,9 +63,9 @@ entries:
   meta:
     comment: Attached to the catalog operations only; they enter the execution scope after authorizing the caller
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.security.storage:workspace_catalog_scope") || (action == "funcs.call" && resource == "bee.workspace.catalog:backend")'
-    actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee.security.storage:workspace_catalog_scope, bee.workspace.catalog:backend]
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.security.storage:workspace_catalog_scope") || (action == "funcs.call" && resource == "bee.workspace.binding:catalog") || (action == "registry.get" && resource == "bee.workspace.binding:catalog")'
+    actions: [funcs.security, security.policy_group.get, funcs.call, registry.get]
+    resources: [security, bee.security.storage:workspace_catalog_scope, bee.workspace.binding:catalog]
     effect: allow
 - name: workspace_catalog_store_policy
   kind: security.policy
@@ -71,7 +74,7 @@ entries:
     comment: The catalog backend's store, the host's admitted roots and its own execution
   policy:
     actions: [db.get, registry.get, bee.workspace.manager.execute]
-    resources: [bee.env:workspace_db, bee.resources:roots_ref, bee.resources:resource_roots, bee.workspace.catalog:backend]
+    resources: [bee.env:workspace_db, bee.resources:roots_ref, bee.resources:resource_roots, bee.workspace.binding:catalog, bee.workspace.persist:store]
     effect: allow
 - name: workspace_catalog_volume_policy
   kind: security.policy

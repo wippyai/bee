@@ -108,7 +108,7 @@ local function main(value: unknown)
     local ticks = ticker:channel()
     local function refresh()
         for _, workspace in ipairs(local_workspaces) do
-            local raw = funcs.call("bee.workspace.catalog:read", {workspace_id = workspace})
+            local raw = funcs.call("bee.workspace.binding:read", {workspace_id = workspace})
             workspace_names[workspace] = model.workspace(raw, workspace)
         end
         for _, workspace in ipairs(state.workspaces) do

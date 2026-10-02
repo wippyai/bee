@@ -352,7 +352,7 @@ local function define_tests()
         local catalog_scope = security.new_scope({assert(security.policy("bee.workspace.catalog:call_test_policy")),
             assert(security.policy("bee.security.storage:workspace_catalog_manage_policy"))})
         local catalog_reply, catalog_error = funcs.new():with_actor(assert(security.new_actor(REQUESTER))):with_scope(catalog_scope)
-            :call("bee.workspace.catalog:create", {label = fresh("launch"), root_ref = "bee.harness.catalog:project_fixture", subpath = fresh("launch-home"), create_directory = true})
+            :call("bee.workspace.binding:create", {label = fresh("launch"), root_ref = "bee.harness.catalog:project_fixture", subpath = fresh("launch-home"), create_directory = true})
         if catalog_error then error(tostring(catalog_error)) end
         local workspace = tostring(value(principals.reply(catalog_reply)).workspace_id)
         prepare_host(workspace)

@@ -32,7 +32,7 @@ rollback and foreign-key restoration after a rebuild.
 Owned-store consumers include `bee.approvals`, `bee.credentials.persist`,
 `bee.gateway`, `bee.gov.persist`, `bee.placement.native`, `bee.resources.persist`,
 `bee.sync.persist`, and `bee.threads.persist` (ledger
-`bee_thread_schema_migrations`, label `thread`). `bee.storage:store` and
+`bee_thread_schema_migrations`, label `thread`). `bee.workspace.persist:store` and
 `bee.client:store` use batch mode. Workspace migration 8 consumes
 `temp.workspace_migration_run`; its ledger retains `applied_at`. The client
 ledger retains its original three columns, without `applied_at` or a new

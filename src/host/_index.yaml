@@ -8,8 +8,8 @@ entries:
   modules: [process, channel, security, ctx, uuid, hash, time]
   imports:
     clock: bee:clock
-    persistence: bee.workspace:persistence
-    recovery: bee.workspace:recovery
+    persistence: bee.workspace.persist:checkpoint
+    recovery: bee.workspace.types:recovery
     contract: bee.protocol:application
     decode: bee.protocol:decode
     model: bee.desktop:model
@@ -44,7 +44,7 @@ entries:
   modules: [process, uuid, hash]
   imports:
     recovery: bee.host:recovery
-    records: bee.workspace:recovery
+    records: bee.workspace.types:recovery
     clients: bee.host:protocol
     contract: bee.protocol:application
     inventory: bee.host:inventory
@@ -55,13 +55,13 @@ entries:
   kind: library.lua
   source: file://recovery.lua
   imports:
-    records: bee.workspace:recovery
+    records: bee.workspace.types:recovery
     inventory: bee.host:inventory
 - name: restores
   kind: library.lua
   source: file://restores.lua
   imports:
-    records: bee.workspace:recovery
+    records: bee.workspace.types:recovery
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

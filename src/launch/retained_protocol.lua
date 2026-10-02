@@ -8,7 +8,7 @@ type Result = {request_id: string, mount: string, error_code: string, error: str
 local M = {}
 -- Local names and topic of the readiness handshake between the desktop bridge
 -- that composes a retained workspace and the owner route that reports it. The
--- names are keyed by the workspace selection (bee.storage:binding key), which
+-- names are keyed by the workspace selection (bee.workspace.types:selection key), which
 -- both sides know before the host reports the workspace identity.
 M.TOPIC_OBSERVE = "bee.retained.observe"
 M.TOPIC_PROGRESS = "bee.retained.progress"

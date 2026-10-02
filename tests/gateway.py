@@ -133,7 +133,7 @@ def write_gateway_host(folder, native):
             ("target_activation_profiles", "bee.env:gov_activation_profiles"),
             ("target_approval_request_policy", "bee.security.approvals:approval_request_policy"),
             ("target_approval_consume_policy", "bee.security.approvals:approval_consume_policy"),
-            ("target_workspace_folder_read", "bee.workspace.catalog:read"),
+            ("target_workspace_folder_read", "bee.workspace.binding:read"),
             ("target_workspace_folder_policy", "bee.security.gov:workspace_folder_read_policy"),
         )),
         dependency("dependency_docs", "bee/docs", (("target_corpus", "bee:docs_corpus"),)),

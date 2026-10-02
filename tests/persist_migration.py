@@ -44,11 +44,13 @@ def declared_migrations(source):
 
 
 def bytes_check():
-    for path in ['src/storage/store.lua', 'src/client/store.lua']:
-        prior = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
+    for path in ['modules/workspace/src/migrations/migrations.lua', 'src/client/store.lua']:
+        prior = subprocess.check_output(['git', 'show', 'origin/main:' + ('src/storage/store.lua' if path == 'modules/workspace/src/migrations/migrations.lua' else path)], cwd=ROOT, text=True)
         current = (ROOT / path).read_text()
         assert declared_migrations(current) == declared_migrations(prior), path
     for path in sorted((ROOT / 'modules').glob('*/src/migrations/*.lua')):
+        if path.parent.parent.parent.name == 'workspace':
+            continue
         prior = subprocess.check_output(['git', 'show', 'origin/main:' + str(path.relative_to(ROOT))], cwd=ROOT)
         assert path.read_bytes() == prior, path
     print('Workspace 1–12, client 1–3 and all owner migration bytes/checksums unchanged', flush=True)
@@ -60,7 +62,7 @@ def seed(path, owner):
         initial = re.search(r'local INITIAL = \[\[(.*?)\]\]', source, re.S)[1].removeprefix('\n')
         expected = [(1, 'owner_local_feed', initial)]
     else:
-        source = ROOT / ('src/storage/store.lua' if owner == 'workspace' else 'src/client/store.lua')
+        source = ROOT / ('modules/workspace/src/migrations/migrations.lua' if owner == 'workspace' else 'src/client/store.lua')
         expected = declared_migrations(source.read_text())
     limit = 7 if owner == 'workspace' else 1
     table = OWNERS[owner][1]
@@ -158,7 +160,7 @@ def main():
                 {'name': 'policy', 'kind': 'security.policy', 'policy': {
                     'actions': ['db.get'], 'resources': [entry[0] for entry in OWNERS.values()], 'effect': 'allow'}},
                 {'name': 'main', 'kind': 'process.lua', 'source': 'file://main.lua', 'method': 'main',
-                 'imports': {'workspace': 'bee.storage:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database'},
+                 'imports': {'workspace': 'bee.workspace.persist:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database'},
                  'meta': {'command': {'name': 'persist-probe', 'short': 'migration recovery fixture'}},
                  'security': {'policies': ['bee.persistprobe:policy']}}]}))
         manifests = {}

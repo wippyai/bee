@@ -14,7 +14,7 @@ local recovery = require("recovery")
 local extensions = require("extensions")
 
 local EXECUTE = "bee.workspace.manager.execute"
-local BACKEND = "bee.workspace.catalog:backend"
+local BACKEND = "bee.workspace.binding:catalog"
 local HOST_PREFIX = "bee.workspace.host/"
 
 type Work = (sql.Transaction) -> (unknown, catalog.Fault?)
@@ -59,7 +59,11 @@ local function folder(path: string): string
 end
 
 local function host_roots(): ({[string]: string}?, string?)
-    local entry, err = registry.get("bee.resources:resource_roots")
+    local configuration = registry.get(BACKEND)
+    local selected = configuration and configuration.data
+    local reference = type(selected) == "table" and selected.roots or nil
+    if type(reference) ~= "string" then return nil, "host roots are not linked" end
+    local entry, err = registry.get(reference)
     if err or not entry then return nil, "host roots unavailable" end
     local data = entry.data
     local roots: {[string]: string} = {}

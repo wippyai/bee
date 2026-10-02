@@ -49,7 +49,7 @@ entries:
   imports:
     protocol: bee.launch:protocol
     decode: bee.protocol:decode
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
   meta:
     command:
       name: bee-host
@@ -67,7 +67,7 @@ entries:
     input_decode: bee.protocol:input
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
     edit_mode_recovery: bee.gov.binding:super_edit_recovery_call
     boot_fallback: bee.launch:boot_fallback
 - name: boot_fallback
@@ -86,7 +86,7 @@ entries:
   modules: [process, channel, security, ctx, time, uuid, logger]
   imports: &supervisor_imports
     leases: bee.app:host_leases
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
     desktop_lifecycle: bee.launch:desktop_lifecycle
     desktop_storage: bee.launch:desktop_storage
     desktops: bee.client:desktops
@@ -114,7 +114,7 @@ entries:
     startup_failure: bee.launch:startup_failure
     startup_watchdog: bee.launch:startup_watchdog
     decode: bee.protocol:decode
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
     command_stop: bee.launch:command_stop
     owner_handoff: bee.launch:owner_handoff
   meta:

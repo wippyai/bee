@@ -22,13 +22,13 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.workspace.catalog:list
-    - bee.workspace.catalog:search
-    - bee.workspace.catalog:inspect
-    - bee.workspace.catalog:archive
-    - bee.workspace.catalog:restore
-    - bee.workspace.catalog:create
-    - bee.workspace.catalog:roots
-    - bee.workspace.catalog:folders
+    - bee.workspace.binding:list
+    - bee.workspace.binding:search
+    - bee.workspace.binding:inspect
+    - bee.workspace.binding:archive
+    - bee.workspace.binding:restore
+    - bee.workspace.binding:create
+    - bee.workspace.binding:roots
+    - bee.workspace.binding:folders
     - bee.threads.binding:list_workspace
     effect: allow

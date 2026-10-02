@@ -686,6 +686,12 @@ persist-migration-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
 check: persist-migration-check
 check-shard-services-storage: persist-migration-check
+
+.PHONY: workspace-component-check
+workspace-component-check: standalone
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_component.py --binary "$(abspath $(BEE_BINARY))"
+check: workspace-component-check
+check-shard-services-storage: workspace-component-check
 .PHONY: layout-check
 layout-check:
 	python3 build/layout_check.py

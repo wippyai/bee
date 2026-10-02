@@ -181,7 +181,7 @@
     {
       "bytes": 20728,
       "id": "docs/distributed_app_delivery",
-      "sha256": "6498e78a82e589fcc5f364b357f4e62b3265431c436a46f3dd11856d1bf87b7c",
+      "sha256": "f7516a923330aa9ec015a2f56f0a6494d4303b2fb102defa1864527f92a9530b",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -235,9 +235,9 @@
       "topic": "approvals"
     },
     {
-      "bytes": 8891,
+      "bytes": 9248,
       "id": "docs/storage",
-      "sha256": "afa774bef19bdc88c901c58c0acc6e9e7e4bfde27e3b4e03e4ddd7f5f3c9795c",
+      "sha256": "7b7d9e05d73c25e2b6ecb9a955c0ff87ff2231bf45ad46f5b834a418d5e78813",
       "source": "docs/reference/storage.md",
       "title": "Workspace storage",
       "topic": "storage"
@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 21765,
+      "bytes": 21784,
       "id": "docs/workspace_catalog",
-      "sha256": "16044b21c2d6bb35fbb92e779db7b34cb79929e44d28a5942e1da31b8be978fc",
+      "sha256": "4e801717b4dafdfc29adc899ba4cd81051f4318904f4600722649868f623667e",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -467,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2702,
+      "bytes": 2712,
       "id": "component/persist",
-      "sha256": "3a90ccc855fbee5e210e044666aeefa741a862786521b2b91e77d2f402b27467",
+      "sha256": "e59cfd5c5c9d9b23276c91eb23da8ac89cec5778a39b348abb62afb2b17056a9",
       "source": "modules/persist/src/README.md",
       "title": "bee.persist",
       "topic": "component"
@@ -528,6 +528,14 @@
       "sha256": "f1544d1b6012ed82ba2c78f1a889a3c877cb27ba9b7631bd59be28ed0aeffcd3",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
+      "topic": "component"
+    },
+    {
+      "bytes": 2198,
+      "id": "component/workspace",
+      "sha256": "b01cc9f89bc93c9930b183cc08342ed80475beb131b9179a751e617afa151476",
+      "source": "modules/workspace/src/README.md",
+      "title": "Workspace component",
       "topic": "component"
     },
     {
@@ -622,7 +630,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 738276,
-    "documents": 77
+    "bytes": 740860,
+    "documents": 78
   }
 }

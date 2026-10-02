@@ -19,9 +19,9 @@ entries:
   method: denied
   modules: [sql]
   imports:
-    store: bee.client:store
+    store: bee.client.persist:store
     workspace_store: bee.workspace.persist:store
-    state: bee.client:state
+    state: bee.client.types:state
   security:
     policies: [bee.client.storage.probe:broad_policy, bee.security.storage:workspace_storage_boundary]
   meta:
@@ -34,9 +34,9 @@ entries:
   method: main
   modules: [sql]
   imports:
-    store: bee.client:store
+    store: bee.client.persist:store
     workspace_store: bee.workspace.persist:store
-    state: bee.client:state
+    state: bee.client.types:state
   security:
     policies: [bee.client.storage.probe:bindings_policy]
   meta:
@@ -48,8 +48,8 @@ entries:
   source: file://main.lua
   method: main
   imports:
-    store: bee.client:store
-    state: bee.client:state
+    store: bee.client.persist:store
+    state: bee.client.types:state
     model: bee.desktop:model
     appearance: bee.app:appearance
   security:
@@ -62,7 +62,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.client:list_desktops, bee.client:allocate_desktop]
+    resources: [bee.client.binding:list_desktops, bee.client.binding:allocate_desktop]
     effect: allow
 - name: desktop_read
   kind: security.policy

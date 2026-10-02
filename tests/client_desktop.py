@@ -56,7 +56,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         executor["default_env"]["HOME"] = str(shell_home)
         console.write_text(yaml.safe_dump(manifest, sort_keys=False))
         if _transfer_failure in ("source", "target"):
-            client = project / "src/client/main.lua"
+            client = project / "modules/client/src/service/main.lua"
             code = client.read_text()
             anchor = "            local committed, err = store.write(database, next_layout)\n"
             assert code.count(anchor) == 1
@@ -221,7 +221,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
 ''', 1)
             fixture.write_text(code)
         if primary_exit:
-            client = project / "src/client/main.lua"
+            client = project / "modules/client/src/service/main.lua"
             code = client.read_text()
             anchor = '                    if selected.channel == copy_results and sender == presenter then\n'
             assert code.count(anchor) == 1
@@ -259,7 +259,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert anchor in code
             fixture.write_text(code.replace(anchor, injection + anchor, 1))
         if session_failure:
-            client = project / "src/client/main.lua"
+            client = project / "modules/client/src/service/main.lua"
             code = client.read_text()
             anchor = '        local function run()\n            send(owner, "bee.client.ready",'
             assert code.count(anchor) == 1
@@ -283,7 +283,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert code.count(anchor) == 1
             session.write_text(code.replace(anchor, '                if width == 100 then saved.version = 2 end\n' + anchor, 1))
         if client_upgrade_fallback:
-            client = project / "src/client/main.lua"
+            client = project / "modules/client/src/service/main.lua"
             code = client.read_text()
             anchor = '                        send(owner, "bee.client.replace", checkpoint)\n'
             assert code.count(anchor) == 1
@@ -304,7 +304,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                 '        if broker_spawn_count == 2 then return nil, "Injected broker startup failure" end\n', 1)
             host_source.write_text(code)
         if copy_exit:
-            client = project / "src/client/main.lua"
+            client = project / "modules/client/src/service/main.lua"
             code = client.read_text()
             anchor = '                    if selected.channel == copy_results and sender == presenter then\n'
             assert code.count(anchor) == 1
@@ -344,7 +344,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert anchor in code
             fixture.write_text(code.replace(anchor, injection + anchor, 1))
         if launch_exit:
-            client = project / "src/client/main.lua"
+            client = project / "modules/client/src/service/main.lua"
             code = client.read_text()
             anchor = '                            if launch_pending and reply.request_id == launch_pending.request_id and (reply.op == "open" or reply.op == "focus") then\n'
             assert code.count(anchor) == 1
@@ -372,11 +372,11 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert anchor in code
             fixture.write_text(code.replace(anchor, injection + anchor, 1))
         if storage_delay:
-            operations = project / "src/client/desktop_storage.lua"
+            operations = project / "modules/client/src/binding/desktop_storage.lua"
             code = operations.read_text().replace('local security = require("security")', 'local security = require("security")\nlocal time = require("time")')
             code = code.replace('function M.allocate(value: unknown): Reply', 'function M.allocate(value: unknown): Reply\n    if type(value) == "table" and value.desktop_id == string.rep("c", 32) then time.sleep("6s") end')
             operations.write_text(code)
-            manifest = project / "src/client/_index.yaml"
+            manifest = project / "modules/client/src/binding/_index.yaml"
             values = yaml.safe_load(manifest.read_text())
             for entry in values["entries"]:
                 if entry.get("source") == "file://desktop_storage.lua": entry["modules"].append("time")

@@ -27,8 +27,8 @@ local MAX_LISTENERS = 16
 local M = {}
 M.CATALOG_LIST = "bee.workspace.binding:list"
 M.CATALOG_SEARCH = "bee.workspace.binding:search"
-M.LIST_DESKTOPS = "bee.client:list_desktops"
-M.ALLOCATE_DESKTOP = "bee.client:allocate_desktop"
+M.LIST_DESKTOPS = "bee.client.binding:list_desktops"
+M.ALLOCATE_DESKTOP = "bee.client.binding:allocate_desktop"
 M.CLIENT_DATABASE = "bee.env:client_db"
 function M.new(): State return {} end
 local function answer(recipient: string, reply: types.Reply)

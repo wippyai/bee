@@ -62,12 +62,12 @@ entries:
     - bee.host:main
     - bee.workspace:main
     - bee.workspace:launch
-    - bee.client:main
-    - bee.client:local
-    - bee.client:local_command
-    - bee.client:local_application
-    - bee.client:desktop
-    - bee.client:application
+    - bee.client.service:main
+    - bee.client.service:local
+    - bee.client.service:local_command
+    - bee.client.service:local_application
+    - bee.client.service:desktop
+    - bee.client.service:application
     - bee.launch:supervisor
     - bee.launch:headless
     - bee.desktop.service:main

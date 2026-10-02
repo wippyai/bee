@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    clipboard: bee.client:clipboard
+    clipboard: bee.client.types:clipboard
 - name: lifecycle_test
   kind: function.lua
   source: file://lifecycle_test.lua
@@ -16,7 +16,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    lifecycle: bee.client:lifecycle
+    lifecycle: bee.client.types:lifecycle
 - name: inbox_test
   kind: function.lua
   source: file://inbox_test.lua
@@ -24,7 +24,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    inbox: bee.client:inbox
+    inbox: bee.client.types:inbox
 - name: state_test
   kind: function.lua
   source: file://state_test.lua
@@ -32,7 +32,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    state: bee.client:state
+    state: bee.client.types:state
     model: bee.desktop:model
     appearance: bee.app:appearance
 - name: handoff_test
@@ -42,7 +42,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    handoff: bee.client:handoff
+    handoff: bee.client.types:handoff
 - name: assignments_test
   kind: function.lua
   source: file://assignments_test.lua
@@ -50,7 +50,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    assignments: bee.client:assignments
+    assignments: bee.client.types:assignments
     transfer: bee.host:transfer
 - name: store_test
   kind: function.lua
@@ -60,8 +60,8 @@ entries:
   modules: [sql, json]
   imports:
     test: wippy.test:test
-    store: bee.client:store
-    state: bee.client:state
+    store: bee.client.persist:store
+    state: bee.client.types:state
     model: bee.desktop:model
     appearance: bee.app:appearance
 - name: workspace_pages_test
@@ -71,4 +71,4 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    workspace_pages: bee.client:workspace_pages
+    workspace_pages: bee.client.binding:workspace_pages

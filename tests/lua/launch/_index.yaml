@@ -74,10 +74,10 @@ entries:
   meta: {type: test, suite: bee}
   modules: [tty, security, process, channel, time]
   imports:
-    attachments: bee.client:attachments
+    attachments: bee.client.binding:attachments
     bounds: bee.values:bounds
     test: wippy.test:test
-    desktops: bee.client:desktops
+    desktops: bee.client.binding:desktops
     desktop_lifecycle: bee.launch:desktop_lifecycle
 - name: boot_fallback_test
   kind: function.lua

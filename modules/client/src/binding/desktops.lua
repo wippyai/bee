@@ -23,7 +23,7 @@ local function spawn(view: tty.Viewport, selected: Selection, scope: security.Sc
     local owner = tostring(process.pid())
     local pid, spawn_error = process.with_options({terminal = grant})
         :with_context({["bee.client_owner"] = owner}):with_scope(scope):spawn_monitored(
-            "bee.client:main", "bee:workers", owner, selected.host, selected.workspace_id, selected.database,
+            "bee.client.service:main", "bee:workers", owner, selected.host, selected.workspace_id, selected.database,
             selected.application, {version = 1, quit_mode = bootstrap.quit_mode,
                 desktop_id = bootstrap.desktop_id, legacy_desktop = bootstrap.legacy_desktop, arguments = bootstrap.arguments,
                 fullscreen = bootstrap.fullscreen, secondary_application = bootstrap.secondary_application,

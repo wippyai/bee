@@ -1644,6 +1644,48 @@
       "migration": "M2",
       "reason": "Desktop projection actor relocation; no stored actor/definition reference exists in desktop/client layouts or owner tables. Preserve workspace/desktop/view IDs, topics, version-one handoff and qualified layout schemas; restart owner composition and reissue existing grants.",
       "to": "bee.desktop.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:main",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local_command",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local_command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local_application",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local_application"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:desktop",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:desktop"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:application",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:application"
     }
   ]
 }

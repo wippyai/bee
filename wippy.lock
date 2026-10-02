@@ -2,6 +2,8 @@ directories:
   modules: .wippy
   src: ./src
 modules:
+- name: bee/client
+  version: 0.1.0-dev
 - name: bee/desktop
   version: 0.1.0-dev
 - name: bee/workspace

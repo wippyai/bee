@@ -1115,7 +1115,7 @@ func run() (retErr error) {
 	}
 
 	if cfg.desktopProbe {
-		fmt.Printf("Hive remote (desktop): 2 independent native runtimes, actual bee.client:main desktop client, native display viewport, destination bash proof, stty resize, F12 rejoin, detach & reattach to retained terminal verified successfully\n")
+		fmt.Printf("Hive remote (desktop): 2 independent native runtimes, actual bee.client.service:main desktop client, native display viewport, destination bash proof, stty resize, F12 rejoin, detach & reattach to retained terminal verified successfully\n")
 	} else if cfg.sshTarget != "" {
 		fmt.Printf("Hive remote (LAN SSH Node A %s, local Node B %s): 2 independent native runtimes, supervisor admission, remote Native Terminal mount, process proof, stty resize, and revoked control verified successfully\n", cfg.hostAddress, cfg.clientAddress)
 	} else if cfg.presenterStall {

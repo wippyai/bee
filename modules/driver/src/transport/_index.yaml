@@ -4,8 +4,7 @@ entries:
 - name: stream_json
   kind: library.lua
   source: file://stream_json.lua
-  modules:
-  - json
+  modules: [json]
   imports:
     framing: bee.driver.transport:framing
 - name: framing

@@ -4,8 +4,6 @@ entries:
 - name: universal
   kind: library.lua
   source: file://universal.lua
-  modules:
-  - registry
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -15,7 +13,6 @@ entries:
     locate: bee.driver.locate:locate
     codec_registry: bee.driver.codec:codec_registry
     option_render: bee.driver.binding:option_render
-    normalizer: bee.driver.codec:normalize
 - name: resolver
   kind: library.lua
   source: file://resolver.lua

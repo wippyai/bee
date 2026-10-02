@@ -23,6 +23,10 @@ declare an icon, slash-separated menu group, role and bounded
 `application.commands`. Roles and metadata affect discovery and presentation;
 they never grant authority. Executable or configuration changes require a new
 revision, and one revision identifies one exact runnable definition.
+Use `restart_policy: never` (the default) when the app does not checkpoint.
+`automatic` and `manual` require a nonempty `resume_schema` of at most 80
+characters without control characters. Without that schema, the desktop cannot
+open the definition; governed preflight reports `APPLICATION_CHECKPOINT`.
 
 The protected `bee.security:application_admission.bindings` selection supplies shipped
 definitions, policy IDs and grants such as `appearance_write` and

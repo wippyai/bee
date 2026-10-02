@@ -60,6 +60,7 @@ entries:
     contract: bee.protocol:application
     application_admissions: bee.gov.activation:application_admissions
     canonical: bee.values:canonical
+    component_lifecycle: bee.hub.types:lifecycle
 - name: interactions
   kind: library.lua
   source: file://interactions.lua

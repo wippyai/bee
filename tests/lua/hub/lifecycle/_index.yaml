@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: tests.hub.lifecycle
+entries:
+- name: lifecycle_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    lifecycle: bee.hub.types:lifecycle

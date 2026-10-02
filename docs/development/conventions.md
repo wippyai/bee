@@ -160,8 +160,8 @@ Pure reducers and value modules have no registry, process, SQL or terminal side
 effects. A subsystem that needs an independent owner adds only the required
 process, persistence, migration, binding, trait and registry slices. The
 module's root, namespace ownership and dependency requirements must be declared
-before extraction. Independent Hub packages, public enrollment and remote
-package transfer remain separate proposals.
+before extraction. Independent release publication and destination Hub package
+transfer remain proposals.
 
 Application entries, renderers, screen models and view helpers live in
 `modules/<module>/src/app` as `<module namespace>.app`. The SDK root

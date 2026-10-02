@@ -256,6 +256,11 @@
       "source": "modules/approvals/src/binding/_index.yaml"
     },
     {
+      "id": "bee.approvals.binding:node_summary",
+      "kind": "function.lua",
+      "source": "modules/approvals/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.approvals.binding:publication_effects",
       "kind": "function.lua",
       "source": "modules/approvals/src/binding/_index.yaml"
@@ -3521,6 +3526,11 @@
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
+      "id": "bee.gov.binding:publication_backend_call",
+      "kind": "function.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.gov.binding:publication_call",
       "kind": "function.lua",
       "source": "modules/gov/src/binding/_index.yaml"
@@ -3559,6 +3569,11 @@
       "id": "bee.gov.binding:workspace_backend_call",
       "kind": "function.lua",
       "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.gov.capability:capability_access",
+      "kind": "library.lua",
+      "source": "modules/gov/src/capability/_index.yaml"
     },
     {
       "id": "bee.gov.capability:capability_files",
@@ -3801,12 +3816,27 @@
       "source": "modules/gov/src/security/_index.yaml"
     },
     {
+      "id": "bee.gov.security:gateway_callee_policy",
+      "kind": "security.policy.expr",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
       "id": "bee.gov.security:gateway_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/gov/src/security/_index.yaml"
     },
     {
       "id": "bee.gov.security:overlay_facade_policy",
+      "kind": "security.policy.expr",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.gov.security:publication_execution_policy",
+      "kind": "security.policy",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.gov.security:publication_facade_policy",
       "kind": "security.policy.expr",
       "source": "modules/gov/src/security/_index.yaml"
     },
@@ -4856,7 +4886,17 @@
       "source": "modules/hive-telemetry/src/binding/_index.yaml"
     },
     {
+      "id": "bee.hive.telemetry.binding:detail",
+      "kind": "function.lua",
+      "source": "modules/hive-telemetry/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.hive.telemetry.binding:holdings",
+      "kind": "function.lua",
+      "source": "modules/hive-telemetry/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.binding:node_summary",
       "kind": "function.lua",
       "source": "modules/hive-telemetry/src/binding/_index.yaml"
     },
@@ -4871,9 +4911,34 @@
       "source": "modules/hive-telemetry/src/binding/_index.yaml"
     },
     {
+      "id": "bee.hive.telemetry.binding:snapshot",
+      "kind": "function.lua",
+      "source": "modules/hive-telemetry/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.hive.telemetry.binding:stats",
       "kind": "function.lua",
       "source": "modules/hive-telemetry/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.binding:status",
+      "kind": "contract.binding",
+      "source": "modules/hive-telemetry/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.binding:status_model",
+      "kind": "library.lua",
+      "source": "modules/hive-telemetry/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.env:empty_peers",
+      "kind": "registry.entry",
+      "source": "modules/hive-telemetry/src/env/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.env:peer_source",
+      "kind": "registry.entry",
+      "source": "modules/hive-telemetry/src/env/_index.yaml"
     },
     {
       "id": "bee.hive.telemetry.security:cluster_policy",
@@ -4882,6 +4947,31 @@
     },
     {
       "id": "bee.hive.telemetry.security:holdings_policy",
+      "kind": "security.policy",
+      "source": "modules/hive-telemetry/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.security:peer_source_policy",
+      "kind": "security.policy",
+      "source": "modules/hive-telemetry/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.security:status_grant_policy",
+      "kind": "security.policy",
+      "source": "modules/hive-telemetry/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.security:status_policy",
+      "kind": "security.policy.expr",
+      "source": "modules/hive-telemetry/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.security:summary_node_name_policy",
+      "kind": "security.policy",
+      "source": "modules/hive-telemetry/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry.security:summary_owner_policy",
       "kind": "security.policy",
       "source": "modules/hive-telemetry/src/security/_index.yaml"
     },
@@ -4896,13 +4986,38 @@
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
     {
+      "id": "bee.hive.telemetry:dependency_approvals",
+      "kind": "ns.dependency",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry:dependency_gov",
+      "kind": "ns.dependency",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
       "id": "bee.hive.telemetry:dependency_hive",
+      "kind": "ns.dependency",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry:dependency_node",
+      "kind": "ns.dependency",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry:dependency_threads",
       "kind": "ns.dependency",
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
     {
       "id": "bee.hive.telemetry:dependency_values",
       "kind": "ns.dependency",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry:status_contract",
+      "kind": "contract.definition",
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
     {
@@ -4926,7 +5041,22 @@
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
     {
+      "id": "bee.hive.telemetry:target_peers",
+      "kind": "ns.requirement",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
       "id": "bee.hive.telemetry:target_presence_policies",
+      "kind": "ns.requirement",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry:target_status_policies",
+      "kind": "ns.requirement",
+      "source": "modules/hive-telemetry/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive.telemetry:target_summary_policies",
       "kind": "ns.requirement",
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
@@ -5081,6 +5211,11 @@
       "source": "modules/hub/src/binding/_index.yaml"
     },
     {
+      "id": "bee.hub.binding:lifecycle",
+      "kind": "library.lua",
+      "source": "modules/hub/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.hub.binding:migration_runner",
       "kind": "library.lua",
       "source": "modules/hub/src/binding/_index.yaml"
@@ -5098,6 +5233,11 @@
     {
       "id": "bee.hub.binding:publish",
       "kind": "library.lua",
+      "source": "modules/hub/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hub.binding:target_lifecycle_owners",
+      "kind": "ns.requirement",
       "source": "modules/hub/src/binding/_index.yaml"
     },
     {
@@ -5281,6 +5421,21 @@
       "source": "modules/hub/src/security/_index.yaml"
     },
     {
+      "id": "bee.hub.security:lifecycle_owner_policy",
+      "kind": "security.policy",
+      "source": "modules/hub/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hub.security:lifecycle_policy",
+      "kind": "security.policy",
+      "source": "modules/hub/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hub.security:lifecycle_scope_policy",
+      "kind": "security.policy",
+      "source": "modules/hub/src/security/_index.yaml"
+    },
+    {
       "id": "bee.hub.security:migration_context_policy",
       "kind": "security.policy.expr",
       "source": "modules/hub/src/security/_index.yaml"
@@ -5344,6 +5499,11 @@
       "id": "bee.hub.traits:research_trait",
       "kind": "registry.entry",
       "source": "modules/hub/src/traits/_index.yaml"
+    },
+    {
+      "id": "bee.hub.types:lifecycle",
+      "kind": "library.lua",
+      "source": "modules/hub/src/types/_index.yaml"
     },
     {
       "id": "bee.hub:definition",
@@ -7316,6 +7476,11 @@
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
+      "id": "bee.sessions.binding:control",
+      "kind": "library.lua",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.sessions.binding:detach",
       "kind": "function.lua",
       "source": "modules/sessions/src/binding/_index.yaml"
@@ -7342,6 +7507,11 @@
     },
     {
       "id": "bee.sessions.binding:join",
+      "kind": "function.lua",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.binding:lifecycle",
       "kind": "function.lua",
       "source": "modules/sessions/src/binding/_index.yaml"
     },
@@ -7376,6 +7546,11 @@
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
+      "id": "bee.sessions.binding:target_lifecycle_policies",
+      "kind": "ns.requirement",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.sessions.binding:target_owner_policies",
       "kind": "ns.requirement",
       "source": "modules/sessions/src/binding/_index.yaml"
@@ -7404,6 +7579,21 @@
       "id": "bee.sessions.executor:executor_selection",
       "kind": "registry.entry",
       "source": "modules/sessions/src/executor/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.security:lifecycle_journal_policy",
+      "kind": "security.policy",
+      "source": "modules/sessions/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.security:lifecycle_policy",
+      "kind": "security.policy",
+      "source": "modules/sessions/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.security:lifecycle_worker_policy",
+      "kind": "security.policy",
+      "source": "modules/sessions/src/security/_index.yaml"
     },
     {
       "id": "bee.sessions.security:owner_admission_policy",
@@ -8037,6 +8227,11 @@
     },
     {
       "id": "bee.threads.binding:list_workspace",
+      "kind": "function.lua",
+      "source": "modules/threads/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.threads.binding:node_summary",
       "kind": "function.lua",
       "source": "modules/threads/src/binding/_index.yaml"
     },
@@ -9035,7 +9230,7 @@
       }
     ],
     "proposal_evidence": [
-      "Hive supervisor and module service handoff and generation rollback remain\nproposals."
+      "Hive supervisor handoff and generation rollback remain proposals."
     ],
     "source": "docs/development/process-handoff.md"
   },
@@ -10147,6 +10342,13 @@
       "source": "modules/hive-telemetry/src/binding/_index.yaml"
     },
     {
+      "namespace": "bee.hive.telemetry.env",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.hive.telemetry.env",
+      "source": "modules/hive-telemetry/src/env/_index.yaml"
+    },
+    {
       "namespace": "bee.hive.telemetry.security",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -10271,6 +10473,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.hub.traits",
       "source": "modules/hub/src/traits/_index.yaml"
+    },
+    {
+      "namespace": "bee.hub.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.hub.types",
+      "source": "modules/hub/src/types/_index.yaml"
     },
     {
       "namespace": "bee.interaction",
@@ -12618,6 +12827,11 @@
     {
       "requirement": "bee.approvals:target_request_policies",
       "resolved_by": "registry source",
+      "target": "bee.approvals.binding:node_summary"
+    },
+    {
+      "requirement": "bee.approvals:target_request_policies",
+      "resolved_by": "registry source",
       "target": "bee.approvals.binding:publication_effects"
     },
     {
@@ -13151,6 +13365,16 @@
       "target": "bee.hive.telemetry.binding:holdings"
     },
     {
+      "requirement": "bee.hive.telemetry:target_peers",
+      "resolved_by": "registry source",
+      "target": "bee.hive.telemetry.env:peer_source"
+    },
+    {
+      "requirement": "bee.hive.telemetry:target_peers",
+      "resolved_by": "registry source",
+      "target": "bee.hive.telemetry.security:peer_source_policy"
+    },
+    {
       "requirement": "bee.hive.telemetry:target_presence_policies",
       "resolved_by": "registry source",
       "target": "bee.hive.telemetry.binding:presence"
@@ -13159,6 +13383,26 @@
       "requirement": "bee.hive.telemetry:target_presence_policies",
       "resolved_by": "registry source",
       "target": "bee.hive.telemetry.binding:stats"
+    },
+    {
+      "requirement": "bee.hive.telemetry:target_status_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.telemetry.binding:detail"
+    },
+    {
+      "requirement": "bee.hive.telemetry:target_status_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.telemetry.binding:snapshot"
+    },
+    {
+      "requirement": "bee.hive.telemetry:target_summary_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.telemetry.binding:node_summary"
+    },
+    {
+      "requirement": "bee.hub.binding:target_lifecycle_owners",
+      "resolved_by": "registry source",
+      "target": "bee.hub.security:lifecycle_owner_policy"
     },
     {
       "requirement": "bee.hub:process_host",
@@ -13484,6 +13728,11 @@
       "requirement": "bee.sessions.binding:target_control_policies",
       "resolved_by": "registry source",
       "target": "bee.sessions.binding:get"
+    },
+    {
+      "requirement": "bee.sessions.binding:target_lifecycle_policies",
+      "resolved_by": "registry source",
+      "target": "bee.sessions.binding:lifecycle"
     },
     {
       "requirement": "bee.sessions.binding:target_owner_policies",
@@ -13913,6 +14162,11 @@
     {
       "requirement": "bee.threads:target_session_create_policies",
       "resolved_by": "registry source",
+      "target": "bee.threads.binding:node_summary"
+    },
+    {
+      "requirement": "bee.threads:target_session_create_policies",
+      "resolved_by": "registry source",
       "target": "bee.threads.binding:operation_describe"
     },
     {
@@ -14196,6 +14450,10 @@
       "id": "bee.approvals:target_request_policies",
       "source": "modules/approvals/src/_index.yaml",
       "targets": [
+        {
+          "entry": "bee.approvals.binding:node_summary",
+          "path": ".security.policies"
+        },
         {
           "entry": "bee.approvals.binding:request",
           "path": ".security.policies"
@@ -15215,6 +15473,23 @@
       ]
     },
     {
+      "default_reference_ids": [
+        "bee.hive.telemetry.env:empty_peers"
+      ],
+      "id": "bee.hive.telemetry:target_peers",
+      "source": "modules/hive-telemetry/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.telemetry.env:peer_source",
+          "path": ".resource_ref"
+        },
+        {
+          "entry": "bee.hive.telemetry.security:peer_source_policy",
+          "path": ".policy.resources"
+        }
+      ]
+    },
+    {
       "default_reference_ids": [],
       "id": "bee.hive.telemetry:target_presence_policies",
       "source": "modules/hive-telemetry/src/_index.yaml",
@@ -15226,6 +15501,43 @@
         {
           "entry": "bee.hive.telemetry.binding:stats",
           "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive.telemetry:target_status_policies",
+      "source": "modules/hive-telemetry/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.telemetry.binding:snapshot",
+          "path": ".security.policies"
+        },
+        {
+          "entry": "bee.hive.telemetry.binding:detail",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive.telemetry:target_summary_policies",
+      "source": "modules/hive-telemetry/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.telemetry.binding:node_summary",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hub.binding:target_lifecycle_owners",
+      "source": "modules/hub/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hub.security:lifecycle_owner_policy",
+          "path": ".policy.resources"
         }
       ]
     },
@@ -15777,6 +16089,17 @@
     },
     {
       "default_reference_ids": [],
+      "id": "bee.sessions.binding:target_lifecycle_policies",
+      "source": "modules/sessions/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.sessions.binding:lifecycle",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
       "id": "bee.sessions.binding:target_owner_policies",
       "source": "modules/sessions/src/binding/_index.yaml",
       "targets": [
@@ -16193,6 +16516,10 @@
         },
         {
           "entry": "bee.threads.binding:session_scan",
+          "path": ".security.policies"
+        },
+        {
+          "entry": "bee.threads.binding:node_summary",
           "path": ".security.policies"
         },
         {
@@ -16936,20 +17263,20 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1791,
-    "namespace_count": 273,
+    "entry_count": 1830,
+    "namespace_count": 275,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 151,
-    "persisted_id_count": 814,
-    "requirement_count": 134,
-    "requirement_target_count": 320,
+    "persisted_id_count": 837,
+    "requirement_count": 139,
+    "requirement_target_count": 329,
     "root_src_lua_budget": 20851,
     "root_src_lua_lines": 20851,
     "schema_tag_count": 70,
-    "topic_count": 137
+    "topic_count": 138
   },
   "topics": [
     {
@@ -17764,6 +18091,12 @@
         "modules/harness/src/service/presentation.lua"
       ],
       "topic": "bee.session.window.request"
+    },
+    {
+      "sources": [
+        "modules/sessions/src/binding/control.lua"
+      ],
+      "topic": "bee.sessions.lifecycle"
     },
     {
       "sources": [

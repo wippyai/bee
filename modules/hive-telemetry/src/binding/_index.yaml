@@ -127,8 +127,8 @@ entries:
     bounds: bee.values:bounds
     leases: bee.app:host_leases
   meta:
-    comment: Open Hive operation paging this node's live workspace holdings with each host phase and lease
-      count
+    comment: Open Hive operation paging this node's live workspace holdings with each
+      host phase and lease count
     hive: open
     hive_operation:
       revision: '1'
@@ -190,7 +190,8 @@ entries:
     types: bee.hive:types
     client: bee.hive.binding:client
   meta:
-    comment: Open Hive operation aggregating workspace holdings and local peer link state
+    comment: Open Hive operation aggregating workspace holdings and local peer link
+      state
     hive: open
     hive_operation:
       revision: '1'
@@ -245,8 +246,91 @@ entries:
                   type: boolean
   security:
     policies: []
+- name: status
+  kind: contract.binding
+  contracts:
+  - contract: bee.hive.telemetry:status_contract
+    methods:
+      snapshot: bee.hive.telemetry.binding:snapshot
+      detail: bee.hive.telemetry.binding:detail
+- name: snapshot
+  kind: function.lua
+  source: file://status.lua
+  method: snapshot
+  modules:
+  - system
+  - registry
+  - security
+  - hash
+  imports: &id001
+    bounds: bee.values:bounds
+    status: bee.hive.telemetry.binding:status_model
+    client: bee.hive.binding:client
+    types: bee.hive:types
+    capability_access: bee.gov.capability:capability_access
+    capability_gateway: bee.gov.capability:capability_gateway
+  security:
+    policies: []
+- name: detail
+  kind: function.lua
+  source: file://status.lua
+  method: detail
+  modules:
+  - system
+  - registry
+  - security
+  - hash
+  imports: *id001
+  security:
+    policies: []
+- name: node_summary
+  kind: function.lua
+  source: file://node_summary.lua
+  method: handle
+  modules:
+  - funcs
+  - system
+  imports:
+    bounds: bee.values:bounds
+    status: bee.hive.telemetry.binding:status_model
+  security:
+    policies: []
+  meta:
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Node activity summary
+      input:
+        type: object
+        properties: {}
+        additionalProperties: false
+      output:
+        type: object
+        additionalProperties: false
+        required:
+        - node_id
+        - name
+        - running_sessions
+        - pending_approvals
+        properties:
+          node_id:
+            type: string
+          name:
+            type: string
+          running_sessions:
+            type: integer
+            minimum: 0
+          pending_approvals:
+            type: integer
+            minimum: 0
 - name: sampling
   kind: library.lua
   source: file://sampling.lua
   imports:
     bounds: bee.values:bounds
+- name: status_model
+  kind: library.lua
+  source: file://status_model.lua
+  imports:
+    bounds: bee.values:bounds
+    types: bee.hive:types

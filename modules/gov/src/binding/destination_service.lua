@@ -430,7 +430,8 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
             return nil, "installed grant differs from the activated intent"
         end
         revision = prior.revision
-    else
+    elseif not (prior == nil and intent.phase == "settled" and intent.outcome == "applied"
+        and intent.application_admission_digest ~= nil) then
         if (prior and prior.record_digest or nil) ~= intent.grant_predecessor_digest then
             return nil, "installed grant changed since permission review"
         end

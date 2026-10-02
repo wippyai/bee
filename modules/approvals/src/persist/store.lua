@@ -174,4 +174,11 @@ function M.attention_count(tx: sql.Transaction, workspace: string, now: integer)
     if type(row.count) ~= "number" or row.count < 0 or row.count ~= math.floor(row.count) then return nil, "attention count is corrupt" end
     return math.floor(row.count), nil
 end
+function M.node_pending_count(tx: sql.Transaction, node: string, now: integer): (integer?, string?)
+    local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE owner_node = ? AND state = 'pending' AND expires_ms > ?", {node, now})
+    if err or not rows or #rows ~= 1 then return nil, err or "count node pending approvals" end
+    local count = rows[1].count
+    if type(count) ~= "number" or count < 0 or count ~= math.floor(count) then return nil, "node pending approval count is corrupt" end
+    return math.floor(count), nil
+end
 return M

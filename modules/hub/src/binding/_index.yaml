@@ -62,6 +62,8 @@ entries:
     migration_runner: bee.hub.binding:migration_runner
     migrations: bee.hub.activation:migrations
     migration_work: bee.hub.activation:migration_work
+    lifecycle: bee.hub.types:lifecycle
+    service_lifecycle: bee.hub.binding:lifecycle
 - name: publish
   kind: library.lua
   source: file://publish.lua
@@ -106,3 +108,17 @@ entries:
     preview: bee.hub.binding:preview
   security: {policies: [bee.hub.security:facade_policy]}
   meta: {type: tool, title: Component explorer, llm_alias: BeeComponents, llm_description: Inspect effective installed component state and exact Hub packages without applying them, input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","updates","plan"]},"request":{"type":"object"}}}'}
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  modules: [registry, events, system, funcs, security, time, channel]
+  imports:
+    bounds: bee.values:bounds
+    lifecycle: bee.hub.types:lifecycle
+- name: target_lifecycle_owners
+  kind: ns.requirement
+  default: ['']
+  meta: {comment: Host-selected owner lifecycle functions; component declarations grant no authority}
+  targets:
+  - entry: bee.hub.security:lifecycle_owner_policy
+    path: .policy.resources

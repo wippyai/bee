@@ -70,6 +70,8 @@ entries:
     value: bee:workers
   - name: target_publish_configuration
     value: bee.hub.publication:hub_publication
+  - name: target_lifecycle_owners
+    value: [bee.sessions.binding:lifecycle]
 - name: gov
   kind: ns.dependency
   component: bee/gov
@@ -142,6 +144,8 @@ entries:
   parameters:
   - name: target_exposure
     value: bee.security.hive:hive_exposure_policy
+  - name: target_peers
+    value: bee.hive.host:enrollment
   - name: target_presence_policies
     value:
     - bee.security.hive:hive_telemetry_policy
@@ -158,6 +162,17 @@ entries:
     value:
     - bee.hive.telemetry.security:cluster_policy
     - bee.security.hive:hive_telemetry_policy
+  - name: target_status_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+    - bee.hive.telemetry.security:status_policy
+    - bee.hive.telemetry.security:peer_source_policy
+    - bee.hive.telemetry.security:status_grant_policy
+  - name: target_summary_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+    - bee.hive.telemetry.security:summary_owner_policy
+    - bee.hive.telemetry.security:summary_node_name_policy
 - name: hive_manager
   kind: ns.dependency
   meta: {independent: true}
@@ -474,7 +489,10 @@ entries:
     - bee.security.threads:thread_node_policy
     - bee.security.threads:thread_sessions_owner_policy
     - bee.sessions.security:scheduler_policy
+    - bee.sessions.security:lifecycle_worker_policy
     - bee.sessions.security:scheduler_principal_policy
+  - name: bee.sessions.binding:target_lifecycle_policies
+    value: [bee.sessions.security:lifecycle_policy, bee.sessions.security:lifecycle_journal_policy, bee.security.threads:thread_sessions_owner_policy]
   - name: bee.sessions.binding:target_owner_policies
     value:
     - bee.security.threads:thread_sessions_owner_policy

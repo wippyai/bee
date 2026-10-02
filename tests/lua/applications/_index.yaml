@@ -135,6 +135,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.ui:appearance
+    fixture: bee.apps.fixture:scope
 - name: app_stable_membership_test
   kind: function.lua
   source: file://app_stable_membership_test.lua
@@ -147,6 +148,7 @@ entries:
     test: wippy.test:test
     appearance: bee.ui:appearance
     catalog: bee.apps:catalog
+    fixture: bee.apps.fixture:scope
 - name: broker_stop_test
   kind: function.lua
   source: file://broker_stop_test.lua
@@ -157,6 +159,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.ui:appearance
+    fixture: bee.apps.fixture:scope
 - name: broker_exit_test
   kind: function.lua
   source: file://broker_exit_test.lua
@@ -167,6 +170,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.ui:appearance
+    fixture: bee.apps.fixture:scope
 - name: close_race_test
   kind: function.lua
   source: file://close_race_test.lua
@@ -187,3 +191,4 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.ui:appearance
+    fixture: bee.apps.fixture:scope

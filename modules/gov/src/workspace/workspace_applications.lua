@@ -47,12 +47,4 @@ function M.prior_owner(workspace_raw: unknown, source_workspace: unknown): strin
     return identity and PRIOR_OWNER_PREFIX .. (workspace_raw) .. "." .. identity.name or nil
 end
 
--- The overlay a workspace-application component was published from.
-function M.source_of(component: unknown): string?
-    if type(component) ~= "string" then return nil end
-    local prefix = M.NAMESPACE_ROOT .. "."
-    if component:sub(1, #prefix) ~= prefix then return nil end
-    return M.name(component:sub(#prefix + 1))
-end
-
 return M

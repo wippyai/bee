@@ -1,6 +1,7 @@
 -- MIT. Pure installed-module snapshot decoder shared by Hub planning and reads.
 local bounds = require("bounds")
 local requirements = require("requirements")
+local operations = require("operations")
 local M = {}
 type Module = {component: string, version: string, locked_version: string, digest: string, source: string, direct: boolean,
     roots: {string}, used_by: {string}, entries: integer}
@@ -128,6 +129,15 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             end
         end
     end
+    local published_roots: {[string]: string} = {}
+    for _, raw_entry in ipairs(entries) do
+        local receipt = operations.record(raw_entry)
+        local root = receipt and bounds.id(receipt.root_id)
+        local name = receipt and component(receipt.component)
+        if root and name and receipt and (receipt.state == "published" or receipt.state == "complete") then
+            published_roots[root] = name
+        end
+    end
     local roots: {Root} = {}
     local conversion: {Selection} = {}
     local selected = false
@@ -152,12 +162,12 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             local target, constraint = component(data.component), bounds.line(data.version, 128)
             if not target or not constraint then return nil, "invalid dependency identity" end
             local bucket = module(target)
-            local host_selection = owned.root == true and target:match("^bee/") ~= nil and id:sub(1, 9) == "bee.deps:" and (owner == "" or owner == "bee/bee")
             local meta = bounds.object(entry.meta) or {}
-            local managed = (host_selection and meta.independent == true) or (owner == "" and id:sub(1, 13) == "bee.hub.deps:")
+            local host_selection = owned.root == true and meta.type == "bee.component_selection"
+            local managed = (host_selection and meta.independent == true) or (owned.root == true and owner == "" and (meta.type == "bee.hub_dependency" or published_roots[id] == target))
             if host_selection then
                 selected = true
-                if owner == "bee/bee" then conversion[#conversion + 1] = {id = id, component = target} end
+                if owner ~= "" then conversion[#conversion + 1] = {id = id, component = target} end
             elseif owner ~= "" then add_once(bucket.used_by, owner) end
             if owned.root == true then
                 local supplied: unknown = data.parameters
@@ -184,8 +194,7 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
 end
 
 function M.host_component(root: Root): boolean
-    return root.id:sub(1, 9) == "bee.deps:" and root.component:match("^bee/") ~= nil
-        and (root.owner == "" or root.owner == "bee/bee")
+    return root.meta.type == "bee.component_selection"
 end
 
 -- Explicit host selections and Hub-authored roots enter planning. Other

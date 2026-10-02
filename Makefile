@@ -169,6 +169,7 @@ idle-cpu-check:
 	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
 lint: layout-check lua-boundary-check component-inventory-check
 	$(WIPPY) lint $(LINT_FLAGS) --strict-any --set lua.type_system.enabled=true --set lua.type_system.strict=true
+	python3 build/registry_discovery_check.py
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
 	test -n "$(CODEX)"
@@ -730,6 +731,10 @@ check-shard-services-storage: workspace-component-check
 .PHONY: layout-check
 layout-check:
 	python3 build/layout_check.py
+
+.PHONY: registry-discovery-check
+registry-discovery-check:
+	python3 build/registry_discovery_check.py
 
 .PHONY: lua-boundary-check
 lua-boundary-check:

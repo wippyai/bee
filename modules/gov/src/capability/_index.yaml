@@ -41,4 +41,4 @@ entries:
     capability_gateway: bee.gov.capability:capability_gateway
     capability_grants: bee.gov.capability:capability_grants
     capability_model: bee.capability:model
-    workspace_applications: bee.gov.workspace:workspace_applications
+    bounds: bee.values:bounds

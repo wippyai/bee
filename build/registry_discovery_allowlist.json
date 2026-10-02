@@ -1,0 +1,194 @@
+[
+  {
+    "path": "modules/gov/src/activation/application_admission.lua",
+    "expression": "owner:sub(1, #PRIOR_WORKSPACE_OWNER_PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
+  },
+  {
+    "path": "modules/gov/src/activation/application_admission.lua",
+    "expression": "(raw):sub(1, #M.RESERVED_PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
+  },
+  {
+    "path": "modules/gov/src/activation/application_admission.lua",
+    "expression": "(raw):sub(1, #\"bee.gov.grants:\")",
+    "count": 1,
+    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
+  },
+  {
+    "path": "modules/gov/src/activation/application_admission.lua",
+    "expression": "(raw):sub(1, #PRIOR_ADMISSION_PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
+  },
+  {
+    "path": "modules/gov/src/activation/application_admission.lua",
+    "expression": "(raw):sub(1, #PRIOR_GRANTS_PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
+  },
+  {
+    "path": "modules/gov/src/activation/application_admission.lua",
+    "expression": "id:match(\"^bee%.gov%.grants:policy%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
+  },
+  {
+    "path": "modules/gov/src/activation/application_admission.lua",
+    "expression": "id:match(\"^bee%.governance%.grants:policy%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
+  },
+  {
+    "path": "modules/gov/src/activation/preflight.lua",
+    "expression": "id:match(\"^([^:]+):[^:]+$\")",
+    "count": 1,
+    "reason": "Declared host policy and artifact namespace ownership validation; collision/out-of-scope denial only, exact measured entries and policy grants still required."
+  },
+  {
+    "path": "modules/gov/src/activation/preflight.lua",
+    "expression": "item.id:match(\"^([^:]+):[^:]+$\")",
+    "count": 1,
+    "reason": "Declared host policy and artifact namespace ownership validation; collision/out-of-scope denial only, exact measured entries and policy grants still required."
+  },
+  {
+    "path": "modules/gov/src/activation/protected_kernel.lua",
+    "expression": "namespace:sub(1, #open + 1)",
+    "count": 1,
+    "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
+  },
+  {
+    "path": "modules/gov/src/activation/protected_kernel.lua",
+    "expression": "namespace:sub(1, #protected + 1)",
+    "count": 1,
+    "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
+  },
+  {
+    "path": "modules/gov/src/activation/protected_kernel.lua",
+    "expression": "id:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_grants.lua",
+    "expression": "(raw:sub(1, #M.PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_grants.lua",
+    "expression": "raw:sub(1, #PRIOR_PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_grants.lua",
+    "expression": "id:sub(1, #files.VOLUME_PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_grants.lua",
+    "expression": "id:sub(1, #files.DATABASE_PREFIX)",
+    "count": 1,
+    "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
+  },
+  {
+    "path": "modules/gov/src/delivery/hub_resolver.lua",
+    "expression": "id:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Declared artifact namespace ownership/collision validation; measured registry ownership supplies package identity."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "id:match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "id:match(\"^bee%.gov%.grants:database%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "id:match(\"^bee%.gov%.grants:policy%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "id:match(\"^bee%.governance%.grants:policy%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "(resource):match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "(resource):match(\"^bee%.gov%.grants:database%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/overlay_resolver.lua",
+    "expression": "id:match(\"^([^:]+):\")",
+    "count": 3,
+    "reason": "Declared artifact namespace ownership/collision and protected-host-scope validation; capability selection uses exact artifact IDs."
+  },
+  {
+    "path": "modules/gov/src/traits/guide.lua",
+    "expression": "NAMESPACE .. \":\" .. workspace_applications.APPLICATION_NAME",
+    "count": 1,
+    "reason": "Authoring example constructs the explicitly declared workspace-application target; no enumeration or authorization."
+  },
+  {
+    "path": "modules/gov/src/workspace/workspace_applications.lua",
+    "expression": "namespace .. \":\" .. M.APPLICATION_NAME",
+    "count": 1,
+    "reason": "M0 persisted workspace-application definition identity construction from the explicitly selected authored overlay."
+  },
+  {
+    "path": "modules/hub/src/package/graph.lua",
+    "expression": "hole.id:match(\":([^:]+)$\")",
+    "count": 1,
+    "reason": "Declared dependency parameter resolves the local name of a declared ns.requirement in that dependency closure."
+  },
+  {
+    "path": "modules/hub/src/package/plan.lua",
+    "expression": "hole.id:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Resolve the relative target expressly declared by an ns.requirement; validate the resolved exact entry."
+  },
+  {
+    "path": "modules/hub/src/package/plan.lua",
+    "expression": "namespace .. \":\" .. destination",
+    "count": 1,
+    "reason": "Resolve the relative target expressly declared by an ns.requirement; validate the resolved exact entry."
+  },
+  {
+    "path": "modules/hub/src/package/requirements.lua",
+    "expression": "id:match(\":([^:]+)$\")",
+    "count": 1,
+    "reason": "Declared dependency parameter resolves the local name of a declared ns.requirement."
+  },
+  {
+    "path": "modules/threads/src/records/app_identity.lua",
+    "expression": "namespace:sub(1, #M.APP_NAMESPACE)",
+    "count": 1,
+    "reason": "M3 immutable application thread membership digest input algorithm; changing this would rename persisted actors, not discover registry entries."
+  },
+  {
+    "path": "modules/threads/src/service/app_alias.lua",
+    "expression": "checked:sub(1, 16)",
+    "count": 1,
+    "reason": "M3 persisted broker-attested actor wire decoder; broker alias permission and exact stored membership authorize access, not the actor prefix."
+  }
+]

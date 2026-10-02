@@ -77,7 +77,7 @@ function M.writable(picker: Picker): boolean
 end
 
 local function root_label(ref: string): string
-    local name = ref:match(":([^:]+)$") or "folder root"
+    local name = "folder root"
     name = name:gsub("[_-]", " ")
     return name:sub(1, 1):upper() .. name:sub(2)
 end

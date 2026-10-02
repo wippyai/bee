@@ -111,10 +111,23 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
 end
 
 function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?): (string?, string?, descriptor.Descriptor?)
-    local namespace = binding_ref:match("^(.*)%.binding:binding$")
-    if not namespace or (target ~= nil and target ~= namespace .. ".binding:configure") then return nil, nil end
     local binding = M.entry(pinned, binding_ref)
     local meta = binding and bounds.object(binding.meta) or nil
+    local data = binding and bounds.object(binding.data) or nil
+    if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" or not data then return nil, nil end
+    local contracts = bounds.array(data.contracts, M.MAX_CONTRACTS)
+    if not contracts then return nil, "driver binding contracts are malformed" end
+    local configure: string? = nil
+    for _, raw in ipairs(contracts) do
+        local contract = bounds.object(raw)
+        if contract and contract.contract == "bee.driver:driver" then
+            if configure then return nil, "driver contract is duplicated" end
+            local methods = bounds.object(contract.methods)
+            configure = methods and bounds.id(methods.configure) or nil
+        end
+    end
+    local implementation = configure and M.entry(pinned, configure) or nil
+    if not configure or not implementation or implementation.kind ~= "function.lua" or (target ~= nil and target ~= configure) then return nil, nil end
     local provider = meta and bounds.id(meta.driver_id) or nil
     if not provider then return nil, nil end
     local descriptor_ref = meta and bounds.id(meta.descriptor_ref) or nil
@@ -129,9 +142,19 @@ function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, ta
 end
 
 function M.configure_renderer_for_target(pinned: registry.Snapshot, target: string): (string?, string?, descriptor.Descriptor?)
-    local namespace = target:match("^(.*)%.binding:configure$")
-    if not namespace then return nil, nil end
-    return M.configure_renderer(pinned, namespace .. ".binding:binding", target)
+    local renderer: string? = nil
+    local selected: descriptor.Descriptor? = nil
+    local bindings, find_error = pinned:find({[".kind"] = "contract.binding", ["meta.type"] = "harness.driver"})
+    if find_error then return nil, tostring(find_error) end
+    for _, binding in ipairs(bindings) do
+        local found, resolve_error, declaration = M.configure_renderer(pinned, binding.id, target)
+        if resolve_error then return nil, resolve_error end
+        if found then
+            if renderer then return nil, "configure target is bound by multiple drivers" end
+            renderer, selected = found, declaration
+        end
+    end
+    return renderer, nil, selected
 end
 
 -- The selected immutable driver profile may name a typed CLI adapter for

@@ -37,8 +37,8 @@ local function define_tests()
             test.eq(identity.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".tally_2")
             test.eq(naming.prior_owner(WORKSPACE, "tally_2"),
                 "bee.governance.workspace_applications:" .. WORKSPACE .. ".tally_2")
-            test.eq(naming.source_of("app.tally_2"), "tally_2")
-            test.is_nil(naming.source_of("vendor.tally"))
+            test.eq(assert(naming.identity(WORKSPACE, "tally_2")).component, "app.tally_2")
+            test.is_nil(naming.name("vendor.tally"))
         end)
         test.it("refuses names that cannot be a namespace segment and states the rule", function()
             for _, name in ipairs({"Tally", "2tally", "tally-app", "tally.app", "", string.rep("a", 49)}) do

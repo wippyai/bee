@@ -165,7 +165,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 frame.put(painter, width - version_width - 2, y, item.version, version_width, foreground, background)
                 local description = item.direct and "Direct installation" or "Dependency"
                 if #item.used_by > 0 then description = description .. " · Required by " .. table.concat(item.used_by, ", ") end
-                if item.component:match("^bee/") and update then
+                if update then
                     if update.available_version ~= "" then
                         description = description .. " · Hub " .. update.available_version
                         if item.component == "bee/bee" and state.bee_update and state.bee_update.needs_new_binary then
@@ -179,7 +179,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             else
                 local label = item.component .. "  " .. item.version
-                if item.component:match("^bee/") then
+                do
                     for _, candidate in ipairs(state.pack_updates) do
                         if candidate.component == item.component and candidate.available_version ~= "" then
                             label = label .. " · Hub " .. candidate.available_version

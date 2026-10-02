@@ -64,6 +64,12 @@ end
 
 local function define_tests()
     test.describe("Node workspace catalog", function()
+        test.it("accepts an exact host-selected database reference independently of namespace", function()
+            test.eq(binding.database("workspace", "host.resources:node"), "host.resources:node")
+            test.is_nil(binding.database("workspace", "../workspace.db"))
+            test.is_nil(binding.database("workspace", "not-qualified"))
+        end)
+
         test.it("serves the classic folder workspace by its root and by its identity", function()
             local classic = open(NODE, binding.classic())
             local id = assert(classic:identity())

@@ -13,6 +13,7 @@ entries:
   meta:
     comment: Open Hive operation listing one page of this node's workspace catalog and which workspaces a host serves now
     hive: open
+    hive_service: bee.hive.api
     hive_operation:
       revision: '1'
       title: Node workspaces

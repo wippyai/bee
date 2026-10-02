@@ -155,17 +155,21 @@ function M.call(raw: unknown): Result
     end
     local config, config_error = load()
     if not config then return failure("UNAVAILABLE", config_error or "publication configuration is unavailable") end
-    local chosen, refused = publication_profiles.for_component(config, workspace_id, component)
-    if not chosen then
-        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
-        return refusal("BLOCKED", reason.message, reason.remedy)
-    end
-
     local node_id, node_error = system.node.id()
     local governance_resource, governance_error = resources.database()
     local sync_resource, sync_error = sync_resources.database()
     if not node_id or node_error or not governance_resource or not sync_resource then
         return failure("UNAVAILABLE", tostring(node_error or governance_error or sync_error or "publication storage is unavailable"))
+    end
+    local source_store, open_error = staging.open(governance_resource, node_id)
+    if not source_store then return failure("UNAVAILABLE", open_error or "open authored overlay store") end
+    local sources, sources_error = staging.sources(source_store)
+    source_store:close()
+    if not sources then return failure("UNAVAILABLE", sources_error or "read authored overlays") end
+    local chosen, refused = publication_profiles.for_component(config, workspace_id, component, sources)
+    if not chosen then
+        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
+        return refusal("BLOCKED", reason.message, reason.remedy)
     end
 
     if request.operation == "prepare" then

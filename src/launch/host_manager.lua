@@ -18,6 +18,7 @@ local leases = require("leases")
 local protocol = require("protocol")
 local decode = require("decode")
 local contract = require("contract")
+local workspaces = require("workspaces")
 
 type Config = {cap: integer, idle: number, database: string?}
 type Channel = channel.Channel
@@ -26,8 +27,6 @@ type Waiter = {sender: string, request: leases.Acquire}
 local HOST_PREFIX = "bee.workspace.host/"
 local DEFAULT_CAP = 64
 local DEFAULT_IDLE_MS = 900000
--- Topics a host delivers to its owner. The manager drains those it does not
--- act on, so no message waits in its queue for a listener that never comes.
 local DRAINED = {"bee.app.catalog", "bee.host.checkpoint", "bee.host.restore_result", "bee.interaction.state"}
 
 local function config(value: unknown): Config?
@@ -41,8 +40,8 @@ local function config(value: unknown): Config?
     if type(idle_ms) ~= "number" or idle_ms ~= math.floor(idle_ms) or idle_ms < 1 or idle_ms > 86400000 then return nil end
     local database: string? = nil
     if value.database ~= nil then
-        if type(value.database) ~= "string" or not value.database:match("^bee%.workspace%.db:[%w_%-]+$") then return nil end
-        database = value.database
+        database = workspaces.database("workspace", value.database)
+        if not database then return nil end
     end
     return {cap = math.floor(cap), idle = idle_ms / 1000, database = database}
 end

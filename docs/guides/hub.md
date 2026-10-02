@@ -90,8 +90,10 @@ digest; the requested component and changed versions use inspected artifacts.
 An already selected development prerelease can satisfy wildcard dependencies;
 catalog selection still excludes prereleases unless the range admits them.
 
-Bee selects independently managed optional components with `meta.independent`
-on its existing `bee.deps` dependencies. The first operation transfers Bee
+The host declares component selections with `meta.type: bee.component_selection`
+on its existing dependency entries and marks independently managed roots with
+`meta.independent: true`. Hub-created roots declare `meta.type: bee.hub_dependency`;
+existing published operation receipts also retain the exact root they selected. The first operation transfers Bee
 component roots to host ownership in the same Registry change as the operation
 receipt, retaining their IDs, live versions and parameters. Inventory and review
 use the existing dependencies and resolution; protection follows required host
@@ -276,3 +278,11 @@ make hub-recovery-check
 See [package boundaries](../development/package-boundaries.md),
 [distributed overlay delivery](overlays.md) and
 [MCP configuration](agents/mcp.md).
+
+Package and application discovery uses declared registry metadata and ownership,
+not package names. The Modules catalog classifies installed applications from
+`process.lua` entries tagged `meta.type: bee.app` and their registry owner.
+Remote packages without that information remain visible. Update status reads the
+catalog for each exact host-selected component. Authored application publication
+selects a matching identity from overlays already present in the governance
+owner's store; entering a component name does not create or authorize an overlay.

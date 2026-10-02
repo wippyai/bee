@@ -29,7 +29,7 @@ type Record = {schema_revision: string, workspace_id: string, overlay_owner: str
     source_node: string, source_workspace: string, artifact_digest: string,
     policy_digest: string, bindings: {Binding}}
 type Measurement = {id: string, record: Record, bytes: string, digest: string}
-type Entry = {id: string, kind: string, data: Record}
+type Entry = {id: string, kind: string, meta: {type: string}, data: Record}
 
 local function sha(value: unknown): string?
     if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
@@ -211,7 +211,7 @@ end
 function M.entry(bytes_raw: unknown, digest_raw: unknown): (Entry?, string?)
     local measured, measure_error = M.decode(bytes_raw, digest_raw)
     if not measured then return nil, measure_error end
-    return {id = measured.id, kind = "registry.entry", data = measured.record}, nil
+    return {id = measured.id, kind = "registry.entry", meta = {type = M.SCHEMA}, data = measured.record}, nil
 end
 
 function M.measure(raw: unknown): (Measurement?, string?)

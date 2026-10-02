@@ -55,7 +55,7 @@ function M.action(decoded: Decoded, installed_raw: unknown): (string?, string?)
     for _, raw_root in ipairs(installed.roots) do
         local root = bounds.object(raw_root)
         local id = root and bounds.id(root.id) or nil
-        if root and id and id:sub(1, 13) == "bee.hub.deps:" and root.component == decoded.component then
+        if root and id and root.managed == true and root.component == decoded.component then
             return "update", nil
         end
     end

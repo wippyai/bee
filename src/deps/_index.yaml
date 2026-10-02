@@ -3,10 +3,12 @@ namespace: bee.deps
 entries:
 - name: persist
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/persist
   version: 0.1.0-dev
 - name: workspace
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/workspace
   version: 0.1.0-dev
   parameters:
@@ -26,6 +28,7 @@ entries:
     value: bee.security.storage:workspace_catalog_facade_policy
 - name: sync
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/sync
   version: 0.1.0-dev
   parameters:
@@ -38,6 +41,7 @@ entries:
     - bee.security.hive:hive_replica_admission_policy
 - name: threads
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/threads
   version: 0.1.0-dev
   parameters:
@@ -63,6 +67,7 @@ entries:
     - bee.security.threads:thread_node_policy
 - name: hub
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/hub
   version: 0.1.0-dev
   parameters:
@@ -74,6 +79,7 @@ entries:
     value: [bee.sessions.binding:lifecycle]
 - name: gov
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/gov
   version: 0.1.0-dev
   parameters:
@@ -93,6 +99,7 @@ entries:
     value: bee.security.gov:workspace_folder_read_policy
 - name: gateway
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/gateway
   version: 0.1.0-dev
   parameters:
@@ -134,11 +141,12 @@ entries:
     value: bee.gateway.env:module_publication
 - name: hive
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/hive
   version: 0.1.0-dev
 - name: hive_telemetry
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/hive-telemetry
   version: 0.1.0-dev
   parameters:
@@ -175,41 +183,42 @@ entries:
     - bee.hive.telemetry.security:summary_node_name_policy
 - name: hive_manager
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/hive-manager
   version: 0.1.0-dev
 - name: threads_timeline
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/threads-timeline
   version: 0.1.0-dev
 - name: workspace_manager
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/workspace-manager
   version: 0.1.0-dev
 - name: host_processes
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/host-processes
   version: 0.1.0-dev
 - name: hub_modules
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/hub-modules
   version: 0.1.0-dev
 - name: gov_overlays
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/gov-overlays
   version: 0.1.0-dev
 - name: approvals_inbox
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/approvals-inbox
   version: 0.1.0-dev
 - name: files
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/files
   version: 0.1.0-dev
   parameters:
@@ -217,14 +226,17 @@ entries:
     value: bee.env:files_root
 - name: application
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/application
   version: 0.1.0-dev
 - name: node
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/node
   version: 0.1.0-dev
 - name: docs
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/docs
   version: 0.1.0-dev
   parameters:
@@ -235,6 +247,7 @@ entries:
     - bee.security.docs:docs_policy
 - name: approvals
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/approvals
   version: 0.1.0-dev
   parameters:
@@ -259,14 +272,17 @@ entries:
     - bee.security.approvals:approval_store_policy
 - name: capability
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/capability
   version: 0.1.0-dev
 - name: agents
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/agents
   version: 0.1.0-dev
 - name: placement_native
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/placement-native
   version: 0.1.0-dev
   parameters:
@@ -309,6 +325,7 @@ entries:
     - bee.security.gateway:gateway_materialize_policy
 - name: placement_docker
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/placement-docker
   version: '*'
   parameters:
@@ -375,15 +392,17 @@ entries:
     - bee.placement.docker.security:docker_socket_policy
 - name: settings
   kind: ns.dependency
-  meta: {independent: true}
+  meta: {type: bee.component_selection, independent: true}
   component: bee/settings
   version: 0.1.0-dev
 - name: console
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/console
   version: 0.1.0-dev
 - name: executor_external
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/executor-external
   version: 0.1.0-dev
   parameters:
@@ -413,6 +432,7 @@ entries:
     - bee.placement.docker.security:image_client_policy
 - name: harness
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/harness
   version: 0.1.0-dev
   parameters:
@@ -477,6 +497,7 @@ entries:
     - bee.security.desktop:workspace_host_lease_policy
 - name: sessions
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/sessions
   version: 0.1.0-dev
   parameters:
@@ -513,9 +534,11 @@ entries:
     - bee.sessions.security:scheduler_principal_policy
 - name: values
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/values
   version: 0.1.0-dev
 - name: ui
   kind: ns.dependency
+  meta: {type: bee.component_selection}
   component: bee/ui
   version: 0.1.0-dev

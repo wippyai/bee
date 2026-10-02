@@ -50,6 +50,7 @@ entries:
   meta:
     type: test_support
     hive: open
+    hive_service: bee.hive
     hive_operation:
       revision: '1'
       title: Probe operation
@@ -67,6 +68,7 @@ entries:
   meta:
     type: test_support
     hive: open
+    hive_service: bee.hive
 - name: probe_policy_mode
   kind: function.lua
   source: file://probe_open.lua
@@ -74,6 +76,7 @@ entries:
   meta:
     type: test_support
     hive: policy
+    hive_service: bee.hive
     hive_operation:
       revision: '1'
       title: Policy probe

@@ -8,6 +8,34 @@ local installed = require("installed")
 local preview = require("preview")
 local function define_tests()
     test.describe("Hub inspection request", function()
+        test.it("selects roots by declared metadata regardless of namespace or component spelling", function()
+            local state = {entries = {
+                {id = "host.selection:tools", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                    meta = {type = "bee.component_selection", independent = true}, data = {component = "vendor/tools", version = "1.0.0"}},
+                {id = "bee.deps:impostor", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/impostor", version = "1.0.0"}},
+                {id = "installed.selection:extra", kind = "ns.dependency", registry = {owner = "", root = true},
+                    meta = {type = "bee.hub_dependency"}, data = {component = "vendor/extra", version = "1.0.0"}},
+            }}
+            local decoded = assert(inventory.decode(state, 7))
+            test.is_true(decoded.selected)
+            test.eq(#assert(decoded.conversion).roots, 1)
+            for _, root in ipairs(decoded.roots) do
+                test.eq(root.managed, root.id ~= "bee.deps:impostor")
+                test.eq(inventory.host_component(root), root.id == "host.selection:tools")
+            end
+        end)
+        test.it("uses existing published receipts to retain ownership of untagged installed roots", function()
+            local digest = string.rep("a", 64)
+            local decoded = assert(inventory.decode({entries = {
+                {id = "installed.selection:old", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "vendor/old", version = "1.0.0"}},
+                {id = "bee.hub.operations:" .. digest, kind = "registry.entry", registry = {owner = "", root = true},
+                    data = {digest = digest, actor_id = "fixture:installer", component = "vendor/old", root_id = "installed.selection:old",
+                        action = "install", state = "complete", baseline_revision = 1, message = "complete"}},
+            }}, 7))
+            test.is_true(decoded.roots[1].managed)
+        end)
         test.it("pages only source owned by the exact installed component and revision", function()
             local state = {resolution = {modules = {{name = "bee/ui", version = "0.1.0-dev", source = "local"}}}, entries = {
                 {id = "bee.ui:frame", kind = "library.lua", registry = {owner = "bee/ui"}, data = {source = "frame source"}},

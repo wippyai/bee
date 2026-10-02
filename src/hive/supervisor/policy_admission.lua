@@ -18,11 +18,7 @@ local M = {}
 -- The destination still applies host exposure, principal mapping, mapped caller
 -- policy and owner/service identity below.  This keeps the mesh generic for
 -- new source-owned sync adapters without creating another transport allowlist.
-local function service_of(operation_ref: string): string?
-    return operation_ref:match("^([^:]+):[^:]+$")
-end
 function M.admits(operation_ref: string): boolean
-    if not service_of(operation_ref) then return false end
     local operation = catalog.resolve(operation_ref)
     return operation ~= nil and operation.mode == "policy"
 end
@@ -33,11 +29,9 @@ function M.handle(value: unknown): types.Reply
     local request, err = types.decode_request(value)
     if not request then return denied("", "INVALID_ARGUMENT", err or "invalid request") end
     local id = request.request_id
-    local service = service_of(request.operation_ref)
-    if not service then return denied(id, "INVALID_ARGUMENT", "operation reference has no service namespace") end
     local native, native_error = system.node.id()
     if native_error or native ~= request.owner_ref.node_id then return denied(id, "DENIED", "owner is not this node") end
-    if request.owner_ref.service_id ~= service or request.owner_ref.resource_ref ~= nil then return denied(id, "INVALID_ARGUMENT", "feed owner service does not match") end
+    if request.owner_ref.resource_ref ~= nil then return denied(id, "INVALID_ARGUMENT", "feed owner service does not match") end
     if request.principal_ref.issuer ~= request.caller_node_id then return denied(id, "DENIED", "principal issuer does not match the verified peer") end
     if not catalog.admits("policy", request.operation_ref) then return denied(id, "DENIED", "host does not expose this operation") end
     local deadline = clock.parse(request.deadline)
@@ -52,6 +46,7 @@ function M.handle(value: unknown): types.Reply
     if not operation or operation.mode ~= "policy" or operation.revision ~= request.operation_revision then
         return denied(id, "CONFLICT", operation_error or "operation changed")
     end
+    if request.owner_ref.service_id ~= operation.service_id then return denied(id, "INVALID_ARGUMENT", "feed owner service does not match") end
     local tiny: catalog.Snapshot = {generation = 0, operations = {[operation.operation_ref] = operation}, interfaces = {}, diagnostics = {}}
     local resolved, resolve_error = catalog.resolve_call(tiny, request.operation_ref, request.input)
     if not resolved or resolved.input_digest ~= request.input_digest then return denied(id, "INVALID_ARGUMENT", resolve_error or "input digest mismatch") end

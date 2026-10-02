@@ -20,6 +20,7 @@ def audit(root):
     errors, entries, sources = [], {}, set()
     component_roots = {SDK.get(index.parent.parent.name, "bee." + index.parent.parent.name.replace("-", "."))
                        for index in (root / "modules").glob("*/src/_index.yaml")}
+    documents = {}
     graph = defaultdict(set)
     groups = defaultdict(set)
     indexes = [*sorted((root / "src").rglob("_index.yaml")),
@@ -29,6 +30,7 @@ def audit(root):
         module = relative.parts[1] if relative.parts[0] == "modules" else None
         source_root = root / "modules" / module / "src" if module else root / "src"
         document = yaml.safe_load(index.read_text())
+        documents[index] = document
         namespace = document["namespace"]
         expected = SDK.get(module, "bee." + module.replace("-", ".")) if module else "bee"
         children = index.parent.relative_to(source_root).parts
@@ -90,6 +92,11 @@ def audit(root):
         document = yaml.safe_load(index.read_text())
         if "_" in document["namespace"]:
             errors.append(f"{index.relative_to(root)}: test overlay namespace cannot contain underscores")
+    external_targets = set()
+    if (root / "build/component-inventory-external.json").is_file():
+        from component_inventory import load_external_proofs
+        external, _ = load_external_proofs(documents)
+        external_targets.update(external)
     dangling, targets = 0, 0
     for identity, (index, entry) in entries.items():
         refs = list(entry.get("imports", {}).values())
@@ -102,7 +109,13 @@ def audit(root):
                         for approver in policy.get("approvers", [])
                         if isinstance(approver, dict) and "definition_id" in approver)
         if entry["kind"] == "ns.requirement":
-            refs.extend(target["entry"] for target in entry.get("targets", []))
+            for target in entry.get("targets", []):
+                ref = target["entry"]
+                if ":" not in ref:
+                    ref = identity.split(":", 1)[0] + ":" + ref
+                if ref not in entries and ref not in NATIVE_ENTRIES and ref not in external_targets:
+                    errors.append(f"{identity}: dangling requirement target {ref}")
+                    dangling += 1
             targets += len(entry.get("targets", []))
             if isinstance(entry.get("default"), list) and any(
                 target["path"].rstrip().endswith("+=") for target in entry.get("targets", [])

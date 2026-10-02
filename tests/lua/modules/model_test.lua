@@ -30,9 +30,10 @@ local function define_tests()
             test.eq(assert(publish.request).component, "app.hive_status")
             model.apply_publication_publish(state, ok({component = "app.hive_status", version = "1.0.0"}))
             test.is_true(state.notice:find("Published app.hive_status 1.0.0", 1, true) ~= nil)
-            for _, invalid in ipairs({"app.Bad", "app.1bad", "app.hive_status.extra", "other.hive_status"}) do
+            for _, invalid in ipairs({"App.Bad", "1bad.app", "app:bad", "no namespace"}) do
                 test.not_nil(model.set_publication_field(state, "component", invalid))
             end
+            test.is_nil(model.set_publication_field(state, "component", "other.hive_status"))
             model.select(state, "app.hive_status")
             model.apply_inspect(state, ok({component = "app.hive_status", version = "1.0.0", digest = string.rep("d", 64),
                 requirements = {requirements = {}, missing = {}}}))
@@ -496,18 +497,21 @@ local function define_tests()
             test.eq(model.component_status(state, "userspace/calc"), "installed")
             test.is_nil(model.component_status(state, "userspace/editor"))
 
+            test.is_true(model.is_application({component = "wippy/arbitrary", title = "Library", description = "library", latest_version = "1.0.0", application = true}))
+            test.is_false(model.is_application({component = "bee/console", title = "App", description = "app", latest_version = "1.0.0", application = false}))
+            test.is_nil(model.component_status(state, "bee/settings"))
             -- Test application classification
             test.is_true(model.is_application({component = "bee/terminal", title = "Terminal", description = "", latest_version = "0.4.6"}))
             test.is_true(model.is_application({component = "userspace/calc", title = "Calculator", description = "App", latest_version = "1.0.0"}))
-            test.is_false(model.is_application({component = "wippy/test", title = "Test Framework", description = "Testing framework", latest_version = "0.4.19"}))
-            test.is_false(model.is_application({component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6"}))
-            test.is_false(model.is_application({component = "wippy/migration", title = "Migrations", description = "Migration utilities", latest_version = "0.3.19"}))
-            test.is_false(model.is_application({component = "bee/sync", title = "Sync", description = "Workspace sync protocol", latest_version = "0.1.0"}))
+            test.is_false(model.is_application({component = "wippy/test", title = "Test Framework", description = "Testing framework", latest_version = "0.4.19", application = false}))
+            test.is_false(model.is_application({component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6", application = false}))
+            test.is_false(model.is_application({component = "wippy/migration", title = "Migrations", description = "Migration utilities", latest_version = "0.3.19", application = false}))
+            test.is_false(model.is_application({component = "bee/sync", title = "Sync", description = "Workspace sync protocol", latest_version = "0.1.0", application = false}))
 
             -- Catalog contains mixed apps and developer packages
             model.apply_catalog(state, ok({total = 5, items = {
-                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19"},
-                {component = "wippy/terminal", title = "Terminal", description = "Terminal library", latest_version = "0.4.6"},
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false},
+                {component = "wippy/terminal", title = "Terminal", description = "Terminal library", latest_version = "0.4.6", application = false},
                 {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
                 {component = "bee/terminal", title = "Terminal", description = "Terminal app", latest_version = "0.4.6"},
                 {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},

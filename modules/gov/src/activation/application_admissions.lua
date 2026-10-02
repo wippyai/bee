@@ -9,6 +9,8 @@ local capability_model = require("capability_model")
 local workspace_applications = require("workspace_applications")
 local governed_admission = require("governed_admission")
 local bounds = require("bounds")
+local resources = require("resources")
+local activation_store = require("activation_store")
 
 local M = {}
 local log = logger:named("bee.gov.application_admission")
@@ -43,23 +45,22 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
     node_id: string): {Measurement}
     local records: {Measurement} = {}
     local by_owner: {[string]: Measurement} = {}
-    for _, namespace in ipairs({governed_admission.NAMESPACE, "bee.governance"}) do
-        for _, raw_entry in ipairs(pinned:find({[".kind"] = "registry.entry", [".ns"] = namespace})) do
-            local entry = raw_entry
-            if governed_admission.reserved(entry.id) then
-                local measured, measured_error = governed_admission.measure(entry.data)
-                if not measured or (measured.id ~= entry.id
-                    and governed_admission.prior_id(measured.record.overlay_owner) ~= entry.id) then
-                    error("Invalid governed application admission: " .. tostring(measured_error))
-                end
-                if measured.record.workspace_id == workspace_id then
-                    local prior = by_owner[measured.record.overlay_owner]
-                    if prior and prior.digest ~= measured.digest then error("Conflicting governed application admissions") end
-                    measured.id = entry.id
-                    if not prior or namespace == governed_admission.NAMESPACE then
-                        by_owner[measured.record.overlay_owner] = measured
-                    end
-                end
+    local entries, find_error = pinned:find({[".kind"] = "registry.entry"})
+    if find_error then error("Read governed application admissions: " .. tostring(find_error)) end
+    for _, entry in ipairs(entries) do
+        local data = bounds.object(entry.data)
+        if data and data.schema_revision == governed_admission.SCHEMA then
+            local measured, measured_error = governed_admission.measure(data)
+            if not measured or (measured.id ~= entry.id
+                and governed_admission.prior_id(measured.record.overlay_owner) ~= entry.id) then
+                error("Invalid governed application admission: " .. tostring(measured_error))
+            end
+            if measured.record.workspace_id == workspace_id then
+                local prior = by_owner[measured.record.overlay_owner]
+                if prior and prior.digest ~= measured.digest then error("Conflicting governed application admissions") end
+                local current = measured.id == entry.id
+                measured.id = entry.id
+                if not prior or current then by_owner[measured.record.overlay_owner] = measured end
             end
         end
     end

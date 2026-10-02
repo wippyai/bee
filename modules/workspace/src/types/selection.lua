@@ -10,12 +10,9 @@ M.CLASSIC_ROOT = "bee.env:workspace_root"
 function M.database(kind: "client" | "workspace", value: unknown): string?
     local default = "bee.env:" .. kind .. "_db"
     if value == nil or value == default then return default end
-    if type(value) ~= "string" or #value > 160 then return nil end
-    local prefix = "bee." .. kind .. ".db:"
-    if value:sub(1, #prefix) ~= prefix then return nil end
-    local name = value:sub(#prefix + 1)
-    if name == "" or not name:match("^[%w_%-]+$") then return nil end
-    return value
+    local selected = bounds.id(value)
+    if not selected or not selected:match("^[A-Za-z0-9][A-Za-z0-9_.-]*:[A-Za-z0-9][A-Za-z0-9_.-]*$") then return nil end
+    return selected
 end
 -- A workspace selection names exactly one catalog row: by identity, or by the
 -- root that classic folder mode and root-bound workspaces are opened from.

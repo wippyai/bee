@@ -31,7 +31,19 @@ parallel registry records or stored state for the same information.
 paths, component roots, local sources, application entries, process placement,
 host-free requirement defaults, duplicate Lua sources, orphan files and
 requirement/import and named approver definition targets. Domain ownership, dynamic registry discovery and
-public API reachability also require review.
+public API reachability also require review. The same lint gate runs
+`build/registry_discovery_check.py` after strict Lua lint. Its allowlist records
+exact expressions, occurrence counts and review reasons for declared target
+resolution, host policy scope validation and immutable persisted identity codecs.
+
+Discover entries with `registry.find` by kind, contract binding and typed
+metadata. Follow the binding's declared method target exactly. Namespace or ID
+spelling cannot classify a provider, application, service or installed package,
+and metadata never authorizes an entry: the host admits the exact entry and
+its policies. Relative requirement targets resolve in their declared namespace;
+namespace collision and protected host-scope checks are publication constraints.
+Existing measured history is decoded and verified against its exact persisted
+record identity; it is never rewritten to add discovery tags.
 
 The generated [component inventory](component-inventory.json) records current
 namespace and entry IDs, requirement targets, topics, owner resources and

@@ -1,5 +1,6 @@
 -- MIT. A small, caller-scoped view of the native Hub catalog.
 local hub = require("hub")
+local registry = require("registry")
 local bounds = require("bounds")
 local M = {}
 
@@ -17,11 +18,11 @@ M.TIMEOUT_SECONDS = 30
 
 type Request = {query: string?, page: integer, keyword: string}
 type DetailRequest = {component: string, page: integer}
-type Item = {component: string, title: string, description: string, latest_version: string}
+type Item = {component: string, title: string, description: string, latest_version: string, application: boolean?}
 type Browse = {items: {Item}, total: integer, page: integer, page_size: integer}
 type Version = {version: string, yanked: boolean}
 type VersionPage = {items: {Version}, total: integer, page: integer, page_size: integer}
-type Detail = {component: string, title: string, description: string, readme: string, versions: {Version}, total_versions: integer, page: integer, page_size: integer}
+type Detail = {component: string, latest_version: string, title: string, description: string, readme: string, versions: {Version}, total_versions: integer, page: integer, page_size: integer}
 
 local function component(value: unknown): string?
     local name = bounds.line(value, M.MAX_COMPONENT_BYTES)
@@ -159,7 +160,7 @@ function M.decode_detail_result(module: unknown, readme: unknown, version_respon
     local versions, versions_error = M.decode_versions(version_response)
     if not versions then return nil, versions_error end
     return {
-        component = item.component,
+        component = item.component, latest_version = item.latest_version,
         title = item.title,
         description = item.description,
         readme = content,
@@ -185,6 +186,30 @@ function M.browse(raw: unknown): (Browse?, string?)
     local result, result_error = M.decode_browse(response)
     if not result then return nil, result_error end
     if result.page ~= request.page or result.page_size ~= M.PAGE_SIZE then return nil, "Hub returned another catalog page" end
+    local snapshot, snapshot_error = registry.snapshot()
+    if not snapshot then return nil, tostring(snapshot_error) end
+    local state, state_error = snapshot:state()
+    if not state then return nil, tostring(state_error) end
+    local application: {[string]: boolean} = {}
+    local resolution = bounds.object(state.resolution)
+    local modules = resolution and bounds.array(resolution.modules, 512)
+    for _, raw_module in ipairs(modules or {}) do
+        local module = bounds.object(raw_module)
+        local name = module and component(module.name) or nil
+        if name then application[name] = false end
+    end
+    local entries, find_error = snapshot:find({[".kind"] = "process.lua", ["meta.type"] = "bee.app"})
+    if find_error then return nil, tostring(find_error) end
+    local definitions: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do definitions[entry.id] = true end
+    for _, raw_entry in ipairs(state.entries) do
+        local entry = bounds.object(raw_entry)
+        local id = entry and bounds.id(entry.id)
+        local ownership = entry and bounds.object(entry.registry)
+        local owner = ownership and component(ownership.owner) or nil
+        if id and definitions[id] and owner then application[owner] = true end
+    end
+    for _, item in ipairs(result.items) do item.application = application[item.component] end
     return result, nil
 end
 

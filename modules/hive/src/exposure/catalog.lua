@@ -12,6 +12,7 @@ local M = {}
 type Limits = {max_input_bytes: integer, max_output_bytes: integer}
 type Operation = {
     operation_ref: string,
+    service_id: string,
     mode: types.Mode,
     revision: string,
     input_schema: {[string]: unknown},
@@ -100,6 +101,8 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
         if candidate == mode then supported = true end
     end
     if mode ~= "open" and mode ~= "approval" and mode ~= "policy" then return nil, entry_id .. ": meta.hive must be open, approval or policy" end
+    local service_id = bounds.id(meta.hive_service)
+    if not service_id then return nil, entry_id .. ": meta.hive_service is required" end
     local exposure_mode: types.Mode = mode
     local declaration = bounds.object(meta.hive_operation)
     if not declaration then return nil, entry_id .. ": meta.hive_operation is required" end
@@ -135,11 +138,11 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
     if security_config and bounds.object(security_config.actor) then
         return nil, entry_id .. ": an exposed operation cannot replace the caller's actor"
     end
-    local material, encode_error = canonical.encode({kind = entry.kind, data = data, declaration = declaration, mode = mode})
+    local material, encode_error = canonical.encode({kind = entry.kind, data = data, declaration = declaration, mode = mode, service_id = service_id})
     if not material then return nil, entry_id .. ": entry is not measurable: " .. tostring(encode_error) end
     local measured, hash_error = hash.sha256(material)
     if hash_error or not measured then return nil, entry_id .. ": entry is not measurable" end
-    return {operation_ref = entry_id, mode = exposure_mode, revision = revision, input_schema = input, output_schema = output,
+    return {operation_ref = entry_id, service_id = service_id, mode = exposure_mode, revision = revision, input_schema = input, output_schema = output,
         limits = limits, measured = measured, title = title}, nil
 end
 function M.decode_operation(entry: {[string]: unknown}): (Operation?, string?)

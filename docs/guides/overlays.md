@@ -206,6 +206,34 @@ the candidate's external-base digest. The request grants no policy. Preflight
 refuses app-shipped `security.actor` and `security.groups` on every entry with
 `SECURITY_DENIED`.
 
+For the shipped `contract.call` capability, `meta.parameters` contains an exact
+`binding` and a nonempty `methods` list. For example, an application requests
+the counts-only Hive status methods with this registry entry in `entries.json`:
+
+```json
+{
+  "id": "app.example:status_read",
+  "kind": "ns.requirement",
+  "meta": {
+    "value_kind": "security.policy",
+    "capability": "contract.call",
+    "parameters": {
+      "binding": "bee.hive.telemetry.binding:status",
+      "methods": ["snapshot", "detail"]
+    },
+    "reason": "Show live node names and session and approval counts."
+  },
+  "data": {
+    "targets": [{"entry": "app.example:app", "path": ".security.policies +="}]
+  }
+}
+```
+
+Replace `app.example` with the application's admitted namespace. The components
+tool can read the destination's `bee:capability_catalog`; its host-selected
+parameter schema remains authoritative. This declaration requests permission;
+the person still reviews and approves the exact binding and methods locally.
+
 The catalog currently describes `workspace.files.read`, `app.database`,
 `threads.read`, `threads.message`, `agents.launch`, `contract.call`, `http.api`,
 `hive.expose`, `hive.view`, `hive.remote_view`, `workspace.catalog.read`,

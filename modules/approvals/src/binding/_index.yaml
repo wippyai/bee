@@ -5,7 +5,7 @@ entries:
   kind: function.lua
   source: file://node_summary_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: request
   kind: function.lua

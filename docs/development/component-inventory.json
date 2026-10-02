@@ -7301,6 +7301,11 @@
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
+      "id": "bee.sessions.binding:cancellation",
+      "kind": "library.lua",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.sessions.binding:catalog",
       "kind": "function.lua",
       "source": "modules/sessions/src/binding/_index.yaml"
@@ -7308,6 +7313,11 @@
     {
       "id": "bee.sessions.binding:catalog_binding",
       "kind": "contract.binding",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.binding:catalog_service",
+      "kind": "library.lua",
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
@@ -7358,6 +7368,11 @@
     {
       "id": "bee.sessions.binding:list",
       "kind": "function.lua",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.binding:locate",
+      "kind": "library.lua",
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
@@ -7464,26 +7479,6 @@
       "id": "bee.sessions.security:scheduler_principal_policy",
       "kind": "security.policy.expr",
       "source": "modules/sessions/src/security/_index.yaml"
-    },
-    {
-      "id": "bee.sessions.service:cancellation",
-      "kind": "library.lua",
-      "source": "modules/sessions/src/service/_index.yaml"
-    },
-    {
-      "id": "bee.sessions.service:catalog",
-      "kind": "library.lua",
-      "source": "modules/sessions/src/service/_index.yaml"
-    },
-    {
-      "id": "bee.sessions.service:locate",
-      "kind": "library.lua",
-      "source": "modules/sessions/src/service/_index.yaml"
-    },
-    {
-      "id": "bee.sessions.service:owner",
-      "kind": "library.lua",
-      "source": "modules/sessions/src/service/_index.yaml"
     },
     {
       "id": "bee.sessions.service:process_host",
@@ -16468,7 +16463,7 @@
   "schema_tags": [
     {
       "sources": [
-        "modules/sessions/src/service/owner.lua",
+        "modules/sessions/src/binding/owner.lua",
         "modules/sessions/src/service/scheduler.lua",
         "modules/threads/src/service/work_store.lua"
       ],
@@ -16958,7 +16953,7 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1789,
+    "entry_count": 1788,
     "namespace_count": 273,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,

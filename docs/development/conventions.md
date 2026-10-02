@@ -271,7 +271,9 @@ and selected modules' `src/` directories.
 `make native-pack` seals independently packed root and component WAPPs into the
 native manifest. `make portable-deployment-check` inspects the exact local lock
 and vendor set, then proves isolated source-free boot, restart and tamper
-rejection. These packs are bundled application inputs, not publications.
+rejection. The same build seals a Hub core with `bee.deps` excluded; the Hub
+composition supplies those host-selected roots. The bundled baseline and Hub
+core share the component artifacts, and host admission authorizes their use.
 
 New runtime patches require upstream Go tests, a refreshed runtime checksum and
 a clean pinned build. `make -C native patched-check` validates the native source

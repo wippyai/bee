@@ -61,7 +61,10 @@ local function configure()
     local activation = assert(registry.get("bee.harness.launch:harness_activation"))
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
-    bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding"; changes:update(activation)
+    local admitted = false
+    for _, binding in ipairs(bindings) do if binding == "bee.placement.native:fixture_agent_binding" then admitted = true end end
+    if not admitted then bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding" end
+    changes:update(activation)
     assert(changes:apply())
 end
 local function request(id: string): types.LaunchRequest
@@ -338,6 +341,39 @@ end
 local function run()
     test.describe("Real Docker placement lifecycle", function()
         configure()
+        test.it("retains the real daemon start refusal as a failed launch", function()
+            local id = "docker-start-refused-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
+            local selected = request(id)
+            selected.launch.executable = "/bee-fixture-missing-executable"
+            selected.launch.argv = {}
+            value(call("prepare", selected))
+            local reply = call("start", {attempt_id = id})
+            test.is_false(reply.ok)
+            local status = assert(placement_decode.status(call("status", {attempt_id = id}).value))
+            local attempt = status.attempt
+            test.eq(attempt.execution_state, "uncertain")
+            local reason = assert(attempt.start_failure)
+            test.is_true(reason:find("failed to start container", 1, true) ~= nil)
+            test.is_true(reason:find("bee-fixture-missing-executable", 1, true) ~= nil)
+            test.is_true(assert(reply.error).message:find(reason, 1, true) ~= nil)
+            test.is_nil(attempt.exit)
+            test.is_nil(attempt.exit_source)
+            test.eq(status.attempt.start_failure, reason)
+            local inspected = prestart.inspect(function(_target: string, _value: unknown): (unknown, unknown?)
+                return {ok = true, value = status}, nil
+            end, "fixture:status", nil, id, "failed", "launch failed")
+            test.eq(inspected.outcome, "failed")
+            test.eq(inspected.reason, "launch failed; failed start: " .. reason)
+            local page = call("evidence", {attempt_id = id, limit = 64})
+            test.is_true(page.ok)
+            local evidence = assert(bounds.array(assert(bounds.object(page.value)).evidence, 64))
+            local found = false
+            for _, item in ipairs(evidence) do
+                local event = assert(bounds.object(item))
+                if event.kind == "child.start_failed" then test.eq(event.detail, reason); found = true end
+            end
+            test.is_true(found)
+        end)
         test.it("keeps a live runner's creation phase when no container exists yet", function()
             local id = "docker-creating-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
             value(call("prepare", request(id)))
@@ -464,4 +500,24 @@ local function run()
         end)
     end)
 end
-return {run = test.run_cases(run), boundary = test.run_cases(boundary), creator = creator}
+local function isolated_cases(definition: () -> ())
+    local cases = test.run_cases(definition)
+    return function(options)
+        local originals: {[string]: unknown} = {}
+        for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots",
+            POLICY, "bee.harness.launch:harness_activation"}) do
+            originals[ref] = assert(registry.get(ref)).data
+        end
+        local ok, result = pcall(cases, options)
+        local changes = assert(registry.snapshot()):changes()
+        for ref, data in pairs(originals) do
+            local entry = assert(registry.get(ref))
+            entry.data = data
+            changes:update(entry)
+        end
+        assert(changes:apply())
+        if not ok then error(tostring(result)) end
+        return result
+    end
+end
+return {run = isolated_cases(run), boundary = isolated_cases(boundary), creator = creator}

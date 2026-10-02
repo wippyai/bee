@@ -2,6 +2,7 @@ local test = require("test")
 local bounds = require("bounds")
 local contract = require("contract")
 local decode = require("decode")
+local projection = require("projection")
 local client = require("client")
 local arguments = require("arguments")
 local function define_tests()
@@ -126,7 +127,7 @@ local function define_tests()
             test.eq(launch.arguments[3], "")
         end)
         test.it("keeps navigation routing out of the public catalog", function()
-            local items = assert(decode.catalog({{definition_id = "test:app", definition_revision = "1",
+            local items = assert(projection.catalog({{definition_id = "test:app", definition_revision = "1",
                 title = "Files", icon = "F", group = "Tools", role = "inspection", singleton = true,
                 navigation_topic = "bee.files.navigate", resume_schema = "", restart_policy = "never"}}))
             local exposed_topic = false

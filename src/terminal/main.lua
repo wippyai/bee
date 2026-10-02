@@ -14,6 +14,7 @@ local time = require("time")
 local uuid = require("uuid")
 local model = require("model")
 local decode = require("decode")
+local projection = require("projection")
 local layout = require("layout")
 local render = require("render")
 local bindings = require("bindings")
@@ -600,7 +601,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         elseif selected.channel == acknowledgements then
             local message = selected.value
             if message:from() == owner then
-                local ack = decode.ack(message:payload():data())
+                local ack = projection.ack(message:payload():data())
                 if ack then
                     if ack.request_id == pending_request then pending_request = nil end
                     if not pending_request then adopt_routing(ack.scene) end
@@ -614,7 +615,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     local incoming = status_surface.presentation(raw.status_surface)
                     if incoming and incoming.revision > status_values.revision then status_values = incoming end
                 end
-                local state = decode.desktop(raw)
+                local state = projection.desktop(raw)
                 local next_scene = state and state.scene
                 if next_scene and next_scene.revision >= scene.revision then
                     -- Inventory-driven removal need not carry a close reply.

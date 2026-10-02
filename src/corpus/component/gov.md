@@ -106,6 +106,11 @@ copies and remeasures the desired artifact, and deletes definitions no longer in
 that owner's complete desired set. Cleanup can reconcile and observe the exact
 empty owner overlay without making an empty application artifact publishable. It
 makes one generation-fenced apply attempt.
+For an approved replacement of a durable entry, it selects an overlay update
+from the pinned composed registry rather than creating a colliding ID. Removing
+the overlay restores the durable entry. The destination's existing namespace,
+kind, protected-kernel, capability and exact-approval checks still decide which
+replacements it may apply; this operation does not admit an artifact itself.
 A conflict returns to the destination owner, which must rebuild its trusted
 context and rerun preflight before another attempt. It has no durable registry
 publication path. The later destination owner supplies the host-selected owner
@@ -282,7 +287,7 @@ names every shipped namespace a host-selected scope lives in or is reached from
 (the governance, security, approvals, admission and launch namespaces plus
 `bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
 `bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
-`bee.sync`, `bee.host`, `bee.session`, `bee.client`, `bee.desktop`,
+`bee.sync`, `bee.host`, `bee.client`, `bee.desktop`,
 `bee.terminal`, `bee.node` and `bee.workspace`), and its `super_edit` list is
 the host's explicit carve-out of protected namespaces, empty in the shipped
 composition. A super-edit profile row carries `expires_at`; it is admitted only

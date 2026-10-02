@@ -26,7 +26,9 @@ gateway tools. Docker mounts
 the private home at `/home/bee` and only the resources admitted for the attempt.
 
 Docker execution requires upstream runtime support for `exec.docker`
-`labels_from_env`. The current runtime pin lacks that support; this source
+`labels_from_env`. This label ownership and reconciliation work depends on
+[runtime#894](https://github.com/wippyai/runtime/pull/894), which is open and
+unmerged. The current runtime pin lacks that support; this source
 change remains dependent on the upstream runtime fix and its integration gates.
 The executor mapping selects Bee's host-supplied node, state and attempt values
 at creation. Placement uses the existing node identity and a SHA-256 digest of
@@ -54,6 +56,14 @@ Created containers after owner loss and restart, including containers that appea
 after an earlier cleanup observation. Recovery errors are logged. Legacy
 unlabelled containers cannot be selected or removed by this ownership mechanism.
 Automatic removal is disabled for attempts so a lost owner can observe outcomes.
+
+A failed create or start records `child.start_failed` with the original runtime
+operation, deadline or daemon error. Status projects that evidence as
+`start_failure`; placement events carry it and Sessions reports the same cause
+as a failed launch. A failed start remains `uncertain` without an invented exit
+code or exit source. Cancellation before runner claim records that no container
+was dispatched. After dispatch, cleanup requires an observed container exit;
+failed or missing observations report uncertainty and cleanup errors explicitly.
 
 The Agent application lives in `bee.harness.app`; its placement constructor
 uses the existing terminal lifecycle and hook processing. The Docker sweeper

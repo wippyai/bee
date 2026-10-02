@@ -29,7 +29,7 @@ entries:
   imports:
     contract: bee.protocol:application
     inventory: bee.host:inventory
-    decode: bee.protocol:decode
+    decode: bee.desktop.types:projection
     protocol: bee.host:protocol
     questions: bee.interaction:delivery
 - name: inventory
@@ -37,7 +37,7 @@ entries:
   source: file://inventory.lua
   imports:
     contract: bee.protocol:application
-    decode: bee.protocol:decode
+    decode: bee.desktop.types:projection
 - name: clients
   kind: library.lua
   source: file://clients.lua

@@ -8,11 +8,12 @@ local physical = require("physical")
 local input_decode = require("input_decode")
 local contract = require("contract")
 local decode = require("decode")
+local projection = require("projection")
 local workspaces = require("workspaces")
 local edit_mode_recovery = require("edit_mode_recovery")
 local boot_fallback = require("boot_fallback")
 type Terminal = {display: physical.Display, input: tty.EventChannel}
-type Started = {supervisor: string, host: string, workspace_id: string, desktop: decode.Desktop, terminal: Terminal}
+type Started = {supervisor: string, host: string, workspace_id: string, desktop: projection.Desktop, terminal: Terminal}
 local M = {}
 
 function M.open(): Started?
@@ -77,7 +78,7 @@ function M.open(): Started?
                     if host_value ~= nil then host_name = host_value end
                     local checked_workspace_id = ""
                     if workspace_id ~= nil then checked_workspace_id = workspace_id end
-                    local desktop = decode.desktop(data.desktop)
+                    local desktop = projection.desktop(data.desktop)
                     if checked_workspace_id == "" or host_name == "" or not desktop then
                         process.terminate(supervisor); supervisor = ""
                         return nil, "Invalid local host bootstrap", true

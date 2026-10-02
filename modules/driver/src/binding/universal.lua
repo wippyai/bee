@@ -505,21 +505,11 @@ end
 function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}, descriptor_ref: string): (unknown) -> Object
     if not bounds.id(default_renderer) or renderers[default_renderer] == nil then error("default configure renderer is unsupported") end
     return function(raw: unknown): Object
-        local object = bounds.object(raw)
-        if not object then return {ok = false, error = "configuration request must be an object"} end
-        local selected: string? = default_renderer
-        if object.configure_renderer ~= nil then
-            selected = bounds.id(object.configure_renderer)
-        end
-        local renderer: ConfigureRenderer? = nil
-        if selected then renderer = renderers[selected] end
-        if not renderer then return {ok = false, error = "CLI descriptor selects an unsupported configure renderer"} end
-        local config_request: {[string]: unknown} = {}
-        for key, value in pairs(object) do
-            if key ~= "configure_renderer" then config_request[key] = value end
-        end
-        local request, decode_error = configuration.decode_request(config_request)
+        local request, decode_error = configuration.decode_request(raw)
         if not request then return {ok = false, error = decode_error or "invalid configuration request"} end
+        local selected = request.configure_renderer or default_renderer
+        local renderer = renderers[selected]
+        if not renderer then return {ok = false, error = "CLI descriptor selects an unsupported configure renderer"} end
         local descriptor, descriptor_error = descriptor_reader.load(descriptor_ref)
         if not descriptor then return {ok = false, error = descriptor_error or "Configuration descriptor is unavailable"} end
         local fields = bounds.object(descriptor.options.fields) or {}

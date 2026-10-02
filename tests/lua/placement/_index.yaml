@@ -65,7 +65,7 @@ entries:
     resources: [bee.placement.native.binding:prepare, bee.placement.native.binding:start, bee.placement.native.binding:status, bee.placement.native.binding:stop,
       bee.placement.native.binding:reconcile, bee.placement.native.binding:cleanup, bee.placement.native.binding:evidence, bee.placement.native.binding:attach,
       bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:revoke,
-      bee.placement.native:fixture_stop_materialization]
+      bee.placement.native:fixture_stop_materialization, bee.placement.native:fixture_start_unacknowledged]
     effect: allow
 - name: fixture_stop_materialization_policy
   kind: security.policy
@@ -114,6 +114,26 @@ entries:
   method: main
   meta: {type: test_support}
   modules: [process]
+- name: startup_runner
+  kind: process.lua
+  source: file://startup_runner.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    service: bee.placement.native.service:service
+    store: bee.placement.native.persist:store
+- name: fixture_start_unacknowledged
+  kind: function.lua
+  source: file://startup_runner.lua
+  method: start
+  meta: {type: test_support}
+  modules: [process]
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy]
+  imports:
+    service: bee.placement.native.service:service
+    store: bee.placement.native.persist:store
 - name: preparer_temp_root
   kind: env.variable
   meta: {type: test_support}

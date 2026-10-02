@@ -1078,11 +1078,16 @@ UPDATE bee_resource_associations SET root_ref = 'bee.persist.env:startup_progres
 UPDATE bee_resource_grants SET root_ref = 'bee.app.status:startup_progress' WHERE root_ref = 'bee.app:startup_progress';
 UPDATE bee_resource_grants SET root_ref = 'bee.persist.env:startup_progress' WHERE root_ref = 'bee.persist:startup_progress';
 ]]
+local DESKTOP_REFERENCES_SQL = [[
+UPDATE bee_resource_associations SET root_ref = 'bee.desktop.service:main' WHERE root_ref = 'bee.session:main';
+UPDATE bee_resource_grants SET root_ref = 'bee.desktop.service:main' WHERE root_ref = 'bee.session:main';
+]]
 local list: {Migration} = {
     {id = 1, name = "resources", sql = RESOURCES_SQL, rebuild = false},
     {id = 2, name = "resources_thread_subject", sql = THREAD_SUBJECT_SQL, rebuild = false},
     {id = 3, name = "resources_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
     {id = 4, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
+    {id = 5, name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

@@ -1011,6 +1011,11 @@
       "source": "src/deps/_index.yaml"
     },
     {
+      "id": "bee.deps:desktop",
+      "kind": "ns.dependency",
+      "source": "src/deps/_index.yaml"
+    },
+    {
       "id": "bee.deps:docs",
       "kind": "ns.dependency",
       "source": "src/deps/_index.yaml"
@@ -1141,19 +1146,79 @@
       "source": "src/deps/_index.yaml"
     },
     {
+      "id": "bee.desktop.service:main",
+      "kind": "process.lua",
+      "source": "modules/desktop/src/service/_index.yaml"
+    },
+    {
+      "id": "bee.desktop.service:status",
+      "kind": "library.lua",
+      "source": "modules/desktop/src/service/_index.yaml"
+    },
+    {
+      "id": "bee.desktop.service:statuses",
+      "kind": "library.lua",
+      "source": "modules/desktop/src/service/_index.yaml"
+    },
+    {
+      "id": "bee.desktop.types:bindings",
+      "kind": "library.lua",
+      "source": "modules/desktop/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.desktop.types:commands",
+      "kind": "library.lua",
+      "source": "modules/desktop/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.desktop.types:handoff",
+      "kind": "library.lua",
+      "source": "modules/desktop/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.desktop.types:projection",
+      "kind": "library.lua",
+      "source": "modules/desktop/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.desktop:definition",
+      "kind": "ns.definition",
+      "source": "modules/desktop/src/_index.yaml"
+    },
+    {
+      "id": "bee.desktop:dependency_application",
+      "kind": "ns.dependency",
+      "source": "modules/desktop/src/_index.yaml"
+    },
+    {
+      "id": "bee.desktop:dependency_ui",
+      "kind": "ns.dependency",
+      "source": "modules/desktop/src/_index.yaml"
+    },
+    {
       "id": "bee.desktop:layout",
       "kind": "library.lua",
-      "source": "src/desktop/_index.yaml"
+      "source": "modules/desktop/src/_index.yaml"
     },
     {
       "id": "bee.desktop:model",
       "kind": "library.lua",
-      "source": "src/desktop/_index.yaml"
+      "source": "modules/desktop/src/_index.yaml"
+    },
+    {
+      "id": "bee.desktop:session_policies",
+      "kind": "ns.requirement",
+      "source": "modules/desktop/src/_index.yaml"
     },
     {
       "id": "bee.desktop:state",
       "kind": "library.lua",
-      "source": "src/desktop/_index.yaml"
+      "source": "modules/desktop/src/_index.yaml"
+    },
+    {
+      "id": "bee.desktop:target_application_protocol",
+      "kind": "ns.requirement",
+      "source": "modules/desktop/src/_index.yaml"
     },
     {
       "id": "bee.docs.binding:call",
@@ -6556,11 +6621,6 @@
       "source": "src/protocol/_index.yaml"
     },
     {
-      "id": "bee.protocol:commands",
-      "kind": "library.lua",
-      "source": "src/protocol/_index.yaml"
-    },
-    {
       "id": "bee.protocol:decode",
       "kind": "library.lua",
       "source": "src/protocol/_index.yaml"
@@ -7384,31 +7444,6 @@
       "id": "bee.security:sync_distribution_policy",
       "kind": "security.policy.expr",
       "source": "src/security/_index.yaml"
-    },
-    {
-      "id": "bee.session:bindings",
-      "kind": "library.lua",
-      "source": "src/session/_index.yaml"
-    },
-    {
-      "id": "bee.session:handoff",
-      "kind": "library.lua",
-      "source": "src/session/_index.yaml"
-    },
-    {
-      "id": "bee.session:main",
-      "kind": "process.lua",
-      "source": "src/session/_index.yaml"
-    },
-    {
-      "id": "bee.session:status",
-      "kind": "library.lua",
-      "source": "src/session/_index.yaml"
-    },
-    {
-      "id": "bee.session:statuses",
-      "kind": "library.lua",
-      "source": "src/session/_index.yaml"
     },
     {
       "id": "bee.sessions.binding:attach",
@@ -9406,7 +9441,21 @@
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
       "path_namespace": "bee.desktop",
-      "source": "src/desktop/_index.yaml"
+      "source": "modules/desktop/src/_index.yaml"
+    },
+    {
+      "namespace": "bee.desktop.service",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.desktop.service",
+      "source": "modules/desktop/src/service/_index.yaml"
+    },
+    {
+      "namespace": "bee.desktop.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.desktop.types",
+      "source": "modules/desktop/src/types/_index.yaml"
     },
     {
       "namespace": "bee.docs",
@@ -10774,13 +10823,6 @@
       "source": "src/security/threads/_index.yaml"
     },
     {
-      "namespace": "bee.session",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.session",
-      "source": "src/session/_index.yaml"
-    },
-    {
       "namespace": "bee.sessions",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -12114,13 +12156,13 @@
       "table": "bee_placement_evidence"
     },
     {
-      "line": 659,
+      "line": 667,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
       "table": "bee_placement_preparer_states"
     },
     {
-      "line": 672,
+      "line": 680,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
       "table": "bee_placement_runner_authorities"
@@ -12132,7 +12174,7 @@
       "table": "bee_placement_schema_migrations"
     },
     {
-      "line": 647,
+      "line": 655,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
       "table": "bee_placement_session_files"
@@ -12204,7 +12246,7 @@
       "table": "bee_sync_distribution_cursors"
     },
     {
-      "line": 1603,
+      "line": 1611,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_distribution_cursors"
@@ -12222,7 +12264,7 @@
       "table": "bee_sync_feeds"
     },
     {
-      "line": 1612,
+      "line": 1620,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_projection_migrations"
@@ -12234,7 +12276,7 @@
       "table": "bee_sync_projections"
     },
     {
-      "line": 1621,
+      "line": 1629,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_projections_next"
@@ -12246,25 +12288,25 @@
       "table": "bee_sync_receipts"
     },
     {
-      "line": 1587,
+      "line": 1595,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_chunks"
     },
     {
-      "line": 1556,
+      "line": 1564,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_sources"
     },
     {
-      "line": 1573,
+      "line": 1581,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_transfers"
     },
     {
-      "line": 1562,
+      "line": 1570,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_versions"
@@ -12837,6 +12879,36 @@
       "requirement": "bee.credentials:target_sources",
       "resolved_by": "registry source",
       "target": "bee.credentials.env:sources_ref"
+    },
+    {
+      "requirement": "bee.desktop:session_policies",
+      "resolved_by": "registry source",
+      "target": "bee.desktop.service:main"
+    },
+    {
+      "requirement": "bee.desktop:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.desktop.service:main"
+    },
+    {
+      "requirement": "bee.desktop:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.desktop.types:bindings"
+    },
+    {
+      "requirement": "bee.desktop:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.desktop.types:commands"
+    },
+    {
+      "requirement": "bee.desktop:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.desktop.types:handoff"
+    },
+    {
+      "requirement": "bee.desktop:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.desktop.types:projection"
     },
     {
       "requirement": "bee.docs:target_call_policies",
@@ -14545,6 +14617,44 @@
         {
           "entry": "bee.credentials.env:sources_ref",
           "path": ".resource_ref"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.desktop:session_policies",
+      "source": "modules/desktop/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.desktop.service:main",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.desktop:target_application_protocol",
+      "source": "modules/desktop/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.desktop.types:commands",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.desktop.types:bindings",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.desktop.types:handoff",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.desktop.service:main",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.desktop.types:projection",
+          "path": ".imports.contract"
         }
       ]
     },
@@ -17212,18 +17322,18 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1824,
-    "namespace_count": 272,
+    "entry_count": 1831,
+    "namespace_count": 273,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 151,
-    "persisted_id_count": 837,
-    "requirement_count": 139,
-    "requirement_target_count": 329,
-    "root_src_lua_budget": 20851,
-    "root_src_lua_lines": 20851,
+    "persisted_id_count": 840,
+    "requirement_count": 141,
+    "requirement_target_count": 335,
+    "root_src_lua_budget": 19277,
+    "root_src_lua_lines": 19277,
     "schema_tag_count": 70,
     "topic_count": 138
   },
@@ -17528,7 +17638,7 @@
     },
     {
       "sources": [
-        "src/session/main.lua",
+        "modules/desktop/src/service/main.lua",
         "src/terminal/main.lua"
       ],
       "topic": "bee.desktop.ack"
@@ -17541,14 +17651,14 @@
     },
     {
       "sources": [
-        "src/session/main.lua"
+        "modules/desktop/src/service/main.lua"
       ],
       "topic": "bee.desktop.bindings"
     },
     {
       "sources": [
+        "modules/desktop/src/service/main.lua",
         "src/client/main.lua",
-        "src/session/main.lua",
         "src/terminal/main.lua"
       ],
       "topic": "bee.desktop.command"
@@ -17573,14 +17683,14 @@
     },
     {
       "sources": [
-        "src/session/main.lua",
+        "modules/desktop/src/service/main.lua",
         "src/terminal/main.lua"
       ],
       "topic": "bee.desktop.scene"
     },
     {
       "sources": [
-        "src/session/main.lua"
+        "modules/desktop/src/service/main.lua"
       ],
       "topic": "bee.desktop.upgraded"
     },

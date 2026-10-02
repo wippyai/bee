@@ -315,16 +315,14 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
     end
     local configure_target = binding.methods.configure
     if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
-    local configure_renderer, configure_renderer_error = driver_resolver.configure_renderer(pinned, request.binding_ref, configure_target)
-    if configure_renderer_error then return nil, configure_renderer_error end
     local provider_entry: Object? = nil
     if launch_policy.provider_ref then
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
-    local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
+    local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, {provider_ref = launch_policy.provider_ref,
         option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or (resumed and "resume" or "first_turn"), provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
-        gateway = gateway_input, fixture = launch_policy.fixture}, configure_target, configure_renderer)
+        gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
         configuration_digest = configuration_digest, gateway = gateway}

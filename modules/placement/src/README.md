@@ -82,6 +82,9 @@ Failures are recorded as placement evidence.
   requires a successful, fully decoded process-table query; command failure,
   malformed output and an empty result retain uncertainty. A failed signal
   probe is never evidence that the group is gone.
+- Docker start refusal records `child.start_failed` and exposes its exact cause
+  as `start_failure` in status and placement events. Sessions reports a failed
+  launch; execution remains `uncertain` until a container exit is observed.
 - Signal evidence is not exit evidence. A liveness observation is returned
   beside the recorded state, never folded into it.
 - Capabilities: `direct_process` controls the launched pid only,

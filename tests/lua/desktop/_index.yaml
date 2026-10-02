@@ -9,7 +9,7 @@ entries:
     type: test
     suite: bee
   imports:
-    commands: bee.protocol:commands
+    commands: bee.desktop.types:commands
     test: wippy.test:test
 - name: state_test
   kind: function.lua
@@ -20,7 +20,7 @@ entries:
     suite: bee
   imports:
     state: bee.desktop:state
-    commands: bee.protocol:commands
+    commands: bee.desktop.types:commands
     test: wippy.test:test
 - name: model_test
   kind: function.lua
@@ -31,7 +31,7 @@ entries:
     suite: bee
   imports:
     model: bee.desktop:model
-    decode: bee.protocol:decode
+    decode: bee.desktop.types:projection
     test: wippy.test:test
 - name: names_test
   kind: function.lua

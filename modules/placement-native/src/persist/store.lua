@@ -120,7 +120,7 @@ function M.attempt(db: sql.DB, attempt_id: string): (types.Attempt?, string?)
     if not attempt then return nil, project_error end
     if row.placement_kind ~= "docker" then return attempt, nil end
     local failures, failure_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'child.start_failed' ORDER BY sequence DESC LIMIT 1", {attempt_id})
-    if not failures or failure_error then return nil, "read start failure" end
+    if not failures or failure_error then return nil, "read start failure: " .. tostring(failure_error or "query returned no rows") end
     if #failures > 0 then
         local reason = bounds.text(failures[1].detail, 4096)
         if not reason then return nil, "start failure evidence is corrupt" end

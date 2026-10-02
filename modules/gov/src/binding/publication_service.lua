@@ -35,7 +35,7 @@ end
 -- application is refused here, at the step where that truth is decided, with a
 -- named code and the remedy the author needs. The remedy is carried in the
 -- failure value under the field name the destination's own diagnostics use
--- (modules/gov/src/preflight.lua), so one reader handles both.
+-- (modules/gov/src/activation/preflight.lua), so one reader handles both.
 local MISSING_ARTIFACT_REMEDY = "freeze an overlay that holds entries.json, a JSON list of complete "
     .. "registry entries; read the overlay tool's guide operation for this destination's contract "
     .. "and one minimal example"
@@ -203,7 +203,7 @@ function M.call(raw: unknown): Result
             or capability_grants.record_id(active.overlay_owner)
         local installed = record_id and registry.get(record_id) or nil
         if installed then
-            local raw_catalog = registry.get("bee:capability_catalog")
+            local raw_catalog = registry.get("bee.security.capability:capability_catalog")
             local vocabulary, catalog_error = capability_model.decode(raw_catalog)
             local record, record_error = vocabulary and capability_grants.decode(installed, active.overlay_owner,
                 workspace_id, identity.definition_id, vocabulary) or nil

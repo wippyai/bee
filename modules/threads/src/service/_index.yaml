@@ -12,7 +12,7 @@ entries:
   source: file://boundary.lua
   modules: [sql, process]
   imports:
-    resources: bee.threads:resources
+    resources: bee.threads.env:resources
     database: bee.threads.persist:database
     transaction: bee.threads.persist:transaction
     types: bee.threads:types
@@ -121,7 +121,7 @@ entries:
   modules: [process, channel, time, logger]
   imports:
     database: bee.threads.persist:database
-    resources: bee.threads:resources
+    resources: bee.threads.env:resources
     outbox: bee.threads.service:outbox
     pump: bee.threads.service:pump
     bounds: bee.values:bounds
@@ -147,7 +147,7 @@ entries:
   method: main
   modules: [process, time, channel]
   imports:
-    resources: bee.threads:resources
+    resources: bee.threads.env:resources
     database: bee.threads.persist:database
     owner: bee.threads.persist:owner
     notices: bee.threads.service:notices

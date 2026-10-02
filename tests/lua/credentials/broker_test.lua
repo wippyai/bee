@@ -134,7 +134,7 @@ local function has(items: {string}, wanted: string): boolean
     return false
 end
 local function admit_sources(workspace: string)
-    local entry = registry.get("bee.credentials:credential_sources")
+    local entry = registry.get("bee.credentials.env:credential_sources")
     if not entry then error("credential sources entry") end
     local data = assert(bounds.object(entry.data))
     data.sources = {{ref = SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"environment"}},
@@ -399,7 +399,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(foreign_audience, "FORBIDDEN")
             local live = issue(user, workspace, "anthropic", attempt)
             value(call(runner, "check", {projection_id = live.projection_id, subject = USER, audience = USER, attempt_id = attempt}))
-            local entry = registry.get("bee.credentials:credential_sources")
+            local entry = registry.get("bee.credentials.env:credential_sources")
             if not entry then error("sources entry") end
             local data = assert(bounds.object(entry.data))
             data.sources = {{ref = OTHER_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}}}
@@ -482,7 +482,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(env_def.projection_kind, "environment")
             test.eq(code(call(manager, "availability", {workspace_id = ws, name = "environment"})), "INVALID")
 
-            local source_entry = registry.get("bee.credentials:credential_sources")
+            local source_entry = registry.get("bee.credentials.env:credential_sources")
             if not source_entry then error("sources entry") end
             local source_data = assert(bounds.object(source_entry.data))
             local saved_sources = source_data.sources
@@ -502,7 +502,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local ws = fresh("nested-login")
             admit_sources(ws)
             local function select_path(path: string)
-                local entry = registry.get("bee.credentials:credential_sources")
+                local entry = registry.get("bee.credentials.env:credential_sources")
                 if not entry then error("sources") end
                 for _, source in ipairs(principals.objects(entry.data.sources)) do
                     if source.ref == CODEX_LOGIN_SOURCE then source.path = path end
@@ -535,7 +535,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(value(call(runner, "check", request)).destination, "auth.json")
             -- A changed host-selected format is fenced independently of the
             -- source digest and cannot retarget a retained projection.
-            local format_entry = registry.get("bee.driver.codex:credential_format")
+            local format_entry = registry.get("bee.driver.codex.credentials:credential_format")
             if not format_entry then error("codex credential format") end
             local format_data = assert(bounds.object(format_entry.data))
             local file_data = assert(bounds.object(format_data.file))
@@ -755,7 +755,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local ws = fresh("token-writeback-not-admitted")
             admit_sources(ws)
             write_file(CODEX_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
-            local entry = registry.get("bee.credentials:credential_sources")
+            local entry = registry.get("bee.credentials.env:credential_sources")
             if not entry then error("credential sources entry") end
             for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
                 if item.ref == CODEX_LOGIN_SOURCE and item.provider == "codex" and item.audience == USER then item.write_back = false end
@@ -803,7 +803,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             write_file(CODEX_LOGIN_SOURCE, AGY_ONBOARDING, string.rep("x", 4097))
             test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation_key = "agy-setup-oversized"})), "INVALID")
-            local entry = registry.get("bee.credentials:credential_sources")
+            local entry = registry.get("bee.credentials.env:credential_sources")
             if not entry then error("credential sources entry") end
             for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
                 if item.provider == "agy" then item.setup_path = nil end
@@ -831,7 +831,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local ws = fresh("claude-settings-absent")
             admit_sources(ws)
             write_file(CLAUDE_LOGIN_SOURCE, ".credentials.json", CLAUDE_FILE_SENTINEL)
-            local entry = registry.get("bee.credentials:credential_sources")
+            local entry = registry.get("bee.credentials.env:credential_sources")
             if not entry then error("credential sources entry") end
             for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
                 if item.ref == CLAUDE_LOGIN_SOURCE and item.provider == "claude" then
@@ -915,7 +915,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
                 local attempt = fresh("attempt")
                 local projection = issue(user, ws, "grok_login", attempt)
 
-                local entry = registry.get("bee.credentials:credential_sources")
+                local entry = registry.get("bee.credentials.env:credential_sources")
                 if not entry then error("credential sources entry") end
                 local changed = false
                 for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
@@ -1000,7 +1000,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             write_file(UNPRIVILEGED_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
             local attempt = fresh("attempt")
 
-            -- UNPRIVILEGED_LOGIN_SOURCE is present in bee.credentials:credential_sources allowlist metadata,
+            -- UNPRIVILEGED_LOGIN_SOURCE is present in bee.credentials.env:credential_sources allowlist metadata,
             -- but absent from bee.credentials.security:credential_file_policy resources.
             local defined = value(call(manager, "define", {workspace_id = ws, name = "unprivileged", provider = "codex", source = {kind = "fs_directory", ref = UNPRIVILEGED_LOGIN_SOURCE}}))
             test.eq(defined.destination, "auth.json")

@@ -66,14 +66,14 @@ local function main(phase: string?)
         assert(refused.ok == false and object(refused.error).code == "CONFLICT", "changed root did not fence the grant")
         return
     end
-    ok(call(nil, "associate", {workspace_id = WORKSPACE, name = "root", root_ref = "bee.placement.native:root", subpath = "", allowed_access = "write"}), "associate")
+    ok(call(nil, "associate", {workspace_id = WORKSPACE, name = "root", root_ref = "bee.placement.native.env:root", subpath = "", allowed_access = "write"}), "associate")
     local granted = ok(call(nil, "grant", {workspace_id = WORKSPACE, name = "root", access = "read", purpose = "project", audience = ACTOR, idempotency_key = "k"}), "grant")
     local grant_id = tostring(granted.grant_id)
     ok(call(nil, "resolve", {grant_id = grant_id, subject = ACTOR, audience = ACTOR}), "resolve")
     -- The resource methods carry their production function scopes. A root
     -- backed by an unrelated environment variable must remain inaccessible
     -- even though this probe's caller has a broad test scope.
-    local unrelated = call(nil, "associate", {workspace_id = WORKSPACE, name = "unrelated", root_ref = "bee.placement.native:unrelated_env_root", subpath = "", allowed_access = "write", expected_revision = 0})
+    local unrelated = call(nil, "associate", {workspace_id = WORKSPACE, name = "unrelated", root_ref = "bee.placement.native.env:unrelated_env_root", subpath = "", allowed_access = "write", expected_revision = 0})
     assert(unrelated.ok == false and object(unrelated.error).code == "INVALID", "unrelated environment variable was readable")
     -- An actor without the resolve policy cannot resolve a grant.
     local denied = call(security.new_scope({}), "resolve", {grant_id = grant_id, subject = ACTOR, audience = ACTOR})
@@ -303,20 +303,22 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	}
 	hostEntries := resourcesModuleThreadsEntries()
 	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
-	hostEntries = append(hostEntries, map[string]interface{}{"name": "protected_kernel", "kind": "registry.entry",
-		"meta": map[string]interface{}{"type": "bee.protected_kernel"},
-		"data": map[string]interface{}{"revision": 2, "namespaces": []string{}}})
+	if err := resourcesModuleWrite(folder, filepath.Join("src", "security", "gov", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee.security.gov", Entries: []map[string]interface{}{
+		{"name": "protected_kernel", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.protected_kernel"}, "data": map[string]interface{}{"revision": 2, "namespaces": []string{}}},
+	}}); err != nil {
+		return err
+	}
 	if !dropRoots {
-		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}})
+		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native.env:root", "access": "write"}, {"root_ref": "bee.placement.native.env:unrelated_env_root", "access": "write"}}}})
 		hostEntries = append(hostEntries, map[string]interface{}{"name": "dependency_resources", "kind": "ns.dependency", "component": "bee/resources", "version": "0.1.0-dev",
 			"parameters": []map[string]interface{}{{"name": "target_roots", "value": "bee:resource_roots"}}})
 		if err := resourcesModuleWrite(folder, filepath.Join("src", "placement", "_index.yaml"), resourcesModuleIndex{
-			Version: "1.0", Namespace: "bee.placement.native", Entries: []map[string]interface{}{
+			Version: "1.0", Namespace: "bee.placement.native.env", Entries: []map[string]interface{}{
 				{"name": "environment", "kind": "env.storage.os", "lifecycle": map[string]interface{}{"auto_start": true}},
-				{"name": "root_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_PLACEMENT_ROOT", "default": ".wippy/placement", "readonly": true},
-				{"name": "unrelated_secret_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_UNRELATED_SECRET_PATH", "default": ".wippy/unrelated-secret", "readonly": true},
-				{"name": "root", "kind": "fs.directory", "directory": "${env:bee.placement.native:root_path}", "auto_init": true, "mode": "0700"},
-				{"name": "unrelated_env_root", "kind": "fs.directory", "directory": "${env:bee.placement.native:unrelated_secret_path}", "auto_init": true},
+				{"name": "root_path", "kind": "env.variable", "storage": "bee.placement.native.env:environment", "variable": "BEE_PLACEMENT_ROOT", "default": ".wippy/placement", "readonly": true},
+				{"name": "unrelated_secret_path", "kind": "env.variable", "storage": "bee.placement.native.env:environment", "variable": "BEE_UNRELATED_SECRET_PATH", "default": ".wippy/unrelated-secret", "readonly": true},
+				{"name": "root", "kind": "fs.directory", "directory": "${env:bee.placement.native.env:root_path}", "auto_init": true, "mode": "0700"},
+				{"name": "unrelated_env_root", "kind": "fs.directory", "directory": "${env:bee.placement.native.env:unrelated_secret_path}", "auto_init": true},
 			},
 		}); err != nil {
 			return err
@@ -365,7 +367,7 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 				{"name": "target_sources", "value": "bee:credential_sources"}}},
 	)
 	// The default credential source catalog belongs to the credentials package.
-	sources, err := resourcesModuleNamed(root, "modules/credentials/src", "credential_sources")
+	sources, err := resourcesModuleNamed(root, "modules/credentials/src/env", "credential_sources")
 	if err != nil {
 		return err
 	}
@@ -382,9 +384,11 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 		})
 	}
 	hostEntries = append(hostEntries, sources, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
-	hostEntries = append(hostEntries, map[string]interface{}{"name": "protected_kernel", "kind": "registry.entry",
-		"meta": map[string]interface{}{"type": "bee.protected_kernel"},
-		"data": map[string]interface{}{"revision": 2, "namespaces": []string{}}})
+	if err := resourcesModuleWrite(folder, filepath.Join("src", "security", "gov", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee.security.gov", Entries: []map[string]interface{}{
+		{"name": "protected_kernel", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.protected_kernel"}, "data": map[string]interface{}{"revision": 2, "namespaces": []string{}}},
+	}}); err != nil {
+		return err
+	}
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {
 		return err
 	}

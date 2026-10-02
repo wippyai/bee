@@ -18,7 +18,7 @@ local function define_tests()
     test.describe("Agent profile form persistence", function()
         test.it("preserves a conflicting draft for reload or a fresh copy", function()
             local workspace = "profile-form-conflict"
-            local created = assert(form.load(workspace, {definition_ref = "bee.driver.claude:default_window", title = "Claude"}, true))
+            local created = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude"}, true))
             test.is_true(form.save(created))
             local choice = {title = "Claude", saved_profile_id = created.profile_id, saved_profile_revision = 1}
             local first = assert(form.load(workspace, choice, false))
@@ -47,7 +47,7 @@ local function define_tests()
         end)
         test.it("creates a profile and retries the original submission despite later draft edits", function()
             local workspace = "profile-form-workspace"
-            local initial = {definition_ref = "bee.driver.claude:default_window", title = "Claude Code"}
+            local initial = {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude Code"}
             local opened, err = form.load(workspace, initial, true)
             if not opened then error(tostring(err)) end
             test.is_true(editor.set_title(opened.draft, "My Claude"))
@@ -75,17 +75,17 @@ local function define_tests()
     test.describe("Agent profile form subject", function()
         test.it("opens a saved profile under its own definition and refuses a different one", function()
             local workspace = "profile-form-subject"
-            local created, err = form.load(workspace, {definition_ref = "bee.driver.claude:default_window", title = "Claude Code"}, true)
+            local created, err = form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude Code"}, true)
             if not created then error(tostring(err)) end
             test.is_true(form.save(created))
             local saved, saved_error = form.saved(workspace, created.profile_id, 1)
             if not saved then error(tostring(saved_error)) end
-            test.eq(saved.definition_ref, "bee.driver.claude:default_window")
+            test.eq(saved.definition_ref, "bee.driver.claude.profiles:default_window")
             local reopened, reopen_error = form.load(workspace, {title = "Claude Code", saved_profile_id = created.profile_id,
                 saved_profile_revision = 1}, false)
             if not reopened then error(tostring(reopen_error)) end
-            test.eq(reopened.draft.definition_ref, "bee.driver.claude:default_window")
-            local mismatched = form.load(workspace, {definition_ref = "bee.driver.codex:default_window", title = "x",
+            test.eq(reopened.draft.definition_ref, "bee.driver.claude.profiles:default_window")
+            local mismatched = form.load(workspace, {definition_ref = "bee.driver.codex.profiles:default_window", title = "x",
                 saved_profile_id = created.profile_id, saved_profile_revision = 1}, false)
             test.is_nil(mismatched)
             local stale, stale_error = form.saved(workspace, created.profile_id, 2)

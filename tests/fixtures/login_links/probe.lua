@@ -77,12 +77,12 @@ local function define_tests()
             else test.is_false(materialized.ok) end
         end)
         test.it("carries locate refusal into the person-facing login-needed state", function()
-            local result = assert(locator.locate(assert(registry.snapshot()), "bee.driver.codex:binding", "window", locator.new_cache()))
+            local result = assert(locator.locate(assert(registry.snapshot()), "bee.driver.codex.binding:binding", "window", locator.new_cache()))
             test.eq(result.status, accepted and "ready" or "unconfigured")
             test.eq(result.login.exists, accepted)
             if not accepted and not contained then refusal(result.reason) end
             local client = sessions_fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?)
-                return {items = {{ref = "bee.driver.codex:default_window", kind = "definition", title = "Codex",
+                return {items = {{ref = "bee.driver.codex.profiles:default_window", kind = "definition", title = "Codex",
                     status = result.status, checked_at = "2026-10-01T12:00:00.000Z", reasons = {result.reason or ""},
                     features = {"driver:codex", "presentation:start_menu"}, actions = {}}}, complete = true,
                     unavailable_count = accepted and 0 or 1, diagnostics = {}}, nil

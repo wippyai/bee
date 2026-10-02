@@ -48,13 +48,13 @@ local function running(id: string): types.Attempt
 end
 local function configure()
     local changes = registry.snapshot():changes()
-    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+    local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
     mode.data.mode = "host_configured"; changes:update(mode)
-    local roots = assert(registry.get("bee.placement.native:placement_admitted_roots"))
+    local roots = assert(registry.get("bee.placement.native.env:placement_admitted_roots"))
     roots.data.roots = {{root_ref = ROOT, access = "write"}}; changes:update(roots)
     local policy = assert(registry.get(POLICY))
     policy.data.placement_profiles = {PROFILE}; changes:update(policy)
-    local activation = assert(registry.get("bee.harness:harness_activation"))
+    local activation = assert(registry.get("bee.harness.launch:harness_activation"))
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
     bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding"; changes:update(activation)

@@ -17,7 +17,7 @@ entries:
   kind: security.policy
   policy:
     actions: [db.get, registry.get, system.read, process.send]
-    resources: [bee.approvals:db, bee.approvals:database_ref, bee.approvals:policies_ref, bee:approver_policies, node, '*']
+    resources: [bee.approvals.env:db, bee.approvals.env:database_ref, bee.approvals.env:policies_ref, bee.security.approvals:approver_policies, node, '*']
     effect: allow
 - name: approval_owner_policy
   kind: security.policy

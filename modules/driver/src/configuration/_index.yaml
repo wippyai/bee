@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: bee.driver.configuration
+entries:
+- name: option_render
+  kind: library.lua
+  source: file://option_render.lua
+  modules: [json, toml, hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    configuration: bee.driver.configuration:configuration
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules:
+  - hash
+  - funcs
+  - security
+  - registry
+  - json
+  - toml
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    driver_resolver: bee.driver.binding:resolver
+    types: bee.driver:types
+    instructions: bee.driver.profiles:instructions

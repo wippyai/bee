@@ -15,7 +15,7 @@ end
 local function define_tests()
     test.describe("Profile definition repair", function()
         test.it("preserves saved drafts and CAS revision when the definition becomes invalid", function()
-            local ref = "bee.driver.claude:default_window"
+            local ref = "bee.driver.claude.profiles:default_window"
             local opened = assert(form.load("profile-repair", {definition_ref = ref, title = "Repair me"}, true))
             assert(form.save(opened))
             local original = assert(json.encode(assert(registry.get(ref)).data))
@@ -31,7 +31,7 @@ local function define_tests()
             test.is_true(form.save(loaded))
         end)
         test.it("refreshes runtime options while preserving an unsaved name and save identity", function()
-            local opened = assert(form.load("profile-refresh", {definition_ref = "bee.driver.claude:default_window", title = "Original"}, true))
+            local opened = assert(form.load("profile-refresh", {definition_ref = "bee.driver.claude.profiles:default_window", title = "Original"}, true))
             assert(editor.set_title(opened.draft, "Unsaved"))
             local refreshed = assert(form.refresh(opened))
             test.eq(refreshed.draft.name, "Unsaved")

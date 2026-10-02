@@ -54,9 +54,6 @@ func copyFixture(root string, manage bool) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join("tests", "fixtures", fixture))); err != nil {
 		return fmt.Errorf("copy Hub inspection fixture: %w", err)
 	}
-	if err := os.CopyFS(filepath.Join(root, "src", "protocol"), os.DirFS("src/protocol")); err != nil {
-		return fmt.Errorf("copy Hub protocol source dependency: %w", err)
-	}
 	if err := os.CopyFS(filepath.Join(root, "modules", "values"), os.DirFS("modules/values")); err != nil {
 		return fmt.Errorf("stage Hub values component: %w", err)
 	}

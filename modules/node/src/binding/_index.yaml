@@ -7,9 +7,9 @@ entries:
   modules: [system, security, hash]
   imports:
     protocol: bee.node:protocol
-    resources: bee.node:resources
+    resources: bee.node.env:resources
     sync: bee.sync.persist:store
-    transaction: bee.persist:transaction
+    transaction: bee.persist.persist:transaction
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     appearance: bee.app:appearance
@@ -55,8 +55,12 @@ entries:
   kind: function.lua
   source: file://update_metadata_method.lua
   method: handle
-  imports: {service: bee.node.binding:node}
-  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
+  imports:
+    service: bee.node.binding:node
+  security:
+    policies:
+    - bee.node.security:database_policy
+    - bee.node.security:store_policy
   meta:
     type: tool
     title: Update node description
@@ -67,42 +71,103 @@ entries:
       input:
         type: object
         additionalProperties: false
-        required: [expected_revision, idempotency_key, metadata]
+        required:
+        - expected_revision
+        - idempotency_key
+        - metadata
         properties:
-          expected_revision: {type: integer, minimum: 0}
-          idempotency_key: {type: string, minLength: 1, maxLength: 160}
+          expected_revision:
+            type: integer
+            minimum: 0
+          idempotency_key:
+            type: string
+            minLength: 1
+            maxLength: 160
           metadata:
             type: object
             additionalProperties: false
-            required: [display_name]
+            required:
+            - display_name
             properties:
-              display_name: {type: string, minLength: 1, maxLength: 80}
-              description: {type: string, maxLength: 512}
-              labels: {type: object, maxProperties: 16, additionalProperties: {type: string, maxLength: 80}}
-      output: *node_reply
+              display_name:
+                type: string
+                minLength: 1
+                maxLength: 80
+              description:
+                type: string
+                maxLength: 512
+              labels:
+                type: object
+                maxProperties: 16
+                additionalProperties:
+                  type: string
+                  maxLength: 80
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          ok:
+            type: boolean
+          code:
+            type: string
+          message:
+            type: string
+          value: {}
+          replayed:
+            type: boolean
+          commit:
+            type: boolean
     llm_alias: BeeNodeUpdateMetadata
-    llm_description: Replace the node display name, description and labels using the current revision and a stable retry key. Requires host authorization; cannot change identity or permissions.
-    input_schema: |
-      {"type":"object","properties":{"expected_revision":{"type":"integer","minimum":0},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"metadata":{"type":"object","properties":{"display_name":{"type":"string","minLength":1,"maxLength":80},"description":{"type":"string","maxLength":512},"labels":{"type":"object","maxProperties":16,"additionalProperties":{"type":"string","maxLength":80}}},"required":["display_name"],"additionalProperties":false}},"required":["expected_revision","idempotency_key","metadata"],"additionalProperties":false}
+    llm_description: Replace the node display name, description and labels using the
+      current revision and a stable retry key. Requires host authorization; cannot
+      change identity or permissions.
+    input_schema: '{"type":"object","properties":{"expected_revision":{"type":"integer","minimum":0},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"metadata":{"type":"object","properties":{"display_name":{"type":"string","minLength":1,"maxLength":80},"description":{"type":"string","maxLength":512},"labels":{"type":"object","maxProperties":16,"additionalProperties":{"type":"string","maxLength":80}}},"required":["display_name"],"additionalProperties":false}},"required":["expected_revision","idempotency_key","metadata"],"additionalProperties":false}
+
+      '
 - name: snapshot
   kind: function.lua
   source: file://snapshot_method.lua
   method: handle
-  imports: {service: bee.node.binding:node}
-  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
+  imports:
+    service: bee.node.binding:node
+  security:
+    policies:
+    - bee.node.security:database_policy
+    - bee.node.security:store_policy
   meta:
     hive: policy
     hive_operation:
       revision: '1'
       title: Node description snapshot
-      input: {type: object, properties: {}, additionalProperties: false}
-      output: *node_reply
+      input:
+        type: object
+        properties: {}
+        additionalProperties: false
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          ok:
+            type: boolean
+          code:
+            type: string
+          message:
+            type: string
+          value: {}
+          replayed:
+            type: boolean
+          commit:
+            type: boolean
 - name: read_after
   kind: function.lua
   source: file://read_after_method.lua
   method: handle
-  imports: {service: bee.node.binding:node}
-  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
+  imports:
+    service: bee.node.binding:node
+  security:
+    policies:
+    - bee.node.security:database_policy
+    - bee.node.security:store_policy
   meta:
     hive: policy
     hive_operation:
@@ -111,11 +176,31 @@ entries:
       input:
         type: object
         additionalProperties: false
-        required: [cursor]
+        required:
+        - cursor
         properties:
-          cursor: {type: integer, minimum: 0}
-          limit: {type: integer, minimum: 1, maximum: 64}
-      output: *node_reply
+          cursor:
+            type: integer
+            minimum: 0
+          limit:
+            type: integer
+            minimum: 1
+            maximum: 64
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          ok:
+            type: boolean
+          code:
+            type: string
+          message:
+            type: string
+          value: {}
+          replayed:
+            type: boolean
+          commit:
+            type: boolean
 - name: get_appearance
   kind: function.lua
   source: file://get_appearance_method.lua

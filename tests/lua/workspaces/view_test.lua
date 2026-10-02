@@ -41,8 +41,8 @@ local function populated(): model.State
     model.move(state, 1)
     model.apply_inspect(state, state.selected, ok({live = true,
         applications = {{definition_id = "bee.settings.app:app", instance_id = "i-1", restart_policy = "automatic"}},
-        extensions = {{binding = "bee.resources:resources_workspace_extension", title = "Resources", total = 1, items = {{label = "project", detail = "bee.env:workspace_root · write"}}},
-            {binding = "bee:gateway_workspace_extension", title = "Agent sessions", total = 0, items = {}}}}))
+        extensions = {{binding = "bee.resources.binding:resources_workspace_extension", title = "Resources", total = 1, items = {{label = "project", detail = "bee.env:workspace_root · write"}}},
+            {binding = "bee.gateway.binding:gateway_workspace_extension", title = "Agent sessions", total = 0, items = {}}}}))
     model.apply_threads(state, state.selected, ok({threads = {{thread_id = "t-1", title = "Migrate billing", state = "open"}}}))
     return state
 end

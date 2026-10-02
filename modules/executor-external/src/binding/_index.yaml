@@ -50,4 +50,4 @@ entries:
     classify: bee.harness.catalog:classify
     policy: bee.harness.carrier:policy
     machine: bee.harness.carrier:machine
-    descriptor: bee.driver:descriptor
+    descriptor: bee.driver.descriptor:descriptor

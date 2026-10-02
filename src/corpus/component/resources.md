@@ -35,7 +35,7 @@ it can narrow that path and is included in the idempotency digest. `describe` (a
 (associations whose name starts with `text`) answer callers holding
 `bee.workspace.manager.read` on the workspace; they have the shape of a workspace
 catalog extension, and the host binds them to that contract as
-`bee.resources:resources_workspace_extension`. Resource root path interpolation uses the narrow
+`bee.resources.binding:resources_workspace_extension`. Resource root path interpolation uses the narrow
 `bee.resources.security:resource_environment_policy` and resolves before the root digest is
 stored or checked; unrelated environment variables remain inaccessible.
 The private `check_grant` binding validates an association, its admitted root

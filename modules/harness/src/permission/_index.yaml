@@ -21,7 +21,7 @@ entries:
   source: file://exchange.lua
   modules: [json]
   imports:
-    preferences: bee.driver:preferences
+    preferences: bee.driver.profiles:preferences
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     permission: bee.harness.permission:adapter

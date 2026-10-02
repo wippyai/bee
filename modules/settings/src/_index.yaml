@@ -6,10 +6,6 @@ entries:
   module: settings
   meta:
     title: Bee Settings
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
@@ -22,6 +18,7 @@ entries:
   kind: ns.dependency
   component: bee/hub
   version: '*'
-- name: build_info
-  kind: library.lua
-  source: file://build_info.lua
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

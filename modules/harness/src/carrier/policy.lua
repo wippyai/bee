@@ -238,7 +238,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         provider_ref = bounds.id(data.provider_ref)
         if not provider_ref then return nil, ref .. ": provider_ref is not an identifier" end
     end
-    local placement_profiles, placement_profiles_error = bounds.ids(data.placement_profiles or {"bee.placement:native"}, true)
+    local placement_profiles, placement_profiles_error = bounds.ids(data.placement_profiles or {"bee.placement.profiles:native"}, true)
     if not placement_profiles then return nil, ref .. ": placement_profiles: " .. tostring(placement_profiles_error) end
     local placement_binding: string? = nil
     if data.placement_binding ~= nil then

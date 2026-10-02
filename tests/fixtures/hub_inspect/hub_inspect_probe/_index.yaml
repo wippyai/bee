@@ -31,7 +31,7 @@ entries:
   imports:
     inspect: bee.hub.binding:inspect
     catalog: bee.hub.binding:catalog
-    inventory: bee.hub:inventory_reader
+    inventory: bee.hub.package:inventory_reader
     preview: bee.hub.binding:preview
   security:
     policies: [bee.hub.inspect.probe:inspect_policy, bee.hub.inspect.probe:registry_read_policy, bee.hub.inspect.probe:catalog_policy]

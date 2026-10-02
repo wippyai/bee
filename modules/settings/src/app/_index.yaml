@@ -17,7 +17,7 @@ entries:
     frame: bee.app:frame
     appearance: bee.app:appearance
     view: bee.settings.app:view
-    build_info: bee.settings:build_info
+    build_info: bee.settings.app:build_info
     client: bee.app:client
     super_edit: bee.gov.binding:super_edit_call
     live_updates: bee.settings.app:live_updates
@@ -42,11 +42,14 @@ entries:
   imports:
     frame: bee.app:frame
     appearance: bee.app:appearance
-    build_info: bee.settings:build_info
+    build_info: bee.settings.app:build_info
     live_updates: bee.settings.app:live_updates
 - name: live_updates
   kind: library.lua
   source: file://live_updates.lua
   imports:
     bounds: bee.values:bounds
-    semver: bee.hub:semver
+    semver: bee.hub.package:semver
+- name: build_info
+  kind: library.lua
+  source: file://build_info.lua

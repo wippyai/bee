@@ -14,4 +14,4 @@ entries:
   modules: [fs, hash]
   meta: {type: test, suite: bee}
   security: {policies: [bee.security.docs:docs_policy]}
-  imports: {test: wippy.test:test, corpus: bee.docs:corpus, protocol: bee.docs:protocol, bounds: bee.values:bounds, resources: bee.docs:resources, method: bee.docs.binding:call}
+  imports: {test: wippy.test:test, corpus: bee.docs.binding:corpus, protocol: bee.docs:protocol, bounds: bee.values:bounds, resources: bee.docs.env:resources, method: bee.docs.binding:call}

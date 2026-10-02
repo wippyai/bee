@@ -21,10 +21,10 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.workspace.catalog:create, bee.workspace.catalog:read, bee.workspace.catalog:list, bee.workspace.catalog:search,
-      bee.workspace.catalog:rename, bee.workspace.catalog:archive, bee.workspace.catalog:restore, bee.workspace.catalog:backend,
-      bee.workspace.catalog:inspect, bee.workspace.catalog:search_within, bee.workspace.catalog:roots,
-      bee.workspace.catalog:folders]
+    resources: [bee.workspace.binding:create, bee.workspace.binding:read, bee.workspace.binding:list, bee.workspace.binding:search,
+      bee.workspace.binding:rename, bee.workspace.binding:archive, bee.workspace.binding:restore, bee.workspace.binding:catalog,
+      bee.workspace.binding:inspect, bee.workspace.binding:search_within, bee.workspace.binding:roots,
+      bee.workspace.binding:folders]
     effect: allow
 - name: catalog_test
   kind: function.lua
@@ -34,8 +34,8 @@ entries:
   modules: [sql]
   imports:
     test: wippy.test:test
-    store: bee.storage:store
-    catalog: bee.storage:catalog
+    store: bee.workspace.persist:store
+    catalog: bee.workspace.persist:catalog
 - name: operations_test
   kind: function.lua
   source: file://operations_test.lua
@@ -77,6 +77,6 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    persistence: bee.workspace:persistence
+    persistence: bee.workspace.persist:checkpoint
     model: bee.desktop:model
     appearance: bee.app:appearance

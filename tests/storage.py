@@ -407,7 +407,7 @@ return {main = main}
 def run_probe(project, folder, expect_success=True):
     environment = database_environment(folder)
     result = subprocess.run(
-        [str(RUNTIME), "run", "storage-probe", "--set", f"registry.history_path={folder / 'registry.db'}"],
+        [str(RUNTIME), "run", "--host", "bee:terminal", "storage-probe", "--set", f"registry.history_path={folder / 'registry.db'}"],
         cwd=project,
         env=environment,
         text=True,
@@ -501,7 +501,7 @@ def main():
                 "source": "file://main.lua",
                 "method": "main",
                 "modules": ["process"],
-                "imports": {"store": "bee.storage:store", "assignments": "bee.storage:assignments", "thread_bindings": "bee.storage:thread_bindings"},
+                "imports": {"store": "bee.workspace.persist:store", "assignments": "bee.workspace.persist:assignments", "thread_bindings": "bee.workspace.persist:thread_bindings"},
                 "meta": {"command": {"name": "storage-probe", "short": "storage probe"}},
                 "security": {"policies": ["bee.security.storage:workspace_storage_policy"]},
             }],
@@ -517,7 +517,7 @@ def main():
             migration = connection.execute(
                 "SELECT id, name, checksum FROM workspace_schema_migrations"
             ).fetchall()
-            assert [row[0] for row in migration] == list(range(1, 13))
+            assert [row[0] for row in migration] == list(range(1, 15))
             checksum = migration[0][2]
             state = connection.execute(
                 "SELECT generation, value FROM workspace_state WHERE workspace_id = (SELECT workspace_id FROM workspaces WHERE root_ref = 'bee.env:workspace_root' AND subpath = '')"
@@ -545,12 +545,12 @@ def main():
         with sqlite3.connect(database) as connection:
             connection.execute(
                 "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) "
-                "VALUES (13, 'future_schema', 'future', 'now')"
+                "VALUES (15, 'future_schema', 'future', 'now')"
             )
             connection.commit()
         assert "workspace database schema is newer" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
-            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 13")
+            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 15")
             connection.commit()
         run_probe(project, folder)
 
@@ -587,7 +587,7 @@ def main():
         # their identity while fencing all three as cleanup-complete tombstones.
         migration4 = folder / "migration4-bindings"
         migration4.mkdir()
-        store_source = (ROOT / "src/storage/store.lua").read_text()
+        store_source = (ROOT / "modules/workspace/src/migrations/migrations.lua").read_text()
 
         def migration_body(constant):
             body = re.search(rf"local {constant} = \[\[(.*?)\]\]", store_source, re.S).group(1)
@@ -645,7 +645,7 @@ return {main = main}
         (probe / "main.lua").write_text(migration4_probe)
         run_probe(project, migration4)
         with sqlite3.connect(migration4 / "workspace.db") as db:
-            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 13))
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 15))
             assert db.execute(
                 "SELECT count(*) FROM workspace_application_thread_bindings WHERE state='revoked' AND cleanup_pending=0"
             ).fetchone()[0] == 3
@@ -653,7 +653,7 @@ return {main = main}
         # Upgrade a real migration-1 database. The old SQL/checksum must stay exact.
         legacy = folder / "legacy"
         legacy.mkdir()
-        sql = re.search(r"local STATE_TABLE_SQL = \[\[(.*?)\]\]", (ROOT / "src/storage/store.lua").read_text(), re.S).group(1)
+        sql = re.search(r"local STATE_TABLE_SQL = \[\[(.*?)\]\]", (ROOT / "modules/workspace/src/migrations/migrations.lua").read_text(), re.S).group(1)
         # Lua long strings discard the initial newline.
         sql = sql.removeprefix("\n")
         digest = hashlib.sha256(("workspace_state_v1\n" + sql).encode()).hexdigest()
@@ -665,7 +665,7 @@ return {main = main}
             db.execute("INSERT INTO workspace_state VALUES (1, 1, 7, ?, 'before')", ('{"version":1,"probe":"legacy"}',))
         # Open only: prove migration leaves the envelope and generation untouched.
         (probe / "main.lua").write_text('local storage = require("store")\nlocal function main() local s = assert(storage.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""})); assert(s:identity()); s:close() end\nreturn {main = main}\n')
-        store_file = project / "src/storage/store.lua"
+        store_file = project / "modules/workspace/src/migrations/migrations.lua"
         healthy_store = store_file.read_text()
         seed = "VALUES (1, lower(hex(randomblob(16))))"
         assert healthy_store.count(seed) == 1
@@ -680,7 +680,7 @@ return {main = main}
         with sqlite3.connect(legacy / "workspace.db") as db:
             assert db.execute("SELECT generation, value FROM workspace_state").fetchone() == (7, '{"version":1,"probe":"legacy"}')
             assert db.execute("SELECT checksum FROM workspace_schema_migrations WHERE id=1").fetchone()[0] == checksum
-            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 13))
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == list(range(1, 15))
         assert len(identity(legacy / "workspace.db")) == 32
 
         # A catalog without the classic row cannot silently mint another ID.
@@ -804,7 +804,8 @@ def client_storage():
                 assert db.execute("SELECT c.client_id, l.workspace_id, l.import_receipt FROM client_state AS c JOIN client_layouts AS l ON l.desktop_id = c.client_id").fetchone() == original
                 ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
                 db.execute("UPDATE client_schema_migrations SET checksum='changed' WHERE id=1")
-            probe(folder, "open", packed, "Client migration checksum changed")
+            probe(folder, "open", packed,
+                  f"Client migration 1 (client_layout_v1) checksum changed: expected {ledger}, found changed")
             with sqlite3.connect(database) as db:
                 db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
                 db.execute("INSERT INTO client_schema_migrations VALUES (4, 'future', 'future')")

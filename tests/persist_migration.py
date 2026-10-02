@@ -71,14 +71,20 @@ def declared_migrations(source):
 
 def bytes_check():
     from test_migration_histories import SOURCES
+    moved = subprocess.check_output(['git', 'diff', '--name-status', '-M', '893d1216', 'origin/main'], cwd=ROOT, text=True)
+    baseline_paths = {parts[2]: parts[1] for line in moved.splitlines()
+                      if (parts := line.split('\t'))[0].startswith('R')}
+    baseline_paths[SOURCES['workspace']] = 'src/storage/store.lua'
     paths = set(SOURCES.values()) | {'src/client/store.lua'}
     paths |= {str(path.relative_to(ROOT)) for path in (ROOT / 'modules').glob('*/src/migrations/*.lua')}
     for path in sorted(paths):
-        prior = subprocess.check_output(['git', 'show', '893d1216:' + path], cwd=ROOT, text=True)
         current = declared_migrations((ROOT / path).read_text())
-        shipped = declared_migrations(prior)
-        assert current[:len(shipped)] == shipped, path
-    print('All owner applied SQL at shipped baseline 893d1216 is unchanged; repairs append new migrations', flush=True)
+        for baseline in ['893d1216', 'origin/main']:
+            baseline_path = baseline_paths.get(path, path) if baseline == '893d1216' else path
+            prior = subprocess.check_output(['git', 'show', baseline + ':' + baseline_path], cwd=ROOT, text=True)
+            shipped = declared_migrations(prior)
+            assert current[:len(shipped)] == shipped, (baseline, path)
+    print('All owner applied SQL at shipped baseline 893d1216 and origin/main is unchanged; repairs append new migrations', flush=True)
 
 
 def seed(path, owner, workspace_revision=7, original_nine=True):
@@ -87,7 +93,7 @@ def seed(path, owner, workspace_revision=7, original_nine=True):
         initial = re.search(r'local INITIAL = \[\[(.*?)\]\]', source, re.S)[1].removeprefix('\n')
         expected = [(1, 'owner_local_feed', initial)]
     else:
-        source = ROOT / ('src/storage/store.lua' if owner == 'workspace' else 'src/client/store.lua')
+        source = ROOT / ('modules/workspace/src/migrations/migrations.lua' if owner == 'workspace' else 'src/client/store.lua')
         expected = declared_migrations(source.read_text())
     limit = workspace_revision if owner == 'workspace' else 1
     if owner == 'workspace' and workspace_revision == 9 and original_nine:
@@ -120,7 +126,7 @@ def seed(path, owner, workspace_revision=7, original_nine=True):
 
 
 def run(project, state, owner, failure=None):
-    result = subprocess.run([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
+    result = subprocess.run([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee.sync.service:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
                             cwd=project, env=database_environment(state), capture_output=True, text=True, timeout=90)
     output = result.stdout + result.stderr
     if failure:
@@ -136,7 +142,7 @@ def ledger_rows(path, owner):
 
 
 def capture_progress(project):
-    source = project / 'modules/persist/src/ledger.lua'
+    source = project / 'modules/persist/src/persist/ledger.lua'
     text = source.read_text().replace('local env = require("env")\n', '')
     text = text.replace('local hash = require("hash")', '''local hash = require("hash")
 local captured: {string} = {}
@@ -166,7 +172,7 @@ def progress(output, owner, start, end, batch):
 
 
 def fault(project, owner, step):
-    source = project / 'modules/persist/src/ledger.lua'
+    source = project / 'modules/persist/src/persist/ledger.lua'
     original = source.read_text()
     table = OWNERS[owner][1]
     replacement = f'''    if not apply_err and ledger.table == "{table}" and migration.id == {step} then
@@ -179,7 +185,7 @@ def fault(project, owner, step):
     end
 '''
     source.write_text(original.replace('    if apply_err then return', replacement + '    if apply_err then return', 1))
-    manifest = project / 'modules/persist/src/_index.yaml'
+    manifest = project / 'modules/persist/src/persist/_index.yaml'
     original_manifest = manifest.read_text()
     document = yaml.safe_load(original_manifest)
     next(entry for entry in document['entries'] if entry['name'] == 'ledger')['modules'] += ['io', 'channel']
@@ -189,7 +195,7 @@ def fault(project, owner, step):
 
 def crash(project, state, owner, step):
     source, original, manifest, original_manifest = fault(project, owner, step)
-    process = subprocess.Popen([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
+    process = subprocess.Popen([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee.sync.service:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
                                cwd=project, env=database_environment(state), stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, start_new_session=True)
     output = bytearray()
@@ -219,7 +225,7 @@ def crash(project, state, owner, step):
 
 
 def diagnostic_failure(project, state, owner):
-    source = project / 'modules/persist/src/ledger.lua'
+    source = project / 'modules/persist/src/persist/ledger.lua'
     original = source.read_text()
     table = OWNERS[owner][1]
     injection = f'''    if not apply_err and ledger.table == "{table}" and migration.id == 1 then
@@ -322,7 +328,7 @@ def startup_failure():
             cwd=project, env=database_environment(state), capture_output=True, text=True, timeout=20)
         elapsed = time.monotonic() - started
         output = result.stdout + result.stderr
-        expected = declared_migrations((ROOT / 'src/storage/store.lua').read_text())[8]
+        expected = declared_migrations((ROOT / 'modules/workspace/src/migrations/migrations.lua').read_text())[8]
         digest = hashlib.sha256((expected[1] + '\n' + expected[2]).encode()).hexdigest()
         message = f'workspace migration 9 (nested_bee_names_v1) checksum changed: expected {digest}, found unknown'
         assert result.returncode and message in output, output
@@ -354,7 +360,7 @@ def equivalent_nine(project, select_db):
         state = project / '.wippy' / ('equivalence-original' if original else 'equivalence-edited')
         path = select_db('workspace', state)
         shutil.copy2(baseline, path)
-        identity, name, sql = declared_migrations((ROOT / 'src/storage/store.lua').read_text())[8]
+        identity, name, sql = declared_migrations((ROOT / 'modules/workspace/src/migrations/migrations.lua').read_text())[8]
         if original:
             sql = sql.replace('bee.approvals.inbox.app:app', 'bee.approvals.inbox:app')
         with sqlite3.connect(path) as db:
@@ -405,7 +411,7 @@ def copy_equivalence(project, select_db, source, upgraded):
                             value = value.replace('bee.approvals.inbox:app', 'bee.inbox:app')
                         values.append(value)
                     db.execute(f'INSERT INTO {table} VALUES ({",".join("?" for _ in values)})', values)
-            identity, name, sql = declared_migrations((ROOT / 'src/storage/store.lua').read_text())[8]
+            identity, name, sql = declared_migrations((ROOT / 'modules/workspace/src/migrations/migrations.lua').read_text())[8]
             if original:
                 sql = sql.replace('bee.approvals.inbox.app:app', 'bee.approvals.inbox:app')
             db.executescript(sql)
@@ -422,7 +428,7 @@ def copy_equivalence(project, select_db, source, upgraded):
 
 def workspace_root_histories(project, select_db):
     from test_migration_histories import HISTORY, snapshot
-    expected = declared_migrations((ROOT / 'src/storage/store.lua').read_text())
+    expected = declared_migrations((ROOT / 'modules/workspace/src/migrations/migrations.lua').read_text())
     for fresh in (False, True):
         snapshots = []
         for original in (True, False):
@@ -465,13 +471,16 @@ def owner_histories(project, probe):
         snapshots = []
         table = {'threads': 'bee_thread_schema_migrations', 'governance': 'bee_governance_migrations',
                  'gateway': 'bee_gateway_schema_migrations', 'sync': 'bee_sync_schema_migrations'}[owner]
-        for original in (True, False):
-            state = project / '.wippy' / f'history-{owner}-{original}'
+        main_source = subprocess.check_output(['git', 'show', 'origin/main:' + SOURCES[owner]], cwd=ROOT, text=True)
+        for variant in ('original', 'edited', 'main'):
+            original = variant == 'original'
+            applied = declared_migrations(main_source) if variant == 'main' else expected[:limit]
+            state = project / '.wippy' / f'history-{owner}-{variant}'
             state.mkdir()
             path = state / 'history.db'
             with sqlite3.connect(path) as db:
                 db.execute(f'CREATE TABLE {table} (id INTEGER PRIMARY KEY CHECK (id > 0), name TEXT NOT NULL UNIQUE, checksum TEXT NOT NULL, applied_at TEXT NOT NULL)')
-                for identity, name, current in expected[:limit]:
+                for identity, name, current in applied:
                     sql = originals.get(identity, current) if original else current
                     db.executescript(sql)
                     db.execute(f'INSERT INTO {table} VALUES (?, ?, ?, ?)',
@@ -487,7 +496,7 @@ def owner_histories(project, probe):
             run(project, state, 'history-' + owner)
             with sqlite3.connect(path) as db:
                 after = db.execute(f'SELECT * FROM {table} ORDER BY id').fetchall()
-                assert after[:limit] == before and len(after) == len(expected)
+                assert after[:len(applied)] == before and len(after) == len(expected)
                 assert db.execute('PRAGMA integrity_check').fetchone() == ('ok',)
                 assert db.execute('PRAGMA foreign_key_check').fetchall() == []
                 schema, data = snapshot(db)
@@ -496,8 +505,8 @@ def owner_histories(project, probe):
             run(project, state, 'history-' + owner)
             with sqlite3.connect(path) as db:
                 assert db.execute(f'SELECT * FROM {table} ORDER BY id').fetchall() == after
-        assert snapshots[0] == snapshots[1], owner
-        print(f'{owner}: real runner original/edited shipped histories converge with data and ledger rows preserved', flush=True)
+        assert all(value == snapshots[0] for value in snapshots[1:]), owner
+        print(f'{owner}: real runner original/edited/main shipped histories converge with data and ledger rows preserved', flush=True)
 
 
 def main(workspace_copy=None, upgrade_only=False):
@@ -513,7 +522,7 @@ def main(workspace_copy=None, upgrade_only=False):
                     'actions': ['db.get'], 'resources': [entry[0] for entry in OWNERS.values()] + ['bee.persistprobe:history'], 'effect': 'allow'}},
                 {'name': 'main', 'kind': 'process.lua', 'source': 'file://main.lua', 'method': 'main',
                  'modules': ['io', 'sql'],
-                 'imports': {'workspace': 'bee.storage:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database', 'ledger': 'bee.persist:ledger',
+                 'imports': {'workspace': 'bee.workspace.persist:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database', 'ledger': 'bee.persist.persist:ledger',
                      'threads_migrations': 'bee.threads.migrations:migrations',
                      'governance_migrations': 'bee.gov.migrations:schema',
                      'gateway_migrations': 'bee.gateway.migrations:migrations',

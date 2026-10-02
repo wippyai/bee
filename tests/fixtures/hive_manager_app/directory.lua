@@ -1,5 +1,5 @@
 -- MIT. Disposable live-directory double. The staging runner selects MODE only in
--- its temporary composition; production imports bee.hive.manager:directory.
+-- its temporary composition; production imports bee.hive.manager.app:directory.
 local time = require("time")
 local process = require("process")
 local ctx = require("ctx")

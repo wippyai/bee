@@ -18,7 +18,7 @@ Cluster telemetry lives in the optional `bee/hive-telemetry` package
 | `bee.hive.desktop` | Root-owned desktop integration |
 
 The Hive workspace listing API and desktop `list` operation share
-`bee.hive:workspace_query` for label, cursor and page-size validation. The
+`bee.hive.workspace:workspace_query` for label, cursor and page-size validation. The
 workspace listing handler validates a dense, bounded catalog page and requires
 the local node identity before it returns results.
 

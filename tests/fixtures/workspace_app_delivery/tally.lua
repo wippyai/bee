@@ -126,7 +126,7 @@ local function main(value: unknown)
         -- The installed agents.launch grant lets this app open a session on exactly the
         -- allow-listed shipped Claude batch definition, send it work and read the
         -- result, then send it a second piece of work on the same session.
-        local session, open_fault = sessions.open({definition = "bee.driver.claude:research_batch",
+        local session, open_fault = sessions.open({definition = "bee.driver.claude.profiles:research_batch",
             operation_key = "tally-open-" .. launch.launch_token})
         local run_state = session and "starting" or ("refused:" .. tostring(open_fault and open_fault.code))
         local outcome = ""
@@ -151,7 +151,7 @@ local function main(value: unknown)
             end
         end
         local _, run_row_error = db:execute("INSERT INTO tally_runs(attempt_id, definition_ref, state, outcome, steer) VALUES (?, ?, ?, ?, ?)",
-            {first_ref, session and "bee.driver.claude:research_batch" or "", run_state, outcome, steer})
+            {first_ref, session and "bee.driver.claude.profiles:research_batch" or "", run_state, outcome, steer})
         if run_row_error then error("Application run record is unavailable") end
         status = "Agent " .. run_state
         paint()

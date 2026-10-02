@@ -255,7 +255,6 @@ def command_environment(folder):
 
 def prepare_fixture(folder):
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
-    shutil.copytree(ROOT / "src/protocol", folder / "src/protocol")
     for module in ("values", "hub", "hive", "persist", "sync", "threads", "placement", "driver"):
         shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
     (folder / "src/hubrecoveryprobe").mkdir()
@@ -405,7 +404,7 @@ def failure_receipt_check(folder):
     (probe / "main.lua").write_text(FAILURE_PROBE)
     document = yaml.safe_load((probe / "_index.yaml").read_text())
     entry = next(item for item in document["entries"] if item["name"] == "main")
-    entry["imports"]["installation"] = "bee.hub:installation"
+    entry["imports"]["installation"] = "bee.hub.activation:installation"
     document["entries"] = [item for item in document["entries"] if item["name"] in {"policy", "management_policy", "reader_policy", "main"}]
     (probe / "_index.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
     service = folder / "modules/hub/src/binding/publication.lua"

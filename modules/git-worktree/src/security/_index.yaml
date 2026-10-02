@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.git.worktree.security
+entries:
+- name: worktree_policy
+  kind: security.policy
+  policy:
+    effect: allow
+    actions:
+    - exec.get
+    - exec.run
+    - fs.get
+    - fs.read
+    - fs.stat
+    - fs.exists
+    - fs.isdir
+    - registry.get
+    resources: '*'

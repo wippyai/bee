@@ -16,7 +16,7 @@ local AGENT = "bee.test.publish_agent"
 local OTHER = "bee.test.publish_other"
 local APPROVER = "bee.test.publish_approver"
 local APPROVER_POLICY = "publication-fixture"
-local CONFIGURATION = "bee:module_publication"
+local CONFIGURATION = "bee.gateway.env:module_publication"
 local PACK = string.rep("a", 64)
 local base_port = publish.port
 type Object = {[string]: unknown}
@@ -60,12 +60,12 @@ local function apply(entry: Object)
     if not applied then error("apply " .. tostring(entry.id) .. ": " .. tostring(err)) end
 end
 local function endpoint(): string
-    local entry = registry.get("bee:gateway_endpoint")
+    local entry = registry.get("bee.gateway.api:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
     return tostring((assert(bounds.object(entry.data))).address)
 end
 local function ensure_approver_policy(name: string)
-    local policies_entry = registry.get("bee:approver_policies")
+    local policies_entry = registry.get("bee.security.approvals:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list_owner = assert(bounds.object(policies_entry.data))
     local list = principals.objects(list_owner.policies)

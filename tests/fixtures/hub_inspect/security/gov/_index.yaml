@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.security.gov
+entries:
+- name: protected_kernel
+  kind: registry.entry
+  data:
+    namespaces: []

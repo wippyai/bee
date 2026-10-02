@@ -27,7 +27,7 @@ entries:
   imports:
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    recovery: bee.workspace:recovery
+    recovery: bee.workspace.types:recovery
   meta:
     command:
       name: workspace-hosts-supervisor
@@ -43,7 +43,7 @@ entries:
   imports:
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    persistence: bee.workspace:persistence
+    persistence: bee.workspace.persist:checkpoint
   meta:
     command:
       name: workspace-hosts-delayed-supervisor
@@ -84,10 +84,10 @@ entries:
   modules: [process, channel, security, funcs, time, uuid, json, logger]
   imports:
     bounds: bee.values:bounds
-    store: bee.storage:store
-    catalog: bee.storage:catalog
+    store: bee.workspace.persist:store
+    catalog: bee.workspace.persist:catalog
     decode: bee.protocol:decode
-    recovery: bee.workspace:recovery
+    recovery: bee.workspace.types:recovery
   meta:
     command:
       name: workspace-hosts-logical-supervisor
@@ -109,10 +109,10 @@ entries:
   modules: [process, channel, security, time, uuid, json, logger]
   imports:
     bounds: bee.values:bounds
-    store: bee.storage:store
-    catalog: bee.storage:catalog
+    store: bee.workspace.persist:store
+    catalog: bee.workspace.persist:catalog
     decode: bee.protocol:decode
-    recovery: bee.workspace:recovery
+    recovery: bee.workspace.types:recovery
     leases: bee.app:host_leases
   meta:
     command:
@@ -135,8 +135,8 @@ entries:
   modules: [process, channel, security, time, uuid, logger, registry]
   imports:
     bounds: bee.values:bounds
-    store: bee.storage:store
-    catalog: bee.storage:catalog
+    store: bee.workspace.persist:store
+    catalog: bee.workspace.persist:catalog
     leases: bee.app:host_leases
   meta:
     command:
@@ -154,8 +154,8 @@ entries:
   modules: [process, channel, security, time, uuid, logger, registry]
   imports:
     bounds: bee.values:bounds
-    store: bee.storage:store
-    catalog: bee.storage:catalog
+    store: bee.workspace.persist:store
+    catalog: bee.workspace.persist:catalog
     leases: bee.app:host_leases
   meta:
     command:

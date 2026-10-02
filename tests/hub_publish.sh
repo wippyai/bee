@@ -24,6 +24,7 @@ count=$(($(find "$root/modules" -name wippy.yaml | wc -l) + 1))
 cat > "$fixture/wippy" <<'MOCK'
 #!/bin/sh
 set -eu
+[ "$1" != registry ] || { printf '%s\n' "${MOCK_CORE_ENTRIES:-[]}"; exit 0; }
 [ "$1" = publish ] || exit 1
 shift
 config= wapp= arguments=$*
@@ -79,6 +80,10 @@ grep -q "^gateway gateway-$version.wapp " "$fixture/calls" || fail 'the sealed g
 run "$fixture/release" publish || { cat "$fixture/out" >&2; fail 'publish refused a coherent release deployment'; }
 [ "$(grep -c -- '--create --protected --module-visibility public' "$fixture/calls")" = "$count" ] || fail 'publish did not create, protect and set visibility for every module'
 ! grep -q -- '--dry-run' "$fixture/calls" || fail 'publish ran a dry run'
+
+MOCK_CORE_ENTRIES='[{"id":"bee.deps:values","kind":"ns.dependency","data":{"component":"bee/values"}}]' run "$fixture/release" check && fail 'check accepted a composed boot root as the Hub core'
+grep -q 'Bee self-update must leave component selection to host roots: bee.deps:values' "$fixture/out" || fail 'core closure refusal was not named'
+[ ! -s "$fixture/calls" ] || fail 'a composed core reached publication'
 
 printf 'tampered upstream\n' >> "$fixture/release/.wippy/vendor/upstream/helper-2.0.0.wapp"
 run "$fixture/release" check && fail 'check accepted a tampered upstream pack'

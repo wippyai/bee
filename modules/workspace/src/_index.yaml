@@ -1,0 +1,86 @@
+version: '1.0'
+namespace: bee.workspace
+entries:
+- name: definition
+  kind: ns.definition
+  module: workspace
+  readme: file://README.md
+  meta:
+    title: Bee workspace
+    comment: Workspace catalog and durable checkpoints; host owns resources and process
+      lifetime
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: '*'
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
+- name: target_decode
+  kind: ns.requirement
+  targets:
+  - entry: bee.workspace.types:recovery
+    path: .imports.decode
+- name: target_model
+  kind: ns.requirement
+  targets:
+  - entry: bee.workspace.types:recovery
+    path: .imports.model
+- name: target_application_protocol
+  kind: ns.requirement
+  targets:
+  - entry: bee.workspace.types:selection
+    path: .imports.contract
+  - entry: bee.workspace.types:recovery
+    path: .imports.contract
+  - entry: bee.workspace.types:catalog
+    path: .imports.contract
+  - entry: bee.workspace.persist:store
+    path: .imports.contract
+  - entry: bee.workspace.persist:catalog
+    path: .imports.contract
+- name: target_db
+  kind: ns.requirement
+  targets:
+  - entry: bee.workspace.persist:store
+    path: .data.database
+- name: target_roots
+  kind: ns.requirement
+  targets:
+  - entry: bee.workspace.binding:catalog
+    path: .data.roots
+- name: target_scope
+  kind: ns.requirement
+  targets:
+  - entry: bee.workspace.binding:catalog
+    path: .data.scope
+- name: target_facade_policy
+  kind: ns.requirement
+  targets:
+  - entry: bee.workspace.binding:create
+    path: .security.policies +=
+  - entry: bee.workspace.binding:read
+    path: .security.policies +=
+  - entry: bee.workspace.binding:list
+    path: .security.policies +=
+  - entry: bee.workspace.binding:search
+    path: .security.policies +=
+  - entry: bee.workspace.binding:rename
+    path: .security.policies +=
+  - entry: bee.workspace.binding:archive
+    path: .security.policies +=
+  - entry: bee.workspace.binding:restore
+    path: .security.policies +=
+  - entry: bee.workspace.binding:inspect
+    path: .security.policies +=
+  - entry: bee.workspace.binding:search_within
+    path: .security.policies +=
+  - entry: bee.workspace.binding:roots
+    path: .security.policies +=
+  - entry: bee.workspace.binding:folders
+    path: .security.policies +=

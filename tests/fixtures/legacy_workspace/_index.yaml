@@ -22,8 +22,8 @@ entries:
     decode_input: bee.protocol:input
     appearance: bee.app:appearance
     physical: bee.terminal:display
-    persistence: bee.workspace:persistence
-    recovery: bee.workspace:recovery
+    persistence: bee.workspace.persist:checkpoint
+    recovery: bee.workspace.types:recovery
 - name: launch
   kind: process.lua
   source: file://main.lua
@@ -45,8 +45,8 @@ entries:
     decode_input: bee.protocol:input
     appearance: bee.app:appearance
     physical: bee.terminal:display
-    persistence: bee.workspace:persistence
-    recovery: bee.workspace:recovery
+    persistence: bee.workspace.persist:checkpoint
+    recovery: bee.workspace.types:recovery
 - name: core_spawn_policy
   kind: security.policy
   meta: {test_support: true}

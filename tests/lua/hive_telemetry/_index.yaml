@@ -14,7 +14,7 @@ entries:
     test: wippy.test:test
     types: bee.hive:types
     bounds: bee.values:bounds
-    sampling: bee.hive.telemetry:sampling
+    sampling: bee.hive.telemetry.binding:sampling
 - name: holdings_test
   kind: function.lua
   source: file://holdings_test.lua

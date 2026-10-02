@@ -15,8 +15,8 @@ entries:
   kind: library.lua
   source: file://sync_sender.lua
   imports:
-    transaction: bee.persist:transaction
-    version: bee.sync:version
+    transaction: bee.persist.persist:transaction
+    version: bee.sync.values:version
 - name: context_tool
   kind: function.lua
   source: file://context_tool.lua
@@ -48,14 +48,14 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, http_client.private_ip, http_client.request, registry.get, bee.threads.lifecycle, bee.threads.carrier]
-    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:materialize, bee.gateway.binding:reissue, bee.gateway.binding:revoke_attempt, bee.gateway.binding:check, bee.gateway.binding:authorize_materialization, bee.gateway.binding:hook_queue, bee.gateway.binding:hook_claim, bee.gateway.binding:hook_ack, bee.gateway.binding:hook_reject, bee.threads.binding:claim, bee.threads.binding:commit, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway.probe:drainer, bee:workers]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:materialize, bee.gateway.binding:reissue, bee.gateway.binding:revoke_attempt, bee.gateway.binding:check, bee.gateway.binding:authorize_materialization, bee.gateway.binding:hook_queue, bee.gateway.binding:hook_claim, bee.gateway.binding:hook_ack, bee.gateway.binding:hook_reject, bee.threads.binding:claim, bee.threads.binding:commit, bee.gateway.api:gateway_endpoint, 127.0.0.1, '*', bee.gateway.probe:drainer, bee:workers]
     effect: allow
 - name: test_database_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [db.get]
-    resources: [bee.gateway:db, bee.threads:db]
+    resources: [bee.gateway.env:db, bee.threads.env:db]
     effect: allow
 - name: configuration_caller_policy
   kind: security.policy
@@ -71,4 +71,4 @@ entries:
   method: run
   modules: [exec, funcs, security, sql]
   imports:
-    configuration: bee.driver.codex:configuration
+    configuration: bee.driver.codex.binding:configuration

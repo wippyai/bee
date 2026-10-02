@@ -16,4 +16,4 @@ entries:
     appearance: bee.app:appearance
     interaction: bee.app:interaction
     live_updates: bee.settings.app:live_updates
-    build_info: bee.settings:build_info
+    build_info: bee.settings.app:build_info

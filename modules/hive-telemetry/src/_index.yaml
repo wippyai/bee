@@ -1,10 +1,6 @@
 version: '1.0'
 namespace: bee.hive.telemetry
 entries:
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: definition
   kind: ns.definition
   module: hive-telemetry
@@ -34,11 +30,6 @@ entries:
   targets:
   - entry: bee.hive.telemetry.binding:presence
     path: .security.policies +=
-- name: sampling
-  kind: library.lua
-  source: file://sampling.lua
-  imports:
-    bounds: bee.values:bounds
 - name: target_presence_policies
   kind: ns.requirement
   default: []
@@ -73,3 +64,7 @@ entries:
   targets:
   - entry: bee.hive.telemetry.binding:cluster
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

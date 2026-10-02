@@ -12,8 +12,8 @@ entries:
   imports:
     test: wippy.test:test
     placement_types: bee.placement:types
-    placement_configuration: bee.placement.native:configuration
-    configuration: bee.driver:configuration
+    placement_configuration: bee.placement.native.env:configuration
+    configuration: bee.driver.configuration:configuration
     bounds: bee.values:bounds
     claude: bee.driver.claude.binding:configure
     codex: bee.driver.codex.binding:configure

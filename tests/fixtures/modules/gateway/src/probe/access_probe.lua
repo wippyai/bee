@@ -45,7 +45,7 @@ local function rpc(address: string, action: string, token: string, name: string,
     return object(decoded)
 end
 local function run(address: string)
-    local entry = registry.get("bee:approver_policies")
+    local entry = registry.get("bee.security.approvals:approver_policies")
     if not entry then error("approver policies unavailable") end
     local data = object(entry.data)
     data.policies = {{name = "mcp-test", approvers = {ACTOR}, max_ttl_ms = 600000}}

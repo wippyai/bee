@@ -1,19 +1,22 @@
 # Workspace storage
 
-`bee.storage:store` is the persistence boundary for workspace hosts. The node
+`bee.workspace.persist:store` is the persistence boundary for workspace hosts. The node
 workspace database holds any number of logical workspaces as rows keyed by
 `workspace_id`; a workspace has no database file, process host or runtime of its
 own. `open(resource, selection)` acquires `bee.env:workspace_db` (or, for protected
 bootstrap, `bee.workspace.db:<name>`) and binds the handle to exactly one catalog
 row. Names contain only letters, digits, underscores and hyphens, with a 160-byte
-total ID limit. The root registry owns each resource's path and lifecycle.
+total ID limit. The root registry owns each resource's path and lifecycle. `bee.deps:workspace`
+links the existing resource through `target_db` onto the component store entry;
+the component provisions no database. The host storage policy allows only that
+entry's configuration read and the selected database acquisition.
 Callers cannot pass file paths, select client resources or change tables. Native
 `db.get` must grant the selected resource explicitly; the existing default policy
 grants only `bee.env:workspace_db`. Default applications cannot import this library,
 and their storage boundary denies both default core stores and the reserved
 client/workspace database namespaces even under a broader database grant.
 
-A selection, decoded by `bee.storage:binding`, is either `{workspace_id}` or
+A selection, decoded by `bee.workspace.types:selection`, is either `{workspace_id}` or
 `{root_ref, subpath}`. Classic folder mode passes `binding.classic()`, the
 workspace rooted at `bee.env:workspace_root` with an empty subpath. The host is
 told its selection by the composition that spawns it
@@ -39,7 +42,7 @@ that workspace adopts it in one transaction under the same desktop identity.
 See the [desktop contract](../guides/desktop.md) for qualified tab identities and generations
 checks and the once-only import from older combined desktop state.
 
-The core-only storage API is:
+The host-only component storage API is:
 
 ```lua
 local storage = require("store")
@@ -53,8 +56,8 @@ store:close()
 
 State is returned and accepted as a JSON string so the workspace owner remains
 responsible for the typed desktop and application resume envelope. A value must
-be a JSON object with `version = 1` and is limited to 2 MiB. The storage layer
-checks syntax and the top-level version; the workspace protocol validates
+be a JSON object with `version = 1` and is limited to 2 MiB. The SQL repository
+checks syntax and the top-level version; `bee.workspace.types:recovery` validates
 desktop geometry, preferences, application identities and opaque resume records.
 
 The catalog table `workspaces` holds one row per logical workspace:
@@ -63,7 +66,7 @@ The catalog table `workspaces` holds one row per logical workspace:
 lookup by root is an index probe), `state` (`active` or `archived`; `open()`
 serves only active rows), `created_at` and `last_used_at`, which `open()`
 records. The ID names a workspace; it does not grant authority. There is no
-identity-write method. `bee.storage:catalog` holds the row operations (insert,
+identity-write method. `bee.workspace.persist:catalog` holds the row operations (insert,
 read, ordered pages, rename and state changes) over a transaction from
 `store.database(resource)`; the [catalog operations](workspace-catalog.md) are
 the only callers outside tests. Components attach their own per-workspace
@@ -105,7 +108,7 @@ layout schema contains no application definition ID.
 version, monotonic generation and update timestamp.
 `workspace_schema_migrations` is an append-only ledger with integer `id`,
 immutable `name`, `checksum` and `applied_at` fields. `open()` enables WAL and
-runs every pending migration in one transaction through `bee.persist:ledger`.
+runs every pending migration in one transaction through `bee.persist.persist:ledger`.
 The shared runner captures freshness before applying the batch and takes the
 writer lock before validating the ledger, so concurrent opens read committed
 migration history. On every open it checks that
@@ -114,7 +117,8 @@ rejects a changed name or checksum. A failed migration rolls back both schema
 changes and all ledger records from that batch. Client migrations use the same
 batch runner with the original `client_schema_migrations` shape (`id`, `name`,
 `checksum`), without an `applied_at` column. Applied workspace migrations 1–12
-and client migrations 1–3 retain their exact SQL and checksums. Workspace
+live in `bee.workspace.migrations:migrations`; they and client migrations 1–3
+retain their exact SQL and checksums. Workspace
 migration 13 converts the original shipped `bee.approvals.inbox:app` identity
 in bindings and saved applications to `bee.approvals.inbox.app:app`; both inbox
 histories canonicalize the same JSON and retain unrelated application state.
@@ -130,7 +134,7 @@ replacing an existing row; malformed or oversized state remains an error and
 is never silently discarded.
 
 Migration 4 adds `workspace_application_thread_bindings`, keyed (since
-migration 6) by workspace and the logical `instance_id`. The core-only `bee.storage:thread_bindings` helper prepares one
+migration 6) by workspace and the logical `instance_id`. The host-only `bee.workspace.persist:thread_bindings` helper prepares one
 immutable `{thread_id, definition_id, actor_id, role}` identity with one bounded
 idempotency key, then advances its revision through `pending`, `active` and
 `revoked` with expected revision/state compare-and-swap checks. Exact prepare
@@ -163,7 +167,7 @@ same intent under multiple leases fail the new unique constraint and roll back;
 they never silently discard authority records. This SQLite migration uses guarded
 double-quoted identifiers for columns absent from the original schema; the
 runtime and populated-history acceptance both exercise that behavior.
-Gateway migration 17 and sync migration 9 repair telemetry owner references in
+Gateway migration 18 and sync migration 10 repair telemetry owner references in
 owned JSON fields. Sync migration 4's historical difference is whitespace only.
 All repair steps are idempotent for both shipped histories.
 

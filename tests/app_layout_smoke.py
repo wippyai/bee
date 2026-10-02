@@ -31,7 +31,7 @@ def screens(binary=None):
             state.mkdir()
             ui = NativeDesktop(binary, folder, state, definition) if binary else Desktop(state, apps=(definition,))
             try:
-                ui.wait(title, timeout=45)
+                ui.wait(title)
                 ui.key(b'\x1b[23~')
                 for width, height in [(120, 36), (80, 24)]:
                     ui.resize(width, height)
@@ -60,7 +60,7 @@ def screens(binary=None):
             state = folder / 'state'
             ui = NativeDesktop(binary, folder, state)
             try:
-                ui.wait('Sessions', timeout=45)
+                ui.wait('Sessions')
                 ui.key(b'\x17')
                 ui.wait(' BEE ')
                 ui.quit()

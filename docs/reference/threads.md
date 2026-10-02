@@ -15,7 +15,7 @@ stored data; no contract reads or writes them.
 
 Every callable method derives the actor from the authenticated security
 context. A request body cannot choose its author. Host-attached policies give
-the method access to the selected `bee.threads:database_ref`; they do not give
+the method access to the selected `bee.threads.env:database_ref`; they do not give
 the caller SQL access. Registry metadata, a claimed producer, a hook name, a
 consumer ID or a parent reference is not authority.
 

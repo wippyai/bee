@@ -24,7 +24,7 @@ local function define_tests()
         test.it("retains a saved profile's identity and title beside its definition", function()
             local saved = assert(funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
-                profile = {schema_revision = "bee.agent-profile@2", name = "Selected container profile", definition_ref = "bee.driver.claude:default_window", driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {mcp = {}}}}))
+                profile = {schema_revision = "bee.agent-profile@2", name = "Selected container profile", definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}}}}))
             test.is_true((assert(bounds.object(saved))).ok == true)
             local page, page_fault = catalog.list({include_unavailable = true}, "saved-profile-workspace")
             if not page then error(page_fault and page_fault.message or "catalog list failed") end
@@ -39,7 +39,7 @@ local function define_tests()
             test.is_true(found)
         end)
         test.it("registers every operation of the host-selected Threads journal", function()
-            local binding = assert(registry.get("bee.threads:journal_local"))
+            local binding = assert(registry.get("bee.threads.binding:journal_local"))
             local data = assert(bounds.object(binding.data))
             for _, contract in ipairs(principals.objects(data.contracts)) do
                 if contract.contract == "bee.threads:journal" then
@@ -55,12 +55,12 @@ local function define_tests()
         test.it("keeps an existing machine login ready in the default launch home", function()
             local found: Candidate? = nil
             for _, candidate in ipairs(listed(true).items) do
-                if candidate.ref == "bee.driver.claude:default_window" then found = candidate end
+                if candidate.ref == "bee.driver.claude.profiles:default_window" then found = candidate end
             end
             test.not_nil(found)
             if found and found.status ~= "ready" then error(table.concat(found.reasons, "; ")) end
             test.eq(found and found.status, "ready")
-            local entry = assert(registry.get("bee.driver.claude:default_window"))
+            local entry = assert(registry.get("bee.driver.claude.profiles:default_window"))
             local definition = assert(bounds.object(entry.data))
             assert(type(definition.binding_ref) == "string" and type(definition.profile_id) == "string" and type(definition.policy_ref) == "string")
             local request: machine.Request = {thread_id = "catalog-login-thread", action_id = "catalog-login-action",
@@ -91,7 +91,7 @@ local function define_tests()
             local claude: Candidate? = nil
             local unavailable = 0
             for _, candidate in ipairs(all.items) do
-                if candidate.ref == "bee.driver.claude:default_window" then claude = candidate end
+                if candidate.ref == "bee.driver.claude.profiles:default_window" then claude = candidate end
                 if candidate.status ~= "ready" then
                     unavailable = unavailable + 1
                     test.is_true(#candidate.reasons > 0)

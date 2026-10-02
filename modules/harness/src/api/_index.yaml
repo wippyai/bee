@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.harness.api
+entries:
+- name: gateway_hook
+  kind: http.endpoint
+  meta:
+    router: bee.gateway.api:gateway_router
+  method: POST
+  path: /hook/:action
+  func: bee.gateway.api:hook_http
+- name: gateway_hook_status
+  kind: http.endpoint
+  meta:
+    router: bee.gateway.api:gateway_router
+  method: GET
+  path: /hook/:action/:event
+  func: bee.gateway.api:hook_status_http
+- name: gateway_hook_mcp
+  kind: http.endpoint
+  meta:
+    router: bee.gateway.api:gateway_router
+  method: POST
+  path: /hook/:action/mcp
+  func: bee.gateway.api:hook_mcp_http

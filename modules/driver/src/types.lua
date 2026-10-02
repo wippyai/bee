@@ -1,6 +1,6 @@
 -- MIT. The driver binding schema: what a provider declares it supports.
 -- Metadata describes; host admission decides. Every field is decoded by
--- bee.driver:profile before anything reads it.
+-- bee.driver.profiles:profile before anything reads it.
 type Mode = "window" | "session" | "batch"
 type Protocol = "stream-json" | "acp" | "app-server" | "rpc" | "sdk" | "native" | "pty" | "http-events"
 type HookTransport = "command" | "http" | "mcp_tool" | "plugin"

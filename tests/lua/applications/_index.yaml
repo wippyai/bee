@@ -12,7 +12,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     catalog: bee.apps:catalog
-    admission: bee.gov:governed_application_admission
+    admission: bee.gov.activation:governed_application_admission
     activation_store: bee.gov.persist:activation_store
     canonical: bee.values:canonical
     test: wippy.test:test
@@ -36,7 +36,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     handler: bee.apps:command
-    native_command: bee.console:command
+    native_command: bee.console.app:command
     test: wippy.test:test
 - name: lifecycle_test
   kind: function.lua

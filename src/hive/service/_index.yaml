@@ -48,13 +48,13 @@ entries:
   kind: library.lua
   source: file://inbox_sender.lua
   imports:
-    hive: bee.hive:client
+    hive: bee.hive.binding:client
 - name: replica_sender
   kind: library.lua
   source: file://replica_sender.lua
   modules: [hash, base64]
   imports:
-    hive: bee.hive:client
-    version: bee.sync:version
-    transaction: bee.persist:transaction
+    hive: bee.hive.binding:client
+    version: bee.sync.values:version
+    transaction: bee.persist.persist:transaction
     bounds: bee.values:bounds

@@ -19,7 +19,7 @@ local OTHER_BINDING = "app.other:api"
 local ACTOR = "bee.application:" .. WORKSPACE .. ":instance-1"
 
 local function vocabulary(): unknown
-    return assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
+    return assert(catalog.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
 end
 
 local function request(capability: string, parameters: {[string]: unknown}): {[string]: unknown}

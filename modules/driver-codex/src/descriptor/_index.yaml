@@ -64,7 +64,7 @@ entries:
       permission_answers:
         window:
           transport: hook_mcp
-          adapter_ref: bee.driver:permission_request_hook
+          adapter_ref: bee.driver.permission:permission_request_hook
         first_turn:
           transport: provider
           reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window
@@ -397,3 +397,28 @@ entries:
         optional: true
         write_back: false
         container_content: ''
+- name: default_provider
+  kind: registry.entry
+  meta:
+    type: bee.codex_provider
+    comment: Built-in account login with Codex's default model; host policy selects this configuration
+  data:
+    schema_revision: bee.codex-provider@1
+    name: openai
+    authentication: chatgpt
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver.binding:universal
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.app_command
+    comment: CLI command to launch Codex CLI in the agent window
+  data:
+    name: codex
+    definition_id: bee.harness.app:app
+    arguments:
+    - bee.driver.codex.profiles:default_window
+    fullscreen: true

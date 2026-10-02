@@ -28,7 +28,7 @@ entries:
   modules: [http, json, funcs, security, contract, registry]
   imports:
     gateway: bee.gateway.binding:gateway
-    hooks: bee.gateway:hooks
+    hooks: bee.gateway.hooks:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
     bounds: bee.values:bounds
@@ -40,7 +40,7 @@ entries:
   modules: [http, json]
   imports:
     gateway: bee.gateway.binding:gateway
-    hooks: bee.gateway:hooks
+    hooks: bee.gateway.hooks:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
     bounds: bee.values:bounds
@@ -52,8 +52,8 @@ entries:
   modules: [http, json, funcs, security, contract, registry]
   imports:
     gateway: bee.gateway.binding:gateway
-    mcp: bee.gateway:mcp
-    hooks: bee.gateway:hooks
+    mcp: bee.gateway.api:mcp
+    hooks: bee.gateway.hooks:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
     bounds: bee.values:bounds
@@ -64,14 +64,29 @@ entries:
   method: handle
   modules: [http, json, funcs, security, registry, contract]
   imports:
-    profile_scope: bee.gateway:profile_scope
+    profile_scope: bee.gateway.catalog:profile_scope
     gateway: bee.gateway.binding:gateway
-    mcp: bee.gateway:mcp
+    mcp: bee.gateway.api:mcp
     admission: bee.gateway.api:admission
-    catalog: bee.gateway:catalog
-    context: bee.gateway:context
-    session_tools: bee.gateway:session_tools
+    catalog: bee.gateway.catalog:catalog
+    context: bee.gateway.catalog:context
+    session_tools: bee.gateway.catalog:session_tools
     bounds: bee.values:bounds
     subject_call: bee.gateway.security:subject_call
   security:
     policies: [bee.resources.security:resource_resolve_policy,bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy, bee.gateway.security:session_contract_policy]
+- name: address_value
+  kind: library.lua
+  source: file://address_value.lua
+- name: mcp
+  kind: library.lua
+  source: file://mcp.lua
+  imports:
+    session_tools: bee.gateway.catalog:session_tools
+    bounds: bee.values:bounds
+    message: bee.threads.records:message
+    arguments: bee.app:arguments
+    workspace_protocol: bee.gov.workspace:workspace_protocol
+    delivery_protocol: bee.gov.delivery:delivery_protocol
+    docs_protocol: bee.docs:protocol
+    record_bounds: bee.threads.records:bounds

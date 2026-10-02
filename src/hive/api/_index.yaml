@@ -8,7 +8,7 @@ entries:
   modules: [funcs, process, system]
   imports:
     bounds: bee.values:bounds
-    workspace_query: bee.hive:workspace_query
+    workspace_query: bee.hive.workspace:workspace_query
     workspace_page: bee.hive.api:workspaces_page
   meta:
     comment: Open Hive operation listing one page of this node's workspace catalog and which workspaces a host serves now
@@ -50,4 +50,4 @@ entries:
   imports:
     bounds: bee.values:bounds
     contract: bee.protocol:application
-    workspace_query: bee.hive:workspace_query
+    workspace_query: bee.hive.workspace:workspace_query

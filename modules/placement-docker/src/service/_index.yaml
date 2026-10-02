@@ -13,16 +13,16 @@ entries:
   imports:
     bounds: bee.values:bounds
     request_codec: bee.placement:request
-    profiles: bee.placement:profiles
-    spec: bee.placement.docker:spec
+    profiles: bee.placement.profiles:profiles
+    spec: bee.placement.docker.binding:spec
     store: bee.placement.native.persist:store
     local_attempts: bee.placement.native.service:service
     homes: bee.placement.native.service:homes
     types: bee.placement:types
     workdir_preparers: bee.placement.native.service:workdir_preparers
     docker_client: userspace.docker:docker_client
-    paths: bee.placement:paths
-    resources: bee.placement.native:resources
+    paths: bee.placement.profiles:paths
+    resources: bee.placement.native.env:resources
     image: bee.placement.docker.service:image
     runtime_probe: bee.placement.docker.service:runtime_probe
     environment: bee.placement.docker.service:environment
@@ -38,12 +38,12 @@ entries:
     bounds: bee.values:bounds
     types: bee.placement:types
     materialization: bee.placement.native.service:materialization
-    process_backend: bee.placement.native:process_backend
-    resources: bee.placement.native:resources
+    process_backend: bee.placement.native.binding:process_backend
+    resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
     service: bee.placement.docker.service:service
-    spec: bee.placement.docker:spec
-    paths: bee.placement:paths
+    spec: bee.placement.docker.binding:spec
+    paths: bee.placement.profiles:paths
     quote: bee.driver.kit:quote
 - name: runner
   kind: process.lua
@@ -96,8 +96,8 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    profiles: bee.placement:profiles
-    resources: bee.placement.native:resources
+    profiles: bee.placement.profiles:profiles
+    resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
     docker_client: userspace.docker:docker_client
@@ -138,8 +138,8 @@ entries:
   imports:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
-    environment: bee.placement.docker:environment
-    resources: bee.placement.native:resources
+    environment: bee.placement.docker.env:environment
+    resources: bee.placement.native.env:resources
     image: bee.placement.docker.service:image
     docker_client: userspace.docker:docker_client
 
@@ -150,6 +150,6 @@ entries:
   imports:
     bounds: bee.values:bounds
     quote: bee.driver.kit:quote
-    resources: bee.placement.native:resources
-    capture: bee.driver:probe_capture
+    resources: bee.placement.native.env:resources
+    capture: bee.driver.locate:probe_capture
     docker_client: userspace.docker:docker_client

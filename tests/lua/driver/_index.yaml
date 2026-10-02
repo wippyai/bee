@@ -13,7 +13,7 @@ entries:
   modules: [registry]
   imports:
     test: wippy.test:test
-    profile: bee.driver:profile
+    profile: bee.driver.profiles:profile
 - name: kit_test
   kind: function.lua
   source: file://kit_test.lua
@@ -34,16 +34,16 @@ entries:
   modules: [fs, json, funcs]
   imports:
     driver_types: bee.driver:types
-    universal: bee.driver:universal
+    universal: bee.driver.binding:universal
     bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
-    claude: bee.driver.claude:protocol
-    codex: bee.driver.codex:protocol
-    muse: bee.driver.muse:protocol
-    claude_launch: bee.driver.claude:launch
-    codex_launch: bee.driver.codex:launch
-    muse_launch: bee.driver.muse:launch
+    claude: bee.driver.claude.binding:protocol
+    codex: bee.driver.codex.binding:protocol
+    muse: bee.driver.muse.binding:protocol
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
     observation: bee.threads.records:observation
     quote: bee.driver.kit:quote
 - name: login_evidence_test
@@ -56,13 +56,13 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    codex_launch: bee.driver.codex:launch
-    claude_launch: bee.driver.claude:launch
-    agy_launch: bee.driver.agy:launch
-    grok_launch: bee.driver.grok:launch
-    muse_launch: bee.driver.muse:launch
-    opencode_launch: bee.driver.opencode:launch
-    universal: bee.driver:universal
+    codex_launch: bee.driver.codex.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    grok_launch: bee.driver.grok.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    universal: bee.driver.binding:universal
     materialization: bee.placement.native.service:materialization
     placement_types: bee.placement:types
 - name: locate_test
@@ -72,15 +72,15 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    locate: bee.driver:locate
-    descriptor: bee.driver:descriptor
-    login_evidence: bee.driver:login_evidence
-    claude: bee.driver.claude:locate
-    codex: bee.driver.codex:locate
-    opencode: bee.driver.opencode:locate
-    agy: bee.driver.agy:locate
-    grok: bee.driver.grok:locate
-    muse: bee.driver.muse:locate
+    locate: bee.driver.locate:locate
+    descriptor: bee.driver.descriptor:descriptor
+    login_evidence: bee.driver.locate:login_evidence
+    claude: bee.driver.claude.descriptor:locate
+    codex: bee.driver.codex.descriptor:locate
+    opencode: bee.driver.opencode.descriptor:locate
+    agy: bee.driver.agy.descriptor:locate
+    grok: bee.driver.grok.descriptor:locate
+    muse: bee.driver.muse.descriptor:locate
 - name: descriptor_test
   kind: function.lua
   source: file://descriptor_test.lua
@@ -90,8 +90,9 @@ entries:
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
-    descriptor: bee.driver:descriptor
-    login_evidence: bee.driver:login_evidence
+    descriptor: bee.driver.descriptor:descriptor
+    resolver: bee.driver.binding:resolver
+    login_evidence: bee.driver.locate:login_evidence
     bounds: bee.values:bounds
 - name: universal_test
   kind: function.lua
@@ -101,10 +102,10 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    universal: bee.driver:universal
-    codec_registry: bee.driver:codec_registry
-    descriptor: bee.driver:descriptor
-    configuration: bee.driver:configuration
+    universal: bee.driver.binding:universal
+    codec_registry: bee.driver.codec:codec_registry
+    descriptor: bee.driver.descriptor:descriptor
+    configuration: bee.driver.configuration:configuration
 - name: codex_config_test
   kind: function.lua
   source: file://codex_config_test.lua
@@ -112,7 +113,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    configuration: bee.driver.codex:configuration
+    configuration: bee.driver.codex.binding:configuration
 - name: codex_launch_test
   kind: function.lua
   source: file://codex_launch_test.lua
@@ -120,7 +121,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    launch: bee.driver.codex:launch
+    launch: bee.driver.codex.binding:launch
     quote: bee.driver.kit:quote
 - name: muse_config_test
   kind: function.lua
@@ -133,10 +134,10 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     registry: registry
-    configuration: bee.driver.muse:configuration
-    driver_configuration: bee.driver:configuration
+    configuration: bee.driver.muse.binding:configuration
+    driver_configuration: bee.driver.configuration:configuration
     configure: bee.driver.muse.binding:configure
-    placement_configuration: bee.placement.native:configuration
+    placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
 
 - name: option_render_test
@@ -147,19 +148,19 @@ entries:
   modules: [json, toml, hash, registry]
   security: {policies: [bee.harness.profiles:repair_policy]}
   imports:
-    universal: bee.driver:universal
+    universal: bee.driver.binding:universal
     test: wippy.test:test
-    render: bee.driver:option_render
-    descriptor: bee.driver:descriptor
-    configuration: bee.driver:configuration
-    materializer: bee.placement.native:configuration
+    render: bee.driver.configuration:option_render
+    descriptor: bee.driver.descriptor:descriptor
+    configuration: bee.driver.configuration:configuration
+    materializer: bee.placement.native.env:configuration
     bounds: bee.values:bounds
 - name: budget_accounting_test
   kind: function.lua
   source: file://budget_accounting_test.lua
   method: run
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, budgets: bee.threads.records:budgets, descriptor: bee.driver:descriptor}
+  imports: {test: wippy.test:test, budgets: bee.threads.records:budgets, descriptor: bee.driver.descriptor:descriptor}
 - name: docker_probe_test
   kind: function.lua
   source: file://docker_probe_test.lua

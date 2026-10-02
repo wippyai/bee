@@ -10,8 +10,8 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     clock: bee.values:clock
-    catalog: bee.hive:catalog
-    principals: bee.hive:principals
+    catalog: bee.hive.exposure:catalog
+    principals: bee.hive.security:principals
 - name: admit
   kind: function.lua
   source: file://admit.lua
@@ -20,7 +20,7 @@ entries:
   imports:
     types: bee.hive:types
     admission: bee.threads.hive:admission
-    principals: bee.hive:principals
+    principals: bee.hive.security:principals
   security:
     policies: [bee.threads.hive:admission_policy, bee.threads.hive:identity_policy, bee.security.hive:hive_thread_exposure_policy]
 - name: admission_policy

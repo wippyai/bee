@@ -100,7 +100,7 @@ local function define_tests()
         end)
         test.it("derives the installed application allowance from its host grant record", function()
             local identity = assert(naming.identity(WORKSPACE, "tally"))
-            local decoded_vocabulary, vocabulary_error = capability_model.decode(assert(registry.get("bee:capability_catalog")))
+            local decoded_vocabulary, vocabulary_error = capability_model.decode(assert(registry.get("bee.security.capability:capability_catalog")))
             if not decoded_vocabulary then error(tostring(vocabulary_error)) end
             local vocabulary = decoded_vocabulary
             local catalog_revision, template_revision = capability_model.revisions(vocabulary, "threads.read")

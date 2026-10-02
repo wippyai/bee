@@ -36,12 +36,12 @@ rollback and foreign-key restoration after a rebuild.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.persist` | `ledger`: checksums, ledger replay, apply; `database`: SQLite open with WAL, full sync, foreign keys, busy timeout, then ledger apply |
+| `bee.persist.persist` | `ledger`: checksums, ledger replay, apply; `database`: SQLite open with WAL, full sync, foreign keys, busy timeout, then ledger apply |
 
 Owned-store consumers include `bee.approvals`, `bee.credentials.persist`,
 `bee.gateway`, `bee.gov.persist`, `bee.placement.native`, `bee.resources.persist`,
 `bee.sync.persist`, and `bee.threads.persist` (ledger
-`bee_thread_schema_migrations`, label `thread`). `bee.storage:store` and
+`bee_thread_schema_migrations`, label `thread`). `bee.workspace.persist:store` and
 `bee.client:store` use batch mode. Workspace migration 8 consumes
 `temp.workspace_migration_run`; its ledger retains `applied_at`. The client
 ledger retains its original three columns, without `applied_at` or a new
@@ -49,7 +49,7 @@ migration. Each owner keeps its immutable SQL, ledger identity, resource and
 schema; this module supplies the runner.
 
 The runner publishes migration checkpoints with lowercase owner labels through
-`bee.persist:startup_progress` while retained startup is active. Ledger
+`bee.persist.env:startup_progress` while retained startup is active. Ledger
 verification reports each checked revision, pending steps report their old/new
 revision before SQL and their applied revision after the ledger insert, and
 completion reports only after commit. A batch completes after its single

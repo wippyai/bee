@@ -1,10 +1,6 @@
 version: '1.0'
 namespace: bee.placement.native
 entries:
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: definition
   kind: ns.definition
   module: placement-native
@@ -47,24 +43,24 @@ entries:
     comment: Add the native placement namespace to the host trust map
   default: bee.placement.native
   targets:
-  - entry: bee:protected_kernel
+  - entry: bee.security.gov:protected_kernel
     path: .data.namespaces +=
 - name: target_db
   kind: ns.requirement
   meta:
     comment: SQL resource for the receipts store
-  default: bee.placement.native:db
+  default: bee.placement.native.env:db
   targets:
-  - entry: bee.placement.native:database_ref
+  - entry: bee.placement.native.env:database_ref
     path: .resource_ref
 - name: target_root
   kind: ns.requirement
   meta:
     comment: Filesystem root that holds attempt homes and retained sessions; the module
       default resolves against the project and the host replaces it
-  default: bee.placement.native:root
+  default: bee.placement.native.env:root
   targets:
-  - entry: bee.placement.native:root_ref
+  - entry: bee.placement.native.env:root_ref
     path: .resource_ref
 - name: process_host
   kind: ns.requirement
@@ -72,7 +68,7 @@ entries:
     comment: Process host that runs attempt runners and the supervision sweeper; an
       assembly may override the Bee default
   targets:
-  - entry: bee.placement.native:runner_host_ref
+  - entry: bee.placement.native.env:runner_host_ref
     path: .host_ref
   - entry: bee.placement.native.service:sweeper_service
     path: .host
@@ -88,198 +84,50 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected native executor; a launch request never selects it
-  default: bee.placement.native:placement_executor
+  default: bee.placement.native.env:placement_executor
   targets:
-  - entry: bee.placement.native:executor_ref
+  - entry: bee.placement.native.env:executor_ref
     path: .resource_ref
 - name: target_host_files
   kind: ns.requirement
   meta:
     comment: Host-selected read-only filesystem for executable measurement
-  default: bee.placement.native:placement_host_files
+  default: bee.placement.native.env:placement_host_files
   targets:
-  - entry: bee.placement.native:host_files_ref
+  - entry: bee.placement.native.env:host_files_ref
     path: .resource_ref
 - name: target_admitted_roots
   kind: ns.requirement
   meta:
     comment: Host-selected admissible resource roots; a launch request cannot choose
       this policy
-  default: bee.placement.native:placement_admitted_roots
+  default: bee.placement.native.env:placement_admitted_roots
   targets:
-  - entry: bee.placement.native:admitted_roots_ref
+  - entry: bee.placement.native.env:admitted_roots_ref
     path: .resource_ref
 - name: target_resource_mode
   kind: ns.requirement
   meta:
     comment: Host-selected placement resource mode; a launch request cannot choose
       it
-  default: bee.placement.native:placement_resource_mode
+  default: bee.placement.native.env:placement_resource_mode
   targets:
-  - entry: bee.placement.native:resource_mode_ref
+  - entry: bee.placement.native.env:resource_mode_ref
     path: .resource_ref
 - name: target_workdir_preparers
   kind: ns.requirement
   meta:
     comment: Host-authorized workdir preparer contract bindings; registry metadata
       alone never authorizes
-  default: bee.placement.native:placement_workdir_preparers
+  default: bee.placement.native.env:placement_workdir_preparers
   targets:
-  - entry: bee.placement.native:workdir_preparers_ref
+  - entry: bee.placement.native.env:workdir_preparers_ref
     path: .resource_ref
-- name: database_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked SQL resource; target_db fills resource_ref
-- name: root_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked placement root; target_root fills resource_ref
-- name: runner_host_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked runner host; process_host fills host_ref
-- name: executor_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked native executor; target_executor fills resource_ref
-- name: host_files_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked read-only host filesystem; target_host_files fills resource_ref
-- name: admitted_roots_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked host placement-roots policy; target_admitted_roots fills resource_ref
-- name: resource_mode_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked host resource-mode policy; target_resource_mode fills resource_ref
-- name: workdir_preparers_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked host workdir-preparers list; target_workdir_preparers fills
-      resource_ref
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules:
-  - registry
-  imports:
-    bounds: bee.values:bounds
-    resource_authority: bee.resources:resources
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports:
     bounds: bee.values:bounds
-- name: configuration
-  kind: library.lua
-  source: file://configuration.lua
-  modules:
-  - json
-  - toml
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    types: bee.placement:types
-- name: environment
-  kind: env.storage.os
-  lifecycle:
-    auto_start: true
-- name: db_path
-  kind: env.variable
-  storage: bee.placement.native:environment
-  variable: BEE_PLACEMENT_DB
-  default: .wippy/placement.db
-  readonly: true
-- name: root_path
-  kind: env.variable
-  storage: bee.placement.native:environment
-  variable: BEE_PLACEMENT_ROOT
-  default: .wippy/placement
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.placement.native:db_path}
-  lifecycle:
-    auto_start: true
-- name: root
-  kind: fs.directory
-  meta:
-    comment: Module-owned attempt-home default resolving against the project; the
-      host replaces it through target_root
-  directory: ${env:bee.placement.native:root_path}
-  base: project
-  auto_init: true
-  mode: '0700'
-- name: placement_admitted_roots
-  kind: registry.entry
-  meta:
-    type: bee.placement_roots
-    comment: fs.directory entries a launch may name as resource roots on this host
-      with the widest access allowed; host policy, not a delegated grant. The workspace
-      folder and its children are admitted so an agent can target a folder it chose,
-      such as a git worktree, without a host step
-  data:
-    roots:
-    - root_ref: bee.env:workspace_root
-      access: write
-- name: placement_executor
-  kind: exec.native
-  meta:
-    comment: Children start with a clean environment; PATH comes from the host, everything
-      else from the admitted request
-  default_env:
-    PATH: ${env:bee.placement.native:placement_path}
-- name: placement_host_files
-  kind: fs.directory
-  meta:
-    comment: The host filesystem as one volume for executable measurement; this entry
-      requests readonly access
-  directory: /
-  auto_init: false
-  readonly: true
-- name: placement_path
-  kind: env.variable
-  meta:
-    comment: Host-selected executable search path for native placement children
-  storage: bee.placement.native:environment
-  variable: PATH
-  default: /usr/local/bin:/usr/bin:/bin
-  readonly: true
-- name: placement_resource_mode
-  kind: registry.entry
-  meta:
-    type: bee.placement_resource_mode
-    comment: host_configured or granted; selected by the host, never by a request
-  data:
-    mode: granted
-- name: placement_workdir_preparers
-  kind: registry.entry
-  meta:
-    type: bee.placement_workdir_preparers
-    comment: Contract bindings authorized by host policy to run workdir setup and
-      cleanup
-  data:
-    preparers: []
-- name: process_backend
-  kind: library.lua
-  source: file://process_backend.lua
-  modules:
-  - exec
-  - sql
-  imports:
-    types: bee.placement:types
-    materialization: bee.placement.native.service:materialization
 - name: target_prepare_policies
   kind: ns.requirement
   default: []
@@ -324,3 +172,7 @@ entries:
   targets:
   - entry: bee.placement.native.service:runner
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

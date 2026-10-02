@@ -14,7 +14,7 @@ type Object = {[string]: unknown}
 local PROFILE = {overlay_owner = "bee.gov:lease-grants", approval_policy = "policy-a", source_workspace = "notes"}
 
 local function vocabulary(): capability_model.Vocabulary
-    return assert(capability_model.decode(assert(registry.get("bee:capability_catalog"))))
+    return assert(capability_model.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
 end
 
 -- A fake owner: request stores the proposal, the test decides it, consume may

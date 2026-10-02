@@ -3,8 +3,11 @@ namespace: bee
 entries:
 - name: hub_workers
   kind: process.host
-  host: {workers: 4, max_processes: 16}
-  lifecycle: {auto_start: true}
+  host:
+    workers: 4
+    max_processes: 16
+  lifecycle:
+    auto_start: true
 - name: dependency_sync
   kind: ns.dependency
   component: bee/sync
@@ -13,14 +16,14 @@ entries:
   - name: bee.sync:target_sender
     value: bee:sync_sender
   - name: bee.sync:target_exports
-    value: bee:sync_exports
-- name: sync_exports
-  kind: registry.entry
-  data: {exports: []}
+    value: bee.sync.env:sync_exports
 - name: sync_sender
   kind: library.lua
   source: file://sync_sender.lua
-  imports: {transaction: bee.persist:transaction, version: bee.sync:version, types: bee.sync:types}
+  imports:
+    transaction: bee.persist.persist:transaction
+    version: bee.sync.values:version
+    types: bee.sync:types
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -29,13 +32,16 @@ entries:
   - name: bee.threads:process_host
     value: bee:hub_workers
   - name: bee.threads:waiter_policies
-    value: [bee:thread_waiter_policy]
+    value:
+    - bee:thread_waiter_policy
 - name: thread_waiter_policy
   kind: security.policy.expr
   policy:
-    actions: [process.registry.register, process.send]
+    actions:
+    - process.registry.register
+    - process.send
     resources: '*'
-    expression: 'action == "process.send" || resource == "bee.threads.waiter"'
+    expression: action == "process.send" || resource == "bee.threads.waiter"
     effect: allow
 - name: dependency_hub
   kind: ns.dependency
@@ -48,12 +54,14 @@ entries:
     value: bee:hub_publish_configuration
 - name: hub_publish_configuration
   kind: registry.entry
-  meta: {type: bee.hub_publication}
-  data: {organization: "", cli: "", source_roots: [], staging_root: ""}
-- name: protected_kernel
-  kind: registry.entry
-  meta: {type: bee.protected_kernel}
-  data: {revision: 3, namespaces: [], entries: [], super_edit: []}
+  meta:
+    type: bee.hub_publication
+  data:
+    organization: ''
+    cli: ''
+    source_roots: []
+    staging_root: ''
 - name: fixture_terminal
   kind: terminal.host
-  lifecycle: {auto_start: true}
+  lifecycle:
+    auto_start: true

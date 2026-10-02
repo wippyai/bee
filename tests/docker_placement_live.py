@@ -68,9 +68,9 @@ def main():
                 entry = next(e for e in doc['entries'] if e['name'] == name)
                 change(entry)
                 path.write_text(yaml.safe_dump(doc, sort_keys=False))
-            edit('src/_index.yaml', 'gateway_endpoint', lambda e: e['data'].update(address=address))
-            edit('src/_index.yaml', 'gateway_listener', lambda e: e.update(addr=address))
-            edit('src/_index.yaml', 'gateway_listener', lambda e: e['lifecycle'].update(auto_start=True))
+            edit('src/gateway/api/_index.yaml', 'gateway_endpoint', lambda e: e['data'].update(address=address))
+            edit('src/gateway/api/_index.yaml', 'gateway_listener', lambda e: e.update(addr=address))
+            edit('src/gateway/api/_index.yaml', 'gateway_listener', lambda e: e['lifecycle'].update(auto_start=True))
             edit('modules/gateway/src/security/_index.yaml', 'readiness_policy', lambda e: e['policy'].update(expression=f'(action == "http_client.private_ip" && resource == "{interface}") || (action == "http_client.request" && resource == "http://{address}/ready")'))
             index = folder / 'src/docker_proof/_index.yaml'
             doc = yaml.safe_load(index.read_text())
@@ -78,8 +78,8 @@ def main():
             profile = by_name['profile']['data']
             profile_ref = 'bee.docker.proof:profile'
             if args.image == 'auto':
-                profile_ref = 'bee.placement.docker:coding'
-                edit('modules/placement-docker/src/_index.yaml', 'coding', lambda e: e['data'].update(network=network))
+                profile_ref = 'bee.placement.docker.profiles:coding'
+                edit('modules/placement-docker/src/profiles/_index.yaml', 'coding', lambda e: e['data'].update(network=network))
                 main = folder / 'src/docker_proof/main.lua'
                 main.write_text(main.read_text().replace('bee.docker.proof:profile', profile_ref))
                 doc['entries'] = [e for e in doc['entries'] if e['name'] not in ('profile', 'executor', 'interactive')]
@@ -93,7 +93,7 @@ def main():
                 for item in e['data']['file']['initialize']:
                     if item['path'] == '.claude.json':
                         item['content'] = json.dumps({'hasCompletedOnboarding': True, 'projects': {'/workspace': {'hasTrustDialogAccepted': True}}})
-            edit('modules/driver-claude/src/_index.yaml', 'credential_format', trust_project)
+            edit('modules/driver-claude/src/credentials/_index.yaml', 'credential_format', trust_project)
             if args.provider == 'opencode' and args.opencode_model:
                 edit('modules/driver-opencode/src/descriptor/_index.yaml', 'cli', lambda e: e['data']['argv_templates']['first_turn']['argv'].__setitem__(slice(1, 1), ['--model', args.opencode_model]))
             # The host owns these profiles; the drivers still name no executor.
@@ -101,7 +101,7 @@ def main():
                 executable = shutil.which(provider)
                 if not executable:
                     continue
-                file = f'modules/driver-{provider}/src/_index.yaml'
+                file = f'modules/driver-{provider}/src/credentials/_index.yaml'
                 for name in (f'launch_policy_{provider}_window', f'launch_policy_{provider}_batch'):
                     def policy(e, provider=provider, executable=executable):
                         data = e['data']

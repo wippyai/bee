@@ -14,7 +14,7 @@ entries:
   imports:
     frame: bee.app:frame
     appearance: bee.app:appearance
-    probe: bee.host.processes:probe
+    probe: bee.host.processes.app:probe
     view: bee.host.processes.app:view
     client: bee.app:client
     clock: bee.values:clock
@@ -37,7 +37,7 @@ entries:
   imports:
     frame: bee.app:frame
     appearance: bee.app:appearance
-    probe: bee.host.processes:probe
+    probe: bee.host.processes.app:probe
     text: bee.app:text
     viz: bee.app:viz
     history_values: bee.host.processes.app:history
@@ -48,5 +48,12 @@ entries:
   kind: library.lua
   source: file://history.lua
   imports:
-    probe: bee.host.processes:probe
+    probe: bee.host.processes.app:probe
     viz: bee.app:viz
+- name: probe
+  kind: library.lua
+  source: file://probe.lua
+  modules:
+  - system
+  imports:
+    bounds: bee.values:bounds

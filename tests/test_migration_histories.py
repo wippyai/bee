@@ -2,12 +2,13 @@
 from pathlib import Path
 import re
 import sqlite3
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 HISTORY = ROOT / 'tests/fixtures/migration_history'
 SOURCES = {
-    'workspace': 'src/storage/store.lua',
+    'workspace': 'modules/workspace/src/migrations/migrations.lua',
     'threads': 'modules/threads/src/migrations/migrations.lua',
     'governance': 'modules/gov/src/migrations/schema.lua',
     'gateway': 'modules/gateway/src/migrations/migrations.lua',
@@ -16,20 +17,28 @@ SOURCES = {
 
 
 def migrations(source):
-    constants = dict(re.findall(r'local (\w+) = \[\[(.*?)\]\]', source, re.S))
+    token = r'\[\[.*?\]\]|"(?:[^"\\]|\\.)*"|\w+'
+    expression = r'(?:' + token + r')(?:\s*\.\.\s*(?:' + token + r'))*'
+    constants = dict(re.findall(r'local (\w+) = (' + expression + r')', source, re.S))
+
+    def resolve(expr):
+        values = []
+        for part in re.findall(token, expr, re.S):
+            if part.startswith('[['):
+                values.append(part[2:-2].removeprefix('\n'))
+            elif part.startswith('"'):
+                import json
+                values.append(json.loads(part))
+            else:
+                values.append(resolve(constants[part]))
+        return ''.join(values)
+
     result = []
     for match in re.finditer(r'\{id\s*=\s*(\d+),\s*name\s*=\s*"([^"]+)"', source):
         identity, name = match.groups()
         tail = source[match.end():]
-        expr = re.search(r'\bsql\s*=\s*(\[\[.*?\]\]|"(?:[^"\\]|\\.)*"|\w+)', tail, re.S)[1]
-        if expr.startswith('[['):
-            sql = expr[2:-2].removeprefix('\n')
-        elif expr.startswith('"'):
-            import json
-            sql = json.loads(expr)
-        else:
-            sql = constants[expr].removeprefix('\n')
-        result.append((int(identity), name, sql))
+        expr = re.search(r'\bsql\s*=\s*(' + expression + r')', tail, re.S)[1]
+        result.append((int(identity), name, resolve(expr)))
     return result
 
 
@@ -66,6 +75,13 @@ def populate(db, owner, original):
 
 
 class MigrationHistories(unittest.TestCase):
+    def test_main_migrations_remain_an_unchanged_prefix(self):
+        for owner, path in SOURCES.items():
+            with self.subTest(owner=owner):
+                prior = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
+                shipped = migrations(prior)
+                self.assertEqual(migrations((ROOT / path).read_text())[:len(shipped)], shipped)
+
     def test_governance_repair_preserves_reserved_and_fenced_approval_fields(self):
         current = migrations((ROOT / SOURCES['governance']).read_text())
         with sqlite3.connect(':memory:') as db:
@@ -99,7 +115,7 @@ class MigrationHistories(unittest.TestCase):
                             db.execute("UPDATE workspaces SET created_at = 'saved', last_used_at = 'saved'")
                     self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
                     before = snapshot(db)
-                    repair_start = {'workspace': 13, 'threads': 29, 'governance': 16, 'gateway': 17, 'sync': 9}[owner]
+                    repair_start = {'workspace': 13, 'threads': 29, 'governance': 16, 'gateway': 18, 'sync': 10}[owner]
                     for identity, _, sql in current:
                         if identity >= repair_start:
                             db.executescript(sql)

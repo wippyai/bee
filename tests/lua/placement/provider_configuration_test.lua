@@ -22,9 +22,9 @@ local ROOT = "bee.placement.native:project_fixture"
 local POLICY = "bee.placement.native:fixture_agent_policy"
 local PROVIDER = "bee.placement.native:fixture_agent_provider"
 local BINDING = "bee.placement.native:fixture_agent_binding"
-local ACTIVATION = "bee.harness:harness_activation"
-local MODE = "bee.placement.native:placement_resource_mode"
-local ROOTS = "bee.placement.native:placement_admitted_roots"
+local ACTIVATION = "bee.harness.launch:harness_activation"
+local MODE = "bee.placement.native.env:placement_resource_mode"
+local ROOTS = "bee.placement.native.env:placement_admitted_roots"
 local counter = 0
 type RegistryState = {activation: {[string]: unknown}, roots: {[string]: unknown}, mode: {[string]: unknown}}
 
@@ -172,7 +172,7 @@ local function denied_without_intent(request: {[string]: unknown}, expected: str
 end
 
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc = assert(executor:exec(command))
     local stdout = proc:stdout_stream()
     assert(proc:start())

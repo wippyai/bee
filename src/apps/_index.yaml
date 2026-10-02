@@ -58,7 +58,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     contract: bee.protocol:application
-    application_admissions: bee.gov:application_admissions
+    application_admissions: bee.gov.activation:application_admissions
     canonical: bee.values:canonical
 - name: interactions
   kind: library.lua
@@ -82,13 +82,13 @@ entries:
   modules: [security]
   imports:
     bounds: bee.values:bounds
-    record_bounds: bee.threads.records:bounds
     principal: bee.apps:principal
     binding_protocol: bee.host:binding_protocol
     reducer: bee.apps:thread_binding_reducer
     contract: bee.protocol:application
     open_protocol: bee.apps:open_protocol
     lifecycle: bee.apps:lifecycle
+    record_bounds: bee.threads.records:bounds
 - name: thread_binding_reducer
   kind: library.lua
   source: file://thread_binding_reducer.lua

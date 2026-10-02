@@ -56,7 +56,7 @@ local function through(executor: funcs.Executor): Owner
     end}
 end
 local function install_policy()
-    local entry = registry.get("bee:approver_policies")
+    local entry = registry.get("bee.security.approvals:approver_policies")
     if not entry then error("approver policies entry") end
     local data = assert(bounds.object(entry.data))
     local policies = principals.objects(data.policies)

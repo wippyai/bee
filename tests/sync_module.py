@@ -35,7 +35,7 @@ entries:
   - name: target_sender
     value: bee.sync.probe:sender
   - name: target_exports
-    value: bee:sync_exports
+    value: bee.sync.env:sync_exports
 - name: dependency_node
   kind: ns.dependency
   component: bee/node
@@ -59,7 +59,7 @@ return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout
         probe_index.write_text(probe_index.read_text() + """\n- name: sender
   kind: library.lua
   source: file://sender.lua
-  imports: {transaction: bee.persist:transaction, version: bee.sync:version}
+  imports: {transaction: bee.persist.persist:transaction, version: bee.sync.values:version}
 """)
         (folder / "wippy.lock").write_text("""directories:
   modules: .wippy

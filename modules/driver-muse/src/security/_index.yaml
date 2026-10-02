@@ -1,0 +1,112 @@
+version: '1.0'
+namespace: bee.driver.muse.security
+entries:
+- name: launch_policy_muse_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected Muse turn budget for agentic research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides:
+    - thread
+    - workdir
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      muse: bee.driver.muse.env:executable
+    environment: {}
+    allow_host_home: false
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    hook_command_ref: bee.gateway.env:hook_executable
+    prepare_options:
+      approval_mode: on-request
+    placement_profiles:
+    - bee.placement.profiles:native
+    - bee.placement.docker.profiles:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+- name: launch_policy_muse_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Muse window; missing host executable leaves the declaration
+      unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides:
+    - thread
+    - workdir
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      muse: bee.driver.muse.env:executable
+    environment: {}
+    allow_host_home: true
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    - capabilities
+    - overlay
+    - docs
+    - components
+    - delivery
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    hook_command_ref: bee.gateway.env:hook_executable
+    prepare_options: {}
+    placement_profiles:
+    - bee.placement.profiles:native
+    - bee.placement.docker.profiles:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true

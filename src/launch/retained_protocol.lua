@@ -1,4 +1,6 @@
 -- MIT. Retained supervisor protocol; sender authentication remains caller responsibility before decoding.
+local types = require("types")
+local bounds = require("bounds")
 local contract = require("contract")
 local clipboard = require("clipboard")
 local arguments = require("arguments")
@@ -8,7 +10,7 @@ type Result = {request_id: string, mount: string, error_code: string, error: str
 local M = {}
 -- Local names and topic of the readiness handshake between the desktop bridge
 -- that composes a retained workspace and the owner route that reports it. The
--- names are keyed by the workspace selection (bee.storage:binding key), which
+-- names are keyed by the workspace selection (bee.workspace.types:selection key), which
 -- both sides know before the host reports the workspace identity.
 M.TOPIC_OBSERVE = "bee.retained.observe"
 M.TOPIC_PROGRESS = "bee.retained.progress"
@@ -177,5 +179,22 @@ function M.activation_result(value: unknown, workspace_id: string, desktop_id: s
     if code ~= "" and code ~= "BUSY" and code ~= "UNAVAILABLE" then return nil end
     if (code == "") ~= (value.error == "") then return nil end
     return {request_id = id, error_code = code, error = value.error}
+end
+function M.startup_node(pid: string): string?
+    local node = types.pid_parts(pid)
+    return node ~= "" and node or nil
+end
+function M.stored_startup_failure(raw: unknown): string?
+    local detail = bounds.text(raw, 4096)
+    if not detail then return nil end
+    detail = detail:gsub("%c", " "):gsub("^%s+", ""):gsub("%s+$", "")
+    return detail ~= "" and ("Hive supervisor failed before retained workspace readiness: " .. detail) or nil
+end
+function M.startup_failure(sender: string, raw: unknown, local_node: string): string?
+    local node, host = types.pid_parts(sender)
+    if not node or node ~= local_node or host ~= types.SUPERVISOR_HOST then return nil end
+    local value = bounds.object(raw)
+    if not value or bounds.fields(value, {"version", "error"}) or value.version ~= 1 then return nil end
+    return M.stored_startup_failure(value.error)
 end
 return M

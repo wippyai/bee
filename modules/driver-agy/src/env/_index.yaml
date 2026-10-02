@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.driver.agy.env
+entries:
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: agy
+  default: ''
+  readonly: true

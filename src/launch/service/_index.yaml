@@ -1,0 +1,16 @@
+version: '1.0'
+namespace: bee.launch.service
+entries:
+- name: workspace_hosts
+  kind: process.service
+  process: bee.launch:host_manager
+  host: bee:workers
+  input:
+  - {cap: 64, idle_ms: 900000}
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.workspace.hosts}
+      policies: [bee.security.desktop:host_policy, bee.security.desktop:local_supervisor_spawn_policy, bee.security.desktop:workspace_host_manager_policy]
+  meta:
+    comment: Starts a node workspace host when a lease first asks for it, stops it after 15 minutes unleased, and keeps at most 64 live

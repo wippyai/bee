@@ -2,6 +2,8 @@
 import tempfile
 from pathlib import Path
 
+import yaml
+
 from tui_smoke import Desktop
 from workspace import fixture_workspace, pack_fixture
 
@@ -206,7 +208,10 @@ def main():
     with fixture_workspace(unit_tests=False) as project:
         (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
         manifest = project / "modules/hub/src/binding/_index.yaml"
-        manifest.write_text(manifest.read_text().replace("modules: [security, funcs]", "modules: [security, funcs, time]", 1))
+        document = yaml.safe_load(manifest.read_text())
+        call = next(entry for entry in document["entries"] if entry["name"] == "call")
+        call["modules"].append("time")
+        manifest.write_text(yaml.safe_dump(document, sort_keys=False))
         pack = project / "modules-update-deployment"
         pack_fixture(project, pack)
         exercise(project, False, pack)

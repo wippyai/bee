@@ -7,7 +7,7 @@ local function handle(raw: unknown)
     local experiment = ctx.get("experiment")
     return {ok = true, value = {project = project, experiment = experiment, binding = ctx.get("bee.gateway.binding"),
         replacement_granted = security.can("bee.probe.replacement", "sentinel"),
-        can_read_gateway = security.can("db.get", "bee.gateway:db"),
+        can_read_gateway = security.can("db.get", "bee.gateway.env:db"),
         can_create_scope = security.can("security.scope.create", "custom")}}
 end
 return {handle = handle}

@@ -23,8 +23,8 @@ local function run(request: Object): Object
     assert(projection and not render_error, "configuration projection: " .. tostring(render_error))
 
     if request.privileged == true then
-        local placement_db, placement_error = sql.get("bee.placement.native:db")
-        local placement_executor, executor_error = exec.get("bee.placement.native:placement_executor")
+        local placement_db, placement_error = sql.get("bee.placement.native.env:db")
+        local placement_executor, executor_error = exec.get("bee.placement.native.env:placement_executor")
         assert(placement_db and not placement_error, "privileged caller could not acquire placement database")
         assert(placement_executor and not executor_error, "privileged caller could not acquire placement executor")
         local _, release_db_error = placement_db:release()
@@ -33,8 +33,8 @@ local function run(request: Object): Object
         return {placement_db_acquired = true, placement_executor_acquired = true}
     end
 
-    local placement_db, placement_error = sql.get("bee.placement.native:db")
-    local placement_executor, executor_error = exec.get("bee.placement.native:placement_executor")
+    local placement_db, placement_error = sql.get("bee.placement.native.env:db")
+    local placement_executor, executor_error = exec.get("bee.placement.native.env:placement_executor")
     local placement_policy, policy_error = security.policy("bee.placement.native.security:placement_store_policy")
     local current_scope = security.scope()
     local recovered_scope, recovered_error = funcs.new():with_scope(current_scope)

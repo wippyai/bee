@@ -104,7 +104,7 @@ entries:
   method: handle
   meta: {type: test_support}
   imports:
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
 - name: fake_supervisor
   kind: process.lua
   source: file://fake_supervisor.lua
@@ -139,7 +139,7 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     test: wippy.test:test
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
     types: bee.hive:types
 - name: client_test
   kind: function.lua
@@ -149,7 +149,7 @@ entries:
   modules: [process, channel, time]
   imports:
     test: wippy.test:test
-    client: bee.hive:client
+    client: bee.hive.binding:client
     types: bee.hive:types
 - name: mapping_test_policy
   kind: security.policy
@@ -165,7 +165,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    principals: bee.hive:principals
+    principals: bee.hive.security:principals
 - name: thread_admission_test
   kind: function.lua
   source: file://thread_admission_test.lua
@@ -178,7 +178,7 @@ entries:
     bounds: bee.protocol:bounds
     test: wippy.test:test
     types: bee.hive:types
-    principals: bee.hive:principals
+    principals: bee.hive.security:principals
     admission: bee.threads.hive:admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
@@ -194,7 +194,7 @@ entries:
     bounds: bee.protocol:bounds
     test: wippy.test:test
     types: bee.hive:types
-    principals: bee.hive:principals
+    principals: bee.hive.security:principals
     admission: bee.threads.hive:admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends

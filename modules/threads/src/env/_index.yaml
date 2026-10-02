@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.threads.env
+entries:
+- name: database_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked SQL resource; target_db fills resource_ref
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: database_path
+  kind: env.variable
+  storage: bee.threads.env:environment
+  variable: BEE_THREADS_DB
+  default: .wippy/threads.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.threads.env:database_path}
+  lifecycle: {auto_start: true}

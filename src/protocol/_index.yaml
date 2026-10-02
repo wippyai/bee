@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://bounds.lua
   imports:
-    clock: bee:clock
+    clock: bee.protocol:clock
 - name: reply
   kind: library.lua
   source: file://reply.lua
@@ -43,3 +43,7 @@ entries:
   source: file://display_transfer.lua
   imports:
     contract: bee.protocol:application
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  modules: [time]

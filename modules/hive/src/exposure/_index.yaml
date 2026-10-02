@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.hive.exposure
+entries:
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [registry, security, json, hash]
+  imports:
+    canonical: bee.protocol:canonical
+    bounds: bee.protocol:bounds
+    types: bee.hive:types

@@ -58,6 +58,6 @@ entries:
     authority: bee.resources.persist:authority
     capability_model: bee.capability:model
     migrations: bee.resources.migrations:migrations
-    persist: bee.persist:database
-    resources: bee.resources:resources
+    persist: bee.persist.persist:database
+    resources: bee.resources.env:resources
     identity_migration: bee.resources.persist:identity_migration

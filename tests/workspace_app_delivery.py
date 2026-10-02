@@ -53,7 +53,7 @@ VERSION = "1.0.0"
 TITLE = "Tally"
 DEFINITION_ID = "app.tally:app"
 APPROVAL_POLICY = "workspace-application-delivery"
-SHIPPED = ["modules/gov/src/_index.yaml", "src/_index.yaml", "src/deps/_index.yaml", "src/env/_index.yaml"]
+SHIPPED = ["modules/gov/src/_index.yaml", "src/_index.yaml", "src/gov/service/_index.yaml", "src/launch/service/_index.yaml", "src/deps/_index.yaml", "src/env/_index.yaml"]
 PROVIDER = os.environ.get("BEE_WORKSPACE_APP_PROVIDER", "scripted")
 HIVE_SOURCE = os.environ.get("BEE_WORKSPACE_APP_HIVE_SOURCE_NODE")
 DESKTOP_RUNTIME = Path(os.environ.get("BEE_WORKSPACE_APP_DESKTOP_RUNTIME", RUNTIME)).resolve()
@@ -70,7 +70,7 @@ LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another
 GREETING = "hello tally"
 SHARED_SUBPATH = "shared"
 DATABASE_NAME = "tally"
-CHILD_DEFINITION = "bee.driver.claude:research_batch"
+CHILD_DEFINITION = "bee.driver.claude.profiles:research_batch"
 
 
 def grant_identities(workspace_id):
@@ -176,12 +176,13 @@ def compose(folder):
     (project / SHARED_SUBPATH).mkdir(parents=True, exist_ok=True)
     (project / SHARED_SUBPATH / "greeting.txt").write_text(GREETING)
     shutil.copytree(FIXTURE, project / "src/workspace_app_probe")
-    source_entries = yaml.safe_load((project / "src/_index.yaml").read_text())["entries"]
+    source_entries = yaml.safe_load((project / "src/gov/service/_index.yaml").read_text())["entries"]
+    launch_entries = yaml.safe_load((project / "src/launch/service/_index.yaml").read_text())["entries"]
     recovery = next(entry for entry in source_entries if entry.get("name") == "gov_recovery_service")
-    workspace_hosts = next(entry for entry in source_entries if entry.get("name") == "workspace_hosts")
+    workspace_hosts = next(entry for entry in launch_entries if entry.get("name") == "workspace_hosts")
     assert recovery["lifecycle"].get("startup") == "complete", recovery
     assert recovery["lifecycle"].get("auto_start") is True, recovery
-    assert source_entries.index(recovery) < source_entries.index(workspace_hosts)
+    assert workspace_hosts["process"] == "bee.launch:host_manager"
     for relative in SHIPPED:
         assert (project / relative).read_bytes() == (ROOT / relative).read_bytes(), relative
     # A Hive acceptance later starts this project as its named source node.
@@ -204,7 +205,7 @@ def compose(folder):
         assert executable, "BEE_WORKSPACE_APP_PROVIDER=claude needs an installed, logged-in Claude Code"
         policy["executables"] = {"claude": str(Path(executable).resolve())}
         policy["environment"] = {}
-        policy["environment_refs"] = {"CLAUDE_CONFIG_DIR": "bee.driver.claude:config_home"}
+        policy["environment_refs"] = {"CLAUDE_CONFIG_DIR": "bee.driver.claude.env:config_home"}
         policy["allow_host_home"] = True
         policy["prepare_options"] = {"permission_mode": "dontAsk"}
         policy["required_exit_observation"] = "independent"
@@ -506,7 +507,7 @@ def exercise():
           "app.database and agents.launch capabilities in Approvals, and the installed scope contained their "
           "generated policies; it called the Threads owner, read a workspace file through its confined volume, "
           "recorded its counts with the greeting in its isolated database, launched the shipped "
-          "bee.driver.claude:research_batch child under its generated launch grant, waited for it to settle, read its "
+          "bee.driver.claude.profiles:research_batch child under its generated launch grant, waited for it to settle, read its "
           "result, sent it a second piece of work, and restored its saved count with its rows intact")
 
 

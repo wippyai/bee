@@ -11,9 +11,9 @@ entries:
   modules: [sql, hash]
   imports:
     bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
-    database: bee.persist:database
-    transaction: bee.persist:transaction
+    canonical: bee.sync.values:canonical
+    database: bee.persist.persist:database
+    transaction: bee.persist.persist:transaction
     migrations: bee.gov.migrations:schema
     identity_migration: bee.gov.persist:identity_migration
     plan_protocol: bee.gov.persist:plan_protocol
@@ -23,37 +23,37 @@ entries:
   modules: [sql, hash, json]
   imports:
     bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
-    database: bee.persist:database
-    transaction: bee.persist:transaction
+    canonical: bee.sync.values:canonical
+    database: bee.persist.persist:database
+    transaction: bee.persist.persist:transaction
     migrations: bee.gov.migrations:schema
     identity_migration: bee.gov.persist:identity_migration
     lease_store: bee.gov.persist:lease_store
-    migration_work: bee.gov:migration_work
+    migration_work: bee.gov.activation:migration_work
 - name: lease_store
   kind: library.lua
   source: file://lease_store.lua
   modules: [sql, hash, json]
   imports:
     bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
-    database: bee.persist:database
-    transaction: bee.persist:transaction
+    canonical: bee.sync.values:canonical
+    database: bee.persist.persist:database
+    transaction: bee.persist.persist:transaction
     migrations: bee.gov.migrations:schema
     identity_migration: bee.gov.persist:identity_migration
     capability_model: bee.capability:model
-    lease_model: bee.gov:lease_model
+    lease_model: bee.gov.delivery:lease_model
 - name: staging
   kind: library.lua
   source: file://staging.lua
   modules: [sql, hash, base64]
   imports:
-    database: bee.persist:database
-    transaction: bee.persist:transaction
+    database: bee.persist.persist:database
+    transaction: bee.persist.persist:transaction
     migrations: bee.gov.migrations:schema
     identity_migration: bee.gov.persist:identity_migration
-    protocol: bee.gov:workspace_protocol
-    workspace: bee.gov:workspace
+    protocol: bee.gov.workspace:workspace_protocol
+    workspace: bee.gov.workspace:workspace
     bounds: bee.threads.records:bounds
 - name: identity_migration
   kind: library.lua

@@ -1,0 +1,18 @@
+version: '1.0'
+namespace: bee.driver.locate
+entries:
+- name: login_evidence
+  kind: library.lua
+  source: file://login_evidence.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: probe_capture
+  kind: library.lua
+  source: file://probe_capture.lua
+  modules: [channel, time]
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    login_evidence: bee.driver.locate:login_evidence

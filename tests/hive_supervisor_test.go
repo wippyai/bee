@@ -118,13 +118,6 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 			t.Fatal(err)
 		}
 	}
-	clock, err := os.ReadFile(filepath.Join(repository, "src/clock.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(sourceSnapshot, "clock.lua"), clock, 0600); err != nil {
-		t.Fatal(err)
-	}
 	stageHiveSupervisorDesktop(t, sourceSnapshot)
 	stageHiveExposureAudiences(t, sourceSnapshot)
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
@@ -156,7 +149,8 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	for _, module := range []struct {
 		name, path, manifest string
 	}{
-		{"bounds", "src/protocol/bounds.lua", "- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n  imports:\n    clock: bee:clock\n"},
+		{"clock", "src/protocol/clock.lua", "- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n"},
+		{"bounds", "src/protocol/bounds.lua", "- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n  imports:\n    clock: bee.protocol:clock\n"},
 		{"canonical", "src/protocol/canonical.lua", "- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n"},
 	} {
 		body, err := os.ReadFile(filepath.Join(repository, module.path))
@@ -219,7 +213,6 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host = append(host, []byte("\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")...)
 	if err := os.WriteFile(filepath.Join(sourceSnapshot, "_index.yaml"), host, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +337,7 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		t.Fatal(err)
 	}
 	dependency := "- name: dependency_approvals\n  kind: ns.dependency\n  component: bee/approvals\n" +
-		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n" +
+		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee.security.approvals:approver_policies\n" +
 		"  - name: process_host\n    value: bee:workers\n" +
 		"  - name: authority_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]\n" +
 		"  - name: worker_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,\n" +

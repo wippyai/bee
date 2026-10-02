@@ -60,18 +60,18 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
     sender: bee.hive.service:replica_sender
     replicas: bee.sync.persist:replicas
-    version: bee.sync:version
-    canonical: bee.sync:canonical
-    artifact: bee.gov:artifact
-    delivery: bee.gov:delivery
+    version: bee.sync.values:version
+    canonical: bee.sync.values:canonical
+    artifact: bee.gov.delivery:artifact
+    delivery: bee.gov.delivery:delivery
     destination: bee.gov.binding:destination
     plan_store: bee.gov.persist:plan_store
-    materializer: bee.gov:materializer
-    overlay_resolver: bee.gov:overlay_resolver
-    preflight: bee.gov:preflight
+    materializer: bee.gov.delivery:materializer
+    overlay_resolver: bee.gov.delivery:overlay_resolver
+    preflight: bee.gov.activation:preflight
     publisher: bee.gov.binding:publisher
     sync: bee.sync.persist:store
   meta:

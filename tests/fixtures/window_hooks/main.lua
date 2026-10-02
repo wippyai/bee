@@ -35,7 +35,7 @@ local function call(target: string, value: unknown): {[string]: unknown}
 end
 
 local function endpoint(): string
-    local entry, err = registry.get("bee:gateway_endpoint")
+    local entry, err = registry.get("bee.gateway.api:gateway_endpoint")
     assert(not err and entry and type(entry.data) == "table", "gateway endpoint")
     local address = (assert(bounds.object(entry.data))).address
     assert(type(address) == "string" and (address):find("^127%.0%.0%.1:%d+$"), "gateway endpoint address")
@@ -90,7 +90,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(opened_gateway.value ~= nil, "failed to open gateway listener")
 
     -- The host explicitly admits a session root in this disposable fixture.
-    local roots = assert(registry.get("bee.resources:resource_roots"))
+    local roots = assert(registry.get("bee.resources.env:resource_roots"))
     roots.data = {roots = {{root_ref = "bee.window.hooks.fixture:session_root", access = "write"}}}
     local changes = registry.snapshot():changes()
     changes:update(roots)

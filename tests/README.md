@@ -22,5 +22,5 @@ Session and Work constructors), and `tests/lua/harness/carrier_faulted.lua`
 (carrier request fixtures). List decoders return new lists: write a modified
 list back to its fixture field. Object guards retain the original record.
 
-Governance staging and activation share `bee.gov:resolver.Resolver`; the Hub
+Governance staging and activation share `bee.gov.delivery:resolver.Resolver`; the Hub
 and overlay implementations and typed fixtures use the same receiver interface.

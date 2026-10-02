@@ -72,3 +72,26 @@ entries:
   method: handle
   imports: {authority: bee.resources.persist:authority}
   security: {policies: [bee.resources.security:resource_store_policy]}
+- name: local
+  kind: contract.binding
+  contracts:
+  - contract: bee.resources:contract
+    methods:
+      associate: bee.resources.binding:associate
+      grant: bee.resources.binding:grant
+      revoke: bee.resources.binding:revoke
+      revoke_all: bee.resources.binding:revoke_all
+      resolve: bee.resources.binding:resolve
+      list: bee.resources.binding:list
+      describe: bee.resources.binding:describe
+      search: bee.resources.binding:search
+- name: resources_workspace_extension
+  kind: contract.binding
+  meta:
+    title: Resources
+    comment: The host attaches each workspace's resource associations to the workspace catalog and its viewer
+  contracts:
+  - contract: bee.workspace.catalog:extension
+    methods:
+      describe: bee.resources.binding:describe
+      search: bee.resources.binding:search

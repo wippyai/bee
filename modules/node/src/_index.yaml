@@ -26,29 +26,13 @@ entries:
   version: '*'
 - name: target_db
   kind: ns.requirement
-  default: bee.node:db
+  default: bee.node.env:db
   meta: {comment: Host-selected SQLite resource for the node description ledger}
   targets:
-  - entry: bee.node:database_ref
+  - entry: bee.node.env:database_ref
     path: .resource_ref
   - entry: bee.node.security:database_policy
     path: .policy.resources
-- name: database_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref}
-- name: environment
-  kind: env.storage.os
-  lifecycle: {auto_start: true}
-- name: db_path
-  kind: env.variable
-  storage: bee.node:environment
-  variable: BEE_NODE_DB
-  default: .wippy/node.db
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.node:db_path}
-  lifecycle: {auto_start: true}
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -70,9 +54,3 @@ entries:
     description: Snapshot the node description feed and its owner-local cursor
   - name: read_after
     description: Catch up the node description feed from an owner-local cursor
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules: [registry]
-  imports:
-    bounds: bee.threads.records:bounds

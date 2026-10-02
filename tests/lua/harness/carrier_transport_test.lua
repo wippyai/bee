@@ -37,7 +37,7 @@ local function thread_record(kind: string, sequence: integer, record_id: string,
 end
 local function plan(mode: string, protocol: string): machine.Plan
     local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
-    local policy_value: policy.Policy = {ref = "policy", digest = "policy-digest", permission_answers = "provider", placement_profiles = {"bee.placement:native"}, prepare_options = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated",
+    local policy_value: policy.Policy = {ref = "policy", digest = "policy-digest", permission_answers = "provider", placement_profiles = {"bee.placement.profiles:native"}, prepare_options = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated",
             start_ms = 1000, stop_grace_ms = 100, drain_ms = 100, runner_drain_ms = 100, retain_ms = 100,
             executables = {}, environment = {}, host_environment = {}, allow_host_home = false, gateway_tools = {}, agent_model_map = {}, agent_delegates = {}, gateway_ttl_ms = 1000, gateway_hooks = {}, fixture = true, allowed_overrides = {}}
     local placement_request_value: placement_types.LaunchRequest = {idempotency_key = "key", owner_id = "actor", owner_incarnation = 1, action_id = "action", attempt_id = "attempt",
@@ -153,7 +153,7 @@ local function define_tests()
 
         test.it("refuses malformed driver replies before executable measurement or admission", function()
             local request = plan("window", "pty").request
-            request.binding_ref = "bee.driver.claude:binding"
+            request.binding_ref = "bee.driver.claude.binding:binding"
             request.profile_id = "batch"
             request.policy_ref = "bee.harness.catalog:fixture_policy"
             request.brief = "test"

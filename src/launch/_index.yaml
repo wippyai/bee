@@ -160,7 +160,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, logger]
   imports:
-    clock: bee:clock
+    clock: bee.protocol:clock
     hosts: bee.launch:hosts
     leases: bee.app:host_leases
     protocol: bee.launch:protocol

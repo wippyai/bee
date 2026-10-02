@@ -30,7 +30,7 @@ local json = require("json")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local SHIPPED_SHAPE_DEFINITION = "bee.harness.catalog:shipped_shape_definition"
-local SHIPPED_BATCH_POLICY = "bee.driver.claude:launch_policy_claude_batch"
+local SHIPPED_BATCH_POLICY = "bee.driver.claude.security:launch_policy_claude_batch"
 local AGENT_DEFINITION = "bee.harness.catalog:agent_fixture_definition"
 local AGENT_POLICY = "bee.harness.catalog:agent_fixture_policy"
 local AGENT_REVIEWER = "bee.harness.catalog:agent_reviewer"
@@ -102,7 +102,7 @@ end
 -- admission opens it here as the host would, under the manage authority
 -- only this call holds.
 local function open_gateway()
-    local endpoint = registry.get("bee:gateway_endpoint")
+    local endpoint = registry.get("bee.gateway.api:gateway_endpoint")
     if not endpoint then error("gateway endpoint entry") end
     local policies: {security.Policy} = {}
     for index, name in ipairs({"bee.harness.catalog:gateway_client_policy", "bee.security.gateway:gateway_manage_policy"}) do
@@ -155,7 +155,7 @@ local function carrier_io(workspace_id: string): machine.IO
     }
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -186,7 +186,7 @@ local function prepare_host(workspace: string)
     policy_data.executables = {claude = bin .. "/claude"}
     policy_data.environment = {BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"}
     apply(policy_entry)
-    local roots_entry = registry.get("bee.resources:resource_roots")
+    local roots_entry = registry.get("bee.resources.env:resource_roots")
     if not roots_entry then error("resource roots") end
     local roots_data = assert(bounds.object(roots_entry.data))
     local roots = principals.objects(roots_data.roots)
@@ -199,7 +199,7 @@ local function prepare_host(workspace: string)
         roots[#roots + 1] = {root_ref = ROOT, access = "write"}
         apply(roots_entry)
     end
-    local native_roots = registry.get("bee.placement.native:placement_admitted_roots")
+    local native_roots = registry.get("bee.placement.native.env:placement_admitted_roots")
     if not native_roots then error("native admitted roots") end
     local native_data = assert(bounds.object(native_roots.data))
     local admitted = principals.objects(native_data.roots)
@@ -210,18 +210,18 @@ local function prepare_host(workspace: string)
         admitted[#admitted + 1] = {root_ref = ROOT, access = "write"}
         apply(native_roots)
     end
-    local setup_entry = registry.get("bee.harness:harness_setup")
+    local setup_entry = registry.get("bee.harness.launch:harness_setup")
     if not setup_entry then error("harness setup") end
     local setup_data = assert(bounds.object(setup_entry.data))
     setup_data.roots = {project = ROOT, session = ROOT}
     setup_data.credentials = {anthropic = {provider = "claude", source = {kind = "env_variable", ref = SOURCE}}}
     apply(setup_entry)
-    local mode_entry = registry.get("bee.placement.native:placement_resource_mode")
+    local mode_entry = registry.get("bee.placement.native.env:placement_resource_mode")
     if not mode_entry then error("resource mode") end
     local mode_data = assert(bounds.object(mode_entry.data))
     mode_data.mode = "granted"
     apply(mode_entry)
-    local sources_entry = registry.get("bee.credentials:credential_sources")
+    local sources_entry = registry.get("bee.credentials.env:credential_sources")
     if not sources_entry then error("credential sources") end
     local sources_data = assert(bounds.object(sources_entry.data))
     local sources = principals.objects(sources_data.sources)
@@ -244,7 +244,7 @@ local function associations(workspace: string): {{[string]: unknown}}
     return principals.objects(listed.associations)
 end
 local function with_host_project_root(root_ref: string, body: () -> ())
-    local roots_entry = assert(registry.get("bee.resources:resource_roots"))
+    local roots_entry = assert(registry.get("bee.resources.env:resource_roots"))
     local roots_original = roots_entry.data
     local roots_data: {[string]: unknown} = {}
     for key, item in pairs(assert(bounds.object(roots_original))) do roots_data[key] = item end
@@ -260,7 +260,7 @@ local function with_host_project_root(root_ref: string, body: () -> ())
     for _, root in ipairs(admitted) do if root.root_ref == root_ref then found = true end end
     if not found then admitted[#admitted + 1] = {root_ref = root_ref, access = "write"} end
 
-    local setup_entry = assert(registry.get("bee.harness:harness_setup"))
+    local setup_entry = assert(registry.get("bee.harness.launch:harness_setup"))
     local setup_original = setup_entry.data
     local setup_data: {[string]: unknown} = {}
     for key, item in pairs(assert(bounds.object(setup_original))) do setup_data[key] = item end
@@ -304,7 +304,7 @@ local function with_overrides(definition_overrides: {string}, policy_overrides: 
     if not ok then error(tostring(failure)) end
 end
 local function restore_host()
-    local mode_entry = registry.get("bee.placement.native:placement_resource_mode")
+    local mode_entry = registry.get("bee.placement.native.env:placement_resource_mode")
     if not mode_entry then error("resource mode") end
     local mode_data = assert(bounds.object(mode_entry.data))
     mode_data.mode = "host_configured"
@@ -346,7 +346,7 @@ local function count(list: {string}, wanted: string): integer
 end
 local function define_tests()
     test.describe("Launch admission", function()
-        local roots_entry = assert(registry.get("bee.resources:resource_roots"))
+        local roots_entry = assert(registry.get("bee.resources.env:resource_roots"))
         roots_entry.data.roots[#roots_entry.data.roots + 1] = {root_ref = ROOT, access = "write"}
         apply(roots_entry)
         local catalog_scope = security.new_scope({assert(security.policy("bee.workspace.catalog:call_test_policy")),
@@ -378,7 +378,7 @@ local function define_tests()
             local workspace_id, saved_id = workspace, fresh("profile")
             local function save(revision: integer, title: string, options: {[string]: unknown})
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
-                    expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
+                    expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
             end
             save(0, "First profile", {})
             local original = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
@@ -411,7 +411,7 @@ local function define_tests()
                 local saved_id = fresh("credential-profile")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Selected credentials",
-                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {},
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {},
                         bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
                 local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
@@ -430,7 +430,7 @@ local function define_tests()
             local saved_id = fresh("undeclared-credential")
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Undeclared",
-                    definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
+                    definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
             local refused = call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(refused), "DENIED")
         end)
@@ -459,7 +459,7 @@ local function define_tests()
                 environment[item.name] = item.literal and {kind = "literal", value = "fixture-value"} or {kind = "credential", credential_ref = "anthropic"}
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Environment",
-                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
                 local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
                 replies[index] = call("bee.harness.binding:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
@@ -617,7 +617,7 @@ local function define_tests()
             end)
         end)
         test.it("preserves optional login policy on setup retry and refuses a required definition", function()
-            local entry = registry.get("bee.harness:harness_setup")
+            local entry = registry.get("bee.harness.launch:harness_setup")
             if not entry then error("host setup") end
             local original = entry.data
             local changed: {[string]: unknown} = {}
@@ -664,7 +664,7 @@ local function define_tests()
             test.eq(definitions[1].source_ref, ALTERNATE_SOURCE)
         end)
         test.it("refuses missing host credential setup before creating resources", function()
-            local entry = registry.get("bee.harness:harness_setup")
+            local entry = registry.get("bee.harness.launch:harness_setup")
             if not entry then error("host setup") end
             local original = entry.data
             local changed: {[string]: unknown} = {}
@@ -771,7 +771,7 @@ local function define_tests()
         end)
         test.it("pins explicit machine-login projections for structured default sessions", function()
             for _, provider in ipairs({"claude", "codex", "agy", "muse", "grok", "opencode"}) do
-                local ref = "bee.driver." .. provider .. ":default_window"
+                local ref = "bee.driver." .. provider .. ".profiles:default_window"
                 local entry = assert(registry.get(ref))
                 local decoded = assert(definitions.decode(ref, entry))
                 test.not_nil(decoded.session_credentials)
@@ -781,32 +781,32 @@ local function define_tests()
                 end
                 test.is_true(found)
             end
-            local entry = assert(registry.get("bee.driver.claude:default_window"))
+            local entry = assert(registry.get("bee.driver.claude.profiles:default_window"))
             local changed = {data = {}}
             for name, value in pairs(entry.data) do changed.data[name] = value end
             changed.data.session_credentials = {false}
-            local invalid, err = definitions.decode("bee.driver.claude:default_window", changed)
+            local invalid, err = definitions.decode("bee.driver.claude.profiles:default_window", changed)
             test.is_nil(invalid)
             test.not_nil(err)
         end)
         test.it("ships hidden research routes without harness turn ceilings", function()
             local cases = {
-                {definition = "bee.driver.codex:research_batch", policy = "bee.driver.codex:launch_policy_codex_batch",
-                    binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
-                    config = "bee.driver.codex:config_home", option = "sandbox", expected = "workspace-write"},
-                {definition = "bee.driver.claude:research_batch", policy = "bee.driver.claude:launch_policy_claude_batch",
-                    binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
-                    config = "bee.driver.claude:config_home", option = "permission_mode", expected = "default"},
-                {definition = "bee.driver.agy:research_batch", policy = "bee.driver.agy:launch_policy_agy_batch",
-                    binding = "bee.driver.agy:binding", credential = "agy_login", executable = "bee.driver.agy:executable",
+                {definition = "bee.driver.codex.profiles:research_batch", policy = "bee.driver.codex.security:launch_policy_codex_batch",
+                    binding = "bee.driver.codex.binding:binding", credential = "codex_login", executable = "bee.driver.codex.env:executable",
+                    config = "bee.driver.codex.env:config_home", option = "sandbox", expected = "workspace-write"},
+                {definition = "bee.driver.claude.profiles:research_batch", policy = "bee.driver.claude.security:launch_policy_claude_batch",
+                    binding = "bee.driver.claude.binding:binding", credential = "claude_api_key", executable = "bee.driver.claude.env:executable",
+                    config = "bee.driver.claude.env:config_home", option = "permission_mode", expected = "default"},
+                {definition = "bee.driver.agy.profiles:research_batch", policy = "bee.driver.agy.security:launch_policy_agy_batch",
+                    binding = "bee.driver.agy.binding:binding", credential = "agy_login", executable = "bee.driver.agy.env:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
-                {definition = "bee.driver.muse:research_batch", policy = "bee.driver.muse:launch_policy_muse_batch",
-                    binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
+                {definition = "bee.driver.muse.profiles:research_batch", policy = "bee.driver.muse.security:launch_policy_muse_batch",
+                    binding = "bee.driver.muse.binding:binding", credential = "muse_login", executable = "bee.driver.muse.env:executable",
                     option = "approval_mode", expected = "on-request"},
-                {definition = "bee.driver.opencode:research_batch", policy = "bee.driver.opencode:launch_policy_opencode_batch",
-                    binding = "bee.driver.opencode:binding", credential = "opencode_login", executable = "bee.driver.opencode:executable", unconfined = true},
-                {definition = "bee.driver.grok:research_batch", policy = "bee.driver.grok:launch_policy_grok_batch",
-                    binding = "bee.driver.grok:binding", credential = "grok_login", executable = "bee.driver.grok:executable",
+                {definition = "bee.driver.opencode.profiles:research_batch", policy = "bee.driver.opencode.security:launch_policy_opencode_batch",
+                    binding = "bee.driver.opencode.binding:binding", credential = "opencode_login", executable = "bee.driver.opencode.env:executable", unconfined = true},
+                {definition = "bee.driver.grok.profiles:research_batch", policy = "bee.driver.grok.security:launch_policy_grok_batch",
+                    binding = "bee.driver.grok.binding:binding", credential = "grok_login", executable = "bee.driver.grok.env:executable",
                     option = "permission_mode", expected = "default", unconfined = true},
             }
             for _, selected in ipairs(cases) do
@@ -853,7 +853,7 @@ local function define_tests()
                             selected.policy .. "." .. name .. " admits a prompt-free mode")
                     end
                 end
-                if selected.binding == "bee.driver.agy:binding" then
+                if selected.binding == "bee.driver.agy.binding:binding" then
                     test.eq(#policy.gateway_hooks, 0)
                     test.eq(policy.prepare_options.sandbox, true)
                     local has_thread_message = false
@@ -879,11 +879,11 @@ local function define_tests()
             -- The named Codex route projects the selected config profile
             -- into its private home while gaining the workspace-write CLI
             -- sandbox.
-            local named_entry = assert(registry.get("bee.driver.codex:launch_policy_codex_named_batch"))
-            local named, named_error = launch_policy.decode("bee.driver.codex:launch_policy_codex_named_batch", named_entry,
+            local named_entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_named_batch"))
+            local named, named_error = launch_policy.decode("bee.driver.codex.security:launch_policy_codex_named_batch", named_entry,
                 function(ref: string): (string?, string?)
-                    if ref == "bee.driver.codex:executable" then return "/usr/bin/named-agent", nil end
-                    if ref == "bee.driver.codex:config_home" then return "/home/person/.codex", nil end
+                    if ref == "bee.driver.codex.env:executable" then return "/usr/bin/named-agent", nil end
+                    if ref == "bee.driver.codex.env:config_home" then return "/home/person/.codex", nil end
                     return nil, "unadmitted environment reference"
                 end)
             if not named then error(tostring(named_error)) end
@@ -892,13 +892,13 @@ local function define_tests()
         end)
         test.it("ships every driver route with thread and workdir overrides its host policy admits, and no placement override", function()
             local shipped = {
-                {"bee.driver.claude:default_window", "bee.driver.claude:launch_policy_claude_window"}, {"bee.driver.claude:research_batch", "bee.driver.claude:launch_policy_claude_batch"},
-                {"bee.driver.codex:default_window", "bee.driver.codex:launch_policy_codex_window"}, {"bee.driver.codex:research_batch", "bee.driver.codex:launch_policy_codex_batch"},
-                {"bee.driver.codex:named_batch", "bee.driver.codex:launch_policy_codex_named_batch"},
-                {"bee.driver.muse:default_window", "bee.driver.muse:launch_policy_muse_window"}, {"bee.driver.muse:research_batch", "bee.driver.muse:launch_policy_muse_batch"},
-                {"bee.driver.agy:default_window", "bee.driver.agy:launch_policy_agy_window"}, {"bee.driver.agy:research_batch", "bee.driver.agy:launch_policy_agy_batch"},
-                {"bee.driver.grok:default_window", "bee.driver.grok:launch_policy_grok_window"}, {"bee.driver.grok:research_batch", "bee.driver.grok:launch_policy_grok_batch"},
-                {"bee.driver.opencode:default_window", "bee.driver.opencode:launch_policy_opencode_window"}, {"bee.driver.opencode:research_batch", "bee.driver.opencode:launch_policy_opencode_batch"},
+                {"bee.driver.claude.profiles:default_window", "bee.driver.claude.security:launch_policy_claude_window"}, {"bee.driver.claude.profiles:research_batch", "bee.driver.claude.security:launch_policy_claude_batch"},
+                {"bee.driver.codex.profiles:default_window", "bee.driver.codex.security:launch_policy_codex_window"}, {"bee.driver.codex.profiles:research_batch", "bee.driver.codex.security:launch_policy_codex_batch"},
+                {"bee.driver.codex.profiles:named_batch", "bee.driver.codex.security:launch_policy_codex_named_batch"},
+                {"bee.driver.muse.profiles:default_window", "bee.driver.muse.security:launch_policy_muse_window"}, {"bee.driver.muse.profiles:research_batch", "bee.driver.muse.security:launch_policy_muse_batch"},
+                {"bee.driver.agy.profiles:default_window", "bee.driver.agy.security:launch_policy_agy_window"}, {"bee.driver.agy.profiles:research_batch", "bee.driver.agy.security:launch_policy_agy_batch"},
+                {"bee.driver.grok.profiles:default_window", "bee.driver.grok.security:launch_policy_grok_window"}, {"bee.driver.grok.profiles:research_batch", "bee.driver.grok.security:launch_policy_grok_batch"},
+                {"bee.driver.opencode.profiles:default_window", "bee.driver.opencode.security:launch_policy_opencode_window"}, {"bee.driver.opencode.profiles:research_batch", "bee.driver.opencode.security:launch_policy_opencode_batch"},
             }
             for _, pair in ipairs(shipped) do
                 local decoded, definition_error = definitions.decode(pair[1], assert(registry.get(pair[1])))
@@ -987,7 +987,7 @@ local function define_tests()
                     subpath = "", allowed_access = "write"})
                 workspace_call("bee.credentials.binding:define", {name = "anthropic", provider = "claude",
                     source = {kind = "env_variable", ref = SOURCE}})
-                with_entry("bee.credentials:credential_sources", function(source_entry)
+                with_entry("bee.credentials.env:credential_sources", function(source_entry)
                     local sources = principals.objects(source_entry.sources)
                     local copied: {{[string]: unknown}} = {}
                     for index, source in ipairs(sources) do
@@ -1049,7 +1049,7 @@ local function define_tests()
             end
         end)
         test.it("refuses an unlinked carrier host before admitting a thread", function()
-            local entry = registry.get("bee.harness:carrier_host_ref")
+            local entry = registry.get("bee.harness.env:carrier_host_ref")
             if not entry then error("carrier host reference") end
             local original = entry.data
             entry.data = {}
@@ -1177,7 +1177,7 @@ local function define_tests()
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
         end)
         test.it("defers driver configuration until placement supplies the actual HOME", function()
-            local binding = assert(registry.get("bee.driver.claude:binding"))
+            local binding = assert(registry.get("bee.driver.claude.binding:binding"))
             local original = binding.data
             binding.data = {contracts = {
                 {contract = "bee.driver:driver", methods = {
@@ -1213,7 +1213,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("keeps Claude's provider config home aligned with a profile that inherits host HOME", function()
-            local profile_entry = assert(registry.get("bee.driver.claude:profiles"))
+            local profile_entry = assert(registry.get("bee.driver.claude.profiles:profiles"))
             local definition_entry = assert(registry.get(SHIPPED_SHAPE_DEFINITION))
             local policy_entry = assert(registry.get(SHIPPED_BATCH_POLICY))
             local original_profiles, original_definition, original_policy = profile_entry.data, definition_entry.data, policy_entry.data
@@ -1302,7 +1302,7 @@ local function define_tests()
             local changed_policy: {[string]: unknown} = {}
             for name, value in pairs(assert(bounds.object(original_definition))) do changed_definition[name] = value end
             for name, value in pairs(assert(bounds.object(original_policy))) do changed_policy[name] = value end
-            changed_definition.binding_ref = "bee.driver.codex:binding"
+            changed_definition.binding_ref = "bee.driver.codex.binding:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"
@@ -1377,7 +1377,7 @@ local function define_tests()
             local changed_policy: {[string]: unknown} = {}
             for name, value in pairs(assert(bounds.object(original_definition))) do changed_definition[name] = value end
             for name, value in pairs(assert(bounds.object(original_policy))) do changed_policy[name] = value end
-            changed_definition.binding_ref = "bee.driver.codex:binding"
+            changed_definition.binding_ref = "bee.driver.codex.binding:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"
@@ -1413,7 +1413,7 @@ local function define_tests()
                 if not applied then error("configure codex named profile: " .. tostring(apply_error)) end
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
-                    profile = {schema_revision = "bee.agent-profile@2", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex:binding", provider = {options = {config_profile = "ds-flash"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
+                    profile = {schema_revision = "bee.agent-profile@2", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "ds-flash"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
                 local selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
@@ -1467,7 +1467,7 @@ local function define_tests()
             for name, value in pairs(assert(bounds.object(original_definition))) do changed_definition[name] = value end
             for name, value in pairs(assert(bounds.object(original_policy))) do changed_policy[name] = value end
             for name, value in pairs(assert(bounds.object(original_provider))) do changed_provider[name] = value end
-            changed_definition.binding_ref = "bee.driver.codex:binding"
+            changed_definition.binding_ref = "bee.driver.codex.binding:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"
@@ -2156,7 +2156,7 @@ local function define_tests()
                 test.is_true(refusal_message(refused):find("unmapped-model", 1, true) ~= nil)
             end)
             with_entry(AGENT_DEFINITION, function(data)
-                data.binding_ref = "bee.driver.codex:binding"
+                data.binding_ref = "bee.driver.codex.binding:binding"
                 data.profile_id = "batch"
             end, function()
                 local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
@@ -2182,13 +2182,13 @@ local function define_tests()
             local workspace_id, saved_id = workspace, fresh("agent-profile")
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"),
-                profile = {schema_revision = "bee.agent-profile@2", name = "Outside tools", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
+                profile = {schema_revision = "bee.agent-profile@2", name = "Outside tools", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
             local outside = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(outside), "FORBIDDEN")
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                 expected_revision = 1, idempotency_key = fresh("save"),
-                profile = {schema_revision = "bee.agent-profile@2", name = "Claimed model", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {model = "sneaky"}, bee = {mcp = {}}}}))
+                profile = {schema_revision = "bee.agent-profile@2", name = "Claimed model", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {model = "sneaky"}, bee = {mcp = {}}}}))
             local claimed = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2})
             test.eq(code(claimed), "FORBIDDEN")

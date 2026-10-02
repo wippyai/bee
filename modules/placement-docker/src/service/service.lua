@@ -419,7 +419,7 @@ function M.capabilities(value: unknown): Reply
         if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
         local network = selected.profile.network
         local present = network == "none" or (network ~= nil and client:inspect_network(network) ~= nil)
-        local config_entry = registry.get("bee.placement.docker:environment_configuration")
+        local config_entry = registry.get("bee.placement.docker.env:environment_configuration")
         local config_record = config_entry and bounds.object(config_entry.data)
         local config = config_record and bounds.object(config_record.value)
         local provisionable = config ~= nil and config.network == network and not environment.revoked()

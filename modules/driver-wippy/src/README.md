@@ -18,7 +18,7 @@ fresh per-attempt actor narrowed to the tool's declared scopes.
 ## Host configuration
 
 `bee.driver.wippy.binding:run` accepts `host_config`, defaulting to the
-`bee.driver.wippy:host_config` registry entry. Fields:
+`bee.driver.wippy.env:host_config` registry entry. Fields:
 
 - `endpoint`: https URL, or plain http only for the 127.0.0.1 loopback fixture.
 - `credential_ref`: registry reference for the chat key. An unresolvable

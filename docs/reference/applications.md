@@ -147,7 +147,7 @@ comes from `await`.
 local sessions = require("sessions")   -- imports: sessions: bee.app:sessions
 
 local ready = sessions.catalog{}                        -- definitions whose executor is ready
-local s, fault = sessions.open{definition = "bee.driver.codex:research_batch", operation_key = "research/open"}
+local s, fault = sessions.open{definition = "bee.driver.codex.profiles:research_batch", operation_key = "research/open"}
 if not s then return fault.code .. ": " .. fault.message end
 local work = s:send{input = "Summarize the build scripts in this folder.",
     budgets = {turn = {provider_steps = 8, wall_time_ms = 120000}}, operation_key = "research/send"}
@@ -176,10 +176,10 @@ cancellation and key derivation.
 Launch definitions are registry entries with `meta.type = bee.launch_definition`;
 a definition ID alone does not reveal whether the host lets this application
 open it. The installed driver definitions include
-`bee.driver.claude:research_batch`,
-`bee.driver.codex:research_batch`, `bee.driver.codex:named_batch`,
-`bee.driver.agy:research_batch`, `bee.driver.muse:research_batch` and
-`bee.driver.opencode:research_batch`. This is an inventory of definitions, not
+`bee.driver.claude.profiles:research_batch`,
+`bee.driver.codex.profiles:research_batch`, `bee.driver.codex.profiles:named_batch`,
+`bee.driver.agy.profiles:research_batch`, `bee.driver.muse.profiles:research_batch` and
+`bee.driver.opencode.profiles:research_batch`. This is an inventory of definitions, not
 an authorization list; `catalog` lists the ones that are ready, and the host
 still decides admission when `open` runs. The Agent app manages saved profiles;
 a caller must obtain an exact ID and revision from the person.

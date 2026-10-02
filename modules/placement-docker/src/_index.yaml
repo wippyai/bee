@@ -23,16 +23,8 @@ entries:
   kind: ns.requirement
   default: bee.placement.docker
   targets:
-  - entry: bee:protected_kernel
+  - entry: bee.security.gov:protected_kernel
     path: .data.namespaces +=
-- name: spec
-  kind: library.lua
-  source: file://spec.lua
-  imports:
-    request_codec: bee.placement:request
-    profiles: bee.placement:profiles
-    types: bee.placement:types
-    bounds: bee.threads.records:bounds
 - name: docker_service_groups
   kind: ns.requirement
   default: []
@@ -45,18 +37,16 @@ entries:
   targets:
   - entry: userspace.docker.service:root.service
     path: .lifecycle.auto_start
-- name: boot_environment
-  kind: env.storage.memory
 - name: dependency_bootloader
   kind: ns.dependency
   component: wippy/bootloader
   version: 0.3.16
   parameters:
   - name: env_storage
-    value: bee.placement.docker:boot_environment
+    value: bee.placement.docker.env:boot_environment
 - name: docker_database
   kind: ns.requirement
-  default: bee.placement.native:db
+  default: bee.placement.native.env:db
   targets:
   - entry: userspace.docker:database
     path: .default
@@ -91,62 +81,10 @@ entries:
   targets:
   - entry: bee.placement.docker.service:sweeper_service
     path: .lifecycle.security.policies
-- name: coding
-  kind: registry.entry
-  meta:
-    type: bee.placement_profile
-    title: Docker coding agents
-  data:
-    schema_revision: bee.placement-profile@1
-    placement_binding: bee.placement.docker.binding:binding
-    image_recipe_ref: bee.placement.docker:coding_recipe
-    user: 1000:1000
-    network: bee-coding
-    limits:
-      memory: 4294967296
-      cpu: 200000
-      pids: 256
-    mounts:
-    - resource: project
-      target: /workspace
-      access: write
-- name: coding_recipe
-  kind: registry.entry
-  meta:
-    type: bee.runtime_recipe
-  data:
-    schema_revision: bee.runtime-recipe@1
-    base: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
-    artifacts:
-    - name: claude
-      executable_ref: bee.driver.claude:executable
-    - name: codex
-      executable_ref: bee.driver.codex:executable
-      candidates:
-      - ../node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
-      - ../node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
-    - name: agy
-      executable_ref: bee.driver.agy:executable
-    - name: grok
-      executable_ref: bee.driver.grok:executable
-    - name: muse
-      executable_ref: bee.driver.muse:executable
-      sibling_prefix: muse-bin-
-    - name: opencode
-      executable_ref: bee.driver.opencode:executable
-- name: environment
-  kind: library.lua
-  source: file://environment.lua
-- name: environment_configuration
-  kind: registry.entry
-  meta:
-    type: bee.docker_environment
-  data:
-    value: {}
 - name: environment_provisioning
   kind: ns.requirement
   targets:
-  - entry: bee.placement.docker:environment_configuration
+  - entry: bee.placement.docker.env:environment_configuration
     path: .data.value
 - name: image_owner_policies
   kind: ns.requirement

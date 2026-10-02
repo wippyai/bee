@@ -18,7 +18,7 @@ entries:
     shutdown: bee.apps:shutdown
     interaction: bee.app:interaction
     interactions: bee.apps:interactions
-    clock: bee:clock
+    clock: bee.protocol:clock
     appearance: bee.app:appearance
     open_protocol: bee.apps:open_protocol
     binding_protocol: bee.host:binding_protocol
@@ -58,7 +58,7 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     contract: bee.protocol:application
-    application_admissions: bee.gov:application_admissions
+    application_admissions: bee.gov.activation:application_admissions
     canonical: bee.protocol:canonical
 - name: interactions
   kind: library.lua

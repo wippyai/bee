@@ -16,8 +16,8 @@ local model = require("model")
 local appearance = require("appearance")
 
 local PROJECTS = "bee.workspace.catalog:projects_fixture"
-local RESOURCES = "bee.resources:resources_workspace_extension"
-local AGENTS = "bee:gateway_workspace_extension"
+local RESOURCES = "bee.resources.binding:resources_workspace_extension"
+local AGENTS = "bee.gateway.binding:gateway_workspace_extension"
 local BROKEN = "bee.workspace.catalog:broken_extension"
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
@@ -51,7 +51,7 @@ local function value(reply: Reply): Object
 end
 
 local function admit()
-    local entry = registry.get("bee.resources:resource_roots")
+    local entry = registry.get("bee.resources.env:resource_roots")
     if not entry then error("admitted roots entry") end
     local roots_owner = assert(bounds.object(entry.data))
     local roots = principals.objects(roots_owner.roots)

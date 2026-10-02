@@ -39,7 +39,7 @@ entries:
     types: bee.hive:types
     admission: bee.hive.supervisor:admission
     peers: bee.hive.supervisor:peers
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
 - name: dispatch_probe
   kind: function.lua
   source: file://dispatch_probe.lua
@@ -102,7 +102,7 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
 - name: replica_admission_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -121,8 +121,8 @@ entries:
     bounds: bee.protocol:bounds
     test: wippy.test:test
     types: bee.hive:types
-    catalog: bee.hive:catalog
-    version: bee.sync:version
+    catalog: bee.hive.exposure:catalog
+    version: bee.sync.values:version
 - name: local_name_policy
   kind: security.policy
   meta: {type: test_support}

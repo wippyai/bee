@@ -20,7 +20,7 @@ local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.harness.catalog:gateway_fixture_policy"
 local EXPIRING_POLICY = "bee.harness.catalog:gateway_expiring_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
-local BINDING = "bee.driver.claude:binding"
+local BINDING = "bee.driver.claude.binding:binding"
 local CARRIER = "bee.harness.catalog:carrier_faulted"
 -- The scripted author's own workspace. The shipped host profiles admit the
 -- overlay named by the guide's workspace-application rule; nothing here
@@ -85,13 +85,13 @@ local function install_policy(name: string)
 end
 local function admit_root()
     -- These runner fixtures exercise host-configured roots with literal grant labels.
-    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+    local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     local selected = registry.snapshot():changes()
     selected:update(mode)
     local configured, mode_error = selected:apply()
     if not configured then error("fixture resource mode: " .. tostring(mode_error)) end
-    local entry = registry.get("bee.placement.native:placement_admitted_roots")
+    local entry = registry.get("bee.placement.native.env:placement_admitted_roots")
     if not entry then error("admitted roots entry") end
     local data = assert(bounds.object(entry.data))
     local roots = principals.objects(data.roots)
@@ -106,7 +106,7 @@ local function admit_root()
     if not applied then error("admit root: " .. tostring(err)) end
 end
 local function endpoint(): string
-    local entry = registry.get("bee:gateway_endpoint")
+    local entry = registry.get("bee.gateway.api:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
     return tostring((assert(bounds.object(entry.data))).address)
 end
@@ -856,8 +856,8 @@ local function define_tests()
 end
 local cases = test.run_cases(define_tests)
 return {run = function(options)
-    local roots = assert(registry.get("bee.placement.native:placement_admitted_roots"))
-    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+    local roots = assert(registry.get("bee.placement.native.env:placement_admitted_roots"))
+    local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
     changes:update(roots)

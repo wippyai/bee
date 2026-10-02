@@ -62,3 +62,15 @@ entries:
     bounds: bee.threads.records:bounds
     values: bee.threads.records:values
     paths: bee.driver.codec:paths
+- name: codec_registry
+  kind: library.lua
+  source: file://codec_registry.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    normalizer: bee.driver.kit:normalize
+    claude_stream_json: bee.driver.codec:claude_stream_json
+    codex_jsonl: bee.driver.codec:codex_jsonl
+    opencode_json_events: bee.driver.codec:opencode_json_events
+    agy_stream_json: bee.driver.codec:agy_stream_json
+    grok_streaming_json: bee.driver.codec:grok_streaming_json
+    muse_record_jsonl: bee.driver.codec:muse_record_jsonl

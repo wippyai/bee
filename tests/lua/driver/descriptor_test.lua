@@ -2,6 +2,8 @@
 local test = require("test")
 local principals = require("principals")
 local descriptor = require("descriptor")
+local resolver = require("resolver")
+local registry = require("registry")
 local login_evidence = require("login_evidence")
 local bounds = require("bounds")
 type Object = {[string]: unknown}
@@ -14,6 +16,20 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("resolves configuration renderers from the driver's binding child", function()
+            local pinned = assert(registry.snapshot())
+            for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode"}) do
+                local namespace = "bee.driver." .. provider .. ".binding"
+                local renderer, err, selected = resolver.configure_renderer(pinned, namespace .. ":binding", namespace .. ":configure")
+                test.is_nil(err)
+                test.eq(renderer, provider)
+                test.eq(selected and selected.provider, provider)
+                local inferred, inferred_error = resolver.configure_renderer_for_target(pinned, namespace .. ":configure")
+                test.is_nil(inferred_error)
+                test.eq(inferred, provider)
+                test.is_nil(resolver.configure_renderer(pinned, namespace .. ":binding", "bee.driver.other.binding:configure"))
+            end
+        end)
         test.it("declares permission answer transports for the launch context without provider dispatch", function()
             local expected: {[string]: {string}} = {
                 claude = {"stdio", "hook_http"}, codex = {"provider", "hook_mcp"},

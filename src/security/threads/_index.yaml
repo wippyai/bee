@@ -7,7 +7,7 @@ entries:
     actions:
     - db.get
     resources:
-    - bee.threads:db
+    - bee.threads.env:db
     effect: allow
 - name: thread_node_policy
   kind: security.policy
@@ -22,7 +22,7 @@ entries:
     actions:
     - registry.get
     resources:
-    - bee.threads:database_ref
+    - bee.threads.env:database_ref
     effect: allow
 - name: thread_authority_client_policy
   kind: security.policy
@@ -32,7 +32,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:authority_local
+    - bee.threads.binding:authority_local
     - create
     - get
     - list
@@ -93,7 +93,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:lifecycle_local
+    - bee.threads.binding:lifecycle_local
     - admit_action
     - prepare_attempt
     - start_attempt
@@ -115,7 +115,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:delivery_local
+    - bee.threads.binding:delivery_local
     - claim
     - dispatch
     - ack
@@ -201,7 +201,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:approvals_local
+    - bee.threads.binding:approvals_local
     - append
     - bee.threads.binding:append
     effect: allow

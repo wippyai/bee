@@ -14,7 +14,7 @@ local function handle(raw: unknown): string
     if type(input.command) ~= "string" or type(input.remote) ~= "string" then error("bad command") end
     local command, remote = input.command, input.remote
     if command:match("^approval%-") then
-        local entry = registry.get("bee:approver_policies")
+        local entry = registry.get("bee.security.approvals:approver_policies")
         if not entry then error("missing approval policies") end
         local approvers: {string} = {}
         if command ~= "approval-revoke" then

@@ -14,7 +14,7 @@ local function vocabulary(): capability_model.Vocabulary
     -- A minimal but well-formed catalog entry, decoded the same way the host
     -- capability catalog is, so M.render's template checks are exercised for
     -- real rather than bypassed.
-    return assert(capability_model.decode({id = "bee:capability_catalog", kind = "registry.entry",
+    return assert(capability_model.decode({id = "bee.security.capability:capability_catalog", kind = "registry.entry",
         meta = {type = "bee.capability_catalog"}, data = {revision = 1, never = {}, capabilities = {
             {id = "workspace.files.write", revision = 1, confirm = "standard",
                 parameters = {subpath = "relative_subpath"}, text = "Write workspace files under {subpath}",

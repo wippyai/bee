@@ -10,11 +10,11 @@ entries:
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
-    profile: bee.driver:profile
-    launch: bee.driver.agy:launch
-    protocol: bee.driver.agy:protocol
-    configuration: bee.driver.agy:configuration
-    configure_protocol: bee.driver:configuration
+    profile: bee.driver.profiles:profile
+    launch: bee.driver.agy.binding:launch
+    protocol: bee.driver.agy.binding:protocol
+    configuration: bee.driver.agy.binding:configuration
+    configure_protocol: bee.driver.configuration:configuration
     observation: bee.threads.records:observation
     stream_json: bee.driver.transport:stream_json
     quote: bee.driver.kit:quote

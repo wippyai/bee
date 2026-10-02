@@ -22,7 +22,7 @@ Use the [UI brand book](../guides/ui.md) and
 interaction rules. The offline toolkit reference gives compact, tested examples
 for `bee.app:frame` and `bee.app:viz`. Apps use
 public contracts such as `bee.app:client` and
-`bee.threads:authority_local`;
+`bee.threads.binding:authority_local`;
 they do not import private broker or store modules.
 
 The workspace owns application state, checkpoints and its migration ledger.

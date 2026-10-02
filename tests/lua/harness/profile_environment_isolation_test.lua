@@ -170,10 +170,10 @@ local function define_tests()
             local original: {Original} = {}
             local policy_alpha = assert(registry.get(ALPHA_POLICY))
             local policy_beta = assert(registry.get(BETA_POLICY))
-            local resource_roots = assert(registry.get("bee.resources:resource_roots"))
-            local roots = assert(registry.get("bee.placement.native:placement_admitted_roots"))
-            local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
-            local sources = assert(registry.get("bee.credentials:credential_sources"))
+            local resource_roots = assert(registry.get("bee.resources.env:resource_roots"))
+            local roots = assert(registry.get("bee.placement.native.env:placement_admitted_roots"))
+            local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
+            local sources = assert(registry.get("bee.credentials.env:credential_sources"))
             original = {
                 {entry = policy_alpha, data = policy_alpha.data},
                 {entry = policy_beta, data = policy_beta.data},

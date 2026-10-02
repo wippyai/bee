@@ -44,8 +44,8 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.protocol:bounds
     test: wippy.test:test
-    runner: bee.driver.wippy:runner
-    client: bee.driver.wippy:client
+    runner: bee.driver.wippy.service:runner
+    client: bee.driver.wippy.binding:client
     types: bee.driver.wippy:types
     harness: bee.threads:harness
 - name: test_tool

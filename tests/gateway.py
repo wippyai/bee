@@ -38,7 +38,7 @@ HOST_ENTRIES = {
     },
     "src/security/approvals/_index.yaml": {
         "approval_store_policy", "approval_owner_policy", "approval_request_policy",
-        "approval_decide_policy", "approval_consume_policy", "approval_manage_policy",
+        "approval_decide_policy", "approval_consume_policy", "approval_manage_policy", "approver_policies",
     },
     "src/security/threads/_index.yaml": {
         "thread_storage_policy", "thread_resource_policy", "thread_authority_client_policy",
@@ -46,13 +46,13 @@ HOST_ENTRIES = {
         "thread_lifecycle_policy", "thread_carrier_policy", "thread_node_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
-    "src/_index.yaml": {"approver_policies", "module_installation", "docs_corpus", "clock"},
-    "src/env/_index.yaml": {"gov_publication_profiles", "gov_activation_profiles"},
+    "src/gateway/env/_index.yaml": {"module_installation"},
+    "src/env/_index.yaml": {"gov_publication_profiles", "gov_activation_profiles", "docs_corpus"},
     "src/security/_index.yaml": {"ordinary_app_subsystem_boundary"},
     "modules/placement-native/src/security/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
     "src/security/gov/_index.yaml": {"workspace_folder_read_policy"},
-    "src/protocol/_index.yaml": {"bounds", "canonical", "application", "reply"},
+    "src/protocol/_index.yaml": {"bounds", "canonical", "application", "reply", "clock"},
 }
 
 
@@ -61,7 +61,7 @@ def selected_host_entries():
     selected = {}
     for relative, names in HOST_ENTRIES.items():
         document = yaml.safe_load((ROOT / relative).read_text())
-        assert (document["namespace"] in {"bee", "bee.env"}
+        assert (document["namespace"] in {"bee", "bee.env", "bee.gateway.env"}
                 or document["namespace"].startswith("bee.security")
                 or document["namespace"] == "bee.protocol"
                 or document["namespace"] == "bee.placement.native.security"), relative
@@ -84,9 +84,9 @@ def dependency(name, component, parameters=()):
 
 def gateway_parameters(listener):
     return (
-        ("target_db", "bee.gateway:db"),
+        ("target_db", "bee.gateway.env:db"),
         ("target_listener", listener),
-        ("target_endpoint", "bee:gateway_endpoint"),
+        ("target_endpoint", "bee.gateway.api:gateway_endpoint"),
         ("target_hook_storage", "bee:gateway_host_environment"),
         ("target_approval_request_policy", "bee.security.approvals:approval_request_policy"),
         ("target_approval_consume_policy", "bee.security.approvals:approval_consume_policy"),
@@ -100,27 +100,27 @@ def gateway_parameters(listener):
         ("target_tool_application_open_policy", "bee.security.gateway:gateway_tool_application_open_policy"),
         ("target_tool_install_policy", "bee.security.gateway:gateway_tool_install_policy"),
         ("target_tool_session_policy", "bee.security.gateway:gateway_tool_session_policy"),
-        ("target_install_configuration", "bee:module_installation"),
+        ("target_install_configuration", "bee.gateway.env:module_installation"),
     )
 
 
 def write_gateway_host(folder, native):
     """Write the fixture's root host and its two small host-selected resources."""
-    listener = "bee:gateway_listener" if native else "bee.managed:listener"
+    listener = "bee.gateway.api:gateway_listener" if native else "bee.managed:listener"
     host_entries = selected_host_entries()
     entries = [
         {"name": "definition", "kind": "ns.definition", "meta": {"title": "Gateway fixture host"}},
         dependency("dependency_persist", "bee/persist"),
         dependency("dependency_threads", "bee/threads", (
-            ("target_db", "bee.threads:db"),
+            ("target_db", "bee.threads.env:db"),
             ("process_host", "bee:workers"),
             ("waiter_policies", ["bee.security.threads:thread_waiter_policy"]),
         )),
         dependency("dependency_application", "bee/application"),
-        dependency("dependency_sync", "bee/sync", (("target_db", "bee.sync:db"), ("target_exports", "bee:sync_exports"), ("target_sender", "bee.gateway.probe:sync_sender"))),
+        dependency("dependency_sync", "bee/sync", (("target_db", "bee.sync.env:db"), ("target_exports", "bee.sync.env:sync_exports"), ("target_sender", "bee.gateway.probe:sync_sender"))),
         dependency("dependency_approvals", "bee/approvals", (
-            ("target_db", "bee.approvals:db"),
-            ("target_policies", "bee:approver_policies"),
+            ("target_db", "bee.approvals.env:db"),
+            ("target_policies", "bee.security.approvals:approver_policies"),
             ("process_host", "bee:workers"),
             ("authority_policies", ["bee.security.approvals:approval_store_policy", "bee.security.approvals:approval_owner_policy"]),
             ("worker_policies", ["bee.security.approvals:approval_store_policy", "bee.security.approvals:approval_owner_policy",
@@ -128,7 +128,7 @@ def write_gateway_host(folder, native):
         )),
         dependency("dependency_hub", "bee/hub", (("process_host", "bee:workers"),)),
         dependency("dependency_governance", "bee/gov", (
-            ("target_db", "bee.gov:db"),
+            ("target_db", "bee.gov.env:db"),
             ("target_publication_profiles", "bee.env:gov_publication_profiles"),
             ("target_activation_profiles", "bee.env:gov_activation_profiles"),
             ("target_approval_request_policy", "bee.security.approvals:approval_request_policy"),
@@ -136,7 +136,7 @@ def write_gateway_host(folder, native):
             ("target_workspace_folder_read", "bee.workspace.catalog:read"),
             ("target_workspace_folder_policy", "bee.security.gov:workspace_folder_read_policy"),
         )),
-        dependency("dependency_docs", "bee/docs", (("target_corpus", "bee:docs_corpus"),)),
+        dependency("dependency_docs", "bee/docs", (("target_corpus", "bee.env:docs_corpus"),)),
         dependency("dependency_driver", "bee/driver"),
         dependency("dependency_driver_codex", "bee/driver-codex", (
             ("host_environment", "bee:gateway_host_environment"),
@@ -154,17 +154,23 @@ def write_gateway_host(folder, native):
         {"name": "codex_batch_policy", "kind": "registry.entry", "data": {}},
         {"name": "codex_named_batch_policy", "kind": "registry.entry", "data": {}},
     ]
-    entries.extend(host_entries["src/_index.yaml"]["entries"])
     if native:
         entries.extend([
             {"name": "gateway_listener", "kind": "http.service", "addr": "127.0.0.1:0", "lifecycle": {"auto_start": True}},
-            {"name": "gateway_router", "kind": "http.router", "meta": {"server": "bee:gateway_listener"}, "prefix": "/"},
-            {"name": "gateway_ready", "kind": "http.endpoint", "meta": {"router": "bee:gateway_router"}, "method": "GET", "path": "/ready", "func": "bee.gateway.api:ready_http"},
-            {"name": "gateway_mcp", "kind": "http.endpoint", "meta": {"router": "bee:gateway_router"}, "method": "POST", "path": "/mcp/:action", "func": "bee.gateway.api:mcp_http"},
-            {"name": "gateway_hook", "kind": "http.endpoint", "meta": {"router": "bee:gateway_router"}, "method": "POST", "path": "/hook/:action", "func": "bee.gateway.api:hook_http"},
-            {"name": "gateway_hook_status", "kind": "http.endpoint", "meta": {"router": "bee:gateway_router"}, "method": "GET", "path": "/hook/:action/:event", "func": "bee.gateway.api:hook_status_http"},
-            {"name": "gateway_hook_mcp", "kind": "http.endpoint", "meta": {"router": "bee:gateway_router"}, "method": "POST", "path": "/hook/:action/mcp", "func": "bee.gateway.api:hook_mcp_http"},
+            {"name": "gateway_router", "kind": "http.router", "meta": {"server": "bee.gateway.api:gateway_listener"}, "prefix": "/"},
+            {"name": "gateway_ready", "kind": "http.endpoint", "meta": {"router": "bee.gateway.api:gateway_router"}, "method": "GET", "path": "/ready", "func": "bee.gateway.api:ready_http"},
+            {"name": "gateway_mcp", "kind": "http.endpoint", "meta": {"router": "bee.gateway.api:gateway_router"}, "method": "POST", "path": "/mcp/:action", "func": "bee.gateway.api:mcp_http"},
+            {"name": "gateway_hook", "kind": "http.endpoint", "meta": {"router": "bee.gateway.api:gateway_router"}, "method": "POST", "path": "/hook/:action", "func": "bee.gateway.api:hook_http"},
+            {"name": "gateway_hook_status", "kind": "http.endpoint", "meta": {"router": "bee.gateway.api:gateway_router"}, "method": "GET", "path": "/hook/:action/:event", "func": "bee.gateway.api:hook_status_http"},
+            {"name": "gateway_hook_mcp", "kind": "http.endpoint", "meta": {"router": "bee.gateway.api:gateway_router"}, "method": "POST", "path": "/hook/:action/mcp", "func": "bee.gateway.api:hook_mcp_http"},
         ])
+    api_names = {"gateway_endpoint", "gateway_listener", "gateway_router", "gateway_ready", "gateway_mcp", "gateway_hook", "gateway_hook_status", "gateway_hook_mcp"}
+    for namespace, names in [("bee.gateway.api", api_names), ("bee.sync.env", {"sync_exports"})]:
+        target = folder / "src" / namespace.removeprefix("bee.").replace(".", "/") / "_index.yaml"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(yaml.safe_dump({"version": "1.0", "namespace": namespace,
+                                        "entries": [entry for entry in entries if entry["name"] in names]}, sort_keys=False))
+        entries = [entry for entry in entries if entry["name"] not in names]
     (folder / "src").mkdir(exist_ok=True)
     (folder / "src" / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee", "entries": entries}, sort_keys=False))
     for relative, document in host_entries.items():
@@ -195,8 +201,8 @@ def write_gateway_host(folder, native):
     (folder / "src" / "placement" / "_index.yaml").write_text(yaml.safe_dump({
         "version": "1.0", "namespace": "bee.placement.native", "entries": [
             {"name": "environment", "kind": "env.storage.os", "lifecycle": {"auto_start": True}},
-            {"name": "db_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_PLACEMENT_DB", "default": ".wippy/placement.db", "readonly": True},
-            {"name": "db", "kind": "db.sql.sqlite", "file": "${env:bee.placement.native:db_path}", "lifecycle": {"auto_start": True}},
+            {"name": "db_path", "kind": "env.variable", "storage": "bee.placement.native.env:environment", "variable": "BEE_PLACEMENT_DB", "default": ".wippy/placement.db", "readonly": True},
+            {"name": "db", "kind": "db.sql.sqlite", "file": "${env:bee.placement.native.env:db_path}", "lifecycle": {"auto_start": True}},
             {"name": "placement_executor", "kind": "exec.native"},
         ],
     }, sort_keys=False))
@@ -239,7 +245,7 @@ def stage_protocol_libraries(folder):
     """Stage shared protocol libraries used by the selected components."""
     source = ROOT / "src" / "protocol"
     document = yaml.safe_load((source / "_index.yaml").read_text())
-    selected = {"bounds", "canonical", "application", "reply"}
+    selected = {"bounds", "canonical", "application", "reply", "clock"}
     entries = [deepcopy(entry) for entry in document["entries"] if entry["name"] in selected]
     assert {entry["name"] for entry in entries} == selected
     destination = folder / "src" / "protocol"
@@ -262,7 +268,6 @@ def gateway_workspace():
         for module in MODULES:
             shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
         (folder / "src").mkdir()
-        shutil.copy2(ROOT / "src" / "clock.lua", folder / "src" / "clock.lua")
         shutil.copytree(ROOT / "tests/fixtures/modules/gateway/src/probe", folder / "src" / "probe")
         if not native:
             shutil.copytree(ROOT / "tests/fixtures/modules/gateway/src/managed", folder / "src" / "managed")

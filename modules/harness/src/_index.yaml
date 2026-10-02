@@ -55,7 +55,7 @@ entries:
     comment: Add the harness namespace to the host trust map
   default: bee.harness
   targets:
-  - entry: bee:protected_kernel
+  - entry: bee.security.gov:protected_kernel
     path: .data.namespaces +=
 - name: process_host
   kind: ns.requirement
@@ -63,115 +63,16 @@ entries:
     comment: Host-selected process host for structured carriers; an assembly may override
       the Bee default
   targets:
-  - entry: bee.harness:carrier_host_ref
+  - entry: bee.harness.env:carrier_host_ref
     path: .host_ref
-- name: carrier_host_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: Linked carrier host; naming a host does not grant spawn permission
-- name: gateway_hook
-  kind: http.endpoint
-  meta:
-    router: bee:gateway_router
-  method: POST
-  path: /hook/:action
-  func: bee.gateway.api:hook_http
-- name: gateway_hook_status
-  kind: http.endpoint
-  meta:
-    router: bee:gateway_router
-  method: GET
-  path: /hook/:action/:event
-  func: bee.gateway.api:hook_status_http
-- name: gateway_hook_mcp
-  kind: http.endpoint
-  meta:
-    router: bee:gateway_router
-  method: POST
-  path: /hook/:action/mcp
-  func: bee.gateway.api:hook_mcp_http
 - name: gateway_hook_storage
   kind: ns.requirement
   meta:
     comment: Host-selected native environment storage for the gateway hook executable
   default: bee.harness.host:environment
   targets:
-  - entry: bee.gateway:hook_executable
+  - entry: bee.gateway.env:hook_executable
     path: .storage
-- name: harness_activation
-  kind: registry.entry
-  meta:
-    type: bee.harness_activation
-    comment: Driver bindings this host activates; discovery alone activates nothing
-  data:
-    schema_revision: bee.harness-activation@1
-    bindings:
-    - bee.driver.agy:binding
-    - bee.driver.claude:binding
-    - bee.driver.codex:binding
-    - bee.driver.grok:binding
-    - bee.driver.muse:binding
-    - bee.driver.opencode:binding
-    - bee.driver.wippy:binding
-- name: harness_setup
-  kind: registry.entry
-  meta:
-    type: bee.harness_setup
-    comment: Host-selected first-use roots keyed by definition-declared resource names
-  data:
-    roots:
-      project: bee.env:workspace_root
-      session: bee.placement.native:root
-    credentials:
-      claude_api_key:
-        provider: claude
-        source:
-          kind: env_variable
-          ref: bee.driver.claude:api_key
-        optional: true
-      codex_login:
-        provider: codex
-        source:
-          kind: fs_directory
-          ref: bee.env:machine_login_source
-        optional: true
-      muse_login:
-        provider: muse
-        source:
-          kind: fs_directory
-          ref: bee.env:machine_login_source
-        optional: true
-      agy_login:
-        provider: agy
-        source:
-          kind: fs_directory
-          ref: bee.env:machine_login_source
-        optional: true
-      grok_login:
-        provider: grok
-        source:
-          kind: fs_directory
-          ref: bee.env:machine_login_source
-        optional: true
-      claude_login:
-        provider: claude
-        source:
-          kind: fs_directory
-          ref: bee.env:machine_login_source
-        optional: true
-      opencode_api_key:
-        provider: opencode
-        source:
-          kind: env_variable
-          ref: bee.driver.opencode:api_key
-        optional: true
-      opencode_login:
-        provider: opencode
-        source:
-          kind: fs_directory
-          ref: bee.env:machine_login_source
-        optional: true
 - name: target_agent_application_admission
   kind: ns.requirement
   meta:
@@ -214,9 +115,3 @@ entries:
   methods:
   - name: call
     description: Read or compare-and-set a typed saved agent profile owned by the host node
-- name: profiles_local
-  kind: contract.binding
-  contracts:
-  - contract: bee.harness:profiles
-    methods:
-      call: bee.harness.binding:call

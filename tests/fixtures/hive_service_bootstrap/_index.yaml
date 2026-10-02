@@ -22,7 +22,7 @@ entries:
   modules: [process, time, io, system]
   imports:
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
   meta:
     type: test_support
     command:

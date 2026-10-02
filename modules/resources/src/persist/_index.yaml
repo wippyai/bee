@@ -9,11 +9,11 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     capability_model: bee.capability:model
-    persist: bee.persist:database
-    transaction: bee.persist:transaction
+    persist: bee.persist.persist:database
+    transaction: bee.persist.persist:transaction
     migrations: bee.resources.migrations:migrations
     identity_migration: bee.resources.persist:identity_migration
-    resources: bee.resources:resources
+    resources: bee.resources.env:resources
 - name: identity_migration
   kind: library.lua
   source: file://identity_migration.lua

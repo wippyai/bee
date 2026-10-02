@@ -6,7 +6,7 @@ entries:
   meta:
     comment: The approval owner's store, linked references, node identity, exact migration source and worker wake
   policy:
-    expression: 'action != "env.get" || resource == "bee.approvals:node_identity_migration_source"'
+    expression: 'action != "env.get" || resource == "bee.approvals.env:node_identity_migration_source"'
     actions:
     - db.get
     - registry.get
@@ -14,10 +14,10 @@ entries:
     - process.send
     - env.get
     resources:
-    - bee.approvals:db
-    - bee.approvals:database_ref
-    - bee.approvals:policies_ref
-    - bee:approver_policies
+    - bee.approvals.env:db
+    - bee.approvals.env:database_ref
+    - bee.approvals.env:policies_ref
+    - bee.security.approvals:approver_policies
     - node
     - '*'
     effect: allow
@@ -85,3 +85,31 @@ entries:
     - bee.approvals.manage
     resources: '*'
     effect: allow
+- name: approver_policies
+  kind: registry.entry
+  meta:
+    type: bee.approval_policies
+    comment: Host-owned approver policies; a request names one, and only its approvers decide it
+  policies:
+  - name: workspace-application-delivery
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    max_ttl_ms: 600000
+  - name: module-installation
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    max_ttl_ms: 600000
+  - name: module-publication
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    max_ttl_ms: 600000
+  - name: super-edit-person
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    max_ttl_ms: 600000
+  - name: docker-environment
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    max_ttl_ms: 600000

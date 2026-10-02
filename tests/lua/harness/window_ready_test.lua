@@ -29,8 +29,8 @@ local function define_tests()
         test.it("announces " .. (structured and "structured" or "direct") .. " launch readiness before opening the terminal", function()
             local ref = "bee.driver.claude.descriptor:cli"
             local original = assert(registry.get(ref))
-            local original_mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
-            local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+            local original_mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
+            local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
             mode.data = {mode = "granted"}
             apply(mode)
             local fixture = assert(registry.get(ref))

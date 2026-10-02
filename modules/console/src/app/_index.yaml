@@ -12,7 +12,7 @@ entries:
   - channel
   imports:
     client: bee.app:client
-    command: bee.console:command
+    command: bee.console.app:command
   meta:
     type: bee.app
     application:
@@ -27,3 +27,6 @@ entries:
       commands:
       - name: terminal
         fullscreen: true
+- name: command
+  kind: library.lua
+  source: file://command.lua

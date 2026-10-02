@@ -20,7 +20,7 @@ entries:
     actions:
     - env.get
     resources:
-    - bee.gov:node_identity_migration_source
+    - bee.gov.env:node_identity_migration_source
     effect: allow
 - name: seed
   kind: process.lua
@@ -34,7 +34,7 @@ entries:
   - logger
   imports:
     bounds: bee.protocol:bounds
-    staging: bee.gov:staging_resources
+    staging: bee.gov.delivery:staging_resources
     lease_store: bee.gov.persist:lease_store
   security:
     policies:

@@ -8,7 +8,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    profile: bee.driver:profile
+    profile: bee.driver.profiles:profile
     driver_types: bee.driver:types
     permission: bee.harness.permission:adapter
 - name: catalog
@@ -18,4 +18,4 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     classify: bee.harness.catalog:classify
-    resolver: bee.driver:resolver
+    resolver: bee.driver.binding:resolver

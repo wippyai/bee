@@ -30,11 +30,6 @@ entries:
   targets:
   - entry: bee.hive.telemetry.binding:presence
     path: .security.policies +=
-- name: sampling
-  kind: library.lua
-  source: file://sampling.lua
-  imports:
-    bounds: bee.protocol:bounds
 - name: target_presence_policies
   kind: ns.requirement
   default: []

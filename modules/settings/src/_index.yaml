@@ -18,6 +18,3 @@ entries:
   kind: ns.dependency
   component: bee/hub
   version: '*'
-- name: build_info
-  kind: library.lua
-  source: file://build_info.lua

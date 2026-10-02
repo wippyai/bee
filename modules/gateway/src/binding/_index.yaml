@@ -21,13 +21,13 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     capability_model: bee.capability:model
-    persist: bee.persist:database
+    persist: bee.persist.persist:database
     migrations: bee.gateway.migrations:migrations
-    configuration: bee.gateway:configuration
-    hooks: bee.gateway:hooks
-    mcp: bee.gateway:mcp
-    sessions: bee.gateway:sessions
-    surface: bee.gateway:surface
+    configuration: bee.gateway.env:configuration
+    hooks: bee.gateway.hooks:hooks
+    mcp: bee.gateway.api:mcp
+    sessions: bee.gateway.catalog:sessions
+    surface: bee.gateway.catalog:surface
     surface_store: bee.gateway.persist:surface_store
     binding_store: bee.gateway.persist:binding_store
     credential_store: bee.gateway.persist:credential_store
@@ -387,7 +387,7 @@ entries:
   - registry
   - system
   imports:
-    configuration: bee.gateway:configuration
+    configuration: bee.gateway.env:configuration
   security:
     policies:
     - bee.gateway.security:address_policy

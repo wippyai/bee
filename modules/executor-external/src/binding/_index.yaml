@@ -23,7 +23,7 @@ entries:
     admission: bee.harness.launch:admission
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    clock: bee:clock
+    clock: bee.protocol:clock
     machine: bee.harness.carrier:machine
     exchange: bee.harness.permission:exchange
     checkpoint: bee.harness.carrier:checkpoint
@@ -50,4 +50,4 @@ entries:
     classify: bee.harness.catalog:classify
     policy: bee.harness.carrier:policy
     machine: bee.harness.carrier:machine
-    descriptor: bee.driver:descriptor
+    descriptor: bee.driver.descriptor:descriptor

@@ -945,7 +945,7 @@ end
             test.eq(#(principals.items(delivery.arguments)), 0)
             test.eq(#(principals.items(delivery.files)), 0)
 
-            local provided = raw_call("bee.driver.wippy.binding:configure", {fixture = false, provider_ref = "bee:gateway_endpoint"})
+            local provided = raw_call("bee.driver.wippy.binding:configure", {fixture = false, provider_ref = "bee.gateway.api:gateway_endpoint"})
             test.is_false(provided.ok)
         end)
     end)

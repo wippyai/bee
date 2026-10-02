@@ -12,7 +12,7 @@ entries:
     arguments: bee.app:arguments
     bounds: bee.protocol:bounds
     contract: bee.protocol:application
-    workspace_query: bee.hive:workspace_query
+    workspace_query: bee.hive.workspace:workspace_query
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
@@ -34,7 +34,7 @@ entries:
   imports:
     protocol: bee.hive.desktop:protocol
     types: bee.hive:types
-    clock: bee:clock
+    clock: bee.protocol:clock
     retained: bee.launch:retained_protocol
     catalog: bee.hive.desktop:catalog
     session_policy: bee.hive.desktop:session_policy
@@ -45,11 +45,11 @@ entries:
   modules: [tty, channel, time, process, uuid]
   imports:
     bounds: bee.protocol:bounds
-    client: bee.hive:client
+    client: bee.hive.binding:client
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
-    clock: bee:clock
+    clock: bee.protocol:clock
     delivery: bee.terminal:delivery
     input: bee.protocol:input
 - name: command
@@ -106,10 +106,10 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
-    clock: bee:clock
+    clock: bee.protocol:clock
     display: bee.hive.desktop:display
     remote: bee.hive.desktop:remote
     delivery: bee.terminal:delivery

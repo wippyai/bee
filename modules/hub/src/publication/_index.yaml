@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.hub.publication
+entries:
+- name: publish_executor
+  kind: exec.native
+  meta: {comment: Native executor for the Hub uploader command only}
+  default_env:
+    PATH: /usr/local/bin:/usr/bin:/bin
+- name: publishing
+  kind: library.lua
+  source: file://publishing.lua
+  modules: [hash]
+  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync.values:canonical, semver: bee.hub.package:semver}

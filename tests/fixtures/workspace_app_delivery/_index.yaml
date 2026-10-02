@@ -73,7 +73,7 @@ entries:
     launch_id: workspace-app-author
     title: Author a workspace application
     command_names: []
-    binding_ref: bee.driver.claude:binding
+    binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
     policy_ref: bee.workspace.app.probe:agent_policy
     default_mode: batch
@@ -167,8 +167,8 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     catalog: bee.apps:catalog
-    workspace_applications: bee.gov:workspace_applications
-    capability_grants: bee.gov:capability_grants
+    workspace_applications: bee.gov.workspace:workspace_applications
+    capability_grants: bee.gov.capability:capability_grants
     capability_catalog: bee.capability:model
   security:
     policies: [bee.workspace.app.probe:operator_policy, bee.workspace.app.probe:grant_evidence_policy]

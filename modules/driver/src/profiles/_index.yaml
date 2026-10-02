@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: bee.driver.profiles
+entries:
+- name: profile_access
+  kind: library.lua
+  source: file://profile_access.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: instructions
+  kind: library.lua
+  source: file://instructions.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: profile
+  kind: library.lua
+  source: file://profile.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.driver:types
+- name: preferences
+  kind: library.lua
+  source: file://preferences.lua
+  imports:
+    profile_access: bee.driver.profiles:profile_access
+    canonical: bee.threads.records:canonical
+    bounds: bee.threads.records:bounds
+    instructions: bee.driver.profiles:instructions

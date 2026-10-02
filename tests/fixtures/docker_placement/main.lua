@@ -49,10 +49,10 @@ local function receive(replies: Channel<Message>, request_id: string, operation:
     error("broker reply missing")
 end
 local function profile(provider: string, mode: string): (string, string, admission.Plan)
-    local definition = "bee.driver." .. provider .. (mode == "window" and ":default_window" or ":research_batch")
+    local definition = "bee.driver." .. provider .. (mode == "window" and ".profiles:default_window" or ".profiles:research_batch")
     local id = provider .. "-docker-" .. mode
     call("bee.harness.binding:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
-        expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = definition, driver_binding_ref = "bee.driver." .. provider .. ":binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = {}}}})
+        expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = definition, driver_binding_ref = "bee.driver." .. provider .. ".binding:binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = {}}}})
     local plan, refused = admission.resolve(definition, mode == "window" and "window" or "batch", WORKSPACE, id, 1)
     assert(plan, tostring(refused and refused.error and refused.error.message))
     call("bee.harness.binding:setup", {workspace_id = WORKSPACE, definition_ref = definition,
@@ -286,10 +286,10 @@ local function scheduled(mode: string)
     for _, provider in ipairs({"claude", "codex"}) do
         local id = provider .. "-docker-scheduler"
         call("bee.harness.binding:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
-            expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = "bee.driver." .. provider .. ":default_window", driver_binding_ref = "bee.driver." .. provider .. ":binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = mcp}}})
+            expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = "bee.driver." .. provider .. ".profiles:default_window", driver_binding_ref = "bee.driver." .. provider .. ".binding:binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = mcp}}})
     end
     local function open(provider: string): Object
-        return object(call("bee.sessions.binding:open", {spec = {definition = "bee.driver." .. provider .. ":default_window",
+        return object(call("bee.sessions.binding:open", {spec = {definition = "bee.driver." .. provider .. ".profiles:default_window",
             profile = {id = provider .. "-docker-scheduler", revision = 1}}, operation_key = "open-" .. provider}).value)
     end
     local function wait(work: string): Object
@@ -311,7 +311,7 @@ local function scheduled(mode: string)
     save("claude-open.json", assert(json.encode(claude)))
     local prompt = "Reply only with docker-claude-scheduler-ok."
     if mode == "child" then
-        prompt = 'Use the Bee session_open MCP tool with spec {definition="bee.driver.codex:default_window",profile={id="codex-docker-scheduler",revision=1}} and operation_key "docker-child-open". Then session_send to that child with operation_key "docker-child-send" and input "Reply only with docker-child-codex-result-731.". Poll session_await on its returned work until ready, then return that exact child result. Use the Bee tools directly; do not invoke a local CLI.'
+        prompt = 'Use the Bee session_open MCP tool with spec {definition="bee.driver.codex.profiles:default_window",profile={id="codex-docker-scheduler",revision=1}} and operation_key "docker-child-open". Then session_send to that child with operation_key "docker-child-send" and input "Reply only with docker-child-codex-result-731.". Poll session_await on its returned work until ready, then return that exact child result. Use the Bee tools directly; do not invoke a local CLI.'
     end
     local sent = object(call("bee.sessions.binding:send", {session = claude.session, input = prompt, operation_key = "claude-work"}).value)
     save("claude-work.json", assert(json.encode(sent)))

@@ -480,3 +480,19 @@ entries:
         kind: config
         optional: true
         write_back: false
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver.binding:universal
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.app_command
+    comment: CLI command to launch Antigravity CLI in the agent window
+  data:
+    name: agy
+    definition_id: bee.harness.app:app
+    arguments:
+    - bee.driver.agy.profiles:default_window
+    fullscreen: true

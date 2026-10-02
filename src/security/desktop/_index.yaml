@@ -6,7 +6,7 @@ entries:
   meta:
     comment: The broker reads this node's identity and its governed application activation catalog
   policy:
-    expression: '(action != "process.host" || resource == "bee:workers") && (action != "system.read" || resource == "node") && (action != "db.get" || resource == "bee.gov:db") && (action != "registry.overlay.get" || resource matches "^bee[.](gov[.]apps|packages|governance[.]workspace_applications):.+$")'
+    expression: '(action != "process.host" || resource == "bee:workers") && (action != "system.read" || resource == "node") && (action != "db.get" || resource == "bee.gov.env:db") && (action != "registry.overlay.get" || resource matches "^bee[.](gov[.]apps|packages|governance[.]workspace_applications):.+$")'
     actions:
     - system.read
     - tty.mount

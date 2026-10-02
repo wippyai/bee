@@ -102,15 +102,15 @@ func run() error {
 		// Lazily started hosts under a fixture-owned manager with a small cap
 		// and idle period; the node's own manager service stays stopped.
 		command, budget = "workspace-hosts-lazy-supervisor", 90*time.Second
-		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
+		overrides = []string{"-o", "bee.launch.service:workspace_hosts:lifecycle.auto_start=false"}
 	case "--attach":
 		// A desktop supervisor selected by workspace identity leases its host
 		// through a fixture-owned manager; the node's own manager stays stopped.
 		command, budget = "workspace-hosts-attach-supervisor", 90*time.Second
-		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
+		overrides = []string{"-o", "bee.launch.service:workspace_hosts:lifecycle.auto_start=false"}
 	case "--attach-fallback":
 		command, budget = "workspace-hosts-attach-fallback", 90*time.Second
-		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
+		overrides = []string{"-o", "bee.launch.service:workspace_hosts:lifecycle.auto_start=false"}
 	default:
 		return fmt.Errorf("unknown mode %q", mode)
 	}

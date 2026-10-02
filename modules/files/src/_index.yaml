@@ -17,34 +17,10 @@ entries:
   meta:
     comment: Host-selected read-only workspace filesystem; the host separately grants acquisition
   targets:
-  - entry: bee.files:workspace_root_ref
+  - entry: bee.files.env:workspace_root_ref
     path: .resource_ref
-- name: workspace_root_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports:
     arguments: bee.app:arguments
-- name: gitignore
-  kind: library.lua
-  source: file://gitignore.lua
-- name: source
-  kind: library.lua
-  source: file://source.lua
-  modules: [fs]
-- name: tree
-  kind: library.lua
-  source: file://tree.lua
-  imports:
-    protocol: bee.files:protocol
-    gitignore: bee.files:gitignore
-    source: bee.files:source
-- name: syntax
-  kind: library.lua
-  source: file://syntax.lua
-  modules: [treesitter]
-  imports:
-    appearance: bee.app:appearance

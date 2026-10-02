@@ -255,18 +255,18 @@ def command_environment(folder):
 
 def prepare_fixture(folder):
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
-    shutil.copy2(ROOT / "src/clock.lua", folder / "src/clock.lua")
-    root_index = folder / "src/_index.yaml"
-    root_index.write_text(root_index.read_text() +
-                          "\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")
     shutil.copytree(ROOT / "src/protocol", folder / "src/protocol")
     (folder / "src/protocol/_index.yaml").write_text("""version: '1.0'
 namespace: bee.protocol
 entries:
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  modules: [time]
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
-  imports: {clock: bee:clock}
+  imports: {clock: bee.protocol:clock}
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
@@ -419,7 +419,7 @@ def failure_receipt_check(folder):
     (probe / "main.lua").write_text(FAILURE_PROBE)
     document = yaml.safe_load((probe / "_index.yaml").read_text())
     entry = next(item for item in document["entries"] if item["name"] == "main")
-    entry["imports"]["installation"] = "bee.hub:installation"
+    entry["imports"]["installation"] = "bee.hub.activation:installation"
     document["entries"] = [item for item in document["entries"] if item["name"] in {"policy", "management_policy", "reader_policy", "main"}]
     (probe / "_index.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
     service = folder / "modules/hub/src/binding/publication.lua"

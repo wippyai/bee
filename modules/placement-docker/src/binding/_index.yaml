@@ -113,3 +113,11 @@ entries:
   method: prepare_environment
   imports: *id001
   security: *id002
+- name: spec
+  kind: library.lua
+  source: file://spec.lua
+  imports:
+    request_codec: bee.placement:request
+    profiles: bee.placement.profiles:profiles
+    types: bee.placement:types
+    bounds: bee.threads.records:bounds

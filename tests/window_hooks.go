@@ -120,9 +120,9 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 
 	// Patch the owning indexes in the disposable fixture, with exact anchors.
 	patches := []struct{ path, from, to string }{
-		{"src/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
+		{"src/gateway/api/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
 		{"modules/gateway/src/security/_index.yaml", `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`, `resource == "http://` + endpointAddress + `/ready"`},
-		{"modules/harness/src/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window.hooks.fixture:binding\n"},
+		{"modules/harness/src/launch/_index.yaml", "    - bee.driver.grok.binding:binding\n", "    - bee.driver.grok.binding:binding\n    - bee.window.hooks.fixture:binding\n"},
 		{"src/_index.yaml", "hide_logs: true", "hide_logs: false"},
 	}
 	for _, patch := range patches {
@@ -144,7 +144,7 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	const selectedListener = "- name: target_listener\n    value: bee:gateway_listener"
+	const selectedListener = "- name: target_listener\n    value: bee.gateway.api:gateway_listener"
 	if strings.Count(string(gatewayBytes), selectedListener) != 1 {
 		return "", fmt.Errorf("missing root gateway listener target")
 	}

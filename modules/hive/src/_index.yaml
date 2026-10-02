@@ -8,11 +8,6 @@ entries:
   meta:
     title: Bee hive
     comment: Cross-node protocol envelopes, client, open telemetry and registry catalog; host composition and policy selection remain in Bee
-- name: workspace_query
-  kind: library.lua
-  source: file://workspace_query.lua
-  imports:
-    bounds: bee.protocol:bounds
 - name: types
   kind: library.lua
   source: file://types.lua
@@ -20,29 +15,3 @@ entries:
   imports:
     canonical: bee.protocol:canonical
     bounds: bee.protocol:bounds
-- name: client
-  kind: library.lua
-  source: file://client.lua
-  modules: [process, channel, time, uuid]
-  imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
-- name: catalog
-  kind: library.lua
-  source: file://catalog.lua
-  modules: [registry, security, json, hash]
-  imports:
-    canonical: bee.protocol:canonical
-    bounds: bee.protocol:bounds
-    types: bee.hive:types
-- name: principals
-  kind: library.lua
-  source: file://principals.lua
-  modules: [hash]
-  imports:
-    types: bee.hive:types
-    bounds: bee.protocol:bounds
-- name: output
-  kind: library.lua
-  source: file://output.lua
-  modules: [json]
-  imports:
-    canonical: bee.protocol:canonical

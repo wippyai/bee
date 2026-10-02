@@ -8,4 +8,4 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    migrations: bee.hub:migrations
+    migrations: bee.hub.activation:migrations

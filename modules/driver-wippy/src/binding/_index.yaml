@@ -19,7 +19,7 @@ entries:
   method: handle
   imports:
     bounds: bee.threads.records:bounds
-    configuration: bee.driver:configuration
+    configuration: bee.driver.configuration:configuration
 - name: normalize
   kind: function.lua
   source: file://normalize.lua
@@ -33,6 +33,31 @@ entries:
   method: handle
   imports:
     bounds: bee.threads.records:bounds
-    runner: bee.driver.wippy:runner
+    runner: bee.driver.wippy.service:runner
     managed_run: bee.harness.launch:managed_run
     types: bee.driver.wippy:types
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules:
+  - http_client
+  - json
+  - env
+  - registry
+  imports:
+    types: bee.driver.wippy:types
+    bounds: bee.threads.records:bounds
+    framing: bee.driver.kit:framing
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.wippy.binding:prepare
+      dispatch: bee.driver.wippy.binding:dispatch
+      normalize: bee.driver.wippy.binding:normalize
+      configure: bee.driver.wippy.binding:configure
+  meta:
+    type: harness.driver
+    driver_id: wippy
+    profiles_ref: bee.driver.wippy.profiles:profiles

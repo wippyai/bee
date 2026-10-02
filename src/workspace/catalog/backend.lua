@@ -59,7 +59,7 @@ local function folder(path: string): string
 end
 
 local function host_roots(): ({[string]: string}?, string?)
-    local entry, err = registry.get("bee.resources:resource_roots")
+    local entry, err = registry.get("bee.resources.env:resource_roots")
     if err or not entry then return nil, "host roots unavailable" end
     local data = entry.data
     local roots: {[string]: string} = {}

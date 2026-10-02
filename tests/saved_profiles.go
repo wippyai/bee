@@ -56,11 +56,7 @@ entries:
 - name: sync_sender
   kind: library.lua
   source: file://sync_sender.lua
-  imports: {transaction: bee.persist:transaction, version: bee.sync:version}
-- name: clock
-  kind: library.lua
-  source: file://clock.lua
-  modules: [time]
+  imports: {transaction: bee.persist.persist:transaction, version: bee.sync.values:version}
 `
 
 const savedProfilesSecurityIndex = `version: '1.0'
@@ -75,13 +71,29 @@ entries:
   kind: security.policy
   policy:
     actions: [db.get, registry.get, system.read]
-    resources: [bee.node:db, bee.harness.profiles:database_ref, node, bee.saved.profiles.probe:agent, bee.saved.profiles.probe:binding, bee.driver.codex.descriptor:cli]
+    resources: [bee.node.env:db, bee.harness.profiles:database_ref, node, bee.saved.profiles.probe:agent, bee.saved.profiles.probe:binding, bee.driver.codex.descriptor:cli]
     effect: allow
 `
 
 const savedProfilesSyncSender = `local transaction = require("transaction")
 local version = require("version")
 return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout: string?, source_cursor: integer}): transaction.Result return transaction.failure("UNAVAILABLE", "saved profile fixture does not distribute replicas") end}
+`
+
+const savedProfilesHarnessBindingIndex = `version: '1.0'
+namespace: bee.harness.binding
+entries:
+- name: call
+  kind: function.lua
+  source: file://method.lua
+  method: handle
+  imports: {service: bee.harness.profiles:service}
+  security: {policies: [bee.harness.security:profile_store_policy]}
+- name: profiles_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.harness:profiles
+    methods: {call: bee.harness.binding:call}
 `
 
 const savedProfilesHarnessIndex = `version: '1.0'
@@ -94,6 +106,11 @@ entries:
   meta:
     title: Bee harness
     comment: Execution contracts and the pinned discovery of admitted driver bindings; carriers arrive with launch admission
+- name: profiles
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Read or compare-and-set a typed saved agent profile owned by the host node
 `
 
 const savedProfilesNodeRootIndex = `version: '1.0'
@@ -105,10 +122,15 @@ entries:
   readme: file://README.md
 - name: target_db
   kind: ns.requirement
-  default: bee.node:db
+  default: bee.node.env:db
   targets:
-  - entry: bee.node:database_ref
+  - entry: bee.node.env:database_ref
     path: .resource_ref
+`
+
+const savedProfilesNodeEnvIndex = `version: '1.0'
+namespace: bee.node.env
+entries:
 - name: database_ref
   kind: registry.entry
   meta: {type: bee.resource_ref}
@@ -117,13 +139,13 @@ entries:
   lifecycle: {auto_start: true}
 - name: db_path
   kind: env.variable
-  storage: bee.node:environment
+  storage: bee.node.env:environment
   variable: BEE_NODE_DB
   default: .wippy/node.db
   readonly: true
 - name: db
   kind: db.sql.sqlite
-  file: ${env:bee.node:db_path}
+  file: ${env:bee.node.env:db_path}
   lifecycle: {auto_start: true}
 `
 
@@ -204,6 +226,12 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "harness", "_index.yaml"), savedProfilesHarnessIndex); err != nil {
 		return fmt.Errorf("write harness index: %w", err)
 	}
+	if err := savedProfilesWrite(filepath.Join(root, "src", "harness", "binding", "_index.yaml"), savedProfilesHarnessBindingIndex); err != nil {
+		return err
+	}
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "harness", "binding", "method.lua"), filepath.Join(source, "modules", "harness", "src", "binding", "method.lua")); err != nil {
+		return err
+	}
 	if err := savedProfilesCopyFile(filepath.Join(root, "src", "harness", "README.md"), filepath.Join(source, "modules", "harness", "src", "README.md")); err != nil {
 		return fmt.Errorf("copy harness README: %w", err)
 	}
@@ -219,16 +247,17 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "hive"), filepath.Join(source, "modules", "hive")); err != nil {
 		return err
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "clock.lua"), filepath.Join(source, "src", "clock.lua")); err != nil {
-		return err
-	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "protocol", "_index.yaml"), `version: '1.0'
 namespace: bee.protocol
 entries:
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  modules: [time]
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
-  imports: {clock: 'bee:clock'}
+  imports: {clock: 'bee.protocol:clock'}
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
@@ -236,7 +265,7 @@ entries:
 `); err != nil {
 		return err
 	}
-	for _, name := range []string{"bounds.lua", "canonical.lua"} {
+	for _, name := range []string{"bounds.lua", "canonical.lua", "clock.lua"} {
 		if err := savedProfilesCopyFile(filepath.Join(root, "src", "protocol", name), filepath.Join(source, "src", "protocol", name)); err != nil {
 			return err
 		}
@@ -246,6 +275,9 @@ entries:
 	}
 	if err := savedProfilesCopyFile(filepath.Join(root, "src", "node", "README.md"), filepath.Join(source, "modules", "node", "src", "README.md")); err != nil {
 		return fmt.Errorf("copy node README: %w", err)
+	}
+	if err := savedProfilesWrite(filepath.Join(root, "src", "node", "env", "_index.yaml"), savedProfilesNodeEnvIndex); err != nil {
+		return err
 	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "node", "_index.yaml"), savedProfilesNodeRootIndex); err != nil {
 		return err

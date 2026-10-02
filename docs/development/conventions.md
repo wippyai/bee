@@ -23,12 +23,12 @@ No child production `src/` path diverges from its namespace.
 `make lint` runs `build/layout_check.py` before typed Lua lint. It checks namespace
 paths, component roots, local sources, application entries, process placement,
 host-free requirement defaults, duplicate Lua sources, orphan files and
-requirement/import targets. Domain ownership, dynamic registry discovery and
+requirement/import and named approver definition targets. Domain ownership, dynamic registry discovery and
 public API reachability also require review.
 
 | Location | Owns |
 |---|---|
-| `src/_index.yaml` | Host composition, resources and protected admission wiring |
+| `src/_index.yaml` | Root composition only: `bee:definition`, `bee:workers` and `bee:terminal` |
 | `src/deps` | One `bee.deps:<module>` dependency per composed module with the host-selected requirement parameters |
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
 | `src/env` | Host environment and selected resources as `bee.env` |
@@ -72,6 +72,45 @@ never point at app ids. Module `process.service` entries take their host and
 policy grants through requirements (`process_host`, per-service policy lists);
 their entries keep empty underlays the host fills.
 
+Every entry belongs to the namespace of the component that owns its concept,
+in the child that implements that responsibility. `bee` has exactly the three
+composition entries above. Host-selected protected admission catalogs live in
+`src/security/<owner>`; endpoint wiring, selected defaults and service instances
+live beside their owner (`api`, `env` and `service`). They remain app-owned
+composition and do not move into installable packages.
+
+Component roots admit `ns.definition`, `ns.dependency`, `ns.requirement` and
+`contract.definition`. The following shared library entries are the complete
+root library set; executable implementations, concrete bindings, policies,
+resources, catalogs, profiles and app helpers belong in their owning children.
+`build/layout_roots.json` records this set with exact kinds; `make lint` rejects
+other root entries, including a known composition name with the wrong kind.
+The check applies to the namespace regardless of which package declares the
+entry: host wiring cannot leak implementations into a component root.
+
+| Component namespace | Shared root libraries |
+|---|---|
+| `bee.app` | `appearance`, `arguments`, `caller`, `client`, `diagram`, `folder_picker`, `forms`, `frame`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `text`, `thread_protocol`, `viz` |
+| `bee.capability` | `model` |
+| `bee.credentials` | `formats`, `protocol` |
+| `bee.docs` | `protocol` |
+| `bee.driver` | `types` |
+| `bee.driver.wippy` | `protocol`, `types` |
+| `bee.files` | `protocol` |
+| `bee.gateway` | `protocol` |
+| `bee.harness` | `types` |
+| `bee.hive` | `types` |
+| `bee.node` | `protocol` |
+| `bee.placement` | `decode`, `request`, `transitions`, `types` |
+| `bee.placement.native` | `protocol` |
+| `bee.sync` | `protocol`, `replica_protocol`, `types` |
+| `bee.threads` | `record_types`, `types` |
+
+The SDK `bee.app` owns its documented public application helpers and rendering
+values at its root. Those entries are included in the same explicit set. New
+shared root libraries require a documented responsibility and a reviewed update
+to the set; a new implementation does not qualify simply because it is shared.
+
 An append requirement (`+=`) contributes one element. It has no array default;
 an absent host selection contributes nothing instead of a nested empty array.
 
@@ -111,7 +150,7 @@ Application entries, renderers, screen models and view helpers live in
 `bee.files.app` import its helpers and own their separate application entries.
 The desktop shell remains in `src/desktop` and `src/terminal`.
 
-Within a module, keep shared domain types and contracts at the root. Contract
+Within a module, keep shared domain types and contracts at the root. Public contract bindings live in `binding`. Contract
 implementations belong in `binding`, SQL repositories in `persist`, and
 long-running processes in `service`. Use `api` for HTTP endpoints and `traits`
 for agent tools. Each child namespace declares its own local sources in its

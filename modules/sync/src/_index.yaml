@@ -22,18 +22,18 @@ entries:
   version: '*'
 - name: target_db
   kind: ns.requirement
-  default: bee.sync:db
+  default: bee.sync.env:db
   meta:
     comment: SQLite resource selected by the host for this owner-local sync store
   targets:
-  - entry: bee.sync:database_ref
+  - entry: bee.sync.env:database_ref
     path: .resource_ref
 - name: target_exports
   kind: ns.requirement
   meta:
     comment: Host-selected immutable Sync feeds; absent selection leaves distribution unwired
   targets:
-  - entry: bee.sync:exports_ref
+  - entry: bee.sync.env:exports_ref
     path: .resource_ref
 - name: target_sender
   kind: ns.requirement
@@ -42,68 +42,23 @@ entries:
   targets:
   - entry: bee.sync.service:distributor
     path: .imports.sender
-- name: database_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: Linked SQL resource; empty until a host selects target_db
-- name: environment
-  kind: env.storage.os
-  lifecycle: {auto_start: true}
-- name: db_path
-  kind: env.variable
-  storage: bee.sync:environment
-  variable: BEE_SYNC_DB
-  default: .wippy/sync.db
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.sync:db_path}
-  lifecycle: {auto_start: true}
-- name: bounds
-  kind: library.lua
-  source: file://bounds.lua
-  imports:
-    shared: bee.protocol:bounds
-- name: canonical
-  kind: library.lua
-  source: file://canonical.lua
-  imports:
-    bounds: bee.sync:bounds
-    encoder: bee.threads.records:canonical
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.sync:bounds
-- name: version
-  kind: library.lua
-  source: file://version.lua
-  modules: [hash]
-  imports:
-    bounds: bee.sync:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.sync.values:bounds
 - name: replica_protocol
   kind: library.lua
   source: file://replica_protocol.lua
   imports:
-    bounds: bee.sync:bounds
-    version: bee.sync:version
+    bounds: bee.sync.values:bounds
+    version: bee.sync.values:version
 - name: types
   kind: library.lua
   source: file://types.lua
   imports:
-    transaction: bee.persist:transaction
-    version: bee.sync:version
-- name: exports_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: Linked host export configuration; target_exports fills resource_ref
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules: [registry]
+    transaction: bee.persist.persist:transaction
+    version: bee.sync.values:version
 - name: target_admit_policies
   kind: ns.requirement
   default: []

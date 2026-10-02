@@ -381,3 +381,19 @@ entries:
         container_omit:
         - hooks
         - mcp_servers
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver.binding:universal
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.app_command
+    comment: CLI command to launch Grok CLI in the agent window
+  data:
+    name: grok
+    definition_id: bee.harness.app:app
+    arguments:
+    - bee.driver.grok.profiles:default_window
+    fullscreen: true

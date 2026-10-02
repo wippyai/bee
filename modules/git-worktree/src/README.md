@@ -4,7 +4,7 @@ Git metadata discovery and dedicated worktrees are a placement plugin. The
 component root contains its registry index and the `git_roots`, `worktree`,
 `plan`, `setup`, `cleanup`, and `binding` entries.
 
-The host selects `bee.git.worktree:binding` through placement's
+The host selects `bee.git.worktree.binding:binding` through placement's
 `target_workdir_preparers` requirement. Its default list is empty; Bee's host
 composition selects this plugin. Registry metadata never authorizes execution.
 The contract has three methods: `plan` performs read-only inspection, placement

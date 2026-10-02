@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://guide.lua
   modules: [json]
-  imports: {preflight: bee.gov:preflight, workspace_applications: bee.gov:workspace_applications}
+  imports: {preflight: bee.gov.activation:preflight, workspace_applications: bee.gov.workspace:workspace_applications}
 - name: authoring_trait
   kind: registry.entry
   meta:

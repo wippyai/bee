@@ -8,7 +8,7 @@ local sessions = require("sessions")
 
 type Object = {[string]: unknown}
 local PROFILE_ID = "saved-profile-selection-fixture"
-local DEFINITION = "bee.driver.claude:default_window"
+local DEFINITION = "bee.driver.claude.profiles:default_window"
 
 
 local function define_tests()

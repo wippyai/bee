@@ -24,19 +24,19 @@ local function ask(target: string, request: Object): caller.Reply
     return {ok = false, error = {code = "NOT_FOUND", message = target}, value = nil, replayed = false}
 end
 local function state(): view.State
-    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex:binding", provider = {system_prompt_append = ""}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}, {options = {}, mcp_tools = {"thread_read"}, instructions = true})
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}, {options = {}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
 end
 local function text_state(): view.State
-    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex:binding", provider = {options = {label = "ds-flash"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {label = "ds-flash"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
         {options = {label = {kind = "text", max_bytes = 64}}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "agent", revision = 1, draft = draft,
         save_key = "save-agent", remove_key = "remove-agent"}, ask)
 end
 local function launch_state(workdir: boolean, thread: boolean): view.State
-    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}}}, {options = {}, mcp_tools = {}, instructions = false, workdir = workdir, thread = thread})
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}}}, {options = {}, mcp_tools = {}, instructions = false, workdir = workdir, thread = thread})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
 end
@@ -56,8 +56,8 @@ local function define_tests()
         end)
         test.it("edits named budgets and supervision with units and preserves unrelated Docker requests", function()
             local s = state()
-            s.form.draft._allowed.placements = {"bee.placement.docker:coding"}
-            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding", overrides = {user = "1000:1000"}}
+            s.form.draft._allowed.placements = {"bee.placement.docker.profiles:coding"}
+            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding", overrides = {user = "1000:1000"}}
             s.settings["turn.wall_time_ms"] = "2000"
             s.settings["session.tokens"] = "10000"
             s.settings.quiet_period_ms = "5000"
@@ -91,7 +91,7 @@ local function define_tests()
 
         test.it("shows Docker revoke under Advanced at both frame sizes", function()
             local current = state()
-            current.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding"}
+            current.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
             current.advanced = true
             for _, size in ipairs({{120, 36}, {80, 24}}) do
                 local shown = view.draw(size[1], size[2], appearance.defaults(), current)
@@ -103,7 +103,7 @@ local function define_tests()
 
         test.it("requires confirmation before the person revokes Docker access", function()
             local s = state()
-            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding"}
+            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
             local revoked = false
             s.ask = function(target: string, request: Object): caller.Reply
                 test.eq(target, "bee.placement.docker.binding:prepare_environment")

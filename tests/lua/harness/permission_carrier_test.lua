@@ -27,13 +27,13 @@ local APPROVER = "bee.test.approver"
 local POLICY = "bee.harness.catalog:permission_fixture_policy"
 local PRODUCTION_POLICY = "bee.harness.catalog:permission_production_policy"
 local UNPINNED_POLICY = "bee.harness.catalog:permission_production_policy_unpinned"
-local REAL_ADAPTER = "bee.driver.claude:permission_adapter"
+local REAL_ADAPTER = "bee.driver.claude.permission:permission_adapter"
 local PRODUCTION_ACCEPTANCE = "bee.harness.catalog:permission_production_acceptance"
 local ADAPTER = "bee.harness.catalog:permission_fixture_adapter"
 local ACCEPTANCE = "bee.harness.catalog:permission_fixture_acceptance"
 local APPROVER_POLICY = "carrier-fixture"
 local ROOT = "bee.harness.catalog:project_fixture"
-local BINDING = "bee.driver.claude:binding"
+local BINDING = "bee.driver.claude.binding:binding"
 local REQUEST_ID = "perm-1"
 local counter = 0
 type Object = {[string]: unknown}
@@ -77,7 +77,7 @@ local function fixture_paths(): (string, string)
     return bin .. "/claude", streams .. "/claude/stream-json-2/permission.jsonl"
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc = assert(executor:exec("sh -c '" .. command .. "'"))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -93,7 +93,7 @@ local function shell(command: string): string
     return output
 end
 local function file_digest(path: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc = assert(executor:exec("cat " .. path))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -196,11 +196,11 @@ local function prepare_host(): string
     unpinned_data.executables = {claude = executable}
     unpinned_data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 2000, ttl_ms = 60000}
     apply(unpinned)
-    local mode = registry.get("bee.placement.native:placement_resource_mode")
+    local mode = registry.get("bee.placement.native.env:placement_resource_mode")
     if not mode then error("placement resource mode entry") end
     mode.data = {mode = "host_configured"}
     apply(mode)
-    local policies_entry = registry.get("bee:approver_policies")
+    local policies_entry = registry.get("bee.security.approvals:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list_owner = assert(bounds.object(policies_entry.data))
     local list = principals.objects(list_owner.policies)
@@ -213,7 +213,7 @@ local function prepare_host(): string
         list[#list + 1] = {name = APPROVER_POLICY, approvers = {APPROVER}, max_ttl_ms = 60000}
         apply(policies_entry)
     end
-    local roots = registry.get("bee.placement.native:placement_admitted_roots")
+    local roots = registry.get("bee.placement.native.env:placement_admitted_roots")
     if not roots then error("admitted roots entry") end
     local root_list_owner = assert(bounds.object(roots.data))
     local root_list = principals.objects(root_list_owner.roots)
@@ -701,7 +701,7 @@ return {run = function(options)
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
     for _, ref in ipairs({ACCEPTANCE, POLICY, PRODUCTION_ACCEPTANCE, PRODUCTION_POLICY, UNPINNED_POLICY,
-        "bee.placement.native:placement_resource_mode", "bee:approver_policies", "bee.placement.native:placement_admitted_roots"}) do
+        "bee.placement.native.env:placement_resource_mode", "bee.security.approvals:approver_policies", "bee.placement.native.env:placement_admitted_roots"}) do
         changes:update(assert(before:get(ref)))
     end
     assert(changes:apply())

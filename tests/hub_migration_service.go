@@ -64,7 +64,7 @@ func prepareFixture(root, repo string) error {
 	if err := os.MkdirAll(protocolDir, 0700); err != nil {
 		return err
 	}
-	for _, name := range []string{"bounds.lua", "canonical.lua"} {
+	for _, name := range []string{"bounds.lua", "canonical.lua", "clock.lua"} {
 		if err := copyServiceFile(filepath.Join(repo, "src", "protocol", name), filepath.Join(protocolDir, name)); err != nil {
 			return err
 		}
@@ -80,7 +80,7 @@ func prepareFixture(root, repo string) error {
 	selected := []any{}
 	for _, value := range protocol["entries"].([]any) {
 		entry := value.(map[string]any)
-		if entry["name"] == "bounds" || entry["name"] == "canonical" {
+		if entry["name"] == "bounds" || entry["name"] == "canonical" || entry["name"] == "clock" {
 			selected = append(selected, entry)
 		}
 	}
@@ -91,21 +91,6 @@ func prepareFixture(root, repo string) error {
 	}
 	if err := os.WriteFile(filepath.Join(protocolDir, "_index.yaml"), encoded, 0600); err != nil {
 		return err
-	}
-	if err := copyServiceFile(filepath.Join(repo, "src", "clock.lua"), filepath.Join(root, "src", "clock.lua")); err != nil {
-		return err
-	}
-	index, err := os.OpenFile(filepath.Join(root, "src", "_index.yaml"), os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	_, err = index.WriteString("\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")
-	closeErr := index.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
 	}
 
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n- name: bee/driver\n  version: 0.1.0-dev\n- name: bee/placement\n  version: 0.1.0-dev\n"

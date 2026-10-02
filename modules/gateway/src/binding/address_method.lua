@@ -10,7 +10,7 @@ local function handle(value: unknown): (configuration.Listener?, string?)
     if not configured then return nil, config_error end
     local selected: configuration.Listener = {address = configured}
     if not configured:match(":0$") then return selected, nil end
-    local entry, entry_error = registry.get("bee.gateway:listener_ref")
+    local entry, entry_error = registry.get("bee.gateway.env:listener_ref")
     if entry_error or not entry then return nil, "gateway listener is not linked" end
     local data = entry.data
     if type(data) ~= "table" then return nil, "gateway listener is not linked" end

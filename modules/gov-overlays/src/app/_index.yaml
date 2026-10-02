@@ -39,7 +39,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     caller: bee.app:caller
-    preflight: bee.gov:preflight
+    preflight: bee.gov.activation:preflight
 - name: view
   kind: library.lua
   source: file://view.lua

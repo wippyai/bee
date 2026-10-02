@@ -16,24 +16,3 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: client_policy
-  kind: security.policy
-  meta:
-    comment: The timeline lists its workspace's threads and reads threads the process
-      actor is a member of, holds its own subscription cursor and waits without claiming;
-      it can acknowledge no delivery and settle nothing
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.threads.binding:list
-    - bee.threads.binding:list_workspace
-    - bee.threads.binding:get
-    - bee.threads.binding:subscribe
-    - bee.threads.binding:page
-    - bee.threads.binding:ack_page
-    - bee.threads.binding:resume
-    - bee.threads.binding:wait
-    - bee.threads.binding:watch
-    - bee.threads.binding:recap_read
-    effect: allow

@@ -148,7 +148,7 @@ return {handle = handle}
 def stage_agent_install(project):
     """Add the agent probe and list its workspace in the Approvals inbox."""
     shutil.copytree(ROOT / "tests/fixtures/agent_install", project / "src/agent_install_probe")
-    index = project / "modules/approvals-inbox/src/_index.yaml"
+    index = project / "modules/approvals-inbox/src/app/_index.yaml"
     document = yaml.safe_load(index.read_text())
     entry = next(item for item in document["entries"] if item["name"] == "workspaces")
     entry["data"]["workspaces"].append(AGENT_WORKSPACE)
@@ -426,7 +426,7 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("wippy.dummy:router")
             ui.key(b"\r")
             ui.wait("Configure package")
-            ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
+            ui.key(b"\x7f" * 32 + b'"bee.gateway.api:gateway_router"\r')
             ui.wait("Selected")
             ui.key(b"p")
             ui.wait("Ready for confirmation", timeout=30)
@@ -459,7 +459,7 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("wippy.dummy:router")
             ui.key(b"\r")
             ui.wait("Configure package")
-            ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
+            ui.key(b"\x7f" * 32 + b'"bee.gateway.api:gateway_router"\r')
             ui.wait("Selected")
             ui.key(b"p")
             ui.wait("Ready for confirmation", timeout=30)

@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.driver.grok.env
+entries:
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: grok
+  default: ''
+  readonly: true

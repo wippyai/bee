@@ -338,7 +338,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     end
     local expected_binding = data.placement_binding
     if request.placement_profile_ref then
-        local admitted = bounds.ids(data.placement_profiles or {"bee.placement:native"}, true)
+        local admitted = bounds.ids(data.placement_profiles or {"bee.placement.profiles:native"}, true)
         if not admitted or not bounds.member(request.placement_profile_ref, admitted) then return nil, nil, "launch policy does not admit this placement profile" end
         local selected, profile_error = placement_profiles.resolve(pinned, request.placement_profile_ref)
         if not selected then return nil, nil, profile_error end

@@ -235,13 +235,13 @@ local function define_tests()
                 thread_access = "none"}}}, definition, overlay_owner, source_node, source_workspace)
             local measurement = assert(admission.measure(projected.data))
             local original_profiles = assert(registry.get("bee.env:gov_activation_profiles"))
-            local original_database_ref = assert(registry.get("bee.gov:database_ref"))
+            local original_database_ref = assert(registry.get("bee.gov.env:database_ref"))
             local changes = registry.snapshot():changes()
             local configured = assert(registry.get("bee.env:gov_activation_profiles"))
             configured.data = {profiles = {}, workspace_applications = {
                 approval_policy = "workspace-application-delivery", kinds = {"process.lua"},
                 modules = {"process"}, policies = {POLICY}, thread_access = "none", hive = false}}
-            local test_database_ref = assert(registry.get("bee.gov:database_ref"))
+            local test_database_ref = assert(registry.get("bee.gov.env:database_ref"))
             test_database_ref.data = {resource_ref = "bee.gov:activation_test_db"}
             assert(changes:update(configured))
             assert(changes:update(test_database_ref))
@@ -291,7 +291,7 @@ local function define_tests()
             local derived: Object = {id = measured.id, kind = "registry.entry", data = measured.record}
 
             local original_profiles = assert(registry.get("bee.env:gov_activation_profiles"))
-            local original_database_ref = assert(registry.get("bee.gov:database_ref"))
+            local original_database_ref = assert(registry.get("bee.gov.env:database_ref"))
             local changes = registry.snapshot():changes()
             local configured = assert(registry.get("bee.env:gov_activation_profiles"))
             local configuration = assert(bounds.object(configured.data))
@@ -299,18 +299,18 @@ local function define_tests()
             configuration.profiles = profiles
             profiles[#profiles + 1] = selected_profile
             assert(changes:update(configured))
-            local database_ref = assert(registry.get("bee.gov:database_ref"))
-            database_ref.data = {resource_ref = "bee.gov:db"}
+            local database_ref = assert(registry.get("bee.gov.env:database_ref"))
+            database_ref.data = {resource_ref = "bee.gov.env:db"}
             assert(changes:update(database_ref))
             assert(changes:apply())
 
             local setup_ok, setup_error = pcall(function()
-                activate(WORKSPACE, node, node, source_workspace, overlay_owner, assert(bounds.object(measured)), "bee.gov:db")
+                activate(WORKSPACE, node, node, source_workspace, overlay_owner, assert(bounds.object(measured)), "bee.gov.env:db")
                 local before = broker_revision(WORKSPACE)
                 if before:match(":unavailable$") or before:match(":unlinked$") then
                     error("application broker could not read the governance activation revision after activation")
                 end
-                local stored_before_result = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
+                local stored_before_result = activation_store.catalog_revision("bee.gov.env:db", node, WORKSPACE)
                 if not stored_before_result.ok then
                     error("read governance activation revision before overlay restoration: " .. tostring(stored_before_result.code))
                 end
@@ -324,14 +324,14 @@ local function define_tests()
                 if after:match(":unavailable$") then
                     error("application broker could not fingerprint the protected admission overlay")
                 end
-                local stored_after_result = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
+                local stored_after_result = activation_store.catalog_revision("bee.gov.env:db", node, WORKSPACE)
                 if not stored_after_result.ok then
                     error("read governance activation revision after overlay restoration: " .. tostring(stored_after_result.code))
                 end
                 test.eq((assert(bounds.object(stored_after_result.value))).revision, stored_before,
                     "overlay restoration does not change the activation-store revision")
                 if after == before then
-                    local stored = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
+                    local stored = activation_store.catalog_revision("bee.gov.env:db", node, WORKSPACE)
                     local stored_value = stored.ok and (assert(bounds.object(stored.value))).revision or stored.code
                     error("restored admission did not invalidate the broker catalog revision; before=" .. before
                         .. "; after=" .. after .. "; stored=" .. tostring(stored_value))
@@ -366,7 +366,7 @@ local function define_tests()
             test.eq(#policies, 3)
             test.eq(policies[1], "bee.security.threads:thread_workspace_list_policy")
             test.eq(policies[2], "bee.security:ordinary_app_subsystem_boundary")
-            test.eq(policies[3], "bee.threads.timeline:client_policy")
+            test.eq(policies[3], "bee.threads.timeline.security:client_policy")
             test.eq(timeline.thread_access, "none")
             local processes = bindings["bee.host.processes.app:app"]
             if not processes then error("processes package binding missing") end

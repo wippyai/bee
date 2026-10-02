@@ -1,0 +1,8 @@
+version: '1.0'
+namespace: bee.hive.workspace
+entries:
+- name: workspace_query
+  kind: library.lua
+  source: file://workspace_query.lua
+  imports:
+    bounds: bee.protocol:bounds

@@ -7,7 +7,7 @@ entries:
   modules:
   - sql
   imports:
-    persist: bee.persist:database
+    persist: bee.persist.persist:database
     migrations: bee.threads.migrations:migrations
     definition_migration: bee.threads.persist:definition_migration
 - name: reader
@@ -23,7 +23,7 @@ entries:
   - time
   - uuid
   imports:
-    shared: bee.persist:transaction
+    shared: bee.persist.persist:transaction
 - name: owner
   kind: library.lua
   source: file://owner.lua
@@ -39,7 +39,7 @@ entries:
   - json
   imports:
     bounds: bee.threads.records:bounds
-    clock: bee:clock
+    clock: bee.protocol:clock
     transaction: bee.threads.persist:transaction
 - name: definition_migration
   kind: library.lua

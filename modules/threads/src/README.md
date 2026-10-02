@@ -25,11 +25,11 @@ delivery contract and does not schedule work.
 
 | Requirement | Default | Injected into |
 |---|---|---|
-| `target_db` | `bee.threads:db` | `bee.threads:database_ref` at `.resource_ref`; every open goes through that resource |
+| `target_db` | `bee.threads.env:db` | `bee.threads.env:database_ref` at `.resource_ref`; every open goes through that resource |
 | `process_host` | none; `bee.deps:threads` supplies `bee:workers` | `bee.threads.service:owner_service` and `bee.threads.service:waiter_service` at `.host` |
 
 The host keeps `db.get` on the selected resource and `registry.get` on
-`bee.threads:database_ref` in the policy it attaches to the methods.
+`bee.threads.env:database_ref` in the policy it attaches to the methods.
 Selecting another resource does not move existing history; each store owns
 its tables and migration lifecycle.
 

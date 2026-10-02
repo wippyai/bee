@@ -125,7 +125,7 @@ end
 -- host's declaration of a person-confirmed, node-local decision; a policy
 -- missing here or carrying any other confirmation is refused.
 local function super_edit_approver_policy(name: string): (boolean, string?)
-    local entry = registry.get("bee:approver_policies")
+    local entry = registry.get("bee.security.approvals:approver_policies")
     local data = entry and bounds.object(entry.data) or nil
     local listed = data and data.policies or nil
     if type(listed) ~= "table" then return false, "approver policies are unavailable" end
@@ -201,7 +201,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
     if id then
         installed = registry.get(id)
         if installed then
-            local raw_catalog = registry.get("bee:capability_catalog")
+            local raw_catalog = registry.get("bee.security.capability:capability_catalog")
             local decoded, catalog_error = capability_model.decode(raw_catalog)
             if not decoded then return nil, catalog_error end
             vocabulary = decoded
@@ -219,7 +219,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
                 local package_id = package_owner and capability_grants.record_id(package_owner) or nil
                 local package_installed = package_id and registry.get(package_id) or nil
                 if package_installed then
-                    local raw_catalog = registry.get("bee:capability_catalog")
+                    local raw_catalog = registry.get("bee.security.capability:capability_catalog")
                     local decoded, catalog_error = capability_model.decode(raw_catalog)
                     if not decoded then return nil, catalog_error end
                     vocabulary = decoded
@@ -391,7 +391,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     local candidate, candidate_error = preflight.decode_candidate(intent.resolution_bytes,
         intent.resolution_digest)
     if not candidate then return nil, candidate_error end
-    local catalog_entry, catalog_lookup_error = registry.get("bee:capability_catalog")
+    local catalog_entry, catalog_lookup_error = registry.get("bee.security.capability:capability_catalog")
     if not catalog_entry then return nil, "host capability catalog lookup failed: " .. tostring(catalog_lookup_error) end
     local vocabulary, catalog_error = capability_model.decode(catalog_entry)
     if not vocabulary then return nil, catalog_error end
@@ -660,7 +660,7 @@ local function installed_envelope(profile_value: Profile): (capability_model.Voc
         or identity.component ~= profile_value.component then
         return nil, nil, "activation profile is not a workspace application"
     end
-    local catalog_entry, catalog_lookup_error = registry.get("bee:capability_catalog")
+    local catalog_entry, catalog_lookup_error = registry.get("bee.security.capability:capability_catalog")
     if not catalog_entry then return nil, nil, "host capability catalog lookup failed: " .. tostring(catalog_lookup_error) end
     local vocabulary, catalog_error = capability_model.decode(catalog_entry)
     if not vocabulary then return nil, nil, catalog_error end

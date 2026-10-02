@@ -12,15 +12,45 @@ The audit corrects `bee.git_worktree` to `bee.git.worktree` and moves
 Threads' owner and waiter actors and Harness's carrier actor live in `service/`.
 Callable method sources for Threads, Harness, drivers, Gateway, Hive, telemetry,
 Sync and Git worktree live in
-`binding/`; module roots publish their shared contracts and public bindings.
+`binding/`; module roots publish shared contracts; public bindings live in `binding/`.
 Placement's process-runner library declares its local source in `service/`.
 Threads' public reply and record types and Harness's shared execution types live
 at their component roots rather than in `records/`, `service/` or `carrier/`.
-The saved-profile contract and public binding also live at the Harness root.
+The saved-profile contract lives at the Harness root; its public binding lives in `binding/`.
 The complete identity map is `build/layout_identity_moves.json`; Placement 8,
 Sync 8 and Gateway 16 migrate their owned saved executable references and
 telemetry `owner_ref.service_id` values. The service remains the operation's exact
 namespace; unrelated namespace strings and opaque state remain intact.
+
+The root follow-up audits all entries in `bee` and every physical component
+root. `bee` retains only `definition`, `workers` and `terminal`. The 376 moved
+identities (143 Lua sources) are enumerated in `build/layout_root_moves.json`;
+`build/layout_identity_moves.json` also resolves earlier moves to these final
+live destinations. Shared root declarations and the exact library set are
+specified in the conventions and `build/layout_roots.json`. Lint rejects new
+root entries outside that set and known composition names with the wrong kind,
+including host declarations that share a physical component namespace. It also
+checks named approver definitions; the module-publication policy now points at
+the implemented `bee.approvals.inbox.app:app` identity.
+
+Host catalogs move to their owning security namespace, endpoint wiring to
+Gateway's `api`, service instances to the owner's `service`, selected defaults
+to the owner's `env`, and the shared clock to `bee.protocol`. Component
+bindings, policies, resource defaults and profile declarations move to
+`binding`, `security`, `env` and `profiles`. App helpers move to `app`; other
+helpers join the owning concept's child, including driver configuration,
+Hive exposure, governance delivery and activation, and Hub package inspection.
+No forwarding implementations are introduced.
+
+Placement 9 migrates the remaining saved binding identity and exact cleanup
+markers, plus request/grant references. Sync 9 and Gateway 17 migrate stored
+reference scalars, including Gateway's policy column. Resources 4 and
+Credentials 7 move owner-local root/source/materializer columns. These new
+blocks cover all 506 cumulative moves, including identities from before the
+first layout refactor. Migration 8/16
+and all older SQL remain byte-for-byte intact. Digests, incarnations and grants
+are preserved; migrations do not select additional authority. Cleanup state
+remains opaque, and a colliding binding key refuses the entire owner transaction.
 
 Module requirements carry host selections through `bee.deps` parameters.
 Module defaults do not name host entries, and host policy grants enter callable
@@ -42,7 +72,7 @@ presentation's executor selects the admitted application loop under its owner
 lifetime and terminal grant. These adapters have actual boundary roles.
 
 The audit removes four dead or redundant sources: the unregistered protocol
-clock duplicates `bee:clock`; the unregistered Sessions worker forwards an
+clock duplicates `bee.protocol:clock`; the unregistered Sessions worker forwards an
 unused superseded journal protocol; the unreferenced JSONL alias only returns
 `stream_json`; the unreferenced application launch decoder predates the used
 Sessions protocol and Harness admission decoder. The obsolete Go Modules UI runner duplicates the active Python source/pack
@@ -66,7 +96,7 @@ the script does not claim to prove arbitrary runtime reachability.
 Disposable test overlays live under `tests/` as required by the packaging rules.
 Their scenario/suite folder names group independent compositions; each overlay
 reuses the identities it tests rather than defining a production namespace.
-There are 67 unit overlay manifests and 69 acceptance overlay manifests,
+There are 67 unit overlay manifests and 74 acceptance overlay manifests,
 including 42 unit suite paths whose grouping differs from the declared
 namespace. They do not introduce a production `src/` divergence. The native
 host's `bee.harness.host:environment` has no source index: the native component
@@ -232,3 +262,150 @@ Hub migration probes borrow the Hub adapter and binding beside their fixture
 index; performance research borrows Threads canonical JSON; placement-publication
 borrows native materialization and its test runner; reference applications borrow
 the documented examples. Agent-author probes point at Timeline's `app/` sources.
+| `tests/fixtures/hub_inspect/security/gov/_index.yaml` | `bee.security.gov` |
+| `tests/fixtures/hub_inspect/sync/env/_index.yaml` | `bee.sync.env` |
+| `tests/fixtures/hub_manage/security/gov/_index.yaml` | `bee.security.gov` |
+| `tests/fixtures/hub_manage/sync/env/_index.yaml` | `bee.sync.env` |
+| `tests/fixtures/hub_preview/sync/env/_index.yaml` | `bee.sync.env` |
+
+## Component root placement map
+
+Every name in a row moves from the source namespace to the owning child shown.
+The root declarations and shared libraries that remain are listed in the
+conventions and `build/layout_roots.json`.
+
+| Source namespace | Owning child namespace | Moved entries |
+|---|---|---|
+| `bee.approvals.inbox` | `bee.approvals.inbox.app` | `client`, `source_config`, `sources`, `workspaces` |
+| `bee.approvals.inbox` | `bee.approvals.inbox.security` | `client_policy` |
+| `bee.approvals` | `bee.approvals.env` | `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `policies_ref`, `resources` |
+| `bee.approvals` | `bee.approvals.migrations` | `identity_migration` |
+| `bee.approvals` | `bee.approvals.binding` | `local` |
+| `bee.approvals` | `bee.approvals.service` | `runtime_lease`, `service` |
+| `bee.console` | `bee.console.app` | `command` |
+| `bee.credentials` | `bee.credentials.env` | `credential_sources`, `database_ref`, `db`, `db_path`, `environment`, `materializer_ref`, `node_identity_migration_source`, `sources`, `sources_ref` |
+| `bee.credentials` | `bee.credentials.binding` | `local` |
+| `bee.docs` | `bee.docs.binding` | `corpus` |
+| `bee.docs` | `bee.docs.env` | `corpus_ref`, `resources` |
+| `bee.driver.agy` | `bee.driver.agy.binding` | `binding`, `configuration`, `launch`, `protocol` |
+| `bee.driver.agy` | `bee.driver.agy.descriptor` | `command`, `locate` |
+| `bee.driver.agy` | `bee.driver.agy.credentials` | `credential_format` |
+| `bee.driver.agy` | `bee.driver.agy.profiles` | `default_window`, `profiles`, `research_batch` |
+| `bee.driver.agy` | `bee.driver.agy.env` | `executable` |
+| `bee.driver.agy` | `bee.driver.agy.security` | `launch_policy_agy_batch`, `launch_policy_agy_window` |
+| `bee.driver.claude` | `bee.driver.claude.env` | `api_key`, `config_home`, `executable` |
+| `bee.driver.claude` | `bee.driver.claude.binding` | `binding`, `launch`, `protocol` |
+| `bee.driver.claude` | `bee.driver.claude.descriptor` | `command`, `locate` |
+| `bee.driver.claude` | `bee.driver.claude.credentials` | `credential_format` |
+| `bee.driver.claude` | `bee.driver.claude.profiles` | `default_window`, `profiles`, `research_batch` |
+| `bee.driver.claude` | `bee.driver.claude.security` | `launch_policy_claude_batch`, `launch_policy_claude_window` |
+| `bee.driver.claude` | `bee.driver.claude.permission` | `permission_adapter` |
+| `bee.driver.codex` | `bee.driver.codex.binding` | `binding`, `configuration`, `launch`, `protocol` |
+| `bee.driver.codex` | `bee.driver.codex.descriptor` | `command`, `default_provider`, `locate` |
+| `bee.driver.codex` | `bee.driver.codex.env` | `config_home`, `executable` |
+| `bee.driver.codex` | `bee.driver.codex.credentials` | `credential_format` |
+| `bee.driver.codex` | `bee.driver.codex.profiles` | `default_window`, `named_batch`, `profiles`, `research_batch` |
+| `bee.driver.codex` | `bee.driver.codex.security` | `launch_policy_codex_batch`, `launch_policy_codex_named_batch`, `launch_policy_codex_window` |
+| `bee.driver.grok` | `bee.driver.grok.binding` | `binding`, `configuration`, `launch`, `protocol` |
+| `bee.driver.grok` | `bee.driver.grok.descriptor` | `command`, `locate` |
+| `bee.driver.grok` | `bee.driver.grok.credentials` | `credential_format` |
+| `bee.driver.grok` | `bee.driver.grok.profiles` | `default_window`, `profiles`, `research_batch` |
+| `bee.driver.grok` | `bee.driver.grok.env` | `executable` |
+| `bee.driver.grok` | `bee.driver.grok.security` | `launch_policy_grok_batch`, `launch_policy_grok_window` |
+| `bee.driver.muse` | `bee.driver.muse.binding` | `binding`, `configuration`, `launch`, `protocol` |
+| `bee.driver.muse` | `bee.driver.muse.descriptor` | `command`, `locate` |
+| `bee.driver.muse` | `bee.driver.muse.credentials` | `credential_format` |
+| `bee.driver.muse` | `bee.driver.muse.profiles` | `default_window`, `profiles`, `research_batch` |
+| `bee.driver.muse` | `bee.driver.muse.env` | `executable` |
+| `bee.driver.muse` | `bee.driver.muse.security` | `launch_policy_muse_batch`, `launch_policy_muse_window` |
+| `bee.driver.opencode` | `bee.driver.opencode.binding` | `binding`, `configuration`, `launch`, `protocol` |
+| `bee.driver.opencode` | `bee.driver.opencode.descriptor` | `command`, `locate` |
+| `bee.driver.opencode` | `bee.driver.opencode.credentials` | `credential_format` |
+| `bee.driver.opencode` | `bee.driver.opencode.profiles` | `default_window`, `profiles`, `research_batch` |
+| `bee.driver.opencode` | `bee.driver.opencode.env` | `executable` |
+| `bee.driver.opencode` | `bee.driver.opencode.security` | `launch_policy_opencode_batch`, `launch_policy_opencode_window` |
+| `bee.driver.wippy` | `bee.driver.wippy.binding` | `binding`, `client` |
+| `bee.driver.wippy` | `bee.driver.wippy.env` | `host_config` |
+| `bee.driver.wippy` | `bee.driver.wippy.profiles` | `profiles` |
+| `bee.driver.wippy` | `bee.driver.wippy.service` | `runner` |
+| `bee.driver` | `bee.driver.codec` | `codec_registry` |
+| `bee.driver` | `bee.driver.configuration` | `configuration`, `option_render` |
+| `bee.driver` | `bee.driver.descriptor` | `descriptor`, `schema_values` |
+| `bee.driver` | `bee.driver.profiles` | `instructions`, `preferences`, `profile`, `profile_access` |
+| `bee.driver` | `bee.driver.locate` | `locate`, `login_evidence`, `probe_capture` |
+| `bee.driver` | `bee.driver.permission` | `permission_request_hook` |
+| `bee.driver` | `bee.driver.binding` | `resolver`, `universal` |
+| `bee.files` | `bee.files.app` | `gitignore`, `source`, `syntax`, `tree` |
+| `bee.files` | `bee.files.env` | `workspace_root_ref` |
+| `bee.gateway` | `bee.gateway.api` | `address_value`, `mcp` |
+| `bee.gateway` | `bee.gateway.env` | `approval_consume_policy_ref`, `approval_request_policy_ref`, `configuration`, `database_ref`, `db`, `db_path`, `endpoint_ref`, `environment`, `hook_executable`, `install_configuration_ref`, `listener_ref`, `publish_configuration_ref`, `tool_application_open_policy_ref`, `tool_components_policy_ref`, `tool_delivery_policy_ref`, `tool_docs_policy_ref`, `tool_hub_publish_policy_ref`, `tool_install_policy_ref`, `tool_message_policy_ref`, `tool_overlay_policy_ref`, `tool_publish_policy_ref`, `tool_read_policy_ref`, `tool_session_policy_ref` |
+| `bee.gateway` | `bee.gateway.catalog` | `catalog`, `context`, `json_schema`, `profile_scope`, `session_bundle`, `session_tools`, `sessions`, `surface` |
+| `bee.gateway` | `bee.gateway.hooks` | `hooks` |
+| `bee.git.worktree` | `bee.git.worktree.binding` | `binding`, `git_roots`, `worktree` |
+| `bee.git.worktree` | `bee.git.worktree.env` | `executor_ref`, `git_executor`, `host_files`, `host_files_ref` |
+| `bee.git.worktree` | `bee.git.worktree.security` | `worktree_policy` |
+| `bee.gov.overlays` | `bee.gov.overlays.security` | `client_policy` |
+| `bee.gov` | `bee.gov.activation` | `activation_measure`, `activation_profile_decoder`, `application_admissions`, `governed_application_admission`, `headless_revert`, `lists`, `migration_work`, `preflight`, `protected_kernel`, `super_edit` |
+| `bee.gov` | `bee.gov.env` | `activation_profiles_ref`, `approval_consume_policy_ref`, `approval_request_policy_ref`, `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `publication_profiles_ref`, `workspace_folder_policy_ref`, `workspace_folder_read_ref` |
+| `bee.gov` | `bee.gov.delivery` | `artifact`, `candidate`, `delivery`, `delivery_protocol`, `hub_resolver`, `lease_model`, `materializer`, `overlay_resolver`, `publication_profile_decoder`, `resolver`, `staging_resources` |
+| `bee.gov` | `bee.gov.capability` | `capability_files`, `capability_gateway`, `capability_grants`, `capability_request` |
+| `bee.gov` | `bee.gov.binding` | `delivery_local`, `overlay_local` |
+| `bee.gov` | `bee.gov.workspace` | `workspace`, `workspace_applications`, `workspace_protocol` |
+| `bee.harness` | `bee.harness.env` | `carrier_host_ref` |
+| `bee.harness` | `bee.harness.api` | `gateway_hook`, `gateway_hook_mcp`, `gateway_hook_status` |
+| `bee.harness` | `bee.harness.launch` | `harness_activation`, `harness_setup` |
+| `bee.harness` | `bee.harness.binding` | `profiles_local` |
+| `bee.hive.manager` | `bee.hive.manager.security` | `client_policy`, `viewer_policy` |
+| `bee.hive.manager` | `bee.hive.manager.app` | `directory`, `names` |
+| `bee.hive.telemetry` | `bee.hive.telemetry.binding` | `sampling` |
+| `bee.hive` | `bee.hive.exposure` | `catalog` |
+| `bee.hive` | `bee.hive.binding` | `client`, `output` |
+| `bee.hive` | `bee.hive.security` | `principals` |
+| `bee.hive` | `bee.hive.workspace` | `workspace_query` |
+| `bee.host.processes` | `bee.host.processes.app` | `probe` |
+| `bee.hub.modules` | `bee.hub.modules.security` | `client_policy`, `hub_policy`, `publication_policy`, `self_update_policy` |
+| `bee.hub` | `bee.hub.package` | `binary_identity`, `graph`, `inspection`, `inventory`, `inventory_reader`, `native_compat`, `plan`, `requirements`, `result`, `semver` |
+| `bee.hub` | `bee.hub.activation` | `host_resources`, `installation`, `migration_work`, `migrations` |
+| `bee.hub` | `bee.hub.env` | `process_host_ref`, `publish_configuration_ref`, `publish_executor_ref` |
+| `bee.hub` | `bee.hub.publication` | `publish_executor`, `publishing` |
+| `bee.node` | `bee.node.env` | `database_ref`, `db`, `db_path`, `environment`, `resources` |
+| `bee.persist` | `bee.persist.persist` | `database`, `ledger`, `transaction` |
+| `bee.placement.docker` | `bee.placement.docker.env` | `boot_environment`, `environment`, `environment_configuration` |
+| `bee.placement.docker` | `bee.placement.docker.profiles` | `coding`, `coding_recipe` |
+| `bee.placement.docker` | `bee.placement.docker.binding` | `spec` |
+| `bee.placement.native` | `bee.placement.native.env` | `admitted_roots_ref`, `configuration`, `database_ref`, `db`, `db_path`, `environment`, `executor_ref`, `host_files_ref`, `placement_admitted_roots`, `placement_executor`, `placement_host_files`, `placement_path`, `placement_resource_mode`, `placement_workdir_preparers`, `resource_mode_ref`, `resources`, `root`, `root_path`, `root_ref`, `runner_host_ref`, `workdir_preparers_ref` |
+| `bee.placement.native` | `bee.placement.native.binding` | `process_backend` |
+| `bee.placement` | `bee.placement.profiles` | `native`, `paths`, `profiles` |
+| `bee.placement` | `bee.placement.binding` | `resolver` |
+| `bee.resources` | `bee.resources.env` | `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `resource_roots`, `resources`, `roots_ref` |
+| `bee.resources` | `bee.resources.binding` | `local`, `resources_workspace_extension` |
+| `bee.sessions` | `bee.sessions.executor` | `driver_route`, `executor_registry`, `executor_selection` |
+| `bee.sessions` | `bee.sessions.service` | `owner` |
+| `bee.sessions` | `bee.sessions.binding` | `threads_journal` |
+| `bee.sessions` | `bee.sessions.env` | `threads_journal_ref` |
+| `bee.settings` | `bee.settings.app` | `build_info` |
+| `bee.sync` | `bee.sync.values` | `bounds`, `canonical`, `version` |
+| `bee.sync` | `bee.sync.env` | `database_ref`, `db`, `db_path`, `environment`, `exports_ref`, `resources` |
+| `bee.threads.timeline` | `bee.threads.timeline.security` | `client_policy` |
+| `bee.threads` | `bee.threads.binding` | `approvals_local`, `authority_local`, `capabilities_report`, `carrier_local`, `delivery_local`, `journal_local`, `lifecycle_local`, `projection_local` |
+| `bee.threads` | `bee.threads.env` | `database_path`, `database_ref`, `db`, `environment`, `resources` |
+| `bee.workspace.manager` | `bee.workspace.manager.security` | `client_policy` |
+| `bee` | `bee.security.approvals` | `approver_policies` |
+| `bee` | `bee.security.capability` | `capability_catalog` |
+| `bee` | `bee.protocol` | `clock` |
+| `bee` | `bee.env` | `docs_corpus` |
+| `bee` | `bee.gateway.api` | `gateway_endpoint`, `gateway_listener`, `gateway_mcp`, `gateway_ready`, `gateway_router` |
+| `bee` | `bee.gateway.service` | `gateway_installation_service`, `gateway_publication_service` |
+| `bee` | `bee.gateway.binding` | `gateway_workspace_extension` |
+| `bee` | `bee.gov.service` | `gov_recovery_service` |
+| `bee` | `bee.hive.supervisor` | `hive_operation_adapters` |
+| `bee` | `bee.hub.publication` | `hub_publication` |
+| `bee` | `bee.gateway.env` | `module_installation`, `module_publication` |
+| `bee` | `bee.security.gov` | `protected_kernel` |
+| `bee` | `bee.sync.service` | `sync_distribution_service` |
+| `bee` | `bee.sync.env` | `sync_exports` |
+| `bee` | `bee.threads.service` | `thread_outbox_pump_service` |
+| `bee` | `bee.placement.native.env` | `workdir_preparers` |
+| `bee` | `bee.launch.service` | `workspace_hosts` |
+| `bee.console` (host) | `bee.console.env` | `environment`, `executor`, `home`, `lang`, `path`, `user` |
+| `bee.console` (host) | `bee.console.security` | `command_policy`, `executor_policy` |

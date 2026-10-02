@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.hub.env
+entries:
+- name: process_host_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked Hub publisher host; an absent link fails closed}
+- name: publish_executor_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked Hub publisher executor; an absent link fails closed}
+- name: publish_configuration_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked Hub publication configuration; an absent link fails closed}

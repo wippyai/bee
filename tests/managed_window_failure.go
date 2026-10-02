@@ -397,7 +397,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	const activation = "    - bee.driver.grok:binding\n"
+	const activation = "    - bee.driver.grok.binding:binding\n"
 	updated := strings.Replace(string(host), activation, activation+"    - bee.managed.window.fixture:binding\n", 1)
 	if updated == string(host) {
 		return fmt.Errorf("host activation anchor missing")

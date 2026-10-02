@@ -33,7 +33,7 @@ refused (`INVALID`).
 A CLI harness route admits the closure only through the route check in
 launch admission (`modules/harness/src/launch/admission.lua`). The route is
 any `harness.driver` contract binding the host activates
-(`bee.harness:harness_activation`); no driver id is listed in
+(`bee.harness.launch:harness_activation`); no driver id is listed in
 `bee.harness.launch:agent_resolver`, so an installed driver package (Claude,
 Codex, agy, Grok, Muse, opencode or a later addition) routes framework
 agents the moment its binding is activated. Each binding's `meta` declares
@@ -56,7 +56,7 @@ the `agent_preferences` helper in
 closure and refuses tools outside it or an option claiming `model`
 (`FORBIDDEN`).
 
-The `from_framework` helper in `modules/gateway/src/catalog.lua` projects the
+The `from_framework` helper in `modules/gateway/src/catalog/catalog.lua` projects the
 closure's selected function tools and traits into gateway declarations: each
 function id becomes one MCP tool under its `llm_alias` adapter alias with its
 input schema, and each trait keeps its prompt with those aliases. The alias
@@ -121,11 +121,11 @@ the `bee.sessions` owner contract methods:
 | Kickside traits/tools | Components contribute `agent.trait` entries and `function.lua` tools with `meta.type: tool`, schema and model-facing metadata. Public tools can be projected as virtual function Blocks. (`../../kickside/main/app/src/app/docs/kickside-development/06-agents-skills-models.md:20-43`, `../../kickside/main/app/src/app/docs/kickside-development/06-agents-skills-models.md:81-135`, `../../kickside/main/app/src/app/docs/kickside-development/18-blocks-flows-workflows.md:73-83`) |
 | Bee launch | `bee.launch-definition@1` identifies a binding, profile and policy, with mode, workdir, thread, session, credentials and presentation rules, plus an optional `agent_ref` naming one `agent.gen1` entry. An agent route resolves the framework closure from the same snapshot and pins its digest, exact gateway tools, mapped model and declined hints in the measured plan. (`modules/harness/src/launch/definition.lua`, `modules/harness/src/launch/agent_resolver.lua`, `modules/harness/src/launch/admission.lua`) |
 | Bee profile | Saved profiles select a launch definition and contain driver options, MCP tool names and instructions capped at 4,096 bytes. These are not a framework agent definition; on an agent route `agent_preferences` narrows a saved profile inside the admitted closure and refuses tools outside it or an option claiming `model`. (`modules/harness/src/profiles/protocol.lua`) |
-| Bee gateway | Its catalog uses local tool names, operation ids and policy refs, plus traits of prompt and tool names. `catalog.from_framework` projects an admitted closure's function tools (under their `llm_alias` adapter alias) and traits into the same declarations. Selection checks the host tool ceiling; tool execution uses a scoped subject executor. (`modules/gateway/src/catalog.lua`, `modules/gateway/src/api/mcp_method.lua:48-53`) |
-| Bee sessions | `session_open` (MCP) and `sessions.open` (application SDK) take one spec: a definition, optional saved profile, workdir, workspace, session budget and progress quiet period. Work enters only through `session_send`, which returns a receipt and may carry a per-Work budget. Sessions survive turns and restarts; `session_get` and `session_list` report stalled activity with quiet-period evidence. (`modules/sessions/src/`, `modules/gateway/src/session_tools.lua`, `modules/application/src/sessions.lua`) |
-| Bee drivers | Claude and Codex prepare declarative CLI launches; their model/effort and permission/sandbox options differ. Driver bindings also exist for Agy, Grok, Muse and OpenCode, and OpenCode takes no model options because the user selects models in its own home. (`modules/driver-claude/src/launch.lua:13-19`, `modules/driver-claude/src/launch.lua:89-112`, `modules/driver-codex/src/launch.lua:4-17`, `modules/driver-codex/src/launch.lua:65-105`, `modules/driver-agy/src/_index.yaml:71-72`, `modules/driver-grok/src/_index.yaml:62-63`, `modules/driver-muse/src/_index.yaml:74-75`) |
+| Bee gateway | Its catalog uses local tool names, operation ids and policy refs, plus traits of prompt and tool names. `catalog.from_framework` projects an admitted closure's function tools (under their `llm_alias` adapter alias) and traits into the same declarations. Selection checks the host tool ceiling; tool execution uses a scoped subject executor. (`modules/gateway/src/catalog/catalog.lua`, `modules/gateway/src/api/mcp_method.lua:48-53`) |
+| Bee sessions | `session_open` (MCP) and `sessions.open` (application SDK) take one spec: a definition, optional saved profile, workdir, workspace, session budget and progress quiet period. Work enters only through `session_send`, which returns a receipt and may carry a per-Work budget. Sessions survive turns and restarts; `session_get` and `session_list` report stalled activity with quiet-period evidence. (`modules/sessions/src/`, `modules/gateway/src/catalog/session_tools.lua`, `modules/application/src/sessions.lua`) |
+| Bee drivers | Claude and Codex prepare declarative CLI launches; their model/effort and permission/sandbox options differ. Driver bindings also exist for Agy, Grok, Muse and OpenCode, and OpenCode takes no model options because the user selects models in its own home. (`modules/driver-claude/src/binding/launch.lua:13-19`, `modules/driver-claude/src/binding/launch.lua:89-112`, `modules/driver-codex/src/binding/launch.lua:4-17`, `modules/driver-codex/src/binding/launch.lua:65-105`, `modules/driver-agy/src/_index.yaml:71-72`, `modules/driver-grok/src/_index.yaml:62-63`, `modules/driver-muse/src/_index.yaml:74-75`) |
 | Bee driver execution | Current catalog compatibility accepts `stream-json` for batch/session and `pty` for windows; an in-process Wippy profile needs a new execution path. (`modules/harness/src/catalog/classify.lua:46-47`) |
-| Bee placement | The host policy names an optional placement binding and options. The resolver defaults to the native binding, and the native module supplies that binding. A migration admits a `docker` value; the surveyed implementation is native. (`modules/harness/src/carrier/policy.lua:237-251`, `modules/placement/src/resolver.lua:10-17`, `modules/placement-native/src/_index.yaml:271-289`, `modules/placement-native/src/migrations/migrations.lua:92`) |
+| Bee placement | The host policy names an optional placement binding and options. The resolver defaults to the native binding, and the native module supplies that binding. A migration admits a `docker` value; the surveyed implementation is native. (`modules/harness/src/carrier/policy.lua:237-251`, `modules/placement/src/binding/resolver.lua:10-17`, `modules/placement-native/src/_index.yaml:271-289`, `modules/placement-native/src/migrations/migrations.lua:92`) |
 | Bee workspaces | The node catalog migration gives `workspaces` a `workspace_id` primary key and keys workspace state by that id; catalog indexes support ordered label and path search. The current host manager also starts a workspace host on demand, capped at 64 live hosts. (`src/storage/store.lua:149-174`, `src/storage/store.lua:255-262`, `src/_index.yaml:169-181`) |
 
 ## Proposal: identity and composition
@@ -198,7 +198,7 @@ manifest. Existing framework agent fields keep their framework meanings.
   meta: {type: bee.launch_definition}
   schema_revision: bee.launch-definition@2
   agent_ref: acme.review:reviewer
-  harness: {requested_binding_ref: bee.driver.codex:binding,
+  harness: {requested_binding_ref: bee.driver.codex.binding:binding,
             profile_id: batch}
   placement: {requested_kind: docker, image_class: review-worker}
   workdir_policy: {kind: required}

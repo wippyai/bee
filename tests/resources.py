@@ -29,7 +29,7 @@ end
 
 local registry = require("registry")
 local fs = require("fs")
-local ROOT_REF = "bee.placement.native:root"
+local ROOT_REF = "bee.placement.native.env:root"
 local WORKSPACE = "resource-restart"
 local ACTOR = "bee.test.resource_probe"
 local KEY = "restart-grant-key"
@@ -50,13 +50,13 @@ local function credential(method: string, request: {[string]: unknown}): {[strin
     return object(value.value)
 end
 local function admit()
-    local roots_entry = registry.get("bee.placement.native:placement_admitted_roots")
+    local roots_entry = registry.get("bee.placement.native.env:placement_admitted_roots")
     assert(roots_entry, "admitted roots entry")
     local roots = objects(object(roots_entry.data).roots)
     local has_root = false
     for _, root in ipairs(roots) do if tostring(root.root_ref) == ROOT_REF then has_root = true end end
     if not has_root then roots[#roots + 1] = {root_ref = ROOT_REF, access = "write"} end
-    local sources_entry = registry.get("bee.credentials:credential_sources")
+    local sources_entry = registry.get("bee.credentials.env:credential_sources")
     assert(sources_entry, "credential sources entry")
     local sources_data = object(sources_entry.data)
     sources_data.sources = {{ref = CRED_SOURCE, workspace_id = "*", audience = ACTOR, provider = "claude", projection_kinds = {"environment"}}}

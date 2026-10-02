@@ -5,5 +5,5 @@ entries:
   kind: security.policy
   policy:
     actions: [db.get, registry.get]
-    resources: [bee.sync:db, bee.sync:database_ref]
+    resources: [bee.sync.env:db, bee.sync.env:database_ref]
     effect: allow

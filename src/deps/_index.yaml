@@ -13,7 +13,7 @@ entries:
   - name: target_sender
     value: bee.hive.service:replica_sender
   - name: target_exports
-    value: bee:sync_exports
+    value: bee.sync.env:sync_exports
   - name: target_admit_policies
     value:
     - bee.security.hive:hive_replica_admission_policy
@@ -50,14 +50,14 @@ entries:
   - name: process_host
     value: bee:workers
   - name: target_publish_configuration
-    value: bee:hub_publication
+    value: bee.hub.publication:hub_publication
 - name: gov
   kind: ns.dependency
   component: bee/gov
   version: 0.1.0-dev
   parameters:
   - name: target_db
-    value: bee.gov:db
+    value: bee.gov.env:db
   - name: target_publication_profiles
     value: bee.env:gov_publication_profiles
   - name: target_activation_profiles
@@ -76,11 +76,11 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_db
-    value: bee.gateway:db
+    value: bee.gateway.env:db
   - name: target_listener
-    value: bee:gateway_listener
+    value: bee.gateway.api:gateway_listener
   - name: target_endpoint
-    value: bee:gateway_endpoint
+    value: bee.gateway.api:gateway_endpoint
   - name: target_approval_request_policy
     value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
@@ -106,11 +106,11 @@ entries:
   - name: target_tool_session_policy
     value: bee.security.gateway:gateway_tool_session_policy
   - name: target_install_configuration
-    value: bee:module_installation
+    value: bee.gateway.env:module_installation
   - name: target_tool_hub_publish_policy
     value: bee.security.gateway:gateway_tool_hub_publish_policy
   - name: target_publish_configuration
-    value: bee:module_publication
+    value: bee.gateway.env:module_publication
 - name: hive
   kind: ns.dependency
   component: bee/hive
@@ -187,7 +187,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_corpus
-    value: bee:docs_corpus
+    value: bee.env:docs_corpus
   - name: target_call_policies
     value:
     - bee.security.docs:docs_policy
@@ -197,9 +197,9 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_db
-    value: bee.approvals:db
+    value: bee.approvals.env:db
   - name: target_policies
-    value: bee:approver_policies
+    value: bee.security.approvals:approver_policies
   - name: process_host
     value: bee:workers
   - name: authority_policies
@@ -229,7 +229,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_workdir_preparers
-    value: bee:workdir_preparers
+    value: bee.placement.native.env:workdir_preparers
   - name: bee.placement.native:process_host
     value: bee:workers
   - name: bee.placement.native:sweeper_policies
@@ -275,8 +275,8 @@ entries:
   - name: environment_provisioning
     value:
       network: bee-coding
-      endpoint: bee:gateway_endpoint
-      listener: bee:gateway_listener
+      endpoint: bee.gateway.api:gateway_endpoint
+      listener: bee.gateway.api:gateway_listener
       approval_policy: docker-environment
       readiness_policy: bee.gateway.security:readiness_policy
   - name: image_owner_policies

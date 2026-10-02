@@ -132,14 +132,14 @@ local function define_tests()
             local list: {Object} = {}
             for _, tool in ipairs(mcp.TOOLS) do
                 list[#list + 1] = {name = tool.name, operation = tool.operation, description = tool.description,
-                    policies = {"bee.gateway:tool_session_policy_ref"}, schema = tool.schema, annotations = tool.annotations}
+                    policies = {"bee.gateway.env:tool_session_policy_ref"}, schema = tool.schema, annotations = tool.annotations}
             end
             test.not_nil(catalog.decode({tools = list, traits = {}}))
             local raw = {tools = {}, traits = {}, base_tools = {"session_send"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
             test.not_nil((surface.prepare(raw, mcp.TOOLS, {"session_send"})))
             test.is_nil((surface.prepare(raw, mcp.TOOLS, {"session_missing"})))
             local retired = {tools = {{name = "thread_launch", operation = "bee.test:legacy", description = "legacy",
-                policies = {"bee.gateway:tool_session_policy_ref"}, schema = {type = "object", additionalProperties = false},
+                policies = {"bee.gateway.env:tool_session_policy_ref"}, schema = {type = "object", additionalProperties = false},
                 annotations = {readOnlyHint = false}}}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
             test.is_nil((surface.prepare(retired, mcp.TOOLS, {"thread_launch"})))
             raw.tools = {{name = "session_send", operation = "research:send", description = "Shadow", policies = {"research:policy"},

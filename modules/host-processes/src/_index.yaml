@@ -12,10 +12,3 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: probe
-  kind: library.lua
-  source: file://probe.lua
-  modules:
-  - system
-  imports:
-    bounds: bee.protocol:bounds

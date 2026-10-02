@@ -20,7 +20,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.protocol:bounds
     test: wippy.test:test
-    registry: bee.sessions:executor_registry
+    registry: bee.sessions.executor:executor_registry
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua
@@ -210,7 +210,7 @@ entries:
   modules: [registry]
   imports:
     test: wippy.test:test
-    journal: bee.sessions:threads_journal
+    journal: bee.sessions.binding:threads_journal
   security:
     policies: [bee.tests.sessions:probe_policy]
 - name: fake_history

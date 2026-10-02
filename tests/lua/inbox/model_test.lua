@@ -12,7 +12,7 @@ local caller = require("caller")
 type Object = {[string]: unknown}
 local function view(id: string, revision: integer, state: string, extra: Object?): Object
     local item: Object = {approval_id = id, workspace_id = "ws-1", requester_id = "bee.test.requester", request_kind = "permission", policy = "inbox-test",
-        proposal = {kind = "attempt", ref = "attempt-" .. id, revision = "r1", action_id = "action-" .. id, payload = {tool_name = "Bash", correlation_id = "c-1", adapter_ref = "bee.driver.claude:permission_adapter"}},
+        proposal = {kind = "attempt", ref = "attempt-" .. id, revision = "r1", action_id = "action-" .. id, payload = {tool_name = "Bash", correlation_id = "c-1", adapter_ref = "bee.driver.claude.permission:permission_adapter"}},
         proposal_digest = string.rep("a", 64), prompt = {text = "touch proof.txt"}, revision = revision, state = state, owner_node = "node-1", owner_incarnation = 3,
         expires_at = "2026-09-09T10:00:00.000Z", created_at = "2026-09-09T09:0" .. tostring(#id % 10) .. ":00.000Z"}
     for key, value in pairs(extra or {}) do item[key] = value end

@@ -35,8 +35,8 @@ entries:
   modules: [funcs, registry, system, json, logger]
   imports:
     bounds: bee.threads.records:bounds
-    artifact: bee.gov:artifact
-    preflight: bee.gov:preflight
+    artifact: bee.gov.delivery:artifact
+    preflight: bee.gov.activation:preflight
   security:
     policies:
     - bee.delivery.review.probe:seed_policy

@@ -1,0 +1,16 @@
+version: '1.0'
+namespace: bee.gov.workspace
+entries:
+- name: workspace
+  kind: library.lua
+  source: file://workspace.lua
+  modules: [hash]
+  imports: {canonical: bee.sync.values:canonical}
+- name: workspace_protocol
+  kind: library.lua
+  source: file://workspace_protocol.lua
+  modules: [base64]
+  imports: {bounds: bee.threads.records:bounds}
+- name: workspace_applications
+  kind: library.lua
+  source: file://workspace_applications.lua

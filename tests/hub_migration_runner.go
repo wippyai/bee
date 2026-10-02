@@ -90,7 +90,7 @@ func copyRunnerFixture(root, repo string) error {
 		return err
 	}
 	for destination, source := range map[string]string{
-		"migrations.lua":       "modules/hub/src/migrations.lua",
+		"migrations.lua":       "modules/hub/src/activation/migrations.lua",
 		"migration_runner.lua": "modules/hub/src/binding/migration_runner.lua",
 	} {
 		if err := copyFile(filepath.Join(repo, source), filepath.Join(root, "src", destination)); err != nil {

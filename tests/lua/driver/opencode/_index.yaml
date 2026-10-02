@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    launch: bee.driver.opencode:launch
+    launch: bee.driver.opencode.binding:launch
     prepare: bee.driver.opencode.binding:prepare
     dispatch: bee.driver.opencode.binding:dispatch
     quote: bee.driver.kit:quote
@@ -23,10 +23,10 @@ entries:
     bounds: bee.protocol:bounds
     test: wippy.test:test
     registry: registry
-    configuration: bee.driver.opencode:configuration
-    driver_configuration: bee.driver:configuration
+    configuration: bee.driver.opencode.binding:configuration
+    driver_configuration: bee.driver.configuration:configuration
     configure: bee.driver.opencode.binding:configure
-    placement_configuration: bee.placement.native:configuration
+    placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
 - name: protocol_test
   kind: function.lua
@@ -37,7 +37,7 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     test: wippy.test:test
-    protocol: bee.driver.opencode:protocol
+    protocol: bee.driver.opencode.binding:protocol
     normalize: bee.driver.opencode.binding:normalize
     stream_json: bee.driver.transport:stream_json
     observation: bee.threads.records:observation

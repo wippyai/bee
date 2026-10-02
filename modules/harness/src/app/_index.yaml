@@ -153,7 +153,7 @@ entries:
   imports:
     canonical: bee.threads.records:canonical
     bounds: bee.threads.records:bounds
-    preferences: bee.driver:preferences
+    preferences: bee.driver.profiles:preferences
     budgets: bee.threads.records:budgets
     protocol: bee.harness.profiles:protocol
 - name: profile_form
@@ -162,9 +162,9 @@ entries:
   modules: [funcs, uuid, json]
   imports:
     canonical: bee.threads.records:canonical
-    descriptors: bee.driver:descriptor
+    descriptors: bee.driver.descriptor:descriptor
     readiness: bee.harness.launch:readiness
-    preferences: bee.driver:preferences
+    preferences: bee.driver.profiles:preferences
     bounds: bee.threads.records:bounds
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions

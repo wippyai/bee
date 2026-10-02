@@ -38,7 +38,7 @@ function M.apply(db: sql.DB, destination_raw: unknown, source_override: unknown?
     if not destination then return false, "governance destination node identity is invalid" end
     local source_raw: unknown = source_override
     if source_raw == nil then
-        local source, env_error = env.get("bee.gov:node_identity_migration_source")
+        local source, env_error = env.get("bee.gov.env:node_identity_migration_source")
         if env_error then
             if env_error:kind() == errors.NOT_FOUND then return true, nil end
             return false, "read governance legacy node identity: " .. tostring(env_error)

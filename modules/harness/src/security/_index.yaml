@@ -71,21 +71,21 @@ entries:
     actions:
     - env.get
     resources:
-    - bee.driver.claude:executable
-    - bee.driver.codex:executable
-    - bee.driver.agy:executable
-    - bee.driver.grok:executable
-    - bee.driver.muse:executable
-    - bee.driver.opencode:executable
-    - bee.driver.claude:config_home
-    - bee.driver.codex:config_home
+    - bee.driver.claude.env:executable
+    - bee.driver.codex.env:executable
+    - bee.driver.agy.env:executable
+    - bee.driver.grok.env:executable
+    - bee.driver.muse.env:executable
+    - bee.driver.opencode.env:executable
+    - bee.driver.claude.env:config_home
+    - bee.driver.codex.env:config_home
     effect: allow
 - name: launch_locate_probe_policy
   kind: security.policy.expr
   meta:
     comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and alternative login metadata without reading credential contents
   policy:
-    expression: '(action == "env.get" && (resource matches "^bee[.]driver[.](claude|codex|opencode|agy|grok|muse):executable$" || resource == "bee.harness.launch:host_environment_names" || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || ((action == "exec.get" || action == "exec.run") && resource == "bee.placement.native:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")'
+    expression: '(action == "env.get" && (resource matches "^bee[.]driver[.](claude|codex|opencode|agy|grok|muse):executable$" || resource == "bee.harness.launch:host_environment_names" || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || ((action == "exec.get" || action == "exec.run") && resource == "bee.placement.native.env:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")'
     actions: [registry.get, registry.snapshot, env.get, exec.get, exec.run, fs.get]
     resources: '*'
     effect: allow
@@ -105,7 +105,7 @@ entries:
     - registry.get
     - system.read
     resources:
-    - bee.node:db
+    - bee.node.env:db
     - bee.harness.profiles:database_ref
     - node
     - "*"

@@ -16,9 +16,11 @@ from app_layout_smoke import layout, saved, stop
 from native_workspace import NativeDesktop
 from workspace import ROOT, RUNTIME, database_environment
 
-STORES = [('placement', 'bee_placement_schema_migrations', 8),
-          ('sync', 'bee_sync_schema_migrations', 8),
-          ('gateway', 'bee_gateway_schema_migrations', 16)]
+STORES = [('placement', 'bee_placement_schema_migrations', 7, 9),
+          ('sync', 'bee_sync_schema_migrations', 7, 9),
+          ('gateway', 'bee_gateway_schema_migrations', 15, 17),
+          ('resources', 'bee_resource_schema_migrations', 3, 4),
+          ('credentials', 'bee_credential_schema_migrations', 6, 7)]
 
 
 @contextmanager
@@ -42,11 +44,19 @@ def stage(folder, source):
     (folder / '.wippy').mkdir()
     (folder / '.wippy/vendor').symlink_to(ROOT / '.wippy/vendor', target_is_directory=True)
     shutil.copytree(ROOT / 'tests/fixtures/layout_upgrade', folder / 'src/tests/layout')
+    if source != ROOT:
+        moves = json.loads((ROOT / 'build/layout_root_moves.json').read_text())
+        for path in (folder / 'src/tests/layout').rglob('*'):
+            if path.suffix in {'.lua', '.yaml'}:
+                text = path.read_text()
+                for previous, current in moves.items():
+                    text = text.replace(current, previous)
+                path.write_text(text)
     overrides = []
     for index in [*source.joinpath('src').rglob('_index.yaml'), *source.joinpath('modules').glob('*/src/**/_index.yaml')]:
         document = yaml.safe_load(index.read_text())
         for entry in document['entries']:
-            if entry['kind'] == 'process.service' or (document['namespace'] == 'bee' and entry['name'] == 'gateway_listener'):
+            if entry['kind'] == 'process.service' or entry['kind'] == 'http.service':
                 overrides.extend(['--override', document['namespace'] + ':' + entry['name'] + ':lifecycle.auto_start=false'])
                 overrides.extend(['--override', document['namespace'] + ':' + entry['name'] + ':lifecycle.startup=optional'])
     return overrides
@@ -81,7 +91,7 @@ def desktop(binary, folder, state):
 
 def ledgers(state):
     result = {}
-    for store, table, _ in STORES:
+    for store, table, _, _ in STORES:
         with sqlite3.connect('file:' + str(state / (store + '.db')) + '?mode=ro', uri=True) as db:
             result[store] = db.execute('SELECT id, name, checksum FROM ' + table + ' ORDER BY id').fetchall()
     return result
@@ -96,8 +106,8 @@ def upgrade(previous, binary, source):
         before_layout = layout(state)
         owner_records(folder / 'old-owners', state, 'layout-seed', source, lint=True)
         prior_ledgers = ledgers(state)
-        for store, _, count in STORES:
-            assert len(prior_ledgers[store]) == count - 1, (store, prior_ledgers[store])
+        for store, _, prior_count, count in STORES:
+            assert len(prior_ledgers[store]) == prior_count, (store, prior_ledgers[store])
         desktop(binary, folder, state)
         after, upgraded_ledger = saved(state)
         assert before == after, 'Saved application/window/checkpoint identities changed'
@@ -105,13 +115,13 @@ def upgrade(previous, binary, source):
         assert layout(state) == before_layout, 'Saved client targets changed'
         owner_records(folder / 'new-owners', state, 'layout-verify', ROOT, lint=True)
         upgraded_ledgers = ledgers(state)
-        for store, _, count in STORES:
+        for store, _, prior_count, count in STORES:
             assert len(upgraded_ledgers[store]) == count, (store, upgraded_ledgers[store])
-            assert upgraded_ledgers[store][:-1] == prior_ledgers[store], 'Applied migration changed: ' + store
+            assert upgraded_ledgers[store][:prior_count] == prior_ledgers[store], 'Applied migration changed: ' + store
         desktop(binary, folder, state)
         owner_records(folder / 'restarted-owners', state, 'layout-verify', ROOT)
         assert ledgers(state) == upgraded_ledgers, 'Restart reapplied a migration'
-        print('origin/main standalone restart: saved desktop retained; owner-written Placement 7→8, Sync 7→8, Gateway 15→16; cleanup replay and second restart pass', flush=True)
+        print('origin/main standalone restart: saved desktop retained; owner-written Placement 7→9, Sync 7→9, Gateway 15→17, Resources 3→4, Credentials 6→7; cleanup replay and second restart pass', flush=True)
 
 
 if __name__ == '__main__':

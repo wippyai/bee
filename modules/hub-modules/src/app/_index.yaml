@@ -39,7 +39,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     text: bee.app:text
-    canonical: bee.sync:canonical
+    canonical: bee.sync.values:canonical
 - name: view
   kind: library.lua
   source: file://view.lua

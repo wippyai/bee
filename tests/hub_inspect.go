@@ -54,32 +54,20 @@ func copyFixture(root string, manage bool) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join("tests", "fixtures", fixture))); err != nil {
 		return fmt.Errorf("copy Hub inspection fixture: %w", err)
 	}
-	clockSource, err := os.ReadFile("src/clock.lua")
-	if err != nil {
-		return fmt.Errorf("read Hub clock source dependency: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "clock.lua"), clockSource, 0600); err != nil {
-		return fmt.Errorf("copy Hub clock source dependency: %w", err)
-	}
-	rootIndex := filepath.Join(root, "src", "_index.yaml")
-	rootManifest, err := os.ReadFile(rootIndex)
-	if err != nil {
-		return fmt.Errorf("read Hub fixture root manifest: %w", err)
-	}
-	rootManifest = append(rootManifest, []byte("\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")...)
-	if err := os.WriteFile(rootIndex, rootManifest, 0600); err != nil {
-		return fmt.Errorf("add Hub clock source dependency: %w", err)
-	}
 	if err := os.CopyFS(filepath.Join(root, "src", "protocol"), os.DirFS("src/protocol")); err != nil {
 		return fmt.Errorf("copy Hub protocol source dependency: %w", err)
 	}
 	protocolIndex := `version: '1.0'
 namespace: bee.protocol
 entries:
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  modules: [time]
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
-  imports: {clock: bee:clock}
+  imports: {clock: bee.protocol:clock}
 - name: canonical
   kind: library.lua
   source: file://canonical.lua

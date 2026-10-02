@@ -20,14 +20,3 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: client_policy
-  kind: security.policy
-  meta:
-    comment: Overlays calls only the destination-owned governance facade; local review
-      is separate from Approvals decisions
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.gov.binding:destination_call
-    effect: allow

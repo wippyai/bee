@@ -18,7 +18,7 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
         if entry["name"] == "catalog_binding":
             entry["contracts"][0]["default"] = False
     sessions_index.write_text(yaml.safe_dump(sessions_document, sort_keys=False))
-    host = folder / "modules/harness/src/_index.yaml"
+    host = folder / "modules/harness/src/launch/_index.yaml"
     document = yaml.safe_load(host.read_text())
     activation = next(entry for entry in document["entries"] if entry["name"] == "harness_activation")
     activation["data"]["bindings"].append("bee.managed.window.fixture:binding")

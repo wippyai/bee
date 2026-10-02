@@ -48,7 +48,7 @@ installed component version. The list gives a registry revision; reads require
 that revision and return at most 16,384 bytes. It does not expose registry
 configuration, other owners or package resources. This covers local development
 versions that have no matching Hub artifact.
-See [the API and acceptance status](../../docs/guides/hub.md) for request examples.
+See [the API and acceptance status](../../../docs/guides/hub.md) for request examples.
 
 Management operations are `plan`, `apply` and `status`, plus publication
 operations `publish_request` and `publish_apply` for person-approved Hub

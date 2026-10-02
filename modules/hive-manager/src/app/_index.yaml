@@ -20,12 +20,12 @@ entries:
     model: bee.hive.manager.app:model
     names: bee.app:names
     view: bee.hive.manager.app:view
-    directory: bee.hive.manager:directory
-    hive: bee.hive:client
+    directory: bee.hive.manager.app:directory
+    hive: bee.hive.binding:client
     types: bee.hive:types
     remote: bee.hive.manager.app:remote
     desktop_protocol: bee.hive.desktop:protocol
-    clock: bee:clock
+    clock: bee.protocol:clock
   meta:
     type: bee.app
     application:
@@ -46,7 +46,7 @@ entries:
   - json
   imports:
     text: bee.app:text
-    directory: bee.hive.manager:directory
+    directory: bee.hive.manager.app:directory
     contract: bee.protocol:application
     types: bee.hive:types
     hive_bounds: bee.protocol:bounds
@@ -67,3 +67,18 @@ entries:
     appearance: bee.app:appearance
     frame: bee.app:frame
     names: bee.app:names
+- name: directory
+  kind: library.lua
+  source: file://directory.lua
+  imports:
+    types: bee.hive:types
+    bounds: bee.protocol:bounds
+    contract: bee.protocol:application
+- name: names
+  kind: registry.entry
+  meta:
+    type: bee.hive_node_names
+    comment: Friendly names the host gives node identities for display and selection;
+      a name authenticates nothing and changes no identity
+  data:
+    names: {}

@@ -1,0 +1,52 @@
+version: '1.0'
+namespace: bee.resources.env
+entries:
+- name: database_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked SQL resource; target_db fills resource_ref
+- name: roots_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked host roots entry; target_roots fills resource_ref
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: node_identity_migration_source
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: node_identity_migration_source
+  default: ""
+  readonly: true
+- name: db_path
+  kind: env.variable
+  storage: bee.resources.env:environment
+  variable: BEE_RESOURCES_DB
+  default: .wippy/resources.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.resources.env:db_path}
+  lifecycle:
+    auto_start: true
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry, env, system]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: resource_roots
+  kind: registry.entry
+  meta:
+    type: bee.resource_roots
+    comment: Host-selected roots available to first-use harness setup; driver declarations select only resource
+      names
+  data:
+    roots:
+    - root_ref: bee.env:workspace_root
+      access: write
+    - root_ref: bee.placement.native.env:root
+      access: write

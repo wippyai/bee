@@ -1,0 +1,45 @@
+version: '1.0'
+namespace: bee.hub.package
+entries:
+- name: requirements
+  kind: library.lua
+  source: file://requirements.lua
+  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync.values:canonical}
+- name: inspection
+  kind: library.lua
+  source: file://inspection.lua
+  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub.package:requirements}
+- name: inventory
+  kind: library.lua
+  source: file://inventory.lua
+  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub.package:requirements}
+- name: semver
+  kind: library.lua
+  source: file://semver.lua
+- name: binary_identity
+  kind: library.lua
+  source: file://binary_identity.lua
+  modules: [json, env]
+  imports: {bounds: bee.threads.records:bounds, semver: bee.hub.package:semver}
+- name: native_compat
+  kind: library.lua
+  source: file://native_compat.lua
+  imports: {bounds: bee.threads.records:bounds, binary_identity: bee.hub.package:binary_identity, semver: bee.hub.package:semver}
+- name: graph
+  kind: library.lua
+  source: file://graph.lua
+  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub.package:requirements, inspection: bee.hub.package:inspection, semver: bee.hub.package:semver, canonical: bee.sync.values:canonical}
+- name: plan
+  kind: library.lua
+  source: file://plan.lua
+  modules: [hash]
+  imports: {bounds: bee.threads.records:bounds, binary_identity: bee.hub.package:binary_identity, canonical: bee.sync.values:canonical, graph: bee.hub.package:graph, inventory: bee.hub.package:inventory, native_compat: bee.hub.package:native_compat, requirements: bee.hub.package:requirements, semver: bee.hub.package:semver}
+- name: inventory_reader
+  kind: library.lua
+  source: file://inventory_reader.lua
+  modules: [registry]
+  imports: {inventory: bee.hub.package:inventory}
+- name: result
+  kind: library.lua
+  source: file://result.lua
+  imports: {bounds: bee.threads.records:bounds, transaction: bee.persist.persist:transaction}

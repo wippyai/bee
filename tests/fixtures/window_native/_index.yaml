@@ -86,7 +86,7 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     test: wippy.test:test
-    persist: bee.persist:database
+    persist: bee.persist.persist:database
     migrations: bee.placement.native.migrations:migrations
   security:
     policies: [bee.window.native:upgrade_policy]

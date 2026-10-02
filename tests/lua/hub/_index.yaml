@@ -69,8 +69,8 @@ entries:
     test: wippy.test:test
     effect: bee.gov.binding:migration_effect
     migration_runner: bee.hub.binding:migration_runner
-    migration_work: bee.gov:migration_work
-    canonical: bee.sync:canonical
+    migration_work: bee.gov.activation:migration_work
+    canonical: bee.sync.values:canonical
 - name: migration_runner_test
   kind: function.lua
   source: file://migration_runner_test.lua
@@ -91,7 +91,7 @@ entries:
   imports:
     test: wippy.test:test
     migration_runner: bee.hub.binding:migration_runner
-    migrations: bee.hub:migrations
+    migrations: bee.hub.activation:migrations
 - name: requirements_test
   kind: function.lua
   source: file://requirements_test.lua
@@ -99,7 +99,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    requirements: bee.hub:requirements
+    requirements: bee.hub.package:requirements
 - name: host_resources_test
   kind: function.lua
   source: file://host_resources_test.lua
@@ -107,7 +107,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    host_resources: bee.hub:host_resources
+    host_resources: bee.hub.activation:host_resources
 - name: inspect_test
   kind: function.lua
   source: file://inspect_test.lua
@@ -117,9 +117,9 @@ entries:
     bounds: bee.protocol:bounds
     test: wippy.test:test
     inspect: bee.hub.binding:inspect
-    inspection: bee.hub:inspection
-    inventory: bee.hub:inventory
-    installed: bee.hub:inventory_reader
+    inspection: bee.hub.package:inspection
+    inventory: bee.hub.package:inventory
+    installed: bee.hub.package:inventory_reader
     preview: bee.hub.binding:preview
 - name: result_test
   kind: function.lua
@@ -128,5 +128,5 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    hub_result: bee.hub:result
-    installation: bee.hub:installation
+    hub_result: bee.hub.package:result
+    installation: bee.hub.activation:installation

@@ -12,8 +12,8 @@ entries:
   source: file://outbox.lua
   modules: [sql, json, funcs]
   imports:
-    transaction: bee.persist:transaction
-    resources: bee.approvals:resources
-    clock: bee:clock
+    transaction: bee.persist.persist:transaction
+    resources: bee.approvals.env:resources
+    clock: bee.protocol:clock
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical

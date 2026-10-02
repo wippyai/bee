@@ -27,35 +27,3 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
-- name: client
-  kind: library.lua
-  source: file://client.lua
-  imports:
-    caller: bee.app:caller
-- name: source_config
-  kind: library.lua
-  source: file://sources.lua
-  modules: [hash]
-  imports:
-    bounds: bee.threads.records:bounds
-- name: sources
-  kind: registry.entry
-  meta:
-    type: bee.approvals.inbox.sources
-    comment: Host-selected remote owner/workspace sources; discovery grants no reading or approval authority
-  data: {sources: []}
-- name: workspaces
-  kind: registry.entry
-  meta:
-    type: bee.approvals.inbox.workspaces
-    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
-  data:
-    workspaces: []
-- name: client_policy
-  kind: security.policy
-  meta:
-    comment: The inbox reads the owner's inbox and requests and submits explicit decisions and withdrawals under the process actor; the owner authorizes each call
-  policy:
-    actions: [funcs.call, registry.get]
-    resources: [bee.workspace.catalog:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, bee.approvals.binding:decide_batch, bee.approvals.binding:withdraw, bee.gov.binding:destination_call, bee.approvals.inbox:workspaces, bee.approvals.inbox:sources]
-    effect: allow

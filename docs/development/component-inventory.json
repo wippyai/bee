@@ -1126,6 +1126,11 @@
       "source": "src/deps/_index.yaml"
     },
     {
+      "id": "bee.deps:workspace",
+      "kind": "ns.dependency",
+      "source": "src/deps/_index.yaml"
+    },
+    {
       "id": "bee.deps:workspace_manager",
       "kind": "ns.dependency",
       "source": "src/deps/_index.yaml"
@@ -7521,31 +7526,6 @@
       "source": "modules/settings/src/_index.yaml"
     },
     {
-      "id": "bee.storage:assignments",
-      "kind": "library.lua",
-      "source": "src/storage/_index.yaml"
-    },
-    {
-      "id": "bee.storage:binding",
-      "kind": "library.lua",
-      "source": "src/storage/_index.yaml"
-    },
-    {
-      "id": "bee.storage:catalog",
-      "kind": "library.lua",
-      "source": "src/storage/_index.yaml"
-    },
-    {
-      "id": "bee.storage:store",
-      "kind": "library.lua",
-      "source": "src/storage/_index.yaml"
-    },
-    {
-      "id": "bee.storage:thread_bindings",
-      "kind": "library.lua",
-      "source": "src/storage/_index.yaml"
-    },
-    {
       "id": "bee.sync.binding:admit",
       "kind": "function.lua",
       "source": "modules/sync/src/binding/_index.yaml"
@@ -8656,89 +8636,84 @@
       "source": "modules/values/src/_index.yaml"
     },
     {
-      "id": "bee.workspace.catalog:archive",
+      "id": "bee.workspace.binding:archive",
       "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
+      "source": "modules/workspace/src/binding/_index.yaml"
     },
     {
-      "id": "bee.workspace.catalog:backend",
+      "id": "bee.workspace.binding:catalog",
       "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:create",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:extensions",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:folders",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:inspect",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:list",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:read",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:rename",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:restore",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:roots",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:search",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.binding:search_within",
+      "kind": "function.lua",
+      "source": "modules/workspace/src/binding/_index.yaml"
     },
     {
       "id": "bee.workspace.catalog:contract",
       "kind": "contract.definition",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:create",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
+      "source": "modules/workspace/src/catalog/_index.yaml"
     },
     {
       "id": "bee.workspace.catalog:extension",
       "kind": "contract.definition",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:extensions",
-      "kind": "library.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:folders",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:inspect",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:list",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
+      "source": "modules/workspace/src/catalog/_index.yaml"
     },
     {
       "id": "bee.workspace.catalog:local",
       "kind": "contract.binding",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:protocol",
-      "kind": "library.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:read",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:rename",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:restore",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:roots",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:search",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
-    },
-    {
-      "id": "bee.workspace.catalog:search_within",
-      "kind": "function.lua",
-      "source": "src/workspace/catalog/_index.yaml"
+      "source": "modules/workspace/src/catalog/_index.yaml"
     },
     {
       "id": "bee.workspace.manager.app:app",
@@ -8781,14 +8756,104 @@
       "source": "modules/workspace-manager/src/_index.yaml"
     },
     {
-      "id": "bee.workspace:persistence",
+      "id": "bee.workspace.migrations:migrations",
       "kind": "library.lua",
-      "source": "src/workspace/_index.yaml"
+      "source": "modules/workspace/src/migrations/_index.yaml"
     },
     {
-      "id": "bee.workspace:recovery",
+      "id": "bee.workspace.persist:assignments",
       "kind": "library.lua",
-      "source": "src/workspace/_index.yaml"
+      "source": "modules/workspace/src/persist/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.persist:catalog",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/persist/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.persist:checkpoint",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/persist/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.persist:store",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/persist/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.persist:thread_bindings",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/persist/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.types:catalog",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.types:recovery",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.workspace.types:selection",
+      "kind": "library.lua",
+      "source": "modules/workspace/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:definition",
+      "kind": "ns.definition",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:dependency_application",
+      "kind": "ns.dependency",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:dependency_persist",
+      "kind": "ns.dependency",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:target_application_protocol",
+      "kind": "ns.requirement",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:target_db",
+      "kind": "ns.requirement",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:target_decode",
+      "kind": "ns.requirement",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:target_facade_policy",
+      "kind": "ns.requirement",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:target_model",
+      "kind": "ns.requirement",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:target_roots",
+      "kind": "ns.requirement",
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "id": "bee.workspace:target_scope",
+      "kind": "ns.requirement",
+      "source": "modules/workspace/src/_index.yaml"
     },
     {
       "id": "bee:definition",
@@ -10529,13 +10594,6 @@
       "source": "modules/settings/src/app/_index.yaml"
     },
     {
-      "namespace": "bee.storage",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.storage",
-      "source": "src/storage/_index.yaml"
-    },
-    {
       "namespace": "bee.sync",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -10743,14 +10801,21 @@
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
       "path_namespace": "bee.workspace",
-      "source": "src/workspace/_index.yaml"
+      "source": "modules/workspace/src/_index.yaml"
+    },
+    {
+      "namespace": "bee.workspace.binding",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.workspace.binding",
+      "source": "modules/workspace/src/binding/_index.yaml"
     },
     {
       "namespace": "bee.workspace.catalog",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
       "path_namespace": "bee.workspace.catalog",
-      "source": "src/workspace/catalog/_index.yaml"
+      "source": "modules/workspace/src/catalog/_index.yaml"
     },
     {
       "namespace": "bee.workspace.manager",
@@ -10772,6 +10837,27 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.workspace.manager.security",
       "source": "modules/workspace-manager/src/security/_index.yaml"
+    },
+    {
+      "namespace": "bee.workspace.migrations",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.workspace.migrations",
+      "source": "modules/workspace/src/migrations/_index.yaml"
+    },
+    {
+      "namespace": "bee.workspace.persist",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.workspace.persist",
+      "source": "modules/workspace/src/persist/_index.yaml"
+    },
+    {
+      "namespace": "bee.workspace.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.workspace.types",
+      "source": "modules/workspace/src/types/_index.yaml"
     }
   ],
   "native_known_ids": [
@@ -12168,81 +12254,81 @@
       "table": "client_state"
     },
     {
-      "line": 85,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 59,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_application_thread_bindings"
     },
     {
-      "line": 102,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 76,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_application_thread_bindings_v5"
     },
     {
-      "line": 203,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 177,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_application_thread_bindings_v6"
     },
     {
-      "line": 58,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 32,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_display_assignments"
     },
     {
-      "line": 167,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 141,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_display_assignments_v6"
     },
     {
-      "line": 65,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 39,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_display_transfer_receipts"
     },
     {
-      "line": 180,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 154,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_display_transfer_receipts_v6"
     },
     {
-      "line": 260,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 234,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_folder"
     },
     {
-      "line": 43,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 17,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_identity"
     },
     {
-      "line": 27,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 29,
+      "owner_namespace": "bee.workspace.persist",
+      "source": "modules/workspace/src/persist/store.lua",
       "table": "workspace_schema_migrations"
     },
     {
-      "line": 31,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 5,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_state"
     },
     {
-      "line": 155,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 129,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspace_state_v6"
     },
     {
-      "line": 142,
-      "owner_namespace": "bee.storage",
-      "source": "src/storage/store.lua",
+      "line": 116,
+      "owner_namespace": "bee.workspace",
+      "source": "modules/workspace/src/migrations/migrations.lua",
       "table": "workspaces"
     }
   ],
@@ -13741,6 +13827,111 @@
       "requirement": "bee.threads:waiter_policies",
       "resolved_by": "registry source",
       "target": "bee.threads.service:waiter_service"
+    },
+    {
+      "requirement": "bee.workspace:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.persist:catalog"
+    },
+    {
+      "requirement": "bee.workspace:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.persist:store"
+    },
+    {
+      "requirement": "bee.workspace:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.types:catalog"
+    },
+    {
+      "requirement": "bee.workspace:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.types:recovery"
+    },
+    {
+      "requirement": "bee.workspace:target_application_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.types:selection"
+    },
+    {
+      "requirement": "bee.workspace:target_db",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.persist:store"
+    },
+    {
+      "requirement": "bee.workspace:target_decode",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.types:recovery"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:archive"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:create"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:folders"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:inspect"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:list"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:read"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:rename"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:restore"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:roots"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:search"
+    },
+    {
+      "requirement": "bee.workspace:target_facade_policy",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:search_within"
+    },
+    {
+      "requirement": "bee.workspace:target_model",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.types:recovery"
+    },
+    {
+      "requirement": "bee.workspace:target_roots",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:catalog"
+    },
+    {
+      "requirement": "bee.workspace:target_scope",
+      "resolved_by": "registry source",
+      "target": "bee.workspace.binding:catalog"
     }
   ],
   "requirements": [
@@ -15934,6 +16125,139 @@
           "path": ".lifecycle.security.policies"
         }
       ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.workspace:target_application_protocol",
+      "source": "modules/workspace/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.workspace.types:selection",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.workspace.types:recovery",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.workspace.types:catalog",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.workspace.persist:store",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.workspace.persist:catalog",
+          "path": ".imports.contract"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.workspace:target_db",
+      "source": "modules/workspace/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.workspace.persist:store",
+          "path": ".data.database"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.workspace:target_decode",
+      "source": "modules/workspace/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.workspace.types:recovery",
+          "path": ".imports.decode"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.workspace:target_facade_policy",
+      "source": "modules/workspace/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.workspace.binding:create",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:read",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:list",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:search",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:rename",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:archive",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:restore",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:inspect",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:search_within",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:roots",
+          "path": ".security.policies +="
+        },
+        {
+          "entry": "bee.workspace.binding:folders",
+          "path": ".security.policies +="
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.workspace:target_model",
+      "source": "modules/workspace/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.workspace.types:recovery",
+          "path": ".imports.model"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.workspace:target_roots",
+      "source": "modules/workspace/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.workspace.binding:catalog",
+          "path": ".data.roots"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.workspace:target_scope",
+      "source": "modules/workspace/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.workspace.binding:catalog",
+          "path": ".data.scope"
+        }
+      ]
     }
   ],
   "schema": 1,
@@ -16430,18 +16754,18 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1761,
-    "namespace_count": 269,
+    "entry_count": 1774,
+    "namespace_count": 272,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 80,
     "owned_table_declaration_count": 138,
-    "persisted_id_count": 801,
-    "requirement_count": 127,
-    "requirement_target_count": 299,
-    "root_src_lua_budget": 23643,
-    "root_src_lua_lines": 23643,
+    "persisted_id_count": 809,
+    "requirement_count": 134,
+    "requirement_target_count": 320,
+    "root_src_lua_budget": 20851,
+    "root_src_lua_lines": 20851,
     "schema_tag_count": 70,
     "topic_count": 137
   },

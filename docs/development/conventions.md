@@ -49,7 +49,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/hive/service`, `src/hive/api`, `src/hive/security` | App-owned Hive supervisor, open workspaces operation and its policy |
 | `src/hive/supervisor`, `src/hive/desktop` | Generic Hive routing, host-selected adapter table, supervisor lifecycle and desktop bridge |
 | `modules/hive-manager/src` | Hive management app as an installable package |
-| `src/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
+| `modules/workspace/src` | Workspace catalog contracts, authorized bindings, SQL repositories, immutable migrations and checkpoint/selection values as `bee.workspace` and its `.catalog`, `.binding`, `.persist`, `.migrations` and `.types` children |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
 | `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
 | `src/client` | Desktop client, public commands, qualified layout and client store |
@@ -59,7 +59,6 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/desktop` | Pure scene, reducer and layout values |
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
-| `src/storage` | Workspace database, catalog rows and immutable migrations; shared runner in `bee.persist` |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
@@ -167,7 +166,10 @@ Application entries, renderers, screen models and view helpers live in
 `bee.files.app` import its helpers and own their separate application entries.
 The desktop shell remains in `src/desktop` and `src/terminal`.
 
-Within a module, keep shared domain types and contracts at the root. Public contract bindings live in `binding`. Contract
+Within a module, keep shared domain types and contracts at the root. Public contract
+bindings live in `binding`. Workspace catalog contracts retain their existing
+domain root `bee.workspace.catalog` and durable binding IDs; their method
+implementations live in `.binding`. Contract
 implementations belong in `binding`, SQL repositories in `persist`, and
 long-running processes in `service`. Use `api` for HTTP endpoints and `traits`
 for agent tools. Each child namespace declares its own local sources in its
@@ -253,7 +255,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 23,643 Lua line ceiling under `src/`, recorded in
+The root has a 20,851 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

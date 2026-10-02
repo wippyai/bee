@@ -4,14 +4,18 @@ entries:
 - name: workspace_storage_policy
   kind: security.policy.expr
   policy:
-    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    expression: (action == "db.get" && resource == "bee.env:workspace_db") || (action
+      == "registry.get" && resource == "bee.workspace.persist:store") || (action in
+      ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
     - env.get
     - env.set
     - db.get
+    - registry.get
     resources:
     - bee.persist.env:startup_progress
     - bee.env:workspace_db
+    - bee.workspace.persist:store
     effect: allow
 - name: workspace_storage_boundary
   kind: security.policy
@@ -29,7 +33,9 @@ entries:
 - name: client_storage_policy
   kind: security.policy.expr
   policy:
-    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set"
+      && action != "env.get") || (action in ["env.get", "env.set"] && resource ==
+      "bee.persist.env:startup_progress")
     actions:
     - env.get
     - env.set
@@ -43,71 +49,118 @@ entries:
   meta:
     comment: Read the node workspace catalog, list it and search it
   policy:
-    actions: [bee.workspace.manager.read]
+    actions:
+    - bee.workspace.manager.read
     resources: '*'
     effect: allow
 - name: workspace_catalog_manage_policy
   kind: security.policy
   meta:
-    comment: Create, rename, archive and restore node workspaces under the host's admitted roots, and browse those roots' folders
+    comment: Create, rename, archive and restore node workspaces under the host's
+      admitted roots, and browse those roots' folders
   policy:
-    actions: [bee.workspace.manager.manage, bee.workspace.manager.browse]
+    actions:
+    - bee.workspace.manager.manage
+    - bee.workspace.manager.browse
     resources: '*'
     effect: allow
 - name: workspace_folder_browse_policy
   kind: security.policy.expr
   meta:
-    comment: List the admitted roots and page their folders, to pick a folder under them; reads no workspace and creates, changes and archives nothing
+    comment: List the admitted roots and page their folders, to pick a folder under
+      them; reads no workspace and creates, changes and archives nothing
   policy:
-    expression: '(action == "bee.workspace.manager.read" && resource == "catalog") || action == "bee.workspace.manager.browse"'
-    actions: [bee.workspace.manager.read, bee.workspace.manager.browse]
+    expression: (action == "bee.workspace.manager.read" && resource == "catalog")
+      || action == "bee.workspace.manager.browse"
+    actions:
+    - bee.workspace.manager.read
+    - bee.workspace.manager.browse
     resources: '*'
     effect: allow
 - name: workspace_catalog_facade_policy
   kind: security.policy.expr
   meta:
-    comment: Attached to the catalog operations only; they enter the execution scope after authorizing the caller
+    comment: Attached to the catalog operations only; they enter the execution scope
+      after authorizing the caller
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.security.storage:workspace_catalog_scope") || (action == "funcs.call" && resource == "bee.workspace.catalog:backend")'
-    actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee.security.storage:workspace_catalog_scope, bee.workspace.catalog:backend]
+    expression: (action == "funcs.security" && resource == "security") || (action
+      == "security.policy_group.get" && resource == "bee.security.storage:workspace_catalog_scope")
+      || (action == "funcs.call" && resource == "bee.workspace.binding:catalog") ||
+      (action == "registry.get" && resource == "bee.workspace.binding:catalog")
+    actions:
+    - funcs.security
+    - security.policy_group.get
+    - funcs.call
+    - registry.get
+    resources:
+    - security
+    - bee.security.storage:workspace_catalog_scope
+    - bee.workspace.binding:catalog
     effect: allow
 - name: workspace_catalog_store_policy
   kind: security.policy.expr
-  groups: [workspace_catalog_scope]
+  groups:
+  - workspace_catalog_scope
   meta:
     comment: The catalog backend's store, the host's admitted roots and its own execution
   policy:
-    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
-    actions: [db.get, registry.get, bee.workspace.manager.execute, env.set, env.get]
-    resources: [bee.env:workspace_db, bee.resources.env:roots_ref, bee.resources.env:resource_roots, bee.workspace.catalog:backend, bee.persist.env:startup_progress]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set"
+      && action != "env.get") || (action in ["env.get", "env.set"] && resource ==
+      "bee.persist.env:startup_progress")
+    actions:
+    - db.get
+    - registry.get
+    - bee.workspace.manager.execute
+    - env.set
+    - env.get
+    resources:
+    - bee.env:workspace_db
+    - bee.resources.env:roots_ref
+    - bee.resources.env:resource_roots
+    - bee.workspace.binding:catalog
+    - bee.persist.env:startup_progress
+    - bee.workspace.persist:store
     effect: allow
 - name: workspace_catalog_volume_policy
   kind: security.policy
-  groups: [workspace_catalog_scope]
+  groups:
+  - workspace_catalog_scope
   meta:
-    comment: Root volumes; the backend opens only roots listed in the host's admitted roots
+    comment: Root volumes; the backend opens only roots listed in the host's admitted
+      roots
   policy:
-    actions: [fs.get]
+    actions:
+    - fs.get
     resources: '*'
     effect: allow
 - name: workspace_catalog_host_policy
   kind: security.policy.expr
-  groups: [workspace_catalog_scope]
+  groups:
+  - workspace_catalog_scope
   meta:
     comment: Whether a workspace host is running, before its row is archived
   policy:
-    expression: 'action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]{32}$"'
-    actions: [process.registry.lookup]
+    expression: action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]{32}$"
+    actions:
+    - process.registry.lookup
     resources: '*'
     effect: allow
 - name: workspace_catalog_extension_policy
   kind: security.policy.expr
-  groups: [workspace_catalog_scope]
+  groups:
+  - workspace_catalog_scope
   meta:
-    comment: The catalog finds the workspace extension bindings and calls their describe and search methods; each binding answers only for workspaces this scope may read, and the operations authorized the caller for that workspace first
+    comment: The catalog finds the workspace extension bindings and calls their describe
+      and search methods; each binding answers only for workspaces this scope may
+      read, and the operations authorized the caller for that workspace first
   policy:
-    expression: '(action == "contract.implementations" && resource == "bee.workspace.catalog:extension") || action == "contract.open" || (action == "contract.call" && (resource == "describe" || resource == "search")) || action == "bee.workspace.manager.read"'
-    actions: [contract.implementations, contract.open, contract.call, bee.workspace.manager.read]
+    expression: (action == "contract.implementations" && resource == "bee.workspace.catalog:extension")
+      || action == "contract.open" || (action == "contract.call" && (resource == "describe"
+      || resource == "search")) || action == "bee.workspace.manager.read"
+    actions:
+    - contract.implementations
+    - contract.open
+    - contract.call
+    - bee.workspace.manager.read
     resources: '*'
     effect: allow

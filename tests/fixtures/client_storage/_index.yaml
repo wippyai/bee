@@ -20,7 +20,7 @@ entries:
   modules: [sql]
   imports:
     store: bee.client:store
-    workspace_store: bee.storage:store
+    workspace_store: bee.workspace.persist:store
     state: bee.client:state
   security:
     policies: [bee.client.storage.probe:broad_policy, bee.security.storage:workspace_storage_boundary]
@@ -35,7 +35,7 @@ entries:
   modules: [sql]
   imports:
     store: bee.client:store
-    workspace_store: bee.storage:store
+    workspace_store: bee.workspace.persist:store
     state: bee.client:state
   security:
     policies: [bee.client.storage.probe:bindings_policy]

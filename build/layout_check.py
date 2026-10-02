@@ -70,7 +70,7 @@ def audit(root):
                 directory = entry.get("directory", "")
                 if directory and not directory.startswith(("/", "${")) and entry.get("base") != "project":
                     errors.append(f"{identity}: a project-relative module directory requires base: project")
-            if entry.get("kind") in {"ns.definition", "contract.definition"} and children and module:
+            if entry.get("kind") in {"ns.definition", "contract.definition"} and children and module and not (module == "workspace" and children == ("catalog",) and entry["kind"] == "contract.definition"):
                 errors.append(f"{identity}: component definition belongs in its source root")
             if module and entry.get("meta", {}).get("type") == "bee.app" and children != ("app",):
                 errors.append(f"{identity}: application identity belongs in src/app")

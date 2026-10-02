@@ -52,8 +52,14 @@ def declared_migrations(source):
 
 
 def bytes_check():
-    for path in ['src/storage/store.lua', 'src/client/store.lua']:
-        prior = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
+    for path in ['modules/workspace/src/migrations/migrations.lua', 'src/client/store.lua']:
+        baseline_path = path
+        if path == 'modules/workspace/src/migrations/migrations.lua':
+            exists = subprocess.run(['git', 'cat-file', '-e', 'origin/main:' + path], cwd=ROOT,
+                capture_output=True, check=False)
+            if exists.returncode:
+                baseline_path = 'src/storage/store.lua'
+        prior = subprocess.check_output(['git', 'show', 'origin/main:' + baseline_path], cwd=ROOT, text=True)
         current = (ROOT / path).read_text()
         assert declared_migrations(current) == declared_migrations(prior), path
     tracked = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'origin/main', 'modules'], cwd=ROOT, text=True)
@@ -76,7 +82,7 @@ def seed(path, owner):
         initial = re.search(r'local INITIAL = \[\[(.*?)\]\]', source, re.S)[1].removeprefix('\n')
         expected = [(1, 'owner_local_feed', initial)]
     else:
-        source = ROOT / ('src/storage/store.lua' if owner == 'workspace' else 'src/client/store.lua')
+        source = ROOT / ('modules/workspace/src/migrations/migrations.lua' if owner == 'workspace' else 'src/client/store.lua')
         expected = declared_migrations(source.read_text())
     limit = 7 if owner == 'workspace' else 1
     table = OWNERS[owner][1]
@@ -244,7 +250,7 @@ def main():
                     'actions': ['db.get'], 'resources': [entry[0] for entry in OWNERS.values()], 'effect': 'allow'}},
                 {'name': 'main', 'kind': 'process.lua', 'source': 'file://main.lua', 'method': 'main',
                  'modules': ['io'],
-                 'imports': {'workspace': 'bee.storage:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database', 'ledger': 'bee.persist.persist:ledger'},
+                 'imports': {'workspace': 'bee.workspace.persist:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database', 'ledger': 'bee.persist.persist:ledger'},
                  'meta': {'command': {'name': 'persist-probe', 'short': 'migration recovery fixture'}},
                  'security': {'policies': ['bee.persistprobe:policy']}}]}))
         manifests = {}

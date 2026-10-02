@@ -4,7 +4,7 @@ One Bee node holds any number of logical workspaces as rows of the node
 workspace catalog (see [storage](storage.md)). The catalog operations are the
 owner operations over those rows. They are contract
 `bee.workspace.catalog:contract`, bound by `bee.workspace.catalog:local` to the
-functions `bee.workspace.catalog:<method>`.
+functions `bee.workspace.binding:<method>` in `bee/workspace`.
 
 Every reply is `{ok, error = {code, message}, value}`. Codes: `INVALID`
 (the request fails its decoder), `UNAUTHENTICATED`, `DENIED`, `FORBIDDEN`
@@ -101,7 +101,7 @@ action; host-named policies `bee.security.storage:workspace_catalog_read_policy`
 `bee.security.storage:workspace_catalog_manage_policy` grant them. Applications cannot open the
 node workspace store (their storage boundary denies it), so each operation
 authorizes the caller for the decoded request and then runs the private
-backend `bee.workspace.catalog:backend` under the execution scope
+backend `bee.workspace.binding:catalog` under the execution scope
 `bee.security.storage:workspace_catalog_scope`, which holds the store, the admitted roots list,
 the root volumes, the host-name lookup and the extension calls. The backend
 refuses callers outside that scope.
@@ -203,7 +203,7 @@ A display the bridge serves shows another workspace without its client
 detaching. F9 opens the connection panel and W its workspace menu: one catalog
 page at a time (`/` searches labels, PgUp/PgDn page, the shown workspace is
 marked, Enter switches). The display's client process reads the pages with
-`bee.workspace.catalog:list` and `:search` under host-selected grants
+`bee.workspace.binding:list` and `:search` under host-selected grants
 (`bee.security.desktop:client_workspace_catalog_call_policy`, `bee.security.storage:workspace_catalog_read_policy`)
 and sends the switch to its retained supervisor, which forwards it, naming the
 display, to the bridge (`bee.retained.switch`). The bridge moves the display's

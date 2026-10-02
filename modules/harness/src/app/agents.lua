@@ -275,7 +275,7 @@ function M.home(ref: string): string?
     return ref:match("^bs:[^:]+:([^:]+):")
 end
 function M.workspace(id: string, ask: Ask): Workspace?
-    local reply = ask("bee.workspace.catalog:read", {workspace_id = id})
+    local reply = ask("bee.workspace.binding:read", {workspace_id = id})
     if not reply.ok then return nil end
     local value = bounds.object(reply.value)
     local row = value and bounds.object(value.workspace)

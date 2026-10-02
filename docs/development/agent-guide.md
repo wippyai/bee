@@ -25,7 +25,9 @@ public contracts such as `bee.app:client` and
 `bee.threads.binding:authority_local`;
 they do not import private broker or store modules.
 
-The workspace owns application state, checkpoints and its migration ledger.
+The `bee/workspace` component owns the node catalog, application checkpoints,
+display assignments, binding rows and its migration ledger. The root host owns
+its resources, permissions, leases and recovery lifetime.
 Registry configuration/history, thread records, approvals, resources and
 credentials remain owned by their respective subsystems, even when stores
 share a SQLite file. Never edit an applied migration, alter a migration

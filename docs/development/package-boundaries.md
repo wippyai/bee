@@ -25,11 +25,11 @@ authorize them. Component services own their domain protocol and state.
 
 | Layer | Owns | Boundary |
 |---|---|---|
-| Core | Workspace/session lifetime, composition, focus, geometry, admission, application lifecycle and persistence | Runtime primitives and shared value contracts; no default-app implementation imports |
+| Core | Workspace/session lifetime, composition, focus, geometry, admission and application lifecycle | Runtime primitives and shared value contracts; no default-app implementation imports |
 | Application SDK UI values | Appearance and reusable presentation helpers, currently exported by `bee/application` | Value contracts only; a separate UI package remains a proposal |
 | Default apps | Terminal, Settings, Process Manager and other bundled apps | Standalone processes with explicit grants and core protocols |
 | Optional packages | Installed applications, coding tools, harnesses, models and services | Published contracts and host admission |
-| Independent subsystems | Threads, Hub reads/planning/local apply, governed overlay authoring/review/apply/recovery, approvals, sync and scoped MCP | Authenticated operation contracts; each owns its state and migrations |
+| Independent subsystems | Workspace catalog/checkpoints, Threads, Hub reads/planning/local apply, governed overlay authoring/review/apply/recovery, approvals, sync and scoped MCP | Authenticated operation contracts; each owns its state and migrations |
 | Native extensions | Coding-specific I/O, file watching and native adapters | Built into a native release; registry installation cannot add a Go module to a running process |
 
 ## Default managed-agent kit

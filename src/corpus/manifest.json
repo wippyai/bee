@@ -115,17 +115,17 @@
       "topic": "lua"
     },
     {
-      "bytes": 4837,
+      "bytes": 4896,
       "id": "docs/readme",
-      "sha256": "d0dcf5f9774b43a34d9e1d4021548091a8c7c773162ac6db50a2c159eeefa1f8",
+      "sha256": "afd3d7840b31c15c6023f225b8c4a1a24339fbde328c68217f9ec8c9392d55cf",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
     },
     {
-      "bytes": 11880,
+      "bytes": 12019,
       "id": "docs/agent_guide",
-      "sha256": "a9e49bcc3d2a909fa2fcdbdf43beda2024a959ed7b194f897eda2d3f116fab42",
+      "sha256": "dabbb2282f1ebe61f81251a66d16efd10458192707a9ab880336554bc26d5da4",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -139,9 +139,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 6709,
+      "bytes": 6727,
       "id": "docs/package_boundaries",
-      "sha256": "6e5e49d478b7f56dc216916df0afad4919345361e66dd5d5daf13af6e410dd96",
+      "sha256": "34225cf81c041bc773481ffc04a0e2fdfb8c4b457a01e5cc1a6f6ea19983c298",
       "source": "docs/development/package-boundaries.md",
       "title": "Package boundaries",
       "topic": "platform"
@@ -181,7 +181,7 @@
     {
       "bytes": 20819,
       "id": "docs/distributed_app_delivery",
-      "sha256": "634b31df3fde15fdd585c851101e18c874130dba6cc28bf29b2079652475a785",
+      "sha256": "fc353b8283620a26a43e2afb4e7fbeb5e5d9f8c3fb4f023e33960c1787b3432f",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -235,9 +235,9 @@
       "topic": "approvals"
     },
     {
-      "bytes": 8899,
+      "bytes": 9256,
       "id": "docs/storage",
-      "sha256": "ef8c3bcede30f3c4a872da5e321d7025928212f0433c0b1666e6c394cad9a84a",
+      "sha256": "67e4f9f7b46f52c6bba99f65c5cbdabc56f664466b88bb40e76136a2372f3157",
       "source": "docs/reference/storage.md",
       "title": "Workspace storage",
       "topic": "storage"
@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 21809,
+      "bytes": 21828,
       "id": "docs/workspace_catalog",
-      "sha256": "e0108dacdaf99522981b4c4ea7e1fca3948147d787c3f8ea31cb96cab3962249",
+      "sha256": "9e43cd2f0ca12177971ac98512f637fe38fdfbe4c791d5702bf24679bd8c7335",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -467,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3451,
+      "bytes": 3461,
       "id": "component/persist",
-      "sha256": "b211dd7aa00e5ade1621f1aeedffc8d9ad2f3de377d74b0961ee08d2a79d3d18",
+      "sha256": "d9bbd631db575af2d045471f92d487df946b477d26d1d41a5beb02645ebe8807",
       "source": "modules/persist/src/README.md",
       "title": "bee.persist",
       "topic": "component"
@@ -536,6 +536,14 @@
       "sha256": "210cd83131475188b38e0dbbdfa8595ac0c2190fe0a35b72a00b9f3e8d54724a",
       "source": "modules/values/src/README.md",
       "title": "Bee values",
+      "topic": "component"
+    },
+    {
+      "bytes": 2277,
+      "id": "component/workspace",
+      "sha256": "82358259d7394127aadb9acc7baa6826f3145118a8a5abd673eb31dccbec2f47",
+      "source": "modules/workspace/src/README.md",
+      "title": "Workspace component",
       "topic": "component"
     },
     {
@@ -630,7 +638,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 741945,
-    "documents": 78
+    "bytes": 744824,
+    "documents": 79
   }
 }

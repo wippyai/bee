@@ -51,7 +51,7 @@ local application = caller("bee.test.catalog_application", {"bee.security.storag
     "bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"})
 
 local function call(client: funcs.Executor, method: string, value: unknown): Reply
-    local reply, err = client:call("bee.workspace.catalog:" .. method, value)
+    local reply, err = client:call("bee.workspace.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     if type(reply) ~= "table" then error(method .. ": missing reply") end
     return reply
@@ -295,7 +295,7 @@ local function define_tests()
             test.eq(code(call(reader, "rename", {workspace_id = id, label = "Taken"})), "DENIED")
             test.eq(code(call(reader, "archive", {workspace_id = id})), "DENIED")
             test.eq(code(call(reader, "create", {label = "Nope", root_ref = PROJECTS, subpath = folder(PROJECTS, fresh("nope"))})), "DENIED")
-            local backend, backend_error = outsider:call("bee.workspace.catalog:backend", {operation = "list", request = {}})
+            local backend, backend_error = outsider:call("bee.workspace.binding:catalog", {operation = "list", request = {}})
             test.is_true(backend_error ~= nil or (type(backend) == "table" and backend.ok == false))
         end)
 

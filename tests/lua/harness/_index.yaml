@@ -590,7 +590,7 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.workspace.catalog:create
+    - bee.workspace.binding:create
     effect: allow
 - name: gateway_carrier_test
   kind: function.lua

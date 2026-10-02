@@ -1,7 +1,7 @@
 # Repository layout audit
 
 `make lint` runs the permanent placement check in `build/layout_check.py`.
-Production consists of the host `src/` and 42 component `modules/*/src/` roots.
+Production consists of the host `src/` and 43 component `modules/*/src/` roots.
 The only root spelling exception is the public SDK: `application` exports
 `bee.app`. Hyphenated component names expand into namespace nesting; all child
 folders match their namespace. `src/host` is the host's documented desktop-owner
@@ -30,7 +30,7 @@ live destinations. Main’s startup progress helper and environment field now li
 in `bee.app.status` and `bee.persist.env`. The persisted identity conversions
 are also explicit in `build/component-inventory-migrations.json`; the generated
 component inventory has no dangling requirement targets and caps root Lua at
-23,643 lines. Topics and schema tags retain their baseline identities.
+20,851 lines. Topics and schema tags retain their baseline identities.
 The persisted map covers exactly the 234 persisted identities removed from
 main. Step 2 adds only nonpersisted helper relocations to the cumulative map;
 the step 1 persisted map and applied migration definitions remain unchanged.

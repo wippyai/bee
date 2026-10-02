@@ -37,7 +37,7 @@ local function admit()
 end
 local function create(label: string): string
     admit()
-    local reply, err = manager:call("bee.workspace.catalog:create", {label = label, root_ref = PROJECTS, subpath = label, create_directory = true})
+    local reply, err = manager:call("bee.workspace.binding:create", {label = label, root_ref = PROJECTS, subpath = label, create_directory = true})
     if err or type(reply) ~= "table" or reply.ok ~= true then error("create " .. label .. ": " .. tostring(err)) end
     return tostring((assert(bounds.object((assert(bounds.object(reply))).value))).workspace_id)
 end

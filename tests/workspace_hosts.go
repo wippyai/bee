@@ -124,21 +124,18 @@ func run() error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS("src")); err != nil {
 		return fmt.Errorf("copy src: %w", err)
 	}
+	if err := os.CopyFS(filepath.Join(root, "modules"), os.DirFS("modules")); err != nil {
+		return fmt.Errorf("copy modules: %w", err)
+	}
 
-	// This host-authority fixture exercises singleton thread fencing. Production
-	// Settings allows independent display instances; select singleton explicitly
-	// only in this disposable composition to preserve the generic fencing proof.
-	settingsManifest := filepath.Join(root, "src", "settings", "_index.yaml")
+	// The host-authority fixture exercises Settings' singleton thread fencing.
+	settingsManifest := filepath.Join(root, "modules", "settings", "src", "app", "_index.yaml")
 	settingsData, err := os.ReadFile(settingsManifest)
 	if err != nil {
 		return fmt.Errorf("read fixture Settings policy: %w", err)
 	}
-	if strings.Count(string(settingsData), "instance_policy: multiple") != 1 {
+	if strings.Count(string(settingsData), "instance_policy: singleton") != 1 {
 		return fmt.Errorf("unexpected production Settings instance policy")
-	}
-	settingsData = []byte(strings.Replace(string(settingsData), "instance_policy: multiple", "instance_policy: singleton", 1))
-	if err := os.WriteFile(settingsManifest, settingsData, 0600); err != nil {
-		return fmt.Errorf("select fixture singleton policy: %w", err)
 	}
 
 	// Copy fixture into src/workspace_hosts
@@ -172,9 +169,6 @@ func run() error {
 		}
 	}
 
-	if err := os.CopyFS(filepath.Join(root, "modules"), os.DirFS("modules")); err != nil {
-		return fmt.Errorf("copy modules: %w", err)
-	}
 	for _, name := range []string{"wippy.lock", ".wippy.yaml", "wippy.yaml"} {
 		data, err := os.ReadFile(name)
 		if err != nil {

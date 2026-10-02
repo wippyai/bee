@@ -5,6 +5,25 @@ entries:
   kind: ns.dependency
   component: bee/persist
   version: 0.1.0-dev
+- name: workspace
+  kind: ns.dependency
+  component: bee/workspace
+  version: 0.1.0-dev
+  parameters:
+  - name: target_decode
+    value: bee.protocol:decode
+  - name: target_model
+    value: bee.desktop:model
+  - name: target_application_protocol
+    value: bee.protocol:application
+  - name: target_db
+    value: bee.env:workspace_db
+  - name: target_roots
+    value: bee.resources.env:resource_roots
+  - name: target_scope
+    value: bee.security.storage:workspace_catalog_scope
+  - name: target_facade_policy
+    value: bee.security.storage:workspace_catalog_facade_policy
 - name: sync
   kind: ns.dependency
   component: bee/sync
@@ -67,7 +86,7 @@ entries:
   - name: target_approval_consume_policy
     value: bee.security.approvals:approval_consume_policy
   - name: target_workspace_folder_read
-    value: bee.workspace.catalog:read
+    value: bee.workspace.binding:read
   - name: target_workspace_folder_policy
     value: bee.security.gov:workspace_folder_read_policy
 - name: gateway

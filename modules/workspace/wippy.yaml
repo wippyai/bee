@@ -1,0 +1,9 @@
+organization: bee
+module: workspace
+type: library
+version: 0.1.0-dev
+description: Workspace catalog, checkpoints and owned SQL repositories
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

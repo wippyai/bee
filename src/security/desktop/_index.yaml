@@ -251,8 +251,8 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.workspace.catalog:list
-    - bee.workspace.catalog:search
+    - bee.workspace.binding:list
+    - bee.workspace.binding:search
     effect: allow
 - name: client_node_defaults_call_policy
   kind: security.policy

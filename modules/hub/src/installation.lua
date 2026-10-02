@@ -163,7 +163,7 @@ function M.proposal(plan_raw: unknown, context: Context): (Object?, string?, str
         local conversion = bounds.object(plan.conversion)
         local selected = conversion and bounds.dense_list(conversion.roots, 128, "component roots") or nil
         if not conversion or conversion.version ~= 1 or not selected then return nil, nil, "Hub root conversion is malformed" end
-        dependencies[#dependencies + 1] = "convert installed components to independent management"
+        dependencies[#dependencies + 1] = "transfer component roots to host ownership"
         for _, raw in ipairs(selected) do
             local root = bounds.object(raw)
             local component = root and component_name(root.component) or nil

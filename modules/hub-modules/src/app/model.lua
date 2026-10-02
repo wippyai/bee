@@ -27,7 +27,7 @@ type Module = {component: string, version: string, source: string, direct: boole
 type PackUpdate = {component: string, installed_version: string, available_version: string, update_available: boolean}
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
 type Parameter = {name: string, value: unknown, json: string}
-type Root = {id: string, component: string, version: string, parameters: {Parameter}, managed: boolean?}
+type Root = {id: string, component: string, version: string, parameters: {Parameter}, managed: boolean}
 type Requirement = {id: string, json: string, origin: string, targets: {string}}
 type RootSelection = {id: string, component: string}
 type Plan = {conversion: {roots: {RootSelection}}?, digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, starts: {string}, capabilities: {string}}
@@ -181,7 +181,7 @@ local function root_rows(raw: unknown): ({Root}?, string?)
         local id = item.id
         local name = component(item.component)
         local selected = version(item.version)
-        if type(id) ~= "string" or #id == 0 or #id > 256 or id:find("%c") or not name or not selected then
+        if type(id) ~= "string" or #id == 0 or #id > 256 or id:find("%c") or not name or not selected or type(item.managed) ~= "boolean" then
             return nil, "installed inventory contains an invalid root"
         end
         if seen[id] then return nil, "installed inventory contains duplicate roots" end
@@ -205,8 +205,7 @@ local function copy_parameters(parameters: {Parameter}): {Parameter}
 end
 
 local function managed_root(root: Root): boolean
-    local measured = hash.sha256(root.component)
-    return root.managed == true or root.component == "bee/bee" or (measured ~= nil and root.id == "bee.hub.deps:" .. measured)
+    return root.managed or root.component == "bee/bee"
 end
 
 local function migration_rows(raw: unknown): ({Object}?, string?)

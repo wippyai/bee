@@ -475,7 +475,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     local review: {string} = {}
     local required: {[integer]: string} = {}
     if plan.conversion then
-        review[#review + 1] = "Convert installed components to independent management"
+        review[#review + 1] = "Transfer component roots to host ownership"
         for _, root in ipairs(plan.conversion.roots) do
             review[#review + 1] = root.component
         end

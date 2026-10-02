@@ -12,9 +12,10 @@ import time
 from types import SimpleNamespace
 
 import yaml
-from workspace import ROOT, RUNTIME, database_environment
+
 from core_artifact import entries as pack_entries
 from native_self_update import exercise as native_exercise
+from workspace import ROOT, RUNTIME, database_environment
 
 PROBE = r'''
 local json = require("json")

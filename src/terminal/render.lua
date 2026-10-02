@@ -85,6 +85,12 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
             else
                 canvas:put(body.x, body.y, styled(FRAME, "View unavailable"), body.width)
             end
+            if win.notice and win.notice ~= "" and body.height > 0 then
+                local notice = text.cut(win.notice, 0, body.width)
+                canvas:put(body.x, body.y + body.height - 1,
+                    styled(appearance.style(theme.text, theme.surface), notice .. string.rep(" ", math.max(0, body.width - text.width(notice)))), body.width)
+                if cursor.y == body.y + body.height - 1 then cursor.visible = false end
+            end
             if body.x ~= rect.x then window_chrome.draw(canvas, win, rect, win.id == scene.focus, theme, badges and badges[win.id] or nil) end
         end
     end

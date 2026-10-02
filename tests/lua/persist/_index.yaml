@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.persist
+entries:
+- name: ledger_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/persist-ledger-test.db
+  lifecycle: {auto_start: true}
+- name: ledger_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.persist:ledger_test_db]
+    effect: allow
+- name: ledger_test
+  kind: function.lua
+  source: file://ledger_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    ledger: bee.persist:ledger
+  security: {policies: [bee.persist:ledger_test_policy]}

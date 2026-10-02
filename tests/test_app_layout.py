@@ -6,6 +6,8 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from persist_migration import declared_migrations
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +95,10 @@ class AppLayout(unittest.TestCase):
         for path in ['src/storage/store.lua', 'modules/sync/src/migrations/migrations.lua', 'modules/gateway/src/migrations/migrations.lua', 'modules/threads/src/migrations/migrations.lua']:
             original = subprocess.check_output(['git', 'show', '463ac2ea:' + path], cwd=ROOT, text=True)
             current = (ROOT / path).read_text()
+            if path == 'src/storage/store.lua':
+                before = declared_migrations(original)
+                self.assertEqual(declared_migrations(current)[:len(before)], before, path)
+                continue
             for block in re.findall(r'\[\[(.*?)\]\]', original, re.S):
                 self.assertIn(block, current, path)
 

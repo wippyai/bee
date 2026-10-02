@@ -27,7 +27,7 @@ type Restore = Header & {op: "restore", id: string}
 type Remove = Header & {op: "remove", id: string}
 type Snap = Header & {op: "snap", id: string, side: "left" | "right"}
 type Place = Header & {op: "place", id: string, x: integer, y: integer, width: integer, height: integer}
-type Announce = Header & {op: "announce", id: string, instance_id: string, title: string}
+type Announce = Header & {op: "announce", id: string, instance_id: string, title: string, notice: string?}
 type Personalize = Header & {op: "personalize", id: string, user_title: string, accent: string}
 type Appearance = Header & {op: "appearance", theme: string, background: string,
     taskbar: "icons" | "labels", expected_revision: integer?}
@@ -119,9 +119,10 @@ function M.decode(value: unknown): Command?
         local id = text(value.id, MAX_ID, true)
         local instance_id = text(value.instance_id, MAX_INSTANCE_ID, true)
         local title = text(value.title, 80, true)
-        if not id or not instance_id or not title then return nil end
+        local notice = value.notice == nil and nil or text(value.notice, 160, false)
+        if not id or not instance_id or not title or value.notice ~= nil and not notice then return nil end
         return {version = base.version, request_id = base.request_id, op = "announce", id = id,
-            instance_id = instance_id, title = title}
+            instance_id = instance_id, title = title, notice = notice}
     elseif value.op == "personalize" then
         local id = text(value.id, MAX_ID, true)
         local user_title = text(value.user_title, MAX_APPEARANCE_VALUE, false)

@@ -260,6 +260,9 @@ function M.application_shape(): string
         .. " authorizes it. The host separately admits the definition, and the broker lists it only once"
         .. " the effective catalog carries it. Advance the application revision whenever executable source"
         .. " or configuration changes; a revision identifies one exact runnable definition."
+        .. " Use restart_policy never for an app without checkpoints; automatic or manual requires"
+        .. " a nonempty resume_schema of at most 80 characters without control characters. Preflight"
+        .. " reports APPLICATION_CHECKPOINT when this metadata prevents the desktop from opening it."
 end
 function M.rendering(): string
     return "The process entry carries its Lua source inline and renders with the terminal"
@@ -377,7 +380,11 @@ function M.workspace_delivery(): string
         .. " own workspace. A later version is a new freeze and a new delivery request with a higher version."
         .. " Request a host catalog capability with an ns.requirement entry whose meta names value_kind"
         .. " security.policy, the capability, its parameters and a reason, targeting your application entry at"
-        .. " .security.policies +=; the person approves it at installation. At run time, call"
+        .. " .security.policies +=; the person approves it at installation. For contract.call,"
+        .. ' meta.parameters is {binding = "bee.hive.telemetry.binding:status", methods = {"snapshot", "detail"}}'
+        .. " when requesting the counts-only Hive status binding. The binding and method names are exact;"
+        .. " check the destination's bee.security.capability:capability_catalog with the components tool for its admitted parameters."
+        .. " At run time, call"
         .. " bee.gov.binding:granted_resources for the identities of your granted file volumes (by subpath) and"
         .. " database (by name), and make approved contract calls and HTTP requests through"
         .. " bee.gov.binding:contract_call and bee.gov.binding:http_request; never embed a grant identity."

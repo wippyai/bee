@@ -66,8 +66,9 @@ def check_action_pin(root, lock):
         raise ValueError("native workflow builder pin differs from build/builder.lock.json")
 
 
-def read_manifest(root):
-    return json.loads((root / "wippy.build.json").read_text())
+def read_manifest(root, local=False):
+    path = ".wippy/local-native/bee.build.json" if local else "wippy.build.json"
+    return json.loads((root / path).read_text())
 
 
 def read_lock(root):
@@ -83,9 +84,9 @@ def keys(root=ROOT):
     print(f"runtime={manifest['runtime']['commit']}")
 
 
-def check_current(root=ROOT):
+def check_current(root=ROOT, local=False):
     """Raise ValueError when the cached toolchain was not built from root's manifest."""
-    manifest = read_manifest(root)
+    manifest = read_manifest(root, local=local)
     lock = read_lock(root)
     try:
         provenance = json.loads(provenance_path(root).read_text())
@@ -131,13 +132,14 @@ def verify(record, root=ROOT):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or sys.argv[1] not in ("keys", "record", "verify", "current"):
-        sys.exit("usage: verify_cached_toolchain.py keys|record|verify|current")
+    if len(sys.argv) not in (2, 3) or sys.argv[1] not in ("keys", "record", "verify", "current") \
+            or (len(sys.argv) == 3 and (sys.argv[1] != "current" or sys.argv[2] != "--local")):
+        sys.exit("usage: verify_cached_toolchain.py keys|record|verify|current [--local]")
     try:
         if sys.argv[1] == "keys":
             keys()
         elif sys.argv[1] == "current":
-            check_current()
+            check_current(local=len(sys.argv) == 3)
         else:
             verify(sys.argv[1] == "record")
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:

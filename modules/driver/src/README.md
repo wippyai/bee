@@ -144,3 +144,8 @@ the exact directories against host-admitted write roots before asking the CLI
 to use its provider-specific option.
 
 Descriptor config renders encode bounded declared objects, arrays, numbers and booleans as JSON/TOML values, or text files in the admitted private home. Set and append operations extend the existing placement composition recipes, preserving ambient configuration. Literal tokens and canonical field tokens use the same renderer. The owner-derived `provider.system_prompt_files` token supplies the prompt-file array for OpenCode; it is not a saved option. Configuration delivery may contain a bounded `environment` map of nonreserved literal variables, persisted with files and arguments. Credential values remain broker references and are never stringified or returned by the driver.
+
+Driver observation builders bound text by its encoded size through the nested
+session journal envelopes. Long text splits at Unicode character boundaries;
+tool previews and error messages remain bounded, and oversized extension
+payloads retain an omission-size object rather than invalid partial JSON.

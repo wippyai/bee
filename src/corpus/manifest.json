@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 20819,
+      "bytes": 23415,
       "id": "docs/distributed_app_delivery",
-      "sha256": "fc353b8283620a26a43e2afb4e7fbeb5e5d9f8c3fb4f023e33960c1787b3432f",
+      "sha256": "43e7622d6f40968caf4e975bb04bff74e41b77230bc7562af9c1fddcd7d9936c",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 24301,
+      "bytes": 24604,
       "id": "docs/application_contracts",
-      "sha256": "2a3b7d23524f724e530cb4d32502a3613fed9c4901ef598073c9e13ba8a789b6",
+      "sha256": "d7cf75b875b47785f0185a29157829a035f413615a530dc31bdb8cd30f355b96",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -291,9 +291,9 @@
       "topic": "component"
     },
     {
-      "bytes": 7306,
+      "bytes": 7699,
       "id": "component/approvals",
-      "sha256": "f9b952d3772589f956e39df6e52cb752acc02c38ab63a730ab07f94136fa7cb9",
+      "sha256": "62785156513b45295fbb8452165735f474be614f9d85373045621f32d838cb8a",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
       "topic": "component"
@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9764,
+      "bytes": 10067,
       "id": "component/driver",
-      "sha256": "5656da0d24dd2a18305d7428f0cad5bd0068fe656765508f93fc5cc16a8a0ed1",
+      "sha256": "3db62361bdbe951482a4770c947db270915e49c1cf10e3a823ff4ec4e8723759",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
@@ -419,9 +419,9 @@
       "topic": "component"
     },
     {
-      "bytes": 21683,
+      "bytes": 22719,
       "id": "component/gov",
-      "sha256": "cea83c8623f4e214c5810c82f6f19dd13bf40d80534ae8d4772b772f529f3f51",
+      "sha256": "11249969d3d11418dfc19db0f1943351a4c9e6befe53bce600157da989b8a833",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -443,9 +443,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3056,
+      "bytes": 5505,
       "id": "component/hive:telemetry",
-      "sha256": "74d574cf7cf5d2ba30c34d3dc8d84a9eeba2015356d3c198716347ca32b81c31",
+      "sha256": "ba46c031774b92ac02c0ca9018aa3a3bd625fbf93e6bcc197cf09bd2205b5d52",
       "source": "modules/hive-telemetry/src/README.md",
       "title": "bee.hive.telemetry",
       "topic": "component"
@@ -523,9 +523,9 @@
       "topic": "component"
     },
     {
-      "bytes": 11089,
+      "bytes": 11552,
       "id": "component/threads",
-      "sha256": "571495a4489f58d355b8a1722c386a93be0eff9e817e77e0cc1af45d35ce4786",
+      "sha256": "eafb175dfc1cb578984e8f4fe1b49c6c184f408aff1ae99721d9cbde9c54afb5",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -638,7 +638,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 753688,
+    "bytes": 761231,
     "documents": 79
   }
 }

@@ -22,6 +22,14 @@ local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
 
 local M = {}
+M.BACKEND = "bee.gov.binding:publication_backend_call"
+M.EXECUTE = "bee.gov.publication.execute"
+M.SCOPE = "bee.gov.security:publication_execution_scope"
+function M.required_action(operation: unknown): string?
+    if operation == "prepare" then return "bee.gov.delivery.manage" end
+    if operation == "publish" then return "bee.gov.delivery.publish" end
+    return nil
+end
 type Object = {[string]: unknown}
 type Profile = publication_profiles.Profile
 type Result = transaction.Result
@@ -142,8 +150,7 @@ function M.call(raw: unknown): Result
         return failure("INVALID", "publication identity is invalid")
     end
     local actor = security.actor()
-    local action = request.operation == "prepare" and "bee.gov.delivery.manage" or "bee.gov.delivery.publish"
-    if not actor or not security.can(action, workspace_id) then
+    if not actor or not security.can(M.EXECUTE, M.BACKEND) then
         return failure("DENIED", "application publication is not authorized")
     end
     local config, config_error = load()

@@ -1335,7 +1335,7 @@ entries:
     placement_store: bee.placement.native.persist:store
     capability_grants: bee.gov:capability_grants
     capability_catalog: bee.capability:model
-    sends: bee.threads.binding:sends
+    sends: bee.threads.service:sends
 - name: steer_permission_probe_test
   kind: function.lua
   source: file://steer_permission_probe_test.lua
@@ -1361,7 +1361,7 @@ entries:
     test: wippy.test:test
     capability_grants: bee.gov:capability_grants
     capability_catalog: bee.capability:model
-    sends: bee.threads.binding:sends
+    sends: bee.threads.service:sends
 - name: steer_grant_actor_probe
   kind: process.lua
   source: file://steer_grant_actor_probe.lua

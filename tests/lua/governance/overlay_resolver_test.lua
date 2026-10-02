@@ -98,6 +98,21 @@ end
 
 local function define_tests()
     test.describe("private overlay artifact resolver", function()
+        test.it("blocks checkpoint metadata the application catalog cannot open", function()
+            local deps, spec = fixture(nil)
+            changes(spec, {{id = "private.app:main", kind = "process.lua",
+                meta = {type = "bee.app", application = {restart_policy = "automatic"}},
+                data = {source = "return true"}}})
+            local facts = resolve(deps, spec)
+            local measured = (principals.objects(facts.candidate.entries))[1]
+            test.is_true(measured.application_checkpoint_invalid)
+            local report = assert(preflight.check(facts.candidate, facts.context))
+            local denied = false
+            for _, diagnostic in ipairs(report.diagnostics) do
+                if diagnostic.code == "APPLICATION_CHECKPOINT" then denied = true end
+            end
+            test.is_true(denied)
+        end)
         test.it("extracts native configuration capabilities without dropping their ceilings", function()
             local deps, spec = fixture(nil)
             changes(spec, {{id = "private.app:main", kind = "function.lua", data = {

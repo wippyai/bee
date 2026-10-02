@@ -156,6 +156,11 @@ component document describes its input and output fields and live refresh.
 
 ## Workspace applications
 
+Use `restart_policy: never` for an application without checkpoints. `automatic`
+or `manual` requires a nonempty `resume_schema` of at most 80 characters without
+control characters. Preflight reports `APPLICATION_CHECKPOINT` when this
+metadata would prevent the desktop from opening the application.
+
 A fresh install delivers an application a workspace's own agent authors to
 that workspace without host configuration, and still only after the person
 approves it. The shipped `bee.env:gov_publication_profiles` sets

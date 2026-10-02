@@ -260,6 +260,9 @@ function M.application_shape(): string
         .. " authorizes it. The host separately admits the definition, and the broker lists it only once"
         .. " the effective catalog carries it. Advance the application revision whenever executable source"
         .. " or configuration changes; a revision identifies one exact runnable definition."
+        .. " Use restart_policy never for an app without checkpoints; automatic or manual requires"
+        .. " a nonempty resume_schema of at most 80 characters without control characters. Preflight"
+        .. " reports APPLICATION_CHECKPOINT when this metadata prevents the desktop from opening it."
 end
 function M.rendering(): string
     return "The process entry carries its Lua source inline and renders with the terminal"

@@ -110,7 +110,7 @@ the script does not claim to prove arbitrary runtime reachability.
 Disposable test overlays live under `tests/` as required by the packaging rules.
 Their scenario/suite folder names group independent compositions; each overlay
 reuses the identities it tests rather than defining a production namespace.
-There are 68 unit overlay manifests and 74 acceptance overlay manifests,
+There are 69 unit overlay manifests and 76 acceptance overlay manifests,
 including 42 unit suite paths whose grouping differs from the declared
 namespace. They do not introduce a production `src/` divergence. The native
 host's `bee.harness.host:environment` has no source index: the native component
@@ -125,6 +125,13 @@ policy entries (gateway inbox, thread projection/carrier clients, governance
 publish, Hive spawn deny, gateway node and cross-workspace launch) and four
 unused driver environment stores; their selected replacements already own
 the running boundaries.
+
+Workspace catalog operations live in `bee.workspace.binding`, SQL repositories
+in `bee.workspace.persist`, and checkpoint/selection decoders in
+`bee.workspace.types`. The durable catalog contract, extension and local binding
+retain their `bee.workspace.catalog` identities. Host-selected requirements link
+the existing store and catalog entries to resources and execution policies; the
+extraction uses the existing catalog and migration runner.
 
 ## Disposable overlay inventory
 
@@ -148,6 +155,7 @@ The following paths group overlays rather than production namespace children:
 | `tests/fixtures/desktop_client/_index.yaml` | `bee.desktop.client.probe` |
 | `tests/fixtures/docker_placement/_index.yaml` | `bee.docker.proof` |
 | `tests/fixtures/docs_agent/_index.yaml` | `bee.docs.agent` |
+| `tests/fixtures/gateway_clock/_index.yaml` | `bee.gateway` |
 | `tests/fixtures/gateway_container/_index.yaml` | `bee.gateway.container` |
 | `tests/fixtures/governance_overlay/_index.yaml` | `bee.gov.overlay.probe` |
 | `tests/fixtures/governance_overlay_composed/_index.yaml` | `bee.gov.overlay.composed.probe` |
@@ -200,6 +208,7 @@ The following paths group overlays rather than production namespace children:
 | `tests/fixtures/window_hooks/_index.yaml` | `bee.window.hooks.fixture` |
 | `tests/fixtures/window_native/_index.yaml` | `bee.window.native` |
 | `tests/fixtures/workspace_app_delivery/_index.yaml` | `bee.workspace.app.probe` |
+| `tests/fixtures/workspace_component/_index.yaml` | `bee.componentproof` |
 | `tests/fixtures/workspace_hosts/_index.yaml` | `bee.workspace.hosts` |
 | `tests/fixtures/workspace_hosts/databases/_index.yaml` | `bee.workspace.db` |
 | `tests/lua/applications/_index.yaml` | `bee.apps` |
@@ -247,6 +256,7 @@ The following paths group overlays rather than production namespace children:
 | `tests/lua/managed/_index.yaml` | `bee.managed` |
 | `tests/lua/modules/_index.yaml` | `tests.modules` |
 | `tests/lua/overlays/_index.yaml` | `tests.overlays` |
+| `tests/lua/persist/_index.yaml` | `bee.persist` |
 | `tests/lua/placement/_index.yaml` | `bee.placement.native` |
 | `tests/lua/placement_docker/_index.yaml` | `bee.placement.docker.tests` |
 | `tests/lua/placement_publication/_index.yaml` | `bee.placement.publication.test` |

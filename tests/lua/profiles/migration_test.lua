@@ -7,7 +7,7 @@ local sync = require("sync")
 local uuid = require("uuid")
 type Object = {[string]: unknown}
 local function binding(ref: string): string?
-    if ref == "bee:codex" then return "bee.driver.codex:binding" end
+    if ref == "bee:codex" then return "bee.driver.codex.binding:binding" end
     return nil
 end
 local function value(result: sync.Result): Object
@@ -19,7 +19,7 @@ local function define_tests()
         test.it("moves provider fields, instructions, Docker and supervision without putting revisions in the profile", function()
             local converted = migration.convert({title = "Coding", definition_ref = "bee:codex", options = {model = "small", sandbox = "workspace-write"},
                 config_profile = "work", instructions = "End with BEE-PROFILE-OK", mcp_tools = {"thread_read"},
-                bee = {permission_answers = "ask"}, placement_profile_ref = "bee.placement.docker:coding",
+                bee = {permission_answers = "ask"}, placement_profile_ref = "bee.placement.docker.profiles:coding",
                 budget = {max_turns = 4, max_tokens = 100}, progress_quiet_ms = 1000}, binding)
             local profile, err = protocol.profile(converted)
             if not profile then error(err or "Conversion failed") end
@@ -46,7 +46,7 @@ local function define_tests()
             end
         end)
         test.it("retains native placement when the former home cannot be established", function()
-            local source = {title = "Native", definition_ref = "bee:codex", placement_profile_ref = "bee.placement:native"}
+            local source = {title = "Native", definition_ref = "bee:codex", placement_profile_ref = "bee.placement.profiles:native"}
             local diagnostic = migration.convert(source, binding)
             test.eq(diagnostic.schema_revision, migration.DIAGNOSTIC)
             test.eq(diagnostic.source, source)
@@ -111,7 +111,7 @@ local function define_tests()
             local retained = assert(bounds.object(diagnostic.source))
             test.eq(retained.instructions, source.instructions)
             test.eq(stored.revision, 1)
-            local repaired = assert(protocol.profile({schema_revision = protocol.SCHEMA, name = "Fixed", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex:binding", provider = {}, bee = {}}))
+            local repaired = assert(protocol.profile({schema_revision = protocol.SCHEMA, name = "Fixed", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {}}))
             test.is_true(store:append({feed = "harness.profiles:large", projection_key = "repair", event_id = "repair", idempotency_key = "repair", event_type = "profile", expected_revision = 1, projection_value = repaired, payload = {}}).ok)
             test.eq(value(store:projection("harness.profiles:large", "repair")).revision, 2)
             test.is_true(store:close())

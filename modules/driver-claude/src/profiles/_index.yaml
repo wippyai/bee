@@ -1,0 +1,218 @@
+version: '1.0'
+namespace: bee.driver.claude.profiles
+entries:
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.claude.binding:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Claude Code
+      implementation_version: 2.1.265
+      default_profile: session
+      profiles:
+      - id: session
+        mode: session
+        hooks:
+          transports:
+          - command
+          - http
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PostToolUseFailure
+          - PermissionRequest
+          - PermissionDenied
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.claude.binding:protocol
+        inbound:
+        - next_turn
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          - sse
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
+        protocol: stream-json
+        protocol_revision: stream-json-2
+        answer_path: &id001
+          strategy: terminal_field
+          adapter_ref: bee.driver.claude.binding:protocol
+        resume: &id002
+          strategy: per-process
+          portable: false
+        isolation_env: &id003
+          variables:
+          - HOME
+          - CLAUDE_CONFIG_DIR
+          private_home: true
+        exit_codes_trustworthy: false
+        sandbox:
+          providers: []
+          required_placement_features: []
+          git_writable_roots_adapter: claude_add_dir
+        permission_exchange:
+          mode: adapter
+          adapter_ref: bee.driver.claude.permission:permission_adapter
+          adapter_digest: 91a46beb9b3e0f0db3af61246310f494bb0ddbfbdff178709fca783c9a4840c6
+        input_ready: &id004
+          strategy: protocol
+          adapter_ref: bee.driver.claude.binding:protocol
+          timeout_ms: 15000
+        interrupt: &id005
+          methods:
+          - signal_group
+      - id: batch
+        mode: batch
+        hooks:
+          transports:
+          - command
+          - http
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PostToolUseFailure
+          - PermissionRequest
+          - PermissionDenied
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.claude.binding:protocol
+        inbound:
+        - next_turn
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          - sse
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
+        protocol: stream-json
+        protocol_revision: stream-json-2
+        answer_path: *id001
+        resume: *id002
+        isolation_env: *id003
+        exit_codes_trustworthy: false
+        sandbox:
+          providers: []
+          required_placement_features: []
+          git_writable_roots_adapter: claude_add_dir
+        permission_exchange:
+          mode: adapter
+          adapter_ref: bee.driver.claude.permission:permission_adapter
+          adapter_digest: 91a46beb9b3e0f0db3af61246310f494bb0ddbfbdff178709fca783c9a4840c6
+        input_ready: *id004
+        interrupt: *id005
+      - id: window
+        mode: window
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PermissionRequest
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.claude.binding:protocol
+        protocol: pty
+        protocol_revision: native-window-1
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CLAUDE_CONFIG_DIR
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: none
+        sandbox:
+          providers: []
+          required_placement_features: []
+          git_writable_roots_adapter: claude_add_dir
+        permission_exchange:
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Claude Code window declaration; the host separately selects its policy, activation, executable
+      and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: claude-window
+    title: Claude Code
+    command_names:
+    - claude
+    binding_ref: bee.driver.claude.binding:binding
+    profile_id: window
+    session_profile_id: session
+    session_credentials:
+    - claude_api_key
+    - claude_login
+    policy_ref: ''
+    default_mode: window
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
+    session_resource: session
+    credentials:
+    - claude_api_key
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned bounded Claude batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: claude-research-batch
+    title: Claude researcher
+    command_names: []
+    binding_ref: bee.driver.claude.binding:binding
+    profile_id: batch
+    policy_ref: ''
+    default_mode: batch
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
+    session_resource: session
+    credentials:
+    - claude_api_key
+    - claude_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never

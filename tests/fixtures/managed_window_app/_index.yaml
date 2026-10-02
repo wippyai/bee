@@ -232,7 +232,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [fs.get]
-    resources: [bee.placement.native:root]
+    resources: [bee.placement.native.env:root]
     effect: allow
 - name: core_spawn_policy
   kind: security.policy

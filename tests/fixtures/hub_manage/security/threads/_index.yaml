@@ -5,11 +5,11 @@ entries:
   kind: security.policy
   policy:
     actions: [db.get]
-    resources: [bee.threads:db]
+    resources: [bee.threads.env:db]
     effect: allow
 - name: thread_resource_policy
   kind: security.policy
   policy:
     actions: [registry.get]
-    resources: [bee.threads:database_ref]
+    resources: [bee.threads.env:database_ref]
     effect: allow

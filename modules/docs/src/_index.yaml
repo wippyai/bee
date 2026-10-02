@@ -8,10 +8,6 @@ entries:
   meta:
     title: Bee documentation
     comment: Offline documentation protocol, corpus reader and read-only facade; the host selects the embedded corpus resource and grants it explicitly
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: dependency_persist
   kind: ns.dependency
   component: bee/persist
@@ -21,28 +17,12 @@ entries:
   meta:
     comment: The read-only documentation filesystem selected by the host
   targets:
-  - entry: bee.docs:corpus_ref
+  - entry: bee.docs.env:corpus_ref
     path: .resource_ref
-- name: corpus_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked documentation filesystem; target_corpus fills resource_ref
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports: {bounds: bee.values:bounds}
-- name: corpus
-  kind: library.lua
-  source: file://corpus.lua
-  modules: [fs, json, hash]
-  imports:
-    bounds: bee.values:bounds
-    protocol: bee.docs:protocol
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules: [registry]
 - name: target_call_policies
   kind: ns.requirement
   default: []
@@ -51,3 +31,7 @@ entries:
   targets:
   - entry: bee.docs.binding:call
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

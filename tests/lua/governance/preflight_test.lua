@@ -11,7 +11,7 @@ local SHA = string.rep("a", 64)
 local EMPTY_STRINGS: {string} = {}
 type Manifest = {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}}
 local KERNEL: Manifest = {revision = 1, namespaces = {"bee.gov", "bee.security"}, super_edit = {},
-    entries = {"bee:approver_policies", "bee:protected_kernel"}}
+    entries = {"bee.security.approvals:approver_policies", "bee.security.gov:protected_kernel"}}
 local function candidate_entry(id: string, kind: string, package: string, digest: string,
     references: {string}): preflight.Entry
     return {id = id, kind = kind, package = package, digest = digest, references = references,
@@ -127,11 +127,11 @@ local function define_tests()
                 return candidate_entry(id, "library.lua", package, SHA, references)
             end
             local candidate, context = fixture()
-            context.entries["bee.gov:preflight"] = entry("bee.gov:preflight", "bee/gov", {"shared.util:bounds"})
+            context.entries["bee.gov.activation:preflight"] = entry("bee.gov.activation:preflight", "bee/gov", {"shared.util:bounds"})
             context.entries["shared.util:bounds"] = entry("shared.util:bounds", "bee/shared", {})
-            local policies = entry("bee:approver_policies", "bee", {"demo:run"})
+            local policies = entry("bee.security.approvals:approver_policies", "bee", {"demo:run"})
             policies.kind = "registry.entry"
-            context.entries["bee:approver_policies"] = policies
+            context.entries["bee.security.approvals:approver_policies"] = policies
             local owned = entry("demo:run", "wolfy-j/demo", {})
             owned.kind = "function.lua"
             context.entries["demo:run"] = owned
@@ -162,17 +162,17 @@ local function define_tests()
             test.is_true(checked(candidate, context).ready)
             context.installed_entries = nil
             local selector, _ = fixture()
-            selector.requirements[1].targets = {"bee:approver_policies"}
+            selector.requirements[1].targets = {"bee.security.approvals:approver_policies"}
             test.is_true(has(checked(selector, context), "PROTECTED_KERNEL"))
             local exact, _ = fixture()
             exact.artifacts[1].namespaces = {"demo", "bee"}
-            exact.entries[#exact.entries + 1] = entry("bee:protected_kernel", "wolfy-j/demo", {})
+            exact.entries[#exact.entries + 1] = entry("bee.security.gov:protected_kernel", "wolfy-j/demo", {})
             test.is_true(has(checked(exact, context), "PROTECTED_KERNEL"))
             local missing, missing_error = preflight.check(candidate, with_kernel(context, nil))
             test.is_nil(missing)
             test.not_nil(missing_error)
             local open_map, open_error = preflight.check(candidate, with_kernel(context,
-                {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:approver_policies"}}))
+                {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.approvals:approver_policies"}}))
             test.is_nil(open_map)
             test.not_nil((string.find(tostring(open_error), "protect itself", 1, true)))
         end)
@@ -180,7 +180,7 @@ local function define_tests()
             -- The shipped trust map itself, not a fixture: each namespace a
             -- host-selected scope lives in is refused, and only the explicit
             -- super-edit set can open one.
-            local entry = assert(registry.get("bee:protected_kernel"))
+            local entry = assert(registry.get("bee.security.gov:protected_kernel"))
             local manifest = assert(protected_kernel.decode(entry))
             local shipped = {"bee.gateway", "bee.harness", "bee.credentials", "bee.placement",
                 "bee.placement.native", "bee.resources", "bee.threads", "bee.hive", "bee.env", "bee.sync",
@@ -220,19 +220,19 @@ local function define_tests()
             test.is_true(checked(open_candidate, open_context).ready)
         end)
         test.it("decodes the super-edit set as an optional exact list", function()
-            local base = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
+            local base = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}}
             test.eq(#assert(protected_kernel.decode(base)).super_edit, 0)
-            local empty = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
+            local empty = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}}
             test.eq(#assert(protected_kernel.decode(empty)).super_edit, 0)
             local opened = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"bee.gov"},
-                entries = {"bee:protected_kernel"}}
+                entries = {"bee.security.gov:protected_kernel"}}
             test.eq(assert(protected_kernel.decode(opened)).super_edit[1], "bee.gov")
             local bad = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"bee.gov", "bee.gov"},
-                entries = {"bee:protected_kernel"}}
+                entries = {"bee.security.gov:protected_kernel"}}
             test.is_nil(protected_kernel.decode(bad))
-            local unknown = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"Bee"}, entries = {"bee:protected_kernel"}}
+            local unknown = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"Bee"}, entries = {"bee.security.gov:protected_kernel"}}
             test.is_nil(protected_kernel.decode(unknown))
-            local extra = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}, note = "x"}
+            local extra = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}, note = "x"}
             test.is_nil(protected_kernel.decode(extra))
         end)
         test.it("refuses app-shipped actor and group selectors on every entry kind", function()

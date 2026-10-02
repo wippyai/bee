@@ -512,13 +512,13 @@ local function define_tests()
             local captured = state({root("bee/bee", "1.0.0"),
                 {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
                     data = {component = "bee/hub", version = "1.0.0"}},
-                {id = "bee.hub:plan", kind = "library.lua", registry = {owner = "bee/hub"}, data = {source = "return {}"}},
+                {id = "bee.hub.package:plan", kind = "library.lua", registry = {owner = "bee/hub"}, data = {source = "return {}"}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/hub", version = "1.0.0"}})
             local prepared, problem = plan.prepare(captured, 3, request({action = "update", component = "bee/bee", version = "2.0.0"}),
                 source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {
                     {id = "bee.deps:hub", kind = "ns.dependency", meta = {}, data = {component = "bee/hub", version = "2.0.0"}},
                 }), ["bee/hub@2.0.0"] = package("bee/hub", "2.0.0", "b", {
-                    {id = "bee.hub:plan", kind = "library.lua", meta = {}, data = {source = "return {changed = true}"}},
+                    {id = "bee.hub.package:plan", kind = "library.lua", meta = {}, data = {source = "return {changed = true}"}},
                 })}), baked_identity("1.0.0"))
             test.is_nil(prepared)
             test.eq(problem, "Bee self-update must leave component selection to host roots: bee.deps:hub")

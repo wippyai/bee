@@ -127,7 +127,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
 		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.app:arguments\n    bounds: bee.values:bounds\n"},
 		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
-		{"workspace_binding", "src/storage/binding.lua", "version: '1.0'\nnamespace: bee.storage\nentries:\n- name: binding\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.values:bounds\n"},
+		{"workspace_binding", "modules/workspace/src/types/selection.lua", "version: '1.0'\nnamespace: bee.workspace.types\nentries:\n- name: selection\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.values:bounds\n"},
 		{"application_host_leases", "modules/application/src/host_leases.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n"},
 	} {
 		directory := filepath.Join(sourceSnapshot, dependency.directory)
@@ -310,7 +310,7 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		t.Fatal(err)
 	}
 	dependency := "- name: dependency_approvals\n  kind: ns.dependency\n  component: bee/approvals\n" +
-		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n" +
+		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee.security.approvals:approver_policies\n" +
 		"  - name: process_host\n    value: bee:workers\n" +
 		"  - name: authority_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]\n" +
 		"  - name: worker_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,\n" +

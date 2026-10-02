@@ -14,7 +14,7 @@ entries:
     test: wippy.test:test
     types: bee.hive:types
     bounds: bee.values:bounds
-    sampling: bee.hive.telemetry:sampling
+    sampling: bee.hive.telemetry.binding:sampling
 - name: holdings_test
   kind: function.lua
   source: file://holdings_test.lua
@@ -50,7 +50,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    status: bee.hive.telemetry:status
+    status: bee.hive.telemetry.binding:status_model
     bounds: bee.values:bounds
     types: bee.hive:types
 - name: gateway_only_test_policy

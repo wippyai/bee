@@ -1,17 +1,14 @@
 version: '1.0'
 namespace: bee.hive.telemetry
 entries:
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: definition
   kind: ns.definition
   module: hive-telemetry
   readme: file://README.md
   meta:
     title: Bee hive telemetry
-    comment: Optional cluster telemetry; host composition and policy selection remain in Bee
+    comment: Optional cluster telemetry; host composition and policy selection remain
+      in Bee
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
@@ -25,20 +22,21 @@ entries:
   meta:
     capability: hive.expose
     parameters:
-      operations: [bee.hive.telemetry.binding:presence, bee.hive.telemetry.binding:stats, bee.hive.telemetry.binding:catalog_list,
-        bee.hive.telemetry.binding:holdings, bee.hive.telemetry.binding:cluster, bee.hive.telemetry.binding:node_summary]
+      operations:
+      - bee.hive.telemetry.binding:presence
+      - bee.hive.telemetry.binding:stats
+      - bee.hive.telemetry.binding:catalog_list
+      - bee.hive.telemetry.binding:holdings
+      - bee.hive.telemetry.binding:cluster
+      - bee.hive.telemetry.binding:node_summary
       mode: open
-      audiences: ['*']
+      audiences:
+      - '*'
     reason: Expose the package open telemetry operations to Hive peers
     value_kind: security.policy
   targets:
   - entry: bee.hive.telemetry.binding:presence
     path: .security.policies +=
-- name: sampling
-  kind: library.lua
-  source: file://sampling.lua
-  imports:
-    bounds: bee.values:bounds
 - name: target_presence_policies
   kind: ns.requirement
   default: []
@@ -87,17 +85,12 @@ entries:
   version: '*'
 - name: target_peers
   kind: ns.requirement
-  default: bee.hive.telemetry:empty_peers
+  default: bee.hive.telemetry.env:empty_peers
   targets:
-  - entry: bee.hive.telemetry:peer_source
+  - entry: bee.hive.telemetry.env:peer_source
     path: .resource_ref
   - entry: bee.hive.telemetry.security:peer_source_policy
     path: .policy.resources
-- name: peer_source
-  kind: registry.entry
-- name: empty_peers
-  kind: registry.entry
-  peers: []
 - name: status_contract
   kind: contract.definition
   methods:
@@ -107,12 +100,6 @@ entries:
   - name: detail
     description: Read one enrolled Hive node by node_id with the same counts-only
       status fields
-- name: status
-  kind: library.lua
-  source: file://status.lua
-  imports:
-    bounds: bee.values:bounds
-    types: bee.hive:types
 - name: dependency_gov
   kind: ns.dependency
   component: bee/gov
@@ -131,3 +118,7 @@ entries:
   targets:
   - entry: bee.hive.telemetry.binding:node_summary
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

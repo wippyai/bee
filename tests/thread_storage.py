@@ -40,10 +40,10 @@ local function call(raw: unknown, method: string): {[string]: unknown}
     return object(reply.value)
 end
 local function main(phase: string?, sub: string?, cursor: string?)
-    local before, before_error = sql.get("bee.threads:db")
+    local before, before_error = sql.get("bee.threads.env:db")
     assert(before == nil and before_error ~= nil, "Caller gained SQL authority")
-    local authority = assert(contract.open("bee.threads:authority_local"))
-    local delivery = assert(contract.open("bee.threads:delivery_local"))
+    local authority = assert(contract.open("bee.threads.binding:authority_local"))
+    local delivery = assert(contract.open("bee.threads.binding:delivery_local"))
     if phase == "prepare" then
         call(authority:create({thread_id = THREAD, idempotency_key = key(), title = "Lifecycle"}), "create")
         for i = 1, 5 do
@@ -72,7 +72,7 @@ local function main(phase: string?, sub: string?, cursor: string?)
         assert(type(reply) == "table" and reply.ok == false and reply.error.code == "NOT_FOUND", "forgotten subscription survived restart")
         io.print("ABSENT")
     end
-    local after, after_error = sql.get("bee.threads:db")
+    local after, after_error = sql.get("bee.threads.env:db")
     assert(after == nil and after_error ~= nil, "Function policy leaked into caller")
 end
 return {main = main}

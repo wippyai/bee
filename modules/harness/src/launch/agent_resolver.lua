@@ -14,7 +14,7 @@ M.AGENT_TYPE = "agent.gen1"
 M.TRAIT_TYPE = "agent.trait"
 M.TOOL_TYPE = "tool"
 -- A CLI harness route is any driver contract.binding the host activates
--- (bee.harness:harness_activation, the same list the harness catalog reads)
+-- (bee.harness.launch:harness_activation, the same list the harness catalog reads)
 -- whose meta declares whether it accepts a model. No driver id is listed
 -- here: an installed driver package routes the moment its binding is
 -- activated and its accepts_model declaration is read.

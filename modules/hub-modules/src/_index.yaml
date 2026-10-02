@@ -7,10 +7,6 @@ entries:
   meta:
     title: Bee hub modules
     comment: Hub component listing app; host composition and policy selection remain in Bee
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: dependency_hub
   kind: ns.dependency
   component: bee/hub
@@ -27,48 +23,7 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: client_policy
-  kind: security.policy
-  meta:
-    comment: Modules may call only the public Hub facade. The facade authorizes the requested package operation
-      before entering its private registry execution scope.
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.hub.binding:call
-    - bee.gov.binding:publication_call
-    effect: allow
-- name: publication_policy
-  kind: security.policy
-  meta:
-    comment: Modules may prepare/publish a configured authored component in the admitted workspace; Governance retains
-      authored-store, overlay and Sync authority.
-  policy:
-    actions:
-    - bee.gov.delivery.manage
-    - bee.gov.delivery.publish
-    resources: '*'
-    effect: allow
-- name: hub_policy
-  kind: security.policy
-  meta:
-    comment: The Hub facade checks these operation actions against the requested catalog or component; no registry
-      or Hub credential scope is granted to the application.
-  policy:
-    actions:
-    - bee.hub.read
-    - bee.hub.manage
-    resources: '*'
-    effect: allow
-- name: self_update_policy
-  kind: security.policy
-  meta:
-    comment: Only Bee's person-operated Modules app may update the host deployment root; agents and overlays receive
-      no self-update authority.
-  policy:
-    actions:
-    - bee.hub.self_update
-    resources:
-    - bee/bee
-    effect: allow
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

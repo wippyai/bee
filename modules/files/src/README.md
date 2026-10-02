@@ -5,7 +5,7 @@ and tree-sitter highlighting. Its UI lives in `bee.files.app`; the root owns
 path decoding, ignore matching, the lazy tree and syntax documents.
 
 The host links `target_workspace_root` to a filesystem resource through
-`bee.files:workspace_root_ref`, and selects the app's admission policy.
+`bee.files.env:workspace_root_ref`, and selects the app's admission policy.
 Bee's stock admission grants only that reference and `bee.env:files_root`,
 a read-only volume rooted in the launch project. Importing `fs` grants no
 volume access. Stock admission does not need the delivered-package module
@@ -21,7 +21,7 @@ absolute paths are rejected. Directory loads and search results are bounded.
 
 An agent with approved `bee.app:runtime` access opens Files through
 `application_open`, with `definition_id: bee.files.app:app` and literal
-`arguments: ["src/clock.lua:2-4"]`. The preview marks the requested range.
+`arguments: ["modules/values/src/clock.lua:2-4"]`. The preview marks the requested range.
 Files uses singleton admission; opening an existing instance with new arguments
 moves its retained preview to the requested file and range. The shared reopen
 navigation uses the `bee.app.navigate` topic. Files calls

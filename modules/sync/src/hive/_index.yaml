@@ -9,6 +9,6 @@ entries:
     types: bee.hive:types
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    catalog: bee.hive:catalog
-    version: bee.sync:version
-    output: bee.hive:output
+    catalog: bee.hive.exposure:catalog
+    version: bee.sync.values:version
+    output: bee.hive.binding:output

@@ -20,7 +20,7 @@ entries:
 - name: status_policy
   kind: security.policy.expr
   policy:
-    expression: '(action == "process.registry.lookup" && resource == "bee.hive.supervisor") || action == "process.send" || (action == "registry.get" && resource == "bee.hive.telemetry:peer_source")'
+    expression: '(action == "process.registry.lookup" && resource == "bee.hive.supervisor") || action == "process.send" || (action == "registry.get" && resource == "bee.hive.telemetry.env:peer_source")'
     actions: [process.registry.lookup, process.send, registry.get]
     resources: '*'
     effect: allow
@@ -28,7 +28,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get]
-    resources: [bee.hive.telemetry:empty_peers]
+    resources: [bee.hive.telemetry.env:empty_peers]
     effect: allow
 - name: summary_owner_policy
   kind: security.policy

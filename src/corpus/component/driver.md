@@ -33,7 +33,7 @@ and alternative provider login evidence. Results are `ready`, `missing`,
 `unconfigured`, `incompatible`, or `unknown`. Login contents are never read;
 file or config existence and environment presence are setup evidence, not proof that a login is valid.
 
-The six external CLI packages use the shared `bee.driver:universal`
+The six external CLI packages use the shared `bee.driver.binding:universal`
 implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
 entry (`bee.driver.cli-descriptor@3`) with executable and version probe, an any-of login evidence declaration, launch templates,
 OptionSpec value schemas, form labels, contexts, capability evidence and renders, JSON paths, and a codec ID. The same declaration supplies form choices, argv, structured configuration and environment delivery; there is no separate profile-options map. Locate reports capabilities established by version/help probes. The host validates the

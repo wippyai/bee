@@ -19,11 +19,11 @@ local function define_tests()
         end)
         test.it("decodes bounded bee.app_command registry entries and rejects invalid or reserved aliases", function()
             local valid_entry = {
-                id = "bee.driver.claude:command",
+                id = "bee.driver.claude.descriptor:command",
                 data = {
                     name = "claude",
                     definition_id = "bee.harness.app:app",
-                    arguments = {"bee.driver.claude:default_window"},
+                    arguments = {"bee.driver.claude.profiles:default_window"},
                     fullscreen = true,
                 },
             }
@@ -32,7 +32,7 @@ local function define_tests()
             test.eq(decoded.name, "claude")
             test.eq(decoded.definition_id, "bee.harness.app:app")
             test.eq(#decoded.arguments, 1)
-            test.eq(decoded.arguments[1], "bee.driver.claude:default_window")
+            test.eq(decoded.arguments[1], "bee.driver.claude.profiles:default_window")
             test.is_true(decoded.fullscreen)
 
             local flat = handler.decode_command({
@@ -64,12 +64,12 @@ local function define_tests()
         end)
         test.it("routes every harness alias through the managed Agent window and refuses raw bypass arguments", function()
             local expected = {
-                agy = "bee.driver.agy:default_window",
-                claude = "bee.driver.claude:default_window",
-                codex = "bee.driver.codex:default_window",
-                grok = "bee.driver.grok:default_window",
-                muse = "bee.driver.muse:default_window",
-                opencode = "bee.driver.opencode:default_window",
+                agy = "bee.driver.agy.profiles:default_window",
+                claude = "bee.driver.claude.profiles:default_window",
+                codex = "bee.driver.codex.profiles:default_window",
+                grok = "bee.driver.grok.profiles:default_window",
+                muse = "bee.driver.muse.profiles:default_window",
+                opencode = "bee.driver.opencode.profiles:default_window",
             }
             for name, definition_ref in pairs(expected) do
                 local launch, err = handler.resolve(name, {})

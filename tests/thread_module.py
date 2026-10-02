@@ -61,7 +61,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bee-thread-module-") as directory:
         folder = stage(Path(directory))
         staged = sorted(str(p.relative_to(folder)) for p in folder.rglob("_index.yaml"))
-        assert staged == ["modules/hive/src/_index.yaml", "modules/persist/src/_index.yaml", "modules/threads/src/_index.yaml", "modules/threads/src/approvals/_index.yaml", "modules/threads/src/carrier/_index.yaml", "modules/threads/src/delivery/_index.yaml", "modules/threads/src/migrations/_index.yaml", "modules/threads/src/persist/_index.yaml", "modules/threads/src/projection/_index.yaml", "modules/threads/src/records/_index.yaml", "modules/threads/src/service/_index.yaml", "modules/values/src/_index.yaml", "src/host/_index.yaml", "src/security/threads/_index.yaml"], staged
+        expected = sorted([str(p.relative_to(ROOT)) for module in (MODULE, PERSIST, HIVE, ROOT / "modules/values") for p in module.rglob('_index.yaml')] + ['src/host/_index.yaml', 'src/security/threads/_index.yaml'])
+        assert staged == expected, staged
         run(folder, "lint")
         database = folder / "threads.db"
         output = run(folder, "run", "threads-isolation", env={"BEE_THREADS_DB": str(database)})

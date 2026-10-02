@@ -6,7 +6,7 @@ local catalog = require("capability_catalog")
 local registry = require("registry")
 
 local function fixture(): {[string]: unknown}
-    return {id = "bee:capability_catalog", kind = "registry.entry",
+    return {id = "bee.security.capability:capability_catalog", kind = "registry.entry",
         meta = {type = "bee.capability_catalog"}, data = {revision = 1,
             never = {"exec", "credentials"}, capabilities = {
                 {id = "workspace.files.read", revision = 1, confirm = "standard",
@@ -25,7 +25,7 @@ end
 local function define_tests()
     test.describe("Capability catalog", function()
         test.it("decodes the shipped host-owned catalog with all initial rows", function()
-            local shipped = assert(registry.get("bee:capability_catalog"))
+            local shipped = assert(registry.get("bee.security.capability:capability_catalog"))
             local decoded = assert(catalog.decode(shipped))
             local count = 0
             for _ in pairs(decoded.capabilities) do count = count + 1 end
@@ -90,7 +90,7 @@ local function define_tests()
             test.is_nil(catalog.render(decoded, {read[1], send[1]}))
         end)
         test.it("names Hive operations, a mode and audiences in the expose template", function()
-            local shipped = assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            local shipped = assert(catalog.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
             local template = shipped.capabilities["hive.expose"]
             test.eq(template.revision, 2)
             test.eq(template.parameters.operations, "hive_operations")
@@ -116,7 +116,7 @@ local function define_tests()
             test.is_true(all:find("Hive operations bee.hive.telemetry.binding:presence, bee.hive.telemetry.binding:stats in open mode", 1, true) ~= nil)
         end)
         test.it("refuses malformed Hive exposure parameters", function()
-            local shipped = assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            local shipped = assert(catalog.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
             test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {}, mode = "open", audiences = {"*"}}))
             test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"no-colon"}, mode = "open", audiences = {"*"}}))
             test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"bee.hive.telemetry.binding:presence"}, mode = "admin", audiences = {"*"}}))

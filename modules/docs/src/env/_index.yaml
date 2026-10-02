@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.docs.env
+entries:
+- name: corpus_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked documentation filesystem; target_corpus fills resource_ref
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]

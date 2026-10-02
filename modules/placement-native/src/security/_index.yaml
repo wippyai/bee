@@ -6,7 +6,7 @@ entries:
   meta:
     comment: The receipts store, the linked references, the placement root and the executor, for the runner and the service
   policy:
-    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
     - env.get
     - env.set
@@ -18,24 +18,24 @@ entries:
     - security.scope.create
     - funcs.security
     resources:
-    - bee.persist:startup_progress
-    - bee.placement.native:db
-    - bee.placement.native:database_ref
-    - bee.placement.native:root_ref
-    - bee.placement.native:runner_host_ref
-    - bee.placement.native:executor_ref
-    - bee.placement.native:host_files_ref
-    - bee.placement.native:admitted_roots_ref
-    - bee.placement.native:resource_mode_ref
+    - bee.persist.env:startup_progress
+    - bee.placement.native.env:db
+    - bee.placement.native.env:database_ref
+    - bee.placement.native.env:root_ref
+    - bee.placement.native.env:runner_host_ref
+    - bee.placement.native.env:executor_ref
+    - bee.placement.native.env:host_files_ref
+    - bee.placement.native.env:admitted_roots_ref
+    - bee.placement.native.env:resource_mode_ref
     - bee.placement.native.service:workdir_preparers_ref
-    - bee.placement.native:placement_workdir_preparers
+    - bee.placement.native.env:placement_workdir_preparers
     - custom
     - security
     - hosts
-    - bee.placement.native:placement_admitted_roots
-    - bee.placement.native:root
-    - bee.placement.native:placement_host_files
-    - bee.placement.native:placement_executor
+    - bee.placement.native.env:placement_admitted_roots
+    - bee.placement.native.env:root
+    - bee.placement.native.env:placement_host_files
+    - bee.placement.native.env:placement_executor
     - cwd
     effect: allow
 - name: placement_exec_policy

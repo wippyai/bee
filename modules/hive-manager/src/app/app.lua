@@ -22,7 +22,7 @@ local types = require("types")
 local remote = require("remote")
 local desktop_protocol = require("desktop_protocol")
 local clock = require("clock")
-local NAMES = "bee.hive.manager:names"
+local NAMES = "bee.hive.manager.app:names"
 local POLL = "5s"
 local CALL_TIMEOUT = "2s"
 local function entry_data(id: string): unknown

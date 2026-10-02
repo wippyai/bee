@@ -42,8 +42,8 @@ entries:
   imports:
     test: wippy.test:test
     retained_protocol: bee.launch:retained_protocol
-    startup_progress: bee.app:startup_progress
-    workspaces: bee.storage:binding
+    startup_progress: bee.app.status:startup_progress
+    workspaces: bee.workspace.types:selection
 - name: hosts_test
   kind: function.lua
   source: file://hosts_test.lua

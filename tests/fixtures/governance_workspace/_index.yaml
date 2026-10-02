@@ -8,7 +8,7 @@ entries:
 - name: sender
   kind: library.lua
   source: file://sender.lua
-  imports: {transaction: bee.persist:transaction, version: bee.sync:version}
+  imports: {transaction: bee.persist.persist:transaction, version: bee.sync.values:version}
 - name: owner_policy
   kind: security.policy
   policy:

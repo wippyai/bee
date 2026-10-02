@@ -49,7 +49,7 @@ recovery restores only the previously authorized desired intent.
 
 ### Protected kernel
 
-The host-owned `bee:protected_kernel` entry is the trust map no activation
+The host-owned `bee.security.gov:protected_kernel` entry is the trust map no activation
 profile can open, however permissive. It names every shipped namespace a
 host-selected security scope lives in or is reached from (`bee.gov`,
 `bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`,
@@ -59,8 +59,8 @@ host-selected security scope lives in or is reached from (`bee.gov`,
 `bee.terminal`, `bee.node` and `bee.workspace`, which cover their child
 namespaces. The legacy `bee.governance` prefix remains protected for old
 application admission records. The kernel also names the exact host selectors
-`bee:approver_policies`,
-`bee:capability_catalog`, `bee.env:gov_activation_profiles`,
+`bee.security.approvals:approver_policies`,
+`bee.security.capability:capability_catalog`, `bee.env:gov_activation_profiles`,
 `bee.env:gov_publication_profiles`, `bee.deps:gov`, `bee.deps:approvals` and
 itself. Its `super_edit` list is the host's explicit carve-out: an empty list
 in the shipped composition opens nothing, and a namespace the host deliberately
@@ -167,7 +167,7 @@ approves it. The shipped `bee.env:gov_publication_profiles` sets
 `workspace_applications: true`, and the shipped
 `bee.env:gov_activation_profiles` carries a `workspace_applications` rule:
 the approval policy (`workspace-application-delivery`, decided in Approvals by
-the person, as `bee:approver_policies` ships it), the admitted entry kinds and
+the person, as `bee.security.approvals:approver_policies` ships it), the admitted entry kinds and
 native modules, and the admission policies and thread access of the one
 application entry.
 
@@ -199,7 +199,7 @@ for capability requests. A request declares `meta.value_kind: security.policy`,
 single target must be its own `bee.app` process entry at
 `.security.policies +=`, except a `hive.expose` request, whose target is one of
 the artifact's own Hive operations at the requested mode. The destination
-resolver checks the request against the host-owned `bee:capability_catalog`,
+resolver checks the request against the host-owned `bee.security.capability:capability_catalog`,
 preserves the normalized parameters, reason, target, and catalog/template
 revisions in the measured candidate, and includes the catalog definition in
 the candidate's external-base digest. The request grants no policy. Preflight
@@ -230,7 +230,7 @@ the counts-only Hive status methods with this registry entry in `entries.json`:
 ```
 
 Replace `app.example` with the application's admitted namespace. The components
-tool can read the destination's `bee:capability_catalog`; its host-selected
+tool can read the destination's `bee.security.capability:capability_catalog`; its host-selected
 parameter schema remains authoritative. This declaration requests permission;
 the person still reviews and approves the exact binding and methods locally.
 
@@ -261,7 +261,7 @@ operations still check the caller through the destination principal mappings.
 A file grant installs a host-created
 `fs.directory` at a verified subroot of the destination workspace's own
 folder: the destination reads the workspace's root and subpath from the node
-workspace catalog (through `bee.workspace.catalog:read` under
+workspace catalog (through `bee.workspace.binding:read` under
 `bee.security.gov:workspace_folder_read_policy`), the grant record measures
 that folder, the pinned runtime confines traversal and symlinks below the
 volume, a read grant is read-only at the filesystem boundary, and private

@@ -103,7 +103,7 @@ local function answer(io: IO, declared: Exchange, labels: Labels, event: unknown
         io.wait_ms(declared.poll_ms)
     end
 end
-local ADAPTER_ID = "bee.driver.claude:permission_adapter"
+local ADAPTER_ID = "bee.driver.claude.permission:permission_adapter"
 local function adapter_table(): Object
     return {
         schema_revision = "bee.permission-adapter@2",

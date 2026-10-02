@@ -31,14 +31,14 @@ local function define_tests()
         test.it("asks for one page of the list, a label search or a folder search", function()
             local state = model.new()
             local listing = model.listing(state)
-            test.eq(listing.target, "bee.workspace.catalog:list")
+            test.eq(listing.target, "bee.workspace.binding:list")
             test.eq(listing.request.state, "active")
             test.eq(listing.request.limit, model.PAGE)
             test.is_nil(listing.request.after)
             model.type_text(state, "Bee")
             model.submit(state)
             local label = model.listing(state)
-            test.eq(label.target, "bee.workspace.catalog:search")
+            test.eq(label.target, "bee.workspace.binding:search")
             test.eq(label.request.label, "Bee")
             model.erase(state); model.erase(state); model.erase(state)
             model.type_text(state, "/legacy/")
@@ -122,7 +122,7 @@ local function define_tests()
             local selected = state.selected
             model.apply_inspect(state, selected, ok({workspace = row(1), live = true,
                 applications = {{definition_id = "bee.settings.app:app", instance_id = "i-1", restart_policy = "automatic"}},
-                extensions = {{binding = "bee.resources:resources_workspace_extension", title = "Resources", total = 3, items = {{label = "docs", detail = "bee.env:workspace_root · read"}}},
+                extensions = {{binding = "bee.resources.binding:resources_workspace_extension", title = "Resources", total = 3, items = {{label = "docs", detail = "bee.env:workspace_root · read"}}},
                     {binding = "bee:broken", title = "Broken", total = 0, items = {}, error = "refused\27[31m"}}}))
             local detail = state.detail
             if not detail then error("detail") end
@@ -145,7 +145,7 @@ local function define_tests()
             local state = model.new()
             model.apply_page(state, page(1, 2, nil))
             local intent = model.change_intent(state)
-            test.eq(intent and intent.target, "bee.workspace.catalog:archive")
+            test.eq(intent and intent.target, "bee.workspace.binding:archive")
             local archived = row(1)
             archived.state = "archived"
             model.apply_change(state, ok(archived))
@@ -154,7 +154,7 @@ local function define_tests()
             test.eq(state.status, "Archived Project 1")
             model.switch(state, "archived")
             model.apply_page(state, ok({items = {archived}}))
-            test.eq(model.change_intent(state) and model.change_intent(state).target, "bee.workspace.catalog:restore")
+            test.eq(model.change_intent(state) and model.change_intent(state).target, "bee.workspace.binding:restore")
             model.apply_change(state, {ok = false, error = {code = "BUSY", message = "host"}, value = nil, replayed = false})
             test.eq(state.status, "BUSY: host")
             test.eq(#state.items, 1)

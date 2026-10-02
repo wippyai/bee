@@ -259,7 +259,7 @@ entries:
     test: wippy.test:test
     harness: bee.threads:harness
     database: bee.threads.persist:database
-    ledger: bee.persist:ledger
+    ledger: bee.persist.persist:ledger
     migrations: bee.threads.migrations:migrations
     owner: bee.threads.persist:owner
     identity: bee.threads.records:app_identity
@@ -362,7 +362,7 @@ entries:
   - security
   imports:
     test: wippy.test:test
-    capabilities: bee.threads:capabilities_report
+    capabilities: bee.threads.binding:capabilities_report
     bounds: bee.values:bounds
     migrations: bee.threads.migrations:migrations
     waits: bee.threads.delivery:waits

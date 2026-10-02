@@ -1,10 +1,6 @@
 version: '1.0'
 namespace: bee.app
 entries:
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: definition
   kind: ns.definition
   module: application
@@ -67,9 +63,6 @@ entries:
     caller: bee.app:caller
     frame: bee.app:frame
     bounds: bee.values:bounds
-- name: startup_progress
-  kind: library.lua
-  source: file://startup_progress.lua
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua
@@ -146,3 +139,7 @@ entries:
     appearance: bee.app:appearance
     frame: bee.app:frame
     viz: bee.app:viz
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

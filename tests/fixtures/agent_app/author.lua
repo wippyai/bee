@@ -26,7 +26,7 @@ local THREAD = "agent-app-authoring"
 -- The launch route and its policy are host-selected per run: the live Agy
 -- attempt and the scripted fixture provider use the same production launch,
 -- admission, carrier, placement and gateway path with a different far end.
-local DEFAULT_DEFINITION = "bee.driver.agy:research_batch"
+local DEFAULT_DEFINITION = "bee.driver.agy.profiles:research_batch"
 local ACCESS_POLICY = "local-agent-app-authoring"
 local NAMESPACE = "bee.agent_app_demo"
 local DEFINITION_ID = "bee.agent_app_demo:app"
@@ -131,7 +131,7 @@ local function configure(policy_ref: string, keep_executable: boolean)
         data.instructions = INSTRUCTIONS
     end
     policy.data = data
-    local approvers = registry.get("bee:approver_policies")
+    local approvers = registry.get("bee.security.approvals:approver_policies")
     if not approvers then error("approval policies missing") end
     local approver_data = bounds.object(approvers.data)
     if not approver_data then error("approval policy data missing") end
@@ -343,7 +343,7 @@ end
 -- What the attempt's own gateway binding admits. Tool metadata grants nothing:
 -- this is the admitted ceiling the MCP calls actually execute under.
 local function binding_scope(attempt_id: string): Object
-    local db, db_error = sql.get("bee.gateway:db")
+    local db, db_error = sql.get("bee.gateway.env:db")
     if not db then error(tostring(db_error)) end
     local rows, query_error = db:query(
         "SELECT b.tools_json, s.active_json, s.context_json FROM bee_gateway_bindings b "
@@ -378,7 +378,7 @@ local function main()
     local definition = bounds.text(values.definition, 160)
     if not definition or definition == "" then definition = DEFAULT_DEFINITION end
     local policy_ref = bounds.text(values.authoring_policy, 160)
-    if not policy_ref or policy_ref == "" then policy_ref = "bee.driver.agy:launch_policy_agy_batch" end
+    if not policy_ref or policy_ref == "" then policy_ref = "bee.driver.agy.security:launch_policy_agy_batch" end
     local round = text_of(values.round, "round")
     local source_workspace = text_of(values.source_workspace, "source workspace")
     local launch_workspace = text_of(values.launch_workspace, "launch workspace")

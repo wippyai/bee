@@ -14,10 +14,10 @@ local time = require("time")
 local configuration = require("configuration")
 local protocol = require("protocol")
 
-local ENDPOINT_REF = "bee.gateway:endpoint_ref"
+local ENDPOINT_REF = "bee.gateway.env:endpoint_ref"
 local ENDPOINT = "bee.gateway:native_admission_endpoint"
-local LISTENER_REF = "bee.gateway:listener_ref"
-local DATABASE_REF = "bee.gateway:database_ref"
+local LISTENER_REF = "bee.gateway.env:listener_ref"
+local DATABASE_REF = "bee.gateway.env:database_ref"
 local DATABASE = "bee.gateway:native_admission_db"
 local LISTENER = "bee.gateway:ephemeral_listener"
 local ACTOR = "bee.test.native_gateway_admission"

@@ -14,15 +14,15 @@ entries:
   modules: [env, fs, funcs, sql, process, hash]
   imports:
     store: bee.placement.native.persist:store
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     homes: bee.placement.publication.test:homes
     workdir_preparers: bee.placement.native.service:workdir_preparers
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
     bounds: bee.values:bounds
-    configuration: bee.placement.native:configuration
+    configuration: bee.placement.native.env:configuration
     provider_projection: bee.placement.native.service:provider_projection
     types: bee.placement:types
-    paths: bee.placement:paths
+    paths: bee.placement.profiles:paths
     gateway_protocol: bee.gateway:protocol
     credential_protocol: bee.credentials:protocol
     service_reply: bee.values:reply

@@ -15,11 +15,11 @@ local machine = require("machine")
 local types = require("types")
 local driver_types = require("driver_types")
 
-local CODEX_WINDOW = "bee.driver.codex:launch_policy_codex_window"
-local CODEX_BATCH = "bee.driver.codex:launch_policy_codex_batch"
-local CODEX_NAMED_BATCH = "bee.driver.codex:launch_policy_codex_named_batch"
-local CLAUDE_WINDOW = "bee.driver.claude:launch_policy_claude_window"
-local CLAUDE_BATCH = "bee.driver.claude:launch_policy_claude_batch"
+local CODEX_WINDOW = "bee.driver.codex.security:launch_policy_codex_window"
+local CODEX_BATCH = "bee.driver.codex.security:launch_policy_codex_batch"
+local CODEX_NAMED_BATCH = "bee.driver.codex.security:launch_policy_codex_named_batch"
+local CLAUDE_WINDOW = "bee.driver.claude.security:launch_policy_claude_window"
+local CLAUDE_BATCH = "bee.driver.claude.security:launch_policy_claude_batch"
 local PROFILE = "ds-flash"
 
 local function raw_policy(ref: string): {[string]: unknown}
@@ -46,7 +46,7 @@ local function launch_request(required: {driver_types.RequiredFile}?, environmen
     local value: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
     if required then value.required_files = required end
     local request: types.LaunchRequest = {idempotency_key = "k", attempt_id = "a", owner_id = "bee.harness.catalog:codex_profile_test", owner_incarnation = 1, action_id = "a",
-        binding_ref = "bee.driver.codex:binding", policy_ref = CODEX_NAMED_BATCH, profile_id = "named_batch", binding_digest = string.rep("b", 64),
+        binding_ref = "bee.driver.codex.binding:binding", policy_ref = CODEX_NAMED_BATCH, profile_id = "named_batch", binding_digest = string.rep("b", 64),
         profile_digest = string.rep("c", 64), launch = value, resources = {}, environment = environment or {}, environment_refs = refs or {}, projections = {},
         required_cleanup = "process_group", required_exit_observation = "independent",
         timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
@@ -63,7 +63,7 @@ local function define_tests()
             test.is_nil(assert(preferences.decode_profile_restrictions(raw_policy(CLAUDE_BATCH).profile_restrictions))["provider.options.config_profile"])
             -- The Codex window profile inherits the host home, so the named
             -- file it declares can resolve there.
-            local codex, codex_error = registry.get("bee.driver.codex:profiles")
+            local codex, codex_error = registry.get("bee.driver.codex.profiles:profiles")
             if not codex then error(tostring(codex_error)) end
             local driver = assert(bounds.object((assert(bounds.object(codex.data))).driver))
             local window: {[string]: unknown}? = nil
@@ -157,11 +157,11 @@ local function define_tests()
             -- the CLI therefore makes the route unavailable; this pins that the
             -- resolution happens through that resolver and not a literal path.
             local windows: {{policy_ref: string, executable: string, variable: string}} = {
-                {policy_ref = "bee.driver.claude:launch_policy_claude_window", executable = "claude", variable = "bee.driver.claude:executable"},
-                {policy_ref = "bee.driver.codex:launch_policy_codex_window", executable = "codex", variable = "bee.driver.codex:executable"},
-                {policy_ref = "bee.driver.muse:launch_policy_muse_window", executable = "muse", variable = "bee.driver.muse:executable"},
-                {policy_ref = "bee.driver.agy:launch_policy_agy_window", executable = "agy", variable = "bee.driver.agy:executable"},
-                {policy_ref = "bee.driver.grok:launch_policy_grok_window", executable = "grok", variable = "bee.driver.grok:executable"},
+                {policy_ref = "bee.driver.claude.security:launch_policy_claude_window", executable = "claude", variable = "bee.driver.claude.env:executable"},
+                {policy_ref = "bee.driver.codex.security:launch_policy_codex_window", executable = "codex", variable = "bee.driver.codex.env:executable"},
+                {policy_ref = "bee.driver.muse.security:launch_policy_muse_window", executable = "muse", variable = "bee.driver.muse.env:executable"},
+                {policy_ref = "bee.driver.agy.security:launch_policy_agy_window", executable = "agy", variable = "bee.driver.agy.env:executable"},
+                {policy_ref = "bee.driver.grok.security:launch_policy_grok_window", executable = "grok", variable = "bee.driver.grok.env:executable"},
             }
             for _, window in ipairs(windows) do
                 local entry = registry.get(window.policy_ref)
@@ -192,11 +192,11 @@ local function define_tests()
             -- by the host environment storage; a rename on either side would
             -- otherwise only surface as a route that silently goes unavailable.
             local bindings: {{policy_ref: string, executable: string, variable: string}} = {
-                {policy_ref = "bee.driver.claude:launch_policy_claude_window", executable = "claude", variable = "bee.driver.claude:executable"},
-                {policy_ref = "bee.driver.codex:launch_policy_codex_window", executable = "codex", variable = "bee.driver.codex:executable"},
-                {policy_ref = "bee.driver.muse:launch_policy_muse_window", executable = "muse", variable = "bee.driver.muse:executable"},
-                {policy_ref = "bee.driver.agy:launch_policy_agy_window", executable = "agy", variable = "bee.driver.agy:executable"},
-                {policy_ref = "bee.driver.grok:launch_policy_grok_window", executable = "grok", variable = "bee.driver.grok:executable"},
+                {policy_ref = "bee.driver.claude.security:launch_policy_claude_window", executable = "claude", variable = "bee.driver.claude.env:executable"},
+                {policy_ref = "bee.driver.codex.security:launch_policy_codex_window", executable = "codex", variable = "bee.driver.codex.env:executable"},
+                {policy_ref = "bee.driver.muse.security:launch_policy_muse_window", executable = "muse", variable = "bee.driver.muse.env:executable"},
+                {policy_ref = "bee.driver.agy.security:launch_policy_agy_window", executable = "agy", variable = "bee.driver.agy.env:executable"},
+                {policy_ref = "bee.driver.grok.security:launch_policy_grok_window", executable = "grok", variable = "bee.driver.grok.env:executable"},
             }
             for _, binding in ipairs(bindings) do
                 local policy_entry = registry.get(binding.policy_ref)

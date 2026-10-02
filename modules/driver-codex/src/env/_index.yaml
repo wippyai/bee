@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.driver.codex.env
+entries:
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: codex
+  default: ''
+  readonly: true
+- name: config_home
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: CODEX_HOME
+  default: ''
+  readonly: true

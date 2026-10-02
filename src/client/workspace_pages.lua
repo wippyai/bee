@@ -63,8 +63,8 @@ function M.start(reader: Reader, query: Query): (Pending?, string?)
     if previous then previous.future:cancel(); reader.pending = nil end
     local request: {[string]: unknown} = {state = "active", limit = M.PAGE}
     if query.after then request.after = query.after end
-    local target = "bee.workspace.catalog:list"
-    if query.label then request.label = query.label; target = "bee.workspace.catalog:search" end
+    local target = "bee.workspace.binding:list"
+    if query.label then request.label = query.label; target = "bee.workspace.binding:search" end
     local future, err = funcs.async(target, request)
     if err or not future then return nil, tostring(err or "the workspace catalog is unavailable") end
     -- Runtime response() returns the future's channel; the selected manifest

@@ -5,7 +5,7 @@
 local test = require("test")
 local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
+    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}}
 local artifact = require("artifact")
 local resolver = require("hub_resolver")
 local preflight = require("preflight")
@@ -53,7 +53,7 @@ local function deps_fixture(policy: Policy?): (Deps, Spec, {root: Object?, captu
         entry("app:claimed", "vendor/app", "stale-preview-value"),
         entry("app:removed", "vendor/app", "removed-by-preview"),
         entry("host:db", "host/base", "database"),
-        {id = "bee:protected_kernel", kind = "registry.entry", registry = {owner = "host/base"},
+        {id = "bee.security.gov:protected_kernel", kind = "registry.entry", registry = {owner = "host/base"},
             meta = {type = "bee.protected_kernel"}, data = KERNEL},
     }
     local updated_entry = entry("app:claimed", "vendor/app", "registry-owner")

@@ -3,7 +3,7 @@ namespace: bee.harness.profiles
 entries:
 - name: target_db
   kind: ns.requirement
-  default: bee.node:db
+  default: bee.node.env:db
   meta: {comment: Host-selected SQLite resource for saved profiles}
   targets:
   - entry: bee.harness.profiles:database_ref
@@ -16,7 +16,7 @@ entries:
   source: file://protocol.lua
   modules: [json]
   imports:
-    access: bee.driver:profile_access
+    access: bee.driver.profiles:profile_access
     bounds: bee.values:bounds
     budgets: bee.threads.records:budgets
     canonical: bee.values:canonical
@@ -27,7 +27,7 @@ entries:
   imports:
     budgets: bee.threads.records:budgets
     bounds: bee.values:bounds
-    descriptors: bee.driver:descriptor
+    descriptors: bee.driver.descriptor:descriptor
     protocol: bee.harness.profiles:protocol
 - name: migration
   kind: library.lua
@@ -43,8 +43,8 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     sync: bee.sync.persist:store
-    transaction: bee.persist:transaction
+    transaction: bee.persist.persist:transaction
     protocol: bee.harness.profiles:protocol
     migration: bee.harness.profiles:migration
     validation: bee.harness.profiles:validation
-    driver_profile: bee.driver:profile
+    driver_profile: bee.driver.profiles:profile

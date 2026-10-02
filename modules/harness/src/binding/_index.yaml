@@ -86,3 +86,9 @@ entries:
   security:
     policies:
     - bee.harness.security:presentation_facade_policy
+- name: profiles_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.harness:profiles
+    methods:
+      call: bee.harness.binding:call

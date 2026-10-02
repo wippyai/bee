@@ -26,7 +26,7 @@ local function approval_call(method: string, request: Object): (Object?, string?
     return bounds.object(value.value), nil
 end
 local function configuration(): (Object?, string?)
-    local entry = registry.get("bee.placement.docker:environment_configuration")
+    local entry = registry.get("bee.placement.docker.env:environment_configuration")
     local record = entry and bounds.object(entry.data)
     local data = record and bounds.object(record.value)
     if not data or bounds.fields(data, {"network", "endpoint", "listener", "readiness_policy", "approval_policy"})
@@ -98,7 +98,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
         local revoked_receipt: environment.Receipt = {state = "revoked", selection_digest = recorded.selection_digest, approval_id = recorded.approval_id, proposal_digest = recorded.proposal_digest, owner_incarnation = recorded.owner_incarnation, address = recorded.address}
         local saved = save(revoked_receipt)
         if saved then return nil, saved end
-        local overlay = registry.overlay("bee.placement.docker:environment")
+        local overlay = registry.overlay("bee.placement.docker.env:environment")
         if not overlay then return nil, "Docker environment overlay unavailable" end
         local stopped = listener_action("stop", "stopped")
         if stopped then return nil, stopped end
@@ -168,7 +168,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
         end,
         activate = function(recorded: environment.Receipt): string?
             if not recorded.address then return "Docker environment has no gateway address" end
-            local overlay, error = registry.overlay("bee.placement.docker:environment")
+            local overlay, error = registry.overlay("bee.placement.docker.env:environment")
             if not overlay then return tostring(error) end
             local active = registry.get(tostring(config.endpoint))
             local active_data = active and bounds.object(active.data)

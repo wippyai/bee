@@ -7,11 +7,13 @@ entries:
   readme: file://README.md
   meta:
     title: Bee values
-    comment: Shared typed bounds, canonical JSON, clock conversions, and reply decoding without subsystem authority
+    comment: Shared typed bounds, canonical JSON, clock conversions, and reply decoding
+      without subsystem authority
 - name: clock
   kind: library.lua
   source: file://clock.lua
-  modules: [time]
+  modules:
+  - time
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
@@ -20,7 +22,8 @@ entries:
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
-  modules: [json]
+  modules:
+  - json
 - name: reply
   kind: library.lua
   source: file://reply.lua

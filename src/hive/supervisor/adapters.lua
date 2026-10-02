@@ -5,7 +5,7 @@
 -- entry names, so metadata selects a route and never grants one.
 local bounds = require("bounds")
 local M = {}
-M.ENTRY = "bee:hive_operation_adapters"
+M.ENTRY = "bee.hive.supervisor:hive_operation_adapters"
 M.ENTRY_TYPE = "bee.hive.operation_adapters"
 M.MAX_ADAPTERS = 32
 M.MAX_OPERATIONS = 32

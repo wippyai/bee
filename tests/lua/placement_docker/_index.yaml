@@ -10,7 +10,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    profiles: bee.placement:profiles
+    profiles: bee.placement.profiles:profiles
 - name: spec_test
   kind: function.lua
   source: file://spec_test.lua
@@ -20,7 +20,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    spec: bee.placement.docker:spec
+    spec: bee.placement.docker.binding:spec
 - name: profile
   kind: registry.entry
   meta:
@@ -96,13 +96,13 @@ entries:
     placement_decode: bee.placement:decode
     test: wippy.test:test
     principals: bee.test.principals:bound
-    profiles: bee.placement:profiles
+    profiles: bee.placement.profiles:profiles
     request_codec: bee.placement:request
     store: bee.placement.native.persist:store
-    spec: bee.placement.docker:spec
+    spec: bee.placement.docker.binding:spec
     types: bee.placement:types
     service: bee.placement.docker.service:service
-    placement_resolver: bee.placement:resolver
+    placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
   security:
     policies:
@@ -134,7 +134,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    environment: bee.placement.docker:environment
+    environment: bee.placement.docker.env:environment
 
 - name: creator_policy
   kind: security.policy
@@ -153,11 +153,11 @@ entries:
     placement_decode: bee.placement:decode
     test: wippy.test:test
     principals: bee.test.principals:bound
-    profiles: bee.placement:profiles
+    profiles: bee.placement.profiles:profiles
     request_codec: bee.placement:request
     store: bee.placement.native.persist:store
-    spec: bee.placement.docker:spec
+    spec: bee.placement.docker.binding:spec
     types: bee.placement:types
     service: bee.placement.docker.service:service
-    placement_resolver: bee.placement:resolver
+    placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol

@@ -27,7 +27,7 @@ entries:
   imports:
     types: bee.hive:types
     peers: bee.hive.supervisor:peers
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
     clock: bee.values:clock
 - name: main
   kind: process.lua
@@ -45,10 +45,10 @@ entries:
     registration: bee.hive.supervisor:registration
     admission: bee.hive.supervisor:admission
     policy_admission: bee.hive.supervisor:policy_admission
-    principals: bee.hive:principals
+    principals: bee.hive.security:principals
     desktop_owner: bee.hive.desktop:owner
     desktop_protocol: bee.hive.desktop:protocol
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
     adapters: bee.hive.supervisor:adapters
     workspace_commands: bee.hive.supervisor:workspace_commands
     clock: bee.values:clock
@@ -106,8 +106,8 @@ entries:
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.values:bounds
-    catalog: bee.hive:catalog
-    principals: bee.hive:principals
+    catalog: bee.hive.exposure:catalog
+    principals: bee.hive.security:principals
     canonical: bee.values:canonical
 - name: admit_policy
   kind: function.lua
@@ -121,8 +121,8 @@ entries:
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.values:bounds
-    catalog: bee.hive:catalog
-    principals: bee.hive:principals
+    catalog: bee.hive.exposure:catalog
+    principals: bee.hive.security:principals
     canonical: bee.values:canonical
 - name: policy_identity_policy
   kind: security.policy
@@ -155,7 +155,7 @@ entries:
   imports:
     canonical: bee.values:canonical
     types: bee.hive:types
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
     bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
 
@@ -167,6 +167,19 @@ entries:
   imports:
     canonical: bee.values:canonical
     types: bee.hive:types
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
     bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
+- name: hive_operation_adapters
+  kind: registry.entry
+  meta:
+    type: bee.hive.operation_adapters
+    comment: Host-selected forwarding routes; the supervisor maps each thread and replica operation to the feature-owned admission worker in the package that owns it, and that worker still runs under the host-selected policies its package declares
+  data:
+    adapters:
+    - operations: [bee.threads.binding:send, bee.threads.binding:send_status, bee.threads.binding:inbox_resolve,
+        bee.threads.binding:inbox_describe, bee.threads.binding:inbox_send, bee.threads.binding:inbox_reply,
+        bee.threads.binding:notify, bee.threads.binding:watch]
+      worker: bee.threads.hive:admit
+    - operations: [bee.sync.binding:replica_receive]
+      worker: bee.sync.binding:admit

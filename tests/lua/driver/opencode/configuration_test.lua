@@ -27,7 +27,7 @@ local function define_tests()
             test.eq(files[1].composition.base_path, configuration.BASE_PATH)
         end)
         test.it("declares no hook transport on either shipped route", function()
-            for _, ref in ipairs({"bee.driver.opencode:launch_policy_opencode_window", "bee.driver.opencode:launch_policy_opencode_batch"}) do
+            for _, ref in ipairs({"bee.driver.opencode.security:launch_policy_opencode_window", "bee.driver.opencode.security:launch_policy_opencode_batch"}) do
                 local entry, entry_error = registry.get(ref)
                 if not entry then error(tostring(entry_error or (ref .. " is missing"))) end
                 local data = assert(bounds.object(entry.data))
@@ -40,7 +40,7 @@ local function define_tests()
             if not file then error(tostring(err)) end
             test.eq(file.revision, "bee.opencode-config@1")
             test.eq(file.path, ".config/opencode/opencode.json")
-            test.eq(file.provider_ref, "bee:gateway_endpoint")
+            test.eq(file.provider_ref, "bee.gateway.api:gateway_endpoint")
             local composition = assert(file.composition)
             test.eq(composition.kind, "json_patch")
             test.eq(composition.base_path, ".config/opencode/.bee-global-opencode.json")

@@ -1,10 +1,6 @@
 version: '1.0'
 namespace: bee.gateway
 entries:
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: definition
   kind: ns.definition
   module: gateway
@@ -51,9 +47,9 @@ entries:
 - name: target_db
   kind: ns.requirement
   meta: {comment: Host-selected SQLite resource for bindings, credential hashes, listener state, surfaces, and hook intake}
-  default: bee.gateway:db
+  default: bee.gateway.env:db
   targets:
-  - entry: bee.gateway:database_ref
+  - entry: bee.gateway.env:database_ref
     path: .resource_ref
   - entry: bee.gateway.security:store_policy
     path: .policy.resources +=
@@ -61,13 +57,13 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected HTTP listener whose supervisor state supplies the native endpoint identity}
   targets:
-  - entry: bee.gateway:listener_ref
+  - entry: bee.gateway.env:listener_ref
     path: .resource_ref
 - name: target_endpoint
   kind: ns.requirement
   meta: {comment: Host-selected endpoint configuration; it describes a destination and never grants a caller network authority}
   targets:
-  - entry: bee.gateway:endpoint_ref
+  - entry: bee.gateway.env:endpoint_ref
     path: .resource_ref
   - entry: bee.gateway.security:address_policy
     path: .policy.resources +=
@@ -75,7 +71,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected approval request policy for exact per-binding MCP access proposals; an absent link fails closed}
   targets:
-  - entry: bee.gateway:approval_request_policy_ref
+  - entry: bee.gateway.env:approval_request_policy_ref
     path: .resource_ref
   - entry: bee.gateway.security:access_policy_read_policy
     path: .policy.resources +=
@@ -83,7 +79,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected approval consume policy for exact per-binding MCP access effects; an absent link fails closed}
   targets:
-  - entry: bee.gateway:approval_consume_policy_ref
+  - entry: bee.gateway.env:approval_consume_policy_ref
     path: .resource_ref
   - entry: bee.gateway.security:access_policy_read_policy
     path: .policy.resources +=
@@ -91,7 +87,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected bound-thread read policy for the built-in MCP tools}
   targets:
-  - entry: bee.gateway:tool_read_policy_ref
+  - entry: bee.gateway.env:tool_read_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -101,7 +97,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected bound-thread message policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway:tool_message_policy_ref
+  - entry: bee.gateway.env:tool_message_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -111,7 +107,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected governed-overlay policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway:tool_overlay_policy_ref
+  - entry: bee.gateway.env:tool_overlay_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -121,7 +117,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected offline-documentation policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway:tool_docs_policy_ref
+  - entry: bee.gateway.env:tool_docs_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -131,7 +127,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected component-inspection policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway:tool_components_policy_ref
+  - entry: bee.gateway.env:tool_components_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -141,7 +137,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected delivery policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway:tool_delivery_policy_ref
+  - entry: bee.gateway.env:tool_delivery_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -151,7 +147,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected publication policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway:tool_publish_policy_ref
+  - entry: bee.gateway.env:tool_publish_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -161,7 +157,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected admitted-application open policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway:tool_application_open_policy_ref
+  - entry: bee.gateway.env:tool_application_open_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -171,7 +167,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected policy for the built-in installation request tools; it admits filing and polling requests and never applying one}
   targets:
-  - entry: bee.gateway:tool_install_policy_ref
+  - entry: bee.gateway.env:tool_install_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -181,7 +177,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected scope the bound subject opens the bee.sessions owner contracts under for the default session tools; an absent link fails closed}
   targets:
-  - entry: bee.gateway:tool_session_policy_ref
+  - entry: bee.gateway.env:tool_session_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -191,7 +187,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected module installation configuration naming the approval policy agent installation requests are filed under; an absent link fails closed}
   targets:
-  - entry: bee.gateway:install_configuration_ref
+  - entry: bee.gateway.env:install_configuration_ref
     path: .resource_ref
   - entry: bee.gateway.security:installation_policy
     path: .policy.resources +=
@@ -199,7 +195,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected policy for the built-in Hub publication tools; it admits filing and read-only polling while the owner worker applies only the approved upload}
   targets:
-  - entry: bee.gateway:tool_hub_publish_policy_ref
+  - entry: bee.gateway.env:tool_hub_publish_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -209,161 +205,17 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected Hub publication configuration naming the approval policy agent publication requests are filed under; an absent link fails closed}
   targets:
-  - entry: bee.gateway:publish_configuration_ref
+  - entry: bee.gateway.env:publish_configuration_ref
     path: .resource_ref
   - entry: bee.gateway.security:publication_policy
     path: .policy.resources +=
-- name: database_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: The linked SQL resource; target_db fills resource_ref}
-- name: listener_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: The linked listener service; target_listener fills resource_ref}
-- name: environment
-  kind: env.storage.os
-  lifecycle: {auto_start: true}
-- name: db_path
-  kind: env.variable
-  storage: bee.gateway:environment
-  variable: BEE_GATEWAY_DB
-  default: .wippy/gateway.db
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.gateway:db_path}
-  lifecycle: {auto_start: true}
-- name: hook_executable
-  kind: env.variable
-  storage: bee.gateway:environment
-  variable: self
-  default: ''
-  readonly: true
-- name: catalog
-  kind: library.lua
-  source: file://catalog.lua
-  modules: [json]
-  imports: {bounds: bee.values:bounds}
-- name: context
-  kind: library.lua
-  source: file://context.lua
-  modules: [json]
-  imports: {bounds: bee.values:bounds}
-- name: address_value
-  kind: library.lua
-  source: file://address_value.lua
-- name: sessions
-  kind: library.lua
-  source: file://sessions.lua
-  imports: {protocol: bee.app:sessions_protocol}
-- name: hooks
-  kind: library.lua
-  source: file://hooks.lua
-  modules: [hash]
-  imports:
-    bounds: bee.values:bounds
-    service_reply: bee.values:reply
-    canonical: bee.values:canonical
-- name: json_schema
-  kind: library.lua
-  source: file://json_schema.lua
-  modules: [json]
-  imports: {bounds: bee.values:bounds}
-- name: session_bundle
-  kind: library.lua
-  source: file://session_bundle.lua
-- name: session_tools
-  kind: library.lua
-  source: file://session_tools.lua
-  modules: [json]
-  imports:
-    bounds: bee.values:bounds
-    json_schema: bee.gateway:json_schema
-    session_bundle: bee.gateway:session_bundle
-- name: mcp
-  kind: library.lua
-  source: file://mcp.lua
-  imports:
-    session_tools: bee.gateway:session_tools
-    bounds: bee.values:bounds
-    message: bee.threads.records:message
-    arguments: bee.app:arguments
-    workspace_protocol: bee.gov:workspace_protocol
-    delivery_protocol: bee.gov:delivery_protocol
-    docs_protocol: bee.docs:protocol
-    record_bounds: bee.threads.records:bounds
-- name: profile_scope
-  kind: library.lua
-  source: file://profile_scope.lua
-  imports:
-    bounds: bee.values:bounds
-    surface: bee.gateway:surface
-    profile_access: bee.driver:profile_access
-- name: surface
-  kind: library.lua
-  source: file://surface.lua
-  imports:
-    profile_access: bee.driver:profile_access
-    bounds: bee.values:bounds
-    catalog: bee.gateway:catalog
-    capability_model: bee.capability:model
-    context: bee.gateway:context
-    mcp: bee.gateway:mcp
-- name: endpoint_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host endpoint configuration; target_endpoint fills resource_ref}
-- name: approval_request_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host approval request policy; an absent link fails closed}
-- name: approval_consume_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host approval consume policy; an absent link fails closed}
-- name: tool_read_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread read tools}
-- name: tool_message_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread message tool}
-- name: tool_overlay_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in governed-overlay tool}
-- name: tool_docs_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in offline-documentation tool}
-- name: tool_components_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in component-inspection tool}
-- name: tool_delivery_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in delivery tool}
-- name: tool_publish_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in publication tool}
-- name: tool_application_open_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in admitted-application open tool}
-- name: tool_install_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in installation request tools}
-- name: tool_session_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the default session tools}
-- name: install_configuration_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host module installation configuration; target_install_configuration fills resource_ref}
-- name: tool_hub_publish_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in Hub publication tools}
-- name: publish_configuration_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host Hub publication configuration; target_publish_configuration fills resource_ref}
-- name: configuration
-  kind: library.lua
-  source: file://configuration.lua
-  modules: [registry, funcs, env]
-  imports: {address_value: bee.gateway:address_value}
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports:
     bounds: bee.values:bounds
     service_reply: bee.values:reply
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

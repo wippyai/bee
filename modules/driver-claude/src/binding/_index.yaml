@@ -6,21 +6,21 @@ entries:
   source: file://prepare.lua
   method: handle
   imports:
-    universal: bee.driver:universal
+    universal: bee.driver.binding:universal
 - name: dispatch
   kind: function.lua
   source: file://dispatch.lua
   method: handle
   imports:
-    universal: bee.driver:universal
+    universal: bee.driver.binding:universal
 - name: configure
   kind: function.lua
   source: file://configure.lua
   method: handle
   imports:
-    configure_protocol: bee.driver:configuration
+    configure_protocol: bee.driver.configuration:configuration
     canonical: bee.values:canonical
-    universal: bee.driver:universal
+    universal: bee.driver.binding:universal
   security:
     policies:
     - bee.driver.claude.binding:configuration_policy
@@ -29,13 +29,13 @@ entries:
   source: file://locate.lua
   method: handle
   imports:
-    universal: bee.driver:universal
+    universal: bee.driver.binding:universal
 - name: normalize
   kind: function.lua
   source: file://normalize.lua
   method: handle
   imports:
-    universal: bee.driver:universal
+    universal: bee.driver.binding:universal
 - name: configuration_policy
   kind: security.policy.expr
   meta:
@@ -49,3 +49,31 @@ entries:
     - '*'
     expression: (action == "registry.get" && resource == "bee.driver.claude.descriptor:cli")
       || action == "registry.snapshot"
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    universal: bee.driver.binding:universal
+- name: launch
+  kind: library.lua
+  source: file://launch.lua
+  imports:
+    universal: bee.driver.binding:universal
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.claude.binding:prepare
+      dispatch: bee.driver.claude.binding:dispatch
+      normalize: bee.driver.claude.binding:normalize
+      configure: bee.driver.claude.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.claude.binding:locate
+  meta:
+    type: harness.driver
+    driver_id: claude
+    descriptor_ref: bee.driver.claude.descriptor:cli
+    accepts_model: true
+    profiles_ref: bee.driver.claude.profiles:profiles

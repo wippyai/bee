@@ -2,7 +2,7 @@
 local sql = require("sql")
 local security = require("security")
 local function handle(): {opened: boolean, scope_create: boolean, scope_lookup: boolean, private_execute: boolean}
-    local db = sql.get("bee.gov:db")
+    local db = sql.get("bee.gov.env:db")
     if db then db:release() end
     return {opened = db ~= nil,
         scope_create = security.can("security.scope.create", "custom"),

@@ -17,7 +17,7 @@ local function read(value: unknown, detail: boolean): Object
     if not query then error(invalid or "invalid status query") end
     local local_node, node_error = system.node.id()
     if not local_node then error(tostring(node_error)) end
-    local ref = registry.get("bee.hive.telemetry:peer_source")
+    local ref = registry.get("bee.hive.telemetry.env:peer_source")
     local data = ref and bounds.object(ref.data) or nil
     local resource = data and bounds.id(data.resource_ref) or nil
     if not resource then error("Hive peer source is not linked") end

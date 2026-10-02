@@ -8,10 +8,6 @@ entries:
   meta:
     title: Bee external executor
     comment: One selected external CLI invocation per pulled turn through the driver and placement contracts
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -48,3 +44,7 @@ entries:
   version: '*'
   meta:
     comment: Shared bounded identifier and object decoders
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

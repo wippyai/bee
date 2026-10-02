@@ -13,7 +13,7 @@ local WORKSPACE = string.rep("d", 32)
 local BINDING = "bee.gov:gateway_probe_binding"
 
 local function admitted(binding_id: string, methods: {string}, name: string): (funcs.Executor, string, string)
-    local vocabulary = assert(model.decode(assert(registry.get("bee:capability_catalog"))))
+    local vocabulary = assert(model.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
     local application = "app." .. name .. ":app"
     local owner = "bee.gov.apps:" .. WORKSPACE .. "." .. name
     local proposal = assert(grants.propose(vocabulary, owner, application, {
@@ -102,7 +102,7 @@ local function define_tests()
             test.eq(code(revoked), "DENIED")
         end)
         test.it("reads approved status from the native host enrollment entry", function()
-            local linked = assert(registry.get("bee.hive.telemetry:peer_source"))
+            local linked = assert(registry.get("bee.hive.telemetry.env:peer_source"))
             test.eq(assert(bounds.object(linked.data)).resource_ref, enrollment.ENTRY)
             local snapshot = assert(registry.snapshot())
             local changes = snapshot:changes()

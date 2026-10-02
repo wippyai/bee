@@ -19,7 +19,7 @@ local stream_json = require("stream_json")
 local protocol = require("protocol")
 local adapter = require("adapter")
 local launch = require("launch")
-local ADAPTER = "bee.driver.claude:permission_adapter"
+local ADAPTER = "bee.driver.claude.permission:permission_adapter"
 local SENTINEL = "sk-ant-sentinel-bee-000"
 type Object = {[string]: unknown}
 type Run = {observations: {Object}, request: adapter.Request?, boundary: integer}
@@ -48,7 +48,7 @@ local function read_all(stream): string
     return content
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -72,7 +72,7 @@ local function real_adapter(): adapter.Adapter
 end
 -- The endpoint answers one Bash tool_use of the given command, then text.
 local function start_endpoint(record: string, command: string): (string, exec.Process, exec.Executor)
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
     assert(proc:start())
@@ -90,7 +90,7 @@ local function open(pinned: adapter.Adapter, claude: string, port: string, work:
     local decoded, decode_error = launch.decode({profile_id = "batch", brief = "leave a marker", permission_mode = "default", permission_exchange = true})
     if not decoded then error(tostring(decode_error)) end
     local specification = launch.specification(decoded)
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local command = claude
     for _, argument in ipairs(specification.argv) do command = command .. " " .. argument end
     local proc, err = executor:exec(command, {work_dir = work, env = {PATH = "/usr/bin:/bin", HOME = home, ANTHROPIC_API_KEY = SENTINEL, ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}})

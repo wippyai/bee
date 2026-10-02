@@ -1,24 +1,18 @@
 -- MIT. The same attempt polls its request after the person decided it.
 local logger = require("logger")
-local agent = require("agent")
 local time = require("time")
-local channel = require("channel")
+local agent = require("agent")
 
 local function run()
     local request = {binding_id = agent.setting("bee.hub.install.probe:binding"),
         request_id = agent.setting("bee.hub.install.probe:request_id")}
     local first = agent.call("bee.gateway.binding:install_status", request)
-    local deadline = time.after("30s")
-    local poll = time.ticker("100ms")
-    while first.status == "approved" do
-        local selected = channel.select({poll:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then
-            poll:stop()
-            error("approved installation did not settle before its deadline")
-        end
+    local deadline = time.now():unix() + 60
+    while first.status == "pending" or first.status == "approved" do
+        if time.now():unix() >= deadline then error("installation owner did not complete: " .. tostring(first.status)) end
+        time.sleep("100ms")
         first = agent.call("bee.gateway.binding:install_status", request)
     end
-    poll:stop()
     local second = agent.call("bee.gateway.binding:install_status", request)
     logger:info("AGENT_INSTALL_STATUS", {status = first.status, message = first.message, code = first.code,
         replayed_status = second.status, component = first.component, version = first.version})

@@ -37,14 +37,14 @@ end
 local function define_tests()
     test.describe("Antigravity CLI binding and profile declarations", function()
         test.it("validates the agy binding and profiles against the driver profile decoder", function()
-            local entry, err = registry.get("bee.driver.agy:binding")
-            if not entry then error("bee.driver.agy:binding: " .. tostring(err)) end
+            local entry, err = registry.get("bee.driver.agy.binding:binding")
+            if not entry then error("bee.driver.agy.binding:binding: " .. tostring(err)) end
             test.eq(entry.meta.type, "harness.driver")
             test.eq(entry.meta.driver_id, "agy")
 
             local declaration, decl_err = registry.get(tostring(entry.meta.profiles_ref))
             if not declaration then error("profiles: " .. tostring(decl_err)) end
-            test.eq(declaration.meta.driver_ref, "bee.driver.agy:binding")
+            test.eq(declaration.meta.driver_ref, "bee.driver.agy.binding:binding")
 
             local binding, decode_error = profile.decode(declaration.data.driver)
             if not binding then error("profile decode: " .. tostring(decode_error)) end
@@ -59,7 +59,7 @@ local function define_tests()
             test.eq(session_p.protocol, "stream-json")
             test.eq(session_p.protocol_revision, "agy-stream-json-1")
             test.eq(session_p.answer_path.strategy, "terminal_field")
-            test.eq(session_p.answer_path.adapter_ref, "bee.driver.agy:protocol")
+            test.eq(session_p.answer_path.adapter_ref, "bee.driver.agy.binding:protocol")
             test.eq(session_p.resume.strategy, "per-process")
             test.eq(session_p.input_ready.strategy, "protocol")
             test.eq(session_p.permission_exchange.mode, "none")
@@ -159,7 +159,7 @@ local function define_tests()
             test.eq(#configured.delivery.files, 1)
             local mcp_file = configured.delivery.files[1]
             test.eq(mcp_file.path, ".agents/mcp_config.json")
-            test.eq(mcp_file.provider_ref, "bee:gateway_endpoint")
+            test.eq(mcp_file.provider_ref, "bee.gateway.api:gateway_endpoint")
             test.is_true(mcp_file.content:find("/mcp/agy%-batch%-proof") ~= nil)
             test.eq(mcp_file.secret_fields[1].environment, "BEE_GATEWAY_TOKEN")
         end)
@@ -853,7 +853,7 @@ local function define_tests()
             -- verified declared MCP file path
             test.eq(file.path, ".agents/mcp_config.json")
             test.eq(file.revision, "bee.agy-mcp@2")
-            test.eq(file.provider_ref, "bee:gateway_endpoint")
+            test.eq(file.provider_ref, "bee.gateway.api:gateway_endpoint")
             test.eq(reply_mcp.delivery.arguments[1], "--add-dir")
             test.eq(reply_mcp.delivery.arguments[2], "/private/agy-session")
 

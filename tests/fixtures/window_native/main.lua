@@ -80,7 +80,7 @@ local function wait_for(view: tty.Viewport, text: string, timeout_ms: integer): 
     return contains(snapshot)
 end
 local function run()
-    local activation = assert(registry.get("bee.harness:harness_activation"))
+    local activation = assert(registry.get("bee.harness.launch:harness_activation"))
     local data = assert(bounds.object(activation.data))
     local bindings = assert(bounds.ids(data.bindings))
     bindings[#bindings + 1] = "bee.window.native:binding"

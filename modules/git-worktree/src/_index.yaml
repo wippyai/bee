@@ -1,10 +1,6 @@
 version: '1.0'
 namespace: bee.git.worktree
 entries:
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: definition
   kind: ns.definition
   module: git-worktree
@@ -18,7 +14,7 @@ entries:
     comment: Add the git-worktree namespace to the host trust map
   default: bee.git.worktree
   targets:
-  - entry: bee:protected_kernel
+  - entry: bee.security.gov:protected_kernel
     path: .data.namespaces +=
 - name: dependency_placement
   kind: ns.dependency
@@ -32,78 +28,23 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
-- name: git_roots
-  kind: library.lua
-  source: file://git_roots.lua
-- name: worktree
-  kind: library.lua
-  source: file://worktree.lua
-  modules: [exec, fs, registry, hash, channel]
-  imports:
-    git_roots: bee.git.worktree:git_roots
-    paths: bee.placement:paths
-    bounds: bee.values:bounds
-    quote: bee.driver.kit:quote
-- name: binding
-  kind: contract.binding
-  meta:
-    type: bee.placement.workdir_preparer
-  contracts:
-  - contract: bee.placement:workdir_preparer
-    methods:
-      plan: bee.git.worktree.binding:plan
-      setup: bee.git.worktree.binding:setup
-      cleanup: bee.git.worktree.binding:cleanup
-- name: worktree_policy
-  kind: security.policy
-  policy:
-    effect: allow
-    actions:
-    - exec.get
-    - exec.run
-    - fs.get
-    - fs.read
-    - fs.stat
-    - fs.exists
-    - fs.isdir
-    - registry.get
-    resources: '*'
 - name: target_executor
   kind: ns.requirement
   meta:
     comment: Host-selected native executor for git commands
-  default: bee.git.worktree:git_executor
+  default: bee.git.worktree.env:git_executor
   targets:
-  - entry: bee.git.worktree:executor_ref
+  - entry: bee.git.worktree.env:executor_ref
     path: .resource_ref
-- name: executor_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked native executor
-- name: git_executor
-  kind: exec.native
-  meta:
-    comment: Native executor for git commands
-  default_env:
-    PATH: /usr/local/bin:/usr/bin:/bin
 - name: target_host_files
   kind: ns.requirement
   meta:
     comment: Host-selected filesystem volume for git metadata reading
-  default: bee.git.worktree:host_files
+  default: bee.git.worktree.env:host_files
   targets:
-  - entry: bee.git.worktree:host_files_ref
+  - entry: bee.git.worktree.env:host_files_ref
     path: .resource_ref
-- name: host_files_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked host files resource
-- name: host_files
-  kind: fs.directory
-  meta:
-    comment: Read-only host filesystem volume for git metadata
-  directory: /
-  auto_init: false
-  readonly: true
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

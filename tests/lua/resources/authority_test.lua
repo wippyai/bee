@@ -75,7 +75,7 @@ local function await(future: funcs.Future): authority.Reply
     return principals.reply(data)
 end
 local function admit_roots()
-    local entry = registry.get("bee.resources:resource_roots")
+    local entry = registry.get("bee.resources.env:resource_roots")
     if not entry then error("admitted roots entry") end
     local data = assert(bounds.object(entry.data))
     local roots = principals.objects(data.roots)

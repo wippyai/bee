@@ -6,19 +6,19 @@ entries:
   source: file://database.lua
   modules: [sql]
   imports:
-    persist: bee.persist:database
+    persist: bee.persist.persist:database
     migrations: bee.sync.migrations:migrations
 - name: store
   kind: library.lua
   source: file://store.lua
   modules: [sql, json, time]
   imports:
-    bounds: bee.sync:bounds
-    values: bee.values:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.sync.values:bounds
+    canonical: bee.sync.values:canonical
     database: bee.sync.persist:database
-    transaction: bee.persist:transaction
-    resources: bee.sync:resources
+    transaction: bee.persist.persist:transaction
+    resources: bee.sync.env:resources
+    values: bee.values:bounds
 - name: replicas
   kind: library.lua
   source: file://replicas.lua
@@ -26,8 +26,8 @@ entries:
   imports:
     bounds: bee.values:bounds
     database: bee.sync.persist:database
-    transaction: bee.persist:transaction
-    version: bee.sync:version
+    transaction: bee.persist.persist:transaction
+    version: bee.sync.values:version
 - name: distribution_store
   kind: library.lua
   source: file://distribution_store.lua
@@ -35,4 +35,4 @@ entries:
   imports:
     bounds: bee.values:bounds
     database: bee.sync.persist:database
-    transaction: bee.persist:transaction
+    transaction: bee.persist.persist:transaction

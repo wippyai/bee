@@ -88,7 +88,8 @@ entries:
       resume_schema: bee.agent.window@1
       restart_policy: automatic
       commands:
-      - {name: agent, fullscreen: false}
+      - name: agent
+        fullscreen: false
 - name: windows
   kind: library.lua
   source: file://windows.lua
@@ -153,7 +154,7 @@ entries:
   imports:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
-    preferences: bee.driver:preferences
+    preferences: bee.driver.profiles:preferences
     budgets: bee.threads.records:budgets
     protocol: bee.harness.profiles:protocol
 - name: profile_form
@@ -162,9 +163,9 @@ entries:
   modules: [funcs, uuid, json]
   imports:
     canonical: bee.values:canonical
-    descriptors: bee.driver:descriptor
+    descriptors: bee.driver.descriptor:descriptor
     readiness: bee.harness.launch:readiness
-    preferences: bee.driver:preferences
+    preferences: bee.driver.profiles:preferences
     bounds: bee.values:bounds
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions

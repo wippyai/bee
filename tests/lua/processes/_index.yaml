@@ -13,7 +13,7 @@ entries:
   imports:
     test: wippy.test:test
     appearance: bee.app:appearance
-    probe: bee.host.processes:probe
+    probe: bee.host.processes.app:probe
     view: bee.host.processes.app:view
     history_values: bee.host.processes.app:history
 - name: probe_test
@@ -25,6 +25,6 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    probe: bee.host.processes:probe
+    probe: bee.host.processes.app:probe
     viz: bee.app:viz
     history_values: bee.host.processes.app:history

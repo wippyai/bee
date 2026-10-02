@@ -8,31 +8,11 @@ entries:
     title: Bee workspace manager
     comment: Workspace catalog management app; host composition and policy selection
       remain in Bee
-- name: dependency_values
-  kind: ns.dependency
-  component: bee/values
-  version: '*'
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: client_policy
-  kind: security.policy
-  meta:
-    comment: The viewer calls the workspace catalog operations and lists a workspace's
-      threads; each owner authorizes the call under the process actor and the host's
-      catalog and thread policies
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.workspace.catalog:list
-    - bee.workspace.catalog:search
-    - bee.workspace.catalog:inspect
-    - bee.workspace.catalog:archive
-    - bee.workspace.catalog:restore
-    - bee.workspace.catalog:create
-    - bee.workspace.catalog:roots
-    - bee.workspace.catalog:folders
-    - bee.threads.binding:list_workspace
-    effect: allow
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

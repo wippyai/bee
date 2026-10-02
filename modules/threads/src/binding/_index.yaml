@@ -625,7 +625,7 @@ entries:
   source: file://capabilities_method.lua
   method: handle
   imports:
-    capabilities: bee.threads:capabilities_report
+    capabilities: bee.threads.binding:capabilities_report
   meta:
     comment: Implementation facts for any caller; the Hive metadata is inert when no Hive supervisor runs
     hive: open
@@ -770,3 +770,118 @@ entries:
     work_store: bee.threads.service:work_store
     types: bee.threads:types
   security: {policies: []}
+- name: capabilities_report
+  kind: library.lua
+  source: file://capabilities.lua
+  imports:
+    bounds: bee.values:bounds
+    migrations: bee.threads.migrations:migrations
+    claims: bee.threads.delivery:claims
+    subscriptions: bee.threads.delivery:subscriptions
+    waits: bee.threads.delivery:waits
+    recap: bee.threads.projection:recap
+    notices: bee.threads.service:notices
+    record_bounds: bee.threads.records:bounds
+- name: authority_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:authority
+    methods:
+      create: bee.threads.binding:create
+      get: bee.threads.binding:get
+      list: bee.threads.binding:list
+      list_workspace: bee.threads.binding:list_workspace
+      join: bee.threads.binding:join
+      leave: bee.threads.binding:leave
+      close: bee.threads.binding:close
+      record: bee.threads.binding:record
+      read_after: bee.threads.binding:read_after
+      send: bee.threads.binding:send
+      send_status: bee.threads.binding:send_status
+      notify: bee.threads.binding:notify
+      register_app_alias: bee.threads.binding:register_app_alias
+      retire_app_alias: bee.threads.binding:retire_app_alias
+      fence_app: bee.threads.binding:fence_app
+- name: delivery_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:delivery
+    methods:
+      claim: bee.threads.binding:delivery_claim
+      dispatch: bee.threads.binding:dispatch
+      ack: bee.threads.binding:ack
+      release: bee.threads.binding:release
+      expire: bee.threads.binding:expire
+      reconcile: bee.threads.binding:reconcile
+      subscribe: bee.threads.binding:subscribe
+      page: bee.threads.binding:page
+      ack_page: bee.threads.binding:ack_page
+      unsubscribe: bee.threads.binding:unsubscribe
+      resume: bee.threads.binding:resume
+      close_subscription: bee.threads.binding:close_subscription
+      forget_subscription: bee.threads.binding:forget_subscription
+      wait: bee.threads.binding:wait
+      watch: bee.threads.binding:watch
+- name: projection_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:projection
+    methods:
+      recap_read: bee.threads.binding:recap_read
+      recap_update: bee.threads.binding:recap_update
+      recap_rebuild: bee.threads.binding:recap_rebuild
+      status_read: bee.threads.binding:status_read
+      status_update: bee.threads.binding:status_update
+      status_rebuild: bee.threads.binding:status_rebuild
+- name: approvals_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:approvals
+    methods:
+      append: bee.threads.binding:append
+- name: carrier_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:carrier
+    methods:
+      claim: bee.threads.binding:claim
+      commit: bee.threads.binding:commit
+      checkpoint: bee.threads.binding:checkpoint
+      cancel_intent: bee.threads.binding:cancel_intent
+      cancel_status: bee.threads.binding:cancel_status
+- name: lifecycle_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:lifecycle
+    methods:
+      admit_action: bee.threads.binding:admit_action
+      prepare_attempt: bee.threads.binding:prepare_attempt
+      start_attempt: bee.threads.binding:start_attempt
+      request_turn: bee.threads.binding:request_turn
+      end_turn: bee.threads.binding:end_turn
+      receipt: bee.threads.binding:receipt
+- name: journal_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:journal
+    methods:
+      session_create: bee.threads.binding:session_create
+      session_attach: bee.threads.binding:session_attach
+      session_describe: bee.threads.binding:session_describe
+      session_scan: bee.threads.binding:session_scan
+      session_transition: bee.threads.binding:session_transition
+      work_send: bee.threads.binding:work_send
+      work_describe: bee.threads.binding:work_describe
+      work_history: bee.threads.binding:work_history
+      work_scan: bee.threads.binding:work_scan
+      turn_reserve: bee.threads.binding:turn_reserve
+      turn_recover: bee.threads.binding:turn_recover
+      turn_pull: bee.threads.binding:turn_pull
+      turn_accept: bee.threads.binding:turn_accept
+      turn_observation: bee.threads.binding:turn_observation
+      work_settle: bee.threads.binding:work_settle
+      work_uncertain: bee.threads.binding:work_uncertain
+      work_cancel: bee.threads.binding:work_cancel
+      operation_lookup: bee.threads.binding:operation_lookup
+      operation_describe: bee.threads.binding:operation_describe
+      feed_read: bee.threads.binding:feed_read

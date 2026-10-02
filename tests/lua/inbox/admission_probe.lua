@@ -8,7 +8,7 @@ local sql = require("sql")
 local funcs = require("funcs")
 type Object = {[string]: unknown}
 local function attempt_store(): string
-    local db, err = sql.get("bee.approvals:db")
+    local db, err = sql.get("bee.approvals.env:db")
     if db then
         db:release()
         return "opened"
@@ -42,7 +42,7 @@ local function main(value: unknown): Object
     report.read = call("bee.approvals.binding:read", {approval_id = approval_id})
     report.list = call("bee.approvals.binding:list", {workspace_id = workspace})
     report.consume = call("bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = string.rep("a", 64), effect_key = "e1", owner_incarnation = 1})
-    report.service = call("bee.approvals:service", {})
+    report.service = call("bee.approvals.service:service", {})
     report.store_after = attempt_store()
     if input.decide == true then
         local read_raw = funcs.new():call("bee.approvals.binding:read", {approval_id = approval_id})

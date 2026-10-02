@@ -20,7 +20,7 @@ entries:
     actions:
     - env.get
     resources:
-    - bee.gov:node_identity_migration_source
+    - bee.gov.env:node_identity_migration_source
     effect: allow
 - name: helper
   kind: library.lua
@@ -33,9 +33,9 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    artifact: bee.gov:artifact
+    artifact: bee.gov.delivery:artifact
     plan_store: bee.gov.persist:plan_store
-    staging: bee.gov:staging_resources
+    staging: bee.gov.delivery:staging_resources
     approval: bee.gov.binding:approval
 - name: seed
   kind: process.lua

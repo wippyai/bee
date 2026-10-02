@@ -82,7 +82,7 @@ local function define_tests()
                 local scope = security.new_scope({assert(security.policy("bee.threads:session_owner_test_policy")),
                     assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
                 local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:open", {spec = {
-                    definition = "bee.driver.claude:default_window", presentation = presentation}, operation_key = operation_key})
+                    definition = "bee.driver.claude.profiles:default_window", presentation = presentation}, operation_key = operation_key})
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
                 test.is_false(reply.ok)
@@ -92,7 +92,7 @@ local function define_tests()
         test.it("rejects supplied non-presentation values before launch admission", function()
             for _, presentation in ipairs({false, true, 42, "", "tab"}) do
                 local raw, err = funcs.call("bee.sessions.binding:open", {spec = {
-                    definition = "bee.driver.claude:default_window", presentation = presentation}, operation_key = harness.key()})
+                    definition = "bee.driver.claude.profiles:default_window", presentation = presentation}, operation_key = harness.key()})
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
                 test.is_false(reply.ok)

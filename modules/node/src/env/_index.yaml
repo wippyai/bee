@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.node.env
+entries:
+- name: database_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref}
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: db_path
+  kind: env.variable
+  storage: bee.node.env:environment
+  variable: BEE_NODE_DB
+  default: .wippy/node.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.node.env:db_path}
+  lifecycle: {auto_start: true}
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]
+  imports:
+    bounds: bee.values:bounds

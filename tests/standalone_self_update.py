@@ -26,6 +26,7 @@ local view = require("view")
 local appearance = require("appearance")
 local live_updates = require("live_updates")
 local catalog = require("catalog")
+local canonical = require("canonical")
 local REQUEST = {action = "update", component = "bee/bee", version = "__TARGET__", parameters = {}, migration_policy = "none"}
 local function call(operation: string, request: unknown?, digest: string?): {[string]: unknown}
     local raw, problem = funcs.new():call("bee.hub.binding:call", {operation = operation, request = request, expected_digest = digest})
@@ -107,19 +108,43 @@ local function selected_components(expected: string)
     end
     assert(files, "Files disappeared")
 end
+local function first_core()
+    local before = captured()
+    assert(before.conversion and #before.conversion.roots > 0, "baseline is not a legacy authored closure")
+    for _, root in ipairs(before.roots) do assert(root.component ~= "bee/bee", "invented standalone registry root") end
+    local selected = {action = "update", component = "bee/bee", version = "__FIRST_CORE__", parameters = {}, migration_policy = "none"}
+    local prepared = call("plan", selected)
+    local plan = bounds.object(prepared.value)
+    local root_id = plan and bounds.id(plan.root_id)
+    assert(prepared.ok == true and plan and plan.ready == true and plan.root_operation == "create", tostring(prepared.message))
+    assert(root_id and not assert(registry.snapshot()):get(root_id), "first selection destination is already resident")
+    component_change(selected)
+    local after = captured()
+    assert(after.conversion == nil, "legacy closure was not converted on first core update")
+    for _, old in ipairs(before.roots) do
+        if old.id:sub(1, 9) == "bee.deps:" then
+            local retained: inventory.Root? = nil
+            for _, root in ipairs(after.roots) do if root.id == old.id then retained = root; break end end
+            assert(retained and retained.owner == "" and retained.version == old.version, "legacy host selection changed")
+            assert(canonical.encode(retained.parameters) == canonical.encode(old.parameters), "legacy requirement parameters changed")
+        end
+    end
+    check("__FIRST_CORE__")
+    logger:info("STANDALONE_SELF_UPDATE_LEGACY_CONVERTED")
+end
 local function live(): integer
     local pid = process.pid()
     local running_code = catalog.code(assert(registry.snapshot()), "bee.settings.app:app")
     check("__BASELINE__")
     about("__BASELINE__", "baseline")
+    first_core()
     components()
-    for _, root in ipairs(captured().roots) do assert(root.component ~= "bee/bee", "invented standalone registry root") end
     local prepared = call("plan", REQUEST)
     assert(prepared.ok == true, tostring(prepared.message))
     local plan = bounds.object(prepared.value)
-    assert(plan and plan.ready == true and plan.root_operation == "create", "first standalone plan is not ready/create")
+    assert(plan and plan.ready == true and plan.root_operation == "update", "second core plan is not ready/update")
     local root_id = bounds.id(plan.root_id)
-    assert(root_id and not assert(registry.snapshot()):get(root_id), "first selection destination is already resident")
+    assert(root_id and assert(registry.snapshot()):get(root_id), "first core selection was not persisted")
     local digest = bounds.line(plan.digest, 64)
     assert(digest, "missing approval digest")
     local modules = bounds.array(plan.modules, 64)
@@ -195,9 +220,9 @@ return {main = main, offline = offline}
 '''
 
 
-BASELINE = "0.1.0-selfupdate.fixture.1"
-TARGET = "0.1.0-selfupdate.fixture.2"
-EXPLICIT = "0.1.0-selfupdate.fixture.3"
+BASELINE = "0.1.0-selfupdate.15"
+TARGET = "0.1.0-selfupdate.16"
+EXPLICIT = "0.1.0-selfupdate.17"
 COMPONENT = "0.1.0-selfupdate.component.2"
 NEXT_COMPONENT = "0.1.0-selfupdate.component.3"
 
@@ -206,6 +231,10 @@ def build_deployments(folder, seed):
     # Refresh code declarations from their current owners while retaining
     # sealed resource assets. Fixture versions do not change the runtime pin.
     lock, paths = artifact_paths(seed)
+    core_seed = seed / "hub"
+    core_lock, core_paths = artifact_paths(core_seed)
+    core = next(row for row in core_lock["modules"] if row["name"] == "bee/bee")
+    core_path = core_paths[f"bee/bee@{core['version']}"]
     sources, declarations = {}, {}
     for root in (ROOT / "src", ROOT / "modules"):
         for index in root.rglob("_index.yaml"):
@@ -225,18 +254,18 @@ def build_deployments(folder, seed):
         copied = json.loads(json.dumps(lock))
         for row in copied["modules"]:
             key = f"{row['name']}@{row['version']}"
-            path = Path(paths[key])
+            path = Path(core_path if row["name"] == "bee/bee" and name != "baseline" else paths[key])
             org, module = row["name"].split("/")
             if org == "bee":
                 row["version"] = version
                 destination = deployment / ".wippy/vendor" / org / f"{module}-{version}.wapp"
                 packs.append({"Input": str(path), "Output": str(destination), "Version": version, "Component": row["name"],
-                              "DependencyVersion": BASELINE if name != "baseline" else version, "Explicit": name != "baseline"})
+                              "DependencyVersion": BASELINE if name != "baseline" else version})
                 if row["name"] == "bee/files" and name == "baseline":
                     for component_version in (COMPONENT, NEXT_COMPONENT):
                         component_path = folder / f"files-{component_version}.wapp"
                         packs.append({"Input": str(path), "Output": str(component_path), "Version": component_version, "Component": row["name"],
-                                      "DependencyVersion": BASELINE, "Explicit": False})
+                                      "DependencyVersion": BASELINE})
             else:
                 destination = deployment / ".wippy/vendor" / org / path.name
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -408,10 +437,10 @@ def exercise(folder, baseline, target, explicit):
             probe.mkdir(parents=True)
             baseline_version = next(row["version"] for row in lock["modules"] if row.get("root"))
             target_version = next(row["version"] for row in explicit_lock["modules"] if row.get("root"))
-            (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version).replace("__COMPONENT__", COMPONENT).replace("__NEXT_COMPONENT__", NEXT_COMPONENT))
-            imports = {"bounds": "bee.values:bounds", "inventory": "bee.hub:inventory",
+            (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version).replace("__COMPONENT__", COMPONENT).replace("__NEXT_COMPONENT__", NEXT_COMPONENT).replace("__FIRST_CORE__", TARGET))
+            imports = {"bounds": "bee.values:bounds", "inventory": "bee.hub.package:inventory",
                        "view": "bee.settings.app:view", "appearance": "bee.app:appearance",
-                       "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog"}
+                       "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog", "canonical": "bee.values:canonical"}
             entries = [
                 {"name": "read", "kind": "security.policy", "policy": {
                     "actions": ["registry.get", "registry.resolution.get", "bee.hub.read"], "resources": "*", "effect": "allow"}},
@@ -439,22 +468,25 @@ def exercise(folder, baseline, target, explicit):
                                   cwd=project, env=environment, text=True, capture_output=True, timeout=120)
             assert lint.returncode == 0, lint.stdout + lint.stderr
             run_probe(project, environment, "standalone-self-update", "STANDALONE_SELF_UPDATE_APPLIED")
-            native_args, native_scratch = native_attached(folder, baseline, explicit, url)
+            fast = os.environ.get("BEE_SELF_UPDATE_FAST") == "1"
+            if not fast:
+                native_args, native_scratch = native_attached(folder, baseline, explicit, url)
             server.terminate()
             server.wait(timeout=10)
             # The same registry/history and cached artifacts boot with no Hub
             # and no network interface in a fresh runtime owner.
             run_probe(project, environment, "standalone-self-update-offline", "STANDALONE_SELF_UPDATE_OFFLINE_PASS", offline=True)
-            subprocess.run(["unshare", "--user", "--map-root-user", "--net", "--", sys.executable,
-                            str(Path(__file__).resolve()), "--native-offline", str(native_args.binary),
-                            str(native_scratch), str(folder), native_args.from_version, native_args.to_version],
-                           check=True, timeout=300)
+            if not fast:
+                subprocess.run(["unshare", "--user", "--map-root-user", "--net", "--", sys.executable,
+                                str(Path(__file__).resolve()), "--native-offline", str(native_args.binary),
+                                str(native_scratch), str(folder), native_args.from_version, native_args.to_version],
+                               check=True, timeout=300)
         finally:
             if server.poll() is None:
                 server.terminate()
                 server.wait(timeout=10)
             server.stdout.close()
-    print("Standalone self-update PASS: baseline -> plan -> approve -> APPLIED, same PID, live About, offline restart.", flush=True)
+    print("Standalone self-update PASS: legacy closure -> core -> core, exact approval/APPLIED, same PID, live About, offline restart" + (" (fast runtime probe)." if fast else " and native PTY."), flush=True)
 
 
 def main(deployment=None):

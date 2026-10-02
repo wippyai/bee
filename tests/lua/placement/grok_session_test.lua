@@ -43,7 +43,7 @@ local function credential(method: string, value: unknown): {[string]: unknown}
 end
 
 local function command(argv: {string}, environment: {[string]: string}?): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local child = assert(executor:exec(quote.line(argv), {env = environment or {}}))
     local stdout = assert(child:stdout_stream())
     assert(child:start())
@@ -61,7 +61,7 @@ local function command(argv: {string}, environment: {[string]: string}?): string
 end
 
 local function admit_source()
-    local entry = assert(registry.get("bee.credentials:credential_sources"))
+    local entry = assert(registry.get("bee.credentials.env:credential_sources"))
     local data = entry.data
     data.sources[#data.sources + 1] = {ref = SOURCE, workspace_id = "*", audience = OWNER, provider = "grok",
         projection_kinds = {"file"}, path = ".grok/auth.json", write_back = true,
@@ -121,7 +121,7 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
         root_ref = "bee.placement.native:project_fixture", subpath = "", access = "write", purpose = "session"} end
     local request: types.LaunchRequest = {
         idempotency_key = fresh("key"), owner_id = OWNER, owner_incarnation = 1, action_id = fresh("action"), attempt_id = attempt_id,
-        binding_ref = "bee.driver.grok:binding", policy_ref = "bee.placement.native:test_launch_policy_without_provider",
+        binding_ref = "bee.driver.grok.binding:binding", policy_ref = "bee.placement.native:test_launch_policy_without_provider",
         profile_id = profile, binding_digest = DIGEST, profile_digest = DIGEST, launch = selected, session_ref = session_ref,
         resources = resources, environment = {}, environment_refs = {}, projections = {assert(bounds.id(projection.projection_id))},
         required_cleanup = "direct_process", required_exit_observation = "eof_gated",
@@ -158,12 +158,12 @@ end
 local function define_tests()
     test.describe("Grok session login homes", function()
         admit_source()
-        local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+        local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
         mode.data = {mode = "host_configured"}
         local changes = assert(registry.snapshot()):changes()
         changes:update(mode)
         assert(changes:apply())
-        local window = assert(registry.get("bee.driver.grok:default_window"))
+        local window = assert(registry.get("bee.driver.grok.profiles:default_window"))
         local definition = window.data
         test.eq(definition.credentials[1], "grok_login")
         test.eq(definition.session_resource, "session")
@@ -198,7 +198,7 @@ return {run = function(options)
     local before = assert(registry.snapshot())
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
-    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.credentials:credential_sources",
+    for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.credentials.env:credential_sources",
         "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy"}) do
         changes:update(assert(before:get(ref)))
     end

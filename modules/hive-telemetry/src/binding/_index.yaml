@@ -9,7 +9,7 @@ entries:
   - system
   imports:
     types: bee.hive:types
-    sampling: bee.hive.telemetry:sampling
+    sampling: bee.hive.telemetry.binding:sampling
     clock: bee.values:clock
   meta:
     hive: open
@@ -43,7 +43,7 @@ entries:
   modules:
   - system
   imports:
-    sampling: bee.hive.telemetry:sampling
+    sampling: bee.hive.telemetry.binding:sampling
     clock: bee.values:clock
   meta:
     hive: open
@@ -87,7 +87,7 @@ entries:
   source: file://catalog_list.lua
   method: handle
   imports:
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
     bounds: bee.values:bounds
   meta:
     hive: open
@@ -127,8 +127,8 @@ entries:
     bounds: bee.values:bounds
     leases: bee.app:host_leases
   meta:
-    comment: Open Hive operation paging this node's live workspace holdings with each host phase and lease
-      count
+    comment: Open Hive operation paging this node's live workspace holdings with each
+      host phase and lease count
     hive: open
     hive_operation:
       revision: '1'
@@ -188,9 +188,10 @@ entries:
     bounds: bee.values:bounds
     contract: bee.protocol:application
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
   meta:
-    comment: Open Hive operation aggregating workspace holdings and local peer link state
+    comment: Open Hive operation aggregating workspace holdings and local peer link
+      state
     hive: open
     hive_operation:
       revision: '1'
@@ -263,11 +264,11 @@ entries:
   - hash
   imports: &id001
     bounds: bee.values:bounds
-    status: bee.hive.telemetry:status
-    client: bee.hive:client
+    status: bee.hive.telemetry.binding:status_model
+    client: bee.hive.binding:client
     types: bee.hive:types
-    capability_access: bee.gov:capability_access
-    capability_gateway: bee.gov:capability_gateway
+    capability_access: bee.gov.capability:capability_access
+    capability_gateway: bee.gov.capability:capability_gateway
   security:
     policies: []
 - name: detail
@@ -291,7 +292,7 @@ entries:
   - system
   imports:
     bounds: bee.values:bounds
-    status: bee.hive.telemetry:status
+    status: bee.hive.telemetry.binding:status_model
   security:
     policies: []
   meta:
@@ -322,3 +323,14 @@ entries:
           pending_approvals:
             type: integer
             minimum: 0
+- name: sampling
+  kind: library.lua
+  source: file://sampling.lua
+  imports:
+    bounds: bee.values:bounds
+- name: status_model
+  kind: library.lua
+  source: file://status_model.lua
+  imports:
+    bounds: bee.values:bounds
+    types: bee.hive:types

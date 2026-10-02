@@ -7,6 +7,6 @@ entries:
     comment: The workspaces operation reads the catalog through its owner operations
   policy:
     actions: [funcs.call]
-    resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
+    resources: [bee.workspace.binding:list, bee.workspace.binding:search]
     effect: allow
 

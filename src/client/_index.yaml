@@ -9,7 +9,7 @@ entries:
   source: file://desktops.lua
   modules: [process, tty, security]
   imports:
-    binding: bee.storage:binding
+    binding: bee.workspace.types:selection
     contract: bee.protocol:application
     lifecycle: bee.client:lifecycle
     attachments: bee.client:attachments
@@ -125,10 +125,10 @@ entries:
   source: file://store.lua
   modules: [sql, json]
   imports:
-    ledger: bee.persist:ledger
+    ledger: bee.persist.persist:ledger
     state: bee.client:state
     contract: bee.protocol:application
-    binding: bee.storage:binding
+    binding: bee.workspace.types:selection
 - name: state
   kind: library.lua
   source: file://state.lua
@@ -145,7 +145,7 @@ entries:
   modules: [security]
   imports: &desktop_storage_imports
     store: bee.client:store
-    binding: bee.storage:binding
+    binding: bee.workspace.types:selection
     contract: bee.protocol:application
   security:
     policies: [bee.security.storage:client_storage_policy]

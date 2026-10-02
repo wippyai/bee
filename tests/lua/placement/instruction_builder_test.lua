@@ -23,9 +23,9 @@ local POLICY = "bee.placement.native:instruction_builder_policy"
 local PROVIDER = "bee.placement.native:fixture_agent_provider"
 local BINDING = "bee.placement.native:fixture_agent_binding"
 local BUILDER = "bee.placement.native:fixture_builder_build"
-local ACTIVATION = "bee.harness:harness_activation"
-local MODE = "bee.placement.native:placement_resource_mode"
-local ROOTS = "bee.placement.native:placement_admitted_roots"
+local ACTIVATION = "bee.harness.launch:harness_activation"
+local MODE = "bee.placement.native.env:placement_resource_mode"
+local ROOTS = "bee.placement.native.env:placement_admitted_roots"
 local TEST_MARKER = "ctx_marker_unique_42"
 local FAILING_BUILDER_SOURCE = [[
 local M = {}
@@ -190,7 +190,7 @@ local function launch_request(attempt_id: string, configuration_digest: string?)
 end
 
 local function shell(command: string): string
-    local executor, executor_error = exec.get("bee.placement.native:placement_executor")
+    local executor, executor_error = exec.get("bee.placement.native.env:placement_executor")
     if not executor then error("executor: " .. tostring(executor_error)) end
     local proc, proc_error = executor:exec(command)
     if not proc then executor:release(); error("exec: " .. tostring(proc_error)) end

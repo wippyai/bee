@@ -2,7 +2,7 @@
 local test = require("test")
 local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
+    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}}
 local measure = require("activation_measure")
 local artifact = require("artifact")
 local preflight = require("preflight")

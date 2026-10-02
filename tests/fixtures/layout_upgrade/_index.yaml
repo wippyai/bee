@@ -6,20 +6,22 @@ entries:
   policy:
     effect: allow
     actions: [db.get, registry.get]
-    resources: [bee.placement.native:db, bee.placement.native:database_ref, bee.sync:db, bee.gateway:db]
+    resources: [bee.placement.native.env:db, bee.placement.native.env:database_ref, bee.sync.env:db, bee.gateway.env:db, bee.resources.env:db, bee.credentials.env:db, bee.git.worktree.binding:binding, bee.git.worktree.binding:plan, bee.git.worktree.binding:setup, bee.git.worktree.binding:cleanup, bee.driver.codex.binding:binding, bee.threads.binding:delivery_claim]
 - name: seed
   kind: process.lua
   source: file://main.lua
   method: seed
-  modules: [io, json]
+  modules: [io, json, registry]
   imports: &imports
     placement: bee.placement.native.persist:store
     request: bee.placement:request
     types: bee.placement:types
     preparers: bee.placement.native.service:workdir_preparers
     sync: bee.sync.persist:store
-    persist: bee.persist:database
+    persist: bee.persist.persist:database
     gateway_migrations: bee.gateway.migrations:migrations
+    resource_migrations: bee.resources.migrations:migrations
+    credential_migrations: bee.credentials.migrations:migrations
     bindings: bee.gateway.persist:binding_store
     surfaces: bee.gateway.persist:surface_store
     bounds: bee.values:bounds
@@ -34,7 +36,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: verify
-  modules: [io, json]
+  modules: [io, json, registry]
   imports: *imports
   meta:
     command:

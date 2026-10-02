@@ -33,7 +33,7 @@ local manager = funcs.new():with_actor(security.new_actor("bee.test.desktop_cata
 
 -- The host admits the projects fixture root for catalog rows.
 local function admit()
-    local entry = registry.get("bee.resources:resource_roots")
+    local entry = registry.get("bee.resources.env:resource_roots")
     if not entry then error("admitted roots entry") end
     local data = assert(bounds.object(entry.data))
     local roots = principals.objects(data.roots)
@@ -49,7 +49,7 @@ local function admit()
 end
 local function create(label: string, subpath: string): string
     admit()
-    local reply, err = manager:call("bee.workspace.catalog:create", {label = label, root_ref = PROJECTS, subpath = subpath, create_directory = true})
+    local reply, err = manager:call("bee.workspace.binding:create", {label = label, root_ref = PROJECTS, subpath = subpath, create_directory = true})
     if err or type(reply) ~= "table" or reply.ok ~= true then
         local failure = type(reply) == "table" and (assert(bounds.object(reply))).error or err
         error("create " .. label .. ": " .. tostring(type(failure) == "table" and (assert(bounds.object(failure))).message or failure))

@@ -136,18 +136,18 @@ entries:
       - component: bee.hive.manager
         definition_id: bee.hive.manager.app:app
         capabilities: [hive.view, hive.remote_view]
-        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hive.manager:client_policy, bee.hive.manager:viewer_policy]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hive.manager.security:client_policy, bee.hive.manager.security:viewer_policy]
         thread_access: none
       - component: bee.threads.timeline
         definition_id: bee.threads.timeline.app:app
         capabilities: [threads.read]
-        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline:client_policy,
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline.security:client_policy,
           bee.security.threads:thread_workspace_list_policy]
         thread_access: none
       - component: bee.workspace.manager
         definition_id: bee.workspace.manager.app:app
         capabilities: [workspace.catalog.read, workspace.catalog.manage, workspace.host.lease]
-        policies: [bee.security:ordinary_app_subsystem_boundary, bee.workspace.manager:client_policy,
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.workspace.manager.security:client_policy,
           bee.security.storage:workspace_catalog_read_policy, bee.security.storage:workspace_catalog_manage_policy,
           bee.security.threads:thread_workspace_list_policy, bee.security.desktop:workspace_host_lease_policy]
         thread_access: none
@@ -160,13 +160,13 @@ entries:
       - component: bee.hub.modules
         definition_id: bee.hub.modules.app:app
         capabilities: [hub.manage, hub.self_update]
-        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hub.modules:client_policy,
-          bee.hub.modules:hub_policy, bee.hub.modules:self_update_policy, bee.hub.modules:publication_policy]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hub.modules.security:client_policy,
+          bee.hub.modules.security:hub_policy, bee.hub.modules.security:self_update_policy, bee.hub.modules.security:publication_policy]
         thread_access: none
       - component: bee.gov.overlays
         definition_id: bee.gov.overlays.app:app
         capabilities: [gov.delivery.manage, gov.delivery.activate]
-        policies: [bee.security:ordinary_app_subsystem_boundary, bee.gov.overlays:client_policy,
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.gov.overlays.security:client_policy,
           bee.security.gov:governance_delivery_read_policy, bee.security.gov:governance_delivery_manage_policy,
           bee.security.gov:governance_delivery_activate_policy]
         thread_access: none
@@ -175,6 +175,14 @@ entries:
         capabilities: [workspace.files.read]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.files:read_policy]
         thread_access: observe_post
+- name: docs_corpus
+  kind: fs.directory
+  directory: ./src/corpus
+  mode: '0500'
+  auto_init: false
+  meta:
+    title: Bee agent documentation corpus
+    comment: The offline platform documentation a bound agent reads through the gateway docs tool; wippy.yaml embed freezes it read-only into the pack. Rebuilt by build/agent_corpus.py.
 
 - name: startup_sequence
   kind: env.variable

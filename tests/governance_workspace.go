@@ -102,7 +102,7 @@ entries:
   - name: target_sender
     value: bee.gov.workspace.probe:sender
   - name: target_exports
-    value: bee:sync_exports
+    value: bee.sync.env:sync_exports
 - name: dependency_hub
   kind: ns.dependency
   component: bee/hub
@@ -125,7 +125,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_policies
-    value: bee:approver_policies
+    value: bee.security.approvals:approver_policies
   - name: process_host
     value: bee:workers
   - name: authority_policies
@@ -147,7 +147,7 @@ entries:
   - name: target_approval_consume_policy
     value: bee.security.approvals:approval_consume_policy
   - name: target_workspace_folder_read
-    value: bee.workspace.catalog:read
+    value: bee.workspace.binding:read
   - name: target_workspace_folder_policy
     value: bee.security.gov:workspace_folder_read_policy
 `

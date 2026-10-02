@@ -18,7 +18,6 @@ import (
 
 type fixturePack struct {
 	Input, Output, Version, DependencyVersion, Component string
-	Explicit                                             bool
 }
 
 type fixturePolicy struct {
@@ -87,15 +86,7 @@ func main() {
 				entries[i].Meta["independent"] = true
 			}
 		}
-		if pack.Explicit && strings.HasPrefix(filepath.Base(pack.Output), "bee-") {
-			retained := entries[:0]
-			for _, entry := range entries {
-				if entry.Kind != "ns.dependency" || !strings.HasPrefix(entry.ID.String(), "bee.deps:") {
-					retained = append(retained, entry)
-				}
-			}
-			entries = retained
-		}
+
 		for i := range entries {
 			entry := &entries[i]
 			fields, ok := entry.Data.(map[string]any)

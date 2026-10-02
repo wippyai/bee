@@ -1,0 +1,155 @@
+version: '1.0'
+namespace: bee.workspace.catalog
+entries:
+- name: contract
+  kind: contract.definition
+  meta:
+    title: Workspace catalog
+    comment: The node's logical workspaces. Reads need bee.workspace.manager.read, changes bee.workspace.manager.manage;
+      every reply is {ok, error {code, message}, value}
+  methods:
+  - name: create
+    description: Add a workspace for a folder under a host-admitted root, or make a new folder under a write-admitted
+      root with create_directory
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["label", "root_ref"],
+         "properties": {"label": {"type": "string", "minLength": 1, "maxLength": 240}, "root_ref": {"type": "string", "minLength": 1, "maxLength": 160},
+          "subpath": {"type": "string", "maxLength": 512}, "create_directory": {"type": "boolean"}}}
+  - name: read
+    description: One workspace's catalog row and whether a host serves it now
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: list
+    description: One page of workspaces in one state, ordered by label; next_after continues it
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false,
+         "properties": {"state": {"enum": ["active", "archived"]}, "after": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}}}
+  - name: search
+    description: One page of workspaces whose label starts with label, or whose folder is path or lies below it
+      under root_ref
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false,
+         "properties": {"state": {"enum": ["active", "archived"]}, "label": {"type": "string", "minLength": 1, "maxLength": 240},
+          "root_ref": {"type": "string", "minLength": 1, "maxLength": 160}, "path": {"type": "string", "maxLength": 512},
+          "after": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}}}
+  - name: rename
+    description: Replace a workspace's label
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id", "label"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "label": {"type": "string", "minLength": 1, "maxLength": 240}}}
+  - name: archive
+    description: Stop serving a workspace whose host is not running; its rows stay
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: restore
+    description: Serve an archived workspace again
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: inspect
+    description: What one workspace holds - its row, whether a host serves it, the applications its checkpoint keeps
+      open, and what every workspace extension describes
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: search_within
+    description: Search inside one workspace; every workspace extension answers with its own hits
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id", "text"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "text": {"type": "string", "minLength": 1, "maxLength": 240},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 50}}}
+  - name: roots
+    description: The roots the host admits for workspaces, in name order, each with the access it admits (read or
+      write)
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "properties": {}}
+  - name: folders
+    description: One page of the folders inside path under an admitted root, in name order and without hidden folders,
+      each with the workspace that holds it; next_after continues it
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["root_ref"],
+         "properties": {"root_ref": {"type": "string", "minLength": 1, "maxLength": 160}, "path": {"type": "string", "maxLength": 512},
+          "after": {"type": "string", "minLength": 1, "maxLength": 512}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}}}
+- name: extension
+  kind: contract.definition
+  meta:
+    title: Workspace extension
+    comment: A component attaches per-workspace data and search to the workspace catalog and its viewer by binding
+      this contract; the catalog finds every binding and calls it under its execution scope. A binding answers only
+      callers holding bee.workspace.manager.read on the workspace, with the reply envelope {ok, error {code, message},
+      value}.
+  methods:
+  - name: describe
+    description: What the component holds for one workspace, as a titled list of at most 50 items and the total
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+    output_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "required": ["ok"], "properties": {"ok": {"type": "boolean"},
+          "error": {"type": "object", "properties": {"code": {"type": "string"}, "message": {"type": "string"}}},
+          "value": {"type": "object", "required": ["title", "items", "total"], "properties": {
+            "title": {"type": "string", "maxLength": 240}, "total": {"type": "integer", "minimum": 0},
+            "items": {"type": "array", "maxItems": 50, "items": {"type": "object", "required": ["label"],
+              "properties": {"label": {"type": "string", "maxLength": 240}, "detail": {"type": "string", "maxLength": 512}}}}}}}}
+  - name: search
+    description: The component's items in one workspace that match a text, at most limit
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id", "text"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "text": {"type": "string", "minLength": 1, "maxLength": 240},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 50}}}
+    output_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "required": ["ok"], "properties": {"ok": {"type": "boolean"},
+          "error": {"type": "object", "properties": {"code": {"type": "string"}, "message": {"type": "string"}}},
+          "value": {"type": "object", "required": ["title", "hits"], "properties": {
+            "title": {"type": "string", "maxLength": 240},
+            "hits": {"type": "array", "maxItems": 50, "items": {"type": "object", "required": ["label"],
+              "properties": {"label": {"type": "string", "maxLength": 240}, "detail": {"type": "string", "maxLength": 512}}}}}}}}
+- name: local
+  kind: contract.binding
+  contracts:
+  - contract: bee.workspace.catalog:contract
+    default: true
+    methods:
+      create: bee.workspace.binding:create
+      read: bee.workspace.binding:read
+      list: bee.workspace.binding:list
+      search: bee.workspace.binding:search
+      rename: bee.workspace.binding:rename
+      archive: bee.workspace.binding:archive
+      restore: bee.workspace.binding:restore
+      inspect: bee.workspace.binding:inspect
+      search_within: bee.workspace.binding:search_within
+      roots: bee.workspace.binding:roots
+      folders: bee.workspace.binding:folders

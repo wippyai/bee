@@ -1,0 +1,83 @@
+{
+  "bee": {
+    "definition": "ns.definition",
+    "terminal": "terminal.host",
+    "workers": "process.host"
+  },
+  "bee.app": {
+    "appearance": "library.lua",
+    "arguments": "library.lua",
+    "caller": "library.lua",
+    "client": "library.lua",
+    "diagram": "library.lua",
+    "folder_picker": "library.lua",
+    "forms": "library.lua",
+    "frame": "library.lua",
+    "host_leases": "library.lua",
+    "interaction": "library.lua",
+    "names": "library.lua",
+    "sessions": "library.lua",
+    "sessions_protocol": "library.lua",
+    "status_reader": "library.lua",
+    "status_surface": "library.lua",
+    "text": "library.lua",
+    "thread_protocol": "library.lua",
+    "viz": "library.lua"
+  },
+  "bee.capability": {
+    "model": "library.lua"
+  },
+  "bee.credentials": {
+    "formats": "library.lua",
+    "protocol": "library.lua"
+  },
+  "bee.docs": {
+    "protocol": "library.lua"
+  },
+  "bee.driver": {
+    "types": "library.lua"
+  },
+  "bee.driver.wippy": {
+    "protocol": "library.lua",
+    "types": "library.lua"
+  },
+  "bee.files": {
+    "protocol": "library.lua"
+  },
+  "bee.gateway": {
+    "protocol": "library.lua"
+  },
+  "bee.harness": {
+    "types": "library.lua"
+  },
+  "bee.hive": {
+    "types": "library.lua"
+  },
+  "bee.node": {
+    "protocol": "library.lua"
+  },
+  "bee.placement": {
+    "decode": "library.lua",
+    "request": "library.lua",
+    "transitions": "library.lua",
+    "types": "library.lua"
+  },
+  "bee.placement.native": {
+    "protocol": "library.lua"
+  },
+  "bee.sync": {
+    "protocol": "library.lua",
+    "replica_protocol": "library.lua",
+    "types": "library.lua"
+  },
+  "bee.threads": {
+    "record_types": "library.lua",
+    "types": "library.lua"
+  },
+  "bee.values": {
+    "bounds": "library.lua",
+    "canonical": "library.lua",
+    "clock": "library.lua",
+    "reply": "library.lua"
+  }
+}

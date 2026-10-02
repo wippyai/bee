@@ -44,7 +44,7 @@ entries:
   kind: process.lua
   source: file://status.lua
   method: main
-  modules: [logger, time, channel]
+  modules: [logger, time]
   imports:
     agent: bee.hub.install.probe:agent
   security:

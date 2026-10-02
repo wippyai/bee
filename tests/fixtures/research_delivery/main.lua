@@ -41,7 +41,7 @@ local function recover()
     if matches ~= true then
         local states = system.supervisor.states()
         for _, state in ipairs(states or {}) do
-            if tostring(state.id) == "bee:gov_recovery_service" then
+            if tostring(state.id) == "bee.gov.service:gov_recovery_service" then
                 io.print("RESEARCH_RECOVERY_SERVICE " .. tostring(json.encode(state)))
             end
         end
@@ -191,7 +191,7 @@ local function main()
     }
     act_entry.data = act_data
 
-    local app_entry = assert(registry.get("bee:approver_policies"))
+    local app_entry = assert(registry.get("bee.security.approvals:approver_policies"))
     local app_data = object(app_entry.data) or {}
     local app_policies = app_data.policies
     if type(app_policies) ~= "table" then error("host approval policies missing") end

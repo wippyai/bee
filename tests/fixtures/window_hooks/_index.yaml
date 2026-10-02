@@ -143,7 +143,7 @@ entries:
   method: configure
   modules: [hash]
   imports:
-    configuration: bee.driver:configuration
+    configuration: bee.driver.configuration:configuration
     quote: bee.driver.kit:quote
 - name: fixture_policy
   kind: security.policy

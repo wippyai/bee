@@ -488,7 +488,7 @@ local function define_tests()
         test.it("matches typed capability results to their advertised output schemas", function()
             local capabilities = {ok = true, value = {workspace_id = "workspace-a", thread_id = "thread-a", action_id = "agent-a",
                 revision = 1, digest = string.rep("a", 64), tools = {{name = "thread_read", description = "Read",
-                    policies = {"bee.gateway:tool_read_policy_ref"}, annotations = {readOnlyHint = true}}},
+                    policies = {"bee.gateway.env:tool_read_policy_ref"}, annotations = {readOnlyHint = true}}},
                 traits = {{id = "bee.traits:read", title = "Read", tools = {"thread_read"}}},
                 allowed_traits = {"bee.traits:read"}, active_traits = {},
                 thread_access = {thread_id = "thread-a", note = "read"},

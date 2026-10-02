@@ -38,7 +38,7 @@ end
 function M.await_listener()
     local deadline = time.now():unix() + 30
     while time.now():unix() < deadline do
-        local state = system.supervisor.state("bee:gateway_listener")
+        local state = system.supervisor.state("bee.gateway.api:gateway_listener")
         if state and state.status == "running" and state.details then return end
         time.sleep("100ms")
     end

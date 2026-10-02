@@ -62,12 +62,12 @@ local function apply(entry: Object)
     if not applied then error("apply " .. tostring(entry.id) .. ": " .. tostring(err)) end
 end
 local function endpoint(): string
-    local entry = registry.get("bee:gateway_endpoint")
+    local entry = registry.get("bee.gateway.api:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
     return tostring((assert(bounds.object(entry.data))).address)
 end
 local function ensure_approver_policy()
-    local policies_entry = registry.get("bee:approver_policies")
+    local policies_entry = registry.get("bee.security.approvals:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list_owner = assert(bounds.object(policies_entry.data))
     local list = principals.objects(list_owner.policies)
@@ -79,7 +79,7 @@ local function ensure_approver_policy()
     apply(policies_entry)
 end
 local function admit_root()
-    local entry = registry.get("bee.resources:resource_roots")
+    local entry = registry.get("bee.resources.env:resource_roots")
     if not entry then error("resource roots entry") end
     local data = assert(bounds.object(entry.data))
     local roots = principals.objects(data.roots)
@@ -93,7 +93,7 @@ end
 -- Temporarily map the installable database capability to a workspace
 -- association so the runtime approval effect can be exercised end to end.
 local function set_database_source(source: string): string
-    local entry = registry.get("bee:capability_catalog")
+    local entry = registry.get("bee.security.capability:capability_catalog")
     if not entry then error("capability catalog entry") end
     local rows = principals.objects((assert(bounds.object(entry.data))).capabilities)
     for _, row in ipairs(rows) do
@@ -108,7 +108,7 @@ local function set_database_source(source: string): string
     error("application database capability missing")
 end
 local function restore_database_source(source: string)
-    local entry = registry.get("bee:capability_catalog")
+    local entry = registry.get("bee.security.capability:capability_catalog")
     if not entry then error("capability catalog entry") end
     local rows = principals.objects((assert(bounds.object(entry.data))).capabilities)
     for _, row in ipairs(rows) do

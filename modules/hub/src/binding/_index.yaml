@@ -4,33 +4,45 @@ entries:
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
-  modules: [hub]
-  imports: {bounds: bee.values:bounds}
+  modules:
+  - hub
+  imports:
+    bounds: bee.values:bounds
 - name: updates
   kind: library.lua
   source: file://updates.lua
   modules: [registry]
   imports:
-    binary_identity: bee.hub:binary_identity
+    binary_identity: bee.hub.package:binary_identity
     catalog: bee.hub.binding:catalog
-    inventory: bee.hub:inventory
+    inventory: bee.hub.package:inventory
     publication: bee.hub.binding:publication
-    semver: bee.hub:semver
+    semver: bee.hub.package:semver
 - name: inspect
   kind: library.lua
   source: file://inspect.lua
-  modules: [hub]
-  imports: {bounds: bee.values:bounds, requirements: bee.hub:requirements, inspection: bee.hub:inspection}
+  modules:
+  - hub
+  imports:
+    bounds: bee.values:bounds
+    requirements: bee.hub.package:requirements
+    inspection: bee.hub.package:inspection
 - name: preview
   kind: library.lua
   source: file://preview.lua
-  modules: [hub, fs, base64]
-  imports: {bounds: bee.values:bounds, inspection: bee.hub:inspection, requirements: bee.hub:requirements}
+  modules:
+  - hub
+  - fs
+  - base64
+  imports:
+    bounds: bee.values:bounds
+    inspection: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
 - name: migration_runner
   kind: library.lua
   source: file://migration_runner.lua
   modules: [sql, funcs, security]
-  imports: {migrations: bee.hub:migrations}
+  imports: {migrations: bee.hub.activation:migrations}
 - name: publication
   kind: library.lua
   source: file://publication.lua
@@ -38,29 +50,29 @@ entries:
   imports:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
-    plan: bee.hub:plan
+    plan: bee.hub.package:plan
     catalog: bee.hub.binding:catalog
     inspect: bee.hub.binding:inspect
-    inspection: bee.hub:inspection
-    transaction: bee.persist:transaction
-    requirements: bee.hub:requirements
-    hub_result: bee.hub:result
-    inventory: bee.hub:inventory
-    inventory_reader: bee.hub:inventory_reader
+    inspection: bee.hub.package:inspection
+    transaction: bee.persist.persist:transaction
+    requirements: bee.hub.package:requirements
+    hub_result: bee.hub.package:result
+    inventory: bee.hub.package:inventory
+    inventory_reader: bee.hub.package:inventory_reader
     migration_runner: bee.hub.binding:migration_runner
-    migrations: bee.hub:migrations
-    migration_work: bee.hub:migration_work
+    migrations: bee.hub.activation:migrations
+    migration_work: bee.hub.activation:migration_work
 - name: publish
   kind: library.lua
   source: file://publish.lua
   modules: [registry, security, exec, channel]
   imports:
     bounds: bee.values:bounds
-    publishing: bee.hub:publishing
-    transaction: bee.persist:transaction
+    publishing: bee.hub.publication:publishing
+    transaction: bee.persist.persist:transaction
     inspect: bee.hub.binding:inspect
-    host_resources: bee.hub:host_resources
-    paths: bee.placement:paths
+    host_resources: bee.hub.activation:host_resources
+    paths: bee.placement.profiles:paths
     quote: bee.driver.kit:quote
 - name: backend
   kind: function.lua
@@ -71,12 +83,12 @@ entries:
     bounds: bee.values:bounds
     catalog: bee.hub.binding:catalog
     updates: bee.hub.binding:updates
-    inventory_reader: bee.hub:inventory_reader
+    inventory_reader: bee.hub.package:inventory_reader
     inspect: bee.hub.binding:inspect
     publication: bee.hub.binding:publication
-    transaction: bee.persist:transaction
+    transaction: bee.persist.persist:transaction
     preview: bee.hub.binding:preview
-    host_resources: bee.hub:host_resources
+    host_resources: bee.hub.activation:host_resources
   meta: {type: internal}
 - name: call
   kind: function.lua
@@ -86,11 +98,11 @@ entries:
   imports:
     bounds: bee.values:bounds
     catalog: bee.hub.binding:catalog
-    inspection: bee.hub:inspection
-    plan: bee.hub:plan
-    publishing: bee.hub:publishing
-    transaction: bee.persist:transaction
-    hub_result: bee.hub:result
+    inspection: bee.hub.package:inspection
+    plan: bee.hub.package:plan
+    publishing: bee.hub.publication:publishing
+    transaction: bee.persist.persist:transaction
+    hub_result: bee.hub.package:result
     preview: bee.hub.binding:preview
   security: {policies: [bee.hub.security:facade_policy]}
   meta: {type: tool, title: Component explorer, llm_alias: BeeComponents, llm_description: Inspect effective installed component state and exact Hub packages without applying them, input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","updates","plan"]},"request":{"type":"object"}}}'}

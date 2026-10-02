@@ -62,7 +62,7 @@ entries:
     launch_id: app-open-managed-agent
     title: Managed application opener
     command_names: []
-    binding_ref: bee.driver.claude:binding
+    binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
     policy_ref: bee.app.open.probe:managed_agent_policy
     default_mode: batch
@@ -129,7 +129,7 @@ entries:
   security:
     policies: [bee.app.open.probe:operator_policy, bee.app.open.probe:operator_call_policy,
       bee.security.gateway:gateway_manage_policy,
-      bee.security.approvals:approval_decide_policy, bee.approvals.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
+      bee.security.approvals:approval_decide_policy, bee.approvals.inbox.security:client_policy, bee.security.threads:thread_authority_client_policy,
       bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy,
       bee.harness.launch:agent_launch_execution_action_policy]
 - name: operator_service
@@ -142,6 +142,6 @@ entries:
       actor: {id: bee.app_open.operator}
       policies: [bee.app.open.probe:operator_policy, bee.app.open.probe:operator_call_policy,
         bee.security.gateway:gateway_manage_policy,
-        bee.security.approvals:approval_decide_policy, bee.approvals.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
+        bee.security.approvals:approval_decide_policy, bee.approvals.inbox.security:client_policy, bee.security.threads:thread_authority_client_policy,
         bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy,
         bee.harness.launch:agent_launch_execution_action_policy]

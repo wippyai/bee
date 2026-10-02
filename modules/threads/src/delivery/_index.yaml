@@ -7,7 +7,6 @@ entries:
   modules: [sql, time]
   imports:
     bounds: bee.values:bounds
-    record_bounds: bee.threads.records:bounds
     canonical: bee.values:canonical
     values: bee.threads.records:values
     record_types: bee.threads:record_types
@@ -16,13 +15,13 @@ entries:
     transaction: bee.threads.persist:transaction
     owner: bee.threads.persist:owner
     authority: bee.threads.service:authority
+    record_bounds: bee.threads.records:bounds
 - name: subscriptions
   kind: library.lua
   source: file://subscriptions.lua
   modules: [sql, hash, json]
   imports:
     bounds: bee.values:bounds
-    record_bounds: bee.threads.records:bounds
     canonical: bee.values:canonical
     values: bee.threads.records:values
     record: bee.threads.records:record
@@ -31,13 +30,13 @@ entries:
     transaction: bee.threads.persist:transaction
     owner: bee.threads.persist:owner
     authority: bee.threads.service:authority
+    record_bounds: bee.threads.records:bounds
 - name: waits
   kind: library.lua
   source: file://waits.lua
   modules: [sql, process, channel, time, uuid]
   imports:
     bounds: bee.values:bounds
-    record_bounds: bee.threads.records:bounds
     canonical: bee.values:canonical
     record: bee.threads.records:record
     record_types: bee.threads:record_types
@@ -45,6 +44,7 @@ entries:
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
     claims: bee.threads.delivery:claims
+    record_bounds: bee.threads.records:bounds
 - name: session
   kind: library.lua
   source: file://session.lua

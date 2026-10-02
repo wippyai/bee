@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Refresh sealed fixture packs with current Lua sources and two release identities.
+// Refresh sealed fixture packs with current Lua sources and core/component identities.
 package main
 
 import (

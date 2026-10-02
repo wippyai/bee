@@ -1,4 +1,4 @@
-"""Prove source-free self-update, exact approval, live About, and offline restore."""
+"""Prove independent roots, exact self-update approval, live About, and offline restore."""
 from pathlib import Path
 import json
 import hashlib
@@ -182,7 +182,7 @@ NEXT_COMPONENT = "0.1.0-selfupdate.component.3"
 
 def build_deployments(folder, seed):
     # Reuse sealed artifact resources and registrations while packing current
-    # production Lua into both versions. No runtime pin or publication changes.
+    # production Lua into the fixture versions. No runtime pin or publication changes.
     lock, paths = artifact_paths(seed)
     sources, imports, modules = {}, {}, {}
     for root in (ROOT / "src", ROOT / "modules"):

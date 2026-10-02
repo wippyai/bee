@@ -13,6 +13,15 @@ local function handle(raw: unknown): unknown
     local request = lifecycle.request(raw)
     if not request or not lifecycle.intent(request) then error("invalid durable scheduler lifecycle intent") end
     local scheduler = process.registry.lookup("bee.sessions.scheduler")
+    if request.phase == "ready" then
+        local deadline = time.after("5s")
+        while not scheduler do
+            local poll = time.after("25ms")
+            local selected = channel.select({poll:case_receive(), deadline:case_receive()})
+            if not selected.ok or selected.channel ~= poll then error("scheduler registration is not ready") end
+            scheduler = process.registry.lookup("bee.sessions.scheduler")
+        end
+    end
     if not scheduler then
         if request.phase == "quiesce" then
             local actor = security.actor()

@@ -14,7 +14,6 @@ local function main()
     assert(entry)
     local encoded = assert(canonical.encode({id = entry.id, kind = entry.kind, meta = entry.meta or {}, data = entry.data}, 1048576))
     local definition = assert(hash.sha256(encoded))
-    local registered = assert(process.registry.register("bee.files.fixture.worker"))
     local inbox = assert(process.listen("bee.files.fixture", {message = true}))
     local events = assert(process.events())
     local volume = assert(fs.get("bee.files.service:retained"))
@@ -32,6 +31,7 @@ local function main()
         end
         return false
     end
+    assert(process.registry.register("bee.files.fixture.worker"))
     logger:info("COMPONENT_SERVICE_READY", {version = VERSION, pid = tostring(process.pid())})
     while true do
         local cases = {inbox:case_receive(), events:case_receive()}

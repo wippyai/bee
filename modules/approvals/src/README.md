@@ -78,11 +78,22 @@ ceiling names only the feed, read and replica operations.
 
 | Slice | Responsibility |
 |---|---|
-| root `bee.approvals` | Contract, stable local binding, linked host references, default database, linked database and host-policy readers, and the owner domain library |
-| `binding/` | Callable approval operations, including the host-authorized installation effect queue and completion, and the Hive policy operations |
-| `persist/` | Approval request, history, inbox, incarnation and thread-projection outbox storage |
+| root `bee.approvals` | Public contract, component registration, dependencies and host-selected requirements |
+| `binding/` | Stable local contract binding, callable approval operations and their domain implementation, including host-authorized effect queues and completion, and Hive policy operations |
+| `persist/` | Approval request, history, inbox, incarnation and thread-projection outbox storage, and owner-controlled node-identity conversion |
 | `migrations/` | Immutable approval schema ledger |
-| `service/` | Authority and outbox worker processes |
+| `env/` | Host-linked database and approver-policy references and readers |
+| `types/` | Runtime lease proposal reference and ceiling decoder |
+| `service/` | Authority and outbox worker processes and host-selected service registrations |
+
+The domain library is `bee.approvals.binding:service`; the authority, outbox worker
+and callable methods import it directly. Node-identity conversion lives in
+`bee.approvals.persist:identity_migration`, and runtime lease ceiling decoding in
+`bee.approvals.types:runtime_lease`. These implementation moves preserve public
+contract and binding IDs, owner process identities, persisted references, schema
+ledgers, tables and topics (M0/M5); existing approval data needs no row migration.
+Running owners use the updated libraries after their normal restart; this source
+move adds no service handoff.
 
 Approval views expose `requesting_session` when the authenticated requester is a SessionRef. The read-only `bee.approvals.binding:attention_count` accepts `{workspace_id}` and returns `{ok=true,value={count=N}}` for pending, unexpired requests. It requires the exact `bee.approvals.attention` grant for that workspace and provides neither request details nor decision authority.
 

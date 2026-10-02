@@ -296,6 +296,11 @@
       "source": "modules/approvals/src/binding/_index.yaml"
     },
     {
+      "id": "bee.approvals.binding:service",
+      "kind": "library.lua",
+      "source": "modules/approvals/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.approvals.binding:withdraw",
       "kind": "function.lua",
       "source": "modules/approvals/src/binding/_index.yaml"
@@ -426,14 +431,14 @@
       "source": "modules/approvals-inbox/src/_index.yaml"
     },
     {
-      "id": "bee.approvals.migrations:identity_migration",
+      "id": "bee.approvals.migrations:migrations",
       "kind": "library.lua",
       "source": "modules/approvals/src/migrations/_index.yaml"
     },
     {
-      "id": "bee.approvals.migrations:migrations",
+      "id": "bee.approvals.persist:identity_migration",
       "kind": "library.lua",
-      "source": "modules/approvals/src/migrations/_index.yaml"
+      "source": "modules/approvals/src/persist/_index.yaml"
     },
     {
       "id": "bee.approvals.persist:outbox",
@@ -466,16 +471,6 @@
       "source": "modules/approvals/src/service/_index.yaml"
     },
     {
-      "id": "bee.approvals.service:runtime_lease",
-      "kind": "library.lua",
-      "source": "modules/approvals/src/service/_index.yaml"
-    },
-    {
-      "id": "bee.approvals.service:service",
-      "kind": "library.lua",
-      "source": "modules/approvals/src/service/_index.yaml"
-    },
-    {
       "id": "bee.approvals.service:worker",
       "kind": "process.lua",
       "source": "modules/approvals/src/service/_index.yaml"
@@ -489,6 +484,11 @@
       "id": "bee.approvals.service:worker_service",
       "kind": "process.service",
       "source": "modules/approvals/src/service/_index.yaml"
+    },
+    {
+      "id": "bee.approvals.types:runtime_lease",
+      "kind": "library.lua",
+      "source": "modules/approvals/src/types/_index.yaml"
     },
     {
       "id": "bee.approvals:contract",
@@ -9122,6 +9122,13 @@
       "source": "modules/approvals/src/service/_index.yaml"
     },
     {
+      "namespace": "bee.approvals.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.approvals.types",
+      "source": "modules/approvals/src/types/_index.yaml"
+    },
+    {
       "namespace": "bee.apps",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -11653,8 +11660,8 @@
     },
     {
       "line": 28,
-      "owner_namespace": "bee.approvals.service",
-      "source": "modules/approvals/src/service/service.lua",
+      "owner_namespace": "bee.approvals.binding",
+      "source": "modules/approvals/src/binding/service.lua",
       "table": "bee_approval_schema_migrations"
     },
     {
@@ -16523,7 +16530,7 @@
     {
       "sources": [
         "modules/approvals-inbox/src/app/feeds.lua",
-        "modules/approvals/src/service/service.lua"
+        "modules/approvals/src/binding/service.lua"
       ],
       "tag": "bee.approval-projection@1"
     },
@@ -16904,7 +16911,7 @@
     },
     {
       "sources": [
-        "modules/approvals/src/service/service.lua",
+        "modules/approvals/src/binding/service.lua",
         "modules/sync/src/persist/store.lua",
         "modules/sync/src/protocol.lua"
       ],
@@ -16912,7 +16919,7 @@
     },
     {
       "sources": [
-        "modules/approvals/src/service/service.lua",
+        "modules/approvals/src/binding/service.lua",
         "modules/sync/src/persist/store.lua",
         "modules/sync/src/protocol.lua"
       ],
@@ -16920,7 +16927,7 @@
     },
     {
       "sources": [
-        "modules/approvals/src/service/service.lua",
+        "modules/approvals/src/binding/service.lua",
         "modules/sync/src/persist/store.lua",
         "modules/sync/src/protocol.lua"
       ],
@@ -16928,7 +16935,7 @@
     },
     {
       "sources": [
-        "modules/approvals/src/service/service.lua",
+        "modules/approvals/src/binding/service.lua",
         "modules/sync/src/persist/store.lua",
         "modules/sync/src/protocol.lua"
       ],
@@ -16959,7 +16966,7 @@
   "summary": {
     "dangling_requirement_target_count": 0,
     "entry_count": 1789,
-    "namespace_count": 273,
+    "namespace_count": 274,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
@@ -17214,13 +17221,13 @@
     },
     {
       "sources": [
-        "modules/approvals/src/service/service.lua"
+        "modules/approvals/src/binding/service.lua"
       ],
       "topic": "bee.approvals.request"
     },
     {
       "sources": [
-        "modules/approvals/src/service/service.lua"
+        "modules/approvals/src/binding/service.lua"
       ],
       "topic": "bee.approvals.wake"
     },

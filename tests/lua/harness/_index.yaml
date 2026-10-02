@@ -1799,7 +1799,7 @@ entries:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
-    approvals: bee.approvals.service:service
+    approvals: bee.approvals.binding:service
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: codex_auth_test
   kind: function.lua
@@ -2050,7 +2050,7 @@ entries:
     principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
-    approvals: bee.approvals.service:service
+    approvals: bee.approvals.binding:service
     policy: bee.harness.carrier:policy
     launch: bee.driver.claude.binding:launch
     driver_types: bee.driver:types

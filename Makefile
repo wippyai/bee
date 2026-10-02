@@ -727,3 +727,7 @@ layout-upgrade-check:
 login-links-check:
 	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
 	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)
+
+.PHONY: ui-module
+ui-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/ui_module.py

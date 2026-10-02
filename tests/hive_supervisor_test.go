@@ -113,7 +113,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "security"), os.DirFS(filepath.Join(repository, "src/security"))); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"values", "hive", "persist", "sync", "threads", "hive-telemetry", "application"} {
+	for _, name := range []string{"values", "hive", "persist", "sync", "threads", "hive-telemetry", "application", "ui"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
 			t.Fatal(err)
 		}
@@ -168,20 +168,6 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	appearance, err := os.ReadFile(filepath.Join(repository, "modules/application/src/appearance.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	appearanceDir := filepath.Join(sourceSnapshot, "appearance")
-	if err := os.MkdirAll(appearanceDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(appearanceDir, "appearance.lua"), appearance, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(appearanceDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.app\nentries:\n- name: appearance\n  kind: library.lua\n  source: file://appearance.lua\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	host, err := os.ReadFile(filepath.Join(fixtureSnapshot, "host.manifest"))
@@ -370,7 +356,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
 			t.Fatal(err)
 		}
-		moduleNames := []string{"values", "hive", "persist", "sync", "threads", "hive-telemetry", "application"}
+		moduleNames := []string{"values", "hive", "persist", "sync", "threads", "hive-telemetry", "application", "ui"}
 		if feeds {
 			moduleNames = append(moduleNames, "approvals", "node")
 		}

@@ -497,3 +497,7 @@ entries:
   kind: ns.dependency
   component: bee/values
   version: 0.1.0-dev
+- name: ui
+  kind: ns.dependency
+  component: bee/ui
+  version: 0.1.0-dev

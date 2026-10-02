@@ -12,9 +12,9 @@ entries:
   - uuid
   - funcs
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     client: bee.app:client
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     model: bee.hub.modules.app:model
     view: bee.hub.modules.app:view
     contents: bee.hub.modules.app:contents
@@ -38,7 +38,7 @@ entries:
   - hash
   imports:
     bounds: bee.values:bounds
-    text: bee.app:text
+    text: bee.ui:text
     canonical: bee.values:canonical
 - name: view
   kind: library.lua
@@ -47,8 +47,8 @@ entries:
   - tty
   - json
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     model: bee.hub.modules.app:model
     contents: bee.hub.modules.app:contents
 - name: contents
@@ -58,4 +58,4 @@ entries:
   - json
   - base64
   imports:
-    text: bee.app:text
+    text: bee.ui:text

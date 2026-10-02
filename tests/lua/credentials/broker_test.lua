@@ -12,6 +12,7 @@ local time = require("time")
 local json = require("json")
 local fs = require("fs")
 local broker = require("broker")
+local store = require("store")
 local persist = require("persist")
 local migrations = require("migrations")
 local identity_migration = require("identity_migration")
@@ -180,7 +181,7 @@ local function define_tests()
             if not destination then error("read persisted node identity: " .. tostring(node_error)) end
             local resource, resource_error = cred_sources.database()
             if not resource then error("credential database: " .. tostring(resource_error)) end
-            local db, open_error = persist.open({resource = resource, ledger = broker.LEDGER, migrations = migrations.all()})
+            local db, open_error = persist.open({resource = resource, ledger = store.LEDGER, migrations = migrations.all()})
             if not db then error("open credential identity migration store: " .. tostring(open_error)) end
             local legacy, workspace_id = "legacy-" .. fresh("node"), fresh("identity")
             local definition, projection, at = fresh("definition"), fresh("projection"), "2026-09-28T00:00:00.000Z"
@@ -356,7 +357,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(checked.materialization_generation, 2)
             local database, database_error = cred_sources.database()
             if not database then error("database ref: " .. tostring(database_error)) end
-            local db, open_error = persist.open({resource = database, ledger = broker.LEDGER, migrations = migrations.all()})
+            local db, open_error = persist.open({resource = database, ledger = store.LEDGER, migrations = migrations.all()})
             if not db then error("open db: " .. tostring(open_error)) end
             local rows, query_error = db:query("SELECT generation_key, generation FROM bee_credential_generations WHERE projection_id = ?", {projection_id})
             db:release()
@@ -1145,10 +1146,10 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             -- 2. Inspect the persistent database and ledger tables directly
             local res, rerr = cred_sources.database()
             if not res then error("database ref: " .. tostring(rerr)) end
-            local db, derr = persist.open({resource = res, ledger = broker.LEDGER, migrations = migrations.all()})
+            local db, derr = persist.open({resource = res, ledger = store.LEDGER, migrations = migrations.all()})
             if not db then error("open db: " .. tostring(derr)) end
 
-            local tables = {"bee_credential_definitions", "bee_credential_projections", "bee_credential_generations", "bee_credential_epochs", broker.LEDGER.table}
+            local tables = {"bee_credential_definitions", "bee_credential_projections", "bee_credential_generations", "bee_credential_epochs", store.LEDGER.table}
             for _, tbl in ipairs(tables) do
                 local found, qerr = db:query("SELECT * FROM " .. tbl)
                 if not found then error("query " .. tbl .. ": " .. tostring(qerr)) end

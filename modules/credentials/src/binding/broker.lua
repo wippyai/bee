@@ -18,14 +18,12 @@ local bounds = require("bounds")
 local clock = require("clock")
 local canonical = require("canonical")
 local credential_protocol = require("credential_protocol")
-local persist = require("persist")
+local store = require("store")
 local transaction = require("transaction")
-local migrations = require("migrations")
 local identity_migration = require("identity_migration")
 local sources = require("sources")
 local formats = require("formats")
 local M = {}
-M.LEDGER = {table = "bee_credential_schema_migrations", label = "credential"}
 M.MANAGE = "bee.credentials.manage"
 M.ISSUE = "bee.credentials.issue"
 M.MATERIALIZE = "bee.credentials.materialize"
@@ -70,7 +68,7 @@ end
 local function open(): (sql.DB?, Reply?)
     local resource, resource_error = sources.database()
     if not resource then return nil, fail("STORAGE", resource_error or "credential database") end
-    local db, open_error = persist.open({resource = resource, ledger = M.LEDGER, migrations = migrations.all()})
+    local db, open_error = store.open(resource)
     if not db then return nil, fail("STORAGE", open_error or "open credential store") end
     local destination, identity_error = node()
     if not destination then
@@ -172,46 +170,6 @@ local function append_setup(format: formats.Format, destination: string, content
     local decoded, decode_error = formats.decode(format)
     if not decoded then return nil, decode_error or "credential setup format is invalid" end
     return decoded, nil
-end
-local function definition_of(db: sql.DB, workspace_id: string, name: string): (Row?, string?)
-    local rows, err = db:query("SELECT * FROM bee_credential_definitions WHERE workspace_id = ? AND name = ?", {workspace_id, name})
-    if err or not rows then return nil, "read definition" end
-    if #rows == 0 then return nil, nil end
-    return rows[1], nil
-end
-local function definition_in(tx: sql.Transaction, workspace_id: string, name: string): (Row?, string?)
-    local rows, err = tx:query("SELECT * FROM bee_credential_definitions WHERE workspace_id = ? AND name = ?", {workspace_id, name})
-    if err or not rows then return nil, "read definition" end
-    if #rows == 0 then return nil, nil end
-    return rows[1], nil
-end
-local function projection_of(db: sql.DB, projection_id: string): (Row?, string?)
-    local rows, err = db:query("SELECT * FROM bee_credential_projections WHERE projection_id = ?", {projection_id})
-    if err or not rows then return nil, "read projection" end
-    if #rows == 0 then return nil, nil end
-    return rows[1], nil
-end
-local function projection_in(tx: sql.Transaction, projection_id: string): (Row?, string?)
-    local rows, err = tx:query("SELECT * FROM bee_credential_projections WHERE projection_id = ?", {projection_id})
-    if err or not rows then return nil, "read projection" end
-    if #rows == 0 then return nil, nil end
-    return rows[1], nil
-end
-local function epoch_of(db: sql.DB, workspace_id: string): (integer?, string?)
-    local rows, err = db:query("SELECT epoch FROM bee_credential_epochs WHERE workspace_id = ?", {workspace_id})
-    if err or not rows then return nil, "read authorization epoch" end
-    if #rows == 0 then return 0, nil end
-    local epoch = integer(rows[1].epoch)
-    if not epoch or epoch < 0 then return nil, "authorization epoch is corrupt" end
-    return epoch, nil
-end
-local function epoch_in(tx: sql.Transaction, workspace_id: string): (integer?, string?)
-    local rows, err = tx:query("SELECT epoch FROM bee_credential_epochs WHERE workspace_id = ?", {workspace_id})
-    if err or not rows then return nil, "read authorization epoch" end
-    if #rows == 0 then return 0, nil end
-    local epoch = integer(rows[1].epoch)
-    if not epoch or epoch < 0 then return nil, "authorization epoch is corrupt" end
-    return epoch, nil
 end
 local function definition_view(row: Row): ({[string]: unknown}?, string?)
     local revision, optional = integer(row.revision), integer(row.optional)
@@ -333,7 +291,7 @@ function M.define(value: unknown): Reply
     local db, open_failure = open()
     if not db then return open_failure end
     local result: TransactionResult = transaction.write(db, "credential definition", function(tx: sql.Transaction): TransactionResult
-        local existing, existing_error = definition_in(tx, workspace_id, name)
+        local existing, existing_error = store.definition(tx, workspace_id, name)
         if existing_error then return transaction.failure("STORAGE", existing_error) end
         local current_revision = 0
         if existing then
@@ -346,16 +304,13 @@ function M.define(value: unknown): Reply
         local definition_id, id_error = uuid.v7()
         if id_error or not definition_id then return transaction.failure("STORAGE", "definition id") end
         local at = stamp(now_ms())
-        if existing then
-            local _, update_error = tx:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, optional = ?, digest = ?, format_json = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
-            {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, owner_node, at, workspace_id, name})
-            if update_error then return transaction.failure("STORAGE", "replace definition") end
-        else
-            local _, insert_error = tx:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, optional, digest, format_json, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
-                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, owner_node, at, at})
-            if insert_error then return transaction.failure("STORAGE", "record definition") end
-        end
-        local stored, stored_error = definition_in(tx, workspace_id, name)
+        local save_error = store.save_definition(tx, {workspace_id = workspace_id, name = name,
+            definition_id = definition_id, revision = current_revision + 1, provider = provider,
+            source_kind = source_kind, source_ref = source_ref, projection_kind = projection_kind,
+            destination = destination, optional = optional, digest = digest, format_json = format_json,
+            owner_node = owner_node, at = at}, existing ~= nil)
+        if save_error then return transaction.failure("STORAGE", save_error) end
+        local stored, stored_error = store.definition(tx, workspace_id, name)
         if stored_error or not stored then return transaction.failure("STORAGE", stored_error or "read definition") end
         if stored.definition_id ~= definition_id then
             return transaction.failure("CONFLICT", "credential definition was created concurrently")
@@ -420,7 +375,7 @@ function M.issue_projection(value: unknown): Reply
     if not owner_node then return fail("UNAVAILABLE", node_error or "node identity is unavailable") end
     local db, open_failure = open()
     if not db then return open_failure end
-    local replay, replay_error = db:query("SELECT * FROM bee_credential_projections WHERE subject = ? AND idempotency_key = ?", {subject, request.idempotency_key})
+    local replay, replay_error = store.issue_replay(db, subject, request.idempotency_key)
     if replay_error or not replay then
         db:release()
         return fail("STORAGE", "read projections")
@@ -435,7 +390,7 @@ function M.issue_projection(value: unknown): Reply
         if not view then return fail("STORAGE", view_error or "credential projection is corrupt") end
         return succeed(view)
     end
-    local definition, definition_error = definition_of(db, request.workspace_id, request.name)
+    local definition, definition_error = store.definition(db, request.workspace_id, request.name)
     if definition_error then
         db:release()
         return fail("STORAGE", definition_error)
@@ -473,7 +428,7 @@ function M.issue_projection(value: unknown): Reply
         db:release()
         return fail("STORAGE", materializer_error or "credential materializer")
     end
-    local epoch, epoch_error = epoch_of(db, request.workspace_id)
+    local epoch, epoch_error = store.epoch(db, request.workspace_id)
     if not epoch then
         db:release()
         return fail("STORAGE", epoch_error or "epoch")
@@ -484,17 +439,20 @@ function M.issue_projection(value: unknown): Reply
         return fail("STORAGE", "projection id")
     end
     local created = now_ms()
-    local _, insert_error = db:execute([[INSERT INTO bee_credential_projections (projection_id, workspace_id, name, definition_id, definition_revision, issuer_owner, issuer_incarnation,
-        subject, audience, attempt_id, profile_id, profile_digest, binding_digest, launch_policy_digest, provider, projection_kind, destination, format_json, materializer, idempotency_key,
-        materialization_generation, expires_at, authorization_epoch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)]],
-        {projection_id, request.workspace_id, request.name, definition.definition_id, definition.revision, owner_node, 1, subject, request.audience, request.attempt_id,
-            request.profile_id, request.profile_digest, request.binding_digest, request.launch_policy_digest, definition.provider, definition.projection_kind, definition.destination,
-            format_json, materializer, request.idempotency_key, stamp(created + request.ttl), epoch, stamp(created)})
+    local insert_error = store.insert_projection(db, {projection_id = projection_id,
+        workspace_id = request.workspace_id, name = request.name, definition_id = definition.definition_id,
+        definition_revision = definition.revision, issuer_owner = owner_node, subject = subject,
+        audience = request.audience, attempt_id = request.attempt_id, profile_id = request.profile_id,
+        profile_digest = request.profile_digest, binding_digest = request.binding_digest,
+        launch_policy_digest = request.launch_policy_digest, provider = definition.provider,
+        projection_kind = definition.projection_kind, destination = definition.destination,
+        format_json = format_json, materializer = materializer, idempotency_key = request.idempotency_key,
+        expires_at = stamp(created + request.ttl), authorization_epoch = epoch, created_at = stamp(created)})
     if insert_error then
         db:release()
         return fail("STORAGE", "record projection")
     end
-    local stored = projection_of(db, projection_id)
+    local stored = store.projection(db, projection_id)
     db:release()
     if not stored then return fail("STORAGE", "read projection") end
     local view, view_error = projection_view(stored)
@@ -576,17 +534,17 @@ end
 -- The checks every use of a projection repeats; nil means it holds.
 local function holds(db: sql.DB, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
     local workspace_id = text(projection.workspace_id) or ""
-    local epoch, epoch_error = epoch_of(db, workspace_id)
+    local epoch, epoch_error = store.epoch(db, workspace_id)
     if not epoch then return fail("STORAGE", epoch_error or "epoch") end
-    local definition, definition_error = definition_of(db, workspace_id, text(projection.name) or "")
+    local definition, definition_error = store.definition(db, workspace_id, text(projection.name) or "")
     if definition_error then return fail("STORAGE", definition_error) end
     return binding_holds(projection, subject, audience, attempt_id, epoch, definition)
 end
 local function holds_in(tx: sql.Transaction, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
     local workspace_id = text(projection.workspace_id) or ""
-    local epoch, epoch_error = epoch_in(tx, workspace_id)
+    local epoch, epoch_error = store.epoch(tx, workspace_id)
     if not epoch then return fail("STORAGE", epoch_error or "epoch") end
-    local definition, definition_error = definition_in(tx, workspace_id, text(projection.name) or "")
+    local definition, definition_error = store.definition(tx, workspace_id, text(projection.name) or "")
     if definition_error then return fail("STORAGE", definition_error) end
     return binding_holds(projection, subject, audience, attempt_id, epoch, definition)
 end
@@ -664,7 +622,7 @@ function M.availability(value: unknown): Reply
     end
     local db, open_failure = open()
     if not db then return open_failure end
-    local definition, definition_error = definition_of(db, request.workspace_id, request.name)
+    local definition, definition_error = store.definition(db, request.workspace_id, request.name)
     if definition_error then
         db:release()
         return fail("STORAGE", definition_error)
@@ -748,7 +706,7 @@ function M.check(value: unknown): Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
     if not db then return open_failure end
-    local projection, projection_error = projection_of(db, object.projection_id)
+    local projection, projection_error = store.projection(db, object.projection_id)
     if projection_error then
         db:release()
         return fail("STORAGE", projection_error)
@@ -767,7 +725,7 @@ function M.check(value: unknown): Reply
     -- Report only its source's existence; no login bytes are opened here.
     local source_present: boolean? = nil
     if not refused and projection.projection_kind == "file" then
-        local definition, definition_error = definition_of(db, workspace_id, text(projection.name) or "")
+        local definition, definition_error = store.definition(db, workspace_id, text(projection.name) or "")
         if definition_error then
             refused = fail("STORAGE", definition_error)
         elseif not definition then
@@ -818,7 +776,7 @@ function M.materialize(value: unknown): Reply
         return fail("INVALID", "materialization identity is malformed")
     end
     local reserved: TransactionResult = transaction.write(db, "credential materialization", function(tx: sql.Transaction): TransactionResult
-        local projection, projection_error = projection_in(tx, projection_id)
+        local projection, projection_error = store.projection(tx, projection_id)
         if projection_error then return transaction.failure("STORAGE", projection_error) end
         if not projection then return transaction.failure("NOT_FOUND", "projection does not exist") end
         local workspace_id = bounds.id(projection.workspace_id)
@@ -830,7 +788,7 @@ function M.materialize(value: unknown): Reply
         local refused = holds_in(tx, projection, subject, audience, attempt_id)
         if refused then return transaction.failure(refused.error and refused.error.code or "DENIED",
             refused.error and refused.error.message or "projection binding is invalid") end
-        local definition, definition_error = definition_in(tx, workspace_id, name)
+        local definition, definition_error = store.definition(tx, workspace_id, name)
         if definition_error then return transaction.failure("STORAGE", definition_error) end
         if not definition then return transaction.failure("CONFLICT", "credential definition is gone") end
         local current_generation = bounds.count(projection.materialization_generation)
@@ -840,19 +798,14 @@ function M.materialize(value: unknown): Reply
         if current_generation == bounds.MAX_SAFE_INTEGER then
             return transaction.failure("STORAGE", "materialization generation has reached its safe integer limit")
         end
-        local used, used_error = tx:query("SELECT generation_key FROM bee_credential_generations WHERE projection_id = ? AND generation_key = ?",
-            {projection_id, generation_key})
-        if used_error or not used then return transaction.failure("STORAGE", "read materialization generation key") end
-        if #used > 0 then
+        local used, used_error = store.generation_used(tx, projection_id, generation_key)
+        if used_error or used == nil then return transaction.failure("STORAGE", "read materialization generation key") end
+        if used then
             return transaction.failure("CONFLICT", "generation key " .. generation_key .. " was already used; a lost reply is not repaired by a second read")
         end
         local generation = current_generation + 1
-        local _, key_error = tx:execute("INSERT INTO bee_credential_generations (projection_id, generation_key, generation, materializer_actor, created_at) VALUES (?, ?, ?, ?, ?)",
-            {projection_id, generation_key, generation, materializer, stamp(now_ms())})
-        if key_error then return transaction.failure("STORAGE", "reserve materialization generation") end
-        local _, update_error = tx:execute("UPDATE bee_credential_projections SET materialization_generation = ? WHERE projection_id = ?",
-            {generation, projection_id})
-        if update_error then return transaction.failure("STORAGE", "advance materialization generation") end
+        local reservation_error = store.reserve_generation(tx, projection_id, generation_key, generation, materializer, stamp(now_ms()))
+        if reservation_error then return transaction.failure("STORAGE", reservation_error) end
         return transaction.success({projection = projection, definition = definition, generation = generation}, false)
     end)
     db:release()
@@ -1008,7 +961,7 @@ function M.write_back(value: unknown): Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
     if not db then return open_failure end
-    local projection, projection_error = projection_of(db, object.projection_id)
+    local projection, projection_error = store.projection(db, object.projection_id)
     if projection_error or not projection then
         db:release()
         return projection_error and fail("STORAGE", projection_error) or fail("NOT_FOUND", "projection does not exist")
@@ -1019,12 +972,12 @@ function M.write_back(value: unknown): Reply
         return fail("DENIED", "caller is not a token writer admitted in workspace " .. workspace_id)
     end
     local result: TransactionResult = transaction.write(db, "credential token write-back", function(tx: sql.Transaction): TransactionResult
-        local current_projection, current_projection_error = projection_in(tx, object.projection_id)
+        local current_projection, current_projection_error = store.projection(tx, object.projection_id)
         if current_projection_error or not current_projection then
             return transaction.failure(current_projection_error and "STORAGE" or "NOT_FOUND",
                 current_projection_error or "projection does not exist")
         end
-        local _, serialize_error = tx:execute("UPDATE bee_credential_projections SET materialization_generation = materialization_generation WHERE projection_id = ?", {current_projection.projection_id})
+        local serialize_error = store.serialize_write_back(tx, current_projection.projection_id)
         if serialize_error then
             if transaction.busy(serialize_error) then return transaction.storage_failure("credential token write-back database is busy") end
             return transaction.failure("STORAGE", "serialize provider token write-back")
@@ -1038,7 +991,7 @@ function M.write_back(value: unknown): Reply
             end
             return transaction.failure("DENIED", "write-back does not match the active file projection generation")
         end
-        local definition, definition_error = definition_in(tx, workspace_id, text(current_projection.name) or "")
+        local definition, definition_error = store.definition(tx, workspace_id, text(current_projection.name) or "")
         if definition_error or not definition then
             return transaction.failure("CONFLICT", definition_error or "credential definition is gone")
         end
@@ -1105,7 +1058,7 @@ function M.revoke(value: unknown): Reply
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
     if not db then return open_failure end
-    local projection, projection_error = projection_of(db, projection_id)
+    local projection, projection_error = store.projection(db, projection_id)
     if projection_error then
         db:release()
         return fail("STORAGE", projection_error)
@@ -1120,13 +1073,13 @@ function M.revoke(value: unknown): Reply
         return fail("DENIED", "only the subject or a workspace manager revokes a projection")
     end
     if projection.revoked_at == nil then
-        local _, update_error = db:execute("UPDATE bee_credential_projections SET revoked_at = ? WHERE projection_id = ?", {stamp(now_ms()), projection_id})
+        local update_error = store.revoke(db, projection_id, stamp(now_ms()))
         if update_error then
             db:release()
             return fail("STORAGE", "revoke projection")
         end
     end
-    local stored = projection_of(db, projection_id)
+    local stored = store.projection(db, projection_id)
     db:release()
     if not stored then return fail("STORAGE", "read projection") end
     local view, view_error = projection_view(stored)
@@ -1144,12 +1097,12 @@ function M.revoke_all(value: unknown): Reply
     if not security.can(M.MANAGE, workspace_id) then return fail("DENIED", "caller does not manage workspace " .. workspace_id) end
     local db, open_failure = open()
     if not db then return open_failure end
-    local epoch, epoch_error = epoch_of(db, workspace_id)
+    local epoch, epoch_error = store.epoch(db, workspace_id)
     if not epoch then
         db:release()
         return fail("STORAGE", epoch_error or "epoch")
     end
-    local _, upsert_error = db:execute("INSERT INTO bee_credential_epochs (workspace_id, epoch) VALUES (?, ?) ON CONFLICT(workspace_id) DO UPDATE SET epoch = excluded.epoch", {workspace_id, epoch + 1})
+    local upsert_error = store.set_epoch(db, workspace_id, epoch + 1)
     db:release()
     if upsert_error then return fail("STORAGE", "advance authorization epoch") end
     return succeed({workspace_id = workspace_id, authorization_epoch = epoch + 1})
@@ -1165,8 +1118,8 @@ function M.list(value: unknown): Reply
     if not security.can(M.MANAGE, workspace_id) then return fail("DENIED", "caller does not manage workspace " .. workspace_id) end
     local db, open_failure = open()
     if not db then return open_failure end
-    local definitions, definitions_error = db:query("SELECT * FROM bee_credential_definitions WHERE workspace_id = ? ORDER BY name LIMIT ?", {workspace_id, M.MAX_LIST})
-    local projections, projections_error = db:query("SELECT * FROM bee_credential_projections WHERE workspace_id = ? AND revoked_at IS NULL AND expires_at > ? ORDER BY created_at LIMIT ?", {workspace_id, stamp(now_ms()), M.MAX_LIST})
+    local definitions, definitions_error = store.definitions(db, workspace_id, M.MAX_LIST)
+    local projections, projections_error = store.active_projections(db, workspace_id, stamp(now_ms()), M.MAX_LIST)
     db:release()
     if definitions_error or not definitions or projections_error or not projections then return fail("STORAGE", "read workspace credentials") end
     local definition_views: {{[string]: unknown}} = {}

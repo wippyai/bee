@@ -44,8 +44,7 @@ end
 
 -- Synchronous validation and dispatch for open telemetry requests.
 function M.dispatch(request: unknown): types.Reply
-    -- 1. Always re-decode request
-    local req, decode_err = types.decode_request(request)
+    local req = types.decode_request(request)
     if not req then
         local object = bounds.object(request)
         local raw_id = object and bounds.id(object.request_id) or "unknown"
@@ -54,12 +53,10 @@ function M.dispatch(request: unknown): types.Reply
 
     local request_id = req.request_id
 
-    -- 2. Require resource_ref absent (node telemetry only)
     if req.owner_ref.resource_ref ~= nil then
         return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "node telemetry only: resource_ref must be absent"))
     end
 
-    -- 3. Require owner_ref.service_id == namespace of operation_ref
     local expected_ns = operation_namespace(req.operation_ref)
     if not expected_ns or req.owner_ref.service_id ~= expected_ns then
         return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "owner service does not match operation namespace"))
@@ -72,13 +69,11 @@ function M.dispatch(request: unknown): types.Reply
         return types.reply_error(request_id, types.fault("DENIED", "host does not expose this operation"))
     end
 
-    -- 5. Resolve canonical operation with catalog.resolve
     local op, resolve_err = catalog.resolve(req.operation_ref)
     if not op then
         return types.reply_error(request_id, types.fault("DENIED", "operation unavailable"))
     end
 
-    -- 6. Require mode=open
     if op.mode ~= "open" then
         return types.reply_error(request_id, types.fault("DENIED", "operation mode is not open"))
     end
@@ -98,12 +93,10 @@ function M.dispatch(request: unknown): types.Reply
         end
     end
 
-    -- 7. Check operation_revision
     if op.revision ~= req.operation_revision then
         return types.reply_error(request_id, types.fault("CONFLICT", "operation revision mismatch"))
     end
 
-    -- 8. Revalidate input schema+limits using catalog.resolve_call and a tiny snapshot of the resolved descriptor
     local tiny_snapshot: catalog.Snapshot = {
         generation = 1,
         operations = {[op.operation_ref] = op},
@@ -115,7 +108,6 @@ function M.dispatch(request: unknown): types.Reply
         return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "input validation failed"))
     end
 
-    -- 9. Check input_digest
     if resolved.input_digest ~= req.input_digest then
         return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "input digest mismatch"))
     end

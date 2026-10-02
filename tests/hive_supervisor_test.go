@@ -80,67 +80,6 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
 		t.Fatal(err)
 	}
-	for _, dependency := range []struct{ directory, source, manifest string }{
-		{"profile_access", "modules/driver/src/profiles/profile_access.lua", "version: '1.0'\nnamespace: bee.driver.profiles\nentries:\n- name: profile_access\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    bounds: bee.values:bounds\n"},
-		{"profile_protocol", "modules/harness/src/profiles/protocol.lua", "version: '1.0'\nnamespace: bee.harness.profiles\nentries:\n- name: protocol\n  kind: library.lua\n  source: file://source.lua\n  modules: [json]\n  imports:\n    access: bee.driver.profiles:profile_access\n    bounds: bee.values:bounds\n    budgets: bee.threads.records:budgets\n    canonical: bee.values:canonical\n"},
-		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
-		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.app:arguments\n    bounds: bee.values:bounds\n"},
-		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
-		{"workspace_binding", "modules/workspace/src/types/selection.lua", "version: '1.0'\nnamespace: bee.workspace.types\nentries:\n- name: selection\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.values:bounds\n"},
-		{"application_host_leases", "modules/application/src/host_leases.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n"},
-	} {
-		directory := filepath.Join(sourceSnapshot, dependency.directory)
-		if err := os.MkdirAll(directory, 0700); err != nil {
-			t.Fatal(err)
-		}
-		body, err := os.ReadFile(filepath.Join(repository, dependency.source))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(directory, "source.lua"), body, 0600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(directory, "_index.yaml"), []byte(dependency.manifest), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	retainedManifest := filepath.Join(sourceSnapshot, "retained_protocol/_index.yaml")
-	retained, err := os.ReadFile(retainedManifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	retained = append(retained, []byte("    types: bee.hive:types\n    bounds: bee.values:bounds\n    arguments: bee.app:arguments\n    clipboard: bee.client:clipboard\n")...)
-	if err := os.WriteFile(retainedManifest, retained, 0600); err != nil {
-		t.Fatal(err)
-	}
-	clipboard, err := os.ReadFile(filepath.Join(repository, "src/client/clipboard.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	clipboardDir := filepath.Join(sourceSnapshot, "clipboard")
-	if err := os.MkdirAll(clipboardDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(clipboardDir, "clipboard.lua"), clipboard, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	appearance, err := os.ReadFile(filepath.Join(repository, "modules/application/src/appearance.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	appearanceDir := filepath.Join(sourceSnapshot, "appearance")
-	if err := os.MkdirAll(appearanceDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(appearanceDir, "appearance.lua"), appearance, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(appearanceDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.app\nentries:\n- name: appearance\n  kind: library.lua\n  source: file://appearance.lua\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	host, err := os.ReadFile(filepath.Join(fixtureSnapshot, "host.manifest"))
 	if err != nil {
 		t.Fatal(err)
@@ -252,11 +191,6 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	// hive-telemetry package; the feeds composition adds only node here.
 	for _, name := range []string{"node"} {
 		if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, directory := range []string{"application_arguments", "appearance"} {
-		if err := os.RemoveAll(filepath.Join(source, directory)); err != nil {
 			t.Fatal(err)
 		}
 	}

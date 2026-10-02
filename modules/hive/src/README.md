@@ -87,8 +87,8 @@ routing and the host-selected grant table, not the per-feature adapter code.
 ## Joining a hive
 
 A node joins another node's hive with one invite; no address, port or key file
-is typed. The operations, all implemented by the Bee root's supervisor
-(`src/hive/supervisor/invites.lua`) and native launch (`native/launch`):
+is typed. The operations, all implemented by the Hive supervisor
+(`service/main.lua` and `types/invites.lua`) and native launch (`native/launch`):
 
 | Operation | Principal and route | Effect |
 |---|---|---|

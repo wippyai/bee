@@ -15,6 +15,22 @@ def compose(folder, source=None):
         document = yaml.safe_load(index.read_text())
         for entry in document.get('entries', []):
             production[document['namespace'] + ':' + entry['name']] = (index, entry)
+    selections = {}
+    for dependency in yaml.safe_load((ROOT / 'src/deps/_index.yaml').read_text())['entries']:
+        namespace = 'bee.app' if dependency.get('component') == 'bee/application' else dependency.get('component', '').replace('/', '.').replace('-', '.')
+        for parameter in dependency.get('parameters', []):
+            identity = parameter['name'] if ':' in parameter['name'] else namespace + ':' + parameter['name']
+            selections[identity] = parameter['value']
+    for identity, (_, requirement) in list(production.items()):
+        if requirement['kind'] != 'ns.requirement':
+            continue
+        value = selections.get(identity, requirement.get('default'))
+        if not isinstance(value, str):
+            continue
+        for target in requirement.get('targets', []):
+            if target['path'].startswith('.imports.'):
+                entry = production[target['entry']][1]
+                entry.setdefault('imports', {})[target['path'].removeprefix('.imports.')] = value
     present = set()
     selected = False
     imports = []

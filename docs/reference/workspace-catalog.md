@@ -163,7 +163,7 @@ never stops the host, and its displays quit through their own lifecycle. A
 supervisor selected by the folder's root (classic mode and `bee start`) still
 spawns and owns its host.
 
-The desktop bridge in the Hive supervisor (`src/hive/desktop`) composes the
+The desktop bridge in the Hive supervisor (`modules/hive/src/desktop`) composes the
 folder workspace when the host selects it (`desktop.folder`, default true) and
 starts a leased supervisor for any other workspace a client attaches to, at
 most 32 at once; the workspace's last detach stops that supervisor and so

@@ -37,3 +37,19 @@ The unit composition stages `fixtures/gateway_clock` and grants the gateway
 read access to its fixture instant. The expiry test selects the binding's exact
 expiry after the child presents its credential, then restores the clock; it
 uses the real HTTP authentication and placement enforcement paths.
+
+After `make standalone`, run `make hub-self-update-standalone-check
+BEE_DEPLOYMENT=dist/portable-deployment` for independent component management,
+exact core approval and receipt replay, native Modules apply, and offline
+restart. The fixture packer refreshes code declarations from their current
+owner indexes while retaining sealed resource assets. Core updates preserve
+the selected Settings code; a separate Settings update verifies its renderer
+marker and changed application code fingerprint. The native proof retains
+Settings/About across the core update and restarts from the same saved state
+with external networking disabled.
+
+To reuse built fixtures, select the baseline with `BEE_DEPLOYMENT`, the target
+with `BEE_SELF_UPDATE_TARGET_DEPLOYMENT`, and the independent core artifact set
+with `BEE_SELF_UPDATE_EXPLICIT_DEPLOYMENT`. `BEE_SELF_UPDATE_BINARY` selects the
+baseline executable; the harness verifies its digest and exact embedded pack
+set before launching it.

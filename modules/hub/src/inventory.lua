@@ -4,8 +4,10 @@ local requirements = require("requirements")
 local M = {}
 type Module = {component: string, version: string, locked_version: string, digest: string, source: string, direct: boolean,
     roots: {string}, used_by: {string}, entries: integer}
-type Root = {id: string, owner: string, component: string, version: string, parameters: {requirements.Parameter}}
-type Result = {version: integer, modules: {Module}, roots: {Root}, deployment: string?}
+type Root = {id: string, owner: string, component: string, version: string, parameters: {requirements.Parameter}, managed: boolean, meta: {[string]: unknown}}
+type Selection = {id: string, component: string}
+type Conversion = {version: integer, roots: {Selection}}
+type Result = {version: integer, modules: {Module}, roots: {Root}, deployment: string?, conversion: Conversion?, selected: boolean}
 
 local function component(raw: unknown): string?
     local name = bounds.line(raw, 160)
@@ -48,6 +50,26 @@ local function digest(raw: unknown): string?
     end
     if #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
     return value
+end
+
+function M.conversion(raw: unknown): (Conversion?, string?)
+    local value = bounds.object(raw)
+    if not value or value.version ~= 1 or bounds.fields(value, {"version", "roots"}) then return nil, "invalid root conversion evidence" end
+    local supplied, problem = rows(value.roots, 128)
+    if not supplied then return nil, problem end
+    local selected: {Selection} = {}
+    local ids: {[string]: boolean} = {}
+    for _, raw_root in ipairs(supplied) do
+        local root = bounds.object(raw_root)
+        local id = root and bounds.id(root.id) or nil
+        local name = root and component(root.component) or nil
+        if not root or not id or not name or ids[id] or bounds.fields(root, {"id", "component"}) then
+            return nil, "invalid or duplicate root conversion"
+        end
+        ids[id] = true
+        selected[#selected + 1] = {id = id, component = name}
+    end
+    return {version = 1, roots = selected}, nil
 end
 
 function M.decode(raw: unknown, revision: unknown): (Result?, string?)
@@ -107,6 +129,8 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
         end
     end
     local roots: {Root} = {}
+    local conversion: {Selection} = {}
+    local selected = false
     local seen: {[string]: boolean} = {}
     for _, raw_entry in ipairs(entries) do
         local entry = bounds.object(raw_entry)
@@ -128,13 +152,19 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             local target, constraint = component(data.component), bounds.line(data.version, 128)
             if not target or not constraint then return nil, "invalid dependency identity" end
             local bucket = module(target)
-            if owner ~= "" then add_once(bucket.used_by, owner) end
+            local host_selection = owned.root == true and target:match("^bee/") ~= nil and id:sub(1, 9) == "bee.deps:" and (owner == "" or owner == "bee/bee")
+            local meta = bounds.object(entry.meta) or {}
+            local managed = (host_selection and meta.independent == true) or (owner == "" and id:sub(1, 13) == "bee.hub.deps:")
+            if host_selection then
+                selected = true
+                if owner == "bee/bee" then conversion[#conversion + 1] = {id = id, component = target} end
+            elseif owner ~= "" then add_once(bucket.used_by, owner) end
             if owned.root == true then
                 local supplied: unknown = data.parameters
                 if supplied == nil then supplied = {} end
                 local parameters, parameter_error = requirements.parameters(supplied)
                 if not parameters then return nil, parameter_error end
-                roots[#roots + 1] = {id = id, owner = owner, component = target, version = constraint, parameters = parameters}
+                roots[#roots + 1] = {id = id, owner = owner, component = target, version = constraint, parameters = parameters, managed = managed, meta = meta}
                 add_once(bucket.roots, id)
                 bucket.direct = true
             end
@@ -150,17 +180,17 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     end
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)
     table.sort(roots, function(a: Root, b: Root): boolean return a.id < b.id end)
-    return {version = version, modules = modules, roots = roots, deployment = deployment}, nil
+    return {version = version, modules = modules, roots = roots, deployment = deployment, conversion = #conversion > 0 and {version = 1, roots = conversion} or nil, selected = selected}, nil
 end
 
--- Hub owns only roots it published. Host-declared component roots remain
--- resident deployment configuration and must not become Hub plan inputs.
+-- Explicit host selections and Hub-authored roots enter planning. Other
+-- host declarations retain their resident closure and cannot be replaced.
 function M.dependency_members(state: Result, self_update: boolean?): {[string]: boolean}
     local host_members: {[string]: boolean} = {}
     for _, root in ipairs(state.roots) do
-        local bee_root_child = self_update == true and root.owner == "bee/bee"
+        local bee_root_child = self_update == true and not state.selected and root.owner == "bee/bee"
         local bee_deployment_root = self_update == true and root.component == "bee/bee" and root.owner == ""
-        if root.id:sub(1, 13) ~= "bee.hub.deps:" and not bee_root_child and not bee_deployment_root then
+        if not root.managed and not bee_root_child and not bee_deployment_root then
             host_members[root.component] = true
         end
     end
@@ -179,7 +209,7 @@ function M.dependency_members(state: Result, self_update: boolean?): {[string]: 
     end
     local members: {[string]: boolean} = {}
     for _, root in ipairs(state.roots) do
-        if root.id:sub(1, 13) == "bee.hub.deps:" and not host_members[root.component] then members[root.component] = true end
+        if root.managed and not host_members[root.component] then members[root.component] = true end
     end
     changed = true
     while changed do

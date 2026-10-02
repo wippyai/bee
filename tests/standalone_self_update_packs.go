@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Refresh sealed fixture packs with current Lua sources and two release identities.
+// Refresh sealed fixture packs with current Lua sources and core/component identities.
 package main
 
 import (
@@ -17,7 +17,14 @@ import (
 )
 
 type fixturePack struct {
-	Input, Output, Version, Component string
+	Input, Output, Version, DependencyVersion, Component string
+	Explicit                                             bool
+}
+
+type fixturePolicy struct {
+	Actions   []string `json:"actions"`
+	Resources []string `json:"resources"`
+	Effect    string   `json:"effect"`
 }
 type codeDeclaration struct {
 	Component, Kind string
@@ -30,6 +37,8 @@ func main() {
 		Packs        []fixturePack
 		Sources      map[string]string
 		Identity     map[string]any
+		Independent  map[string]bool
+		Policies     map[string]fixturePolicy
 		Declarations map[string]codeDeclaration
 	}
 	data, err := os.ReadFile(os.Args[1])
@@ -71,10 +80,30 @@ func main() {
 			entries = append(entries, wapp.Entry{ID: wapp.NewID(namespace, name), Kind: declaration.Kind, Meta: declaration.Meta, Data: declaration.Data})
 		}
 		for i := range entries {
+			if config.Independent[entries[i].ID.String()] {
+				if entries[i].Meta == nil {
+					mustPack(json.Unmarshal([]byte(`{}`), &entries[i].Meta))
+				}
+				entries[i].Meta["independent"] = true
+			}
+		}
+		if pack.Explicit && strings.HasPrefix(filepath.Base(pack.Output), "bee-") {
+			retained := entries[:0]
+			for _, entry := range entries {
+				if entry.Kind != "ns.dependency" || !strings.HasPrefix(entry.ID.String(), "bee.deps:") {
+					retained = append(retained, entry)
+				}
+			}
+			entries = retained
+		}
+		for i := range entries {
 			entry := &entries[i]
 			fields, ok := entry.Data.(map[string]any)
 			if !ok {
 				continue
+			}
+			if policy := config.Policies[entry.ID.String()]; policy.Effect != "" {
+				fields["policy"] = policy
 			}
 			if declaration, found := config.Declarations[entry.ID.String()]; found {
 				for _, key := range []string{"imports", "modules", "method"} {
@@ -96,7 +125,7 @@ func main() {
 			if entry.Kind == "ns.dependency" {
 				component, _ := fields["component"].(string)
 				if strings.HasPrefix(component, "bee/") {
-					fields["version"] = pack.Version
+					fields["version"] = pack.DependencyVersion
 				}
 			}
 			if entry.ID.String() == "bee.env:binary_identity" {

@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee Codex driver
     comment: Optional harness binding; host activation and launch policies authorize its use
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -80,8 +84,8 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     shared_configuration: bee.driver:configuration
     toml: bee.driver.kit:toml
 - name: launch

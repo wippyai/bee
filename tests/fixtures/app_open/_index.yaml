@@ -114,7 +114,7 @@ entries:
       restart_policy: never
   imports:
     client: bee.app:client
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.app.open.probe:view_policy, bee.app.open.probe:evidence_policy,
       bee.app.open.probe:host_lookup_policy, bee.app.open.probe:operator_signal_policy]
@@ -124,7 +124,7 @@ entries:
   method: main
   modules: [process, channel, time, funcs, json, registry]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     thread_binding: bee.apps:thread_binding
   security:
     policies: [bee.app.open.probe:operator_policy, bee.app.open.probe:operator_call_policy,

@@ -301,7 +301,7 @@ def exercise(folder, baseline, target):
             baseline_version = next(row["version"] for row in lock["modules"] if row.get("root"))
             target_version = next(row["version"] for row in target_lock["modules"] if row.get("root"))
             (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version))
-            imports = {"bounds": "bee.threads.records:bounds", "inventory": "bee.hub:inventory",
+            imports = {"bounds": "bee.values:bounds", "inventory": "bee.hub:inventory",
                        "view": "bee.settings.app:view", "appearance": "bee.app:appearance",
                        "live_updates": "bee.settings.app:live_updates"}
             entries = [

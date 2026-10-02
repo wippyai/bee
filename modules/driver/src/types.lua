@@ -165,7 +165,7 @@ function M.decode_terminal(value: unknown): (Terminal?, string?)
         local fault_unknown = bounds.fields(raw_fault, {"code", "message", "retryable"})
         if fault_unknown then return nil, "terminal.error: " .. fault_unknown end
         local code = bounds.id(raw_fault.code)
-        local message = bounds.text(raw_fault.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+        local message = bounds.text(raw_fault.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
         if not code or not message or type(raw_fault.retryable) ~= "boolean" then return nil, "terminal.error is malformed" end
         fault = {code = code, message = message, retryable = raw_fault.retryable}
     end

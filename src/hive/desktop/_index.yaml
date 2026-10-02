@@ -10,7 +10,7 @@ entries:
   source: file://protocol.lua
   imports:
     arguments: bee.app:arguments
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     workspace_query: bee.hive:workspace_query
 - name: catalog
@@ -20,7 +20,7 @@ entries:
   imports:
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
 - name: session_policy
   kind: library.lua
@@ -34,7 +34,7 @@ entries:
   imports:
     protocol: bee.hive.desktop:protocol
     types: bee.hive:types
-    clock: bee:clock
+    clock: bee.values:clock
     retained: bee.launch:retained_protocol
     catalog: bee.hive.desktop:catalog
     session_policy: bee.hive.desktop:session_policy
@@ -44,12 +44,12 @@ entries:
   source: file://display.lua
   modules: [tty, channel, time, process, uuid]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     client: bee.hive:client
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
-    clock: bee:clock
+    clock: bee.values:clock
     delivery: bee.terminal:delivery
     input: bee.protocol:input
 - name: command
@@ -95,7 +95,7 @@ entries:
   source: file://remote.lua
   imports:
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     display: bee.hive.desktop:display
 - name: viewer
@@ -104,12 +104,12 @@ entries:
   method: main
   modules: [process, channel, time, uuid]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     types: bee.hive:types
     client: bee.hive:client
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
-    clock: bee:clock
+    clock: bee.values:clock
     display: bee.hive.desktop:display
     remote: bee.hive.desktop:remote
     delivery: bee.terminal:delivery

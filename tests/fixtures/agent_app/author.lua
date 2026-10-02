@@ -320,7 +320,7 @@ local function reported_digest(started: Object, marker: string): (string?, strin
                     local content = bounds.object(body.content)
                     if not content or type(content.artifact_ref) ~= "string" then error("missing authored snapshot digest") end
                     digest = content.artifact_ref
-                    sequence = bounds.sequence(record.sequence) or 0
+                    sequence = record_bounds.sequence(record.sequence) or 0
                 end
             end
             if record.kind == "turn.end" or record.kind == "receipt" then

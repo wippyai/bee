@@ -10,7 +10,7 @@ local function depth(value: unknown, level: integer): integer
     for _, item in pairs(value) do
         local inner = depth(item, level + 1)
         if inner > deepest then deepest = inner end
-        if deepest > bounds.MAX_JSON_DEPTH then return deepest end
+        if deepest > record_bounds.MAX_JSON_DEPTH then return deepest end
     end
     return deepest
 end
@@ -114,7 +114,7 @@ local function decode_data(value: unknown): (types.ObservationData?, string?)
         if not payload or #payload == 0 then return nil, "payload_json is not bounded text" end
         local decoded: unknown, decode_error = json.decode(payload)
         if decode_error then return nil, "payload_json is not valid JSON" end
-        if depth(decoded, 1) > bounds.MAX_JSON_DEPTH then return nil, "payload_json nests deeper than " .. tostring(bounds.MAX_JSON_DEPTH) end
+        if depth(decoded, 1) > record_bounds.MAX_JSON_DEPTH then return nil, "payload_json nests deeper than " .. tostring(record_bounds.MAX_JSON_DEPTH) end
         return {type = "extension", event_name = name, event_revision = revision, payload_json = payload}, nil
     end
     return nil, "observation type is not supported"

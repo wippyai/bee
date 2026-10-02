@@ -367,14 +367,14 @@ function M.read_arguments(params: Object): (Object?, string?)
     if unknown_field then return nil, unknown_field end
     local cursor = 0
     if arguments.cursor ~= nil then
-        local declared = bounds.cursor(arguments.cursor)
+        local declared = record_bounds.cursor(arguments.cursor)
         if not declared then return nil, "cursor is out of range" end
         cursor = declared
     end
     local request: Object = {cursor = cursor}
     if arguments.limit ~= nil then
         local limit = bounds.integer(arguments.limit)
-        if not limit or limit < 1 or limit > bounds.MAX_PAGE_RECORDS then return nil, "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS) end
+        if not limit or limit < 1 or limit > record_bounds.MAX_PAGE_RECORDS then return nil, "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS) end
         request.limit = limit
     end
     if arguments.member_thread ~= nil then

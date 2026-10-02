@@ -176,7 +176,7 @@ local function measurements(thread_id: string, action_id: string, attempt_id: st
                 local expected_digest = label == "baseline" and baseline_digest or candidate_digest
                 if not expected_digest then error("expected measurement source digest missing") end
                 local checked = validate_measurement(raw_measurement, label, expected_digest)
-                local record_id, sequence = bounds.id(record.record_id), bounds.sequence(record.sequence)
+                local record_id, sequence = bounds.id(record.record_id), record_bounds.sequence(record.sequence)
                 if not record_id or not sequence then error("measurement observation identity is invalid") end
                 found[label] = {measurement = checked, record_id = record_id, sequence = sequence}
             end

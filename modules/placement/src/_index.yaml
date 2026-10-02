@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee placement
     comment: Placement contract and launch and attempt values; implementations own executors, homes and receipts
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: protected_namespace
   kind: ns.requirement
   meta:
@@ -35,8 +39,8 @@ entries:
   source: file://request.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types
     driver_types: bee.driver:types
     login_evidence: bee.driver:login_evidence
@@ -50,7 +54,7 @@ entries:
   kind: library.lua
   source: file://decode.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     types: bee.placement:types
 - name: placement
   kind: contract.definition
@@ -95,8 +99,8 @@ entries:
   source: file://resolver.lua
   modules: [hash, registry]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types
 - name: paths
   kind: library.lua
@@ -110,8 +114,8 @@ entries:
   source: file://profiles.lua
   modules: [hash, registry]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
 - name: native
   kind: registry.entry
   meta: {type: bee.placement_profile, title: Native}

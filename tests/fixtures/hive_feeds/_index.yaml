@@ -6,7 +6,7 @@ entries:
   source: file://handle.lua
   modules: [registry, funcs]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     client: bee.hive:client
     types: bee.hive:types
     principals: bee.hive:principals
@@ -42,7 +42,7 @@ entries:
   security:
     policies: [bee.feed.probe:policy, bee.feed.probe:enrollment_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     client: bee.hive:client
     types: bee.hive:types
     principals: bee.hive:principals

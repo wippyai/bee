@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee node descriptions
     comment: Authorized editable node descriptions with owner-local revisions and sync ledger events
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_persist
   kind: ns.dependency
   component: bee/persist
@@ -53,7 +57,7 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     appearance: bee.app:appearance
 - name: contract
   kind: contract.definition
@@ -75,4 +79,4 @@ entries:
   source: file://resources.lua
   modules: [registry]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds

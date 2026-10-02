@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.deps
 entries:
+- name: values
+  kind: ns.dependency
+  component: bee/values
+  version: 0.1.0-dev
 - name: persist
   kind: ns.dependency
   component: bee/persist

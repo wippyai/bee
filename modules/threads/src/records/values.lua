@@ -3,17 +3,17 @@ local types = require("types")
 local bounds = require("bounds")
 local M = {}
 function M.source(value: unknown): types.Source?
-    local member = bounds.member(value, bounds.SOURCES)
+    local member = bounds.member(value, record_bounds.SOURCES)
     if member ~= "stream" and member ~= "hook" and member ~= "transcript" and member ~= "mcp" and member ~= "bee" then return nil end
     return member
 end
 function M.outcome(value: unknown): types.Outcome?
-    local member = bounds.member(value, bounds.OUTCOMES)
+    local member = bounds.member(value, record_bounds.OUTCOMES)
     if member ~= "succeeded" and member ~= "failed" and member ~= "cancelled" and member ~= "uncertain" then return nil end
     return member
 end
 function M.kind(value: unknown): types.Kind?
-    local member = bounds.member(value, bounds.KINDS)
+    local member = bounds.member(value, record_bounds.KINDS)
     if member ~= "observation" and member ~= "message" and member ~= "action.admitted" and member ~= "attempt.prepared" and member ~= "attempt.started" and member ~= "turn.request" and member ~= "turn.end" and member ~= "receipt" and member ~= "delivery.mark" and member ~= "request.answered" and member ~= "approval.request" and member ~= "approval.transition" then return nil end
     return member
 end
@@ -33,7 +33,7 @@ function M.fault(value: unknown): (types.Fault?, string?)
     local unknown_field = bounds.fields(object, {"code", "message", "retryable"})
     if unknown_field then return nil, unknown_field end
     local code = bounds.id(object.code)
-    local message = bounds.text(object.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+    local message = bounds.text(object.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
     local retryable: unknown = object.retryable
     if not code then return nil, "fault code is not an identifier" end
     if not message then return nil, "fault message is not bounded text" end

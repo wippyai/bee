@@ -7,7 +7,7 @@ entries:
   modules: [hash]
   imports:
     contract: bee.protocol:application
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: store
   kind: library.lua
   source: file://store.lua

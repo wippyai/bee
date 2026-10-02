@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     catalog: bee.storage:catalog
 - name: extensions
@@ -13,7 +13,7 @@ entries:
   source: file://extensions.lua
   modules: [contract]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: backend
   kind: function.lua
   source: file://backend.lua

@@ -100,15 +100,15 @@ entries:
   source: file://subject_call.lua
   modules: [funcs, security, registry, contract]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     context: bee.gateway:context
 - name: access
   kind: library.lua
   source: file://access.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     surface: bee.gateway:surface
     subject_call: bee.gateway.security:subject_call
@@ -125,8 +125,8 @@ entries:
   source: file://elevation.lua
   modules: [hash, registry]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability: bee.gov:capability_request
     subject_call: bee.gateway.security:subject_call
 - name: installation_policy
@@ -184,7 +184,7 @@ entries:
   source: file://installation.lua
   modules: [registry, funcs]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     installation: bee.hub:installation
     subject_call: bee.gateway.security:subject_call
 
@@ -250,6 +250,6 @@ entries:
   source: file://publish.lua
   modules: [registry, funcs]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     publishing: bee.hub:publishing
     subject_call: bee.gateway.security:subject_call

@@ -152,7 +152,7 @@ local function thread_page(value: unknown, cursor: integer, limit: integer): (Th
     if unknown_field then return nil, "page: " .. unknown_field end
     if not rows then return nil, "page records: " .. tostring(rows_error) end
     if scanned_through == nil then return nil, "page cursor is invalid" end
-    if scanned_through < cursor or scanned_through > bounds.MAX_THREAD_RECORDS then return nil, "page cursor is invalid" end
+    if scanned_through < cursor or scanned_through > record_bounds.MAX_THREAD_RECORDS then return nil, "page cursor is invalid" end
     if type(object.has_more) ~= "boolean" then return nil, "page has_more flag is invalid" end
     local page_cursor: integer = scanned_through
     local has_more: boolean = object.has_more

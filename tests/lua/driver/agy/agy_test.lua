@@ -358,7 +358,7 @@ local function define_tests()
             -- Oversized answer in state
             local bad_answer, err5 = funcs.call("bee.driver.agy.binding:normalize", {
                 index = 1,
-                state = {started = true, resumed = false, answer_truncated = false, answer = string.rep("x", bounds.MAX_RECORD_BYTES + 1)},
+                state = {started = true, resumed = false, answer_truncated = false, answer = string.rep("x", record_bounds.MAX_RECORD_BYTES + 1)},
                 envelope = {event = "step_update", step_update = {}},
             })
             if err5 then error(tostring(err5)) end
@@ -416,7 +416,7 @@ local function define_tests()
 
             local bad_terminal_answer, bad_terminal_answer_call_error = funcs.call("bee.driver.agy.binding:normalize", {
                 index = 1,
-                state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", answer = string.rep("x", bounds.MAX_RECORD_BYTES + 1)}},
+                state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", answer = string.rep("x", record_bounds.MAX_RECORD_BYTES + 1)}},
                 envelope = {event = "step_update", step_update = {}},
             })
             if bad_terminal_answer_call_error then error(tostring(bad_terminal_answer_call_error)) end
@@ -623,7 +623,7 @@ local function define_tests()
                 result = {
                     conversation_id = "c1",
                     status = "SUCCESS",
-                    response = string.rep("B", bounds.MAX_RECORD_BYTES + 500),
+                    response = string.rep("B", record_bounds.MAX_RECORD_BYTES + 500),
                 },
             })
             test.not_nil(result_step.terminal)

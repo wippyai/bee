@@ -27,7 +27,7 @@ entries:
   source: file://catalog.lua
   modules: [funcs, time]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     harness_catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
     admission: bee.harness.launch:admission
@@ -39,21 +39,21 @@ entries:
   source: file://scheduler.lua
   modules: [funcs]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     cancellation: bee.sessions.service:cancellation
 - name: cancellation
   kind: library.lua
   source: file://cancellation.lua
   modules: [funcs, security]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: scheduler_worker
   kind: process.lua
   source: file://scheduler_worker.lua
   method: main
   modules: [process, time, channel, logger, hash, funcs]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions:threads_journal
     executors: bee.sessions:executor_registry
@@ -72,7 +72,7 @@ entries:
   method: turn_run
   modules: [process, time, channel, logger, hash, funcs]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions:threads_journal
     executors: bee.sessions:executor_registry

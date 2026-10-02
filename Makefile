@@ -151,11 +151,15 @@ codex-native-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
-test: fixture-gateway-client
+test: fixture-gateway-client values-module
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
+
+.PHONY: values-module
+values-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py

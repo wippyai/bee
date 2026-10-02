@@ -122,8 +122,8 @@ function M.watch(db: sql.DB, actor: string, request: unknown): Result
     end
     local thread_id = bounds.id(object.thread_id)
     if not thread_id then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
-    local after = bounds.cursor(object.after_sequence)
-    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(bounds.MAX_THREAD_RECORDS)) end
+    local after = record_bounds.cursor(object.after_sequence)
+    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(record_bounds.MAX_THREAD_RECORDS)) end
     local wait_ms = bounds.integer(object.wait_ms)
     if not wait_ms or wait_ms < 0 then return failure("INVALID_ARGUMENT", "wait_ms must be a nonnegative integer") end
     local budget: integer? = nil
@@ -200,10 +200,10 @@ function M.wait(db: sql.DB, actor: string, request: unknown): Result
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local consumer_id = bounds.id(object.consumer_id)
     if not consumer_id then return failure("INVALID_ARGUMENT", "consumer_id is not an identifier") end
-    local after = bounds.cursor(object.after_sequence)
-    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(bounds.MAX_THREAD_RECORDS)) end
-    local limit = bounds.page_limit(object.limit)
-    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
+    local after = record_bounds.cursor(object.after_sequence)
+    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(record_bounds.MAX_THREAD_RECORDS)) end
+    local limit = record_bounds.page_limit(object.limit)
+    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS)) end
     local wait_ms = bounds.integer(object.wait_ms)
     if not wait_ms or wait_ms < 0 then return failure("INVALID_ARGUMENT", "wait_ms must be a nonnegative integer") end
     local budget: integer? = nil

@@ -17,7 +17,7 @@ local function decode_fault(raw: unknown): Fault?
     local declared = bounds.object(raw)
     if not declared or bounds.fields(declared, {"code", "message", "retryable"}) then return nil end
     local code = bounds.id(declared.code)
-    local message = bounds.text(declared.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+    local message = bounds.text(declared.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
     if not code or not message or (declared.retryable ~= nil and type(declared.retryable) ~= "boolean") then return nil end
     local retryable: boolean? = nil
     if declared.retryable ~= nil then retryable = declared.retryable end

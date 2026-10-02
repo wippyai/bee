@@ -54,7 +54,7 @@ local function reply_value(reply: unknown): ({[string]: unknown}?, string?, bool
         if not fault or bounds.fields(fault, {"code", "message", "retryable"}) or type(fault.retryable) ~= "boolean" then
             return nil, "owner returned a malformed fault", false
         end
-        local code, message = bounds.id(fault.code), bounds.text(fault.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+        local code, message = bounds.id(fault.code), bounds.text(fault.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
         if not code or not message then return nil, "owner returned an invalid fault", false end
         return nil, code .. ": " .. message, true
     end
@@ -95,7 +95,7 @@ local function decode_inbox_offer(value: unknown, thread_id: string, action_id: 
         "state", "dispatch", "offer_count", "in_reply_to"})
     if extra then return nil, "offer: " .. extra end
     local offered_thread, offered_action = bounds.id(object.thread_id), bounds.id(object.action_id)
-    local sequence, record_id = bounds.sequence(object.inbox_sequence), bounds.id(object.record_id)
+    local sequence, record_id = record_bounds.sequence(object.inbox_sequence), bounds.id(object.record_id)
     local digest = bounds.text(object.payload_digest, 64)
     local message_id = bounds.id(object.message_id)
     local message_kind = bounds.member(object.message_kind, {"request", "progress", "reply", "notification"})
@@ -331,8 +331,8 @@ local function output_record(event_key: string, payload: {[string]: unknown}): (
     local record: {[string]: unknown} = {source = "bee", body = {type = "extension", event_key = event_key,
         data = {type = "extension", event_name = "bee.carrier.output", event_revision = "1", payload_json = payload_json}}}
     local encoded_record, record_error = canonical.encode(record)
-    if not encoded_record or #encoded_record > bounds.MAX_RECORD_BYTES then
-        return nil, "tool event record exceeds " .. tostring(bounds.MAX_RECORD_BYTES) .. " bytes: " .. tostring(record_error or "")
+    if not encoded_record or #encoded_record > record_bounds.MAX_RECORD_BYTES then
+        return nil, "tool event record exceeds " .. tostring(record_bounds.MAX_RECORD_BYTES) .. " bytes: " .. tostring(record_error or "")
     end
     return record, nil
 end

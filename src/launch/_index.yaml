@@ -7,7 +7,7 @@ entries:
 - name: startup_failure
   kind: library.lua
   source: file://startup_failure.lua
-  imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
+  imports: {types: bee.hive:types, bounds: bee.values:bounds}
 - name: startup_watchdog
   kind: library.lua
   source: file://startup_watchdog.lua
@@ -160,7 +160,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, logger]
   imports:
-    clock: bee:clock
+    clock: bee.values:clock
     hosts: bee.launch:hosts
     leases: bee.app:host_leases
     protocol: bee.launch:protocol

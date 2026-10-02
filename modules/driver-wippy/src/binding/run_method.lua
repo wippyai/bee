@@ -183,7 +183,7 @@ local function decode_status(value: unknown, expected_thread: string, expected_a
     if object.error ~= nil then
         local fault = bounds.object(object.error)
         if not fault or bounds.fields(fault, {"code", "message", "retryable"}) then return nil, "status.error is malformed" end
-        if not bounds.id(fault.code) or not bounds.text(fault.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+        if not bounds.id(fault.code) or not bounds.text(fault.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
             or (fault.retryable ~= nil and type(fault.retryable) ~= "boolean") then return nil, "status.error is malformed" end
     end
     local idempotency_key, key_error = optional_text(object, "idempotency_key", 128)
@@ -225,7 +225,7 @@ local function decode_run_result(value: unknown, request: RunRequest): (DecodedR
     end
     local error_message: string? = nil
     if object.error ~= nil then
-        error_message = bounds.text(object.error, bounds.MAX_FAULT_MESSAGE_BYTES)
+        error_message = bounds.text(object.error, record_bounds.MAX_FAULT_MESSAGE_BYTES)
         if error_message == nil then return nil, "managed run result.error is malformed" end
     end
     if object.ok ~= (selected_outcome ~= "failed") or (not object.ok and (not error_message or error_message == "")) then
@@ -296,7 +296,7 @@ local function status_reply(reply: unknown, thread_id: string, attempt_id: strin
         if object.value ~= nil then return fail("INTERNAL", "failed status reply carries a value") end
         local fault = bounds.object(object.error)
         if not fault or bounds.fields(fault, {"code", "message"}) then return fail("INTERNAL", "managed run returned a malformed fault") end
-        local code, message = bounds.id(fault.code), bounds.text(fault.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+        local code, message = bounds.id(fault.code), bounds.text(fault.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
         if not code or message == nil then return fail("INTERNAL", "managed run returned a malformed fault") end
         return fail(code, message)
     end

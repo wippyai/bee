@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    handoff: bee.session:handoff
+    handoff: bee.desktop.types:handoff
     state: bee.desktop:state
 - name: handoff_apply_policy
   kind: security.policy

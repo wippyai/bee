@@ -1,6 +1,17 @@
 version: '1.0'
 namespace: bee.deps
 entries:
+- name: desktop
+  kind: ns.dependency
+  component: bee/desktop
+  version: 0.1.0-dev
+  parameters:
+  - name: target_application_protocol
+    value: bee.protocol:application
+  - name: session_policies
+    value:
+    - bee.security.desktop:session_policy
+    - bee.security.desktop:session_status_policy
 - name: persist
   kind: ns.dependency
   component: bee/persist
@@ -11,7 +22,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_decode
-    value: bee.protocol:decode
+    value: bee.desktop.types:projection
   - name: target_model
     value: bee.desktop:model
   - name: target_application_protocol

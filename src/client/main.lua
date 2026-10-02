@@ -15,6 +15,7 @@ local log = logger:named("bee.client")
 local store = require("store")
 local state = require("state")
 local decode = require("decode")
+local projection = require("projection")
 local input_decode = require("input_decode")
 local contract = require("contract")
 local inventory = require("inventory")
@@ -156,7 +157,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local function spawn_session(): string
             return tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = self,
                 ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee.security.desktop:session_policy")):spawn_monitored(
-                    "bee.session:main", "bee:workers", self, display.width, display.height, layout.preferences,
+                    "bee.desktop.service:main", "bee:workers", self, display.width, display.height, layout.preferences,
                     {scene = layout.scene, tabs = layout.tabs, preferences = layout.preferences})))
         end
         session = spawn_session()
@@ -349,7 +350,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 local message = selected.value
                 if tostring(message:from()) == session then
                     local data: unknown = message:payload():data()
-                    local ack = decode.ack(data)
+                    local ack = projection.ack(data)
                     if ack and ack.request_id == request_id then
                         if ack.error_code ~= "" then error("Session rejected final client snapshot") end
                         adopt(data)
@@ -1023,7 +1024,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 client_id = database.client_id, session = session})
                         end
                     elseif selected.channel == acknowledgements and sender == session then
-                        local ack = decode.ack(data)
+                        local ack = projection.ack(data)
                         if ack then
                             if ack.request_id == defaults_request then defaults_request = "" end
                             -- Scene and acknowledgement topics can arrive independently.

@@ -84,6 +84,7 @@ entries:
   meta:
     type: test
     suite: bee_docker
+    resources: [docker_daemon]
     timeout: 60s
   modules:
   - funcs

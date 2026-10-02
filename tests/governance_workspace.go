@@ -47,22 +47,8 @@ func setup(root string) error {
 	if err := os.MkdirAll(filepath.Join(root, "src"), 0700); err != nil {
 		return fmt.Errorf("create host source root: %w", err)
 	}
-	if err := copyFile(filepath.Join(root, "src", "clock.lua"), "src/clock.lua"); err != nil {
-		return fmt.Errorf("stage shared clock contract: %w", err)
-	}
-	protocolRoot := filepath.Join(root, "src", "protocol")
-	if err := os.MkdirAll(protocolRoot, 0700); err != nil {
-		return fmt.Errorf("create shared protocol namespace: %w", err)
-	}
-	if err := copyFile(filepath.Join(protocolRoot, "bounds.lua"), "src/protocol/bounds.lua"); err != nil {
-		return fmt.Errorf("stage shared protocol contracts: %w", err)
-	}
-	if err := copyFile(filepath.Join(protocolRoot, "canonical.lua"), "src/protocol/canonical.lua"); err != nil {
-		return fmt.Errorf("stage shared canonical contracts: %w", err)
-	}
-	protocolIndex := "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n  imports: {clock: bee:clock}\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n"
-	if err := os.WriteFile(filepath.Join(protocolRoot, "_index.yaml"), []byte(protocolIndex), 0600); err != nil {
-		return fmt.Errorf("write shared protocol contracts: %w", err)
+	if err := copyTree(filepath.Join(root, "modules", "values"), "modules/values"); err != nil {
+		return fmt.Errorf("stage shared values component: %w", err)
 	}
 	for _, name := range []string{"approvals", "capability", "gov", "hive", "hub", "persist", "sync", "threads"} {
 		if err := copyTree(filepath.Join(root, "modules", name), filepath.Join("modules", name)); err != nil {
@@ -91,10 +77,6 @@ entries:
   kind: process.host
   host: {workers: 2, max_processes: 8}
   lifecycle: {auto_start: true}
-- name: clock
-  kind: library.lua
-  source: file://clock.lua
-  modules: [time]
 - name: sync_exports
   kind: registry.entry
   data: {exports: []}
@@ -108,6 +90,10 @@ entries:
 	depsIndex := `version: '1.0'
 namespace: bee.deps
 entries:
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: 0.1.0-dev
 - name: dependency_sync
   kind: ns.dependency
   component: bee/sync
@@ -116,7 +102,7 @@ entries:
   - name: target_sender
     value: bee.gov.workspace.probe:sender
   - name: target_exports
-    value: bee:sync_exports
+    value: bee.sync.env:sync_exports
 - name: dependency_hub
   kind: ns.dependency
   component: bee/hub
@@ -139,7 +125,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_policies
-    value: bee:approver_policies
+    value: bee.security.approvals:approver_policies
   - name: process_host
     value: bee:workers
   - name: authority_policies
@@ -161,7 +147,7 @@ entries:
   - name: target_approval_consume_policy
     value: bee.security.approvals:approval_consume_policy
   - name: target_workspace_folder_read
-    value: bee.workspace.catalog:read
+    value: bee.workspace.binding:read
   - name: target_workspace_folder_policy
     value: bee.security.gov:workspace_folder_read_policy
 `
@@ -191,13 +177,13 @@ entries:
 	}
 
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
-	for _, name := range []string{"approvals", "capability", "gov", "hive", "hub", "persist", "sync", "threads"} {
+	for _, name := range []string{"values", "approvals", "capability", "gov", "hive", "hub", "persist", "sync", "threads"} {
 		lock += "  - name: bee/" + name + "\n    version: 0.1.0-dev\n"
 	}
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write runtime lock: %w", err)
 	}
-	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/capability: ./modules/capability\n    bee/gov: ./modules/gov\n    bee/hive: ./modules/hive\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/values: ./modules/values\n    bee/approvals: ./modules/approvals\n    bee/capability: ./modules/capability\n    bee/gov: ./modules/gov\n    bee/hive: ./modules/hive\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write bounded shutdown config: %w", err)
 	}

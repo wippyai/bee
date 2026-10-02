@@ -173,7 +173,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     local prompt_capability = capabilities["provider.system_prompt_append"]
     local prompt_available = policy_data.fixture == true or (prompt_capability and prompt_capability.supported == true)
     local draft, draft_error = editor.new(base, {options = form_options,
-        host_home = policy_data.allow_host_home == true, placements = policy_data.placement_profiles or {"bee.placement:native"}, mcp_tools = tools, instructions = policy_data.profile_instructions == true and prompt_available == true, workdir = allows("workdir"), thread = allows("thread")})
+        host_home = policy_data.allow_host_home == true, placements = policy_data.placement_profiles or {"bee.placement.profiles:native"}, mcp_tools = tools, instructions = policy_data.profile_instructions == true and prompt_available == true, workdir = allows("workdir"), thread = allows("thread")})
     if not draft then
         if profile then
             migration_draft = profile

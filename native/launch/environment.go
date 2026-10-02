@@ -55,6 +55,7 @@ func systemEnvironmentNames() []string {
 type hostEnvironment struct {
 	resolver hostResolver
 	facts    map[string]string
+	startup  *startupMonitor
 }
 
 func newHostEnvironment(resolver hostResolver) (*hostEnvironment, error) {
@@ -115,7 +116,22 @@ func safeExecutableName(name string) bool {
 		!strings.ContainsAny(name, `/\\`) && !strings.Contains(name, "..")
 }
 
-func (storage *hostEnvironment) Get(_ context.Context, name string) (string, error) {
+func (storage *hostEnvironment) Get(ctx context.Context, name string) (string, error) {
+	if name == "startup_progress" {
+		if storage.startup == nil {
+			return "", nil
+		}
+		return storage.startup.Get(ctx, "progress")
+	}
+	if name == "startup_sequence" || name == "startup_phase" {
+		if storage.startup != nil {
+			return storage.startup.Get(ctx, strings.TrimPrefix(name, "startup_"))
+		}
+		if name == "startup_sequence" {
+			return "0", nil
+		}
+		return "starting", nil
+	}
 	if value, ok := storage.facts[name]; ok {
 		return value, nil
 	}
@@ -129,7 +145,15 @@ func (storage *hostEnvironment) Get(_ context.Context, name string) (string, err
 	return path, nil
 }
 
-func (*hostEnvironment) Set(context.Context, string, string) error {
+func (storage *hostEnvironment) Set(ctx context.Context, name, value string) error {
+	if storage.startup != nil {
+		if name == "startup_phase" {
+			return storage.startup.Set(ctx, "phase", value)
+		}
+		if name == "startup_progress" {
+			return storage.startup.Set(ctx, "progress", value)
+		}
+	}
 	return errors.New("host environment is read-only")
 }
 

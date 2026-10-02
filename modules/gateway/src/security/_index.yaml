@@ -2,18 +2,19 @@ version: '1.0'
 namespace: bee.gateway.security
 entries:
 - name: store_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {comment: Gateway private store; target_db injects only the selected database resource}
   policy:
-    actions: [db.get]
-    resources: []
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, env.set, env.get]
+    resources: [bee.persist.env:startup_progress]
     effect: allow
 - name: database_ref_policy
   kind: security.policy
   meta: {comment: Gateway store resolution reads only its component-owned database reference}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway:database_ref]
+    resources: [bee.gateway.env:database_ref]
     effect: allow
 - name: readiness_policy
   kind: security.policy.expr
@@ -28,7 +29,7 @@ entries:
   meta: {comment: Gateway address lookup reads only its listener link, endpoint reference, and selected endpoint configuration}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway:listener_ref, bee.gateway:endpoint_ref]
+    resources: [bee.gateway.env:listener_ref, bee.gateway.env:endpoint_ref]
     effect: allow
 - name: supervisor_policy
   kind: security.policy
@@ -63,7 +64,7 @@ entries:
   meta: {comment: The MCP adapter reads only its component-owned links to the selected built-in tool policies}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway:tool_read_policy_ref, bee.gateway:tool_message_policy_ref, bee.gateway:tool_overlay_policy_ref, bee.gateway:tool_docs_policy_ref, bee.gateway:tool_components_policy_ref, bee.gateway:tool_delivery_policy_ref, bee.gateway:tool_publish_policy_ref, bee.gateway:tool_application_open_policy_ref, bee.gateway:tool_install_policy_ref, bee.gateway:tool_session_policy_ref]
+    resources: [bee.gateway.env:tool_read_policy_ref, bee.gateway.env:tool_message_policy_ref, bee.gateway.env:tool_overlay_policy_ref, bee.gateway.env:tool_docs_policy_ref, bee.gateway.env:tool_components_policy_ref, bee.gateway.env:tool_delivery_policy_ref, bee.gateway.env:tool_publish_policy_ref, bee.gateway.env:tool_application_open_policy_ref, bee.gateway.env:tool_install_policy_ref, bee.gateway.env:tool_session_policy_ref]
     effect: allow
 - name: session_contract_policy
   kind: security.policy
@@ -84,7 +85,7 @@ entries:
   meta: {comment: Private per-binding approval access reads only its component-owned policy links}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway:approval_request_policy_ref, bee.gateway:approval_consume_policy_ref]
+    resources: [bee.gateway.env:approval_request_policy_ref, bee.gateway.env:approval_consume_policy_ref]
     effect: allow
 - name: access_policy_read_policy
   kind: security.policy
@@ -100,17 +101,17 @@ entries:
   source: file://subject_call.lua
   modules: [funcs, security, registry, contract]
   imports:
-    bounds: bee.threads.records:bounds
-    context: bee.gateway:context
+    bounds: bee.values:bounds
+    context: bee.gateway.catalog:context
 - name: access
   kind: library.lua
   source: file://access.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
-    surface: bee.gateway:surface
+    surface: bee.gateway.catalog:surface
     subject_call: bee.gateway.security:subject_call
 - name: elevation_policy
   kind: security.policy
@@ -118,16 +119,16 @@ entries:
     comment: Private per-binding capability elevation calls the approval operations and the resource grant write the consumed decision effects; the thread-bound approval is the authority for every write
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.resources.binding:check_grant, bee.resources.binding:grant, bee:capability_catalog, bee.threads.binding:get, bee.threads.binding:read_after]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.resources.binding:check_grant, bee.resources.binding:grant, bee.security.capability:capability_catalog, bee.threads.binding:get, bee.threads.binding:read_after]
     effect: allow
 - name: elevation
   kind: library.lua
   source: file://elevation.lua
   modules: [hash, registry]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    capability: bee.gov:capability_request
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    capability: bee.gov.capability:capability_request
     subject_call: bee.gateway.security:subject_call
 - name: installation_policy
   kind: security.policy
@@ -136,7 +137,7 @@ entries:
   policy:
     actions: [funcs.call, registry.get]
     resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate,
-      bee.approvals.binding:complete_installation_effect, bee.hub.binding:call, bee.gateway:install_configuration_ref,
+      bee.approvals.binding:complete_installation_effect, bee.hub.binding:call, bee.gateway.env:install_configuration_ref,
       bee.threads.binding:get, bee.threads.binding:read_after]
     effect: allow
 - name: installation_queue_policy
@@ -184,8 +185,8 @@ entries:
   source: file://installation.lua
   modules: [registry, funcs]
   imports:
-    bounds: bee.threads.records:bounds
-    installation: bee.hub:installation
+    bounds: bee.values:bounds
+    installation: bee.hub.activation:installation
     subject_call: bee.gateway.security:subject_call
 
 - name: session_boundary_policy
@@ -218,7 +219,7 @@ entries:
   policy:
     actions: [funcs.call, registry.get]
     resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate,
-      bee.approvals.binding:complete_publication_effect, bee.hub.binding:call, bee.gateway:publish_configuration_ref,
+      bee.approvals.binding:complete_publication_effect, bee.hub.binding:call, bee.gateway.env:publish_configuration_ref,
       bee.threads.binding:get, bee.threads.binding:read_after]
     effect: allow
 - name: publication_queue_policy
@@ -250,6 +251,6 @@ entries:
   source: file://publish.lua
   modules: [registry, funcs]
   imports:
-    bounds: bee.threads.records:bounds
-    publishing: bee.hub:publishing
+    bounds: bee.values:bounds
+    publishing: bee.hub.publication:publishing
     subject_call: bee.gateway.security:subject_call

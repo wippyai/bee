@@ -12,7 +12,7 @@ local protected_kernel = require("protected_kernel")
 
 local M = {}
 local PROFILE_ID = "bee.env:gov_activation_profiles"
-local KERNEL_ID = "bee:protected_kernel"
+local KERNEL_ID = "bee.security.gov:protected_kernel"
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Object = {[string]: unknown}
 

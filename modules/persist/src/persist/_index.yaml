@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.persist.persist
+entries:
+- name: ledger
+  kind: library.lua
+  source: file://ledger.lua
+  modules: [sql, hash, env, time, logger]
+- name: database
+  kind: library.lua
+  source: file://database.lua
+  modules: [sql]
+  imports:
+    ledger: bee.persist.persist:ledger
+- name: transaction
+  kind: library.lua
+  source: file://transaction.lua
+  modules: [sql, time]

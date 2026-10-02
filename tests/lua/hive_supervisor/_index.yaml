@@ -19,7 +19,7 @@ entries:
     test: wippy.test:test
     peers: bee.hive.supervisor:peers
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: registration_test
   kind: function.lua
   source: file://registration_test.lua
@@ -39,7 +39,7 @@ entries:
     types: bee.hive:types
     admission: bee.hive.supervisor:admission
     peers: bee.hive.supervisor:peers
-    catalog: bee.hive:catalog
+    catalog: bee.hive.exposure:catalog
 - name: dispatch_probe
   kind: function.lua
   source: file://dispatch_probe.lua
@@ -59,7 +59,7 @@ entries:
     test: wippy.test:test
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
 - name: audiences_probe
   kind: function.lua
@@ -68,7 +68,7 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
 - name: audiences_test
   kind: function.lua
@@ -102,7 +102,7 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
 - name: replica_admission_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -118,11 +118,11 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.hive.supervisor:replica_admission_test_policy]}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
-    catalog: bee.hive:catalog
-    version: bee.sync:version
+    catalog: bee.hive.exposure:catalog
+    version: bee.sync.values:version
 - name: local_name_policy
   kind: security.policy
   meta: {type: test_support}
@@ -138,11 +138,11 @@ entries:
   modules: [funcs, security, registry, uuid]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
-    store: bee.storage:store
-    binding: bee.storage:binding
+    store: bee.workspace.persist:store
+    binding: bee.workspace.types:selection
     workspace_page: bee.hive.api:workspaces_page
 - name: workspace_commands_test
   kind: function.lua
@@ -152,7 +152,7 @@ entries:
   modules: [funcs, security, registry, time]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     commands: bee.hive.supervisor:workspace_commands

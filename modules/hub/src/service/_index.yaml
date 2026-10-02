@@ -6,12 +6,12 @@ entries:
   source: file://worker.lua
   method: main
   modules: [process, security]
-  imports: {publication: bee.hub.binding:publication, transaction: bee.persist:transaction, bounds: bee.protocol:bounds}
+  imports: {publication: bee.hub.binding:publication, transaction: bee.persist.persist:transaction, bounds: bee.values:bounds}
   meta: {type: internal}
 - name: publish_worker
   kind: process.lua
   source: file://publish_worker.lua
   method: main
   modules: [process, security]
-  imports: {publish: bee.hub.binding:publish, transaction: bee.persist:transaction}
+  imports: {publish: bee.hub.binding:publish, transaction: bee.persist.persist:transaction}
   meta: {type: internal}

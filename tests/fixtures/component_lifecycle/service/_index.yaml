@@ -6,7 +6,7 @@ entries:
   source: file://worker.lua
   method: main
   modules: [process, registry, channel, time, fs, logger, hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.protocol:canonical}
+  imports: {bounds: bee.values:bounds, canonical: bee.values:canonical}
 - name: worker_service
   kind: process.service
   process: bee.files.service:worker

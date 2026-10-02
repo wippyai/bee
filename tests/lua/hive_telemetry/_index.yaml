@@ -13,8 +13,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    bounds: bee.protocol:bounds
-    sampling: bee.hive.telemetry:sampling
+    bounds: bee.values:bounds
+    sampling: bee.hive.telemetry.binding:sampling
 - name: holdings_test
   kind: function.lua
   source: file://holdings_test.lua
@@ -30,7 +30,7 @@ entries:
   imports:
     test: wippy.test:test
     leases: bee.app:host_leases
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: cluster_test
   kind: function.lua
   source: file://cluster_test.lua

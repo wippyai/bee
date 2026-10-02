@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.gov.env
+entries:
+- name: database_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref}
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: node_identity_migration_source
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: node_identity_migration_source
+  default: ""
+  readonly: true
+- name: db_path
+  kind: env.variable
+  storage: bee.gov.env:environment
+  variable: BEE_GOVERNANCE_DB
+  default: .wippy/governance.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.gov.env:db_path}
+  lifecycle: {auto_start: true}
+- name: publication_profiles_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected publication profiles; absent link fails closed}
+- name: activation_profiles_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected activation profiles; absent link fails closed}
+- name: approval_request_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected approval request policy; absent link fails closed}
+- name: approval_consume_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected approval consume policy; absent link fails closed}
+- name: workspace_folder_read_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected workspace catalog read operation; absent link fails closed}
+- name: workspace_folder_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected workspace folder read policy; absent link fails closed}

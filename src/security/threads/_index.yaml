@@ -2,12 +2,16 @@ version: '1.0'
 namespace: bee.security.threads
 entries:
 - name: thread_storage_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
+    - env.get
+    - env.set
     - db.get
     resources:
-    - bee.threads:db
+    - bee.persist.env:startup_progress
+    - bee.threads.env:db
     effect: allow
 - name: thread_node_policy
   kind: security.policy
@@ -22,7 +26,7 @@ entries:
     actions:
     - registry.get
     resources:
-    - bee.threads:database_ref
+    - bee.threads.env:database_ref
     effect: allow
 - name: thread_authority_client_policy
   kind: security.policy
@@ -32,7 +36,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:authority_local
+    - bee.threads.binding:authority_local
     - create
     - get
     - list
@@ -93,7 +97,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:lifecycle_local
+    - bee.threads.binding:lifecycle_local
     - admit_action
     - prepare_attempt
     - start_attempt
@@ -115,7 +119,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:delivery_local
+    - bee.threads.binding:delivery_local
     - claim
     - dispatch
     - ack
@@ -201,7 +205,7 @@ entries:
     - contract.call
     - funcs.call
     resources:
-    - bee.threads:approvals_local
+    - bee.threads.binding:approvals_local
     - append
     - bee.threads.binding:append
     effect: allow
@@ -215,11 +219,12 @@ entries:
     expression: action == "process.send" || resource == "bee.threads.waiter"
     effect: allow
 - name: thread_outbox_pump_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
     comment: Selected by the host for the forwarding pump; it reaches the shared outbox tables and nothing else, and the host links its transport separately
   policy:
-    actions: [db.get, registry.get, system.read, process.registry.lookup, process.listen, process.unlisten, process.send, channel.select]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, registry.get, system.read, process.registry.lookup, process.listen, process.unlisten, process.send, channel.select, env.set, env.get]
     resources: '*'
     effect: allow
 - name: thread_sessions_owner_policy

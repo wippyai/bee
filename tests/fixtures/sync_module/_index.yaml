@@ -47,4 +47,4 @@ entries:
       security:
         actor: {id: bee.sync.probe}
 
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}

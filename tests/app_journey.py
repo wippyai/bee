@@ -133,7 +133,7 @@ def assert_overlay_authority(project):
     activation = yaml.safe_load((project / "src/env/_index.yaml").read_text())
     profiles = next(entry for entry in activation["entries"] if entry["name"] == "gov_activation_profiles")["data"]["profiles"]
     assert not any(profile.get("super_edit") or profile.get("expires_at") for profile in profiles), profiles
-    kernel = yaml.safe_load((project / "src/_index.yaml").read_text())
+    kernel = yaml.safe_load((project / "src/security/gov/_index.yaml").read_text())
     protected = next(entry for entry in kernel["entries"] if entry["name"] == "protected_kernel")["data"]
     assert protected["super_edit"] == [], protected["super_edit"]
 
@@ -247,7 +247,7 @@ def apply_staged_in_ui(ui, staged, root, expected_capability=None):
     try:
         ui.wait("REVIEW " + staged["workspace"], timeout=20)
     except AssertionError:
-        Path("/tmp/app-journey-replacement-desktop.raw").write_bytes(ui.raw)
+        (Path(root) / ".wippy/app-journey-replacement-desktop.raw").write_bytes(ui.raw)
         raise
     ui.wait("Verdict ready", timeout=20)
     ui.key(b"\r")
@@ -426,7 +426,7 @@ def configure_open_agent(project):
     policy["data"]["environment"]["BEE_FIXTURE_STREAM"] = \
         str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     policy["data"]["environment"]["BEE_FIXTURE_WINDOW_DEFINITION"] = "bee.harness.app:app"
-    harness = project / "modules/harness/src/_index.yaml"
+    harness = project / "modules/harness/src/launch/_index.yaml"
     harness_document = yaml.safe_load(harness.read_text())
     activation = next(entry for entry in harness_document["entries"] if entry["name"] == "harness_activation")
     activation["data"]["bindings"].append("bee.window.hooks.fixture:binding")
@@ -440,7 +440,7 @@ def configure_open_agent(project):
     hooks.write_text(yaml.safe_dump(hooks_document, sort_keys=False))
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
-    approvals = project / "src/_index.yaml"
+    approvals = project / "src/security/approvals/_index.yaml"
     approval_document = yaml.safe_load(approvals.read_text())
     approvers = next(entry for entry in approval_document["entries"]
                      if entry["name"] == "approver_policies")

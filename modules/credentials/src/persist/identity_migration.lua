@@ -18,7 +18,7 @@ end
 function M.apply(db: sql.DB, destination_raw: unknown, source_override: unknown?): (boolean, string?)
     local source_raw: unknown = source_override
     if source_raw == nil then
-        local source, env_error = env.get("bee.credentials:node_identity_migration_source")
+        local source, env_error = env.get("bee.credentials.env:node_identity_migration_source")
         if env_error then
             if env_error:kind() == errors.NOT_FOUND then return true, nil end
             return false, "read credential legacy node identity: " .. tostring(env_error)

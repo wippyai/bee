@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.sessions.executor
+entries:
+- name: executor_selection
+  kind: registry.entry
+  meta:
+    type: bee.sessions.executor_selection
+    comment: The host-selected executor binding refs
+  data:
+    refs:
+    - bee.sessions.binding:external_executor_binding
+- name: driver_route
+  kind: library.lua
+  source: file://driver_route.lua
+  modules:
+  - registry
+- name: executor_registry
+  kind: library.lua
+  source: file://executor_registry.lua
+  modules:
+  - registry
+  - funcs
+  - security
+  imports:
+    scheduler: bee.sessions.service:scheduler

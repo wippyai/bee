@@ -32,9 +32,11 @@ const (
 // calls Plan before it opens state, while Load registers the one read-only host
 // environment storage needed by native integrations.
 type Host struct {
+	bootLog *bootLog
 	// ownerState is the state directory selected for a retained owner launch. It
 	// is set during planning so Load can add the owner's enrollment publisher.
 	ownerState string
+	startup    *startupMonitor
 	// ownerLaunch is the launch identity the starting client handed this owner.
 	ownerLaunch        string
 	nodeIdentity       string
@@ -71,6 +73,12 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	if err := ctx.Err(); err != nil {
 		return app.Plan{}, err
 	}
+	var traceError error
+	host.bootLog, traceError = newBootLog(os.Getenv(bootLogVariable))
+	if traceError != nil {
+		return app.Plan{}, traceError
+	}
+	host.bootLog.phase("launch_plan", "point")
 	// A harness hook process carries a token the gateway authorizes. It posts one
 	// event within the hook deadline and never selects a project, opens state or
 	// reaches the retained owner.
@@ -171,7 +179,8 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			return app.Plan{}, err
 		}
 		host.ownerState, host.ownerLaunch = state, launched
-		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
+		plan.Prepare = func(ctx context.Context) (boot.Config, func() error, error) {
+			host.bootLog.phase("owner_prepare", "begin")
 			config, release, err := prepareOwnerForProject(state, launch.Dir, owner)
 			if err != nil {
 				return nil, nil, err
@@ -181,7 +190,16 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 				return nil, nil, errors.Join(err, release())
 			}
 			host.nodeIdentity, host.legacyNodeIdentity = identity.NodeID, identity.LegacyNodeID
-			return config, release, nil
+			host.bootLog.phase("owner_prepare", "end")
+			if host.bootLog != nil {
+				config = bootLoggingConfig(config)
+			}
+			monitor, err := beginStartup(ctx, state, launched, os.Getenv(ownerProgressLogVariable))
+			if err != nil {
+				return nil, nil, errors.Join(err, release())
+			}
+			host.startup = monitor
+			return config, func() error { return errors.Join(monitor.stop(), release()) }, nil
 		}
 		return plan, nil
 	}
@@ -198,7 +216,10 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		selected.State = state
 		plan.DefaultState = ""
 		route := host.clientRoute
-		plan.Run = func(ctx context.Context) error { return route(ctx, selected, intent) }
+		plan.Run = func(ctx context.Context) error {
+			defer host.bootLog.close()
+			return route(context.WithValue(ctx, bootLogKey{}, host.bootLog), selected, intent)
+		}
 		if intent.hive != nil {
 			command := *intent.hive
 			switch command.verb {
@@ -240,8 +261,12 @@ func (host *Host) prepareStateIdentity(ctx context.Context, state, projectDir st
 }
 
 func (host *Host) Load(ctx context.Context) (context.Context, error) {
-	registry := envapi.GetRegistry(ctx)
-	if registry == nil {
+	host.bootLog.phase("runtime_load", "point")
+	if err := host.bootLog.subscribe(ctx); err != nil {
+		return ctx, err
+	}
+	environment := envapi.GetRegistry(ctx)
+	if environment == nil {
 		return ctx, errors.New("environment registry is unavailable")
 	}
 	storage, err := newHostEnvironment(host.resolver)
@@ -254,7 +279,11 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 	if host.nodeIdentity != "" {
 		storage.facts["node_identity"] = host.nodeIdentity
 	}
-	registry.RegisterStorage(registryID(), storage)
+	environment.RegisterStorage(registryID(), storage)
+	if host.startup != nil {
+		host.startup.advance("Starting services")
+		storage.startup = host.startup
+	}
 	return ctx, nil
 }
 
@@ -263,6 +292,7 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 // it starts the publisher directly; the cluster it depends on is already up by
 // the time Start runs.
 func (host *Host) Start(ctx context.Context) error {
+	host.bootLog.phase("runtime_start", "point")
 	if host.ownerState == "" {
 		return nil
 	}
@@ -282,11 +312,13 @@ func (host *Host) Start(ctx context.Context) error {
 			}
 		}
 	}
+	host.bootLog.phase("owner_native_ready", "point")
 	return nil
 }
 
 // Stop releases the owner components this host started.
 func (host *Host) Stop(ctx context.Context) error {
+	defer host.bootLog.close()
 	var result error
 	for _, component := range host.components {
 		if stopper, ok := component.(boot.Stopper); ok {

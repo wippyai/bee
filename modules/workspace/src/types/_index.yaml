@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.workspace.types
+entries:
+- name: selection
+  kind: library.lua
+  source: file://selection.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+- name: recovery
+  kind: library.lua
+  source: file://recovery.lua
+  modules:
+  - json
+  imports:
+    appearance: bee.app:appearance
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  imports:
+    bounds: bee.values:bounds
+    catalog: bee.workspace.persist:catalog

@@ -10,7 +10,7 @@ end
 local function run()
     test.describe("Placement profiles", function()
         test.it("keeps native as the default", function()
-            test.eq(profiles.DEFAULT, "bee.placement:native")
+            test.eq(profiles.DEFAULT, "bee.placement.profiles:native")
             local value, err = profiles.decode({schema_revision = "bee.placement-profile@1", placement_binding = "bee.placement.native.binding:binding"})
             if not value then error(tostring(err)) end
             test.eq(value.placement_binding, "bee.placement.native.binding:binding")
@@ -26,9 +26,9 @@ local function run()
             test.is_nil(profiles.decode(value))
         end)
         test.it("admits a host-selected image recipe without accepting a mutable tag", function()
-            local value = docker(); value.image_ref = nil; value.image_recipe_ref = "bee.placement.docker:coding_recipe"
+            local value = docker(); value.image_ref = nil; value.image_recipe_ref = "bee.placement.docker.profiles:coding_recipe"
             local decoded = assert(profiles.decode(value))
-            test.eq(decoded.image_recipe_ref, "bee.placement.docker:coding_recipe")
+            test.eq(decoded.image_recipe_ref, "bee.placement.docker.profiles:coding_recipe")
             value.image_ref = "sha256:" .. string.rep("a", 64)
             test.is_nil(profiles.decode(value))
         end)
@@ -45,7 +45,7 @@ local function run()
         end)
         test.it("narrows canonical overrides without changing the host template", function()
             local base = assert(profiles.decode(docker()))
-            local resolved = {ref = "bee.placement.docker:coding", digest = string.rep("a", 64), profile = base}
+            local resolved = {ref = "bee.placement.docker.profiles:coding", digest = string.rep("a", 64), profile = base}
             local tuned = assert(profiles.tune(resolved, {limits = {memory_bytes = 1073741824, cpu_millicpus = 500, pids = 16},
                 mounts = {{resource = "project", subpath = "", target = "/workspace", access = "read"}}}))
             test.eq(tuned.profile.limits.memory, 1073741824)

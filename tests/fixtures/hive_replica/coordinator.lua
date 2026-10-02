@@ -150,7 +150,7 @@ local function must(result: {[string]: unknown}, operation: string): {[string]: 
     return object(result.value)
 end
 local function configure_exports()
-    local entry = assert(registry.get("bee:sync_exports"))
+    local entry = assert(registry.get("bee.sync.env:sync_exports"))
     entry.data = {exports = {
         {feed = delivery.FEED, content_kinds = {delivery.CONTENT_KIND}},
         {feed = "replica-feed", content_kinds = {"test.binary"}},
@@ -160,7 +160,7 @@ local function configure_exports()
 end
 local function publish_binary()
     local item = descriptor("node-1", WORKER_KEY, CONTENT)
-    local replica_store = assert(replicas.open("bee.sync:db"))
+    local replica_store = assert(replicas.open("bee.sync.env:db"))
     local begun = replicas.begin(replica_store, item, 0)
     must(assert(bounds.object(begun)), "begin generic binary publication")
     local offset = 0
@@ -176,7 +176,7 @@ local function publish_binary()
         version_key = item.key, descriptor_digest = item.digest}))),
         "finish generic binary publication")
     assert(replicas.close(replica_store))
-    local feed = assert(sync.open({resource = "bee.sync:db", owner = "node-1"}))
+    local feed = assert(sync.open({resource = "bee.sync.env:db", owner = "node-1"}))
     must(assert(bounds.object(sync.append(feed, {feed = item.feed, event_id = item.digest,
         idempotency_key = item.digest, event_type = "test.binary.published", payload = item,
         projection_key = item.key, projection_value = item, expected_revision = 0}))),
@@ -206,7 +206,7 @@ local function application_descriptor(item: delivery.Delivery): version.Descript
     return result
 end
 local function governance_plans(): plan_store.Store
-    local result, err = plan_store.open("bee.gov:db", "node-0", "workspace-node-0")
+    local result, err = plan_store.open("bee.gov.env:db", "node-0", "workspace-node-0")
     if not result then error(tostring(err)) end
     return result
 end
@@ -247,7 +247,7 @@ end
 local function configure_destination()
     local profiles = assert(registry.get("bee.env:gov_activation_profiles"))
     local configured_profiles = type(profiles.data) == "table" and object(profiles.data).profiles or nil
-    local approvals = assert(registry.get("bee:approver_policies"))
+    local approvals = assert(registry.get("bee.security.approvals:approver_policies"))
     local configured_approvals = type(approvals.data) == "table" and object(approvals.data).policies or nil
     if type(configured_profiles) == "table" and #configured_profiles > 0
         and type(configured_approvals) == "table" and #configured_approvals > 0 then return end
@@ -268,7 +268,7 @@ local function configure_agent_destination(scenario: AgentScenario)
     -- so the same ordinary desktop composition can recover it after the
     -- headless coordinator exits.
     local profiles = assert(registry.get("bee.env:gov_activation_profiles"))
-    local approvals = assert(registry.get("bee:approver_policies"))
+    local approvals = assert(registry.get("bee.security.approvals:approver_policies"))
     local configured_profiles = object(profiles.data).profiles
     if scenario.admission == "rule" then
         -- Only the shipped rule may admit this source: no explicit row, Hive
@@ -525,7 +525,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             assert(io.print("BEE_HIVE_SUPERVISOR replica_sent"))
         elseif command == "replica-read" then
             local item = descriptor("node-1", VERSION_KEY, CONTENT)
-            local store, open_error = replicas.open("bee.sync:db")
+            local store, open_error = replicas.open("bee.sync.env:db")
             if not store then error(tostring(open_error)) end
             local content, content_error = replicas.content(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
@@ -540,7 +540,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             local deadline = time.now():add("30s")
             local found = false
             while time.now():before(deadline) do
-                local store = assert(replicas.open("bee.sync:db"))
+                local store = assert(replicas.open("bee.sync.env:db"))
                 local content = replicas.content(store, {source_owner = item.owner_id, feed = item.feed,
                     version_key = item.key, descriptor_digest = item.digest})
                 assert(replicas.close(store))
@@ -559,7 +559,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             local label = string.sub(command, -2)
             local selected_version = label == "v1" and PACKAGE_V1 or PACKAGE_V2
             local exact = private_artifact(selected_version)
-            local result = publisher.publish("bee.sync:db", "node-1", {source_workspace = "shared/application",
+            local result = publisher.publish("bee.sync.env:db", "node-1", {source_workspace = "shared/application",
                 component = PACKAGE, version = selected_version,
                 artifact = {bytes = exact.bytes, digest = exact.digest}})
             required(assert(bounds.object(result)), "publish application " .. selected_version)
@@ -600,7 +600,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             local selected_version = label == "v1" and PACKAGE_V1 or PACKAGE_V2
             local item = application(selected_version)
             local descriptor_value = application_descriptor(item)
-            local replica_store, replica_error = replicas.open("bee.sync:db")
+            local replica_store, replica_error = replicas.open("bee.sync.env:db")
             if not replica_store then error(tostring(replica_error)) end
             local plans = governance_plans()
             local staged = destination.stage_replica(plans, replica_store, "destination-reviewer", {
@@ -737,7 +737,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 end
             else
                 local exact = exact_agent_artifact(agent)
-                local result = publisher.publish("bee.sync:db", "node-1", {source_workspace = AGENT_WORKSPACE,
+                local result = publisher.publish("bee.sync.env:db", "node-1", {source_workspace = AGENT_WORKSPACE,
                     component = AGENT_PACKAGE, version = AGENT_VERSION, artifact = {bytes = exact.bytes, digest = exact.digest}})
                 required(assert(bounds.object(result)), "publish retained agent artifact")
             end

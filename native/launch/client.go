@@ -45,7 +45,10 @@ type clientSeams struct {
 	// local enrollment, or the context ends.
 	waitEnrolled func(ctx context.Context, state, node string, public ed25519.PublicKey) error
 	// report receives the foreground route line.
-	report io.Writer
+	report         io.Writer
+	progressReport io.Writer
+	progress       func(state string, previous startupSnapshot, report io.Writer) func() error
+	abortOwner     func(state, launchID string) error
 	// released waits until no owner holds state.
 	released func(ctx context.Context, state string) error
 	// holdOwnerExit pins the owner process before a stop request so success can
@@ -207,7 +210,26 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	// This client's own start won only when the owner publishes the launch
 	// identity it handed its child.
 	started := false
+	launched := ""
+	var observe func() error
+	if seams.progress != nil {
+		previous, _ := readStartup(launch.State)
+		if owned {
+			previous = startupSnapshot{}
+		}
+		progressReport := seams.progressReport
+		if progressReport == nil {
+			progressReport = seams.report
+		}
+		observe = seams.progress(launch.State, previous, progressReport)
+	}
+	defer func() {
+		if result != nil && launched != "" && seams.abortOwner != nil {
+			result = errors.Join(result, seams.abortOwner(launch.State, launched))
+		}
+	}()
 	if !owned {
+		bootPhase(ctx, "owner_spawn", "begin")
 		previous, err := seams.waitDescriptor(ctx, directory)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
@@ -220,10 +242,17 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		if err != nil {
 			return err
 		}
-		startup, cancel := context.WithTimeout(ctx, waitOwnerTimeout)
-		defer cancel()
+		bootPhase(ctx, "owner_spawn", "end")
+		bootPhase(ctx, "owner_wait", "begin")
+		launched = launchID
+		startup := ctx
+		if observe == nil {
+			var cancel context.CancelFunc
+			startup, cancel = context.WithTimeout(ctx, waitOwnerTimeout)
+			defer cancel()
+		}
 		held := func() (bool, error) { return seams.owned(launch.State) }
-		published, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, previous, done, wait, held)
+		published, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, previous, done, wait, held, observe)
 		if err != nil {
 			if running, ownedErr := seams.owned(launch.State); ownedErr == nil && running && errors.Is(err, context.DeadlineExceeded) {
 				return fmt.Errorf("a running Bee owner did not publish its rendezvous in time: %w; %s", err, manualOwnerStop(launch.State))
@@ -231,6 +260,7 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 			return fmt.Errorf("Bee owner startup: %w", err)
 		}
 		started = published.Launch == launchID
+		bootPhase(ctx, "owner_wait", "end")
 	}
 	owner, err := seams.waitDescriptor(ctx, directory)
 	if err != nil {
@@ -263,11 +293,14 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		join.Public, join.Key = public, private
 	}
 	join.Node = clientNodeName(join.Public)
+	bootPhase(ctx, "client_enrollment", "begin")
+	bootPhase(ctx, "client_key_publish", "begin")
 	release, err := enrollClient(ctx, launch.State, join.Node, join.Public)
 	if err != nil {
 		return err
 	}
 	defer func() { result = errors.Join(result, release()) }()
+	bootPhase(ctx, "client_key_publish", "end")
 	// The owner registers the trusted key on its own bounded refresh, so wait
 	// until the enrollment lists this node with this key before the mesh
 	// handshake.
@@ -277,6 +310,8 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 	}
 	join.State = launch.State
+	bootPhase(ctx, "client_enrollment", "end")
+	bootPhase(ctx, "client_join", "begin")
 	if err := seams.join(ctx, join); err != nil {
 		// An owner this client started only for a command it refused retains no
 		// desktop. The owner itself declines when another local client uses it.
@@ -335,13 +370,20 @@ const detachedLine = "Bee is still running; bee stop ends it\n"
 // the wait continues; when the child exits and nothing holds the state, the
 // start failed.
 func waitDescriptorOrExit(ctx context.Context, read func(context.Context, string) (rendezvous.Descriptor, error),
-	directory string, previous rendezvous.Descriptor, done <-chan struct{}, wait func() error, owned func() (bool, error)) (rendezvous.Descriptor, error) {
+	directory string, previous rendezvous.Descriptor, done <-chan struct{}, wait func() error, owned func() (bool, error), observers ...func() error) (rendezvous.Descriptor, error) {
 	tick := time.NewTicker(waitPollInterval)
 	defer tick.Stop()
 	finished := false
 	for {
 		if err := ctx.Err(); err != nil {
 			return rendezvous.Descriptor{}, err
+		}
+		for _, observe := range observers {
+			if observe != nil {
+				if err := observe(); err != nil {
+					return rendezvous.Descriptor{}, err
+				}
+			}
 		}
 		if descriptor, err := read(ctx, directory); err == nil && descriptor != previous {
 			return descriptor, nil

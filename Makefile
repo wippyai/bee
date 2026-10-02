@@ -47,9 +47,10 @@ hub-self-update-runtime-check:
 .PHONY: hub-self-update-standalone-check
 hub-self-update-standalone-check:
 	BEE_RUNTIME="$(or $(BEE_RUNTIME),$(abspath $(WIPPY)))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
-.PHONY: hub-core-pack
-hub-core-pack: $(TOOLCHAIN_CURRENT)
-	WIPPY="$(abspath $(WIPPY))" BEE_CORE_VERSION="$(BEE_CORE_VERSION)" build/core-pack.sh
+.PHONY: hub-core-artifact-check
+hub-core-artifact-check: native-pack
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/core_artifact.py "$(abspath $(BEE_DEPLOYMENT))" "$(abspath $(BEE_BUNDLE_MANIFEST))"
+check: hub-core-artifact-check
 .PHONY: settings-unit-check capability-grants-unit-check
 settings-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.settings view_test
@@ -162,18 +163,34 @@ codex-native-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
-test: fixture-gateway-client component-inventory-check
+test: fixture-gateway-client values-module component-inventory-check
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_TEST_JOBS="$(TEST_JOBS)" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
+
+.PHONY: values-module
+values-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py
+
+.PHONY: boot-measure boot-measure-unit-check
+BOOT_BASELINE ?= .wippy/boot-measure/baseline.json
+BOOT_RUNS ?= 3
+boot-measure:
+	@test -x "$(or $(BEE_BINARY),dist/bee)" || { echo 'Run make standalone before boot-measure.' >&2; exit 1; }
+	@test -n "$(BOOT_PREVIOUS_BEE)" || { echo 'BOOT_PREVIOUS_BEE must name the previous standalone build.' >&2; exit 1; }
+	python3 tests/boot_measure.py "$(abspath $(or $(BEE_BINARY),dist/bee))" --previous "$(abspath $(BOOT_PREVIOUS_BEE))" --baseline "$(BOOT_BASELINE)" --runs "$(BOOT_RUNS)" $(if $(filter 1,$(BOOT_RECORD)),--record,) $(if $(filter 1,$(BOOT_DIAGNOSTIC)),--diagnostic,)
+boot-measure-unit-check:
+	python3 -m unittest discover -s tests -p test_boot_measure.py
 .PHONY: clipboard-contract-check
 clipboard-contract-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/clipboard_contract.py
-.PHONY: client-desktop-check local-launcher-check client-storage-check retained-desktop-check
+.PHONY: client-desktop-check local-launcher-check client-storage-check retained-desktop-check sessions-display-check
+sessions-display-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-supervisor-probe", sessions_windows=True)'
 retained-desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-supervisor-probe"); client_desktop.run(command="retained-supervisor-probe", storage_delay=True); client_desktop.run(command="retained-supervisor-probe", launch_exit=True); client_desktop.run(command="retained-supervisor-probe", primary_render_delay=True); client_desktop.run(command="retained-supervisor-probe", copy_exit=True); client_desktop.run(command="retained-supervisor-probe", primary_exit=True); client_desktop.run(command="retained-supervisor-probe", host_prompt=True)'
 client-storage-check:
@@ -288,7 +305,7 @@ CHECK_JOBS ?= 4
 .PHONY: check-parallel
 check-parallel:
 	python3 build/parallel_check.py --jobs "$(CHECK_JOBS)"
-check-shard-foundation: $(TOOLCHAIN_CURRENT) check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
+check-shard-foundation: $(TOOLCHAIN_CURRENT) check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check hub-core-artifact-check
 check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check kernel-bare-check package-drop-check retained-owner-check hive-supervisor-check
 check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check thread-storage-check resources-check
 check-shard-services-storage: workspace-storage-check
@@ -404,7 +421,7 @@ retained-broker-fallback-check:
 check: session-upgrade-fallback-check
 session-upgrade-fallback-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(failed_session_upgrade=True)'
-desktop-client-launch-check:
+desktop-client-launch-check: sessions-display-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 desktop-client-recovery-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
@@ -686,6 +703,12 @@ persist-migration-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
 check: persist-migration-check
 check-shard-services-storage: persist-migration-check
+
+.PHONY: workspace-component-check
+workspace-component-check: standalone
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_component.py --binary "$(abspath $(BEE_BINARY))"
+check: workspace-component-check
+check-shard-services-storage: workspace-component-check
 .PHONY: layout-check
 layout-check:
 	python3 build/layout_check.py

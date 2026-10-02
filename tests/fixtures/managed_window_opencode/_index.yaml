@@ -30,7 +30,7 @@ entries:
     launch_id: managed-opencode-window-fixture
     title: Open OpenCode window
     command_names: []
-    binding_ref: bee.driver.opencode:binding
+    binding_ref: bee.driver.opencode.binding:binding
     profile_id: window
     policy_ref: bee.managed.opencode.fixture:policy
     default_mode: window
@@ -67,7 +67,7 @@ entries:
   - json
   - registry
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     appearance: bee.app:appearance
   security:
     policies:

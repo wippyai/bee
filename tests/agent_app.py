@@ -90,7 +90,7 @@ def configure_continuous_source(project, workspace_id):
                   "kinds": ["process.lua"], "databases": [], "grants": [],
                   "modules": ["tty", "process", "channel", "json"]}}]}
     governance_path.write_text(yaml.safe_dump(governance, sort_keys=False))
-    approvals_path = project / "src/_index.yaml"
+    approvals_path = project / "src/security/approvals/_index.yaml"
     approvals = yaml.safe_load(approvals_path.read_text())
     policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
     policies["policies"] = [{"name": "local-agent-app-delivery",
@@ -348,7 +348,7 @@ def stage(project, folder, round_label):
 
 def preflight_diagnostic(diagnostic):
     """One destination diagnostic as the agent reads it. The preflight wire
-    contract names the field remedy (modules/gov/src/preflight.lua), so a
+    contract names the field remedy (modules/gov/src/activation/preflight.lua), so a
     reviewer that read another name would drop the destination's own repair
     instruction and hand back a weaker finding than the host observed."""
     return (str(diagnostic.get("code")) + " on " + str(diagnostic.get("target")) + ": "
@@ -665,7 +665,7 @@ def exercise():
         shutil.copy2(ROOT / name, project / name)
     configure_source_node(project)
     stage_material(project)
-    set_variable(project, "modules/driver-agy/src/_index.yaml", "executable", "BEE_AGENT_APP_AGY")
+    set_variable(project, "modules/driver-agy/src/env/_index.yaml", "executable", "BEE_AGENT_APP_AGY")
     set_variable(project, "src/env/_index.yaml", "machine_home", "BEE_AGENT_APP_HOME")
     admit_docs_tool(project)
     assert_overlay_authority(project)

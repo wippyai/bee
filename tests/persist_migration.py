@@ -21,17 +21,26 @@ OWNERS = {
 PROBE = '''local workspace = require("workspace")
 local client = require("client")
 local sync = require("sync")
+local ledger = require("ledger")
+local io = require("io")
+local function report()
+    for _, phase in ipairs(ledger.progress()) do assert(io.print("PERSIST_PROGRESS " .. phase)) end
+    for _, phase in ipairs(ledger.boot_phases()) do assert(io.print("PERSIST_BOOT " .. phase)) end
+end
 local function main(owner: string)
     local db, err
     if owner == "workspace" then db, err = workspace.database("bee.workspace.db:runner")
     elseif owner == "client" then
         local store, failure = client.open("bee.client.db:runner", string.rep("a", 32))
-        if not store then error(tostring(failure)) end
-        assert(client.close(store)); return
+        if not store then report(); error(tostring(failure)) end
+        assert(client.close(store))
     elseif owner == "sync" then db, err = sync.open("bee.sync:runner")
     else error("unknown owner") end
-    if not db then error(tostring(err)) end
-    assert(db:release())
+    if owner ~= "client" then
+        if not db then report(); error(tostring(err)) end
+        assert(db:release())
+    end
+    report()
 end
 return {main = main}
 '''
@@ -44,14 +53,28 @@ def declared_migrations(source):
 
 
 def bytes_check():
-    for path in ['src/storage/store.lua', 'src/client/store.lua']:
-        prior = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
+    for path in ['modules/workspace/src/migrations/migrations.lua', 'src/client/store.lua']:
+        baseline_path = path
+        if path == 'modules/workspace/src/migrations/migrations.lua':
+            exists = subprocess.run(['git', 'cat-file', '-e', 'origin/main:' + path], cwd=ROOT,
+                capture_output=True, check=False)
+            if exists.returncode:
+                baseline_path = 'src/storage/store.lua'
+        prior = subprocess.check_output(['git', 'show', 'origin/main:' + baseline_path], cwd=ROOT, text=True)
         current = (ROOT / path).read_text()
         assert declared_migrations(current) == declared_migrations(prior), path
-    for path in sorted((ROOT / 'modules').glob('*/src/migrations/*.lua')):
+    tracked = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'origin/main', 'modules'], cwd=ROOT, text=True)
+    for path in [ROOT / name for name in tracked.splitlines() if re.search(r'/src/migrations/[^/]+\.lua$', name)]:
         prior = subprocess.check_output(['git', 'show', 'origin/main:' + str(path.relative_to(ROOT))], cwd=ROOT)
-        assert path.read_bytes() == prior, path
-    print('Workspace 1–12, client 1–3 and all owner migration bytes/checksums unchanged', flush=True)
+        original = prior.decode()
+        current = path.read_text()
+        for constant, content in re.findall(r'local (\w+) = \[\[(.*?)\]\]', original, re.S):
+            found = re.search(r'local ' + constant + r' = \[\[(.*?)\]\]', current, re.S)
+            assert found and found[1] == content, (path, constant)
+        descriptors = re.findall(r'\{id = \d+, name = "[^"]+",[^}]*\}', original)
+        actual = re.findall(r'\{id = \d+, name = "[^"]+",[^}]*\}', current)
+        assert actual[:len(descriptors)] == descriptors, path
+    print('Workspace 1–12, client 1–3 and all applied owner migration bytes/checksums unchanged; new migrations append', flush=True)
 
 
 def seed(path, owner):
@@ -60,7 +83,7 @@ def seed(path, owner):
         initial = re.search(r'local INITIAL = \[\[(.*?)\]\]', source, re.S)[1].removeprefix('\n')
         expected = [(1, 'owner_local_feed', initial)]
     else:
-        source = ROOT / ('src/storage/store.lua' if owner == 'workspace' else 'src/client/store.lua')
+        source = ROOT / ('modules/workspace/src/migrations/migrations.lua' if owner == 'workspace' else 'src/client/store.lua')
         expected = declared_migrations(source.read_text())
     limit = 7 if owner == 'workspace' else 1
     table = OWNERS[owner][1]
@@ -85,13 +108,17 @@ def seed(path, owner):
 
 
 def run(project, state, owner, failure=None):
-    result = subprocess.run([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
+    result = subprocess.run([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee.sync.service:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
                             cwd=project, env=database_environment(state), capture_output=True, text=True, timeout=90)
     output = result.stdout + result.stderr
     if failure:
         assert result.returncode and failure in output, output
     else:
         assert result.returncode == 0, output
+    phases = re.findall(r'^PERSIST_BOOT (\w+) (begin|end|failed) (-?\d+)$', output, re.M)
+    phases = [(stage, int(elapsed)) for label, stage, elapsed in phases if label == owner]
+    assert [stage for stage, _ in phases] == ['begin', 'failed' if failure else 'end'], output
+    assert all(elapsed >= 0 for _, elapsed in phases), output
     return output
 
 
@@ -100,20 +127,61 @@ def ledger_rows(path, owner):
         return db.execute(f'SELECT id, name, checksum FROM {OWNERS[owner][1]} ORDER BY id').fetchall()
 
 
+def capture_progress(project):
+    source = project / 'modules/persist/src/persist/ledger.lua'
+    text = source.read_text().replace('local env = require("env")\n', '')
+    text = text.replace('local hash = require("hash")', '''local hash = require("hash")
+local captured: {string} = {}
+local env = {
+    get = function(_name: string): string return "active" end,
+    set = function(_name: string, phase: string) table.insert(captured, phase) end,
+}''')
+    text = text.replace('local logger = require("logger")', '''local boot_phases: {string} = {}
+local logger = {
+    named = function(_self: unknown, _name: string)
+        return {info = function(_self: unknown, message: string,
+            fields: {phase: string, stage: string, owner: string, elapsed_ms: integer?})
+            assert(message == "Boot phase" and fields.phase == "migration_check")
+            table.insert(boot_phases, fields.owner .. " " .. fields.stage .. " " .. tostring(fields.elapsed_ms or 0))
+        end}
+    end,
+}''')
+    text = text.replace('local M = {}', 'local M = {}\nfunction M.progress(): {string} return captured end\nfunction M.boot_phases(): {string} return boot_phases end')
+    source.write_text(text)
+
+
+def progress(output, owner, start, end, batch):
+    phases = re.findall(r'^PERSIST_PROGRESS (.+)$', output, re.M)
+    phases = [phase for phase in phases if phase.split(': ', 1)[1].split()[0] == owner]
+    assert phases and phases[0] == f'Checking data: {owner}', phases
+    for revision in range(1, start + 1):
+        assert f'Checking data: {owner} {revision}/{end}' in phases, phases
+    pending = []
+    for revision in range(start + 1, end + 1):
+        pending += [f'Upgrading data: {owner} {revision - 1}->{revision}',
+                    f'Applied data: {owner} {revision}']
+        if not batch:
+            pending.append(f'Upgraded data: {owner} {revision - 1}->{revision}')
+    if batch and start < end:
+        pending.append(f'Upgraded data: {owner} {end - 1}->{end}')
+    assert [phase for phase in phases if not phase.startswith('Checking data: ')] == pending, phases
+
+
 def fault(project, owner, step):
-    source = project / 'modules/persist/src/ledger.lua'
+    source = project / 'modules/persist/src/persist/ledger.lua'
     original = source.read_text()
     table = OWNERS[owner][1]
     replacement = f'''    if not apply_err and ledger.table == "{table}" and migration.id == {step} then
         local io = require("io")
         local channel = require("channel")
+        for _, phase in ipairs(M.progress()) do assert(io.print("PERSIST_PROGRESS " .. phase)) end
         assert(io.print("PERSIST_CRASH_READY"))
         local barrier = channel.new()
         barrier:receive()
     end
 '''
     source.write_text(original.replace('    if apply_err then return', replacement + '    if apply_err then return', 1))
-    manifest = project / 'modules/persist/src/_index.yaml'
+    manifest = project / 'modules/persist/src/persist/_index.yaml'
     original_manifest = manifest.read_text()
     document = yaml.safe_load(original_manifest)
     next(entry for entry in document['entries'] if entry['name'] == 'ledger')['modules'] += ['io', 'channel']
@@ -123,7 +191,7 @@ def fault(project, owner, step):
 
 def crash(project, state, owner, step):
     source, original, manifest, original_manifest = fault(project, owner, step)
-    process = subprocess.Popen([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
+    process = subprocess.Popen([str(RUNTIME), 'run', '--host', 'bee:terminal', '--set', f'registry.history_path={state / "registry.db"}', '--override', 'bee.sync.service:sync_distribution_service:lifecycle.auto_start=false', 'persist-probe', owner],
                                cwd=project, env=database_environment(state), stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, start_new_session=True)
     output = bytearray()
@@ -136,6 +204,11 @@ def crash(project, state, owner, step):
                 block = os.read(process.stdout.fileno(), 65536)
                 assert block, output.decode(errors='replace')
                 output.extend(block)
+        phases = output.decode(errors='replace')
+        assert f'PERSIST_PROGRESS Upgrading data: {owner} {step - 1}->{step}' in phases, phases
+        assert f'PERSIST_PROGRESS Upgraded data: {owner} {step - 1}->{step}' not in phases, phases
+        if owner != 'sync':
+            assert f'PERSIST_PROGRESS Upgraded data: {owner}' not in phases, phases
         os.killpg(process.pid, signal.SIGKILL)
         process.wait(timeout=10)
     finally:
@@ -147,9 +220,42 @@ def crash(project, state, owner, step):
         manifest.write_text(original_manifest)
 
 
+def diagnostic_failure(project, state, owner):
+    source = project / 'modules/persist/src/persist/ledger.lua'
+    original = source.read_text()
+    table = OWNERS[owner][1]
+    injection = f'''    if not apply_err and ledger.table == "{table}" and migration.id == 1 then
+        _, apply_err = tx:execute([[CREATE TABLE diagnostic_abort (value INTEGER);
+CREATE TRIGGER diagnostic_abort_trigger BEFORE INSERT ON diagnostic_abort
+BEGIN SELECT RAISE(ROLLBACK, 'native startup migration abort'); END;
+INSERT INTO diagnostic_abort VALUES (1)]])
+    end
+'''
+    source.write_text(original.replace('    if apply_err then return', injection + '    if apply_err then return', 1))
+    try:
+        output = run(project, state, owner, 'native startup migration abort')
+    finally:
+        source.write_text(original)
+    phases = re.findall(r'^PERSIST_PROGRESS (.+)$', output, re.M)
+    assert f'Upgrading data: {owner} 0->1' in phases, output
+    assert not any(phase.startswith(('Applied data:', 'Upgraded data:')) for phase in phases), output
+    operation = f'apply {"Client" if owner == "client" else owner} migration '
+    native_message, cleanup = 'native startup migration abort', '; rollback migration:'
+    assert all(message in output for message in (operation, native_message, cleanup)), output
+    assert output.index(operation) < output.index(native_message) < output.index(cleanup), output
+    with sqlite3.connect(state / (owner + '.db')) as db:
+        assert db.execute("SELECT count(*) FROM sqlite_master WHERE name = 'diagnostic_abort'").fetchone() == (0,)
+        if owner == 'sync':
+            assert db.execute(f'SELECT count(*) FROM {table}').fetchone() == (0,)
+        else:
+            assert db.execute("SELECT count(*) FROM sqlite_master WHERE type = 'table'").fetchone() == (0,)
+    print(f'{owner}: active checkpoint retains operation/native/rollback diagnostics without announcing completion', flush=True)
+
+
 def main():
     bytes_check()
     with fixture_workspace(unit_tests=False) as project:
+        capture_progress(project)
         probe = project / 'src/persistprobe'
         probe.mkdir()
         (probe / 'main.lua').write_text(PROBE)
@@ -158,7 +264,8 @@ def main():
                 {'name': 'policy', 'kind': 'security.policy', 'policy': {
                     'actions': ['db.get'], 'resources': [entry[0] for entry in OWNERS.values()], 'effect': 'allow'}},
                 {'name': 'main', 'kind': 'process.lua', 'source': 'file://main.lua', 'method': 'main',
-                 'imports': {'workspace': 'bee.storage:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database'},
+                 'modules': ['io'],
+                 'imports': {'workspace': 'bee.workspace.persist:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database', 'ledger': 'bee.persist.persist:ledger'},
                  'meta': {'command': {'name': 'persist-probe', 'short': 'migration recovery fixture'}},
                  'security': {'policies': ['bee.persistprobe:policy']}}]}))
         manifests = {}
@@ -184,16 +291,22 @@ def main():
             return state / (owner + '.db')
 
         for owner in OWNERS:
+            state = project / '.wippy' / ('diagnostic-' + owner)
+            select_db(owner, state)
+            diagnostic_failure(project, state, owner)
+
             state = project / '.wippy' / ('fresh-' + owner)
             path = select_db(owner, state)
-            run(project, state, owner)
+            progress(run(project, state, owner), owner, 0, OWNERS[owner][2], owner != 'sync')
             original = ledger_rows(path, owner)
             assert len(original) == OWNERS[owner][2]
-            run(project, state, owner)
+            progress(run(project, state, owner), owner, OWNERS[owner][2], OWNERS[owner][2], owner != 'sync')
             assert ledger_rows(path, owner) == original
             with sqlite3.connect(path) as db:
                 db.execute(f"UPDATE {OWNERS[owner][1]} SET checksum = 'changed' WHERE id = 1")
-            run(project, state, owner, 'checksum changed')
+            rejected = run(project, state, owner, 'checksum changed')
+            assert f'PERSIST_PROGRESS Checking data: {owner}' in rejected, rejected
+            assert not re.search(r'PERSIST_PROGRESS (?:Upgrading|Applied|Upgraded) data:', rejected), rejected
             with sqlite3.connect(path) as db:
                 db.execute(f'UPDATE {OWNERS[owner][1]} SET checksum = ? WHERE id = 1', (original[0][2],))
             if owner == 'workspace':
@@ -232,7 +345,7 @@ def main():
             before = ledger_rows(path, owner)
             crash(project, state, owner, 8 if owner == 'workspace' else 2)
             assert ledger_rows(path, owner) == before
-            run(project, state, owner)
+            progress(run(project, state, owner), owner, len(before), OWNERS[owner][2], owner != 'sync')
             after = ledger_rows(path, owner)
             assert after[:len(before)] == before
             with sqlite3.connect(path) as db:

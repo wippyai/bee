@@ -23,11 +23,11 @@ end
 local function define_tests()
     test.describe("Muse configuration", function()
         test.it("binds the command hook executable on both shipped routes", function()
-            for _, ref in ipairs({"bee.driver.muse:launch_policy_muse_window", "bee.driver.muse:launch_policy_muse_batch"}) do
+            for _, ref in ipairs({"bee.driver.muse.security:launch_policy_muse_window", "bee.driver.muse.security:launch_policy_muse_batch"}) do
                 local entry, entry_error = registry.get(ref)
                 if not entry then error(tostring(entry_error or (ref .. " is missing"))) end
                 local data = assert(bounds.object(entry.data))
-                test.eq(data.hook_command_ref, "bee.gateway:hook_executable")
+                test.eq(data.hook_command_ref, "bee.gateway.env:hook_executable")
             end
         end)
         test.it("renders one settings file with scoped MCP and command hooks", function()
@@ -35,7 +35,7 @@ local function define_tests()
             if not file then error(tostring(err)) end
             test.eq(file.revision, "bee.muse-config@1")
             test.eq(file.path, ".config/muse/settings.json")
-            test.eq(file.provider_ref, "bee:gateway_endpoint")
+            test.eq(file.provider_ref, "bee.gateway.api:gateway_endpoint")
             local composition = assert(file.composition)
             test.eq(composition.kind, "json_patch")
             test.eq(composition.base_path, ".config/muse/.bee-global-settings.json")

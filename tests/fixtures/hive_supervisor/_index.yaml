@@ -48,7 +48,7 @@ entries:
   modules: [process, security, time, channel, io, system, funcs]
   imports:
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
   meta:
     command:
       name: hive-supervisor-probe

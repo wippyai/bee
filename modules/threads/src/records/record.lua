@@ -3,6 +3,7 @@
 local json = require("json")
 local types = require("types")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local values = require("values")
 local observation = require("observation")
 local message = require("message")
@@ -272,9 +273,9 @@ function M.decode(value: unknown): (types.Record?, string?)
     local unknown_field = bounds.fields(object, {"schema_revision", "record_id", "thread_id", "sequence", "recorded_at", "kind",
         "producer_id", "source", "causation", "correlation_id", "action_id", "attempt_id", "turn_id", "body"})
     if unknown_field then return nil, unknown_field end
-    if object.schema_revision ~= bounds.SCHEMA_REVISION then return nil, "schema_revision is not " .. bounds.SCHEMA_REVISION end
+    if object.schema_revision ~= record_bounds.SCHEMA_REVISION then return nil, "schema_revision is not " .. record_bounds.SCHEMA_REVISION end
     local record_id, thread_id, producer_id = bounds.id(object.record_id), bounds.id(object.thread_id), bounds.id(object.producer_id)
-    local sequence, recorded_at = bounds.sequence(object.sequence), bounds.timestamp(object.recorded_at)
+    local sequence, recorded_at = record_bounds.sequence(object.sequence), bounds.timestamp(object.recorded_at)
     local kind, source = values.kind(object.kind), values.source(object.source)
     if not record_id then return nil, "record_id is not an identifier" end
     if not thread_id then return nil, "thread_id is not an identifier" end
@@ -283,7 +284,7 @@ function M.decode(value: unknown): (types.Record?, string?)
     if not kind then return nil, "kind is not a supported record family" end
     if not producer_id then return nil, "producer_id is not an identifier" end
     if not source then return nil, "source is not supported" end
-    local common: types.RecordEnvelope = {schema_revision = bounds.SCHEMA_REVISION, record_id = record_id, thread_id = thread_id,
+    local common: types.RecordEnvelope = {schema_revision = record_bounds.SCHEMA_REVISION, record_id = record_id, thread_id = thread_id,
         sequence = sequence, recorded_at = recorded_at, producer_id = producer_id, source = source}
     if object.causation ~= nil then
         local ref, ref_error = values.ref(object.causation)
@@ -388,7 +389,7 @@ function M.decode(value: unknown): (types.Record?, string?)
     end
 end
 function M.decode_json(text: string): (types.Record?, string?)
-    if #text > bounds.MAX_RECORD_BYTES then return nil, "record exceeds " .. tostring(bounds.MAX_RECORD_BYTES) .. " bytes" end
+    if #text > record_bounds.MAX_RECORD_BYTES then return nil, "record exceeds " .. tostring(record_bounds.MAX_RECORD_BYTES) .. " bytes" end
     local decoded: unknown, decode_error = json.decode(text)
     if decode_error then return nil, "record is not valid JSON" end
     return M.decode(decoded)
@@ -405,11 +406,11 @@ function M.encode(value: types.Record): (string?, string?)
     return M.encode_parts(envelope, M.payload(decoded))
 end
 function M.encode_parts(envelope: types.RecordEnvelope, payload: types.RecordPayload): (string?, string?)
-    if envelope.schema_revision ~= bounds.SCHEMA_REVISION then return nil, "schema_revision is not " .. bounds.SCHEMA_REVISION end
+    if envelope.schema_revision ~= record_bounds.SCHEMA_REVISION then return nil, "schema_revision is not " .. record_bounds.SCHEMA_REVISION end
     if not bounds.id(envelope.record_id) or not bounds.id(envelope.thread_id) or not bounds.id(envelope.producer_id) then
         return nil, "record identity is not valid"
     end
-    if not bounds.sequence(envelope.sequence) then return nil, "sequence is out of range" end
+    if not record_bounds.sequence(envelope.sequence) then return nil, "sequence is out of range" end
     if not bounds.timestamp(envelope.recorded_at) then return nil, "recorded_at is not a canonical UTC timestamp" end
     if not values.source(envelope.source) then return nil, "source is not supported" end
     local rule = context_rule(payload.kind, envelope)
@@ -430,7 +431,7 @@ function M.encode_parts(envelope: types.RecordEnvelope, payload: types.RecordPay
     field(fields, "turn_id", optional_string(envelope.turn_id))
     field(fields, "body", M.encode_body(payload))
     local encoded = encode_object(fields)
-    if #encoded > bounds.MAX_RECORD_BYTES then return nil, "record exceeds " .. tostring(bounds.MAX_RECORD_BYTES) .. " bytes" end
+    if #encoded > record_bounds.MAX_RECORD_BYTES then return nil, "record exceeds " .. tostring(record_bounds.MAX_RECORD_BYTES) .. " bytes" end
     return encoded, nil
 end
 return M

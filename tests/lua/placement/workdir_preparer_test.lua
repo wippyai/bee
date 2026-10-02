@@ -24,7 +24,7 @@ local function fresh(prefix: string): string
 end
 
 local function run_cmd(args: {string}): (string?, integer?, string?)
-    local executor, exec_err = exec.get("bee.git.worktree:git_executor")
+    local executor, exec_err = exec.get("bee.git.worktree.env:git_executor")
     if not executor then return nil, 1, "no executor: " .. tostring(exec_err) end
     local proc, err = executor:exec(quote.line(args), {})
     if not proc then return nil, 1, tostring(err) end
@@ -67,7 +67,7 @@ local function make_request(attempt_id: string, options: types.WorkdirOptions?):
         owner_incarnation = 1,
         action_id = fresh("action"),
         attempt_id = attempt_id,
-        binding_ref = "bee.driver.codex:binding",
+        binding_ref = "bee.driver.codex.binding:binding",
         policy_ref = "bee.placement.native:test_launch_policy",
         profile_id = "session",
         binding_digest = string.rep("c", 64),
@@ -110,7 +110,7 @@ local function claim_attempt(db, request: types.LaunchRequest)
 end
 
 local function with_preparer(config: {[string]: unknown}, body: () -> ())
-    local host = registry.get("bee:workdir_preparers")
+    local host = registry.get("bee.placement.native.env:workdir_preparers")
     local fixture = registry.get("bee.placement.native:preparer_fixture_config")
     if not host or not fixture then error("fixture configuration missing") end
     local original_host, original_config = host.data, fixture.data
@@ -243,7 +243,7 @@ local function define_tests()
             test.is_true(#preparers >= 1)
             local found_git_wt = false
             for _, p in ipairs(preparers) do
-                if p.binding_id == "bee.git.worktree:binding" then
+                if p.binding_id == "bee.git.worktree.binding:binding" then
                     found_git_wt = true
                     test.eq(p.setup, "bee.git.worktree.binding:setup")
                     test.eq(p.cleanup, "bee.git.worktree.binding:cleanup")
@@ -333,7 +333,7 @@ local function define_tests()
             local req = make_request(fresh("legacy-truncated"))
             claim_attempt(db, req)
             store.transition(db, req.attempt_id, {evidence = {kind = "workdir_preparer.state",
-                detail = '{"binding_id":"bee.git.worktree:binding"'}})
+                detail = '{"binding_id":"bee.git.worktree.binding:binding"'}})
             store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
                 evidence = {kind = "child.not_started", detail = "truncated legacy state fixture"}})
             apply_legacy_preparer_backfill(db)

@@ -106,7 +106,7 @@ entries:
   - registry
   - fs
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine

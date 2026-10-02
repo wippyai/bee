@@ -11,8 +11,8 @@ local registry = require("registry")
 local bounds = require("bounds")
 local context = require("context")
 local M = {}
-M.REQUEST_POLICY_REF = "bee.gateway:approval_request_policy_ref"
-M.CONSUME_POLICY_REF = "bee.gateway:approval_consume_policy_ref"
+M.REQUEST_POLICY_REF = "bee.gateway.env:approval_request_policy_ref"
+M.CONSUME_POLICY_REF = "bee.gateway.env:approval_consume_policy_ref"
 type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string,
     policy_ref: string?, workspace_id: string?, origin_view: context.OriginView?}

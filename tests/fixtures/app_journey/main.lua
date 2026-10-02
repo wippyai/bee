@@ -132,9 +132,8 @@ local function main(value: unknown)
     end
     local function records(raw: unknown, label: string, thread_id: string): {Object}
         if type(raw) ~= "table" then error(label .. " records are not a list") end
-        local list = raw
         local result: {Object} = {}
-        for index, item in ipairs(list) do
+        for index, item in ipairs(raw) do
             local record = object(item, label .. " record")
             identifier(record.record_id, label .. " record id")
             if record.thread_id ~= thread_id or record.kind ~= "message" then
@@ -423,7 +422,7 @@ local function configure_host(workspace_id: string, local_node: string)
         migration_policies = {"bee.app.journey.probe:migration_policy"}}}
     act_entry.data = act_data
 
-    local policy_entry = assert(registry.get("bee:approver_policies"))
+    local policy_entry = assert(registry.get("bee.security.approvals:approver_policies"))
     local policy_data = object(policy_entry.data)
     local policies = assert(bounds.array(policy_data.policies))
     policies[#policies + 1] = {name = APPROVAL_POLICY,
@@ -437,7 +436,7 @@ local function configure_host(workspace_id: string, local_node: string)
     assert(changes:update(policy_entry))
     local applied, apply_error = changes:apply()
     if not applied then error("apply host delivery profiles: " .. tostring(apply_error)) end
-    local selected = assert(registry.get("bee.gov:activation_profiles_ref"))
+    local selected = assert(registry.get("bee.gov.env:activation_profiles_ref"))
     local selected_data = object(selected.data)
     if selected_data.resource_ref ~= "bee.env:gov_activation_profiles" then
         error("activation profile requirement did not retain the default selection")

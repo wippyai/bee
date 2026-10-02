@@ -12,7 +12,7 @@ local function main(value: unknown)
     local input = assert(tty.events())
     local events = assert(process.events())
     assert(tty.start())
-    local executor = assert(exec.get("bee.console:executor"))
+    local executor = assert(exec.get("bee.console.env:executor"))
     -- The PTY takes the current terminal geometry; the returned process owns the child.
     local terminal, start_error = executor:terminal(command.encode(launch.arguments), {pty = {term = "xterm-256color"}})
     if not terminal then executor:release(); error(tostring(start_error)) end

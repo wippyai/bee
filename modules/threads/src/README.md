@@ -13,7 +13,7 @@ delivery contract and does not schedule work.
 | Slice | Responsibility |
 |---|---|
 | `bee.threads` | Contracts (`authority`, `lifecycle`, `delivery`, `projection`, `carrier`, `approvals`, `journal`), local bindings, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
-| `bee.threads.records` | Pure typed decoders for the seven record families, bounds, the canonical record encoder and canonical JSON for request identity; no I/O |
+| `bee.threads.records` | Pure typed decoders for the seven record families, thread-specific capacity and sequence checks, and canonical record envelopes encoded through `bee.values`; no I/O |
 | `bee.threads.binding` | Callable implementations of the authority, lifecycle, delivery, projection, carrier, approvals and journal contracts; domain-qualified method names resolve collisions |
 | `bee.threads.service` | The owner and delivery waiter processes; the authority: access facade, authority, action inbox and lifecycle operations, canonical session/work store, one-shot notices, and owner methods |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
@@ -25,11 +25,11 @@ delivery contract and does not schedule work.
 
 | Requirement | Default | Injected into |
 |---|---|---|
-| `target_db` | `bee.threads:db` | `bee.threads:database_ref` at `.resource_ref`; every open goes through that resource |
+| `target_db` | `bee.threads.env:db` | `bee.threads.env:database_ref` at `.resource_ref`; every open goes through that resource |
 | `process_host` | none; `bee.deps:threads` supplies `bee:workers` | `bee.threads.service:owner_service` and `bee.threads.service:waiter_service` at `.host` |
 
 The host keeps `db.get` on the selected resource and `registry.get` on
-`bee.threads:database_ref` in the policy it attaches to the methods.
+`bee.threads.env:database_ref` in the policy it attaches to the methods.
 Selecting another resource does not move existing history; each store owns
 its tables and migration lifecycle.
 

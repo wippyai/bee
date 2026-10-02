@@ -6,24 +6,24 @@ entries:
   source: file://adapter.lua
   modules: [hash, json]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     driver_types: bee.driver:types
 - name: acceptance
   kind: library.lua
   source: file://acceptance.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
 - name: exchange
   kind: library.lua
   source: file://exchange.lua
   modules: [json]
   imports:
-    preferences: bee.driver:preferences
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    preferences: bee.driver.profiles:preferences
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     permission: bee.harness.permission:adapter
     checkpoint: bee.harness.carrier:checkpoint
-    service_reply: bee.protocol:reply
+    service_reply: bee.values:reply

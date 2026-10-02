@@ -60,9 +60,9 @@ def run_shard(index, folder, entries, timeout=None):
         str(RUNTIME), "test", "--host", "bee:terminal", "--override",
         "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
         # Effect worker tests drain the queues synchronously; avoid racing the workers.
-        "--override", "bee:gateway_installation_service:lifecycle.auto_start=false",
-        "--override", "bee:gateway_publication_service:lifecycle.auto_start=false",
-        "--override", "bee:thread_outbox_pump_service:lifecycle.auto_start=false",
+        "--override", "bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false",
+        "--override", "bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false",
+        "--override", "bee.threads.service:thread_outbox_pump_service:lifecycle.auto_start=false",
         "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
         "test", *entries,
     ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)

@@ -21,7 +21,7 @@ PROBE = '''
     assert(not client_database and client_database_error)
     assert(not security.can("db.get", "bee.env:client_db"))
     assert(security.can("db.get", "foreign-resource"), "Broad test policy was not applied")
-    assert(security.can("exec.get", "bee.console:executor"))
+    assert(security.can("exec.get", "bee.console.env:executor"))
     assert(not security.can("exec.get", "other:executor"))
     for _, action in ipairs({"tty.observe", "tty.input", "tty.resize", "tty.mount", "registry.apply", "registry.apply_version", "registry.overlay.apply", "process.security", "process.context", "security.scope.create"}) do
         assert(not security.can(action, "foreign-resource"), "Leaked authority: " .. action)

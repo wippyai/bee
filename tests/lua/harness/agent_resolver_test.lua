@@ -8,7 +8,7 @@ local principals = require("principals")
 local bounds = require("bounds")
 local registry = require("registry")
 local agent_resolver = require("agent_resolver")
-local ACTIVATION = "bee.harness:harness_activation"
+local ACTIVATION = "bee.harness.launch:harness_activation"
 local WITH_MODEL = "bee.harness.catalog:fixture_open_cli_binding"
 local WITHOUT_MODEL = "bee.harness.catalog:fixture_open_cli_no_model_binding"
 local function pinned(): registry.Snapshot

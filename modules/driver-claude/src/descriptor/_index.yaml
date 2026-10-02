@@ -62,13 +62,13 @@ entries:
       permission_answers:
         window:
           transport: hook_http
-          adapter_ref: bee.driver:permission_request_hook
+          adapter_ref: bee.driver.permission:permission_request_hook
         first_turn:
           transport: stdio
-          adapter_ref: bee.driver.claude:permission_adapter
+          adapter_ref: bee.driver.claude.permission:permission_adapter
         resume:
           transport: stdio
-          adapter_ref: bee.driver.claude:permission_adapter
+          adapter_ref: bee.driver.claude.permission:permission_adapter
     options:
       profiles:
       - session
@@ -424,3 +424,19 @@ entries:
         kind: state
         optional: true
         write_back: false
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver.binding:universal
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.app_command
+    comment: CLI command to launch Claude in the agent window
+  data:
+    name: claude
+    definition_id: bee.harness.app:app
+    arguments:
+    - bee.driver.claude.profiles:default_window
+    fullscreen: true

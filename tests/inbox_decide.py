@@ -23,7 +23,7 @@ PROMPT = "Apply demo decide version v1"
 
 
 def edit_approver_policy(project):
-    index = project / "src/_index.yaml"
+    index = project / "src/security/approvals/_index.yaml"
     import yaml
     doc = yaml.safe_load(index.read_text())
     entry = next(e for e in doc["entries"] if e["name"] == "approver_policies")
@@ -33,7 +33,7 @@ def edit_approver_policy(project):
 
 
 def edit_inbox_workspaces(project):
-    index = project / "modules/approvals-inbox/src/_index.yaml"
+    index = project / "modules/approvals-inbox/src/app/_index.yaml"
     import yaml
     doc = yaml.safe_load(index.read_text())
     entry = next(e for e in doc["entries"] if e["name"] == "workspaces")

@@ -20,9 +20,9 @@ entries:
   kind: ns.requirement
   meta:
     comment: SQL resource for approval requests, history, inbox and outbox
-  default: bee.approvals:db
+  default: bee.approvals.env:db
   targets:
-  - entry: bee.approvals:database_ref
+  - entry: bee.approvals.env:database_ref
     path: .resource_ref
 - name: target_node_identity_storage
   kind: ns.requirement
@@ -30,7 +30,7 @@ entries:
     comment: Native state identity and its recorded legacy alias
   default: bee.harness.host:environment
   targets:
-  - entry: bee.approvals:node_identity_migration_source
+  - entry: bee.approvals.env:node_identity_migration_source
     path: .storage
 - name: target_policies
   kind: ns.requirement
@@ -38,66 +38,8 @@ entries:
   meta:
     comment: The host's approver policies; each names its approvers and the longest request lifetime it allows
   targets:
-  - entry: bee.approvals:policies_ref
+  - entry: bee.approvals.env:policies_ref
     path: .resource_ref
-- name: database_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked SQL resource; target_db fills resource_ref
-- name: policies_ref
-  kind: registry.entry
-  meta:
-    type: bee.resource_ref
-    comment: The linked approver policies entry; target_policies fills resource_ref
-- name: environment
-  kind: env.storage.os
-  lifecycle:
-    auto_start: true
-- name: identity_migration
-  kind: library.lua
-  source: file://identity_migration.lua
-  modules: [sql, env]
-  imports:
-    bounds: bee.threads.records:bounds
-- name: node_identity_migration_source
-  kind: env.variable
-  storage: bee.harness.host:environment
-  variable: node_identity_migration_source
-  default: ""
-  readonly: true
-- name: db_path
-  kind: env.variable
-  storage: bee.approvals:environment
-  variable: BEE_APPROVALS_DB
-  default: .wippy/approvals.db
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.approvals:db_path}
-  lifecycle:
-    auto_start: true
-- name: runtime_lease
-  kind: library.lua
-  source: file://runtime_lease.lua
-  imports: {bounds: bee.threads.records:bounds}
-- name: service
-  kind: library.lua
-  source: file://service.lua
-  modules: [sql, hash, uuid, json, security, system, process, funcs]
-  imports:
-    runtime_lease: bee.approvals:runtime_lease
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    values: bee.threads.records:values
-    clock: bee:clock
-    persist: bee.persist:database
-    transaction: bee.persist:transaction
-    migrations: bee.approvals.migrations:migrations
-    identity_migration: bee.approvals:identity_migration
-    resources: bee.approvals:resources
-    store: bee.approvals.persist:store
-    outbox: bee.approvals.persist:outbox
 - name: contract
   kind: contract.definition
   meta:
@@ -141,36 +83,6 @@ entries:
     description: The owner expires due requests and forgets settled ones past retention
   - name: capabilities
     description: States, bounds and delivery guarantees of this owner
-- name: local
-  kind: contract.binding
-  contracts:
-  - contract: bee.approvals:contract
-    methods:
-      feed_snapshot: bee.approvals.binding:feed_snapshot
-      feed_read_after: bee.approvals.binding:feed_read_after
-      runtime_lease: bee.approvals.binding:runtime_lease
-      request: bee.approvals.binding:request
-      decide: bee.approvals.binding:decide
-      decide_batch: bee.approvals.binding:decide_batch
-      withdraw: bee.approvals.binding:withdraw
-      consume: bee.approvals.binding:consume
-      installation_effects: bee.approvals.binding:installation_effects
-      complete_installation_effect: bee.approvals.binding:complete_installation_effect
-      publication_effects: bee.approvals.binding:publication_effects
-      complete_publication_effect: bee.approvals.binding:complete_publication_effect
-      revalidate: bee.approvals.binding:revalidate
-      read: bee.approvals.binding:read
-      inbox: bee.approvals.binding:inbox
-      list: bee.approvals.binding:list
-      deliveries: bee.approvals.binding:deliveries
-      reconcile: bee.approvals.binding:reconcile
-      capabilities: bee.approvals.binding:capabilities
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules: [registry]
-  imports:
-    bounds: bee.threads.records:bounds
 - name: target_request_policies
   kind: ns.requirement
   default: []
@@ -217,3 +129,7 @@ entries:
     path: .security.policies
   - entry: bee.approvals.binding:runtime_lease
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

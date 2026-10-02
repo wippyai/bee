@@ -407,7 +407,7 @@ return {main = main}
 def run_probe(project, folder, expect_success=True):
     environment = database_environment(folder)
     result = subprocess.run(
-        [str(RUNTIME), "run", "storage-probe", "--set", f"registry.history_path={folder / 'registry.db'}"],
+        [str(RUNTIME), "run", "--host", "bee:terminal", "storage-probe", "--set", f"registry.history_path={folder / 'registry.db'}"],
         cwd=project,
         env=environment,
         text=True,
@@ -501,7 +501,7 @@ def main():
                 "source": "file://main.lua",
                 "method": "main",
                 "modules": ["process"],
-                "imports": {"store": "bee.storage:store", "assignments": "bee.storage:assignments", "thread_bindings": "bee.storage:thread_bindings"},
+                "imports": {"store": "bee.workspace.persist:store", "assignments": "bee.workspace.persist:assignments", "thread_bindings": "bee.workspace.persist:thread_bindings"},
                 "meta": {"command": {"name": "storage-probe", "short": "storage probe"}},
                 "security": {"policies": ["bee.security.storage:workspace_storage_policy"]},
             }],
@@ -587,7 +587,7 @@ def main():
         # their identity while fencing all three as cleanup-complete tombstones.
         migration4 = folder / "migration4-bindings"
         migration4.mkdir()
-        store_source = (ROOT / "src/storage/store.lua").read_text()
+        store_source = (ROOT / "modules/workspace/src/migrations/migrations.lua").read_text()
 
         def migration_body(constant):
             body = re.search(rf"local {constant} = \[\[(.*?)\]\]", store_source, re.S).group(1)
@@ -653,7 +653,7 @@ return {main = main}
         # Upgrade a real migration-1 database. The old SQL/checksum must stay exact.
         legacy = folder / "legacy"
         legacy.mkdir()
-        sql = re.search(r"local STATE_TABLE_SQL = \[\[(.*?)\]\]", (ROOT / "src/storage/store.lua").read_text(), re.S).group(1)
+        sql = re.search(r"local STATE_TABLE_SQL = \[\[(.*?)\]\]", (ROOT / "modules/workspace/src/migrations/migrations.lua").read_text(), re.S).group(1)
         # Lua long strings discard the initial newline.
         sql = sql.removeprefix("\n")
         digest = hashlib.sha256(("workspace_state_v1\n" + sql).encode()).hexdigest()
@@ -665,7 +665,7 @@ return {main = main}
             db.execute("INSERT INTO workspace_state VALUES (1, 1, 7, ?, 'before')", ('{"version":1,"probe":"legacy"}',))
         # Open only: prove migration leaves the envelope and generation untouched.
         (probe / "main.lua").write_text('local storage = require("store")\nlocal function main() local s = assert(storage.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""})); assert(s:identity()); s:close() end\nreturn {main = main}\n')
-        store_file = project / "src/storage/store.lua"
+        store_file = project / "modules/workspace/src/migrations/migrations.lua"
         healthy_store = store_file.read_text()
         seed = "VALUES (1, lower(hex(randomblob(16))))"
         assert healthy_store.count(seed) == 1
@@ -706,9 +706,9 @@ def client_storage():
         shutil.copytree(ROOT / "tests/fixtures/client_storage", project / "src/client_storage_probe")
         host = project / "src/env/_index.yaml"
         configuration = yaml.safe_load(host.read_text())
-        next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee:client_db_path}"
+        next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee.env:client_db_path}"
         host.write_text(yaml.safe_dump(configuration, sort_keys=False))
-        root_index = project / "src/_index.yaml"
+        root_index = project / "src/env/_index.yaml"
         configuration = yaml.safe_load(root_index.read_text())
         configuration["entries"] += [
             {"name": "client_db_path", "kind": "env.variable", "storage": "bee.env:workspace_environment",
@@ -726,7 +726,7 @@ def client_storage():
             if packed:
                 deployment_copy(pack, folder)
             args = [str(RUNTIME), "--console", "run"]
-            args += [command, mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
+            args += [command, mode, "--host", "bee:terminal", "--set", f"registry.history_path={folder / 'registry.db'}"]
             result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=30,
                                     env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
             output = result.stdout + result.stderr
@@ -804,7 +804,7 @@ def client_storage():
                 assert db.execute("SELECT c.client_id, l.workspace_id, l.import_receipt FROM client_state AS c JOIN client_layouts AS l ON l.desktop_id = c.client_id").fetchone() == original
                 ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
                 db.execute("UPDATE client_schema_migrations SET checksum='changed' WHERE id=1")
-            probe(folder, "open", packed, "migration ledger")
+            probe(folder, "open", packed, "Client migration checksum changed")
             with sqlite3.connect(database) as db:
                 db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
                 db.execute("INSERT INTO client_schema_migrations VALUES (4, 'future', 'future')")

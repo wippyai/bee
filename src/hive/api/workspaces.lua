@@ -16,8 +16,8 @@ local function handle(value: unknown): Object
     if not query then error("invalid workspace listing: " .. tostring(invalid)) end
     local request: Object = {state = "active", limit = query.limit}
     if query.after then request.after = query.after end
-    local target = "bee.workspace.catalog:list"
-    if query.label then request.label = query.label; target = "bee.workspace.catalog:search" end
+    local target = "bee.workspace.binding:list"
+    if query.label then request.label = query.label; target = "bee.workspace.binding:search" end
     local raw, call_error = funcs.call(target, request)
     if call_error then error("the workspace catalog did not answer: " .. tostring(call_error)) end
     local reply = bounds.object(raw)

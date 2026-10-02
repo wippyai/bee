@@ -16,7 +16,7 @@ local function inspect()
     local identity = assert(naming.identity(workspace, "tally"))
     local installed_entry, installed_error = registry.get(assert(grants.record_id(identity.overlay_owner)))
     if not installed_entry then error("grant record unavailable: " .. tostring(installed_error)) end
-    local host_catalog = assert(vocabulary.decode(assert(registry.get("bee:capability_catalog"))))
+    local host_catalog = assert(vocabulary.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
     local installed = assert(grants.decode(installed_entry, identity.overlay_owner,
         workspace, identity.definition_id, host_catalog))
     assert(grants.live(installed, function(id: string): unknown return registry.get(id) end))

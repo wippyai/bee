@@ -37,8 +37,8 @@ local PROVIDER = "bee.harness.catalog:codex_fixture_provider"
 local CLAUDE_SOURCE = "bee.harness.catalog:claude_sentinel_key"
 local CODEX_SOURCE = "bee.harness.catalog:codex_sentinel_key"
 local ROOT = "bee.harness.catalog:project_fixture"
-local CLAUDE_BINDING = "bee.driver.claude:binding"
-local CODEX_BINDING = "bee.driver.codex:binding"
+local CLAUDE_BINDING = "bee.driver.claude.binding:binding"
+local CODEX_BINDING = "bee.driver.codex.binding:binding"
 local CLAUDE_SENTINEL = "sk-ant-sentinel-bee-000"
 local CODEX_SENTINEL = "sk-sentinel-bee-000"
 local GATEWAY_TOKEN = "BEE_GATEWAY_TOKEN"
@@ -80,7 +80,7 @@ local function read_all(stream): string
     return content
 end
 local function shell(command: string, environment: {[string]: string}?): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'", {env = environment or {}})
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -136,7 +136,7 @@ local endpoint_handle: exec.Process? = nil
 local endpoint_executor: exec.Executor? = nil
 -- The endpoint scripts one call of the named gateway tool, then text.
 local function start_endpoint(record: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_MCP_TOOL = "thread_read"}})
     if not proc then error("endpoint: " .. tostring(err)) end
     local started, start_error = proc:start()
@@ -171,7 +171,7 @@ local function measured(binding_ref: string, policy_ref: string): (string, strin
     error("binding " .. binding_ref .. " is not usable on this host")
 end
 local function endpoint_address(): string
-    local entry = registry.get("bee:gateway_endpoint")
+    local entry = registry.get("bee.gateway.api:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
     return tostring((assert(bounds.object(entry.data))).address)
 end
@@ -307,10 +307,10 @@ local function prepare_host(harness: Harness, port: string)
         (assert(bounds.object(provider.data))).base_url = "http://127.0.0.1:" .. port .. "/v1"
         apply(provider)
     end
-    admit("bee.placement.native:placement_admitted_roots", "roots", {root_ref = ROOT, access = "write"}, function(item: Object): boolean return item.root_ref == ROOT end)
+    admit("bee.placement.native.env:placement_admitted_roots", "roots", {root_ref = ROOT, access = "write"}, function(item: Object): boolean return item.root_ref == ROOT end)
     -- The source is admitted for this suite's audience; other suites admit
     -- the same source for theirs.
-    admit("bee.credentials:credential_sources", "sources", {ref = harness.source, workspace_id = "*", audience = ACTOR, provider = harness.provider, projection_kinds = {"environment"}}, function(item: Object): boolean return item.ref == harness.source and item.audience == ACTOR end)
+    admit("bee.credentials.env:credential_sources", "sources", {ref = harness.source, workspace_id = "*", audience = ACTOR, provider = harness.provider, projection_kinds = {"environment"}}, function(item: Object): boolean return item.ref == harness.source and item.audience == ACTOR end)
 end
 local function through_placement(harness: Harness)
     local root = ".wippy/gateway-" .. harness.name .. "-" .. fresh("run")
@@ -436,7 +436,7 @@ local function without_variable(harness: Harness)
         environment.CODEX_HOME = home .. "/.codex"
         environment.OPENAI_API_KEY = CODEX_SENTINEL
     end
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, proc_error = executor:exec(quote.line(argv), {work_dir = root .. "/work", env = environment})
     if not proc then error("exec " .. harness.name .. ": " .. tostring(proc_error)) end
     local stdout = proc:stdout_stream()
@@ -484,7 +484,7 @@ end
 local function drive_app_server(codex_home: string, cwd: string): {[string]: string}
     -- The pinned executable's own hook listing is the trust authority: its
     -- app-server answers hooks/list with each hook's key and current hash.
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec("codex app-server", {env = {PATH = "/usr/bin:/bin", HOME = codex_home:gsub("/%.codex$", ""), CODEX_HOME = codex_home}})
     if not proc then error("exec codex app-server: " .. tostring(err)) end
     local stdout = proc:stdout_stream()
@@ -573,7 +573,7 @@ local function hooks_through_gateway(harness: Harness)
         environment.CODEX_HOME = home .. "/.codex"
         environment.OPENAI_API_KEY = CODEX_SENTINEL
     end
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local started_at = time.now()
     local proc, proc_error = executor:exec(quote.line(argv), {work_dir = work, env = environment})
     if not proc then error("exec " .. harness.name .. ": " .. tostring(proc_error)) end

@@ -2,6 +2,7 @@
 """Check the mechanically decidable placement rules in development/conventions.md."""
 import argparse
 import hashlib
+import json
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -11,10 +12,14 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SDK = {"application": "bee.app"}
 NATIVE_ENTRIES = {"bee.harness.host:environment"}
+ROOT_ENTRIES = json.loads((ROOT / "build/layout_roots.json").read_text())
+ROOT_DECLARATIONS = {"ns.definition", "ns.dependency", "ns.requirement", "contract.definition"}
 
 
 def audit(root):
     errors, entries, sources = [], {}, set()
+    component_roots = {SDK.get(index.parent.parent.name, "bee." + index.parent.parent.name.replace("-", "."))
+                       for index in (root / "modules").glob("*/src/_index.yaml")}
     graph = defaultdict(set)
     groups = defaultdict(set)
     indexes = [*sorted((root / "src").rglob("_index.yaml")),
@@ -38,6 +43,11 @@ def audit(root):
             errors.append(f"{relative}: component has no root _index.yaml")
         for entry in document.get("entries", []):
             identity = namespace + ":" + entry["name"]
+            if namespace == "bee" or namespace in component_roots:
+                documented = ROOT_ENTRIES.get(namespace, {}).get(entry["name"])
+                allowed = entry["kind"] == documented if documented is not None else namespace != "bee" and entry["kind"] in ROOT_DECLARATIONS
+                if not allowed:
+                    errors.append(f"{identity}: root entry is outside the documented composition set; place it in its owner's child namespace")
             if identity in entries:
                 errors.append(f"{relative}: duplicate registry identity {identity}")
             entries[identity] = (index, entry)
@@ -60,7 +70,7 @@ def audit(root):
                 directory = entry.get("directory", "")
                 if directory and not directory.startswith(("/", "${")) and entry.get("base") != "project":
                     errors.append(f"{identity}: a project-relative module directory requires base: project")
-            if entry.get("kind") in {"ns.definition", "contract.definition"} and children and module:
+            if entry.get("kind") in {"ns.definition", "contract.definition"} and children and module and not (module == "workspace" and children == ("catalog",) and entry["kind"] == "contract.definition"):
                 errors.append(f"{identity}: component definition belongs in its source root")
             if module and entry.get("meta", {}).get("type") == "bee.app" and children != ("app",):
                 errors.append(f"{identity}: application identity belongs in src/app")
@@ -87,6 +97,10 @@ def audit(root):
             for contract in entry.get("contracts", []):
                 refs.append(contract["contract"])
                 refs.extend(contract.get("methods", {}).values())
+        if entry.get("meta", {}).get("type") == "bee.approval_policies":
+            refs.extend(approver["definition_id"] for policy in entry.get("policies", [])
+                        for approver in policy.get("approvers", [])
+                        if isinstance(approver, dict) and "definition_id" in approver)
         if entry["kind"] == "ns.requirement":
             refs.extend(target["entry"] for target in entry.get("targets", []))
             targets += len(entry.get("targets", []))

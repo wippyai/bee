@@ -2,7 +2,7 @@
 local sql = require("sql")
 local registry = require("registry")
 local function handle(): boolean
-    local db = sql.get("bee.gov:db")
+    local db = sql.get("bee.gov.env:db")
     if db then db:release(); return true end
     local overlay = registry.overlay("bee.gov:agent")
     return overlay ~= nil

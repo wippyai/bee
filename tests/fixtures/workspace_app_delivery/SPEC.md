@@ -27,7 +27,7 @@ here for my approval.
   `.security.policies +=`. Record every count with the greeting as a row in
   the granted database; the rows survive a restart.
 - Request the host catalog capability `agents.launch` with
-  `definitions: [bee.driver.claude:research_batch]` using a measured
+  `definitions: [bee.driver.claude.profiles:research_batch]` using a measured
   `ns.requirement` targeting `app.tally:app` at `.security.policies +=`. At
   startup, open a session on that definition with the application sessions
   helper, `send` it a brief and wait for its result, then `send` it a second

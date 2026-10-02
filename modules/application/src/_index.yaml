@@ -24,12 +24,13 @@ entries:
     interaction: bee.app:interaction
     thread_bounds: bee.threads.records:bounds
     thread_protocol: bee.app:thread_protocol
+    bounds: bee.values:bounds
 - name: sessions_protocol
   kind: library.lua
   source: file://sessions_protocol.lua
   imports:
-    bounds: bee.protocol:bounds
-    canonical: bee.protocol:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     record_values: bee.threads.records:values
     record_types: bee.threads:record_types
     budget_values: bee.threads.records:budgets
@@ -40,7 +41,7 @@ entries:
   modules:
   - contract
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     protocol: bee.app:sessions_protocol
 - name: arguments
   kind: library.lua
@@ -52,7 +53,8 @@ entries:
   kind: library.lua
   source: file://caller.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
+    record_bounds: bee.threads.records:bounds
 - name: folder_picker
   kind: library.lua
   source: file://folder_picker.lua
@@ -60,7 +62,7 @@ entries:
     text: bee.app:text
     caller: bee.app:caller
     frame: bee.app:frame
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua
@@ -70,24 +72,25 @@ entries:
   - time
   - uuid
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: status_reader
   kind: library.lua
   source: file://status_reader.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     caller: bee.app:caller
     text: bee.app:text
+    record_bounds: bee.threads.records:bounds
 - name: status_surface
   kind: library.lua
   source: file://status_surface.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: interaction
   kind: library.lua
   source: file://interaction.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
@@ -107,9 +110,10 @@ entries:
   kind: library.lua
   source: file://thread_protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     record: bee.threads.records:record
     record_types: bee.threads:record_types
+    record_bounds: bee.threads.records:bounds
 - name: viz
   kind: library.lua
   source: file://viz.lua
@@ -135,3 +139,7 @@ entries:
     appearance: bee.app:appearance
     frame: bee.app:frame
     viz: bee.app:viz
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

@@ -20,7 +20,7 @@ entries:
     actions:
     - env.get
     resources:
-    - bee.gov:node_identity_migration_source
+    - bee.gov.env:node_identity_migration_source
     effect: allow
 - name: helper
   kind: library.lua
@@ -31,11 +31,11 @@ entries:
   - process
   - time
   imports:
-    bounds: bee.protocol:bounds
-    canonical: bee.sync:canonical
-    artifact: bee.gov:artifact
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    artifact: bee.gov.delivery:artifact
     plan_store: bee.gov.persist:plan_store
-    staging: bee.gov:staging_resources
+    staging: bee.gov.delivery:staging_resources
     approval: bee.gov.binding:approval
 - name: seed
   kind: process.lua
@@ -69,7 +69,7 @@ entries:
   - security
   - logger
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     helper: bee.approvals.inbox.decide.probe:helper
   security:
     policies:

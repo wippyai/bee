@@ -44,15 +44,15 @@ entries:
     policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
-    service: bee.approvals:service
+    service: bee.approvals.service:service
     worker: bee.approvals.service:worker
-    resources: bee.approvals:resources
+    resources: bee.approvals.env:resources
     outbox: bee.approvals.persist:outbox
     migrations: bee.approvals.migrations:migrations
-    persist: bee.persist:database
-    identity_migration: bee.approvals:identity_migration
+    persist: bee.persist.persist:database
+    identity_migration: bee.approvals.migrations:identity_migration
     thread_harness: bee.threads:harness
 - name: lease_flow_test_policy
   kind: security.policy
@@ -73,10 +73,10 @@ entries:
     principals: bee.test.principals:bound
     test: wippy.test:test
     capability_model: bee.capability:model
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     lease_grants: bee.gov.binding:lease_grants
     lease_store: bee.gov.persist:lease_store
-    service: bee.approvals:service
+    service: bee.approvals.service:service
 - name: attention_client_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -98,4 +98,4 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, uuid, time]
   security: {policies: [bee.approvals:apply_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]}
-  imports: {test: wippy.test:test, service: bee.approvals:service, lease: bee.approvals:runtime_lease, bounds: bee.threads.records:bounds}
+  imports: {test: wippy.test:test, service: bee.approvals.service:service, lease: bee.approvals.service:runtime_lease, bounds: bee.values:bounds}

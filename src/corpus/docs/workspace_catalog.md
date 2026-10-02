@@ -4,7 +4,7 @@ One Bee node holds any number of logical workspaces as rows of the node
 workspace catalog (see [storage](storage.md)). The catalog operations are the
 owner operations over those rows. They are contract
 `bee.workspace.catalog:contract`, bound by `bee.workspace.catalog:local` to the
-functions `bee.workspace.catalog:<method>`.
+functions `bee.workspace.binding:<method>` in `bee/workspace`.
 
 Every reply is `{ok, error = {code, message}, value}`. Codes: `INVALID`
 (the request fails its decoder), `UNAUTHENTICATED`, `DENIED`, `FORBIDDEN`
@@ -31,7 +31,7 @@ last_used_at}`. `live` says whether a host serves the workspace now. The
 folder workspace's row has an empty label; readers name it by identity.
 
 **Create.** A label is one nonempty line of at most 240 bytes. `root_ref` must
-be listed in the host's admitted roots (`bee.resources:resource_roots`, the same ceiling
+be listed in the host's admitted roots (`bee.resources.env:resource_roots`, the same ceiling
 resource associations use); a caller never supplies a path outside it.
 `subpath` is relative, without empty, `.` or `..` segments. Without
 `create_directory` the folder must already exist as a directory. With it, the
@@ -49,12 +49,12 @@ case-folded over ASCII letters. Path search takes `root_ref` and an optional
 `path` and walks `(state, root_ref, subpath)`: it returns the folder named by
 `path` first, then every folder below `path/`, never a sibling such as
 `path-old`. A `path` without `root_ref` runs that search under every root the
-host admits (`bee.resources:resource_roots`), one root after another in name order; its
+host admits (`bee.resources.env:resource_roots`), one root after another in name order; its
 cursor names the root of the page's last row. No operation reads rows it does
 not return.
 
 **Roots and folders.** `roots` lists the roots the host admits
-(`bee.resources:resource_roots`) in name order as `{root_ref, access}`, `access` being
+(`bee.resources.env:resource_roots`) in name order as `{root_ref, access}`, `access` being
 `read` or `write`. `folders` pages the folders inside `path` (a subpath, default
 the root itself) under an admitted root: names in byte order after the folder
 name `after`, `limit` 1-100 (default 50), each `{name, workspace_id?}` naming the
@@ -88,7 +88,7 @@ order), calls each under its execution scope after it has authorized the
 caller, checks every answer against those bounds and reports a failing
 binding as that entry's `error` while the others stay intact. The host binds
 the resources component's `describe` and `search`
-(`bee.resources:resources_workspace_extension`), so a workspace shows its resource
+(`bee.resources.binding:resources_workspace_extension`), so a workspace shows its resource
 associations. Semantic search such as embeddings is a future binding of the
 same contract.
 
@@ -101,7 +101,7 @@ action; host-named policies `bee.security.storage:workspace_catalog_read_policy`
 `bee.security.storage:workspace_catalog_manage_policy` grant them. Applications cannot open the
 node workspace store (their storage boundary denies it), so each operation
 authorizes the caller for the decoded request and then runs the private
-backend `bee.workspace.catalog:backend` under the execution scope
+backend `bee.workspace.binding:catalog` under the execution scope
 `bee.security.storage:workspace_catalog_scope`, which holds the store, the admitted roots list,
 the root volumes, the host-name lookup and the extension calls. The backend
 refuses callers outside that scope.
@@ -109,7 +109,7 @@ refuses callers outside that scope.
 ## Live hosts
 
 A workspace costs rows until something uses it. The node host manager
-(`bee.launch:host_manager`, run by the service `bee:workspace_hosts` with a cap
+(`bee.launch:host_manager`, run by the service `bee.launch.service:workspace_hosts` with a cap
 of 64 live hosts and a 15-minute idle period) starts a workspace host when a
 lease first asks for its workspace and stops it when no lease has held it for
 the idle period. Classic folder mode is unchanged: its launch composition
@@ -203,7 +203,7 @@ A display the bridge serves shows another workspace without its client
 detaching. F9 opens the connection panel and W its workspace menu: one catalog
 page at a time (`/` searches labels, PgUp/PgDn page, the shown workspace is
 marked, Enter switches). The display's client process reads the pages with
-`bee.workspace.catalog:list` and `:search` under host-selected grants
+`bee.workspace.binding:list` and `:search` under host-selected grants
 (`bee.security.desktop:client_workspace_catalog_call_policy`, `bee.security.storage:workspace_catalog_read_policy`)
 and sends the switch to its retained supervisor, which forwards it, naming the
 display, to the bridge (`bee.retained.switch`). The bridge moves the display's
@@ -330,6 +330,6 @@ releases its serving lease.
 
 Its admission binding grants `bee.security.storage:workspace_catalog_read_policy`,
 `bee.security.storage:workspace_catalog_manage_policy`, `bee.security.threads:thread_workspace_list_policy`,
-`bee.security.desktop:workspace_host_lease_policy` and `bee.workspace.manager:client_policy`, which may
+`bee.security.desktop:workspace_host_lease_policy` and `bee.workspace.manager.security:client_policy`, which may
 call only the catalog operations it uses (`list`, `search`, `inspect`,
 `archive`, `restore`, `create`, `roots`, `folders`) and `list_workspace`.

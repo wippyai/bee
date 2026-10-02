@@ -1,0 +1,8 @@
+version: '1.0'
+namespace: bee.sessions.env
+entries:
+- name: threads_journal_ref
+  kind: registry.entry
+  meta:
+    type: bee.sessions.threads_journal_ref
+    comment: The host-selected Threads journal contract binding

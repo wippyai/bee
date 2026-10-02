@@ -16,8 +16,8 @@ local adapter = require("adapter")
 local stream_json = require("stream_json")
 local protocol = require("protocol")
 local events = require("events")
-local ADAPTER = "bee.driver.claude:permission_adapter"
-local BINDING = "bee.driver.claude:binding"
+local ADAPTER = "bee.driver.claude.permission:permission_adapter"
+local BINDING = "bee.driver.claude.binding:binding"
 type Object = {[string]: unknown}
 local function capture_path(): string
     local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
@@ -25,7 +25,7 @@ local function capture_path(): string
     return streams .. "/claude/stream-json-2/control.jsonl"
 end
 local function read_file(path: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc = assert(executor:exec("cat " .. path))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -70,7 +70,7 @@ local function define_tests()
                         if profile.mode == "window" then
                             test.eq(profile.permission.mode, "adapter")
                             test.is_true(profile.permission.eligible)
-                            test.eq(profile.permission.adapter_ref, "bee.driver:permission_request_hook")
+                            test.eq(profile.permission.adapter_ref, "bee.driver.permission:permission_request_hook")
                         else
                             if not profile.permission.eligible or profile.permission.adapter_ref ~= ADAPTER then
                                 error("profile " .. profile.id .. " does not pin " .. ADAPTER .. " at digest " .. pinned.digest .. ": " .. table.concat(binding.diagnostics, "; "))

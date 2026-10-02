@@ -172,7 +172,7 @@ func check() error {
 		}
 		material := map[string]string{}
 		for topic, relative := range map[string]string{
-			"source": "modules/threads/src/records/canonical.lua", "corpus": "tests/fixtures/performance_research/corpus.lua",
+			"source": "modules/values/src/canonical.lua", "corpus": "tests/fixtures/performance_research/corpus.lua",
 			"authoring": "tests/fixtures/research_author/AUTHORING.md", "application": "modules/threads-timeline/src/app/app.lua",
 			"model": "modules/threads-timeline/src/app/model.lua", "view": "modules/threads-timeline/src/app/view.lua",
 		} {
@@ -216,7 +216,7 @@ func check() error {
 	if err = os.WriteFile(filepath.Join(host, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.harness.host\nentries:\n- name: environment\n  kind: env.storage.os\n  lifecycle: {auto_start: true}\n"), 0600); err != nil {
 		return err
 	}
-	if err = setVariable(root, "modules/driver-agy/src/_index.yaml", "executable", "BEE_RESEARCH_AGY_EXECUTABLE"); err != nil {
+	if err = setVariable(root, "modules/driver-agy/src/env/_index.yaml", "executable", "BEE_RESEARCH_AGY_EXECUTABLE"); err != nil {
 		return err
 	}
 	if err = setVariable(root, "src/env/_index.yaml", "machine_home", "BEE_RESEARCH_USER_HOME"); err != nil {

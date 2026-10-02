@@ -19,13 +19,15 @@ generator when the corpus is intentionally updated.
 | Copyable, proven application screens (deploy board, inbox, logs, metrics, forms, overlays) | [Reference applications](reference/apps) |
 | Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md) |
 | Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
-| Workspace storage and application state | [Storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
+| Workspace storage and application state | [Workspace component](../modules/workspace/src/README.md), [storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
 | Node workspace catalog, lazy workspace hosts, workspace extensions and the Workspaces viewer | [Workspace catalog](reference/workspace-catalog.md) |
 | Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md) |
+| Shared bounds, canonical JSON, time conversions, and reply decoding | [Values module](../modules/values/src/README.md) |
 | Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |
 | Native executable, updates, and I/O events | [Native distribution](operations/native.md) |
 | Hive network reachability and runtime proposal | [Reachability study](operations/hive-reachability.md) |
 | Runtime integration and upstream boundaries | [Runtime integration](development/runtime.md) |
+| Standalone startup timings and load-aware regression measurement | [Boot measurement](development/boot-measurement.md) |
 | Live process code handoff and recovery status | [Process handoff](development/process-handoff.md) |
 | Release artifacts and publication | [Releasing](operations/releasing.md) |
 | GitHub protections and repository settings | [GitHub setup](development/github.md) |

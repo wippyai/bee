@@ -6,7 +6,7 @@ entries:
   source: file://memory_source.lua
   meta: {type: test_support}
   imports:
-    source: bee.files:source
+    source: bee.files.app:source
 - name: syntax_test
   kind: function.lua
   source: file://syntax_test.lua
@@ -15,7 +15,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    syntax: bee.files:syntax
+    syntax: bee.files.app:syntax
     appearance: bee.app:appearance
 - name: protocol_test
   kind: function.lua
@@ -32,7 +32,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    gitignore: bee.files:gitignore
+    gitignore: bee.files.app:gitignore
 - name: tree_test
   kind: function.lua
   source: file://tree_test.lua
@@ -42,9 +42,9 @@ entries:
   imports:
     test: wippy.test:test
     memory_source: bee.files.test:memory_source
-    source: bee.files:source
-    tree: bee.files:tree
-    gitignore: bee.files:gitignore
+    source: bee.files.app:source
+    tree: bee.files.app:tree
+    gitignore: bee.files.app:gitignore
 - name: model_test
   kind: function.lua
   source: file://model_test.lua

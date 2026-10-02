@@ -6,7 +6,7 @@ entries:
   source: file://lifecycle.lua
   method: handle
   modules: [process, registry, security, time, channel, uuid, logger, fs]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.files.binding:lifecycle_policy]}
 - name: lifecycle_policy
   kind: security.policy

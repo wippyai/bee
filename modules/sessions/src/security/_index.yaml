@@ -11,8 +11,8 @@ entries:
     - bee.executor.external.binding:answer_hook
     - "bs:*"
     - bee.sessions.binding:open
-    - bee.sessions:threads_journal_ref
-    - bee.threads:journal_local
+    - bee.sessions.env:threads_journal_ref
+    - bee.threads.binding:journal_local
     - bee.threads.binding:session_create
     - bee.threads.binding:session_attach
     - bee.threads.binding:session_describe
@@ -59,10 +59,10 @@ entries:
     - bee.sessions.scheduler
     - bee.sessions.scheduler.wake
     - bee.sessions.service:turn_run
-    - bee.sessions:threads_journal_ref
-    - bee.sessions:executor_selection
+    - bee.sessions.env:threads_journal_ref
+    - bee.sessions.executor:executor_selection
     - bee.sessions.binding:external_executor_binding
-    - bee.threads:journal_local
+    - bee.threads.binding:journal_local
     - bee.executor.external.binding:run_turn
     - bee.threads.binding:session_scan
     - bee.threads.binding:session_create

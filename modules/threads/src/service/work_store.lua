@@ -13,6 +13,7 @@ local record = require("record")
 local observation = require("observation")
 local record_types = require("record_types")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local budget_values = require("budget_values")
 local canonical = require("canonical")
 local time = require("time")
@@ -72,7 +73,7 @@ local function now_ms(): integer
 end
 
 local function encode(value: unknown, maximum: integer?): (string?, string?)
-    return canonical.encode(value, maximum or MAX_VALUE_BYTES, bounds.MAX_JSON_DEPTH)
+    return canonical.encode(value, maximum or MAX_VALUE_BYTES, record_bounds.MAX_JSON_DEPTH)
 end
 
 local function budget_json(value: unknown): (string?, string?)
@@ -282,7 +283,7 @@ end
 
 local function append_event(tx: sql.Transaction, session: Session, actor: string, operation_ref: string, kind: string,
     subject: string, revision: integer, data: unknown): (string?, integer?, string?)
-    local payload_json, payload_error = encode({kind = kind, subject = subject, revision = revision, operation = operation_ref, data = data}, bounds.MAX_RECORD_BYTES - 1024)
+    local payload_json, payload_error = encode({kind = kind, subject = subject, revision = revision, operation = operation_ref, data = data}, record_bounds.MAX_RECORD_BYTES - 1024)
     if not payload_json then return nil, nil, "encode journal event: " .. tostring(payload_error) end
     local head, head_error = query_one(tx, "SELECT head_sequence FROM bee_thread_heads WHERE thread_id = ?", {session.thread_id}, "journal head")
     if head_error then return nil, nil, head_error end
@@ -300,7 +301,7 @@ local function append_event(tx: sql.Transaction, session: Session, actor: string
     local decoded_body, body_error = observation.decode(body)
     if not decoded_body then return nil, nil, "validate journal event: " .. tostring(body_error) end
     local payload: record_types.RecordPayload = {kind = "observation", body = decoded_body}
-    local envelope: record_types.RecordEnvelope = {schema_revision = bounds.SCHEMA_REVISION, record_id = record_id,
+    local envelope: record_types.RecordEnvelope = {schema_revision = record_bounds.SCHEMA_REVISION, record_id = record_id,
         thread_id = session.thread_id, sequence = sequence, recorded_at = now, producer_id = actor, source = "bee"}
     local record_json, encode_error = record.encode_parts(envelope, payload)
     if not record_json then return nil, nil, "encode canonical journal record: " .. tostring(encode_error) end

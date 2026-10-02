@@ -18,7 +18,6 @@ import (
 
 type fixturePack struct {
 	Input, Output, Version, DependencyVersion, Component string
-	Explicit                                             bool
 }
 
 type fixturePolicy struct {
@@ -38,6 +37,7 @@ func main() {
 		Sources      map[string]string
 		Identity     map[string]any
 		Independent  map[string]bool
+		Parameters   map[string]any
 		Policies     map[string]fixturePolicy
 		Declarations map[string]codeDeclaration
 	}
@@ -87,15 +87,7 @@ func main() {
 				entries[i].Meta["independent"] = true
 			}
 		}
-		if pack.Explicit && strings.HasPrefix(filepath.Base(pack.Output), "bee-") {
-			retained := entries[:0]
-			for _, entry := range entries {
-				if entry.Kind != "ns.dependency" || !strings.HasPrefix(entry.ID.String(), "bee.deps:") {
-					retained = append(retained, entry)
-				}
-			}
-			entries = retained
-		}
+
 		for i := range entries {
 			entry := &entries[i]
 			fields, ok := entry.Data.(map[string]any)
@@ -114,10 +106,8 @@ func main() {
 					}
 				}
 			}
-			if declaration, found := config.Declarations[entry.ID.String()]; found {
-				if parameters, selected := declaration.Data["parameters"]; selected {
-					fields["parameters"] = parameters
-				}
+			if parameters, selected := config.Parameters[entry.ID.String()]; selected {
+				fields["parameters"] = parameters
 			}
 			if source := config.Sources[entry.ID.String()]; source != "" {
 				code, err := os.ReadFile(source)
@@ -130,7 +120,6 @@ func main() {
 				}
 				fields["source"] = string(code)
 			}
-
 			if entry.Kind == "ns.dependency" {
 				component, _ := fields["component"].(string)
 				if strings.HasPrefix(component, "bee/") {

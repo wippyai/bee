@@ -28,12 +28,12 @@ local principals = require("principals")
 local ACTOR = "bee.test.claude_control"
 local APPROVER = "bee.test.approver"
 local POLICY = "bee.harness.catalog:claude_control_fixture_policy"
-local ADAPTER = "bee.driver.claude:permission_adapter"
+local ADAPTER = "bee.driver.claude.permission:permission_adapter"
 local ACCEPTANCE = "bee.harness.catalog:claude_control_acceptance"
 local APPROVER_POLICY = "claude-control"
 local ROOT = "bee.harness.catalog:project_fixture"
 local PROJECT = ".wippy/carrier-project"
-local BINDING = "bee.driver.claude:binding"
+local BINDING = "bee.driver.claude.binding:binding"
 local SENTINEL = "sk-ant-sentinel-bee-000"
 local counter = 0
 type Object = {[string]: unknown}
@@ -79,7 +79,7 @@ local function read_all(stream): string
     return content
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -123,7 +123,7 @@ end
 local endpoint_handle: exec.Process? = nil
 local endpoint_executor: exec.Executor? = nil
 local function start_endpoint(record: string, command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
     assert(proc:start())
@@ -186,7 +186,7 @@ local function prepare_host(claude: string, port: string, ttl_ms: integer)
     data.environment = {ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}
     data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 500, ttl_ms = ttl_ms}
     apply(policy)
-    local policies_entry = registry.get("bee:approver_policies")
+    local policies_entry = registry.get("bee.security.approvals:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list_owner = assert(bounds.object(policies_entry.data))
     local list = principals.objects(list_owner.policies)
@@ -199,7 +199,7 @@ local function prepare_host(claude: string, port: string, ttl_ms: integer)
         list[#list + 1] = {name = APPROVER_POLICY, approvers = {APPROVER}, max_ttl_ms = 60000}
         apply(policies_entry)
     end
-    local roots = registry.get("bee.placement.native:placement_admitted_roots")
+    local roots = registry.get("bee.placement.native.env:placement_admitted_roots")
     if not roots then error("admitted roots entry") end
     local root_list_owner = assert(bounds.object(roots.data))
     local root_list = principals.objects(root_list_owner.roots)

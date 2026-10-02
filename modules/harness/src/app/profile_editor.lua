@@ -134,7 +134,7 @@ end
 function M.placement_ref(profile: Profile): string?
     local placement = profile.placement
     if not placement then return nil end
-    if placement.kind == "native" then return "bee.placement:native" end
+    if placement.kind == "native" then return "bee.placement.profiles:native" end
     return placement.profile_ref
 end
 local function result_for(draft: Draft): (Profile?, string?)
@@ -191,7 +191,7 @@ function M.cycle_placement(draft: Draft, delta: integer): (boolean, string?)
     for index, choice in ipairs(choices) do if choice == M.placement_ref(draft) then selected = index end end
     selected = math.floor(((selected + delta - 1) % #choices) + 1)
     local ref = choices[selected]
-    if ref == "bee.placement:native" then draft.placement = {kind = "native", home = "private"}
+    if ref == "bee.placement.profiles:native" then draft.placement = {kind = "native", home = "private"}
     else draft.placement = {kind = "docker", profile_ref = ref} end
     return true, nil
 end

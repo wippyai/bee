@@ -1,0 +1,56 @@
+version: '1.0'
+namespace: bee.gateway.catalog
+entries:
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules:
+  - json
+  imports:
+    bounds: bee.values:bounds
+- name: context
+  kind: library.lua
+  source: file://context.lua
+  modules:
+  - json
+  imports:
+    bounds: bee.values:bounds
+- name: sessions
+  kind: library.lua
+  source: file://sessions.lua
+  imports: {protocol: bee.app:sessions_protocol}
+- name: json_schema
+  kind: library.lua
+  source: file://json_schema.lua
+  modules:
+  - json
+  imports:
+    bounds: bee.values:bounds
+- name: session_bundle
+  kind: library.lua
+  source: file://session_bundle.lua
+- name: session_tools
+  kind: library.lua
+  source: file://session_tools.lua
+  modules: [json]
+  imports:
+    bounds: bee.values:bounds
+    json_schema: bee.gateway.catalog:json_schema
+    session_bundle: bee.gateway.catalog:session_bundle
+- name: profile_scope
+  kind: library.lua
+  source: file://profile_scope.lua
+  imports:
+    bounds: bee.values:bounds
+    surface: bee.gateway.catalog:surface
+    profile_access: bee.driver.profiles:profile_access
+- name: surface
+  kind: library.lua
+  source: file://surface.lua
+  imports:
+    profile_access: bee.driver.profiles:profile_access
+    bounds: bee.values:bounds
+    catalog: bee.gateway.catalog:catalog
+    capability_model: bee.capability:model
+    context: bee.gateway.catalog:context
+    mcp: bee.gateway.api:mcp

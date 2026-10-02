@@ -1,12 +1,9 @@
 """Standalone-binary Workspaces and Claude Agent restart acceptance."""
-import os
-
-os.environ.clear()
-os.environ.update(PATH="/usr/bin:/bin", LC_ALL="C", LANG="C.UTF-8")
-
 import argparse
 from pathlib import Path
 import shutil
+import json
+import sqlite3
 import subprocess
 import sys
 import tarfile
@@ -16,6 +13,8 @@ from native_client import owner_handle
 from native_workspace import NativeDesktop
 from processes import hold, table
 from workspace import name_node
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class AcceptanceFailure(RuntimeError):
@@ -35,6 +34,7 @@ def environment(folder, home):
         "TERM": "xterm-256color",
         "LANG": "C.UTF-8",
         "LC_ALL": "C",
+        "TMPDIR": str(folder),
     }
 
 
@@ -60,7 +60,7 @@ def prepare(folder, label="fresh", source=None):
     login.mkdir(mode=0o700)
     (login / ".credentials.json").write_text('{"fixture":"real-build-check"}\n')
     cli = bin_dir / "claude"
-    cli.write_text("#!/bin/sh\nprintf 'BEE_REAL_BUILD_CLAUDE_STARTED\\n'\nIFS= read -r answer\n")
+    cli.write_text("#!/bin/sh\nif [ \"$1\" = --version ]; then printf '2.1.0 (Claude Code)\\n'; exit 0; fi\nprintf 'BEE_REAL_BUILD_CLAUDE_STARTED\\n'\nIFS= read -r answer\n")
     cli.chmod(0o700)
     state.mkdir(mode=0o700)
     return project, state, home, environment(root, home)
@@ -126,7 +126,10 @@ def open_workspaces(binary, project, state, home, env, detail, owner=None):
             local_owner = owner_handle(ui, binary, state)
         stage = "open the Start menu"
         ui.open_start()
-        ui.choose("Tools")
+        ui.wait_until(lambda: any("│" in row and "Apps " in row for row in ui.screen.display),
+                      "the Start menu", timeout=20)
+        ui.choose("Apps")
+        ui.choose("Advanced")
         stage = "choose Workspaces"
         ui.choose("Workspaces")
         stage = "wait for Workspaces list"
@@ -150,7 +153,7 @@ def open_workspaces(binary, project, state, home, env, detail, owner=None):
 
 
 def show_workspace_detail(ui):
-    ui.key(b"\r")
+    ui.key(b"d")
     ui.wait_until(
         lambda: any(marker in ui.text() for marker in (
             "AGENT SESSIONS", "native listener changed", "Could not inspect this workspace", "Workspaces unavailable:")),
@@ -164,6 +167,8 @@ def show_workspace_detail(ui):
 
 def close_workspaces(ui):
     ui.key(b"\x17")
+    ui.wait("SESSIONS", timeout=20)
+    ui.key(b"\x17")
     ui.wait("No applications open", timeout=20)
     ui.quit()
 
@@ -175,21 +180,22 @@ def open_claude_agent(binary, project, state, home, env, owner=None):
     stage = "start the Agent window"
     try:
         ui = NativeDesktop(binary, project, state, arguments=("agent",), home=home, environment=env)
-        stage = "wait for the profile list"
-        ui.wait("Choose a profile", timeout=90)
+        stage = "wait for Sessions on the second display"
+        ui.wait("SESSIONS", timeout=90)
         if local_owner is None:
             local_owner = owner_handle(ui, binary, state)
-        ui.wait("Claude", timeout=45)
-        stage = "move the selection to Claude"
-        ui.key(b"\x1b[B")
-        stage = "wait for the Claude summary"
-        ui.wait("Configured folder", timeout=20)
-        stage = "wait for Claude's tools summary"
-        ui.wait("tools configured", timeout=20)
+        ui.key(b"n")
+        stage = "wait for the new-session picker"
+        ui.wait("NEW SESSION", timeout=45)
+        ui.key(b"/Claude\r")
+        ui.wait_until(lambda: any(row.lstrip().startswith("›") and "Claude" in row for row in ui.screen.display),
+                      "the selected Claude profile", timeout=45)
         stage = "open the Claude profile"
-        ui.key(b"\r")
+        ui.key(b"m")
         ui.wait("BEE_REAL_BUILD_CLAUDE_STARTED", timeout=60)
         stage = "close the Claude Agent window"
+        ui.key(b"\x17")
+        ui.wait("SESSIONS", timeout=20)
         ui.key(b"\x17")
         ui.wait("No applications open", timeout=20)
         ui.quit()
@@ -237,8 +243,21 @@ def round_trip(binary, project, state, home, env, workspaces_first):
         raise
 
 
+def retained_state(state):
+    with sqlite3.connect(state / "workspace.db") as database:
+        rows = database.execute("SELECT value FROM workspace_state").fetchall()
+        ledger = database.execute("SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id").fetchall()
+    applications = {
+        item["id"]: (item["definition_id"], item["instance_id"])
+        for row in rows for item in json.loads(row[0])["applications"]
+    }
+    return applications, ledger
+
+
 def exercise(binary, previous, previous_commit):
-    with tempfile.TemporaryDirectory(prefix="bee-real-build-check-") as temporary:
+    temporary_root = ROOT / ".wippy/tmp"
+    temporary_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="bee-real-build-check-", dir=temporary_root) as temporary:
         folder = Path(temporary)
         project, state, home, env = prepare(folder, "fresh")
         try:
@@ -255,13 +274,53 @@ def exercise(binary, previous, previous_commit):
                 pinned_source = previous_source(folder, previous_commit)
                 upgrade_project, upgrade_state, upgrade_home, upgrade_env = prepare(
                     folder, "upgrade", source=pinned_source)
-                prior_owner = round_trip(previous, upgrade_project, upgrade_state, upgrade_home, upgrade_env, workspaces_first=False)
-                print("Real standalone previous-build Workspaces and Claude Agent passed", flush=True)
+                # Seed the prior build's Workspaces and a restorable Settings checkpoint.
+                # Agent on a second display is the regression being fixed here.
+                prior_owner, prior_ui = open_workspaces(previous, upgrade_project, upgrade_state,
+                                                       upgrade_home, upgrade_env, detail=True)
+                try:
+                    prior_ui.open_start()
+                    prior_ui.wait_until(lambda: any("│" in row and "Settings/Help" in row for row in prior_ui.screen.display),
+                                        "the Settings menu", timeout=20)
+                    prior_ui.choose("Settings/Help")
+                    prior_ui.choose("Settings")
+                    prior_ui.wait("BEE SETTINGS", timeout=45)
+                    prior_ui.wait_until(lambda: any(value[0] == "bee.settings.app:app" for value in retained_state(upgrade_state)[0].values()),
+                                        "the Settings checkpoint", timeout=20)
+                    prior_ui.quit()
+                finally:
+                    prior_ui.close()
                 stop_owner(previous, upgrade_state, upgrade_home, upgrade_env, prior_owner)
-                upgrade_project_sources(upgrade_project, Path(__file__).resolve().parents[1], folder.name)
+                prior_apps, prior_ledger = retained_state(upgrade_state)
+                require(any(value[0] == "bee.settings.app:app" for value in prior_apps.values()),
+                        "prior build did not retain Settings")
+                upgrade_project_sources(upgrade_project, ROOT, folder.name)
+                upgraded_owner, upgraded_ui = open_workspaces(binary, upgrade_project, upgrade_state,
+                                                             upgrade_home, upgrade_env, detail=True)
+                try:
+                    current_apps, current_ledger = retained_state(upgrade_state)
+                    require(all(current_apps.get(identity) == value for identity, value in prior_apps.items()),
+                            "upgrade changed a retained application or instance identity")
+                    require(current_ledger == prior_ledger, "upgrade changed the applied migration ledger")
+                    upgraded_ui.key(b"\x17")
+                    upgraded_ui.wait_until(lambda: "▣ Settings" in upgraded_ui.screen.display[0],
+                                           "the restored Settings tab", timeout=20)
+                    settings_x = upgraded_ui.screen.display[0].index("▣ Settings") + 4
+                    upgraded_ui.mouse(0, settings_x, 1)
+                    upgraded_ui.wait("BEE SETTINGS", timeout=20)
+                    upgraded_ui.key(b"\x17")
+                    upgraded_ui.wait_until(lambda: "No applications open" in upgraded_ui.text() or "SESSIONS" in upgraded_ui.text(),
+                                           "the desktop after closing Settings", timeout=20)
+                    if "SESSIONS" in upgraded_ui.text():
+                        upgraded_ui.key(b"\x17")
+                    upgraded_ui.wait("No applications open", timeout=20)
+                    upgraded_ui.quit()
+                finally:
+                    upgraded_ui.close()
+                    stop_owner(binary, upgrade_state, upgrade_home, upgrade_env, upgraded_owner)
                 upgraded_owner = round_trip(binary, upgrade_project, upgrade_state, upgrade_home, upgrade_env, workspaces_first=True)
                 stop_owner(binary, upgrade_state, upgrade_home, upgrade_env, upgraded_owner)
-                print("Real standalone upgraded-state Workspaces and Claude Agent passed", flush=True)
+                print("Real standalone main-created-state Workspaces and Claude Agent passed; restored Settings application/instance IDs and migration checksums unchanged", flush=True)
             else:
                 print("Real standalone prior-build upgrade: skipped (no previous binary supplied)", flush=True)
         except Exception:

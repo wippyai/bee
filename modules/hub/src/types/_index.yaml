@@ -6,5 +6,5 @@ entries:
   source: file://lifecycle.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical

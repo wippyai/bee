@@ -5,10 +5,10 @@ entries:
   kind: library.lua
   source: file://threads_owner.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     scheduler: bee.sessions.service:scheduler
 - name: fake_executor
   kind: library.lua
   source: file://fake_executor.lua
 
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}

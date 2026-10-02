@@ -32,8 +32,8 @@ entries:
     decode: bee.protocol:decode
     model: bee.desktop:model
     appearance: bee.app:appearance
-    recovery: bee.workspace:recovery
-    store: bee.storage:store
+    recovery: bee.workspace.types:recovery
+    store: bee.workspace.persist:store
   meta:
     command:
       name: attachment-probe
@@ -80,8 +80,8 @@ entries:
   imports:
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    recovery: bee.workspace:recovery
-    persistence: bee.workspace:persistence
+    recovery: bee.workspace.types:recovery
+    persistence: bee.workspace.persist:checkpoint
     model: bee.desktop:model
     appearance: bee.app:appearance
 - name: host_guest
@@ -92,8 +92,8 @@ entries:
   imports:
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    recovery: bee.workspace:recovery
-    persistence: bee.workspace:persistence
+    recovery: bee.workspace.types:recovery
+    persistence: bee.workspace.persist:checkpoint
     model: bee.desktop:model
     appearance: bee.app:appearance
 - name: observer_producer
@@ -113,7 +113,7 @@ entries:
   imports:
     decode: bee.protocol:decode
     appearance: bee.app:appearance
-    store: bee.storage:store
+    store: bee.workspace.persist:store
 - name: controller
   kind: process.lua
   source: file://controller.lua

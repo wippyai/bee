@@ -26,6 +26,7 @@ local agy_launch = require("agy_launch")
 local muse_launch = require("muse_launch")
 local opencode_launch = require("opencode_launch")
 local configuration_protocol = require("configuration_protocol")
+local preferences = require("preferences")
 local hash = require("hash")
 local json = require("json")
 local store = require("store")
@@ -89,7 +90,7 @@ local function credential_call(method: string, value: unknown): {[string]: unkno
     return assert(bounds.object(typed.value))
 end
 local function admit_credential_source()
-    local entry = registry.get("bee.credentials:credential_sources")
+    local entry = registry.get("bee.credentials.env:credential_sources")
     if not entry then error("credential sources entry") end
     local data = assert(bounds.object(entry.data))
     local list = principals.objects(data.sources)
@@ -104,7 +105,7 @@ local function admit_credential_source()
     if not applied then error("admit credential source: " .. tostring(err)) end
 end
 local function admit_login_source(source: string, private_codex_home: boolean?)
-    local entry = registry.get("bee.credentials:credential_sources")
+    local entry = registry.get("bee.credentials.env:credential_sources")
     if not entry then error("credential sources entry") end
     local data = assert(bounds.object(entry.data))
     local list = principals.objects(data.sources)
@@ -149,7 +150,7 @@ local function admit_login_source(source: string, private_codex_home: boolean?)
     if not applied then error("admit login source: " .. tostring(apply_error)) end
 end
 local function admit_claude_login_source(source: string)
-    local entry = registry.get("bee.credentials:credential_sources")
+    local entry = registry.get("bee.credentials.env:credential_sources")
     if not entry then error("credential sources entry") end
     local data = assert(bounds.object(entry.data))
     local list = principals.objects(data.sources)
@@ -178,7 +179,7 @@ local function admit_claude_login_source(source: string)
     if not applied then error("admit Claude login source: " .. tostring(apply_error)) end
 end
 local function admit_grok_login_source(source: string)
-    local entry = registry.get("bee.credentials:credential_sources")
+    local entry = registry.get("bee.credentials.env:credential_sources")
     if not entry then error("credential sources entry") end
     local data = assert(bounds.object(entry.data))
     local list = principals.objects(data.sources)
@@ -202,7 +203,7 @@ local function admit_grok_login_source(source: string)
     if not applied then error("admit Grok login source: " .. tostring(apply_error)) end
 end
 local function resource_mode(mode: string)
-    local entry = registry.get("bee.placement.native:placement_resource_mode")
+    local entry = registry.get("bee.placement.native.env:placement_resource_mode")
     if not entry then error("resource mode entry") end
     local data = assert(bounds.object(entry.data))
     data.mode = mode
@@ -300,7 +301,7 @@ local function retained_launch(owner: string, session_ref: string, marker: strin
     request.owner_id = owner
     request.session_ref = session_ref
     request.policy_ref = POLICY
-    request.binding_ref = "bee.driver.codex:binding"
+    request.binding_ref = "bee.driver.codex.binding:binding"
     local declared = assert(bounds.object(request.launch))
     declared.home_ref = "session"
     local resources = principals.objects(request.resources)
@@ -324,7 +325,7 @@ local function grok_composition_request(attempt_id: string, session_ref: string,
     local value: types.LaunchRequest = {
         idempotency_key = fresh("grok-key"), owner_id = OWNER, owner_incarnation = 1,
         action_id = fresh("grok-action"), attempt_id = attempt_id,
-        binding_ref = "bee.driver.grok:binding", policy_ref = POLICY, profile_id = "window",
+        binding_ref = "bee.driver.grok.binding:binding", policy_ref = POLICY, profile_id = "window",
         binding_digest = DIGEST, profile_digest = DIGEST, launch = launch_spec,
         session_ref = session_ref,
         resources = {
@@ -365,7 +366,7 @@ local function admit_root(ref: string)
     if not applied then error("admit root: " .. tostring(err)) end
 end
 local function activate_fixture_binding()
-    local entry = registry.get("bee.harness:harness_activation")
+    local entry = registry.get("bee.harness.launch:harness_activation")
     if not entry then error("harness activation") end
     local data = assert(bounds.object(entry.data))
     local bindings = principals.items(data.bindings)
@@ -392,7 +393,7 @@ local function kinds(attempt_id: string): {string}
     return list
 end
 local function alive(pid: string): boolean
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc = assert(executor:exec("sh -c 'kill -0 " .. pid .. " 2>/dev/null && echo alive || echo gone'"))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -403,7 +404,7 @@ local function alive(pid: string): boolean
     return output:find("alive", 1, true) ~= nil
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc = assert(executor:exec(quote.line({"sh", "-c", command})))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -813,7 +814,7 @@ local function define_tests()
             end
         end)
         test.it("reports a rejected OS group signal instead of claiming success", function()
-            local executor, executor_error = exec.get("bee.placement.native:placement_executor")
+            local executor, executor_error = exec.get("bee.placement.native.env:placement_executor")
             if not executor then error(tostring(executor_error)) end
             local child, child_error = executor:exec("sh -c 'echo $$; exec sleep 30'", {process_group = true})
             if not child then executor:release(); error(tostring(child_error)) end
@@ -841,8 +842,8 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         resource_mode("host_configured")
-        admit_root("bee.placement.native:placement_admitted_roots")
-        admit_root("bee.resources:resource_roots")
+        admit_root("bee.placement.native.env:placement_admitted_roots")
+        admit_root("bee.resources.env:resource_roots")
         activate_fixture_binding()
         local measured = value(service.capabilities())
         local capability = tostring(measured.capability)
@@ -1052,7 +1053,7 @@ local function define_tests()
             test.eq(denied.error and denied.error.code, "FORBIDDEN")
             local elsewhere = launch({"sh", "-c", "true"}, "direct_process")
             local grant = (principals.objects(elsewhere.resources))[1]
-            grant.root_ref = "bee.placement.native:root"
+            grant.root_ref = "bee.placement.native.env:root"
             local refused = call(OWNER, "prepare", elsewhere)
             test.eq(refused.error and refused.error.code, "FORBIDDEN")
             local narrow = launch({"sh", "-c", "true"}, "direct_process")
@@ -1478,13 +1479,26 @@ local function define_tests()
             end
             process.unlisten(outputs)
         end)
+        test.it("prepares the planner's default options without a configuration conflict", function()
+            local policy = assert(registry.get(NO_PROVIDER_POLICY))
+            local policy_data = assert(bounds.object(policy.data))
+            local options = assert(preferences.decode_prepare_options(policy_data.prepare_options))
+            local digest = assert(configuration_protocol.digest({option_values = options, context = "window", fixture = true}, "bee.driver.claude.binding:configure"))
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            request.policy_ref = NO_PROVIDER_POLICY
+            request.binding_ref = "bee.driver.claude.binding:binding"
+            request.configuration_context = "window"
+            request.configuration_digest = digest
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            test.eq(prepared.execution_state, "intended")
+        end)
         test.it("refuses a stale host configuration digest and retries only the matching plan", function()
             local provider = registry.get("bee.placement.native:codex_test_provider")
             if not provider then error("provider entry") end
             local rendered = assert(configuration.projection(assert(configuration.decode("bee.placement.native:codex_test_provider", provider))))
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex:binding"
+            request.binding_ref = "bee.driver.codex.binding:binding"
             request.configuration_digest = string.rep("0", 64)
             local refused = call(OWNER, "prepare", request)
             test.eq(refused.error and refused.error.code, "CONFLICT")
@@ -1494,7 +1508,7 @@ local function define_tests()
             -- A digest from another host selection is a plan conflict, even
             -- where the replacement policy has no provider of its own.
             request.policy_ref = NO_PROVIDER_POLICY
-            request.binding_ref = "bee.driver.claude:binding"
+            request.binding_ref = "bee.driver.claude.binding:binding"
             local unselected = call(OWNER, "prepare", request)
             test.eq(unselected.error and unselected.error.code, "CONFLICT")
             test.is_true(tostring(unselected.error and unselected.error.message):find("inputs changed", 1, true) ~= nil)
@@ -1503,7 +1517,7 @@ local function define_tests()
             test.eq(foreign.error and foreign.error.code, "DENIED")
             test.is_true(tostring(foreign.error and foreign.error.message):find("not a host launch policy", 1, true) ~= nil)
             request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex:binding"
+            request.binding_ref = "bee.driver.codex.binding:binding"
             local prepared = attempt_of(call(OWNER, "prepare", request))
             test.eq(prepared.execution_state, "intended")
             local db, open_error = store.open()
@@ -1543,7 +1557,7 @@ local function define_tests()
         test.it("rejects malformed persisted delivery before creating a home or starting a child", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex:binding"
+            request.binding_ref = "bee.driver.codex.binding:binding"
             request.configuration_digest = provider_configuration_digest()
             local prepared = attempt_of(call(OWNER, "prepare", request))
             local db, open_error = store.open()
@@ -1611,7 +1625,7 @@ local function define_tests()
         test.it("refuses a missing configuration when the host policy selects a provider before recording intent", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex:binding"
+            request.binding_ref = "bee.driver.codex.binding:binding"
             local refused = call(OWNER, "prepare", request)
 
             local db, open_error = store.open()
@@ -2277,7 +2291,7 @@ local function define_tests()
             request.attempt_id = attempt_id
             local grant = (principals.objects(request.resources))[1]
             grant.grant_ref = granted.grant_id
-            grant.root_ref = "bee.placement.native:root"
+            grant.root_ref = "bee.placement.native.env:root"
             local prepared = attempt_of(call(OWNER, "prepare", request))
             test.eq(prepared.execution_state, "intended")
             local reported = value(service.capabilities())
@@ -2362,7 +2376,7 @@ local function define_tests()
             request.attempt_id = attempt_id
             local grant = (principals.objects(request.resources))[1]
             grant.grant_ref = granted.grant_id
-            grant.root_ref = "bee.placement.native:root"
+            grant.root_ref = "bee.placement.native.env:root"
             attempt_of(call(OWNER, "prepare", request))
             test.eq(attempt_of(call(OWNER, "start", {attempt_id = attempt_id})).execution_state, "running")
             local revoked = resource_call("revoke_all", {workspace_id = workspace})
@@ -3157,7 +3171,7 @@ end
 local cases = test.run_cases(define_tests)
 return {run = function(options)
     local originals: {{[string]: unknown}} = {}
-    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots", "bee.resources:resource_roots", "bee.credentials:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+    for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
     for _, original in ipairs(originals) do changes:update(registry_input(original)) end

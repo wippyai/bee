@@ -112,7 +112,7 @@ local function define_tests()
             test.eq(exit_error, "profile batch.exit_codes_trustworthy must be a boolean")
         end)
         test.it("validates the shipped Claude, Codex and Muse bindings", function()
-            for _, id in ipairs({"bee.driver.claude:binding", "bee.driver.codex:binding", "bee.driver.agy:binding", "bee.driver.muse:binding"}) do
+            for _, id in ipairs({"bee.driver.claude.binding:binding", "bee.driver.codex.binding:binding", "bee.driver.agy.binding:binding", "bee.driver.muse.binding:binding"}) do
                 local entry, err = registry.get(id)
                 if not entry then error(id .. ": " .. tostring(err)) end
                 test.eq(entry.meta.type, "harness.driver")
@@ -136,12 +136,12 @@ local function define_tests()
                 test.eq(window.isolation_env.private_home, false)
                 test.is_false(window.exit_codes_trustworthy)
                 test.eq(window.input_ready.strategy, "none")
-                test.eq(window.permission_exchange.mode, (id == "bee.driver.claude:binding" or id == "bee.driver.codex:binding") and "adapter" or "none")
-                if id == "bee.driver.claude:binding" then
+                test.eq(window.permission_exchange.mode, (id == "bee.driver.claude.binding:binding" or id == "bee.driver.codex.binding:binding") and "adapter" or "none")
+                if id == "bee.driver.claude.binding:binding" then
                     test.eq(window.sandbox.git_writable_roots_adapter, "claude_add_dir")
-                elseif id == "bee.driver.codex:binding" then
+                elseif id == "bee.driver.codex.binding:binding" then
                     test.eq(window.sandbox.git_writable_roots_adapter, "codex_workspace_write")
-                elseif id == "bee.driver.agy:binding" then
+                elseif id == "bee.driver.agy.binding:binding" then
                     test.eq(profile.find(binding, "batch").sandbox.git_writable_roots_adapter, "agy_add_dir")
                 end
             end

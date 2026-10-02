@@ -75,7 +75,7 @@ def main():
         ui.key(b"\x1b[C")
         ui.key(b"\x1b[C")
         ui.pump(1)
-        assert "bee.placement.docker:coding" in ui.text(), ui.text()
+        assert "bee.placement.docker.profiles:coding" in ui.text(), ui.text()
         (base / "profile.txt").write_text(ui.text())
         ui.key(b"\x13")
         ui.wait("NEW SESSION", timeout=45)

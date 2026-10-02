@@ -65,9 +65,9 @@ local function run()
             test.is_true(not configuration.host_matches("localhost:43211", "127.0.0.1:43210"))
         end)
         test.it("reads the actual selected native listener without accepting a caller address", function()
-            local endpoint_link = registry.get("bee.gateway:endpoint_ref")
+            local endpoint_link = registry.get("bee.gateway.env:endpoint_ref")
             local endpoint = registry.get("bee.gateway:address_test_endpoint")
-            local listener_link = registry.get("bee.gateway:listener_ref")
+            local listener_link = registry.get("bee.gateway.env:listener_ref")
             if not endpoint_link or not endpoint or not listener_link then error("missing gateway component host selections") end
             local changed_endpoint_link: Object = {id = endpoint_link.id, kind = endpoint_link.kind, meta = endpoint_link.meta,
                 data = {resource_ref = "bee.gateway:address_test_endpoint"}}

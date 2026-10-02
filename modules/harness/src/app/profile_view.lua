@@ -65,7 +65,7 @@ end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"}}
     if state.form.draft._allowed.workdir then result[#result + 1] = {kind = "workdir", name = "", label = folder_label(state)} end
-    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Placement: " .. (editor.placement_ref(state.form.draft) or "bee.placement:native")} end
+    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Placement: " .. (editor.placement_ref(state.form.draft) or "bee.placement.profiles:native")} end
     local options = editor.options(state.form.draft)
     local metadata = state.form.fields or {}
     table.sort(options or {}, function(a: {name: string}, b: {name: string}): boolean
@@ -424,7 +424,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         state.confirming_remove and painter.theme.text or painter.theme.muted)
     if height >= 3 then
         local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not state.confirming_remove and state.form.pending ~= "remove", primary = true}}
-        if state.advanced and editor.placement_ref(state.form.draft) == "bee.placement.docker:coding" then
+        if state.advanced and editor.placement_ref(state.form.draft) == "bee.placement.docker.profiles:coding" then
             buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
         end
         if state.form.revision > 0 then

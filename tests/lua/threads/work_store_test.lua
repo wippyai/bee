@@ -347,6 +347,39 @@ local function define_tests()
                 result = result("failed"), operation_key = harness.key()})), "CONFLICT")
         end)
 
+        test.it("rolls back the journal event, turn and receipt when persisting settlement fails", function()
+            local sessions = harness.session_owner(WORKSPACE)
+            local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
+            local sent = harness.value(sessions:call("work_send", {session = opened.session,
+                input = "atomic settlement", operation_key = harness.key()}))
+            local reserved = harness.value(sessions:call("turn_reserve", {session = opened.session,
+                operation_key = harness.key()}))
+            harness.value(sessions:call("turn_accept", {turn = reserved.turn, claim = reserved.claim,
+                input_digest = reserved.input_digest, checkpoint = {}, operation_key = harness.key()}))
+            local before = harness.value(sessions:call("feed_read", {session = opened.session, after_sequence = 0}))
+            local db = harness.open()
+            harness.execute(db, "CREATE TRIGGER journal_reject_settlement BEFORE UPDATE OF phase ON bee_session_work " ..
+                "WHEN NEW.phase = 'settled' BEGIN SELECT RAISE(ABORT, 'fixture settlement failure'); END", {})
+            db:release()
+            local operation_key = harness.key()
+            local request = {turn = reserved.turn, claim = reserved.claim, result = result("succeeded"),
+                operation_key = operation_key}
+            local refused = sessions:call("work_settle", request)
+            local cleanup_db = harness.open()
+            harness.execute(cleanup_db, "DROP TRIGGER journal_reject_settlement", {})
+            cleanup_db:release()
+            test.eq(harness.code(refused), "CONFLICT")
+            test.eq(harness.value(sessions:call("work_describe", {work = sent.work})).phase, "accepted")
+            test.eq(harness.value(sessions:call("turn_pull", {turn = reserved.turn, claim = reserved.claim})).phase, "accepted")
+            test.is_false(harness.value(sessions:call("operation_lookup", {operation_key = operation_key})).found)
+            local after = harness.value(sessions:call("feed_read", {session = opened.session, after_sequence = 0}))
+            test.eq(#after.events, #before.events)
+            local committed = sessions:call("work_settle", request)
+            test.is_true(committed.ok)
+            test.is_false(committed.replayed)
+            test.eq(harness.value(sessions:call("work_describe", {work = sent.work})).phase, "settled")
+        end)
+
         test.it("appends normalized observations only while the current turn claim is accepted", function()
             local sessions = harness.session_owner(WORKSPACE)
             local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))

@@ -8511,6 +8511,11 @@
       "source": "modules/threads/src/persist/_index.yaml"
     },
     {
+      "id": "bee.threads.persist:journal",
+      "kind": "library.lua",
+      "source": "modules/threads/src/persist/_index.yaml"
+    },
+    {
       "id": "bee.threads.persist:outbox",
       "kind": "library.lua",
       "source": "modules/threads/src/persist/_index.yaml"
@@ -17186,7 +17191,7 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1816,
+    "entry_count": 1817,
     "namespace_count": 274,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,

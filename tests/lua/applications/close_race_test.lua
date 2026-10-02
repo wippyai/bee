@@ -5,20 +5,22 @@ local channel = require("channel")
 local security = require("security")
 local time = require("time")
 local appearance = require("appearance")
+local fixture = require("fixture")
 local WORKSPACE = string.rep("e", 32)
 local function define_tests()
     test.describe("Broker close and monitored exit", function()
-        test.it("acknowledges close when escalation finds an exited producer before consuming EXIT", function()
+        test.it("acknowledges close when escalation finds an exited producer before consuming EXIT", fixture.case(function(scope: fixture.State)
             local owner = tostring(process.pid())
-            local events = assert(process.events())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local events = scope.events
+            local catalogs = scope.catalogs
+            local replies = scope.replies
             local gates = assert(process.listen("bee.test.close_gate", {message = true}))
             local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE, ["bee.test.close_exit_order"] = true})
                 :with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                     assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
+            scope.brokers[broker] = true
             local function reply(request_id: string): {[string]: unknown}
                 local deadline = time.after("10s")
                 while true do
@@ -64,14 +66,28 @@ local function define_tests()
                 test.eq(closed.op, "close")
                 test.eq(closed.instance_id, opened.instance_id)
             end)
-            if ok then assert(process.cancel(broker, "close race test complete"))
-            else assert(process.terminate(broker)) end
-            exit(broker)
-            process.unlisten(catalogs)
-            process.unlisten(replies)
+            if not ok then
+                assert(process.terminate(broker))
+                exit(broker)
+                scope.brokers[broker] = nil
+            end
             process.unlisten(gates)
             assert(ok, tostring(fault))
-        end)
+        end))
+        test.it("releases the close case's readiness publication before the next broker starts", fixture.case(function(scope: fixture.State)
+            local owner = tostring(process.pid())
+            local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner,
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({
+                    assert(security.policy("bee.security.desktop:broker_policy")),
+                    assert(security.policy("bee.security:core_spawn_boundary"))}))
+                :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
+            scope.brokers[broker] = true
+            test.eq(tostring(scope.catalogs:receive():from()), broker)
+            local deadline = time.after("10s")
+            local selected = channel.select({scope.ready:case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel == scope.ready, "broker readiness timed out")
+            test.eq(tostring(selected.value:from()), broker, "previous close case's readiness escaped its scope")
+        end))
     end)
 end
 return test.run_cases(define_tests)

@@ -181,6 +181,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.ui:appearance
+    fixture: bee.apps.fixture:scope
 - name: broker_reopen_test
   kind: function.lua
   source: file://broker_reopen_test.lua

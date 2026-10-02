@@ -15,6 +15,7 @@ entries:
     client: bee.app:client
     arguments: bee.app:arguments
     bounds: bee.values:bounds
+    projection: bee.desktop.types:projection
 - name: decode_test
   kind: function.lua
   source: file://decode_test.lua
@@ -27,6 +28,7 @@ entries:
     model: bee.desktop:model
     decode: bee.protocol:decode
     contract: bee.protocol:application
+    projection: bee.desktop.types:projection
 - name: recovery_test
   kind: function.lua
   source: file://recovery_test.lua

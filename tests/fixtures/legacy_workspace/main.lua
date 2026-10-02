@@ -8,6 +8,7 @@ local time = require("time")
 local uuid = require("uuid")
 local model = require("model")
 local decode = require("decode")
+local projection = require("projection")
 local decode_input = require("decode_input")
 local appearance = require("appearance")
 local physical = require("physical")
@@ -34,7 +35,7 @@ local function main(initial_application: string?, secondary_application: string?
     local shutdown_dialog: interaction.Wire? = nil
     local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local appearance_pending: {[string]: boolean} = {}
-    local catalog_items: {decode.CatalogItem} = {}
+    local catalog_items: {projection.CatalogItem} = {}
     local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
     local display = physical.open()
@@ -68,7 +69,7 @@ local function main(initial_application: string?, secondary_application: string?
     local broker_scope = security.new_scope({broker_policy, private_core})
     local presenter_scope = security.new_scope({presenter_policy})
     local session = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id}):with_scope(session_scope)
-        :spawn_monitored("bee.session:main", "bee:workers", owner, width, height, preferences)))
+        :spawn_monitored("bee.desktop.service:main", "bee:workers", owner, width, height, preferences)))
     local broker = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id}):with_scope(broker_scope)
         :spawn_monitored("bee.apps:broker", "bee:workers", owner, preferences, {})))
     local scene = model.new(width, height)
@@ -327,7 +328,7 @@ local function main(initial_application: string?, secondary_application: string?
             if selected.value:from() == broker then
                 local data: unknown = selected.value:payload():data()
                 if type(data) == "table" and data.version == 1 then
-                    local items = decode.catalog(data.items)
+                    local items = projection.catalog(data.items)
                     if items then catalog_items = items; send_scene() end
                 end
             end
@@ -427,7 +428,7 @@ local function main(initial_application: string?, secondary_application: string?
             end
         elseif selected.channel == acknowledgements then
             if selected.value:from() == session then
-                local ack = decode.ack(selected.value:payload():data())
+                local ack = projection.ack(selected.value:payload():data())
                 if ack then
                     if ack.preferences and ack.tabs and ack.scene.revision >= scene.revision then
                         scene, tabs, preferences = ack.scene, ack.tabs, ack.preferences
@@ -441,7 +442,7 @@ local function main(initial_application: string?, secondary_application: string?
             end
         elseif selected.channel == scenes then
             if selected.value:from() == session then
-                local envelope = decode.desktop(selected.value:payload():data())
+                local envelope = projection.desktop(selected.value:payload():data())
                 if envelope and envelope.scene.revision >= scene.revision then
                     local changed = preferences.theme ~= envelope.preferences.theme or preferences.background ~= envelope.preferences.background or preferences.taskbar ~= envelope.preferences.taskbar
                     scene, tabs, preferences = envelope.scene, envelope.tabs, envelope.preferences

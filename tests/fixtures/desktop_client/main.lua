@@ -358,7 +358,7 @@ local function main(mode: string?)
         wait_text(right_screen, "CLIENT_UPGRADE_right_" .. right_shell .. "_END")
     end
     if mode == "session-upgrade" or mode == "session-failed-upgrade" then
-        local entry = assert(registry.get("bee.session:main"))
+        local entry = assert(registry.get("bee.desktop.service:main"))
         entry.meta.handoff_probe = "desktop-definition-changed"
         local changes = assert(registry.snapshot()):changes()
         changes:update(entry)

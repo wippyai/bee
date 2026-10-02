@@ -72,6 +72,7 @@ entries:
     workspaces: bee.workspace.types:selection
     edit_mode_recovery: bee.gov.binding:super_edit_recovery_call
     boot_fallback: bee.launch:boot_fallback
+    projection: bee.desktop.types:projection
 - name: boot_fallback
   kind: library.lua
   source: file://boot_fallback.lua
@@ -80,7 +81,7 @@ entries:
   source: file://protocol.lua
   imports:
     contract: bee.protocol:application
-    decode: bee.protocol:decode
+    decode: bee.desktop.types:projection
 - name: supervisor
   kind: process.lua
   source: file://supervisor.lua

@@ -29,14 +29,14 @@ local function define_tests()
             local upgraded = assert(process.listen("bee.desktop.upgraded", {message = true}))
             local events = assert(process.events())
             local child = tostring(assert(process.with_context({["bee.workspace_owner"] = self,
-                ["bee.workspace_id"] = workspace}):spawn_monitored("bee.session:main", "bee:workers",
+                ["bee.workspace_id"] = workspace}):spawn_monitored("bee.desktop.service:main", "bee:workers",
                 self, 80, 24, nil, nil)))
             wait_for(scenes, child, "initial scene")
             assert(process.send(child, "bee.desktop.command", {version = 1, op = "add", id = "view",
                 instance_id = "instance", workspace_id = workspace, title = "Terminal", request_id = "add"}))
             local added = wait_for(acks, child, "add acknowledgement")
             test.eq(added.request_id, "add")
-            local entry = assert(registry.get("bee.session:main"))
+            local entry = assert(registry.get("bee.desktop.service:main"))
             entry.meta.handoff_probe = "definition-changed"
             local changes = assert(registry.snapshot()):changes()
             changes:update(entry)

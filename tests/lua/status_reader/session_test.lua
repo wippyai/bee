@@ -21,7 +21,7 @@ local function define_tests()
             local scope = security.new_scope({policy})
             local owner = tostring(process.pid())
             local session = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = owner,
-                ["bee.workspace_id"] = workspace}):with_actor(security.new_actor(actor_id)):with_scope(scope):spawn_monitored("bee.session:main", "bee:workers", owner, 80, 24, {}, nil)))
+                ["bee.workspace_id"] = workspace}):with_actor(security.new_actor(actor_id)):with_scope(scope):spawn_monitored("bee.desktop.service:main", "bee:workers", owner, 80, 24, {}, nil)))
             local ok, err = pcall(function()
                 local deadline = time.after("3s")
                 local ready = channel.select({scenes:case_receive(), deadline:case_receive()})

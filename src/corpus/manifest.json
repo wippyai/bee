@@ -115,33 +115,33 @@
       "topic": "lua"
     },
     {
-      "bytes": 5117,
+      "bytes": 5172,
       "id": "docs/readme",
-      "sha256": "e240dea02d2540607a500c57274a84afd65e89a8655b6eacf63a9da2b3b174da",
+      "sha256": "223ce1f8059d95521f1e97cf203345a33d0112d318045be89364b76987851e6f",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
     },
     {
-      "bytes": 12059,
+      "bytes": 12112,
       "id": "docs/agent_guide",
-      "sha256": "1a3eed7f6cd1555a0a495f0b00b2280d363f3b7ed7663d381702e7afe6e26372",
+      "sha256": "06a7da7f55d7f7e2340e7c04dff6681467854f52564543b8d00d03e7a514a739",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
     },
     {
-      "bytes": 9001,
+      "bytes": 9177,
       "id": "docs/system_map",
-      "sha256": "6ae08f05547daf6254bfeb483511d1af9704db2f18b520f84bc0a997437a564b",
+      "sha256": "90607de59cf7a3d864240f149e8e4298a2086a21172862c44ed89902b45f060e",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
     },
     {
-      "bytes": 7218,
+      "bytes": 7364,
       "id": "docs/package_boundaries",
-      "sha256": "dda0d21f1e5a9771d0ae1b04fb2f9e333206cba3a21c00ed49c3259efff96364",
+      "sha256": "2b0278ddb87bcc248aba9f199ee4e8e2c05529d7d719a8f97b55a08caf2b85e9",
       "source": "docs/development/package-boundaries.md",
       "title": "Package boundaries",
       "topic": "platform"
@@ -155,9 +155,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 19815,
+      "bytes": 19823,
       "id": "docs/app_style",
-      "sha256": "d4e5bd629412b4112ba0ddafdffbcdd1c4fb3f5828d348cfc04a34a86a12e812",
+      "sha256": "eedf26760c7b8ecd919afc777f0e507e511e05156367ae5f5cd5a40cacc77b61",
       "source": "docs/guides/app-style.md",
       "title": "Application visual style",
       "topic": "ui"
@@ -179,9 +179,15 @@
       "topic": "registry"
     },
     {
+<<<<<<< HEAD
       "bytes": 23793,
       "id": "docs/distributed_app_delivery",
       "sha256": "2ebaffd347d12adc2b60be08b46a6cc9cb9fcaa7f50256373fa02c8eb9af22b4",
+=======
+      "bytes": 23400,
+      "id": "docs/distributed_app_delivery",
+      "sha256": "979435bdf3f891013a3d363615fc1bd35e50290a8ef4d20d9baeb326a107edb4",
+>>>>>>> origin/main
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -315,6 +321,14 @@
       "topic": "component"
     },
     {
+      "bytes": 1537,
+      "id": "component/desktop",
+      "sha256": "8bf6f0f7bc05241c69847cf90985102903d473913a5225e259e55f08b0ec4fae",
+      "source": "modules/desktop/src/README.md",
+      "title": "Desktop component",
+      "topic": "component"
+    },
+    {
       "bytes": 1586,
       "id": "component/docs",
       "sha256": "3cf2838ea26f9258e3147ae13a4359bcef30c85e0610ffbbeb05573fd078fb90",
@@ -419,9 +433,9 @@
       "topic": "component"
     },
     {
-      "bytes": 23111,
+      "bytes": 23096,
       "id": "component/gov",
-      "sha256": "1f71ddf2a57bf060ec20635ec765d85085dda49649da8d7a1ef034877d2d852f",
+      "sha256": "c6322b74823090f3cd293482612ab8d4cfd29e4801e2a678c8f9f859697f285c",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -491,9 +505,9 @@
       "topic": "component"
     },
     {
-      "bytes": 24789,
+      "bytes": 25033,
       "id": "component/placement:native",
-      "sha256": "36c2f57e33fc7f6fc6f38a59c2d153f9171bf4278812bfb56b1c3562efed1041",
+      "sha256": "bcab3739010c73912fb82d960114553611d320edded094b549ff0e68d29da85a",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -635,9 +649,9 @@
       "topic": "reference_apps"
     },
     {
-      "bytes": 41511,
+      "bytes": 41519,
       "id": "toolkit",
-      "sha256": "9e63ad52ddbb37af6339cca0789012b8bc9e8d343a8ae893bd98f0dc28431d37",
+      "sha256": "0edd274d6e72e79ed13f9ee3419dad4145901fef84612bf39b9adcace940e54b",
       "source": "generated: modules/ui/src, modules/application/src, module app views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -647,10 +661,15 @@
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
 <<<<<<< HEAD
+<<<<<<< HEAD
     "bytes": 768968,
 =======
     "bytes": 771423,
 >>>>>>> origin/main
     "documents": 80
+=======
+    "bytes": 773620,
+    "documents": 81
+>>>>>>> origin/main
   }
 }

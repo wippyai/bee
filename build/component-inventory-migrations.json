@@ -1637,6 +1637,13 @@
       "migration": "M0",
       "reason": "Owner namespace placement; exact scalar references are converted by additive Placement 9, Sync 9, Gateway 17, Resources 4 and Credentials 7 root_namespace_references migrations. Registry history and frozen artifacts remain immutable; coordinated owner restart.",
       "to": "bee.launch.service:workspace_hosts"
+    },
+    {
+      "category": "ids",
+      "from": "bee.session:main",
+      "migration": "M2",
+      "reason": "Desktop projection actor relocation; exact persisted references convert through additive Placement 10, Sync 11, Gateway 19, Resources 5 and Credentials 8 desktop_projection_references migrations. Preserve workspace/desktop/view IDs, opaque state, topics, version-one handoff and qualified layout schemas; restart owner composition and reissue existing grants.",
+      "to": "bee.desktop.service:main"
     }
   ]
 }

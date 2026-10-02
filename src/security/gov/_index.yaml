@@ -66,7 +66,6 @@ entries:
     - bee.persist
     - bee.protocol
     - bee.security
-    - bee.session
     - bee.settings
     - bee.storage
     - bee.sync

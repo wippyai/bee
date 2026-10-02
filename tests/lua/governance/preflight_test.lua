@@ -184,7 +184,7 @@ local function define_tests()
             local manifest = assert(protected_kernel.decode(entry))
             local shipped = {"bee.gateway", "bee.harness", "bee.credentials", "bee.placement",
                 "bee.placement.native", "bee.resources", "bee.threads", "bee.hive", "bee.env", "bee.sync",
-                "bee.host", "bee.session", "bee.client", "bee.desktop", "bee.terminal", "bee.node",
+                "bee.host", "bee.client", "bee.desktop", "bee.terminal", "bee.node",
                 "bee.workspace"}
             for _, namespace in ipairs(shipped) do
                 local shadowed: preflight.Candidate, shadow_context: preflight.Context = fixture()

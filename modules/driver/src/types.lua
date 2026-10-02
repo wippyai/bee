@@ -107,6 +107,7 @@ type Terminal = {
     error: Fault?,
 }
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local events = require("events")
 local values = require("values")
 local login_evidence = require("login_evidence")

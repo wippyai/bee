@@ -8,8 +8,8 @@ entries:
   - hash
   - registry
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     placement_request: bee.placement:request
     placement_types: bee.placement:types
 - name: admission
@@ -24,8 +24,8 @@ entries:
   - time
   imports:
     budgets: bee.threads.records:budgets
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     definition: bee.harness.launch:definitions
@@ -39,6 +39,7 @@ entries:
     profile_validation: bee.harness.profiles:validation
     descriptors: bee.driver:descriptor
     placement_profiles: bee.placement:profiles
+    record_bounds: bee.threads.records:bounds
 - name: agent_resolver
   kind: library.lua
   source: file://agent_resolver.lua
@@ -47,8 +48,8 @@ entries:
   - json
   - registry
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     driver_resolver: bee.driver:resolver
 - name: selection
   kind: library.lua
@@ -57,7 +58,7 @@ entries:
   - registry
   imports:
     definitions: bee.harness.launch:definitions
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: locate
   kind: library.lua
   source: file://locate.lua
@@ -70,8 +71,8 @@ entries:
   - funcs
   - hash
   imports:
-    canonical: bee.threads.records:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     descriptor: bee.driver:descriptor
     driver_resolver: bee.driver:resolver
     driver_types: bee.driver:types
@@ -87,14 +88,14 @@ entries:
   kind: library.lua
   source: file://probe_version.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: readiness
   kind: library.lua
   source: file://readiness.lua
   modules:
   - funcs
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     driver_locate: bee.driver:locate
     driver_types: bee.driver:types
 - name: managed_run
@@ -106,7 +107,7 @@ entries:
   - process
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     placement_resolver: bee.placement:resolver
     placement_decode: bee.placement:decode
     prestart: bee.harness.carrier:prestart

@@ -1,5 +1,6 @@
 -- MIT. Entry point for the in-process driver adapter and shared run lifecycle.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local runner = require("runner")
 local managed_run = require("managed_run")
 local types = require("types")

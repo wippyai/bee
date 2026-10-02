@@ -12,6 +12,7 @@ type Envelope = {ok: true, error: nil, value: unknown, replayed: boolean?}
 type Call = (string, unknown) -> (unknown, string?)
 type Client = {invoke: (Client, string, unknown) -> Reply?}
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 
 local function decode_fault(raw: unknown): Fault?
     local declared = bounds.object(raw)

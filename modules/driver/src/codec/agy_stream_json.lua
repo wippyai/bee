@@ -5,6 +5,7 @@ local json = require("json")
 local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local values = require("values")
 local path_reader = require("paths")
 

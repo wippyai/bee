@@ -4,6 +4,7 @@
 local sql = require("sql")
 local json = require("json")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local values = require("values")
 local record = require("record")

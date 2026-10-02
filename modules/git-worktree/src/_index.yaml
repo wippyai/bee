@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.git.worktree
 entries:
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: definition
   kind: ns.definition
   module: git-worktree
@@ -38,7 +42,7 @@ entries:
   imports:
     git_roots: bee.git.worktree:git_roots
     paths: bee.placement:paths
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     quote: bee.driver.kit:quote
 - name: binding
   kind: contract.binding

@@ -230,4 +230,4 @@ entries:
     quote: bee.driver.kit:quote
     types: bee.placement:types
     process_backend: bee.placement.native:process_backend
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds

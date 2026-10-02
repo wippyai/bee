@@ -3,6 +3,7 @@
 -- transition is checked against the indexes in the same transaction.
 local sql = require("sql")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local values = require("values")
 local decoders = require("lifecycle")
 local record_types = require("record_types")

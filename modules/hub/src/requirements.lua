@@ -1,6 +1,7 @@
 -- MIT. Reads declared Hub requirement holes without resolving, linking, or
 -- mutating them. The caller supplies already-decoded configuration values.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local M = {}
 M.MAX_PACKAGE_ENTRIES = 512

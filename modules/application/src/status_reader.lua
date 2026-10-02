@@ -2,6 +2,7 @@
 local text = require("text")
 local caller = require("caller")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local M = {}
 M.UPDATE = "bee.threads.binding:status_update"
 M.READ = "bee.threads.binding:status_read"

@@ -1,4 +1,5 @@
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local migrations = require("migrations")
 local claims = require("claims")
 local subscriptions = require("subscriptions")

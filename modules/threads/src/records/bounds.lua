@@ -1,5 +1,5 @@
 -- Thread-specific capacities and sequence validators.
-local values = require("values")
+local shared_bounds = require("shared_bounds")
 local M = {}
 M.SCHEMA_REVISION = "bee.thread-record@1"
 M.MAX_RECORD_BYTES = 16384
@@ -18,20 +18,20 @@ M.SOURCES = {"stream", "hook", "transcript", "mcp", "bee"}
 M.OUTCOMES = {"succeeded", "failed", "cancelled", "uncertain"}
 
 function M.sequence(value: unknown): integer?
-    local number = values.integer(value)
-    if not number or number < 1 or number > values.MAX_SAFE_INTEGER then return nil end
+    local number = shared_bounds.integer(value)
+    if not number or number < 1 or number > shared_bounds.MAX_SAFE_INTEGER then return nil end
     return number
 end
 
 function M.cursor(value: unknown): integer?
-    local number = values.integer(value)
+    local number = shared_bounds.integer(value)
     if not number or number < 0 or number > M.MAX_THREAD_RECORDS then return nil end
     return number
 end
 
 function M.page_limit(value: unknown): integer?
     if value == nil then return M.MAX_PAGE_RECORDS end
-    local number = values.integer(value)
+    local number = shared_bounds.integer(value)
     if not number or number < 1 or number > M.MAX_PAGE_RECORDS then return nil end
     return number
 end

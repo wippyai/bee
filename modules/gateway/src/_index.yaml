@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.gateway
 entries:
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: definition
   kind: ns.definition
   module: gateway
@@ -238,12 +242,12 @@ entries:
   kind: library.lua
   source: file://catalog.lua
   modules: [json]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: context
   kind: library.lua
   source: file://context.lua
   modules: [json]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: address_value
   kind: library.lua
   source: file://address_value.lua
@@ -256,14 +260,14 @@ entries:
   source: file://hooks.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    service_reply: bee.protocol:reply
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    service_reply: bee.values:reply
+    canonical: bee.values:canonical
 - name: json_schema
   kind: library.lua
   source: file://json_schema.lua
   modules: [json]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: session_bundle
   kind: library.lua
   source: file://session_bundle.lua
@@ -272,7 +276,7 @@ entries:
   source: file://session_tools.lua
   modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     json_schema: bee.gateway:json_schema
     session_bundle: bee.gateway:session_bundle
 - name: mcp
@@ -280,17 +284,18 @@ entries:
   source: file://mcp.lua
   imports:
     session_tools: bee.gateway:session_tools
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     message: bee.threads.records:message
     arguments: bee.app:arguments
     workspace_protocol: bee.gov:workspace_protocol
     delivery_protocol: bee.gov:delivery_protocol
     docs_protocol: bee.docs:protocol
+    record_bounds: bee.threads.records:bounds
 - name: profile_scope
   kind: library.lua
   source: file://profile_scope.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     surface: bee.gateway:surface
     profile_access: bee.driver:profile_access
 - name: surface
@@ -298,7 +303,7 @@ entries:
   source: file://surface.lua
   imports:
     profile_access: bee.driver:profile_access
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     catalog: bee.gateway:catalog
     capability_model: bee.capability:model
     context: bee.gateway:context
@@ -360,5 +365,5 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
-    service_reply: bee.protocol:reply
+    bounds: bee.values:bounds
+    service_reply: bee.values:reply

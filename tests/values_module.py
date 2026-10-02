@@ -49,12 +49,12 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    time: bee.values:time
+    clock: bee.values:clock
     reply: bee.values:reply
 """)
         (check / "probe.lua").write_text("""local bounds = require("bounds")
 local canonical = require("canonical")
-local time = require("time")
+local clock = require("clock")
 local reply = require("reply")
 local hash = require("hash")
 
@@ -65,7 +65,7 @@ local function main()
     if assert(hash.sha256(encoded)) ~= "43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777" then
         error("digest probe failed")
     end
-    if not bounds.timestamp(time.now()) then error("time probe failed") end
+    if not bounds.timestamp(clock.now()) then error("time probe failed") end
     local decoded = assert(reply.decode({ok = true, value = "ready"}))
     if decoded.ok ~= true or decoded.value ~= "ready" then error("reply probe failed") end
 end

@@ -6,6 +6,7 @@
 local sql = require("sql")
 local time = require("time")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local values = require("values")
 local record_types = require("record_types")

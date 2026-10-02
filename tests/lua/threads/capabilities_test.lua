@@ -7,6 +7,7 @@ local registry = require("registry")
 local security = require("security")
 local capabilities = require("capabilities")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local migrations = require("migrations")
 local waits = require("waits")
 local function names(id: string): {string}

@@ -3,6 +3,7 @@
 local test = require("test")
 local harness = require("harness")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local function define_tests()
     test.describe("Thread authority", function()
         local alice = harness.principal("alice", harness.ALL)

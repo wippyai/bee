@@ -3,6 +3,7 @@
 -- The broker retains application lifecycle ownership. This module owns the
 -- thread binding reducer's effects and the values sent across its boundaries.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local principal = require("principal")
 local binding_protocol = require("binding_protocol")
 local reducer = require("reducer")

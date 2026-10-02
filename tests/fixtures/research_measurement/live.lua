@@ -10,6 +10,7 @@ local time = require("time")
 local json = require("json")
 local io = require("io")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 type Object = {[string]: unknown}
 local THREAD = "research-performance"
 local WORKSPACE = "research-workspace"

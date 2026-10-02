@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.placement.native
 entries:
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: definition
   kind: ns.definition
   module: placement-native
@@ -170,13 +174,13 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     resource_authority: bee.resources:resources
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -184,8 +188,8 @@ entries:
   - json
   - toml
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types
 - name: environment
   kind: env.storage.os

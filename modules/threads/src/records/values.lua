@@ -1,6 +1,7 @@
 -- MIT. Decoders for the shared value types every family embeds.
 local types = require("types")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local M = {}
 function M.source(value: unknown): types.Source?
     local member = bounds.member(value, record_bounds.SOURCES)

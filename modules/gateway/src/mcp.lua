@@ -3,6 +3,7 @@
 -- them, with the built-in tool descriptions. Configured component tools join
 -- these at admission. Nothing here executes a tool or reads a store.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local message = require("message")
 local workspace_protocol = require("workspace_protocol")
 local docs_protocol = require("docs_protocol")

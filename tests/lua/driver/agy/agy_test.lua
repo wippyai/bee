@@ -14,6 +14,7 @@ local observation = require("observation")
 local stream_json = require("stream_json")
 local quote = require("quote")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 
 local function has(list: {string}, item: string): boolean
     for _, candidate in ipairs(list) do

@@ -10,7 +10,7 @@ entries:
   imports:
     types: bee.hive:types
     sampling: bee.hive.telemetry:sampling
-    clock: bee:clock
+    clock: bee.values:clock
   meta:
     hive: open
     hive_operation:
@@ -44,7 +44,7 @@ entries:
   - system
   imports:
     sampling: bee.hive.telemetry:sampling
-    clock: bee:clock
+    clock: bee.values:clock
   meta:
     hive: open
     hive_operation:
@@ -88,7 +88,7 @@ entries:
   method: handle
   imports:
     catalog: bee.hive:catalog
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
   meta:
     hive: open
     hive_operation:
@@ -124,7 +124,7 @@ entries:
   - process
   - system
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     leases: bee.app:host_leases
   meta:
     comment: Open Hive operation paging this node's live workspace holdings with each host phase and lease
@@ -185,7 +185,7 @@ entries:
   modules:
   - system
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     types: bee.hive:types
     client: bee.hive:client

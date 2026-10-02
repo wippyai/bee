@@ -1,6 +1,7 @@
 -- MIT. Exact application-to-broker thread facade messages. Identity and
 -- authority come from the authenticated execution and its durable binding.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local record = require("record")
 local record_types = require("record_types")
 

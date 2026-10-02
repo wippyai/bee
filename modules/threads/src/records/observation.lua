@@ -2,6 +2,7 @@
 local json = require("json")
 local types = require("types")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local values = require("values")
 local M = {}
 local function depth(value: unknown, level: integer): integer

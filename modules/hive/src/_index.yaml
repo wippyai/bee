@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.hive
 entries:
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: definition
   kind: ns.definition
   module: hive
@@ -12,26 +16,26 @@ entries:
   kind: library.lua
   source: file://workspace_query.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: types
   kind: library.lua
   source: file://types.lua
   modules: [hash]
   imports:
-    canonical: bee.protocol:canonical
-    bounds: bee.protocol:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
 - name: client
   kind: library.lua
   source: file://client.lua
   modules: [process, channel, time, uuid]
-  imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
+  imports: {types: bee.hive:types, bounds: bee.values:bounds}
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
   modules: [registry, security, json, hash]
   imports:
-    canonical: bee.protocol:canonical
-    bounds: bee.protocol:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     types: bee.hive:types
 - name: principals
   kind: library.lua
@@ -39,10 +43,10 @@ entries:
   modules: [hash]
   imports:
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: output
   kind: library.lua
   source: file://output.lua
   modules: [json]
   imports:
-    canonical: bee.protocol:canonical
+    canonical: bee.values:canonical

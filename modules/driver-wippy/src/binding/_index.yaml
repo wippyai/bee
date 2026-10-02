@@ -32,7 +32,8 @@ entries:
   source: file://run_method.lua
   method: handle
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
+    record_bounds: bee.threads.records:bounds
     runner: bee.driver.wippy:runner
     managed_run: bee.harness.launch:managed_run
     types: bee.driver.wippy:types

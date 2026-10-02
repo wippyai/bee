@@ -4,9 +4,39 @@ local bounds = require("bounds")
 local service = require("publication_service")
 local artifact = require("artifact")
 local base64 = require("base64")
+local funcs = require("funcs")
+local security = require("security")
 
 local function define_tests()
     test.describe("application publication artifacts", function()
+        test.it("prepares through the owning facade while the application cannot open governance storage", function()
+            local workspace = string.rep("e", 32)
+            local actor = security.new_actor("bee.application:" .. workspace .. ":publication-test",
+                {workspace_id = workspace})
+            local scope = security.new_scope({
+                assert(security.policy("bee.gov:publication_test_policy")),
+                assert(security.policy("bee.security:ordinary_app_subsystem_boundary"))})
+            test.eq(scope:evaluate(actor, "db.get", "bee.gov.env:db"), "deny")
+            local caller = funcs.new():with_actor(actor):with_scope(scope)
+            local raw, err = caller:call("bee.gov.binding:publication_call", {operation = "prepare",
+                workspace_id = workspace, component = "app.publication_scope_test", version = "1.0.0",
+                snapshot_digest = string.rep("f", 64)})
+            test.is_nil(err)
+            local result = assert(bounds.object(raw))
+            test.eq(result.code, "MISSING_ARTIFACT")
+            local other = assert(bounds.object(caller:call("bee.gov.binding:publication_call", {operation = "prepare",
+                workspace_id = string.rep("d", 32), component = "app.publication_scope_test", version = "1.0.0",
+                snapshot_digest = string.rep("f", 64)})))
+            test.eq(other.code, "DENIED")
+            local direct = assert(bounds.object(caller:call("bee.gov.binding:publication_backend_call", {operation = "prepare",
+                workspace_id = workspace, component = "app.publication_scope_test", version = "1.0.0",
+                snapshot_digest = string.rep("f", 64)})))
+            test.eq(direct.code, "DENIED")
+            local publish = assert(bounds.object(caller:call("bee.gov.binding:publication_call", {operation = "publish",
+                workspace_id = workspace, component = "app.publication_scope_test", version = "1.0.0"})))
+            test.eq(publish.code, "DENIED")
+        end)
+
         test.it("builds an exact artifact from declarative frozen entries", function()
             local entries = "[{\"data\":{\"source\":\"return 'private'\"},\"kind\":\"function.lua\",\"id\":\"demo:main\"}]"
             local exact = assert(artifact.create({{id = "demo:main", kind = "function.lua", data = {source = "return 'private'"}}}))

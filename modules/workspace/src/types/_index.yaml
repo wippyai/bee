@@ -14,7 +14,7 @@ entries:
   modules:
   - json
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
 - name: catalog
   kind: library.lua
   source: file://catalog.lua

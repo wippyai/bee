@@ -14,7 +14,7 @@ TOOLCHAIN_CURRENT := toolchain-current
 endif
 .PHONY: toolchain-current
 toolchain-current:
-	python3 build/verify_cached_toolchain.py current || $(MAKE) native-tools
+	python3 build/verify_cached_toolchain.py current $(if $(BEE_NATIVE_LOCAL),--local,) || $(MAKE) native-tools
 .PHONY: component-inventory component-inventory-check root-src-budget-check
 component-inventory:
 	python3 build/component_inventory.py --write
@@ -30,6 +30,19 @@ check: $(TOOLCHAIN_CURRENT)
 setup: native-tools
 
 .PHONY: hub-inspect-check
+.PHONY: hive-status-check
+hive-status-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.hive.telemetry status_test
+.PHONY: hive-status-owner-check
+.PHONY: governance-gateway-check
+governance-gateway-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov gateway_test
+.PHONY: governance-activation-owner-check
+governance-activation-owner-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov activation_owner_test
+hive-status-owner-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.threads work_store_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.approvals service_test
 # Explicit live-Hub proof; ordinary checks do not require Hub network access.
 hub-inspect-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_inspect.go
@@ -732,3 +745,7 @@ layout-upgrade-check:
 login-links-check:
 	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
 	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)
+
+.PHONY: ui-module
+ui-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/ui_module.py

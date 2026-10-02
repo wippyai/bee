@@ -120,7 +120,8 @@ retain code until their existing lifecycle replaces them. Later function calls
 and newly spawned processes resolve the current registry definitions.
 
 Hive supervisor handoff and generation rollback remain proposals. Native binary
-cutover is available through the local `bee upgrade` commands: a person confirms the candidate digest, and `bee upgrade --rollback`
+cutover is available through the local `bee upgrade` commands: a person confirms
+the candidate digest, and `bee upgrade --rollback`
 restarts the retained previous executable. No gateway operation exposes the
 cutover. Viewport handles and registry metadata are never checkpoint authority
 or permission grants.

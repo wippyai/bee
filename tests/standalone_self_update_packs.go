@@ -120,7 +120,6 @@ func main() {
 				}
 				fields["source"] = string(code)
 			}
-
 			if entry.Kind == "ns.dependency" {
 				component, _ := fields["component"].(string)
 				if strings.HasPrefix(component, "bee/") {

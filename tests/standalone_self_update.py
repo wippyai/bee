@@ -327,7 +327,6 @@ def build_deployments(folder, seed):
                 source = entry.get("source", "")
                 identity = f"{document['namespace']}:{entry['name']}"
                 if entry.get("kind") in {"library.lua", "function.lua", "process.lua"} and source.startswith("file://"):
-                    identity = f"{document['namespace']}:{entry['name']}"
                     sources[identity] = str(index.parent / source.removeprefix("file://"))
                     declarations[identity] = {"Component": "bee/bee" if root.name == "src" else "bee/" + index.relative_to(root).parts[0],
                                               "Kind": entry["kind"], "Meta": entry.get("meta", {}),

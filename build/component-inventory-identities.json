@@ -662,6 +662,7 @@
     "bee.security.hive:hive_names_policy",
     "bee.security.hive:hive_owner_stop_policy",
     "bee.security.hive:hive_policy_exposure_policy",
+    "bee.security.hive:hive_readiness_policy",
     "bee.security.hive:hive_replica_admission_policy",
     "bee.security.hive:hive_replica_peer_policy",
     "bee.security.hive:hive_supervisor_policy",

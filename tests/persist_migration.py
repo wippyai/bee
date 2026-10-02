@@ -37,6 +37,7 @@ local histories: {[string]: History} = {
 }
 local function report()
     for _, phase in ipairs(ledger.progress()) do assert(io.print("PERSIST_PROGRESS " .. phase)) end
+    for _, phase in ipairs(ledger.boot_phases()) do assert(io.print("PERSIST_BOOT " .. phase)) end
 end
 local function main(owner: string)
     local history = histories[owner:match("^history%-(.+)$") or ""]
@@ -44,6 +45,7 @@ local function main(owner: string)
         local db = assert(sql.get("bee.persistprobe:history"))
         assert(ledger.apply(db, history.ledger, history.migrations))
         assert(db:release())
+        report()
         return
     end
     local db, err
@@ -133,6 +135,12 @@ def run(project, state, owner, failure=None):
         assert result.returncode and failure in output, output
     else:
         assert result.returncode == 0, output
+    label = owner.removeprefix('history-')
+    label = 'thread' if label == 'threads' else label
+    phases = re.findall(r'^PERSIST_BOOT (\w+) (begin|end|failed) (-?\d+)$', output, re.M)
+    phases = [(stage, int(elapsed)) for reported, stage, elapsed in phases if reported == label]
+    assert [stage for stage, _ in phases] == ['begin', 'failed' if failure else 'end'], output
+    assert all(elapsed >= 0 for _, elapsed in phases), output
     return output
 
 
@@ -150,7 +158,17 @@ local env = {
     get = function(_name: string): string return "active" end,
     set = function(_name: string, phase: string) table.insert(captured, phase) end,
 }''')
-    text = text.replace('local M = {}', 'local M = {}\nfunction M.progress(): {string} return captured end')
+    text = text.replace('local logger = require("logger")', '''local boot_phases: {string} = {}
+local logger = {
+    named = function(_self: unknown, _name: string)
+        return {info = function(_self: unknown, message: string,
+            fields: {phase: string, stage: string, owner: string, elapsed_ms: integer?})
+            assert(message == "Boot phase" and fields.phase == "migration_check")
+            table.insert(boot_phases, fields.owner .. " " .. fields.stage .. " " .. tostring(fields.elapsed_ms or 0))
+        end}
+    end,
+}''')
+    text = text.replace('local M = {}', 'local M = {}\nfunction M.progress(): {string} return captured end\nfunction M.boot_phases(): {string} return boot_phases end')
     source.write_text(text)
 
 

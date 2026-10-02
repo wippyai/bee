@@ -4,7 +4,7 @@ entries:
 - name: ledger
   kind: library.lua
   source: file://ledger.lua
-  modules: [sql, hash, env]
+  modules: [sql, hash, env, time, logger]
 - name: database
   kind: library.lua
   source: file://database.lua

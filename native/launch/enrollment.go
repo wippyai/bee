@@ -184,7 +184,10 @@ func (p *enrollmentPublisherComponent) supervisor(ctx context.Context) (pid.PID,
 	if pidRegistry == nil {
 		return pid.PID{}, errors.New("enrollment publisher requires the process names")
 	}
-	supervisor, found := pidRegistry.Lookup("bee.hive.supervisor")
+	supervisor, found, err := topapi.LookupScopedPID(ctx, "bee.hive.supervisor", topapi.Local)
+	if err != nil {
+		return pid.PID{}, err
+	}
 	if !found || supervisor.Node != p.node || supervisor.Host != "bee.hive.service:supervisor_host" || supervisor.UniqID == "" {
 		return pid.PID{}, errSupervisorPending
 	}
@@ -213,6 +216,7 @@ func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) er
 
 type enrollmentPublisherComponent struct {
 	state              string
+	retryInterval      time.Duration
 	directory          string
 	trusted            string
 	execution          string
@@ -300,11 +304,16 @@ func retireDepartedClients(ctx context.Context, trusted string) error {
 // written first, the supervisor address is published next, and the local
 // enrollment lists only the nodes that write named.
 func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry.Registry, enrollment *rendezvous.Enrollment) error {
+	log := logs.GetLogger(ctx).Named("bee.launch.enrollment")
+	phase := func(name, stage string) {
+		log.Info("Boot phase", zap.String("phase", name), zap.String("stage", stage))
+	}
 	// The service's name is the existing readiness barrier: before it runs the
 	// deployment's initial LoadState can still clear process-local overlays.
 	if _, err := p.supervisor(ctx); err != nil {
 		return err
 	}
+	phase("enrollment_snapshot", "begin")
 	if err := retireDepartedClients(ctx, p.trusted); err != nil {
 		return err
 	}
@@ -317,6 +326,7 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 		return err
 	}
 	clientNames, peerNames := trustedNames(keys), trustedNames(peers)
+	phase("enrollment_snapshot", "end")
 	if !p.registryApplied || !slices.Equal(clientNames, p.registryClients) || !slices.Equal(peerNames, p.registryPeers) {
 		writer, ok := reg.(registry.OverlayWriter)
 		if !ok {
@@ -335,10 +345,13 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 				return errors.New("unexpected enrollment overlay contents")
 			}
 		}
+		phase("enrollment_overlay", "begin")
 		generation, err := writer.ApplyOverlay(ctx, enrollmentOverlayOwner, p.registryGeneration, changes)
 		if err != nil {
+			phase("enrollment_overlay", "failed")
 			return err
 		}
+		phase("enrollment_overlay", "end")
 		p.registryGeneration = generation
 		p.registryClients, p.registryPeers, p.registryApplied = clientNames, peerNames, true
 	}
@@ -346,9 +359,12 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 		return err
 	}
 	if !p.seeded || !sameTrustedKeys(p.seededClients, keys) {
+		phase("enrollment_seed", "begin")
 		if err := p.seedEnrollment(ctx, enrollment, keys); err != nil {
+			phase("enrollment_seed", "failed")
 			return err
 		}
+		phase("enrollment_seed", "end")
 		p.seededClients, p.seeded = cloneTrustedKeys(keys), true
 	}
 	return nil
@@ -426,19 +442,17 @@ func watchEnrollmentDirectories(ctx context.Context, directories ...string) (<-c
 	return changed, done, nil
 }
 
-func subscribeDepartures(lifetime, ctx context.Context) (<-chan struct{}, <-chan struct{}) {
-	departures := make(chan struct{}, 1)
+func subscribeEnrollmentEvent(lifetime, ctx context.Context, system eventapi.System, kind eventapi.Kind) (<-chan struct{}, <-chan struct{}, error) {
+	wakeups := make(chan struct{}, 1)
 	done := make(chan struct{})
 	bus := eventapi.GetBus(ctx)
 	if bus == nil {
-		close(done)
-		return departures, done
+		return nil, nil, errors.New("enrollment publisher requires the event bus")
 	}
 	events := make(chan eventapi.Event, 16)
-	subscriber, err := bus.SubscribeP(lifetime, clusterapi.System, clusterapi.NodeLeft, events)
+	subscriber, err := bus.SubscribeP(lifetime, system, kind, events)
 	if err != nil {
-		close(done)
-		return departures, done
+		return nil, nil, err
 	}
 	go func() {
 		defer close(done)
@@ -452,13 +466,13 @@ func subscribeDepartures(lifetime, ctx context.Context) (<-chan struct{}, <-chan
 					return
 				}
 				select {
-				case departures <- struct{}{}:
+				case wakeups <- struct{}{}:
 				default:
 				}
 			}
 		}
 	}()
-	return departures, done
+	return wakeups, done, nil
 }
 
 // Start arms the publisher and returns. Publication waits for the supervisor's
@@ -485,15 +499,34 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 		p.cancel = nil
 		return fmt.Errorf("watch enrollment directories: %w", err)
 	}
-	departures, departuresDone := subscribeDepartures(lifetime, ctx)
+	readiness, readinessDone, err := subscribeEnrollmentEvent(lifetime, ctx, "bee.launch", "supervisor.ready")
+	if err != nil {
+		cancel()
+		<-changesDone
+		p.cancel = nil
+		return fmt.Errorf("watch supervisor readiness: %w", err)
+	}
+	departures, departuresDone, err := subscribeEnrollmentEvent(lifetime, ctx, clusterapi.System, clusterapi.NodeLeft)
+	if err != nil {
+		cancel()
+		<-changesDone
+		<-readinessDone
+		p.cancel = nil
+		return fmt.Errorf("watch client departures: %w", err)
+	}
 	p.done = make(chan struct{})
 	go func() {
 		defer close(p.done)
 		defer func() {
 			<-changesDone
 			<-departuresDone
+			<-readinessDone
 		}()
-		ticker := time.NewTicker(time.Second)
+		interval := p.retryInterval
+		if interval == 0 {
+			interval = time.Second
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		published := false
 		// A refused publication is retried on the ticker until one succeeds,
@@ -506,7 +539,7 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 				} else {
 					log.Debug("enrollment entry not yet writable", zap.Error(err))
 				}
-				ticker.Reset(time.Second)
+				ticker.Reset(interval)
 			} else {
 				published = true
 				ticker.Stop()
@@ -520,6 +553,8 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 			case <-changes:
 				publish()
 			case <-departures:
+				publish()
+			case <-readiness:
 				publish()
 			case <-ticker.C:
 				publish()

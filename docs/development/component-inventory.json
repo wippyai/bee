@@ -6971,6 +6971,11 @@
       "source": "src/security/hive/_index.yaml"
     },
     {
+      "id": "bee.security.hive:hive_readiness_policy",
+      "kind": "security.policy",
+      "source": "src/security/hive/_index.yaml"
+    },
+    {
       "id": "bee.security.hive:hive_replica_admission_policy",
       "kind": "security.policy",
       "source": "src/security/hive/_index.yaml"
@@ -16854,14 +16859,14 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1776,
+    "entry_count": 1777,
     "namespace_count": 272,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 151,
-    "persisted_id_count": 812,
+    "persisted_id_count": 813,
     "requirement_count": 134,
     "requirement_target_count": 320,
     "root_src_lua_budget": 20851,

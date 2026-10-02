@@ -19,7 +19,7 @@ entries:
     interaction: bee.app:interaction
     interactions: bee.apps:interactions
     clock: bee.values:clock
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     open_protocol: bee.apps:open_protocol
     binding_protocol: bee.host:binding_protocol
     thread_binding: bee.apps:thread_binding

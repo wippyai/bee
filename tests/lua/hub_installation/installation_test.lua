@@ -101,6 +101,20 @@ local function define_tests()
             test.eq((principals.strings(payload.auto_start))[1], "acme.tool:service")
         end)
 
+        test.it("includes retained component reasons in the single approval", function()
+            local proposal, _, problem = installation.proposal(plan({modules = {
+                {component = "bee/bee", version = "2.0.0", previous_version = "1.0.0", change = "update"},
+                {component = "bee/settings", version = "1.0.0", change = "keep", reason = "pinned by acme/app"},
+            }}), CONTEXT)
+            test.is_nil(problem); test.not_nil(proposal)
+            if proposal then
+                local payload = assert(bounds.object(proposal.payload))
+                local changes = principals.strings(payload.dependency_changes)
+                test.eq(#changes, 2)
+                test.eq(changes[2], "keep bee/settings 1.0.0: pinned by acme/app")
+                test.eq(proposal.input_digest, DIGEST)
+            end
+        end)
         test.it("refuses a plan that still needs requirement values", function()
             local proposal, _, problem = installation.proposal(plan({ready = false, missing = {"acme.tool:port"}}), CONTEXT)
             test.is_nil(proposal)

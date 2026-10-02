@@ -84,3 +84,7 @@ entries:
     path: .security.policies +=
   - entry: bee.workspace.binding:folders
     path: .security.policies +=
+- name: dependency_ui
+  kind: ns.dependency
+  component: bee/ui
+  version: '*'

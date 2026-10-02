@@ -34,6 +34,10 @@ component inventory has no dangling requirement targets and caps root Lua at
 The persisted map covers exactly the 234 persisted identities removed from
 main. Step 2 adds only nonpersisted helper relocations to the cumulative map;
 the step 1 persisted map and applied migration definitions remain unchanged.
+Credentials' source resolver now lives in `bee.credentials.binding:sources`;
+the cumulative map resolves both earlier helper IDs to that implementation.
+The host-selected source catalog and resource reference remain in
+`bee.credentials.env`; the historical root map and applied SQL stay unchanged.
 Shared root declarations and the exact library set are
 specified in the conventions and `build/layout_roots.json`. Lint rejects new
 root entries outside that set and known composition names with the wrong kind,
@@ -293,6 +297,14 @@ the documented examples. Agent-author probes point at Timeline's `app/` sources.
 | `tests/fixtures/hub_manage/sync/env/_index.yaml` | `bee.sync.env` |
 | `tests/fixtures/hub_preview/sync/env/_index.yaml` | `bee.sync.env` |
 
+Sessions admission and catalog implementations live in `bee.sessions.binding`;
+its pull scheduler and turn workers live in `bee.sessions.service`, and selected
+executor/driver routing lives in `bee.sessions.executor`. Threads remains the
+journal owner. Sessions has no empty persistence, migrations or traits children.
+The former Sessions owner library and its nonpersisted move-map entries are
+removed; existing public function and binding IDs resolve directly to the owner
+source without a forwarding layer.
+
 ## Component root placement map
 
 Every name in a row moves from the source namespace to the owning child shown.
@@ -309,8 +321,8 @@ conventions and `build/layout_roots.json`.
 | `bee.approvals` | `bee.approvals.binding` | `local` |
 | `bee.approvals` | `bee.approvals.service` | `runtime_lease`, `service` |
 | `bee.console` | `bee.console.app` | `command` |
-| `bee.credentials` | `bee.credentials.env` | `credential_sources`, `database_ref`, `db`, `db_path`, `environment`, `materializer_ref`, `node_identity_migration_source`, `sources`, `sources_ref` |
-| `bee.credentials` | `bee.credentials.binding` | `local` |
+| `bee.credentials` | `bee.credentials.env` | `credential_sources`, `database_ref`, `db`, `db_path`, `environment`, `materializer_ref`, `node_identity_migration_source`, `sources_ref` |
+| `bee.credentials` | `bee.credentials.binding` | `local`, `sources` |
 | `bee.docs` | `bee.docs.binding` | `corpus` |
 | `bee.docs` | `bee.docs.env` | `corpus_ref`, `resources` |
 | `bee.driver.agy` | `bee.driver.agy.binding` | `binding`, `configuration`, `launch`, `protocol` |
@@ -407,7 +419,6 @@ conventions and `build/layout_roots.json`.
 | `bee.resources` | `bee.resources.env` | `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `resource_roots`, `resources`, `roots_ref` |
 | `bee.resources` | `bee.resources.binding` | `local`, `resources_workspace_extension` |
 | `bee.sessions` | `bee.sessions.executor` | `driver_route`, `executor_registry`, `executor_selection` |
-| `bee.sessions` | `bee.sessions.service` | `owner` |
 | `bee.sessions` | `bee.sessions.binding` | `threads_journal` |
 | `bee.sessions` | `bee.sessions.env` | `threads_journal_ref` |
 | `bee.settings` | `bee.settings.app` | `build_info` |

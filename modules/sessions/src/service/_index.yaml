@@ -18,43 +18,26 @@ entries:
     path: .lifecycle.security.policies
   - entry: bee.sessions.service:turn_run
     path: .security.policies
-- name: locate
-  kind: library.lua
-  source: file://locate.lua
-  modules: [time]
-- name: catalog
-  kind: library.lua
-  source: file://catalog.lua
-  modules: [funcs, time]
-  imports:
-    bounds: bee.values:bounds
-    harness_catalog: bee.harness.catalog:catalog
-    definition: bee.harness.launch:definitions
-    admission: bee.harness.launch:admission
-    profile_protocol: bee.harness.profiles:protocol
-    locate: bee.sessions.service:locate
-    readiness: bee.harness.launch:readiness
 - name: scheduler
   kind: library.lua
   source: file://scheduler.lua
-  modules: [funcs]
+  modules:
+  - funcs
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    cancellation: bee.sessions.service:cancellation
-- name: cancellation
-  kind: library.lua
-  source: file://cancellation.lua
-  modules:
-  - funcs
-  - security
-  imports:
-    bounds: bee.values:bounds
+    cancellation: bee.sessions.binding:cancellation
 - name: scheduler_worker
   kind: process.lua
   source: file://scheduler_worker.lua
   method: main
-  modules: [process, time, channel, logger, hash, funcs]
+  modules:
+  - process
+  - time
+  - channel
+  - logger
+  - hash
+  - funcs
   imports:
     bounds: bee.values:bounds
     scheduler: bee.sessions.service:scheduler
@@ -63,42 +46,31 @@ entries:
     lifecycle: bee.sessions.binding:control
 - name: scheduler_service
   kind: process.service
-  meta: {component_lifecycle: bee.sessions.binding:lifecycle}
+  meta:
+    component_lifecycle: bee.sessions.binding:lifecycle
   process: bee.sessions.service:scheduler_worker
   lifecycle:
     auto_start: true
     security:
-      actor: {id: bee.sessions.scheduler}
+      actor:
+        id: bee.sessions.scheduler
       policies: []
-
 - name: turn_run
   kind: function.lua
   source: file://scheduler_worker.lua
   method: turn_run
-  modules: [process, time, channel, logger, hash, funcs]
+  modules:
+  - process
+  - time
+  - channel
+  - logger
+  - hash
+  - funcs
   imports:
     bounds: bee.values:bounds
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions.binding:threads_journal
     executors: bee.sessions.executor:executor_registry
     lifecycle: bee.sessions.binding:control
-  security: {policies: []}
-- name: owner
-  kind: library.lua
-  source: file://owner.lua
-  modules:
-  - security
-  - hash
-  - funcs
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    journal: bee.sessions.binding:threads_journal
-    driver_route: bee.sessions.executor:driver_route
-    cancellation: bee.sessions.service:cancellation
-    lifecycle: bee.sessions.binding:control
-    admission: bee.harness.launch:admission
-    catalog_service: bee.sessions.service:catalog
-    scheduler: bee.sessions.service:scheduler
-    budget_values: bee.threads.records:budgets
-    profile_values: bee.harness.profiles:protocol
+  security:
+    policies: []

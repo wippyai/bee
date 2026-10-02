@@ -47,8 +47,12 @@ end
 
 local function source(items: {[string]: inspect.Inspection}): graph.Source
     return {
-        versions = function(_: string, _: integer): ({string}?, boolean?, string?)
-            return nil, nil, "exact pins do not list versions"
+        versions = function(component: string, _: integer): ({string}?, boolean?, string?)
+            local result: {string} = {}
+            for _, item in pairs(items) do
+                if item.component == component then result[#result + 1] = item.version end
+            end
+            return result, false, nil
         end,
         artifact = function(component: string, version: string): (inspect.Inspection?, string?)
             local found = items[component .. "@" .. version]
@@ -456,7 +460,8 @@ local function define_tests()
             local identity = binary_identity("github.com/wippyai/bee/native", "1.0.0")
             local selected = request({action = "update", component = "bee/bee", version = "2.0.0"})
             local safe, problem = plan.prepare(captured, 2, selected,
-                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {identity})}), baked_identity("1.0.0"))
+                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {identity}),
+                    ["bee/hub@1.0.0"] = package("bee/hub", "1.0.0", "b")}), baked_identity("1.0.0"))
             test.is_nil(problem); test.not_nil(safe)
             local unsafe, unsafe_error = plan.prepare(captured, 2, selected,
                 source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {identity,
@@ -476,7 +481,7 @@ local function define_tests()
             test.is_nil(problem); test.not_nil(prepared)
             if prepared then test.not_nil(prepared.plan.conversion) end
         end)
-        test.it("updates the core while retaining independent component versions and parameters", function()
+        test.it("updates the core and selected components together while retaining parameters", function()
             local captured = state({
                 root("bee/bee", "1.0.0"),
                 {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "", root = true},
@@ -484,7 +489,7 @@ local function define_tests()
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/files", version = "1.5.0"}})
             local prepared, problem = plan.prepare(captured, 2, request({action = "update", component = "bee/bee", version = "2.0.0"}),
                 source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
-                    ["bee/files@1.5.0"] = package("bee/files", "1.5.0", "b", {
+                    ["bee/files@2.0.0"] = package("bee/files", "2.0.0", "b", {
                         {id = "bee.files:folder", kind = "ns.requirement", meta = {}, data = {targets = {{entry = "main", path = ".folder"}}}},
                         {id = "bee.files:main", kind = "registry.entry", meta = {}, data = {}},
                     })}), baked_identity("1.0.0"))
@@ -492,7 +497,155 @@ local function define_tests()
             if prepared then
                 local files = module_for(prepared.plan.modules, "bee/files")
                 test.not_nil(files)
-                if files then test.eq(files.change, "keep"); test.eq(files.version, "1.5.0"); test.eq(files.requirements.requirements[1].selected, "selected") end
+                if files then test.eq(files.change, "update"); test.eq(files.version, "2.0.0"); test.eq(files.requirements.requirements[1].selected, "selected") end
+            end
+        end)
+        for _, independent in ipairs({false, true}) do
+            test.it("updates host-selected Settings with the core; independent=" .. tostring(independent), function()
+                local captured = state({root("bee/bee", "1.0.0"), root("acme/app", "1.0.0"),
+                    {id = "bee.deps:settings", kind = "ns.dependency", meta = {independent = independent},
+                        registry = {owner = "", root = true}, data = {component = "bee/settings", version = "1.0.0"}},
+                }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"},
+                    {name = "acme/app", version = "1.0.0"}})
+                local prepared, problem = plan.prepare(captured, 2,
+                    request({action = "update", component = "bee/bee", version = "2.0.0"}), source({
+                        ["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                        ["bee/settings@2.0.0"] = package("bee/settings", "2.0.0", "b"),
+                        ["acme/app@1.0.0"] = package("acme/app", "1.0.0", "c"),
+                        ["acme/app@2.0.0"] = package("acme/app", "2.0.0", "d"),
+                    }), baked_identity("1.0.0"))
+                test.is_nil(problem); test.not_nil(prepared)
+                if prepared then
+                    local settings, third_party = module_for(prepared.plan.modules, "bee/settings"), module_for(prepared.plan.modules, "acme/app")
+                    test.not_nil(settings); test.not_nil(third_party)
+                    if settings then test.eq(settings.version, "2.0.0"); test.eq(settings.change, "update") end
+                    if third_party then test.eq(third_party.version, "1.0.0"); test.eq(third_party.change, "keep") end
+                    test.is_nil(module_for(prepared.plan.modules, "bee/files"))
+                    test.is_true(prepared.plan.ready)
+                end
+            end)
+        end
+        for _, pinned in ipairs({false, true}) do
+            test.it("lists retained component reason; pinned=" .. tostring(pinned), function()
+                local resident: {unknown} = {root("bee/bee", "1.0.0"), root("acme/app", "1.0.0"),
+                    {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                        data = {component = "bee/settings", version = "1.0.0"}}}
+                local dependencies: {inspect.Entry} = {}
+                if pinned then
+                    local dependency = {id = "acme.app:settings", kind = "ns.dependency", meta = {},
+                        data = {component = "bee/settings", version = "1.0.0"}, registry = {owner = "acme/app"}}
+                    resident[#resident + 1] = dependency
+                    dependencies[#dependencies + 1] = dependency
+                end
+                local prepared, problem = plan.prepare(state(resident, {{name = "bee/bee", version = "1.0.0"},
+                    {name = "bee/settings", version = "1.0.0"}, {name = "acme/app", version = "1.0.0"}}), 2,
+                    request({action = "update", component = "bee/bee", version = "2.0.0"}), source({
+                        ["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                        ["bee/settings@1.0.0"] = package("bee/settings", "1.0.0", "b"),
+                        ["bee/settings@2.0.0"] = package("bee/settings", "2.0.0", "c", pinned and {} or {
+                            {id = "bee.settings:definition", kind = "ns.definition", data = {}, meta = {native_requirements = {
+                                {package = "github.com/wippyai/bee/native", version = "3.0.0"}}}}}),
+                        ["acme/app@1.0.0"] = package("acme/app", "1.0.0", "d", dependencies),
+                    }), baked_identity("1.0.0"))
+                test.is_nil(problem); test.not_nil(prepared)
+                if prepared then
+                    local settings = module_for(prepared.plan.modules, "bee/settings")
+                    test.not_nil(settings)
+                    if settings then test.eq(settings.change, "keep"); test.not_nil(settings.reason) end
+                end
+            end)
+        end
+        test.it("retains a third-party wildcard root when a newer Bee component requires replacing it", function()
+            local captured = state({root("bee/bee", "1.0.0"), root("acme/app", "*"),
+                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/settings", version = "1.0.0"}},
+            }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"},
+                {name = "acme/app", version = "1.0.0"}})
+            local prepared, problem = plan.prepare(captured, 1,
+                request({action = "update", component = "bee/bee", version = "2.0.0"}), source({
+                    ["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                    ["bee/settings@1.0.0"] = package("bee/settings", "1.0.0", "b"),
+                    ["bee/settings@2.0.0"] = package("bee/settings", "2.0.0", "c", {
+                        {id = "bee.settings:thirdparty", kind = "ns.dependency", meta = {}, data = {component = "acme/app", version = "2.0.0"}}}),
+                    ["acme/app@1.0.0"] = package("acme/app", "1.0.0", "d"),
+                    ["acme/app@2.0.0"] = package("acme/app", "2.0.0", "e"),
+                }), baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                local settings, third_party = module_for(prepared.plan.modules, "bee/settings"), module_for(prepared.plan.modules, "acme/app")
+                test.not_nil(settings); test.not_nil(third_party)
+                if settings then
+                    test.eq(settings.change, "keep")
+                    test.eq(settings.reason, "bee/settings requires third-party root acme/app 2.0.0")
+                end
+                if third_party then test.eq(third_party.change, "keep"); test.eq(third_party.version, "1.0.0") end
+            end
+        end)
+        test.it("lists a selected component whose advertised update artifact is unavailable", function()
+            local captured = state({root("bee/bee", "1.0.0"),
+                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/settings", version = "1.0.0"}},
+            }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"}})
+            local artifacts = source({
+                ["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                ["bee/settings@1.0.0"] = package("bee/settings", "1.0.0", "b"),
+            })
+            artifacts.versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {"2.0.0"}, false, nil end
+            local prepared, problem = plan.prepare(captured, 1,
+                request({action = "update", component = "bee/bee", version = "2.0.0"}), artifacts, baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                local settings = module_for(prepared.plan.modules, "bee/settings")
+                test.not_nil(settings)
+                if settings then test.eq(settings.change, "keep"); test.eq(settings.reason, "missing artifact") end
+            end
+        end)
+        test.it("selects a coordinated prerelease closure without retaining its old dependency pins", function()
+            local captured = state({root("bee/bee", "1.0.0"),
+                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/settings", version = "1.0.0"}},
+                {id = "bee.deps:application", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/application", version = "1.0.0"}},
+            }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"},
+                {name = "bee/application", version = "1.0.0"}})
+            local target = "2.0.0-beta.1"
+            local prepared, problem = plan.prepare(captured, 1,
+                request({action = "update", component = "bee/bee", version = target}), source({
+                    ["bee/bee@" .. target] = package("bee/bee", target, "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                    ["bee/settings@" .. target] = package("bee/settings", target, "b", {
+                        {id = "bee.settings:application", kind = "ns.dependency", meta = {}, data = {component = "bee/application", version = target}}}),
+                    ["bee/application@" .. target] = package("bee/application", target, "c"),
+                }), baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                for _, item in ipairs(prepared.plan.modules) do test.eq(item.version, target); test.eq(item.change, "update") end
+            end
+        end)
+        test.it("selects the newest core-compatible release and rejects a removed dependency", function()
+            local captured = state({root("bee/bee", "1.0.0"),
+                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/settings", version = "*"}},
+            }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"}})
+            captured.resolution = {modules = {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "1.0.0"},
+                    {name = "bee/settings", version = "1.0.0"}, {name = "bee/files", version = "1.0.0"}}}}
+            local artifacts = source({
+                ["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                ["bee/settings@1.0.0"] = package("bee/settings", "1.0.0", "b"),
+                ["bee/settings@1.5.0"] = package("bee/settings", "1.5.0", "c"),
+                ["bee/settings@2.0.0"] = package("bee/settings", "2.0.0", "d", {
+                    {id = "bee.settings:files", kind = "ns.dependency", meta = {}, data = {component = "bee/files", version = "1.0.0"}}}),
+                ["bee/settings@3.0.0"] = package("bee/settings", "3.0.0", "e", {
+                    {id = "bee.settings:core", kind = "ns.dependency", meta = {}, data = {component = "bee/bee", version = "3.0.0"}}}),
+            })
+            local prepared, problem = plan.prepare(captured, 1,
+                request({action = "update", component = "bee/bee", version = "2.0.0"}), artifacts, baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                local settings = module_for(prepared.plan.modules, "bee/settings")
+                test.not_nil(settings)
+                if settings then test.eq(settings.version, "1.5.0"); test.eq(settings.change, "update") end
+                test.is_nil(module_for(prepared.plan.modules, "bee/files"))
             end
         end)
         test.it("refuses self-update that resets an independently selected version", function()

@@ -10,10 +10,10 @@ entries:
     type: test
     suite: bee
   imports:
-    frames: bee.app:frame
+    frames: bee.ui:frame
     test: wippy.test:test
     view: bee.settings.app:view
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     interaction: bee.app:interaction
     live_updates: bee.settings.app:live_updates
     build_info: bee.settings.app:build_info

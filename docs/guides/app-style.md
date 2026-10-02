@@ -361,7 +361,7 @@ application owns, and are drawn at every size class by
 
 ## 12. Visualizations
 
-The visualization kit is `bee.app:viz`. Choose by the question:
+The visualization kit is `bee.ui.viz:viz`. Choose by the question:
 
 | Question | Function |
 |---|---|

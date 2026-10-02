@@ -1,7 +1,7 @@
 # Repository layout audit
 
 `make lint` runs the permanent placement check in `build/layout_check.py`.
-Production consists of the host `src/` and 43 component `modules/*/src/` roots.
+Production consists of the host `src/` and 47 component `modules/*/src/` roots.
 The only root spelling exception is the public SDK: `application` exports
 `bee.app`. Hyphenated component names expand into namespace nesting; all child
 folders match their namespace. `src/host` is the host's documented desktop-owner
@@ -87,7 +87,8 @@ reviewed binding, and the application journey fixture edits that host selection.
 
 Application entries, renderers, screen models and rendering helpers live under
 component `app/` namespaces. The public rendering kit remains in `application`;
-the desktop component and core terminal sources implement the desktop shell. Placement's
+the desktop and terminal components implement the desktop shell. Root launch
+retains physical display ownership. Placement's
 process-local native terminal facade is an executor contract, not an application
 screen: it consumes the caller's terminal grant. Docker's short window adapter
 selects its backend; it does not duplicate the native facade. Retained
@@ -394,12 +395,10 @@ conventions and `build/layout_roots.json`.
 | `bee.git.worktree` | `bee.git.worktree.env` | `executor_ref`, `git_executor`, `host_files`, `host_files_ref` |
 | `bee.git.worktree` | `bee.git.worktree.security` | `worktree_policy` |
 | `bee.gov.overlays` | `bee.gov.overlays.security` | `client_policy` |
-| `bee.gov` | `bee.gov.activation` | `activation_measure`, `activation_profile_decoder`, `application_admissions`, `governed_application_admission`, `headless_revert`, `lists`, `migration_work`, `preflight`, `protected_kernel`, `super_edit` |
+| `bee.gov` | `bee.gov.binding` | `activation_measure`, `application_admissions`, `delivery_local`, `headless_revert`, `hub_resolver`, `materializer`, `overlay_local`, `overlay_resolver`, `preflight`, `staging_resources` |
 | `bee.gov` | `bee.gov.env` | `activation_profiles_ref`, `approval_consume_policy_ref`, `approval_request_policy_ref`, `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `publication_profiles_ref`, `workspace_folder_policy_ref`, `workspace_folder_read_ref` |
-| `bee.gov` | `bee.gov.delivery` | `artifact`, `candidate`, `delivery`, `delivery_protocol`, `hub_resolver`, `lease_model`, `materializer`, `overlay_resolver`, `publication_profile_decoder`, `resolver`, `staging_resources` |
-| `bee.gov` | `bee.gov.capability` | `capability_files`, `capability_gateway`, `capability_grants`, `capability_request` |
-| `bee.gov` | `bee.gov.binding` | `delivery_local`, `overlay_local` |
-| `bee.gov` | `bee.gov.workspace` | `workspace`, `workspace_applications`, `workspace_protocol` |
+| `bee.gov` | `bee.gov.security` | `super_edit` |
+| `bee.gov` | `bee.gov.types` | `activation_profile_decoder`, `artifact`, `candidate`, `capability_files`, `capability_gateway`, `capability_grants`, `capability_request`, `delivery`, `delivery_protocol`, `governed_application_admission`, `lease_model`, `lists`, `migration_work`, `protected_kernel`, `publication_profile_decoder`, `resolver`, `workspace`, `workspace_applications`, `workspace_protocol` |
 | `bee.harness` | `bee.harness.env` | `carrier_host_ref` |
 | `bee.harness` | `bee.harness.api` | `gateway_hook`, `gateway_hook_mcp`, `gateway_hook_status` |
 | `bee.harness` | `bee.harness.launch` | `harness_activation`, `harness_setup` |
@@ -460,3 +459,12 @@ conventions and `build/layout_roots.json`.
 | `bee` | `bee.launch.service` | `workspace_hosts` |
 | `bee.console` (host) | `bee.console.env` | `environment`, `executor`, `home`, `lang`, `path`, `user` |
 | `bee.console` (host) | `bee.console.security` | `command_policy`, `executor_policy` |
+
+Application owner clients are extracted from the base SDK. Managed work uses
+`bee.sessions.client:sessions` and `bee.sessions.types:protocol`; host leases use
+`bee.workspace.client:host_leases`. Threads status readers and presentation
+values live in `bee.app.threads.client:status_reader` and
+`bee.app.threads.types:status_surface`. Consumers import these entries directly.
+The base SDK depends only on Values and UI. These helper moves preserve source
+bytes, topics, schemas, owner bindings and stored identities; no state migration
+or compatibility alias accompanies them.

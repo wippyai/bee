@@ -100,10 +100,11 @@ class RepositoryLayout(unittest.TestCase):
         self.assertEqual(database.execute('SELECT * FROM bee_placement_preparer_states ORDER BY binding_id').fetchall(), before)
 
     def test_reference_migrations_preserve_text_and_actor_identities(self):
-        # Applied step 1 SQL covers persisted identities; step 2 helper moves
-        # change coordinated imports without rewriting those immutable migrations.
+        # Applied root-reference SQL converts M0/M5 identities. Later actor moves
+        # preserve existing rows and do not extend those immutable migrations.
         migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] for entry in migrations if entry['category'] == 'ids'}
+        moves = {entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} else entry['from']
+                 for entry in migrations if entry['category'] == 'ids'}
         for path, tables in [
             ('modules/sync/src/migrations/migrations.lua', [('bee_sync_projections', 'value_json'), ('bee_sync_events', 'payload_json'), ('bee_sync_receipts', 'request_json')]),
             ('modules/gateway/src/migrations/migrations.lua', [('bee_gateway_surfaces', 'surface_json'), ('bee_gateway_surfaces', 'active_json'), ('bee_gateway_access_grants', 'traits_json')]),
@@ -194,10 +195,11 @@ class RepositoryLayout(unittest.TestCase):
         database = sqlite3.connect(':memory:')
         database.executescript('CREATE TABLE bee_placement_preparer_states (attempt_id TEXT, binding_id TEXT, record_json TEXT, PRIMARY KEY(attempt_id, binding_id)); CREATE TABLE bee_placement_evidence (kind TEXT, detail TEXT); CREATE TABLE bee_placement_attempts (request_json TEXT, grants_json TEXT);')
         record = {'binding_id': 'bee.git.worktree:binding', 'state': {'token': 'bee.git.worktree:binding'}}
-        # Applied step 1 SQL covers persisted identities; step 2 helper moves
-        # change coordinated imports without rewriting those immutable migrations.
+        # Applied root-reference SQL converts M0/M5 identities. Later actor moves
+        # preserve existing rows and do not extend those immutable migrations.
         migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] for entry in migrations if entry['category'] == 'ids'}
+        moves = {entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} else entry['from']
+                 for entry in migrations if entry['category'] == 'ids'}
         database.execute('INSERT INTO bee_placement_preparer_states VALUES (?, ?, ?)', ('attempt', record['binding_id'], json.dumps(record)))
         database.execute('INSERT INTO bee_placement_attempts VALUES (?, ?)', (json.dumps({'references': list(moves), 'binding_ref': 'bee.driver.codex:binding'}), json.dumps({'resource': 'bee.placement.native:db'})))
         database.executescript(script)
@@ -218,10 +220,11 @@ class RepositoryLayout(unittest.TestCase):
         self.assertEqual(database.execute('SELECT * FROM bee_placement_preparer_states ORDER BY binding_id').fetchall(), before)
 
     def test_scalar_resource_and_credential_references_move_without_grants(self):
-        # Applied step 1 SQL covers persisted identities; step 2 helper moves
-        # change coordinated imports without rewriting those immutable migrations.
+        # Applied root-reference SQL converts M0/M5 identities. Later actor moves
+        # preserve existing rows and do not extend those immutable migrations.
         migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] for entry in migrations if entry['category'] == 'ids'}
+        moves = {entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} else entry['from']
+                 for entry in migrations if entry['category'] == 'ids'}
         for module, tables in [('resources', [('bee_resource_associations', 'root_ref'), ('bee_resource_grants', 'root_ref')]), ('credentials', [('bee_credential_definitions', 'source_ref'), ('bee_credential_projections', 'materializer')])]:
             database = sqlite3.connect(':memory:')
             for table, column in tables:

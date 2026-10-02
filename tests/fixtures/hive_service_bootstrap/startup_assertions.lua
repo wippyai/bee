@@ -11,7 +11,7 @@
     assert(security.can("process.host", "bee:workers"), "missing desktop bridge host authority")
     assert(security.can("process.spawn", "bee.launch:retained"), "missing desktop bridge spawn authority")
     assert(security.can("security.scope.create", "scope"), "missing desktop bridge scope authority")
-    assert(security.can("funcs.call", "bee.client:list_desktops"), "missing display catalog authority")
+    assert(security.can("funcs.call", "bee.client.binding:list_desktops"), "missing display catalog authority")
     assert(security.can("bee.client.desktops.read", "bee.env:client_db"), "missing display read authority")
     assert(security.can("bee.workspace.manager.read", "bee:workspace_catalog"), "missing workspace catalog authority")
     assert(security.can("funcs.call", "bee.workspace.binding:list"), "missing workspace catalog call authority")

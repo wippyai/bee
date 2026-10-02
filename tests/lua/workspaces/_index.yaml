@@ -21,7 +21,7 @@ entries:
     model: bee.workspace.manager.app:model
     view: bee.workspace.manager.app:view
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.app:folder_picker
+    folder_picker: bee.ui.picker:folder
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     caller: bee.app:caller
@@ -33,5 +33,5 @@ entries:
   imports:
     test: wippy.test:test
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.app:folder_picker
+    folder_picker: bee.ui.picker:folder
     caller: bee.app:caller

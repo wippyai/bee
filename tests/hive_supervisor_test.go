@@ -129,7 +129,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.app:arguments\n    bounds: bee.values:bounds\n"},
 		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
 		{"workspace_binding", "modules/workspace/src/types/selection.lua", "version: '1.0'\nnamespace: bee.workspace.types\nentries:\n- name: selection\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.values:bounds\n"},
-		{"application_host_leases", "modules/application/src/host_leases.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n"},
+		{"workspace_host_leases", "modules/workspace/src/client/host_leases.lua", "version: '1.0'\nnamespace: bee.workspace.client\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n  imports:\n    bounds: bee.values:bounds\n"},
 	} {
 		directory := filepath.Join(sourceSnapshot, dependency.directory)
 		if err := os.MkdirAll(directory, 0700); err != nil {
@@ -151,11 +151,11 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	retained = append(retained, []byte("    arguments: bee.app:arguments\n    clipboard: bee.client:clipboard\n")...)
+	retained = append(retained, []byte("    arguments: bee.app:arguments\n    clipboard: bee.client.types:clipboard\n")...)
 	if err := os.WriteFile(retainedManifest, retained, 0600); err != nil {
 		t.Fatal(err)
 	}
-	clipboard, err := os.ReadFile(filepath.Join(repository, "src/client/clipboard.lua"))
+	clipboard, err := os.ReadFile(filepath.Join(repository, "modules/client/src/types/clipboard.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.WriteFile(filepath.Join(clipboardDir, "clipboard.lua"), clipboard, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client.types\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	host, err := os.ReadFile(filepath.Join(fixtureSnapshot, "host.manifest"))

@@ -1644,6 +1644,69 @@
       "migration": "M2",
       "reason": "Desktop projection actor relocation; exact persisted references convert through additive Placement 10, Sync 11, Gateway 19, Resources 5 and Credentials 8 desktop_projection_references migrations. Preserve workspace/desktop/view IDs, opaque state, topics, version-one handoff and qualified layout schemas; restart owner composition and reissue existing grants.",
       "to": "bee.desktop.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:main",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local_command",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local_command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local_application",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local_application"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:desktop",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:desktop"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:application",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:application"
+    },
+    {
+      "category": "ids",
+      "from": "bee.terminal:main",
+      "migration": "M2",
+      "reason": "Presenter actor relocation; no actor definition is stored in desktop/client layouts or owner tables. Preserve existing topics, qualified layouts and viewport grants; restart composition and replace the presenter through F12. No persisted row rewrite.",
+      "to": "bee.terminal.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:target_terminal_display",
+      "migration": "M2",
+      "reason": "Client component requirement relocation; all dependency parameters and linker targets are updated in the same composition. Preserve stored references and immutable applied SQL; no stored row rewrite. Historic registry artifacts remain immutable; restart composition and reissue host grants.",
+      "to": "bee.client:target_launch_display"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:target_protocol_input",
+      "migration": "M2",
+      "reason": "Client component requirement relocation; all dependency parameters and linker targets are updated in the same composition. Preserve stored references and immutable applied SQL; no stored row rewrite. Historic registry artifacts remain immutable; restart composition and reissue host grants.",
+      "to": "bee.client:target_terminal_input"
     }
   ]
 }

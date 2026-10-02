@@ -504,7 +504,7 @@ func parseAndValidateFlags(args []string) (*harnessConfig, error) {
 	hostAddrFlag := fs.String("host-address", "", "host (node A) bind/advertise IP address (default: 127.0.0.1 for loopback; required if -ssh)")
 	clientAddrFlag := fs.String("client-address", "", "client (node B) bind/advertise IP address (default: 127.0.0.1 for loopback; required if -ssh)")
 	stallProbe := fs.Bool("stall", false, "pause local destination runtime to verify concurrent native viewport yields (Unix only)")
-	presenterStall := fs.Bool("presenter-stall", false, "pause local destination runtime to verify production bee.terminal:main UI responsiveness (Unix only)")
+	presenterStall := fs.Bool("presenter-stall", false, "pause local destination runtime to verify production bee.terminal.service:main UI responsiveness (Unix only)")
 	desktopProbe := fs.Bool("desktop", false, "run actual desktop client acceptance phase (Unix only)")
 
 	if err := fs.Parse(args); err != nil {
@@ -1115,11 +1115,11 @@ func run() (retErr error) {
 	}
 
 	if cfg.desktopProbe {
-		fmt.Printf("Hive remote (desktop): 2 independent native runtimes, actual bee.client:main desktop client, native display viewport, destination bash proof, stty resize, F12 rejoin, detach & reattach to retained terminal verified successfully\n")
+		fmt.Printf("Hive remote (desktop): 2 independent native runtimes, actual bee.client.service:main desktop client, native display viewport, destination bash proof, stty resize, F12 rejoin, detach & reattach to retained terminal verified successfully\n")
 	} else if cfg.sshTarget != "" {
 		fmt.Printf("Hive remote (LAN SSH Node A %s, local Node B %s): 2 independent native runtimes, supervisor admission, remote Native Terminal mount, process proof, stty resize, and revoked control verified successfully\n", cfg.hostAddress, cfg.clientAddress)
 	} else if cfg.presenterStall {
-		fmt.Printf("Hive remote (presenter-stall): 2 independent native runtimes, supervisor admission, real bee.terminal:main presenter responsive during paused host, F1 menu, F12 retire, shell PID & variable preserved across re-admission verified successfully\n")
+		fmt.Printf("Hive remote (presenter-stall): 2 independent native runtimes, supervisor admission, real bee.terminal.service:main presenter responsive during paused host, F1 menu, F12 retire, shell PID & variable preserved across re-admission verified successfully\n")
 	} else {
 		fmt.Printf("Hive remote: 2 independent native runtimes, supervisor admission, remote Native Terminal mount, process proof, stty resize, and revoked control verified successfully\n")
 	}

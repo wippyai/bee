@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 11364,
+      "bytes": 10892,
       "id": "docs/agent_guide",
-      "sha256": "21b5588f46fd0a370d4964a9281a05ab251c2b082850a6d7f2027013b5040a2f",
+      "sha256": "6260765e3190bba8c26f40996e4d673a92ed8020c676c8c18778dbf29128ea0c",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -307,9 +307,9 @@
       "topic": "component"
     },
     {
-      "bytes": 16418,
+      "bytes": 15352,
       "id": "component/credentials",
-      "sha256": "fa432034d47d1b2765a843493588d4407bca91b29b93c48155a96505127306f4",
+      "sha256": "b4e8c21dd078a1aa73ecf1c3e2a7b76adcd3cda36de77a8c48211cddf3b1c551",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
@@ -622,7 +622,11 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
+<<<<<<< HEAD
     "bytes": 728363,
+=======
+    "bytes": 722240,
+>>>>>>> parent of d1327b85 (fix: support host-selected provider login symlinks)
     "documents": 77
   }
 }

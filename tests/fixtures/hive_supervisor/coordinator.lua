@@ -60,7 +60,7 @@ local function main(remote: string)
             local reply: types.Reply? = nil
             while time.now():before(deadline) do
                 reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
-                    {operation_ref = "bee.hive.telemetry:presence"}, {}, {timeout = "1s"})
+                    {operation_ref = "bee.hive.telemetry.binding:presence"}, {}, {timeout = "1s"})
                 if reply.ok then break end
                 -- Presence is a read: a replacement can make its dispatched outcome
                 -- uncertain, and retrying this read is safe. Mutations must reconcile.
@@ -71,7 +71,7 @@ local function main(remote: string)
             local value: unknown = reply.value
             if type(value) ~= "table" or value.node_id ~= remote then error("telemetry did not execute on destination") end
             local denied = handle:call({node_id = remote, service_id = "bee.hive.telemetry", resource_ref = "forbidden"},
-                {operation_ref = "bee.hive.telemetry:stats"}, {}, {timeout = "3s"})
+                {operation_ref = "bee.hive.telemetry.binding:stats"}, {}, {timeout = "3s"})
             if not denied.error or denied.error.code ~= "INVALID_ARGUMENT" then error("resource scope was not refused") end
             handle:close()
             assert(io.print("BEE_HIVE_SUPERVISOR probe_passed"))
@@ -79,7 +79,7 @@ local function main(remote: string)
             local handle, open_error = client.open()
             if not handle then error(tostring(open_error)) end
             local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
-                {operation_ref = "bee.hive.telemetry:stats"}, {}, {timeout = "3s"})
+                {operation_ref = "bee.hive.telemetry.binding:stats"}, {}, {timeout = "3s"})
             handle:close()
             if reply.ok then
                 assert(io.print("BEE_HIVE_SUPERVISOR stats_ok"))
@@ -92,7 +92,7 @@ local function main(remote: string)
             local handle, open_error = client.open()
             if not handle then error(tostring(open_error)) end
             local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
-                {operation_ref = "bee.hive.telemetry:presence"}, {}, {timeout = "3s"})
+                {operation_ref = "bee.hive.telemetry.binding:presence"}, {}, {timeout = "3s"})
             handle:close()
             if not reply.ok then error("presence refused: " .. tostring(reply.error and reply.error.code)) end
             assert(io.print("BEE_HIVE_SUPERVISOR presence_ok"))
@@ -106,7 +106,7 @@ local function main(remote: string)
                 protocol_revision = types.REVISION, request_id = "sibling-forgery", idempotency_key = "sibling-forgery-key",
                 caller_node_id = local_node, caller_incarnation = "sibling-forgery-incarnation",
                 owner_ref = {node_id = remote, service_id = "bee.hive.telemetry"},
-                operation_ref = "bee.hive.telemetry:stats", operation_revision = "1", input = input,
+                operation_ref = "bee.hive.telemetry.binding:stats", operation_revision = "1", input = input,
                 input_digest = assert(types.digest(input)),
                 principal_ref = {issuer = local_node, subject_id = tostring(process.pid())},
                 principal_assertion = {method = types.ASSERTION_METHOD, audience = remote,

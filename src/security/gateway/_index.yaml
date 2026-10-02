@@ -60,9 +60,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.threads.service:read_after
-    - bee.threads.delivery:watch
-    - bee.threads.service:get
+    - bee.threads.binding:read_after
+    - bee.threads.binding:watch
+    - bee.threads.binding:get
     - bee.gateway.binding:request_capability
     - bee.gateway.binding:capability_status
     effect: allow
@@ -76,17 +76,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.threads.service:record
-    - bee.threads.service:notify
-    - bee.threads.service:get
-    effect: allow
-- name: gateway_tool_inbox_policy
-  kind: security.policy
-  meta: {comment: Bound agents call only action inbox owner methods; each method checks its own action, workspace and acceptance}
-  policy:
-    actions: [funcs.call]
-    resources: [bee.threads.service:inbox_send, bee.threads.service:inbox_reply, bee.threads.service:inbox_list,
-      bee.threads.service:inbox_ack, bee.threads.service:inbox_describe]
+    - bee.threads.binding:record
+    - bee.threads.binding:notify
+    - bee.threads.binding:get
     effect: allow
 - name: gateway_tool_overlay_policy
   kind: security.policy.expr

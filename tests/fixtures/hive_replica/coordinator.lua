@@ -494,7 +494,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             local reply: types.Reply? = nil
             while time.now():before(deadline) do
                 reply = mesh:call({node_id = remote, service_id = "bee.hive.telemetry"},
-                    {operation_ref = "bee.hive.telemetry:presence"}, {}, {timeout = "1s"})
+                    {operation_ref = "bee.hive.telemetry.binding:presence"}, {}, {timeout = "1s"})
                 if reply.ok then break end
                 time.sleep("100ms")
             end

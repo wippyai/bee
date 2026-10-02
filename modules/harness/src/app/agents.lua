@@ -160,7 +160,7 @@ end
 local function observe_thread(conv: Conversation)
     local thread = conv.session.snapshot.thread_ref
     if not thread then return end
-    local reply = caller.new(funcs.call):invoke("bee.threads.service:read_after", {thread_id = thread,
+    local reply = caller.new(funcs.call):invoke("bee.threads.binding:read_after", {thread_id = thread,
         cursor = conv.thread_cursor or 0, limit = 64})
     if not reply or not reply.ok then return end
     local page = bounds.object(reply.value)

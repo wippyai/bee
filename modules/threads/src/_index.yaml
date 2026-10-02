@@ -21,16 +21,17 @@ entries:
   meta:
     comment: Process host that runs the module's owner process
   targets:
-  - entry: bee.threads:owner_service
+  - entry: bee.threads.service:owner_service
     path: .host
-  - entry: bee.threads.delivery:waiter_service
+  - entry: bee.threads.service:waiter_service
     path: .host
 - name: waiter_policies
   kind: ns.requirement
+  default: []
   meta:
     comment: Host-selected policy grants for the delivery waiter
   targets:
-  - entry: bee.threads.delivery:waiter_service
+  - entry: bee.threads.service:waiter_service
     path: .lifecycle.security.policies
 - name: sender
   kind: ns.requirement
@@ -60,89 +61,6 @@ entries:
     waits: bee.threads.delivery:waits
     recap: bee.threads.projection:recap
     notices: bee.threads.service:notices
-- name: capabilities
-  kind: function.lua
-  source: file://capabilities_method.lua
-  method: handle
-  imports:
-    capabilities: bee.threads:capabilities_report
-  meta:
-    comment: Implementation facts for any caller; the Hive metadata is inert when no Hive supervisor runs
-    hive: open
-    hive_operation:
-      revision: '1'
-      title: Threads capabilities
-      input: {type: object, properties: {}, additionalProperties: false}
-      output:
-        type: object
-        additionalProperties: false
-        properties:
-          revision: {type: string}
-          record_schema: {type: string}
-          recap_schema: {type: string}
-          record_kinds: {type: array, items: {type: string}, maxItems: 64}
-          record_sources: {type: array, items: {type: string}, maxItems: 64}
-          outcomes: {type: array, items: {type: string}, maxItems: 64}
-          migrations:
-            type: array
-            maxItems: 64
-            items:
-              type: object
-              additionalProperties: false
-              properties:
-                id: {type: integer}
-                name: {type: string}
-                rebuild: {type: boolean}
-          contracts:
-            type: array
-            maxItems: 64
-            items:
-              type: object
-              additionalProperties: false
-              properties:
-                contract: {type: string}
-                methods: {type: array, items: {type: string}, maxItems: 64}
-          limits:
-            type: object
-            additionalProperties: false
-            properties:
-              max_record_bytes: {type: integer}
-              max_page_records: {type: integer}
-              max_thread_records: {type: integer}
-              max_thread_members: {type: integer}
-              max_thread_actions: {type: integer}
-              max_thread_attempts: {type: integer}
-              max_thread_turns: {type: integer}
-              max_thread_obligations: {type: integer}
-              max_thread_subscriptions: {type: integer}
-              max_array_items: {type: integer}
-              max_json_depth: {type: integer}
-              max_title_bytes: {type: integer}
-              claim_ttl_seconds: {type: integer}
-              max_wait_ms: {type: integer}
-              wait_budget_margin_ms: {type: integer}
-              max_waiters_per_thread: {type: integer}
-              max_waiters: {type: integer}
-              recap_summary_lines: {type: integer}
-              recap_line_bytes: {type: integer}
-          delivery:
-            type: object
-            additionalProperties: false
-            properties:
-              channels: {type: array, items: {type: string}, maxItems: 64}
-              self_service_only: {type: boolean}
-              delegated_replies: {type: boolean}
-              cross_thread_replies: {type: boolean}
-              cross_node_send: {type: boolean}
-              telemetry_subscribe: {type: boolean}
-              outstanding_pages_per_subscription: {type: integer}
-              transport_budget:
-                type: object
-                additionalProperties: false
-                properties:
-                  ceiling_ms: {type: integer}
-                  caller_may_shorten: {type: boolean}
-                  caller_may_extend: {type: boolean}
 - name: authority
   kind: contract.definition
   methods:
@@ -181,21 +99,21 @@ entries:
   contracts:
   - contract: bee.threads:authority
     methods:
-      create: bee.threads.service:create
-      get: bee.threads.service:get
-      list: bee.threads.service:list
-      list_workspace: bee.threads.service:list_workspace
-      join: bee.threads.service:join
-      leave: bee.threads.service:leave
-      close: bee.threads.service:close
-      record: bee.threads.service:record
-      read_after: bee.threads.service:read_after
-      send: bee.threads.service:send
-      send_status: bee.threads.service:send_status
-      notify: bee.threads.service:notify
-      register_app_alias: bee.threads.service:register_app_alias
-      retire_app_alias: bee.threads.service:retire_app_alias
-      fence_app: bee.threads.service:fence_app
+      create: bee.threads.binding:create
+      get: bee.threads.binding:get
+      list: bee.threads.binding:list
+      list_workspace: bee.threads.binding:list_workspace
+      join: bee.threads.binding:join
+      leave: bee.threads.binding:leave
+      close: bee.threads.binding:close
+      record: bee.threads.binding:record
+      read_after: bee.threads.binding:read_after
+      send: bee.threads.binding:send
+      send_status: bee.threads.binding:send_status
+      notify: bee.threads.binding:notify
+      register_app_alias: bee.threads.binding:register_app_alias
+      retire_app_alias: bee.threads.binding:retire_app_alias
+      fence_app: bee.threads.binding:fence_app
 - name: delivery
   kind: contract.definition
   methods:
@@ -234,21 +152,21 @@ entries:
   contracts:
   - contract: bee.threads:delivery
     methods:
-      claim: bee.threads.delivery:claim
-      dispatch: bee.threads.delivery:dispatch
-      ack: bee.threads.delivery:ack
-      release: bee.threads.delivery:release
-      expire: bee.threads.delivery:expire
-      reconcile: bee.threads.delivery:reconcile
-      subscribe: bee.threads.delivery:subscribe
-      page: bee.threads.delivery:page
-      ack_page: bee.threads.delivery:ack_page
-      unsubscribe: bee.threads.delivery:unsubscribe
-      resume: bee.threads.delivery:resume
-      close_subscription: bee.threads.delivery:close_subscription
-      forget_subscription: bee.threads.delivery:forget_subscription
-      wait: bee.threads.delivery:wait
-      watch: bee.threads.delivery:watch
+      claim: bee.threads.binding:delivery_claim
+      dispatch: bee.threads.binding:dispatch
+      ack: bee.threads.binding:ack
+      release: bee.threads.binding:release
+      expire: bee.threads.binding:expire
+      reconcile: bee.threads.binding:reconcile
+      subscribe: bee.threads.binding:subscribe
+      page: bee.threads.binding:page
+      ack_page: bee.threads.binding:ack_page
+      unsubscribe: bee.threads.binding:unsubscribe
+      resume: bee.threads.binding:resume
+      close_subscription: bee.threads.binding:close_subscription
+      forget_subscription: bee.threads.binding:forget_subscription
+      wait: bee.threads.binding:wait
+      watch: bee.threads.binding:watch
 - name: projection
   kind: contract.definition
   methods:
@@ -269,12 +187,12 @@ entries:
   contracts:
   - contract: bee.threads:projection
     methods:
-      recap_read: bee.threads.projection:recap_read
-      recap_update: bee.threads.projection:recap_update
-      recap_rebuild: bee.threads.projection:recap_rebuild
-      status_read: bee.threads.projection:status_read
-      status_update: bee.threads.projection:status_update
-      status_rebuild: bee.threads.projection:status_rebuild
+      recap_read: bee.threads.binding:recap_read
+      recap_update: bee.threads.binding:recap_update
+      recap_rebuild: bee.threads.binding:recap_rebuild
+      status_read: bee.threads.binding:status_read
+      status_update: bee.threads.binding:status_update
+      status_rebuild: bee.threads.binding:status_rebuild
 - name: lifecycle
   kind: contract.definition
   methods:
@@ -313,28 +231,28 @@ entries:
   contracts:
   - contract: bee.threads:approvals
     methods:
-      append: bee.threads.approvals:append
+      append: bee.threads.binding:append
 - name: carrier_local
   kind: contract.binding
   contracts:
   - contract: bee.threads:carrier
     methods:
-      claim: bee.threads.carrier:claim
-      commit: bee.threads.carrier:commit
-      checkpoint: bee.threads.carrier:checkpoint
-      cancel_intent: bee.threads.carrier:cancel_intent
-      cancel_status: bee.threads.carrier:cancel_status
+      claim: bee.threads.binding:claim
+      commit: bee.threads.binding:commit
+      checkpoint: bee.threads.binding:checkpoint
+      cancel_intent: bee.threads.binding:cancel_intent
+      cancel_status: bee.threads.binding:cancel_status
 - name: lifecycle_local
   kind: contract.binding
   contracts:
   - contract: bee.threads:lifecycle
     methods:
-      admit_action: bee.threads.service:admit_action
-      prepare_attempt: bee.threads.service:prepare_attempt
-      start_attempt: bee.threads.service:start_attempt
-      request_turn: bee.threads.service:request_turn
-      end_turn: bee.threads.service:end_turn
-      receipt: bee.threads.service:receipt
+      admit_action: bee.threads.binding:admit_action
+      prepare_attempt: bee.threads.binding:prepare_attempt
+      start_attempt: bee.threads.binding:start_attempt
+      request_turn: bee.threads.binding:request_turn
+      end_turn: bee.threads.binding:end_turn
+      receipt: bee.threads.binding:receipt
 - name: journal
   kind: contract.definition
   methods:
@@ -383,46 +301,26 @@ entries:
   contracts:
   - contract: bee.threads:journal
     methods:
-      session_create: bee.threads.service:session_create
-      session_attach: bee.threads.service:session_attach
-      session_describe: bee.threads.service:session_describe
-      session_scan: bee.threads.service:session_scan
-      session_transition: bee.threads.service:session_transition
-      work_send: bee.threads.service:work_send
-      work_describe: bee.threads.service:work_describe
-      work_history: bee.threads.service:work_history
-      work_scan: bee.threads.service:work_scan
-      turn_reserve: bee.threads.service:turn_reserve
-      turn_recover: bee.threads.service:turn_recover
-      turn_pull: bee.threads.service:turn_pull
-      turn_accept: bee.threads.service:turn_accept
-      turn_observation: bee.threads.service:turn_observation
-      work_settle: bee.threads.service:work_settle
-      work_uncertain: bee.threads.service:work_uncertain
-      work_cancel: bee.threads.service:work_cancel
-      operation_lookup: bee.threads.service:operation_lookup
-      operation_describe: bee.threads.service:operation_describe
-      feed_read: bee.threads.service:feed_read
-- name: owner
-  kind: process.lua
-  source: file://owner.lua
-  method: main
-  modules: [process, time, channel]
-  imports:
-    resources: bee.threads:resources
-    database: bee.threads.persist:database
-    owner: bee.threads.persist:owner
-    notices: bee.threads.service:notices
-    boundary: bee.threads.service:boundary
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: owner_service
-  kind: process.service
-  process: bee.threads:owner
-  lifecycle:
-    auto_start: true
-    restart:
-      max_attempts: 10
+      session_create: bee.threads.binding:session_create
+      session_attach: bee.threads.binding:session_attach
+      session_describe: bee.threads.binding:session_describe
+      session_scan: bee.threads.binding:session_scan
+      session_transition: bee.threads.binding:session_transition
+      work_send: bee.threads.binding:work_send
+      work_describe: bee.threads.binding:work_describe
+      work_history: bee.threads.binding:work_history
+      work_scan: bee.threads.binding:work_scan
+      turn_reserve: bee.threads.binding:turn_reserve
+      turn_recover: bee.threads.binding:turn_recover
+      turn_pull: bee.threads.binding:turn_pull
+      turn_accept: bee.threads.binding:turn_accept
+      turn_observation: bee.threads.binding:turn_observation
+      work_settle: bee.threads.binding:work_settle
+      work_uncertain: bee.threads.binding:work_uncertain
+      work_cancel: bee.threads.binding:work_cancel
+      operation_lookup: bee.threads.binding:operation_lookup
+      operation_describe: bee.threads.binding:operation_describe
+      feed_read: bee.threads.binding:feed_read
 - name: environment
   kind: env.storage.os
   lifecycle: {auto_start: true}
@@ -436,3 +334,187 @@ entries:
   kind: db.sql.sqlite
   file: ${env:bee.threads:database_path}
   lifecycle: {auto_start: true}
+- name: owner_policies
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: bee.threads.service:owner
+    path: .security.policies
+  - entry: bee.threads.service:owner_service
+    path: .lifecycle.security.policies
+- name: target_append_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.threads.binding:append
+    path: .security.policies
+  - entry: bee.threads.binding:claim
+    path: .security.policies
+  - entry: bee.threads.binding:commit
+    path: .security.policies
+  - entry: bee.threads.binding:checkpoint
+    path: .security.policies
+  - entry: bee.threads.binding:cancel_intent
+    path: .security.policies
+  - entry: bee.threads.binding:cancel_status
+    path: .security.policies
+  - entry: bee.threads.binding:delivery_claim
+    path: .security.policies
+  - entry: bee.threads.binding:dispatch
+    path: .security.policies
+  - entry: bee.threads.binding:ack
+    path: .security.policies
+  - entry: bee.threads.binding:release
+    path: .security.policies
+  - entry: bee.threads.binding:expire
+    path: .security.policies
+  - entry: bee.threads.binding:reconcile
+    path: .security.policies
+  - entry: bee.threads.binding:subscribe
+    path: .security.policies
+  - entry: bee.threads.binding:page
+    path: .security.policies
+  - entry: bee.threads.binding:ack_page
+    path: .security.policies
+  - entry: bee.threads.binding:unsubscribe
+    path: .security.policies
+  - entry: bee.threads.binding:close_subscription
+    path: .security.policies
+  - entry: bee.threads.binding:forget_subscription
+    path: .security.policies
+  - entry: bee.threads.binding:resume
+    path: .security.policies
+  - entry: bee.threads.binding:wait
+    path: .security.policies
+  - entry: bee.threads.binding:watch
+    path: .security.policies
+  - entry: bee.threads.binding:recap_read
+    path: .security.policies
+  - entry: bee.threads.binding:recap_update
+    path: .security.policies
+  - entry: bee.threads.binding:recap_rebuild
+    path: .security.policies
+  - entry: bee.threads.binding:status_read
+    path: .security.policies
+  - entry: bee.threads.binding:status_update
+    path: .security.policies
+  - entry: bee.threads.binding:status_rebuild
+    path: .security.policies
+  - entry: bee.threads.binding:notify
+    path: .security.policies
+  - entry: bee.threads.binding:create
+    path: .security.policies
+  - entry: bee.threads.binding:get
+    path: .security.policies
+  - entry: bee.threads.binding:list
+    path: .security.policies
+  - entry: bee.threads.binding:list_workspace
+    path: .security.policies
+  - entry: bee.threads.binding:join
+    path: .security.policies
+  - entry: bee.threads.binding:leave
+    path: .security.policies
+  - entry: bee.threads.binding:close
+    path: .security.policies
+  - entry: bee.threads.binding:record
+    path: .security.policies
+  - entry: bee.threads.binding:register_app_alias
+    path: .security.policies
+  - entry: bee.threads.binding:retire_app_alias
+    path: .security.policies
+  - entry: bee.threads.binding:fence_app
+    path: .security.policies
+  - entry: bee.threads.binding:read_after
+    path: .security.policies
+  - entry: bee.threads.binding:admit_action
+    path: .security.policies
+  - entry: bee.threads.binding:prepare_attempt
+    path: .security.policies
+  - entry: bee.threads.binding:start_attempt
+    path: .security.policies
+  - entry: bee.threads.binding:request_turn
+    path: .security.policies
+  - entry: bee.threads.binding:end_turn
+    path: .security.policies
+  - entry: bee.threads.binding:receipt
+    path: .security.policies
+  - entry: bee.threads.binding:send
+    path: .security.policies
+  - entry: bee.threads.binding:send_status
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_offer
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_transport
+    path: .security.policies
+- name: target_session_create_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.threads.binding:session_create
+    path: .security.policies
+  - entry: bee.threads.binding:session_attach
+    path: .security.policies
+  - entry: bee.threads.binding:session_describe
+    path: .security.policies
+  - entry: bee.threads.binding:session_scan
+    path: .security.policies
+  - entry: bee.threads.binding:session_transition
+    path: .security.policies
+  - entry: bee.threads.binding:work_send
+    path: .security.policies
+  - entry: bee.threads.binding:work_describe
+    path: .security.policies
+  - entry: bee.threads.binding:work_history
+    path: .security.policies
+  - entry: bee.threads.binding:work_scan
+    path: .security.policies
+  - entry: bee.threads.binding:turn_reserve
+    path: .security.policies
+  - entry: bee.threads.binding:turn_recover
+    path: .security.policies
+  - entry: bee.threads.binding:turn_pull
+    path: .security.policies
+  - entry: bee.threads.binding:turn_accept
+    path: .security.policies
+  - entry: bee.threads.binding:turn_observation
+    path: .security.policies
+  - entry: bee.threads.binding:work_settle
+    path: .security.policies
+  - entry: bee.threads.binding:work_uncertain
+    path: .security.policies
+  - entry: bee.threads.binding:work_cancel
+    path: .security.policies
+  - entry: bee.threads.binding:operation_lookup
+    path: .security.policies
+  - entry: bee.threads.binding:operation_describe
+    path: .security.policies
+  - entry: bee.threads.binding:feed_read
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_accept
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_describe
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_resolve
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_send
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_reply
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_list
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_ack
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_outbox_claim
+    path: .security.policies
+  - entry: bee.threads.binding:inbox_outbox_settle
+    path: .security.policies
+- name: record_types
+  kind: library.lua
+  source: file://record_types.lua
+- name: types
+  kind: library.lua
+  source: file://types.lua

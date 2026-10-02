@@ -174,7 +174,7 @@ local function member_thread(executor: funcs.Executor, request: Object, bound: s
     request.member_thread = nil
     local thread_id = bounds.id(supplied)
     if not thread_id then return nil, refused("INVALID_ARGUMENT", "member_thread must be a thread identifier") end
-    local reply, call_error = executor:call("bee.threads.service:get", {thread_id = thread_id})
+    local reply, call_error = executor:call("bee.threads.binding:get", {thread_id = thread_id})
     if call_error then return nil, refused("UNAVAILABLE", tostring(call_error)) end
     local answer = bounds.object(reply)
     local value = answer and answer.ok == true and bounds.object(answer.value) or nil

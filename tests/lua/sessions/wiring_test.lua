@@ -8,7 +8,7 @@ local function define_tests()
             for _, name in ipairs(journal.METHODS) do
                 local target, err = journal.target(name)
                 test.is_nil(err)
-                test.eq(target, "bee.threads.service:" .. name)
+                test.eq(target, "bee.threads.binding:" .. name)
             end
         end)
         test.it("registers the real owner and catalog bindings", function()

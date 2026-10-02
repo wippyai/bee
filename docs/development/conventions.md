@@ -12,7 +12,19 @@ upstream licenses.
 Folder nesting mirrors namespace nesting: each folder holding an
 `_index.yaml` file is one namespace, so `src/a/b` is `<root>.a.b`, and no
 folder re-declares its parent's namespace. There are no `host/` folders;
-host wiring lives in the app root or beside its component.
+host wiring lives in the app root or beside its component. The host component
+`src/host` is the documented desktop-owner namespace, not an installable
+component wiring subfolder. Module source roots map hyphen-separated package
+names to dotted namespaces (`git-worktree` → `bee.git.worktree`). The only
+package-root spelling exception is `modules/application/src` → `bee.app`, the
+public SDK. Namespace segments and mapped folders contain no underscores.
+No child production `src/` path diverges from its namespace.
+
+`make lint` runs `build/layout_check.py` before typed Lua lint. It checks namespace
+paths, component roots, local sources, application entries, process placement,
+host-free requirement defaults, duplicate Lua sources, orphan files and
+requirement/import targets. Domain ownership, dynamic registry discovery and
+public API reachability also require review.
 
 | Location | Owns |
 |---|---|
@@ -175,7 +187,10 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-Fixtures use disposable test workspaces and remain outside `src/`. Inspect
+Fixtures use disposable test workspaces and remain outside production `src/`.
+Test scenario folders are independent overlay roots, not namespace children;
+their indexes augment the identities under test. The complete overlay inventory
+is in [the layout audit](layout.md). Inspect
 source and assembled packs for test registrations, fixture data, test-library
 dependencies and embedded filesystem assets. Production loads only the root
 and selected modules' `src/` directories.

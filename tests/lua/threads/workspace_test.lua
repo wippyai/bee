@@ -32,7 +32,7 @@ local function bound(id: string, workspace_id: string?, grants: {string}): funcs
 end
 
 local function call(client: funcs.Executor, operation: string, request: Object): Reply
-    local result, err = client:call("bee.threads.service:" .. operation, request)
+    local result, err = client:call("bee.threads.binding:" .. operation, request)
     if err then error(operation .. ": " .. tostring(err)) end
     return harness.decode_reply(result)
 end

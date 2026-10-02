@@ -82,6 +82,17 @@ DROP TABLE bee_placement_attempts;
 ALTER TABLE bee_placement_attempts_next RENAME TO bee_placement_attempts;
 CREATE INDEX bee_placement_attempts_action ON bee_placement_attempts (owner_id, action_id);
 ]]
+local LAYOUT_REFERENCES_SQL = [[
+UPDATE bee_placement_preparer_states SET binding_id = 'bee.git.worktree:binding' WHERE binding_id = 'bee.git_worktree:binding';
+UPDATE bee_placement_preparer_states SET record_json = json_set(record_json, '$.binding_id', 'bee.git.worktree:binding') WHERE json_valid(record_json) AND json_extract(record_json, '$.binding_id') = 'bee.git_worktree:binding';
+UPDATE bee_placement_preparer_states SET record_json = json_set(record_json, '$.plan', 'bee.git.worktree.binding:plan') WHERE json_valid(record_json) AND json_extract(record_json, '$.plan') = 'bee.git_worktree:plan';
+UPDATE bee_placement_preparer_states SET record_json = json_set(record_json, '$.setup', 'bee.git.worktree.binding:setup') WHERE json_valid(record_json) AND json_extract(record_json, '$.setup') = 'bee.git_worktree:setup';
+UPDATE bee_placement_preparer_states SET record_json = json_set(record_json, '$.cleanup', 'bee.git.worktree.binding:cleanup') WHERE json_valid(record_json) AND json_extract(record_json, '$.cleanup') = 'bee.git_worktree:cleanup';
+UPDATE bee_placement_preparer_states SET record_json = json_set(record_json, '$.plan', 'bee.git.worktree.binding:plan') WHERE json_valid(record_json) AND json_extract(record_json, '$.plan') = 'bee.git.worktree:plan';
+UPDATE bee_placement_preparer_states SET record_json = json_set(record_json, '$.setup', 'bee.git.worktree.binding:setup') WHERE json_valid(record_json) AND json_extract(record_json, '$.setup') = 'bee.git.worktree:setup';
+UPDATE bee_placement_preparer_states SET record_json = json_set(record_json, '$.cleanup', 'bee.git.worktree.binding:cleanup') WHERE json_valid(record_json) AND json_extract(record_json, '$.cleanup') = 'bee.git.worktree:cleanup';
+UPDATE bee_placement_evidence SET detail = 'bee.git.worktree:binding' WHERE kind IN ('workdir_preparer.cleaned', 'workdir_preparer.setup', 'workdir_preparer.state') AND detail = 'bee.git_worktree:binding';
+]]
 local list: {Migration} = {
     {id = 1, name = "placement_attempts", sql = ATTEMPTS_SQL, rebuild = false},
     {id = 2, name = "terminal_exit_source", sql = TERMINAL_EXIT_SQL, rebuild = true},
@@ -148,6 +159,7 @@ FROM bee_placement_evidence
 WHERE kind = 'workdir_preparer.state'
   AND substr(ltrim(detail), 1, 1) = '{';
 ]], rebuild = false},
+    {id = 8, name = "layout_registry_references", sql = LAYOUT_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

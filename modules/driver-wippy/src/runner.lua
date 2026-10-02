@@ -10,7 +10,7 @@ local types = require("types")
 local driver_configuration = require("driver_configuration")
 
 local M = {}
-local THREADS = "bee.threads.service"
+local THREADS = "bee.threads.binding"
 type CheckpointTerminal = {outcome: types.Outcome, answer: string?}
 type Checkpoint = {messages: {types.Message}, terminal: CheckpointTerminal?}
 type InboxContent = {text: string?, artifact_ref: string?}

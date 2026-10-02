@@ -10,9 +10,9 @@ local prestart = require("prestart")
 
 local M = {}
 local MAX_ANSWER_BYTES = 16384
-local CARRIER = "bee.threads.carrier"
-local THREADS = "bee.threads.service"
-local DELIVERY = "bee.threads.delivery"
+local CARRIER = "bee.threads.binding"
+local THREADS = "bee.threads.binding"
+local DELIVERY = "bee.threads.binding"
 local CHECKPOINT = CARRIER .. ":checkpoint"
 local CANCEL_INTENT = CARRIER .. ":cancel_intent"
 local CANCEL_STATUS = CARRIER .. ":cancel_status"

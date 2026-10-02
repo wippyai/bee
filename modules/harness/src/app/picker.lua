@@ -46,7 +46,7 @@ function M.direct(workspace_id: string, definition_ref: string, thread_id: strin
     origin_view: {view_id: string, instance_id: string}?): (admission.Admitted?, string?)
     local plan, refused = admission.resolve(definition_ref, "window", workspace_id)
     if not plan then return nil, fault(refused) end
-    local setup, setup_error = funcs.call("bee.harness.launch:setup", {
+    local setup, setup_error = funcs.call("bee.harness.binding:setup", {
         workspace_id = workspace_id, definition_ref = definition_ref,
         expected_plan_digest = plan.plan_digest})
     local prepared = bounds.object(setup)

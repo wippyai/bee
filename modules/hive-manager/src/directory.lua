@@ -7,8 +7,8 @@ local bounds = require("bounds")
 local contract = require("contract")
 local M = {}
 M.TELEMETRY = "bee.hive.telemetry"
-M.PRESENCE = "bee.hive.telemetry:presence"
-M.STATS = "bee.hive.telemetry:stats"
+M.PRESENCE = "bee.hive.telemetry.binding:presence"
+M.STATS = "bee.hive.telemetry.binding:stats"
 M.MAX_NODES = 64
 -- One page of a node's workspaces, and its cursor bound.
 M.PAGE = 50

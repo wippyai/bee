@@ -41,14 +41,14 @@ entries:
     - close
     - record
     - read_after
-    - bee.threads.service:create
-    - bee.threads.service:get
-    - bee.threads.service:list
-    - bee.threads.service:join
-    - bee.threads.service:leave
-    - bee.threads.service:close
-    - bee.threads.service:record
-    - bee.threads.service:read_after
+    - bee.threads.binding:create
+    - bee.threads.binding:get
+    - bee.threads.binding:list
+    - bee.threads.binding:join
+    - bee.threads.binding:leave
+    - bee.threads.binding:close
+    - bee.threads.binding:record
+    - bee.threads.binding:read_after
     effect: allow
 - name: application_thread_membership_policy
   kind: security.policy
@@ -56,7 +56,7 @@ entries:
     comment: Broker-only executor for owner-authenticated application membership reconciliation
   policy:
     actions: [funcs.call]
-    resources: [bee.threads.service:get, bee.threads.service:join, bee.threads.service:leave]
+    resources: [bee.threads.binding:get, bee.threads.binding:join, bee.threads.binding:leave]
     effect: allow
 - name: application_thread_alias_policy
   kind: security.policy
@@ -72,7 +72,7 @@ entries:
     comment: Application broker transport for alias attestation operations
   policy:
     actions: [funcs.call]
-    resources: [bee.threads.service:register_app_alias, bee.threads.service:retire_app_alias, bee.threads.service:fence_app]
+    resources: [bee.threads.binding:register_app_alias, bee.threads.binding:retire_app_alias, bee.threads.binding:fence_app]
     effect: allow
 - name: application_thread_facade_policy
   kind: security.policy
@@ -80,10 +80,10 @@ entries:
     comment: Broker-only executor for one authenticated application's active bound thread
   policy:
     actions: [funcs.call]
-    resources: [bee.threads.service:read_after, bee.threads.service:record,
-      bee.threads.delivery:subscribe, bee.threads.delivery:page,
-      bee.threads.delivery:ack_page, bee.threads.delivery:resume,
-      bee.threads.delivery:unsubscribe]
+    resources: [bee.threads.binding:read_after, bee.threads.binding:record,
+      bee.threads.binding:subscribe, bee.threads.binding:page,
+      bee.threads.binding:ack_page, bee.threads.binding:resume,
+      bee.threads.binding:unsubscribe]
     effect: allow
 - name: thread_lifecycle_client_policy
   kind: security.policy
@@ -100,12 +100,12 @@ entries:
     - request_turn
     - end_turn
     - receipt
-    - bee.threads.service:admit_action
-    - bee.threads.service:prepare_attempt
-    - bee.threads.service:start_attempt
-    - bee.threads.service:request_turn
-    - bee.threads.service:end_turn
-    - bee.threads.service:receipt
+    - bee.threads.binding:admit_action
+    - bee.threads.binding:prepare_attempt
+    - bee.threads.binding:start_attempt
+    - bee.threads.binding:request_turn
+    - bee.threads.binding:end_turn
+    - bee.threads.binding:receipt
     effect: allow
 - name: thread_delivery_client_policy
   kind: security.policy
@@ -131,43 +131,21 @@ entries:
     - forget_subscription
     - wait
     - watch
-    - bee.threads.delivery:claim
-    - bee.threads.delivery:dispatch
-    - bee.threads.delivery:ack
-    - bee.threads.delivery:release
-    - bee.threads.delivery:expire
-    - bee.threads.delivery:reconcile
-    - bee.threads.delivery:subscribe
-    - bee.threads.delivery:page
-    - bee.threads.delivery:ack_page
-    - bee.threads.delivery:unsubscribe
-    - bee.threads.delivery:resume
-    - bee.threads.delivery:close_subscription
-    - bee.threads.delivery:forget_subscription
-    - bee.threads.delivery:wait
-    - bee.threads.delivery:watch
-    effect: allow
-- name: thread_projection_client_policy
-  kind: security.policy
-  policy:
-    actions:
-    - contract.open
-    - contract.call
-    - funcs.call
-    resources:
-    - bee.threads:projection_local
-    - recap_read
-    - recap_update
-    - recap_rebuild
-    - status_read
-    - status_update
-    - status_rebuild
-    - bee.threads.projection:recap_read
-    - bee.threads.projection:recap_update
-    - bee.threads.projection:recap_rebuild
-    - bee.threads.projection:status_read
-    - bee.threads.projection:status_update
-    - bee.threads.projection:status_rebuild
+    - bee.threads.binding:delivery_claim
+    - bee.threads.binding:dispatch
+    - bee.threads.binding:ack
+    - bee.threads.binding:release
+    - bee.threads.binding:expire
+    - bee.threads.binding:reconcile
+    - bee.threads.binding:subscribe
+    - bee.threads.binding:page
+    - bee.threads.binding:ack_page
+    - bee.threads.binding:unsubscribe
+    - bee.threads.binding:resume
+    - bee.threads.binding:close_subscription
+    - bee.threads.binding:forget_subscription
+    - bee.threads.binding:wait
+    - bee.threads.binding:watch
     effect: allow
 - name: thread_create_policy
   kind: security.policy
@@ -225,23 +203,7 @@ entries:
     resources:
     - bee.threads:approvals_local
     - append
-    - bee.threads.approvals:append
-    effect: allow
-- name: thread_carrier_client_policy
-  kind: security.policy
-  policy:
-    actions:
-    - contract.open
-    - contract.call
-    - funcs.call
-    resources:
-    - bee.threads:carrier_local
-    - claim
-    - commit
-    - checkpoint
-    - bee.threads.carrier:claim
-    - bee.threads.carrier:commit
-    - bee.threads.carrier:checkpoint
+    - bee.threads.binding:append
     effect: allow
 - name: thread_waiter_policy
   kind: security.policy.expr

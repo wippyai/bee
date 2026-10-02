@@ -69,7 +69,7 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
     if not matches(native, request) or native.execution_state ~= "exited" then
         return false, "previous native process exit is not proven"
     end
-    local claimed, claim_error = call(raw_call, "bee.threads.carrier:claim", {thread_id = request.thread_id,
+    local claimed, claim_error = call(raw_call, "bee.threads.binding:claim", {thread_id = request.thread_id,
         attempt_id = request.previous_attempt_id, idempotency_key = key()})
     if not claimed then return false, claim_error end
     if claimed.attempt_id ~= request.previous_attempt_id or claimed.action_id ~= request.action_id then
@@ -112,7 +112,7 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
     if not draining or not hooks.finished(state) or state.unresolved then
         return false, "interrupted window hooks are not fully drained"
     end
-    local settled, settle_error = call(raw_call, "bee.threads.service:receipt", {thread_id = request.thread_id,
+    local settled, settle_error = call(raw_call, "bee.threads.binding:receipt", {thread_id = request.thread_id,
         idempotency_key = "launch:" .. request.previous_attempt_id .. ":window:recovered:" .. tostring(epoch),
         action_id = request.action_id, attempt_id = request.previous_attempt_id, carrier_epoch = epoch,
         receipt = {scope = "attempt", outcome = "uncertain", evidence_refs = {},

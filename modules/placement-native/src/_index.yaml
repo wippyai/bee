@@ -67,7 +67,6 @@ entries:
   meta:
     comment: Process host that runs attempt runners and the supervision sweeper; an
       assembly may override the Bee default
-  default: bee:workers
   targets:
   - entry: bee.placement.native:runner_host_ref
     path: .host_ref
@@ -75,16 +74,9 @@ entries:
     path: .host
 - name: sweeper_policies
   kind: ns.requirement
+  default: []
   meta:
     comment: Host-selected policy grants for the supervision sweeper
-  default:
-  - bee.placement.native.security:placement_store_policy
-  - bee.placement.native.security:placement_exec_policy
-  - bee.placement.native.security:placement_service_policy
-  - bee.resources.security:resource_resolve_policy
-  - bee.credentials.security:credential_materialize_policy
-  - bee.placement.native.security:placement_sweeper_policy
-  - bee.security.gateway:gateway_supervision_policy
   targets:
   - entry: bee.placement.native.service:sweeper_service
     path: .lifecycle.security.policies
@@ -284,26 +276,47 @@ entries:
   imports:
     types: bee.placement:types
     materialization: bee.placement.native.service:materialization
-- name: process_runner
-  kind: library.lua
-  source: file://service/runner.lua
-  modules:
-  - process
-  - channel
-  - time
-  - sql
-  - exec
-  - funcs
-  imports:
-    service: bee.placement.native.service:service
-    materialization: bee.placement.native.service:materialization
-    store: bee.placement.native.persist:store
-    executable: bee.placement.native.service:executable
-    resources: bee.placement.native:resources
-    identity: bee.placement.native.service:identity
-    output_buffer: bee.placement.native.service:output_buffer
-    protocol: bee.placement.native:protocol
-    quote: bee.driver.kit:quote
-    types: bee.placement:types
-    process_backend: bee.placement.native:process_backend
-    bounds: bee.protocol:bounds
+- name: target_prepare_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.placement.native.binding:prepare
+    path: .security.policies
+  - entry: bee.placement.native.binding:start
+    path: .security.policies
+  - entry: bee.placement.native.binding:status
+    path: .security.policies
+  - entry: bee.placement.native.binding:stop
+    path: .security.policies
+  - entry: bee.placement.native.binding:capabilities
+    path: .security.policies
+  - entry: bee.placement.native.binding:measure_executable
+    path: .security.policies
+  - entry: bee.placement.native.binding:close_stdin
+    path: .security.policies
+  - entry: bee.placement.native.binding:reconcile
+    path: .security.policies
+  - entry: bee.placement.native.binding:cleanup
+    path: .security.policies
+  - entry: bee.placement.native.binding:evidence
+    path: .security.policies
+  - entry: bee.placement.native.binding:attach
+    path: .security.policies
+- name: target_stop_revoked_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.placement.native.binding:stop_revoked
+    path: .security.policies
+- name: target_runner_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.placement.native.service:runner
+    path: .security.policies

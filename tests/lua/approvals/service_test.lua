@@ -130,7 +130,7 @@ local function replace_approvers(value: {unknown})
     if not applied then error("replace test approvers: " .. tostring(apply_error)) end
 end
 local function proposal(payload: {[string]: unknown}?): {[string]: unknown}
-    return {kind = "operation", ref = "bee.harness.launch:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
+    return {kind = "operation", ref = "bee.harness.binding:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
 end
 local function attempt_proposal(action_id: string?, attempt_id: string): {[string]: unknown}
     return {kind = "attempt", ref = attempt_id, revision = "r1", action_id = action_id, payload = {tool = "Bash", correlation_id = "c-1"}}
@@ -145,14 +145,14 @@ local function request_of(workspace: string, extra: {[string]: unknown}?): {[str
 end
 local function thread(): string
     local thread_id = "thread-" .. key()
-    local reply, err = requester:call("bee.threads.service:create", {thread_id = thread_id, idempotency_key = key(), title = "Approvals"})
+    local reply, err = requester:call("bee.threads.binding:create", {thread_id = thread_id, idempotency_key = key(), title = "Approvals"})
     if err then error("create thread: " .. tostring(err)) end
     local typed = principals.replayed_reply(reply)
     if not typed.ok then error("create thread: " .. tostring(typed.error and typed.error.message)) end
     return thread_id
 end
 local function records_of(thread_id: string, kinds: {string}): {{[string]: unknown}}
-    local reply, err = requester:call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = kinds}})
+    local reply, err = requester:call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = kinds}})
     if err then error("read thread: " .. tostring(err)) end
     local typed = principals.replayed_reply(reply)
     if not typed.ok then error("read thread: " .. tostring(typed.error and typed.error.message)) end
@@ -170,7 +170,7 @@ local function await_records(thread_id: string, kinds: {string}, count: integer)
     local records: {{[string]: unknown}} = {}
     local cursor = 0
     while #records < count do
-        local reply, err = requester:call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor,
+        local reply, err = requester:call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor,
             limit = 64, filter = {kinds = kinds}})
         if err then error("read thread: " .. tostring(err)) end
         local page = value(principals.replayed_reply(reply))
@@ -180,7 +180,7 @@ local function await_records(thread_id: string, kinds: {string}, count: integer)
         if page.has_more ~= true then
             local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
             if remaining <= 0 then error("thread " .. thread_id .. " retained only " .. tostring(#records) .. " of " .. tostring(count) .. " records") end
-            local watched, watch_error = requester:call("bee.threads.delivery:watch", {thread_id = thread_id,
+            local watched, watch_error = requester:call("bee.threads.binding:watch", {thread_id = thread_id,
                 after_sequence = cursor, wait_ms = remaining})
             if watch_error then error("watch thread: " .. tostring(watch_error)) end
             value(principals.replayed_reply(watched))

@@ -24,7 +24,7 @@ local function fresh(prefix: string): string
 end
 
 local function run_cmd(args: {string}): (string?, integer?, string?)
-    local executor, exec_err = exec.get("bee.git_worktree:git_executor")
+    local executor, exec_err = exec.get("bee.git.worktree:git_executor")
     if not executor then return nil, 1, "no executor: " .. tostring(exec_err) end
     local proc, err = executor:exec(quote.line(args), {})
     if not proc then return nil, 1, tostring(err) end
@@ -243,10 +243,10 @@ local function define_tests()
             test.is_true(#preparers >= 1)
             local found_git_wt = false
             for _, p in ipairs(preparers) do
-                if p.binding_id == "bee.git_worktree:binding" then
+                if p.binding_id == "bee.git.worktree:binding" then
                     found_git_wt = true
-                    test.eq(p.setup, "bee.git_worktree:setup")
-                    test.eq(p.cleanup, "bee.git_worktree:cleanup")
+                    test.eq(p.setup, "bee.git.worktree.binding:setup")
+                    test.eq(p.cleanup, "bee.git.worktree.binding:cleanup")
                 end
             end
             test.is_true(found_git_wt)
@@ -333,7 +333,7 @@ local function define_tests()
             local req = make_request(fresh("legacy-truncated"))
             claim_attempt(db, req)
             store.transition(db, req.attempt_id, {evidence = {kind = "workdir_preparer.state",
-                detail = '{"binding_id":"bee.git_worktree:binding"'}})
+                detail = '{"binding_id":"bee.git.worktree:binding"'}})
             store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
                 evidence = {kind = "child.not_started", detail = "truncated legacy state fixture"}})
             apply_legacy_preparer_backfill(db)

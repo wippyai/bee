@@ -22,7 +22,7 @@ type Form = {leases: {string}?, readiness: string?, credentials: {string}?,confl
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
 
 local function call(request: unknown): ({[string]: unknown}?, string?)
-    local raw, err = funcs.call("bee.harness.profiles:call", request)
+    local raw, err = funcs.call("bee.harness.binding:call", request)
     if err then return nil, tostring(err) end
     local reply = bounds.object(raw)
     if not reply then return nil, "Profile store returned an invalid reply" end

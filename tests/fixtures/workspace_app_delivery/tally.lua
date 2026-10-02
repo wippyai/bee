@@ -17,7 +17,7 @@ local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "r", verb =
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid launch") end
-    local owned, read_error = funcs.call("bee.threads.service:list", {limit = 1})
+    local owned, read_error = funcs.call("bee.threads.binding:list", {limit = 1})
     if read_error or not owned or owned.ok ~= true then error("Owned thread read grant is unavailable") end
     -- The host confines the granted volume to the approved subroot and the
     -- database to its dedicated file; their identities come from the host.

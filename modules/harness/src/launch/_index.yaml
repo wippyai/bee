@@ -50,28 +50,6 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     driver_resolver: bee.driver:resolver
-- name: resolve
-  kind: function.lua
-  source: file://resolve_method.lua
-  method: handle
-  imports:
-    admission: bee.harness.launch:admission
-    bounds: bee.threads.records:bounds
-- name: admit
-  kind: function.lua
-  source: file://admit_method.lua
-  method: handle
-  imports:
-    admission: bee.harness.launch:admission
-- name: start
-  kind: function.lua
-  source: file://start_method.lua
-  method: handle
-  imports:
-    admission: bee.harness.launch:admission
-  security:
-    policies:
-    - bee.harness.security:launch_spawn_policy
 - name: selection
   kind: library.lua
   source: file://selection.lua
@@ -110,19 +88,6 @@ entries:
   source: file://probe_version.lua
   imports:
     bounds: bee.threads.records:bounds
-- name: locate_probe
-  kind: function.lua
-  source: file://locate_probe.lua
-  method: handle
-  modules:
-  - registry
-  imports:
-    bounds: bee.threads.records:bounds
-    locator: bee.harness.launch:locate
-  security:
-    policies:
-    - bee.harness.security:launch_locate_probe_policy
-    - bee.harness.security:launch_docker_readiness_policy
 - name: readiness
   kind: library.lua
   source: file://readiness.lua
@@ -132,32 +97,6 @@ entries:
     bounds: bee.threads.records:bounds
     driver_locate: bee.driver:locate
     driver_types: bee.driver:types
-- name: setup_backend
-  kind: function.lua
-  source: file://setup_backend.lua
-  method: handle
-  modules:
-  - hash
-  - funcs
-  - registry
-  - security
-  imports:
-    bounds: bee.threads.records:bounds
-    definition: bee.harness.launch:definitions
-- name: setup
-  kind: function.lua
-  source: file://setup_method.lua
-  method: handle
-  modules:
-  - funcs
-  - security
-  imports:
-    bounds: bee.threads.records:bounds
-    admission: bee.harness.launch:admission
-    profiles: bee.harness.profiles:protocol
-  security:
-    policies:
-    - bee.harness.launch:setup_facade_policy
 - name: managed_run
   kind: library.lua
   source: file://managed_run.lua
@@ -190,7 +129,7 @@ entries:
   kind: security.policy.expr
   policy:
     expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope")
-      || (action == "funcs.call" && resource == "bee.harness.launch:setup_backend") || action == "registry.snapshot"
+      || (action == "funcs.call" && resource == "bee.harness.binding:setup_backend") || action == "registry.snapshot"
     actions:
     - funcs.security
     - security.policy_group.get
@@ -203,13 +142,3 @@ entries:
   storage: bee.harness.host:environment
   variable: environment_names
   readonly: true
-
-- name: present
-  kind: function.lua
-  source: file://presentation_method.lua
-  method: open
-  modules: [funcs, security]
-  imports:
-    bounds: bee.threads.records:bounds
-  security:
-    policies: [bee.harness.security:presentation_facade_policy]

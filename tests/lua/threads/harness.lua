@@ -26,7 +26,7 @@ function M.decode_reply(raw: unknown): Reply
     return {ok = reply.ok, error = fault, value = reply.value, replayed = reply.replayed}
 end
 M.RESOURCE = "bee.threads:db"
-local SERVICE = "bee.threads.service:"
+local SERVICE = "bee.threads.binding:"
 local DELIVERY = {claim = true, dispatch = true, ack = true, release = true, expire = true, reconcile = true, subscribe = true, page = true, ack_page = true, unsubscribe = true, resume = true, close_subscription = true, forget_subscription = true, wait = true, watch = true}
 local CLIENT_POLICY = "bee.threads:client_test_policy"
 local function scope_for(grants: {string}): security.Scope
@@ -47,10 +47,10 @@ function M.principal(id: string, grants: {string}, workspace_id: string?): Clien
     local scope = scope_for(grants)
     local function call(self: Client, operation: string, request: {[string]: unknown}): Reply
         local target = SERVICE .. operation
-        if DELIVERY[operation] then target = "bee.threads.delivery:" .. operation end
-        if operation:sub(1, 6) == "recap_" or operation:sub(1, 7) == "status_" then target = "bee.threads.projection:" .. operation end
-        if operation:sub(1, 8) == "carrier_" then target = "bee.threads.carrier:" .. operation:sub(9) end
-        if operation == "approval_append" then target = "bee.threads.approvals:append" end
+        if DELIVERY[operation] then target = "bee.threads.binding:" .. (operation == "claim" and "delivery_claim" or operation) end
+        if operation:sub(1, 6) == "recap_" or operation:sub(1, 7) == "status_" then target = "bee.threads.binding:" .. operation end
+        if operation:sub(1, 8) == "carrier_" then target = "bee.threads.binding:" .. operation:sub(9) end
+        if operation == "approval_append" then target = "bee.threads.binding:append" end
         local result, err = funcs.new():with_actor(actor):with_scope(scope):call(target, request)
         if err then error("call " .. operation .. ": " .. tostring(err)) end
         if type(result) ~= "table" then error("call " .. operation .. " returned " .. type(result)) end
@@ -58,7 +58,7 @@ function M.principal(id: string, grants: {string}, workspace_id: string?): Clien
     end
     local function start(self: Client, operation: string, request: {[string]: unknown}): funcs.Future
         local target = SERVICE .. operation
-        if DELIVERY[operation] then target = "bee.threads.delivery:" .. operation end
+        if DELIVERY[operation] then target = "bee.threads.binding:" .. (operation == "claim" and "delivery_claim" or operation) end
         local future, err = funcs.new():with_actor(actor):with_scope(scope):async(target, request)
         if err or not future then error("async " .. operation .. ": " .. tostring(err)) end
         return future

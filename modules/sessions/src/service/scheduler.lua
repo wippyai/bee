@@ -318,7 +318,7 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
         driver_methods = route.driver_methods, budget = turn.budget,
         session_budget = (object(route.budgets) or {}).session, session_consumption = turn.session_consumption, supervision = route.supervision,
         placement_methods = route.placement_methods, checkpoint = context}
-    local observation_target: string? = "bee.threads.service:turn_observation"
+    local observation_target: string? = "bee.threads.binding:turn_observation"
     if journal.target then
         local selected_target, target_error = journal.target("turn_observation")
         if target_error or not selected_target then

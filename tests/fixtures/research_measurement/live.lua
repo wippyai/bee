@@ -31,7 +31,7 @@ local function call(target: string, request: Object): Object
 end
 local function wait_for_live_inputs()
     for _ = 1, 300 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.binding:address", {})
         local address = not address_error and bounds.object(raw) or nil
         local candidate = registry.get("bee.research.demo:measure")
         if address and type(address.address) == "string" and address.address:match("^127%.0%.0%.1:%d+$")
@@ -149,7 +149,7 @@ local function measurements(thread_id: string, action_id: string, attempt_id: st
     local found: {[string]: Object} = {}
     local cursor = 0
     for _ = 1, 32 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64,
+        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64,
             filter = {kinds = {"observation"}, action_id = action_id}})
         local records = page.records
         if type(records) ~= "table" then error("thread observation page is missing records") end
@@ -196,8 +196,8 @@ local function run(): Object
     local actor = bounds.id(current:id())
     if not actor or actor == PRODUCER then error("live measurement operator must differ from the producer") end
     wait_for_live_inputs()
-    local plan = call("bee.harness.launch:resolve", {definition_ref = DEFINITION})
-    local setup, setup_error = funcs.call("bee.harness.launch:setup", {workspace_id = WORKSPACE, definition_ref = DEFINITION,
+    local plan = call("bee.harness.binding:resolve", {definition_ref = DEFINITION})
+    local setup, setup_error = funcs.call("bee.harness.binding:setup", {workspace_id = WORKSPACE, definition_ref = DEFINITION,
         expected_plan_digest = plan.plan_digest})
     if setup_error or object(setup, "setup reply").ok ~= true then error("managed Agy setup failed: " .. tostring(setup_error)) end
     local request_id = "research-measurement-live-" .. tostring(time.now():unix_nano())
@@ -207,7 +207,7 @@ local function run(): Object
         .. "Read the session again and select research:measure using the current revision and an empty context. "
         .. "Then call call_tool for research_measure exactly once with label baseline and once with label candidate. "
         .. "Report correctness and outcomes before comparing timings. Do not claim measurements unless the tools returned them."
-    local started = call("bee.harness.launch:start", {request_id = request_id, definition_ref = DEFINITION,
+    local started = call("bee.harness.binding:start", {request_id = request_id, definition_ref = DEFINITION,
         workspace_id = WORKSPACE, thread_id = THREAD, brief = brief})
     local action_id, attempt_id = bounds.id(started.action_id), bounds.id(started.attempt_id)
     local pid = bounds.id(started.carrier)

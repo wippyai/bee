@@ -89,11 +89,11 @@ func copyRunnerFixture(root, repo string) error {
 	if err := os.MkdirAll(filepath.Join(root, ".wippy"), 0700); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(root, "src/hub"), 0700); err != nil {
-		return err
-	}
-	for _, name := range []string{"migrations.lua", "migration_runner.lua"} {
-		if err := copyFile(filepath.Join(repo, "src/hub", name), filepath.Join(root, "src/hub", name)); err != nil {
+	for destination, source := range map[string]string{
+		"migrations.lua":       "modules/hub/src/migrations.lua",
+		"migration_runner.lua": "modules/hub/src/binding/migration_runner.lua",
+	} {
+		if err := copyFile(filepath.Join(repo, source), filepath.Join(root, "src", destination)); err != nil {
 			return err
 		}
 	}

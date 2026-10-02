@@ -7,7 +7,7 @@ local time = require("time")
 local client = require("client")
 local types = require("types")
 local OWNER = {node_id = "local", service_id = "bee.hive.telemetry"}
-local TARGET = {operation_ref = "bee.hive.telemetry:stats"}
+local TARGET = {operation_ref = "bee.hive.telemetry.binding:stats"}
 local supervisor_sequence = 0
 local function spawn_supervisor(host: string): (string, Channel<process.Event>)
     supervisor_sequence = supervisor_sequence + 1

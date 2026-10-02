@@ -7,6 +7,13 @@ local json = require("json")
 local locate = require("locate")
 local function define_tests()
     test.describe("Docker descriptor probes", function()
+        test.it("rejects a native client without a callable cleanup operation before launching", function()
+            for _, client in ipairs({false, {}, {remove_container = true}}) do
+                local output, err = probe.run(client, "sha256:" .. string.rep("a", 64), "codex", {"--version"})
+                test.is_nil(output)
+                test.eq(err, "Docker cleanup client is invalid")
+            end
+        end)
         test.it("uses cached immutable images with isolated help and version commands", function()
             local image = "sha256:" .. string.rep("a", 64)
             for _, args in ipairs({{"--version"}, {"exec", "--help"}}) do

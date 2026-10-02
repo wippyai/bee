@@ -21,49 +21,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
-
-func stageHiveSupervisorDesktop(t *testing.T, source string) {
-	t.Helper()
-	path := filepath.Join(source, "hive", "desktop", "_index.yaml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var manifest struct {
-		Version   string                   `yaml:"version"`
-		Namespace string                   `yaml:"namespace"`
-		Entries   []map[string]interface{} `yaml:"entries"`
-	}
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
-		t.Fatalf("decode Hive desktop fixture manifest: %v", err)
-	}
-	if manifest.Namespace != "bee.hive.desktop" {
-		t.Fatalf("Hive desktop fixture namespace = %q", manifest.Namespace)
-	}
-	wanted := map[string]bool{"protocol": true, "catalog": true, "session_policy": true, "owner": true, "host_policy": true, "catalog_call_policy": true}
-	entries := make([]map[string]interface{}, 0, len(wanted))
-	for _, entry := range manifest.Entries {
-		name, _ := entry["name"].(string)
-		if wanted[name] {
-			entries = append(entries, entry)
-			delete(wanted, name)
-		}
-	}
-	if len(wanted) != 0 {
-		t.Fatalf("Hive desktop fixture is missing bridge entries: %v", wanted)
-	}
-	manifest.Entries = entries
-	data, err = yaml.Marshal(&manifest)
-	if err != nil {
-		t.Fatalf("encode Hive desktop fixture manifest: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // The staged host admits node-0 to the telemetry stats operation on every
 // node; node-1 stays outside the audience while presence stays unlisted.
@@ -117,56 +75,8 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 			t.Fatal(err)
 		}
 	}
-	stageHiveSupervisorDesktop(t, sourceSnapshot)
 	stageHiveExposureAudiences(t, sourceSnapshot)
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
-		t.Fatal(err)
-	}
-	for _, dependency := range []struct{ directory, source, manifest string }{
-		{"profile_access", "modules/driver/src/profiles/profile_access.lua", "version: '1.0'\nnamespace: bee.driver.profiles\nentries:\n- name: profile_access\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    bounds: bee.values:bounds\n"},
-		{"profile_protocol", "modules/harness/src/profiles/protocol.lua", "version: '1.0'\nnamespace: bee.harness.profiles\nentries:\n- name: protocol\n  kind: library.lua\n  source: file://source.lua\n  modules: [json]\n  imports:\n    access: bee.driver.profiles:profile_access\n    bounds: bee.values:bounds\n    budgets: bee.threads.records:budgets\n    canonical: bee.values:canonical\n"},
-		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
-		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.app:arguments\n    bounds: bee.values:bounds\n"},
-		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
-		{"workspace_binding", "modules/workspace/src/types/selection.lua", "version: '1.0'\nnamespace: bee.workspace.types\nentries:\n- name: selection\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.values:bounds\n"},
-		{"workspace_host_leases", "modules/workspace/src/client/host_leases.lua", "version: '1.0'\nnamespace: bee.workspace.client\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n  imports:\n    bounds: bee.values:bounds\n"},
-	} {
-		directory := filepath.Join(sourceSnapshot, dependency.directory)
-		if err := os.MkdirAll(directory, 0700); err != nil {
-			t.Fatal(err)
-		}
-		body, err := os.ReadFile(filepath.Join(repository, dependency.source))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(directory, "source.lua"), body, 0600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(directory, "_index.yaml"), []byte(dependency.manifest), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	retainedManifest := filepath.Join(sourceSnapshot, "retained_protocol/_index.yaml")
-	retained, err := os.ReadFile(retainedManifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	retained = append(retained, []byte("    arguments: bee.app:arguments\n    clipboard: bee.client.types:clipboard\n")...)
-	if err := os.WriteFile(retainedManifest, retained, 0600); err != nil {
-		t.Fatal(err)
-	}
-	clipboard, err := os.ReadFile(filepath.Join(repository, "modules/client/src/types/clipboard.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	clipboardDir := filepath.Join(sourceSnapshot, "clipboard")
-	if err := os.MkdirAll(clipboardDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(clipboardDir, "clipboard.lua"), clipboard, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client.types\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	host, err := os.ReadFile(filepath.Join(fixtureSnapshot, "host.manifest"))
@@ -175,6 +85,27 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	}
 	if err := os.WriteFile(filepath.Join(sourceSnapshot, "_index.yaml"), host, 0600); err != nil {
 		t.Fatal(err)
+	}
+	composition, err := os.ReadFile(filepath.Join(repository, "src", "deps", "_index.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(composition), "- name: hive\n")
+	end := strings.Index(string(composition), "- name: hive_telemetry\n")
+	if start < 0 || end <= start {
+		t.Fatal("production Hive dependency selection is missing")
+	}
+	deps := filepath.Join(sourceSnapshot, "deps")
+	if err := os.MkdirAll(deps, 0700); err != nil {
+		t.Fatal(err)
+	}
+	selected := "version: '1.0'\nnamespace: bee.deps\nentries:\n" + string(composition)[start:end]
+	if err := os.WriteFile(filepath.Join(deps, "_index.yaml"), []byte(selected), 0600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("python3", filepath.Join(repository, "tests", "hive_component_fixture.py"), root, sourceSnapshot)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("compose Hive host libraries: %v\n%s", err, output)
 	}
 	return sourceSnapshot, fixtureSnapshot
 }
@@ -262,42 +193,24 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 			t.Fatal(err)
 		}
 	}
-	for _, directory := range []string{"application_arguments"} {
-		if err := os.RemoveAll(filepath.Join(source, directory)); err != nil {
-			t.Fatal(err)
-		}
-	}
 	// The feeds composition stages the production approver policies from the
 	// app root, where the host owns them, instead of a module-side folder.
-	rootIndex, err := os.ReadFile(filepath.Join(repository, "src", "_index.yaml"))
+	rootIndex, err := os.ReadFile(filepath.Join(repository, "src", "security", "approvals", "_index.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	anchor := "\n- name: approver_policies\n"
-	start := strings.Index(string(rootIndex), anchor)
-	if start < 0 {
-		t.Fatal("production approver policies left the app root")
-	}
-	rest := string(rootIndex)[start+1:]
-	if end := strings.Index(rest, "\n- name: "); end > 0 {
-		rest = rest[:end] + "\n"
+	if !strings.Contains(string(rootIndex), "- name: approver_policies\n") {
+		t.Fatal("production approver policies are missing")
 	}
 	stagedRoot := filepath.Join(source, "_index.yaml")
+	// The approvals module takes its policies only through the dependency,
+	// mirroring the production bee.deps wiring.
 	staged, err := os.ReadFile(stagedRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(stagedRoot, append(staged, []byte(rest)...), 0600); err != nil {
-		t.Fatal(err)
-	}
-	// The approvals module takes its policies only through the dependency,
-	// mirroring the production bee.deps wiring.
-	staged, err = os.ReadFile(stagedRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
 	dependency := "- name: dependency_approvals\n  kind: ns.dependency\n  component: bee/approvals\n" +
-		"  version: 0.1.0-dev\n  parameters:\n  - name: target_db\n    value: bee.approvals:db\n" +
+		"  version: 0.1.0-dev\n  parameters:\n  - name: target_db\n    value: bee.approvals.env:db\n" +
 		"  - name: target_policies\n    value: bee.security.approvals:approver_policies\n" +
 		"  - name: process_host\n    value: bee:workers\n" +
 		"  - name: authority_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]\n" +

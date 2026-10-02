@@ -71,7 +71,7 @@ local function define_tests()
             test.is_false(call_can(scope, "process.registry.register", "unrelated.name"))
             test.is_false(call_can(scope, "process.registry.foreign", "bee.threads.waiter"))
             test.is_false(call_can(scope, "process.host", "bee:workers"))
-            test.is_false(call_can(scope, "process.spawn", "bee.hive.supervisor:main"))
+            test.is_false(call_can(scope, "process.spawn", "bee.hive.service:supervisor"))
             test.is_false(call_can(scope, "db.get", "bee.threads.env:db"))
             test.is_false(call_can(scope, "security.scope.create", "scope"))
         end)
@@ -145,7 +145,7 @@ local function define_tests()
             test.is_true(call_can(scope, "process.spawn", "bee.apps:welcome"))
             -- Core spawn boundary explicitly denies core and supervisor processes
             test.is_false(call_can(scope, "process.spawn", "bee.apps:broker"))
-            test.is_false(call_can(scope, "process.spawn", "bee.hive.supervisor:main"))
+            test.is_false(call_can(scope, "process.spawn", "bee.hive.service:supervisor"))
             test.is_false(call_can(scope, "process.spawn", "bee.hive:supervisor"))
             -- Process send remains allowed
             test.is_true(call_can(scope, "process.send", "target:process"))
@@ -171,7 +171,7 @@ local function define_tests()
             }
             -- Spawning supervisor entries is strictly denied
             for _, action in ipairs({"process.spawn", "process.spawn.monitored", "process.spawn.linked", "process.exec"}) do
-                test.is_false(call_can(scope, action, "bee.hive.supervisor:main"))
+                test.is_false(call_can(scope, action, "bee.hive.service:supervisor"))
                 test.is_false(call_can(scope, action, "bee.hive:supervisor"))
                 test.is_false(call_can(scope, action, "bee.hive.service:supervisor_host"))
                 test.is_true(call_can(scope, action, "bee.apps:welcome"))
@@ -191,7 +191,7 @@ local function define_tests()
             test.is_false(call_can(scope, "process.host", "bee.hive.service:supervisor_host"))
             test.is_false(call_can(scope, "process.host", "foreign:host"))
             -- App scope cannot spawn supervisor entries or arbitrary apps
-            test.is_false(call_can(scope, "process.spawn", "bee.hive.supervisor:main"))
+            test.is_false(call_can(scope, "process.spawn", "bee.hive.service:supervisor"))
             test.is_false(call_can(scope, "process.spawn", "bee.apps:welcome"))
             -- App scope retains process.send
             test.is_true(call_can(scope, "process.send", "target:process"))

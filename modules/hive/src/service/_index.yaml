@@ -1,0 +1,65 @@
+version: '1.0'
+namespace: bee.hive.service
+entries:
+- name: supervisor
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash, events]
+  security:
+    policies: []
+  imports:
+    types: bee.hive:types
+    bounds: bee.values:bounds
+    peers: bee.hive.types:peers
+    enrollment: bee.hive.types:enrollment
+    invites: bee.hive.types:invites
+    owner_stop: bee.hive.types:owner_stop
+    registration: bee.hive.types:registration
+    admission: bee.hive.binding:admission
+    policy_admission: bee.hive.binding:policy_admission
+    desktop_owner: bee.hive.desktop:owner
+    desktop_protocol: bee.hive.desktop:protocol
+    catalog: bee.hive.exposure:catalog
+    adapters: bee.hive.types:adapters
+    workspace_commands: bee.hive.types:workspace_commands
+    clock: bee.values:clock
+- name: supervisor_policies
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: bee.hive.service:supervisor
+    path: .security.policies
+
+- name: display_command
+  kind: process.lua
+  source: file://display_command.lua
+  method: command
+  imports:
+    display: bee.hive.desktop:display
+    arguments: bee.app:arguments
+  meta:
+    command:
+      name: bee-display
+      host: bee.hive.desktop:display_host
+      short: Attach a terminal to an admitted Hive desktop
+      security:
+        actor: {id: bee.desktop.display}
+        policies: [bee.hive.desktop:display_policy]
+
+- name: viewer
+  kind: process.lua
+  source: file://viewer.lua
+  method: main
+  modules: [process, channel, time, uuid]
+  imports:
+    bounds: bee.values:bounds
+    types: bee.hive:types
+    client: bee.hive.binding:client
+    protocol: bee.hive.desktop:protocol
+    contract: bee.protocol:application
+    clock: bee.values:clock
+    display: bee.hive.desktop:display
+    remote: bee.hive.desktop:remote
+    delivery: bee.terminal:delivery
+    input: bee.protocol:input

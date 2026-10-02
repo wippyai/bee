@@ -4,11 +4,10 @@ local registry = require("registry")
 local time = require("time")
 local types = require("types")
 local admission = require("admission")
-local principals = require("principals")
 local function handle(value: unknown): types.Reply
     local request, err = types.decode_request(value)
     if not request then return types.reply_error("", types.fault("INVALID_ARGUMENT", err or "invalid request")) end
-    local entry = registry.get(principals.ENTRY)
+    local entry = registry.get(types.PRINCIPAL_MAPPINGS_ENTRY)
     local mappings, mappings_error = admission.mappings(entry)
     if not mappings then return types.reply_error(request.request_id, types.fault("UNAVAILABLE", mappings_error or "principal mappings unavailable")) end
     local admitted, fault = admission.admit(request.owner_ref.node_id, request, mappings, time.now())

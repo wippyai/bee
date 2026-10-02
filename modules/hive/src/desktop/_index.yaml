@@ -1,0 +1,83 @@
+version: '1.0'
+namespace: bee.hive.desktop
+entries:
+
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    arguments: bee.app:arguments
+    bounds: bee.values:bounds
+    contract: bee.protocol:application
+    workspace_query: bee.hive.types:workspace_query
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [funcs, process, channel]
+  imports:
+    types: bee.hive:types
+    protocol: bee.hive.desktop:protocol
+    bounds: bee.values:bounds
+    contract: bee.protocol:application
+- name: session_policy
+  kind: library.lua
+  source: file://session_policy.lua
+  imports:
+    protocol: bee.hive.desktop:protocol
+- name: owner
+  kind: library.lua
+  source: file://owner.lua
+  modules: [process, security, channel, time, uuid, funcs, env]
+  imports:
+    protocol: bee.hive.desktop:protocol
+    types: bee.hive:types
+    clock: bee.values:clock
+    retained: bee.launch:retained_protocol
+    startup_progress: bee.app.status:startup_progress
+    catalog: bee.hive.desktop:catalog
+    session_policy: bee.hive.desktop:session_policy
+    workspaces: bee.workspace.types:selection
+- name: display
+  kind: library.lua
+  source: file://display.lua
+  modules: [tty, channel, time, process, uuid]
+  imports:
+    bounds: bee.values:bounds
+    client: bee.hive.binding:client
+    types: bee.hive:types
+    protocol: bee.hive.desktop:protocol
+    contract: bee.protocol:application
+    clock: bee.values:clock
+    delivery: bee.terminal:delivery
+    input: bee.protocol:input
+- name: display_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.lookup, process.send, tty.attach, tty.read, tty.write, tty.resize, tty.viewport]
+    resources: '*'
+    effect: allow
+- name: host_policy
+  kind: security.policy.expr
+  meta:
+    comment: Only the native host selects desktop admission; this policy is not attached to ordinary applications
+  policy:
+    actions: [bee.desktop.host, process.spawn, process.spawn.monitored, process.host, process.context, process.security, process.terminate, process.registry.register, process.registry.unregister, security.policy.get, security.scope.create]
+    resources: '*'
+    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]retained[.]bridge/[0-9a-f]{32}$") || (action == "bee.desktop.host" && resource == "bee.desktop") || ((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.launch:retained") || (action == "process.host" && resource == "bee:workers") || (action == "security.policy.get" && (resource == "bee.security.desktop:host_policy" || resource == "bee.security.desktop:desktop_policy" || resource == "bee.security.desktop:retained_supervisor_spawn_policy" || resource == "bee.security.desktop:desktop_catalog_policy" || resource == "bee.security.desktop:desktop_catalog_resource_policy" || resource == "bee.security.desktop:workspace_host_lease_policy")) || action == "process.context" || action == "process.security" || action == "process.terminate" || action == "security.scope.create"'
+    effect: allow
+- name: catalog_call_policy
+  kind: security.policy
+  meta:
+    comment: The desktop bridge pages the node workspace catalog; the catalog authorizes the read under the host's catalog read policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.workspace.binding:list, bee.workspace.binding:search]
+    effect: allow
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  imports:
+    types: bee.hive:types
+    bounds: bee.values:bounds
+    contract: bee.protocol:application
+    display: bee.hive.desktop:display

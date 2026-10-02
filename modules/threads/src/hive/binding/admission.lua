@@ -17,14 +17,11 @@ local clock = require("clock")
 local types = require("types")
 local bounds = require("bounds")
 local canonical = require("canonical")
-local catalog = require("catalog")
-local principals = require("principals")
 local M = {}
 -- The thread operations, their contract revision and the exact payload
 -- each takes; the exposure mode a host ceiling must admit for them.
 M.OPERATION_REVISION = "1"
 M.EXPOSURE_MODE = "policy"
-M.OWNER_SERVICE = "bee.threads"
 -- The exact owner service each forwarded operation must name.
 local OWNER_SERVICE_BY_OPERATION: {[string]: string} = {
     ["bee.threads.binding:send"] = "bee.threads",
@@ -63,22 +60,19 @@ local fields_by_operation: {[string]: {string}} = {
     -- ceiling before any reply.
     ["bee.threads.binding:watch"] = {"thread_id", "after_sequence", "wait_ms", "transport_budget_ms", "caller_node_id"},
 }
-M.FIELDS = fields_by_operation
 M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref", "scope", "policies", "owner_id"}
 -- Operations whose payload deliberately carries no thread: an address
 -- resolution answers with the thread, it never receives one.
 M.THREADLESS_OPERATIONS = {["bee.threads.binding:inbox_resolve"] = true}
-M.INVOKE_CHECK = "bee.hive.binding:invoke_check"
 type Object = {[string]: unknown}
 type Admission = {actor_id: string, policies: {string}, operation_ref: string, input: Object, caller_node_id: string, principal: types.PrincipalRef}
-type ServiceReply = {ok: boolean, error: {code: string, message: string}?, value: unknown, replayed: boolean?}
 -- admit: the common operation checks a forwarded request faces on every
 -- path (host exposure ceiling, owner service, revision, exact payload
 -- fields, digest, deadline) and then the principal mapping; a mapped
 -- actor with a thread membership bypasses none of them.
-function M.admit(local_node: string, request: types.Request, mappings: principals.Mappings, now: time.Time): (Admission?, types.Fault?)
+function M.admit(local_node: string, request: types.Request, mappings: types.PrincipalMappings, now: time.Time): (Admission?, types.Fault?)
     if not M.OPERATIONS[request.operation_ref] then return nil, types.fault("UNSUPPORTED_CAPABILITY", "operation " .. request.operation_ref .. " is not a thread operation") end
-    if not security.can(catalog.exposure_action(M.EXPOSURE_MODE), request.operation_ref) then return nil, types.fault("DENIED", "the host does not expose " .. request.operation_ref .. " to forwarded principals") end
+    if not security.can(types.exposure_action(M.EXPOSURE_MODE), request.operation_ref) then return nil, types.fault("DENIED", "the host does not expose " .. request.operation_ref .. " to forwarded principals") end
     if request.owner_ref.node_id ~= local_node then return nil, types.fault("DENIED", "request owner is not on this node") end
     -- Each forwarded operation binds its exact owner service: a request may
     -- not retarget a thread operation onto another service. The thread owner
@@ -113,7 +107,7 @@ function M.admit(local_node: string, request: types.Request, mappings: principal
     if not deadline then return nil, types.fault("INVALID_ARGUMENT", "invalid deadline") end
     if not deadline:after(now) then return nil, types.fault("DEADLINE_EXCEEDED", "request deadline has passed") end
     if request.principal_ref.issuer ~= request.caller_node_id then return nil, types.fault("DENIED", "principal issuer is not the authenticated caller node") end
-    local mapping = principals.resolve(mappings, request.principal_ref)
+    local mapping = types.resolve_principal(mappings, request.principal_ref)
     if not mapping then return nil, types.fault("DENIED", "principal is not mapped on this node") end
     local input: Object = {}
     for name, item in pairs(request.input) do input[name] = item end
@@ -138,7 +132,7 @@ function M.execute(request_id: string, admission: Admission): types.Reply
     local principal = funcs.new():with_actor(security.new_actor(admission.actor_id)):with_scope(security.new_scope(policies))
     -- Invocation is the principal's own authority: the check runs under the
     -- mapped actor and scope, where no worker grant reaches.
-    local verdict, check_error = principal:call(M.INVOKE_CHECK, {operation_ref = admission.operation_ref})
+    local verdict, check_error = principal:call(types.INVOKE_CHECK, {operation_ref = admission.operation_ref})
     if check_error or type(verdict) ~= "table" or (verdict).allowed ~= true then
         return types.reply_error(request_id, types.fault("DENIED", "principal may not invoke " .. admission.operation_ref))
     end
@@ -158,11 +152,11 @@ function M.execute(request_id: string, admission: Admission): types.Reply
     return types.reply_error(request_id, types.fault(fault.code, fault.message))
 end
 -- mappings: the host's table, read from the registry when asked.
-function M.mappings(entry: unknown): (principals.Mappings?, string?)
+function M.mappings(entry: unknown): (types.PrincipalMappings?, string?)
     local object = bounds.object(entry)
     if not object then return nil, "principal mappings entry is missing" end
     local meta = bounds.object(object.meta) or {}
-    if meta.type ~= principals.ENTRY_TYPE then return nil, "principal mappings entry is not a " .. principals.ENTRY_TYPE end
-    return principals.decode(object.data)
+    if meta.type ~= types.PRINCIPAL_MAPPINGS_TYPE then return nil, "principal mappings entry is not a " .. types.PRINCIPAL_MAPPINGS_TYPE end
+    return types.decode_principal_mappings(object.data)
 end
 return M

@@ -5,9 +5,6 @@
 -- the registry write.
 local M = {}
 type Decision = {publish: boolean, name: string, reason: string?}
--- decide returns whether this supervisor publishes its eventual name. A node
--- without a native identity cannot be addressed by a remote client, so it stays
--- local-only; everything else publishes, with or without a desktop bridge.
 function M.decide(native_node: string, distributed_name: string): Decision
     if native_node == "" then
         return {publish = false, name = distributed_name, reason = "no native node identity"}

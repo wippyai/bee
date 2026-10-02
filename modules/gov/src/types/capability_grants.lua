@@ -60,7 +60,7 @@ end
 -- ceiling; each generated body repeats its reviewed static policy exactly.
 -- Other catalog entries remain review vocabulary until their resource and
 -- owner boundaries arrive in later slices.
-local VIEWER_EXPRESSION = '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
+local VIEWER_EXPRESSION = '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.service:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
 local SESSIONS_EXPRESSION = '(action == "contract.open" && resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$") || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
 local LEASE_EXPRESSION = '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
 

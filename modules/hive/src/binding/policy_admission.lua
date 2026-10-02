@@ -9,7 +9,6 @@ local clock = require("clock")
 local types = require("types")
 local bounds = require("bounds")
 local catalog = require("catalog")
-local principals = require("principals")
 local canonical = require("canonical")
 local dispatch = require("dispatch")
 local logger = require("logger")
@@ -42,11 +41,11 @@ function M.handle(value: unknown): types.Reply
     if not catalog.admits("policy", request.operation_ref) then return denied(id, "DENIED", "host does not expose this operation") end
     local deadline = clock.parse(request.deadline)
     if not deadline or clock.elapsed_ms(time.now(), deadline) <= 0 then return denied(id, "DEADLINE_EXCEEDED", "request deadline passed") end
-    local entry = registry.get(principals.ENTRY)
+    local entry = registry.get(types.PRINCIPAL_MAPPINGS_ENTRY)
     if not entry or type(entry.data) ~= "table" then return denied(id, "UNAVAILABLE", "principal mappings unavailable") end
-    local mappings, mapping_error = principals.decode(entry.data)
+    local mappings, mapping_error = types.decode_principal_mappings(entry.data)
     if not mappings then return denied(id, "UNAVAILABLE", mapping_error or "invalid principal mappings") end
-    local mapping = principals.resolve(mappings, request.principal_ref)
+    local mapping = types.resolve_principal(mappings, request.principal_ref)
     if not mapping then return denied(id, "DENIED", "principal has no destination mapping") end
     local operation, operation_error = catalog.resolve(request.operation_ref)
     if not operation or operation.mode ~= "policy" or operation.revision ~= request.operation_revision then

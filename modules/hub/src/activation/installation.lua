@@ -47,19 +47,26 @@ function M.decode(kind: Kind, raw: unknown): (Decoded?, string?)
 end
 
 -- The plan action for an install: update when this installer already holds
--- a Hub dependency root for the component, else install.
+-- a managed dependency root for the component, else install.
 function M.action(decoded: Decoded, installed_raw: unknown): (string?, string?)
     if decoded.kind == "uninstall" then return "uninstall", nil end
     local installed = bounds.object(installed_raw)
-    if not installed or type(installed.roots) ~= "table" then return nil, "installed inventory is malformed" end
-    for _, raw_root in ipairs(installed.roots) do
+    if not installed then return nil, "installed inventory is malformed" end
+    local roots, roots_error = bounds.array(installed.roots, 128)
+    if not roots then return nil, "installed inventory roots are malformed: " .. tostring(roots_error) end
+    local action = "install"
+    for _, raw_root in ipairs(roots) do
         local root = bounds.object(raw_root)
         local id = root and bounds.id(root.id) or nil
-        if root and id and root.managed == true and root.component == decoded.component then
-            return "update", nil
+        local component = root and component_name(root.component) or nil
+        if not root or not id or not component or type(root.managed) ~= "boolean" then
+            return nil, "installed inventory root is malformed"
+        end
+        if root.managed and component == decoded.component then
+            action = "update"
         end
     end
-    return "install", nil
+    return action, nil
 end
 
 -- The highest version a Hub details page lists that is not yanked.

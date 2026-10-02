@@ -42,3 +42,21 @@ entries:
     test: wippy.test:test
     types: bee.hive:types
     cluster: bee.hive.telemetry.binding:cluster
+- name: status_test
+  kind: function.lua
+  source: file://status_test.lua
+  method: run
+  modules: [funcs, security]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    status: bee.hive.telemetry.binding:status_model
+    bounds: bee.values:bounds
+    types: bee.hive:types
+- name: gateway_only_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gov.binding:contract_call]
+    effect: allow

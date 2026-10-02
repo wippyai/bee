@@ -149,6 +149,13 @@ An interactive Session may use an existing workspace thread only when its authen
 
 Pull scans exclude settled Work, including Work with retained cancellation records, so cancellation does not block later intake.
 
+The host-selected counts-only `bee.threads.binding:node_summary` accepts an
+empty object and requires `bee.threads.sessions.summary` on `node`. It returns
+`{ok=true,value={running_sessions=N}}` for sessions with accepted execution in
+the current owner epoch, excluding closed sessions and unreconciled old claims.
+It exposes no session identities, prompts or work records. Applications reach
+Hive-wide counts through the approved Hive telemetry status contract.
+
 The existing owner-only journal `work_scan` accepts optional
 `include_hooks = true` for component drain evidence. It includes hook-delivered
 work and returns `interactive_active` when a nonclosed hook Session remains,

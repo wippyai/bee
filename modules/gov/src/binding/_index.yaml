@@ -5,7 +5,11 @@ entries:
   kind: function.lua
   source: file://delivery_method.lua
   method: handle
-  modules: [funcs, security, json, system]
+  modules:
+  - funcs
+  - security
+  - json
+  - system
   imports:
     bounds: bee.values:bounds
     publication_profiles: bee.gov.delivery:publication_profile_decoder
@@ -14,13 +18,35 @@ entries:
     guide: bee.gov.traits:guide
     protocol: bee.gov.delivery:delivery_protocol
     resources: bee.gov.delivery:staging_resources
-  security: {policies: [bee.gov.security:delivery_facade_policy, bee.gov.security:delivery_node_read_policy, bee.gov.security:publication_profiles_read_policy]}
+  security:
+    policies:
+    - bee.gov.security:delivery_facade_policy
+    - bee.gov.security:delivery_node_read_policy
+    - bee.gov.security:publication_profiles_read_policy
 - name: publication_call
   kind: function.lua
   source: file://publication_method.lua
   method: handle
-  imports: {service: bee.gov.binding:publication_service}
-  security: {policies: [bee.gov.security:publication_service_policy]}
+  modules:
+  - funcs
+  - security
+  imports: &id001
+    service: bee.gov.binding:publication_service
+    bounds: bee.values:bounds
+    transaction: bee.persist.persist:transaction
+  security:
+    policies:
+    - bee.gov.security:publication_facade_policy
+- name: publication_backend_call
+  kind: function.lua
+  source: file://publication_method.lua
+  method: backend
+  modules:
+  - funcs
+  - security
+  imports: *id001
+  meta:
+    type: internal
 - name: super_edit_call
   kind: function.lua
   source: file://super_edit_method.lua
@@ -49,18 +75,26 @@ entries:
   kind: function.lua
   source: file://super_edit_backend.lua
   method: handle
-  modules: [registry, security, system, time, uuid]
+  modules:
+  - registry
+  - security
+  - system
+  - time
+  - uuid
   imports:
     bounds: bee.values:bounds
     transaction: bee.persist.persist:transaction
     super_edit: bee.gov.activation:super_edit
     activation_profiles: bee.gov.activation:activation_profile_decoder
     protected_kernel: bee.gov.activation:protected_kernel
-  meta: {type: internal}
+  meta:
+    type: internal
 - name: recovery_service
   kind: library.lua
   source: file://recovery_service.lua
-  modules: [system, uuid]
+  modules:
+  - system
+  - uuid
   imports:
     bounds: bee.values:bounds
     resources: bee.gov.delivery:staging_resources
@@ -72,25 +106,34 @@ entries:
   kind: function.lua
   source: file://destination_method.lua
   method: handle
-  modules: [funcs, security]
+  modules:
+  - funcs
+  - security
   imports:
     service: bee.gov.binding:destination_service
     transaction: bee.persist.persist:transaction
     bounds: bee.values:bounds
-  security: {policies: [bee.gov.security:destination_facade_policy]}
+  security:
+    policies:
+    - bee.gov.security:destination_facade_policy
 - name: contract_call
   kind: function.lua
   source: file://gateway.lua
   method: contract_call
-  modules: &gateway_modules [registry, security, contract, http_client, hash]
-  imports: &gateway_imports
+  modules:
+  - registry
+  - security
+  - contract
+  - http_client
+  - hash
+  imports: &id002
     bounds: bee.values:bounds
     capability_gateway: bee.gov.capability:capability_gateway
-    capability_grants: bee.gov.capability:capability_grants
-    capability_model: bee.capability:model
-    workspace_applications: bee.gov.workspace:workspace_applications
+    capability_access: bee.gov.capability:capability_access
     capability_files: bee.gov.capability:capability_files
-  security: {policies: [bee.gov.security:gateway_policy]}
+  security:
+    policies:
+    - bee.gov.security:gateway_policy
 - name: http_request
   kind: function.lua
   source: file://gateway.lua
@@ -101,13 +144,7 @@ entries:
   - contract
   - http_client
   - hash
-  imports:
-    bounds: bee.values:bounds
-    capability_gateway: bee.gov.capability:capability_gateway
-    capability_grants: bee.gov.capability:capability_grants
-    capability_model: bee.capability:model
-    workspace_applications: bee.gov.workspace:workspace_applications
-    capability_files: bee.gov.capability:capability_files
+  imports: *id002
   security:
     policies:
     - bee.gov.security:gateway_policy
@@ -121,13 +158,7 @@ entries:
   - contract
   - http_client
   - hash
-  imports:
-    bounds: bee.values:bounds
-    capability_gateway: bee.gov.capability:capability_gateway
-    capability_grants: bee.gov.capability:capability_grants
-    capability_model: bee.capability:model
-    workspace_applications: bee.gov.workspace:workspace_applications
-    capability_files: bee.gov.capability:capability_files
+  imports: *id002
   security:
     policies:
     - bee.gov.security:gateway_policy
@@ -135,20 +166,33 @@ entries:
   kind: function.lua
   source: file://workspace_method.lua
   method: handle
-  modules: [funcs, security]
+  modules:
+  - funcs
+  - security
   imports:
     protocol: bee.gov.workspace:workspace_protocol
     guide: bee.gov.traits:guide
     transaction: bee.persist.persist:transaction
     bounds: bee.values:bounds
-  security: {policies: [bee.gov.security:overlay_facade_policy]}
+  security:
+    policies:
+    - bee.gov.security:overlay_facade_policy
   meta:
     type: tool
     title: Overlay authoring
     llm_alias: BeeOverlay
-    llm_description: Read this destination's component authoring guide, or create, list, read, put, append, remove or freeze files in your host-admitted private overlay. Put replaces a file; append adds bytes at an exact offset and verifies the complete result_digest. Read returns a base64 window of at most 16,384 bytes; use offset and limit to page. Writes require the current revision and a stable retry key. Freeze stages measured content only; it neither requests approval nor activates it. Use BeeComponents to inspect installed and Hub components for examples. Binary files use canonical base64. There is no host filesystem or registry access.
-    input_schema: |
-      {"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["guide","create","list","read","put","append","remove","freeze"]},"overlay_id":{"type":"string","minLength":1,"maxLength":160},"expected_revision":{"type":"integer","minimum":0,"maximum":9007199254740990},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","minLength":1,"maxLength":240},"offset":{"type":"integer","minimum":0,"maximum":4194304},"limit":{"type":"integer","minimum":1,"maximum":16384},"result_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"content":{"type":"string","maxLength":4194304},"content_base64":{"type":"string","maxLength":5592408},"snapshot_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
+    llm_description: Read this destination's component authoring guide, or create,
+      list, read, put, append, remove or freeze files in your host-admitted private
+      overlay. Put replaces a file; append adds bytes at an exact offset and verifies
+      the complete result_digest. Read returns a base64 window of at most 16,384 bytes;
+      use offset and limit to page. Writes require the current revision and a stable
+      retry key. Freeze stages measured content only; it neither requests approval
+      nor activates it. Use BeeComponents to inspect installed and Hub components
+      for examples. Binary files use canonical base64. There is no host filesystem
+      or registry access.
+    input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["guide","create","list","read","put","append","remove","freeze"]},"overlay_id":{"type":"string","minLength":1,"maxLength":160},"expected_revision":{"type":"integer","minimum":0,"maximum":9007199254740990},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","minLength":1,"maxLength":240},"offset":{"type":"integer","minimum":0,"maximum":4194304},"limit":{"type":"integer","minimum":1,"maximum":16384},"result_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"content":{"type":"string","maxLength":4194304},"content_base64":{"type":"string","maxLength":5592408},"snapshot_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
+
+      '
 - name: approval
   kind: library.lua
   source: file://approval.lua
@@ -158,7 +202,8 @@ entries:
 - name: destination
   kind: library.lua
   source: file://destination.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     resolution: bee.gov.delivery:resolver
     bounds: bee.values:bounds
@@ -172,7 +217,8 @@ entries:
 - name: publisher
   kind: library.lua
   source: file://publisher.lua
-  modules: [base64]
+  modules:
+  - base64
   imports:
     bounds: bee.values:bounds
     delivery: bee.gov.delivery:delivery
@@ -182,7 +228,12 @@ entries:
 - name: publication_service
   kind: library.lua
   source: file://publication_service.lua
-  modules: [registry, security, system, base64, json]
+  modules:
+  - registry
+  - security
+  - system
+  - base64
+  - json
   imports:
     bounds: bee.values:bounds
     artifact: bee.gov.delivery:artifact
@@ -201,7 +252,8 @@ entries:
 - name: activation_owner
   kind: library.lua
   source: file://activation_owner.lua
-  modules: [json]
+  modules:
+  - json
   imports:
     resolution: bee.gov.delivery:resolver
     bounds: bee.values:bounds
@@ -218,7 +270,8 @@ entries:
 - name: migration_effect
   kind: library.lua
   source: file://migration_effect.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     canonical: bee.values:canonical
     hub_migrations: bee.hub.activation:migrations
@@ -228,7 +281,8 @@ entries:
 - name: lease_grants
   kind: library.lua
   source: file://lease_grants.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -239,7 +293,13 @@ entries:
 - name: destination_service
   kind: library.lua
   source: file://destination_service.lua
-  modules: [registry, security, system, funcs, hash, time]
+  modules:
+  - registry
+  - security
+  - system
+  - funcs
+  - hash
+  - time
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -270,29 +330,36 @@ entries:
   kind: function.lua
   source: file://destination_backend.lua
   method: call
-  modules: [security]
+  modules:
+  - security
   imports:
     service: bee.gov.binding:destination_service
     transaction: bee.persist.persist:transaction
-  meta: {type: internal}
+  meta:
+    type: internal
 - name: workspace_backend_call
   kind: function.lua
   source: file://authoring.lua
   method: call
-  modules: [security, system]
+  modules:
+  - security
+  - system
   imports:
     protocol: bee.gov.workspace:workspace_protocol
     staging: bee.gov.persist:staging
     resources: bee.gov.delivery:staging_resources
     transaction: bee.persist.persist:transaction
-  meta: {type: internal}
+  meta:
+    type: internal
 - name: delivery_local
   kind: contract.binding
   contracts:
   - contract: bee.gov:delivery_contract
-    methods: {call: bee.gov.binding:destination_call}
+    methods:
+      call: bee.gov.binding:destination_call
 - name: overlay_local
   kind: contract.binding
   contracts:
   - contract: bee.gov:overlay_contract
-    methods: {call: bee.gov.binding:overlay_call}
+    methods:
+      call: bee.gov.binding:overlay_call

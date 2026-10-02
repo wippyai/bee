@@ -267,7 +267,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local actions = 2
         actions = button(actions, height - 1, "operations_previous", " Prev ", state.operation_page > 1)
         actions = button(actions, height - 1, "operations_next", " Next ", state.operation_page < total_pages)
-        if selected_operation and (selected_operation.state == "published" or selected_operation.state == "recovery_required") and selected_operation.request then
+        if selected_operation and (selected_operation.state == "prepared" or selected_operation.state == "published" or selected_operation.state == "recovery_required") and selected_operation.request then
             button(actions, height - 1, "recover", " Review recovery… ", true)
         end
         frame.footer(painter, status, ("Page " .. tostring(state.operation_page) .. "/" .. tostring(total_pages) .. " · select a receipt to inspect its measured result"))

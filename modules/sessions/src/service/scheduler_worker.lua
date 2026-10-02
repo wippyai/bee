@@ -10,6 +10,7 @@ local bounds = require("bounds")
 local scheduler = require("scheduler")
 local threads_journal = require("threads_journal")
 local executors = require("executors")
+local lifecycle = require("lifecycle")
 local M = {}
 M.WORKER = "bee.sessions.scheduler"
 M.TOPIC_WAKE = "bee.sessions.scheduler.wake"
@@ -30,6 +31,7 @@ local function pass(only_work: string?): string?
     if report.uncertain > 0 then
         logger:error("Session executor reconciliation is uncertain", {count = report.uncertain})
     end
+    if report.uncertain > 0 then return "Session executor reconciliation remains uncertain" end
     return nil
 end
 
@@ -48,9 +50,14 @@ local function main()
     local hints = assert(process.listen(M.TOPIC_WAKE, {message = true}))
     local registered, register_error = process.registry.register(M.WORKER)
     if not registered then error("register session scheduler: " .. tostring(register_error)) end
+    local lifecycle_inbox = assert(process.listen(lifecycle.TOPIC, {message = true}))
+    local definition = assert(lifecycle.definition(), "scheduler definition could not be captured")
+    local waiting: {recipient: string, topic: string, request: lifecycle.Request}? = nil
+    local drain_error: string? = nil
     local ticker = time.ticker(M.SCAN_INTERVAL)
     local active: {[string]: Pending} = {}
     local function scan()
+        if waiting or lifecycle.fenced() then return end
         local page, scan_error = threads_journal.invoke("work_scan", {limit = scheduler.MAX_SCAN})
         local decoded = bounds.object(page)
         local rows = decoded and bounds.array(decoded.items, scheduler.MAX_SCAN)
@@ -67,7 +74,7 @@ local function main()
     end
     scan()
     while true do
-        local cases = {events:case_receive(), hints:case_receive(), ticker:channel():case_receive()}
+        local cases = {events:case_receive(), hints:case_receive(), ticker:channel():case_receive(), lifecycle_inbox:case_receive()}
         for _, pending in pairs(active) do cases[#cases + 1] = pending.response:case_receive() end
         local selected = channel.select(cases)
         if selected.channel == events then
@@ -76,16 +83,42 @@ local function main()
                 ticker:stop()
                 return
             end
+        elseif selected.channel == lifecycle_inbox and selected.ok then
+            local message = selected.value
+            local envelope = bounds.object(message:payload():data())
+            local request = envelope and lifecycle.request(envelope.request)
+            local topic = envelope and bounds.line(envelope.topic, 128)
+            if request and topic and topic:sub(1, #lifecycle.TOPIC + 1) == lifecycle.TOPIC .. "."
+                and request.definition == definition and lifecycle.intent(request) then
+                if request.phase == "ready" then
+                    process.send(tostring(message:from()), topic, {version = 1, digest = request.digest, service = request.service,
+                        phase = "ready", definition = definition, retention = "retain", ok = not waiting})
+                elseif not waiting then
+                    waiting = {recipient = tostring(message:from()), topic = topic, request = request}
+                elseif waiting.request.digest == request.digest then
+                    waiting.recipient, waiting.topic = tostring(message:from()), topic
+                end
+            end
         else
             for session, pending in pairs(active) do
                 if selected.channel == pending.response then
-                    local _, completion_error = pending.future:result()
+                    local reply, completion_error = pending.future:result()
+                    local outcome = bounds.object(reply)
+                    if completion_error or not outcome or outcome.ok ~= true then drain_error = "accepted session work remains uncertain" end
                     if completion_error then logger:error("Session turn worker ended without a report", {session = session, cause = tostring(completion_error)}) end
                     active[session] = nil
                     break
                 end
             end
             scan()
+        end
+        if waiting and next(active) == nil then
+            local page, journal_error = threads_journal.invoke("work_scan", {limit = scheduler.MAX_SCAN, include_hooks = true})
+            local problem = drain_error or journal_error or scheduler.drain_problem(page)
+            local request = waiting.request
+            process.send(waiting.recipient, waiting.topic, {version = 1, digest = request.digest, service = request.service,
+                phase = "quiesce", definition = definition, retention = "retain", ok = problem == nil, message = problem})
+            waiting = nil
         end
     end
 end

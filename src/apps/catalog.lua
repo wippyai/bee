@@ -6,6 +6,7 @@ local contract = require("contract")
 local application_admissions = require("application_admissions")
 local canonical = require("canonical")
 local bounds = require("bounds")
+local component_lifecycle = require("component_lifecycle")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
@@ -39,8 +40,6 @@ local function static_bindings(entry: Entry?): {contract.Binding}
     return result
 end
 
--- Command discovery has no workspace owner. Keep its historical surface
--- limited to shipped static admission; the broker uses read(workspace_id).
 function M.bindings(pinned: registry.Snapshot?): {contract.Binding}
     local entry, entry_error
     if pinned then entry, entry_error = pinned:get("bee.security:application_admission")
@@ -116,8 +115,6 @@ function M.revision(workspace_id: string): string
     if not encoded then error("Encode application admission revision: " .. tostring(encode_error)) end
     local fingerprint, digest_error = hash.sha256(encoded)
     if not fingerprint then error("Hash application admission revision: " .. tostring(digest_error)) end
-    -- Revision discovery still invalidates malformed admission; read owns its
-    -- validation and withdraws the catalog rather than retaining old authority.
     local code_fingerprint = "unavailable"
     local code_ok, observed_code = pcall(function(): string
         local codes: {string} = {}
@@ -171,9 +168,6 @@ local function record_bindings(raw: unknown): {contract.Binding}
     return result
 end
 
--- Overlays change the effective catalog without advancing registry history.
--- Compare the bounded admission/presentation values captured in one snapshot;
--- source code and unrelated registry entries are not serialized here.
 function M.read(workspace_id: string, snapshot: registry.Snapshot?): Selection
     if not contract.workspace_id(workspace_id) then error("Invalid application catalog workspace") end
     local pinned = snapshot or assert(registry.snapshot())
@@ -218,6 +212,12 @@ function M.read(workspace_id: string, snapshot: registry.Snapshot?): Selection
     end
     consume(published.governed, false)
     consume(published.packages, true)
+    local withdrawn = component_lifecycle.withdrawn(assert(pinned:state()))
+    local retained: {contract.Binding} = {}
+    for _, binding in ipairs(bindings) do
+        if not withdrawn[binding.definition_id] then retained[#retained + 1] = binding end
+    end
+    bindings = retained
     table.sort(bindings, function(left: contract.Binding, right: contract.Binding): boolean
         return left.definition_id < right.definition_id
     end)

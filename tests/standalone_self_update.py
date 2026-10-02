@@ -16,6 +16,11 @@ from workspace import ROOT, RUNTIME, database_environment
 from native_self_update import exercise as native_exercise
 
 PROBE = r'''
+local canonical = require("canonical")
+local json = require("json")
+local channel = require("channel")
+local time = require("time")
+local fs = require("fs")
 local registry = require("registry")
 local process = require("process")
 local funcs = require("funcs")
@@ -69,20 +74,80 @@ local function component_change(request: unknown): string
     assert(digest, "component plan has no digest")
     local result = call("apply", request, digest)
     local receipt = bounds.object(result.value)
-    assert(result.ok == true and receipt and receipt.state == "complete", tostring(result.message))
+    if receipt and receipt.state ~= "complete" then
+        local again = call("plan", request)
+        local refreshed = bounds.object(again.value)
+        if refreshed then
+            for key, value in pairs(plan) do
+                if key ~= "base_revision" and key ~= "digest" and canonical.encode(value, 1048576) ~= canonical.encode(refreshed[key], 1048576) then
+                    logger:info("COMPONENT_PLAN_DRIFT", {field = key})
+                    if key == "modules" then
+                        local original = bounds.array(value, 512)
+                        local changed = bounds.array(refreshed[key], 512)
+                        if original and changed then
+                            for index, raw in ipairs(original) do
+                                local left, right = bounds.object(raw), bounds.object(changed[index])
+                                if left and right then
+                                    for field, item in pairs(left) do
+                                        if canonical.encode(item, 1048576) ~= canonical.encode(right[field], 1048576) then
+                                            logger:info("COMPONENT_MODULE_DRIFT", {component = left.component, field = field})
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    assert(result.ok == true and receipt and receipt.state == "complete", tostring(result.message or (receipt and receipt.message)))
     assert(process.registry.register("bee.hub.publisher"), "could not hold publisher name during completed replay")
     local replayed = call("apply", request, digest)
     process.registry.unregister("bee.hub.publisher")
     assert(replayed.ok == true and replayed.replayed == true, "component operation replay failed: " .. tostring(replayed.code) .. ": " .. tostring(replayed.message) .. "; replayed=" .. tostring(replayed.replayed))
     return digest
 end
+local function service_work(value: string): (string, Channel<process.Message>)
+    local worker: string? = nil
+    local deadline = time.after("5s")
+    while not worker do
+        worker = process.registry.lookup("bee.files.fixture.worker")
+        if not worker then
+            local selected = channel.select({time.after("25ms"):case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel ~= deadline, "fixture service did not start")
+        end
+    end
+    local topic = "bee.files.fixture.work." .. value
+    local inbox: Channel<process.Message> = assert(process.listen(topic, {message = true}))
+    assert(process.send(worker, "bee.files.fixture", {operation = "accept", value = value, topic = topic}))
+    local accepted = channel.select({inbox:case_receive(), deadline:case_receive()})
+    assert(accepted.ok and accepted.channel == inbox and tostring(accepted.value:from()) == worker)
+    local reply = bounds.object(accepted.value:payload():data())
+    assert(reply and reply.accepted == true, "service did not admit work")
+    return worker, inbox
+end
+local function service_settled(worker: string, inbox: Channel<process.Message>, value: string)
+    local result = channel.select({inbox:case_receive(), time.after("5s"):case_receive()})
+    assert(result.ok and result.channel == inbox and tostring(result.value:from()) == worker, "accepted work reply was lost")
+    local reply = bounds.object(result.value:payload():data())
+    assert(reply and reply.ok == true and reply.value == value)
+    process.unlisten(inbox)
+end
 local function components()
     local installed = captured()
     local files: inventory.Root? = nil
     for _, root in ipairs(installed.roots) do if root.component == "bee/files" then files = root; break end end
     assert(files, "Files has no installed root")
+    local owner = process.pid()
+    local worker, work = service_work("before-update")
     component_change({action = "update", component = "bee/files", version = "__COMPONENT__",
         parameters = files.parameters, migration_policy = "none"})
+    service_settled(worker, work, "before-update")
+    assert(process.pid() == owner, "owner changed during service activation")
+    local replacement = process.registry.lookup("bee.files.fixture.worker")
+    assert(replacement and replacement ~= worker, "service code change retained the old worker")
+    logger:info("STANDALONE_COMPONENT_SERVICE_UPDATED", {owner = tostring(owner), worker_before = worker, worker_after = replacement})
     for _, root in ipairs(captured().roots) do
         if root.id:sub(1, 9) == "bee.deps:" then assert(root.owner == "", "converted dependency is not host-owned") end
     end
@@ -176,6 +241,15 @@ local function live(): integer
         parameters = files.parameters, migration_policy = "none"})
     selected_components("__NEXT_COMPONENT__")
     logger:info("STANDALONE_SELF_UPDATE_POST_ROOT_COMPONENT_UPDATED")
+    local removed_worker, removed_work = service_work("before-remove")
+    component_change({action = "uninstall", component = "bee/files", migration_policy = "leave"})
+    service_settled(removed_worker, removed_work, "before-remove")
+    assert(not process.registry.lookup("bee.files.fixture.worker"), "removed service still has a live worker")
+    -- File retention is checked outside the departed registry resources.
+    component_change({action = "install", component = "bee/files", version = "__NEXT_COMPONENT__", parameters = files.parameters})
+    local volume = assert(fs.get("bee.files.service:retained"))
+    assert(volume:readfile("work.txt") == "before-remove", "removal discarded owned data")
+    logger:info("STANDALONE_COMPONENT_SERVICE_REMOVED_DATA_RETAINED")
     logger:info("STANDALONE_SELF_UPDATE_APPLIED", {owner_before = tostring(pid), owner_after = tostring(process.pid())})
     return 0
 end
@@ -186,12 +260,50 @@ local function offline(): integer
     logger:info("STANDALONE_SELF_UPDATE_OFFLINE_PASS")
     return 0
 end
+local function crash(): integer
+    local files: inventory.Root? = nil
+    for _, root in ipairs(captured().roots) do if root.component == "bee/files" then files = root; break end end
+    assert(files)
+    local request = {action = "update", component = "bee/files", version = "__COMPONENT__", parameters = files.parameters, migration_policy = "none"}
+    local planned = call("plan", request)
+    local plan = bounds.object(planned.value)
+    local digest = plan and bounds.line(plan.digest, 64)
+    assert(planned.ok == true and digest)
+    local volume = assert(fs.get("bee.files.service:retained"))
+    assert(volume:writefile("crash.request", assert(json.encode({request = request, digest = digest})), {atomic = true}))
+    assert(volume:writefile("crash.once", "requested", {atomic = true}))
+    service_work("before-crash")
+    call("apply", request, digest)
+    error("crash point was not reached")
+end
+local function recover(): integer
+    local volume = assert(fs.get("bee.files.service:retained"))
+    local encoded = assert(volume:readfile("crash.request"))
+    local recovery = bounds.object(json.decode(encoded))
+    local digest = recovery and bounds.line(recovery.digest, 64)
+    assert(recovery and digest)
+    assert(volume:readfile("crash.drained") == digest, "owner did not drain before crash")
+    assert(volume:readfile("work.txt") == "before-crash", "crash lost accepted work")
+    assert(volume:remove("crash.once"))
+    local status = call("status", nil, digest)
+    local receipt = bounds.object(status.value)
+    assert(status.ok == true and receipt and receipt.state == "prepared", "crash intent was not durable")
+    local result = call("apply", recovery.request, digest)
+    receipt = bounds.object(result.value)
+    assert(result.ok == true and result.replayed == true and receipt and receipt.state == "complete", tostring(result.message))
+    local files: inventory.Root? = nil
+    for _, root in ipairs(captured().roots) do if root.component == "bee/files" then files = root; break end end
+    assert(files)
+    component_change({action = "update", component = "bee/files", version = "__NEXT_COMPONENT__", parameters = files.parameters, migration_policy = "none"})
+    logger:info("STANDALONE_COMPONENT_SERVICE_CRASH_RECOVERED")
+    return 0
+end
 local function main(): integer
     local ok, result = pcall(live)
     if not ok then logger:error("STANDALONE_SELF_UPDATE_FAILURE", {cause = tostring(result)}); return 1 end
     return 0
 end
-return {main = main, offline = offline}
+return {main = main, offline = offline, crash = crash, recover = recover}
 '''
 
 
@@ -212,12 +324,35 @@ def build_deployments(folder, seed):
             document = yaml.safe_load(index.read_text())
             for entry in document.get("entries", []):
                 source = entry.get("source", "")
+                identity = f"{document['namespace']}:{entry['name']}"
                 if entry.get("kind") in {"library.lua", "function.lua", "process.lua"} and source.startswith("file://"):
                     identity = f"{document['namespace']}:{entry['name']}"
                     sources[identity] = str(index.parent / source.removeprefix("file://"))
                     declarations[identity] = {"Component": "bee/bee" if root.name == "src" else "bee/" + index.relative_to(root).parts[0],
                                               "Kind": entry["kind"], "Meta": entry.get("meta", {}),
                                               "Data": {key: value for key, value in entry.items() if key not in {"name", "kind", "meta", "source"}}}
+    for relative in ("modules/hub/src/binding/_index.yaml", "modules/hub/src/security/_index.yaml"):
+        document = yaml.safe_load((ROOT / relative).read_text())
+        for entry in document["entries"]:
+            if entry["name"].startswith("lifecycle_") or entry["name"] == "target_lifecycle_owners":
+                declarations[f"{document['namespace']}:{entry['name']}"] = {
+                    "Component": "bee/hub", "Kind": entry["kind"], "Meta": entry.get("meta", {}),
+                    "Data": {key: value for key, value in entry.items() if key not in {"name", "kind", "meta"}}}
+    host = yaml.safe_load((ROOT / "src/deps/_index.yaml").read_text())
+    hub = next(entry for entry in host["entries"] if entry["name"] == "hub")
+    parameters = [parameter for parameter in hub["parameters"] if parameter["name"] != "target_lifecycle_owners"]
+    parameters.append({"name": "target_lifecycle_owners", "value": ["bee.files.binding:lifecycle"]})
+    declarations["bee.deps:hub"] = {"Component": "bee/bee", "Kind": "ns.dependency", "Meta": {}, "Data": {"parameters": parameters}}
+    fixture = ROOT / "tests/fixtures/component_lifecycle"
+    for index in fixture.rglob("_index.yaml"):
+        document = yaml.safe_load(index.read_text())
+        for entry in document["entries"]:
+            identity = f"{document['namespace']}:{entry['name']}"
+            source = entry.get("source", "")
+            if source.startswith("file://"):
+                sources[identity] = str(index.parent / source.removeprefix("file://"))
+            declarations[identity] = {"Component": "bee/files", "Kind": entry["kind"], "Meta": entry.get("meta", {}),
+                                      "Data": {key: value for key, value in entry.items() if key not in {"name", "kind", "meta", "source"}}}
     packs, deployments = [], []
     for name, version in (("baseline", BASELINE), ("target", TARGET), ("explicit", EXPLICIT)):
         deployment = folder / name
@@ -317,7 +452,7 @@ def native_attached(folder, baseline, explicit, url):
     """Apply through Modules on a PTY, then navigate About and detach."""
     binary = build_native(folder, baseline)
     scratch = folder / "native"
-    for name in ("project", "tmp", "home/.config"):
+    for name in ("project", "project/component-retained", "tmp", "home/.config"):
         (scratch / name).mkdir(parents=True, exist_ok=True)
     baseline_lock, _ = artifact_paths(baseline)
     target_lock, _ = artifact_paths(explicit)
@@ -330,7 +465,7 @@ def native_attached(folder, baseline, explicit, url):
     return args, scratch
 
 
-def run_probe(folder, environment, command, marker, offline=False):
+def run_probe(folder, environment, command, marker, offline=False, crash=False):
     arguments = [str(RUNTIME), "run", "--verbose", command, "--host", "bee:workers"]
     if offline:
         arguments = ["unshare", "--user", "--map-root-user", "--net", "--", *arguments]
@@ -347,13 +482,18 @@ def run_probe(folder, environment, command, marker, offline=False):
                     raise AssertionError(f"{failure}\nOwner log: {log}")
                 if marker in evidence:
                     assert owner.pid == pid, "runtime owner PID changed"
+                    if crash:
+                        owner.kill()
+                        owner.wait(timeout=10)
+                        break
                 time.sleep(0.1)
             if owner.poll() is None:
                 raise AssertionError(f"{command} exceeded 120s; log: {log}")
             evidence = log.read_text()
             errors = "\n".join(line for line in evidence.splitlines()
                                if "STANDALONE_SELF_UPDATE" in line or "\tERROR\t" in line)
-            assert owner.returncode == 0 and marker in evidence, f"{errors}\nOwner log: {log}"
+            expected_exit = -9 if crash else 0
+            assert owner.returncode == expected_exit and marker in evidence, f"{errors}\nOwner log: {log}"
         finally:
             if owner.poll() is None:
                 owner.terminate()
@@ -399,6 +539,7 @@ def exercise(folder, baseline, target, explicit):
             assert url.startswith("http://127.0.0.1:"), url
             project = folder / "owner"
             project.mkdir()
+            (project / "component-retained").mkdir()
             shutil.copy2(baseline / "wippy.lock", project / "wippy.lock")
             for path in artifact_paths(baseline)[1].values():
                 relative = Path(path).relative_to(baseline)
@@ -411,7 +552,7 @@ def exercise(folder, baseline, target, explicit):
             (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version).replace("__COMPONENT__", COMPONENT).replace("__NEXT_COMPONENT__", NEXT_COMPONENT))
             imports = {"bounds": "bee.threads.records:bounds", "inventory": "bee.hub:inventory",
                        "view": "bee.settings.app:view", "appearance": "bee.app:appearance",
-                       "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog"}
+                       "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog", "canonical": "bee.protocol:canonical"}
             entries = [
                 {"name": "read", "kind": "security.policy", "policy": {
                     "actions": ["registry.get", "registry.resolution.get", "bee.hub.read"], "resources": "*", "effect": "allow"}},
@@ -422,10 +563,13 @@ def exercise(folder, baseline, target, explicit):
                 {"name": "manage", "kind": "security.policy", "policy": {
                     "actions": ["bee.hub.manage", "bee.hub.self_update"], "resources": ["bee/bee", "bee/files", "bee/hive-telemetry", "bee/hub", "bee/settings"], "effect": "allow"}},
             ]
-            for name, method in (("standalone-self-update", "main"), ("standalone-self-update-offline", "offline")):
+            entries.append({"name": "service", "kind": "security.policy", "policy": {
+                "actions": ["process.registry.lookup", "process.listen", "process.send", "fs.get", "fs.stat", "fs.readfile", "fs.writefile", "fs.remove"],
+                "resources": "*", "effect": "allow"}})
+            for name, method in (("standalone-self-update", "main"), ("standalone-self-update-offline", "offline"), ("component-lifecycle-crash", "crash"), ("component-lifecycle-recover", "recover")):
                 entries.append({"name": method, "kind": "process.lua", "source": "file://main.lua", "method": method,
-                                "modules": ["registry", "process", "funcs", "logger"], "imports": imports,
-                                "security": {"policies": [f"selfroot.probe:{policy}" for policy in ("read", "call", "manage", "replay_holder")]},
+                                "modules": ["registry", "process", "funcs", "logger", "channel", "time", "fs", "json"], "imports": imports,
+                                "security": {"policies": [f"selfroot.probe:{policy}" for policy in ("read", "call", "manage", "replay_holder", "service")]},
                                 "meta": {"command": {"name": name, "security": {"actor": {"id": "selfroot.probe"}}}}})
             (probe / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "selfroot.probe", "entries": entries}, sort_keys=False))
             (project / ".wippy.yaml").write_text(yaml.safe_dump({"version": "1.0", "registry": {
@@ -439,6 +583,9 @@ def exercise(folder, baseline, target, explicit):
                                   cwd=project, env=environment, text=True, capture_output=True, timeout=120)
             assert lint.returncode == 0, lint.stdout + lint.stderr
             run_probe(project, environment, "standalone-self-update", "STANDALONE_SELF_UPDATE_APPLIED")
+            run_probe(project, environment, "component-lifecycle-crash", "COMPONENT_LIFECYCLE_CRASH_POINT", crash=True)
+            run_probe(project, environment, "component-lifecycle-recover", "STANDALONE_COMPONENT_SERVICE_CRASH_RECOVERED")
+            assert (project / "component-retained/work.txt").read_text() == "before-crash"
             native_args, native_scratch = native_attached(folder, baseline, explicit, url)
             server.terminate()
             server.wait(timeout=10)

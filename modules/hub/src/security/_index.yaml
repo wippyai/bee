@@ -68,3 +68,24 @@ entries:
     actions: [funcs.security, security.scope.create]
     resources: [security, without]
     effect: allow
+- name: lifecycle_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [events.send, system.read]
+    resources: [supervisor, hosts]
+    effect: allow
+- name: lifecycle_owner_policy
+  kind: security.policy
+  groups: [execution_scope, lifecycle_scope]
+  policy:
+    actions: [funcs.call]
+    resources: ['']
+    effect: allow
+- name: lifecycle_scope_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [security.policy_group.get]
+    resources: [bee.hub.security:lifecycle_scope]
+    effect: allow

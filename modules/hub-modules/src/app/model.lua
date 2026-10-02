@@ -440,7 +440,7 @@ function M.apply_history(state: State, reply: Reply)
         end
     end
     if state.recovery and (not state.selected_operation or state.recovery.digest ~= state.selected_operation.digest
-        or (state.selected_operation.state ~= "published" and state.selected_operation.state ~= "recovery_required")) then
+        or (state.selected_operation.state ~= "prepared" and state.selected_operation.state ~= "published" and state.selected_operation.state ~= "recovery_required")) then
         state.recovery = nil
     end
     state.phase, state.notice = "operations", ""
@@ -465,7 +465,7 @@ end
 function M.recover(state: State): string?
     local operation = state.selected_operation
     if not operation then return "select an operation first" end
-    if operation.state ~= "published" and operation.state ~= "recovery_required" then
+    if operation.state ~= "prepared" and operation.state ~= "published" and operation.state ~= "recovery_required" then
         return "only published or recovery-required operations can be recovered"
     end
     if not operation.request then return "this operation has no stored request for recovery" end

@@ -148,3 +148,10 @@ reserved before new work is admitted.
 An interactive Session may use an existing workspace thread only when its authenticated application has active owner or participant membership, including a live broker-attested application family. Observer membership and workspace visibility alone do not authorize attachment.
 
 Pull scans exclude settled Work, including Work with retained cancellation records, so cancellation does not block later intake.
+
+The existing owner-only journal `work_scan` accepts optional
+`include_hooks = true` for component drain evidence. It includes hook-delivered
+work and returns `interactive_active` when a nonclosed hook Session remains,
+even with no current Work. The ordinary pull scan retains its existing shape
+and filtering. This reads the existing session/work store in one transaction;
+no schema or persisted identity changes.

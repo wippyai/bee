@@ -13,6 +13,7 @@ local security = require("security")
 local funcs = require("funcs")
 local scheduler = require("scheduler")
 local cancellation = require("cancellation")
+local lifecycle = require("lifecycle")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -996,6 +997,10 @@ local function attention_count(request: Object): Reply
 end
 
 function M.call(method: string, request: unknown): Reply
+    if method == "open" or method == "run" or method == "send" or method == "attach" then
+        local fenced, problem = lifecycle.fenced()
+        if fenced then return fail("BUSY", problem or "Sessions admission is fenced") end
+    end
     local input = object(request)
     if not input then return fail("INVALID", "request must be an object", nil) end
     if method == "attention_count" then return attention_count(input) end

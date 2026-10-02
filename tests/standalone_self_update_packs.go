@@ -114,14 +114,21 @@ func main() {
 					}
 				}
 			}
+			if declaration, found := config.Declarations[entry.ID.String()]; found {
+				if parameters, selected := declaration.Data["parameters"]; selected { fields["parameters"] = parameters }
+			}
 			if source := config.Sources[entry.ID.String()]; source != "" {
 				code, err := os.ReadFile(source)
 				mustPack(err)
 				if entry.ID.String() == "bee.settings.app:view" {
 					code = bytes.ReplaceAll(code, []byte("BEE SETTINGS · ABOUT"), []byte("BEE SETTINGS · ABOUT proof marker "+pack.Version))
 				}
+				if entry.ID.String() == "bee.files.service:worker" {
+					code = bytes.ReplaceAll(code, []byte("__SERVICE_VERSION__"), []byte(pack.Version))
+				}
 				fields["source"] = string(code)
 			}
+
 			if entry.Kind == "ns.dependency" {
 				component, _ := fields["component"].(string)
 				if strings.HasPrefix(component, "bee/") {

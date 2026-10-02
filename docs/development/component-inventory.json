@@ -4826,6 +4826,11 @@
       "source": "modules/hub/src/binding/_index.yaml"
     },
     {
+      "id": "bee.hub.binding:lifecycle",
+      "kind": "library.lua",
+      "source": "modules/hub/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.hub.binding:migration_runner",
       "kind": "library.lua",
       "source": "modules/hub/src/binding/_index.yaml"
@@ -4843,6 +4848,11 @@
     {
       "id": "bee.hub.binding:publish",
       "kind": "library.lua",
+      "source": "modules/hub/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hub.binding:target_lifecycle_owners",
+      "kind": "ns.requirement",
       "source": "modules/hub/src/binding/_index.yaml"
     },
     {
@@ -4936,6 +4946,21 @@
       "source": "modules/hub/src/security/_index.yaml"
     },
     {
+      "id": "bee.hub.security:lifecycle_owner_policy",
+      "kind": "security.policy",
+      "source": "modules/hub/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hub.security:lifecycle_policy",
+      "kind": "security.policy",
+      "source": "modules/hub/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.hub.security:lifecycle_scope_policy",
+      "kind": "security.policy",
+      "source": "modules/hub/src/security/_index.yaml"
+    },
+    {
       "id": "bee.hub.security:migration_context_policy",
       "kind": "security.policy.expr",
       "source": "modules/hub/src/security/_index.yaml"
@@ -4999,6 +5024,11 @@
       "id": "bee.hub.traits:research_trait",
       "kind": "registry.entry",
       "source": "modules/hub/src/traits/_index.yaml"
+    },
+    {
+      "id": "bee.hub.types:lifecycle",
+      "kind": "library.lua",
+      "source": "modules/hub/src/types/_index.yaml"
     },
     {
       "id": "bee.hub:binary_identity",
@@ -7006,6 +7036,11 @@
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
+      "id": "bee.sessions.binding:control",
+      "kind": "library.lua",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.sessions.binding:detach",
       "kind": "function.lua",
       "source": "modules/sessions/src/binding/_index.yaml"
@@ -7032,6 +7067,11 @@
     },
     {
       "id": "bee.sessions.binding:join",
+      "kind": "function.lua",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.binding:lifecycle",
       "kind": "function.lua",
       "source": "modules/sessions/src/binding/_index.yaml"
     },
@@ -7066,9 +7106,29 @@
       "source": "modules/sessions/src/binding/_index.yaml"
     },
     {
+      "id": "bee.sessions.binding:target_lifecycle_policies",
+      "kind": "ns.requirement",
+      "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.sessions.binding:target_owner_policies",
       "kind": "ns.requirement",
       "source": "modules/sessions/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.security:lifecycle_journal_policy",
+      "kind": "security.policy",
+      "source": "modules/sessions/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.security:lifecycle_policy",
+      "kind": "security.policy",
+      "source": "modules/sessions/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.sessions.security:lifecycle_worker_policy",
+      "kind": "security.policy",
+      "source": "modules/sessions/src/security/_index.yaml"
     },
     {
       "id": "bee.sessions.security:owner_admission_policy",
@@ -8675,7 +8735,7 @@
       }
     ],
     "proposal_evidence": [
-      "Hive supervisor and module service handoff and generation rollback remain\nproposals."
+      "Hive supervisor handoff and generation rollback remain proposals."
     ],
     "source": "docs/development/process-handoff.md"
   },
@@ -9421,6 +9481,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.hub.traits",
       "source": "modules/hub/src/traits/_index.yaml"
+    },
+    {
+      "namespace": "bee.hub.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.hub.types",
+      "source": "modules/hub/src/types/_index.yaml"
     },
     {
       "namespace": "bee.interaction",
@@ -12011,6 +12078,11 @@
       "target": "bee.hive.telemetry.binding:stats"
     },
     {
+      "requirement": "bee.hub.binding:target_lifecycle_owners",
+      "resolved_by": "registry source",
+      "target": "bee.hub.security:lifecycle_owner_policy"
+    },
+    {
       "requirement": "bee.hub:process_host",
       "resolved_by": "registry source",
       "target": "bee.hub.security:worker_host_policy"
@@ -12334,6 +12406,11 @@
       "requirement": "bee.sessions.binding:target_control_policies",
       "resolved_by": "registry source",
       "target": "bee.sessions.binding:get"
+    },
+    {
+      "requirement": "bee.sessions.binding:target_lifecycle_policies",
+      "resolved_by": "registry source",
+      "target": "bee.sessions.binding:lifecycle"
     },
     {
       "requirement": "bee.sessions.binding:target_owner_policies",
@@ -13976,6 +14053,17 @@
     },
     {
       "default_reference_ids": [],
+      "id": "bee.hub.binding:target_lifecycle_owners",
+      "source": "modules/hub/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hub.security:lifecycle_owner_policy",
+          "path": ".policy.resources"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
       "id": "bee.hub:process_host",
       "source": "modules/hub/src/_index.yaml",
       "targets": [
@@ -14516,6 +14604,17 @@
         },
         {
           "entry": "bee.sessions.binding:get",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.sessions.binding:target_lifecycle_policies",
+      "source": "modules/sessions/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.sessions.binding:lifecycle",
           "path": ".security.policies"
         }
       ]
@@ -15548,20 +15647,20 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1719,
-    "namespace_count": 176,
+    "entry_count": 1731,
+    "namespace_count": 177,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 77,
     "owned_table_declaration_count": 138,
-    "persisted_id_count": 796,
-    "requirement_count": 127,
-    "requirement_target_count": 299,
+    "persisted_id_count": 804,
+    "requirement_count": 129,
+    "requirement_target_count": 301,
     "root_src_lua_budget": 23987,
     "root_src_lua_lines": 23987,
     "schema_tag_count": 70,
-    "topic_count": 137
+    "topic_count": 138
   },
   "topics": [
     {
@@ -16376,6 +16475,12 @@
         "modules/harness/src/service/presentation.lua"
       ],
       "topic": "bee.session.window.request"
+    },
+    {
+      "sources": [
+        "modules/sessions/src/binding/control.lua"
+      ],
+      "topic": "bee.sessions.lifecycle"
     },
     {
       "sources": [

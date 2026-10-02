@@ -59,6 +59,7 @@ entries:
     journal: bee.sessions:threads_journal
     driver_route: bee.sessions:driver_route
     cancellation: bee.sessions.service:cancellation
+    lifecycle: bee.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.sessions.service:catalog
     scheduler: bee.sessions.service:scheduler

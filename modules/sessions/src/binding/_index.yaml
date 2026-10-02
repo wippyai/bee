@@ -179,3 +179,27 @@ entries:
   modules: [security]
   imports: {owner: bee.sessions:owner}
   security: {policies: []}
+- name: lifecycle
+  kind: function.lua
+  source: file://lifecycle.lua
+  method: handle
+  modules: [process, time, channel, security, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    lifecycle: bee.sessions.binding:control
+    scheduler: bee.sessions.service:scheduler
+    threads_journal: bee.sessions:threads_journal
+  security: {policies: []}
+- name: target_lifecycle_policies
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: bee.sessions.binding:lifecycle
+    path: .security.policies
+- name: control
+  kind: library.lua
+  source: file://control.lua
+  modules: [registry, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.protocol:canonical

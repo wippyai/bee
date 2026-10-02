@@ -40,7 +40,7 @@ entries:
   modules: [funcs]
   imports:
     bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    canonical: bee.protocol:canonical
     cancellation: bee.sessions.service:cancellation
 - name: cancellation
   kind: library.lua
@@ -57,8 +57,10 @@ entries:
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions:threads_journal
     executors: bee.sessions:executor_registry
+    lifecycle: bee.sessions.binding:control
 - name: scheduler_service
   kind: process.service
+  meta: {component_lifecycle: bee.sessions.binding:lifecycle}
   process: bee.sessions.service:scheduler_worker
   lifecycle:
     auto_start: true
@@ -76,4 +78,5 @@ entries:
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions:threads_journal
     executors: bee.sessions:executor_registry
+    lifecycle: bee.sessions.binding:control
   security: {policies: []}

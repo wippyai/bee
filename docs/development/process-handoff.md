@@ -91,13 +91,10 @@ application `process.upgrade` handoff. Native PTY processes owned by a changed
 application still follow that application's normal stop lifecycle; no native
 session state is invented.
 
-The standalone acceptance checks the live registry renderer as well as the
-retained window's code marker. The proof runtime currently advances the selected
-pack versions while preserving resident child-module definitions during the
-first deployment-root apply. That runtime transition must expose the new code
-before application replacement can occur; live pack updates do not yet pass
-this acceptance. The broker does not synthesize a second registry or restart path
-to compensate for that missing transition.
+The standalone acceptance checks the live registry renderer and retained window
+code marker using runtime PR #889 at `84c4b63d`. This proof runtime publishes
+changed pack definitions before application replacement and verifies unchanged
+owner PID; the repository runtime pin has not advanced in this change.
 
 The desktop session and workspace host already use same-PID handoff; desktop
 clients, application brokers and the owner controller already use acknowledged
@@ -105,13 +102,21 @@ supervised replacement. The terminal presenter changes through explicit F12.
 A changed `process.service` registration follows the runtime supervisor's own
 stop/start lifecycle; a code-only change with an equal service configuration does
 not replace that controller.
-Bee does not add checkpoint handoff for running service workers, drivers,
+Independent component `process.service` changes now use Hub durable receipt
+intent, owner admission/drain and the runtime supervisor stop/start path. Hub
+verifies exact process/handler definitions and the registry revision before
+publication and owner boot-definition readiness before completion. Sessions is
+the first production owner; unsupported service/process-host owners refuse the
+change. Removal retains owned data and refuses while departing applications or
+other processes remain alive. Existing broker closure revokes their grants and
+resources. Crashes preserve the original operation for explicit recovery.
+
+Bee does not add checkpoint handoff for running drivers,
 managed agent sessions or the Hive supervisor here. Their running executions
 retain code until their existing lifecycle replaces them. Later function calls
 and newly spawned processes resolve the current registry definitions.
 
-Hive supervisor and module service handoff and generation rollback remain
-proposals. Native binary cutover is available through the local `bee upgrade`
+Hive supervisor handoff and generation rollback remain proposals. Native binary cutover is available through the local `bee upgrade`
 commands: a person confirms the candidate digest, and `bee upgrade --rollback`
 restarts the retained previous executable. No gateway operation exposes the
 cutover. Viewport handles and registry metadata are never checkpoint authority

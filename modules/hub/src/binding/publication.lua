@@ -18,13 +18,15 @@ local hash = require("hash")
 local migration_runner = require("migration_runner")
 local migrations = require("migrations")
 local migration_work = require("migration_work")
+local lifecycle = require("lifecycle")
+local service_lifecycle = require("service_lifecycle")
 local M = {}
 type Result = transaction.Result
 type ExpectedModule = {component: string, version: string, change: string}
 type Removal = {root_digest: string, before_modules: {ExpectedModule}, published: boolean}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
     baseline_revision: integer, message: string, action: string, code: string?, expected_modules: {ExpectedModule}?,
-    migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?, root_id: string?, conversion: inventory.Conversion?}
+    migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?, root_id: string?, conversion: inventory.Conversion?, lifecycle_work: lifecycle.Work?, effect_digest: string?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
 local function digest(raw: unknown): string?
@@ -128,7 +130,7 @@ local function decode_receipt(raw: unknown): Receipt?
     local value = bounds.object(raw)
     if not value then return nil end
     local actor, measured, component = bounds.id(value.actor_id), digest(value.digest), bounds.line(value.component, 160)
-    local state = bounds.member(value.state, {"published", "complete", "failed", "recovery_required"})
+    local state = bounds.member(value.state, {"prepared", "published", "complete", "failed", "recovery_required"})
     local baseline = bounds.count(value.baseline_revision)
     local message, action = bounds.text(value.message, 4096), bounds.member(value.action, {"install", "update", "uninstall"})
     if not actor or not measured or not component or not state or not baseline or not message or not action then return nil end
@@ -155,6 +157,10 @@ local function decode_receipt(raw: unknown): Receipt?
         conversion = inventory.conversion(value.conversion)
         if not conversion then return nil end
     end
+    local lifecycle_work: lifecycle.Work? = value.lifecycle_work ~= nil and lifecycle.decode(value.lifecycle_work) or nil
+    local effect_digest = digest(value.effect_digest)
+    if value.lifecycle_work ~= nil and (not lifecycle_work or not effect_digest) then return nil end
+    if value.effect_digest ~= nil and not effect_digest then return nil end
     local removal: Removal? = nil
     if value.removal ~= nil then
         local supplied = bounds.object(value.removal)
@@ -166,9 +172,10 @@ local function decode_receipt(raw: unknown): Receipt?
         for _, item in ipairs(before) do if item.change ~= "keep" or item.version == "" then return nil end end
         removal = {root_digest = root_digest, before_modules = before, published = supplied.published}
     end
-    return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
+    local result: Receipt = {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
         baseline_revision = baseline, message = message, action = action, code = code, expected_modules = expected, migration_work = work,
-        request = request, removal = removal, root_id = root_id, conversion = conversion}
+        request = request, removal = removal, root_id = root_id, conversion = conversion, lifecycle_work = lifecycle_work, effect_digest = effect_digest}
+    return result
 end
 
 function M.status(raw: unknown, options: unknown?): Result
@@ -261,7 +268,9 @@ local function root_digest(raw: unknown): string?
 end
 
 local function failed_apply(receipt: Receipt, problem: unknown): Result
-    receipt.state, receipt.code = "failed", "FAILED"
+    local services = receipt.lifecycle_work
+    receipt.state, receipt.code = services and #services.services > 0 and "recovery_required" or "failed", "FAILED"
+    if services and #services.services > 0 then services.phase = "quiesced" end
     receipt.message = hub_result.message(tostring(problem)) or "Hub apply failed"
     local recorded = save(receipt)
     local message = receipt.message
@@ -348,9 +357,19 @@ end
 -- Work is captured in the publication receipt before any package function
 -- runs. After interruption, exact definitions and ledger state are checked
 -- again under current host permissions.
+local function complete_services(receipt: Receipt): Result
+    local work = receipt.lifecycle_work
+    if receipt.state ~= "complete" or not work or #work.services == 0 or work.phase == "ready" then return save(receipt) end
+    local problem = service_lifecycle.ready(work, receipt.digest)
+    receipt.state = problem and "recovery_required" or "complete"
+    receipt.message = problem or "Dependency change, owner drain and service readiness verified"
+    if not problem then work.phase = "ready" end
+    return save(receipt)
+end
+
 local function migrate(receipt: Receipt): Result
     local work = receipt.migration_work
-    if not work then return save(receipt) end
+    if not work then return complete_services(receipt) end
     local snapshot, snapshot_error = registry.snapshot()
     local state, state_error
     if snapshot then state, state_error = snapshot:state() end
@@ -404,7 +423,7 @@ local function migrate(receipt: Receipt): Result
     receipt.message = problem or "Dependency change and selected migrations completed"
     -- Never restore registry definitions after migration execution: schema
     -- transactions and registry publication are separate commits.
-    return save(receipt)
+    return complete_services(receipt)
 end
 
 local function reconcile(receipt: Receipt, request: plan.Request): Result
@@ -460,6 +479,126 @@ local function reconcile(receipt: Receipt, request: plan.Request): Result
     return result
 end
 
+local function effect(displayed: plan.Plan): string?
+    local modules: {{component: string, version: string, previous_version: string, digest: string, change: string}} = {}
+    for _, item in ipairs(displayed.modules) do
+        modules[#modules + 1] = {component = item.component, version = item.version, previous_version = item.previous_version,
+            digest = item.digest, change = item.change}
+    end
+    local encoded = canonical.encode({request = displayed.request, root_id = displayed.root_id, root_operation = displayed.root_operation,
+        modules = modules, missing = displayed.missing, migrations = displayed.migrations, starts = displayed.starts,
+        capabilities = displayed.capabilities, policy_changes = displayed.policy_changes}, 1048576)
+    return encoded and hash.sha256(encoded) or nil
+end
+local function service_work(prepared: plan.Prepared): (lifecycle.Work?, string?)
+    if prepared.plan.request.component == "bee/bee" then return {version = 1, phase = "prepared", services = {}}, nil end
+    local snapshot, problem = registry.snapshot()
+    local state = snapshot and snapshot:state()
+    if not state then return nil, tostring(problem) end
+    local entries: {lifecycle.Entry} = {}
+    for _, package in ipairs(prepared.resolved.packages) do
+        for _, entry in ipairs(package.entries) do
+            entries[#entries + 1] = {id = entry.id, kind = entry.kind, meta = entry.meta, data = entry.data, owner = package.component}
+        end
+    end
+    return lifecycle.capture(state, prepared.plan.modules, entries)
+end
+local function publish_intent(receipt: Receipt): Result
+    local request = receipt.request and plan.decode(receipt.request)
+    local intent = receipt.lifecycle_work
+    if not request or not intent then return transaction.failure("INTERNAL", "missing service intent") end
+    local prepared, problem = M.prepare(receipt.request)
+    if not prepared or effect(prepared.plan) ~= receipt.effect_digest then
+        return incomplete_removal(receipt, problem or "candidate or installation changed after lifecycle intent")
+    end
+    local captured, capture_error = service_work(prepared)
+    if not captured then return incomplete_removal(receipt, capture_error or "cannot recapture service intent") end
+    if canonical.encode(captured.services, 1048576) ~= canonical.encode(intent.services, 1048576) then
+        return incomplete_removal(receipt, "service definitions changed after lifecycle intent")
+    end
+    local drained = service_lifecycle.quiesce(intent, receipt.digest)
+    if drained then return incomplete_removal(receipt, drained) end
+    local observed = registry.snapshot()
+    if not observed or observed:version():id() ~= prepared.plan.base_revision then
+        return incomplete_removal(receipt, "registry changed during service drain")
+    end
+    intent.phase = "quiesced"
+    local checkpoint = save(receipt)
+    if not checkpoint.ok then return checkpoint end
+    local refreshed, refresh_error = M.prepare(receipt.request)
+    if not refreshed or effect(refreshed.plan) ~= receipt.effect_digest then
+        return incomplete_removal(receipt, refresh_error or "candidate or registry changed during owner drain")
+    end
+    prepared = refreshed
+    local baseline, baseline_error = registry.snapshot()
+    if not baseline then return transaction.failure("UNAVAILABLE", tostring(baseline_error)) end
+    if baseline:version():id() ~= prepared.plan.base_revision then return incomplete_removal(receipt, "registry changed after drain revalidation") end
+    local displayed = prepared.plan
+    local changes, changes_error = baseline:changes()
+    if not changes then return transaction.failure("UNAVAILABLE", tostring(changes_error)) end
+    if displayed.conversion then
+        local selected_roots: {[string]: boolean} = {}
+        for _, root in ipairs(displayed.conversion.roots) do selected_roots[root.id] = true end
+        for _, root in ipairs(prepared.installed.roots) do
+            if selected_roots[root.id] and root.id ~= displayed.root_id then
+                local selected: string? = nil
+                for _, item in ipairs(prepared.installed.modules) do
+                    if item.component == root.component then selected = item.version; break end
+                end
+                if not selected or selected == "" then return transaction.failure("INVALID", "selected root has no installed version: " .. root.id) end
+                local root_data: {[string]: unknown} = {component = root.component, version = selected}
+                if #root.parameters > 0 then root_data.parameters = root.parameters end
+                local deleted, delete_error = changes:delete(root.id)
+                if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
+                local created_root, root_error = changes:create({id = root.id, kind = "ns.dependency", dependency_root = true, meta = root.meta, data = root_data})
+                if not created_root then return transaction.failure("FAILED", tostring(root_error)) end
+            end
+        end
+    end
+    local data: {[string]: unknown} = {component = request.component, version = request.version}
+    -- Empty Lua tables encode as objects; omit the optional native slice when
+    -- no bindings are supplied.
+    if #request.parameters > 0 then data.parameters = request.parameters end
+    local meta: {[string]: unknown} = {}
+    for _, root in ipairs(prepared.installed.roots) do if root.id == displayed.root_id then meta = root.meta; break end end
+    local entry = {id = displayed.root_id, kind = "ns.dependency", dependency_root = true, meta = meta, data = data}
+    local staged, stage_error
+    if displayed.conversion and displayed.root_operation == "update" and request.component ~= "bee/bee" then
+        local deleted, delete_error = changes:delete(displayed.root_id)
+        if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
+        staged, stage_error = changes:create(entry)
+    elseif displayed.root_operation == "create" then staged, stage_error = changes:create(entry)
+    elseif displayed.root_operation == "update" then staged, stage_error = changes:update(entry)
+    else staged, stage_error = changes:delete(displayed.root_id) end
+    if not staged then return transaction.failure("FAILED", tostring(stage_error)) end
+    local expected: {ExpectedModule} = {}
+    for _, item in ipairs(displayed.modules) do
+        expected[#expected + 1] = {component = item.component, version = item.version, change = item.change}
+    end
+    receipt.state, receipt.message = "published", "Dependency change published; readiness pending"
+    if receipt.lifecycle_work then receipt.lifecycle_work.phase = "published" end
+    local recorded, record_error = changes:update({id = receipt_id(receipt.digest), kind = "registry.entry", data = receipt})
+    if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
+    local applied, apply_error = changes:apply()
+    if not applied then return failed_apply(receipt, apply_error) end
+    local actual, inventory_error = inventory_reader.read()
+    local mismatch: string? = inventory_error
+    if actual then mismatch = verify(expected, actual)
+    else mismatch = inventory_error or "cannot verify installed module inventory" end
+    if mismatch then
+        receipt.state, receipt.message = "recovery_required", mismatch
+        local current = registry.snapshot()
+        if #intent.services == 0 and current and current:version():id() == applied:id() then
+            local restored, restore_error = registry.apply_version(baseline:version())
+            if restored then receipt.state = "failed"; receipt.message = mismatch .. "; registry restored to baseline"
+            else receipt.message = mismatch .. "; registry restore failed: " .. tostring(restore_error) end
+        else receipt.message = mismatch .. "; registry changed after publication; review recovery" end
+        return save(receipt)
+    end
+    receipt.state, receipt.message = "complete", "Dependency root " .. request.action .. " completed"
+    return migrate(receipt)
+end
+
 -- Called only inside the named publication worker after facade authorization.
 function M.apply(raw: unknown, expected: unknown): Result
     if not security.can("bee.hub.execute", "bee.hub.service:worker") then return transaction.failure("DENIED", "Hub worker authority required") end
@@ -475,20 +614,27 @@ function M.apply(raw: unknown, expected: unknown): Result
     if not request_digest then return transaction.failure("INTERNAL", tostring(hash_error)) end
     local previous = M.status(measured)
     if previous.ok then
-        local receipt = decode_receipt(previous.value)
+        local receipt: Receipt? = decode_receipt(previous.value)
         if not receipt or receipt.request_digest ~= request_digest then
             return transaction.failure("STALE", "request differs from the recorded operation; refresh its plan")
+        end
+        local lifecycle_work = receipt.lifecycle_work
+        if lifecycle_work and (lifecycle_work.phase == "prepared" or lifecycle_work.phase == "quiesced") and not receipt.removal then
+            local resumed = publish_intent(receipt)
+            resumed.replayed = true
+            return resumed
         end
         if receipt.removal and (receipt.state == "published" or receipt.state == "recovery_required") then
             local resumed = remove_with_migrations(receipt)
             resumed.replayed = true
             return resumed
         end
-        if receipt.state == "published" or (receipt.state == "recovery_required" and receipt.migration_work ~= nil) then
+        if receipt.state == "published" or (receipt.state == "recovery_required" and (receipt.migration_work ~= nil or receipt.lifecycle_work ~= nil)) then
             return reconcile(receipt, decoded)
         end
-        if receipt.state == "failed" and receipt.code then
-            local failed = transaction.failure(receipt.code, receipt.message, receipt)
+        local failure_code = receipt.code
+        if receipt.state == "failed" and failure_code then
+            local failed = transaction.failure(failure_code, receipt.message, receipt)
             failed.replayed = true
             return failed
         end
@@ -496,6 +642,17 @@ function M.apply(raw: unknown, expected: unknown): Result
         return previous
     end
     if previous.code ~= "NOT_FOUND" then return previous end
+    local current = registry.snapshot()
+    local current_state = current and current:state()
+    if not current_state then return transaction.failure("UNAVAILABLE", "cannot inspect pending component lifecycles") end
+    for _, entry in ipairs(current_state.entries) do
+        if entry.id:sub(1, 19) == "bee.hub.operations:" then
+            local pending = decode_receipt(entry.data)
+            if pending and pending.lifecycle_work and pending.state ~= "complete" and pending.state ~= "failed" then
+                return transaction.failure("BUSY", "component lifecycle needs recovery: " .. pending.digest)
+            end
+        end
+    end
     local prepared, prepare_error = M.prepare(raw)
     if not prepared then return transaction.failure("INVALID", prepare_error or "cannot prepare installation") end
     local displayed = prepared.plan
@@ -507,6 +664,13 @@ function M.apply(raw: unknown, expected: unknown): Result
     local request = displayed.request
     if displayed.conversion and request.migration_policy == "down" and #displayed.migrations > 0 then
         return transaction.failure("BLOCKED", "convert installed roots with an update before removing a component with migration rollback")
+    end
+    local intent, intent_error = service_work(prepared)
+    if not intent then return transaction.failure("BLOCKED", intent_error or "cannot prepare service lifecycle") end
+    local allowed = service_lifecycle.allowed(intent)
+    if allowed then return transaction.failure("DENIED", allowed) end
+    if #intent.services > 0 and request.migration_policy == "down" then
+        return transaction.failure("BLOCKED", "service removal retains owner data; select leave")
     end
     local work: migration_work.Work? = nil
     if request.migration_policy == "up" and #displayed.migrations > 0 then
@@ -585,69 +749,17 @@ function M.apply(raw: unknown, expected: unknown): Result
             end
         end
     end
-    local changes, changes_error = baseline:changes()
-    if not changes then return transaction.failure("UNAVAILABLE", tostring(changes_error)) end
-    if displayed.conversion then
-        local selected_roots: {[string]: boolean} = {}
-        for _, root in ipairs(displayed.conversion.roots) do selected_roots[root.id] = true end
-        for _, root in ipairs(prepared.installed.roots) do
-            if selected_roots[root.id] and root.id ~= displayed.root_id then
-                local selected: string? = nil
-                for _, item in ipairs(prepared.installed.modules) do
-                    if item.component == root.component then selected = item.version; break end
-                end
-                if not selected or selected == "" then return transaction.failure("INVALID", "selected root has no installed version: " .. root.id) end
-                local root_data: {[string]: unknown} = {component = root.component, version = selected}
-                if #root.parameters > 0 then root_data.parameters = root.parameters end
-                local deleted, delete_error = changes:delete(root.id)
-                if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
-                local created_root, root_error = changes:create({id = root.id, kind = "ns.dependency", dependency_root = true, meta = root.meta, data = root_data})
-                if not created_root then return transaction.failure("FAILED", tostring(root_error)) end
-            end
-        end
-    end
-    local data: {[string]: unknown} = {component = request.component, version = request.version}
-    -- Empty Lua tables encode as objects; omit the optional native slice when
-    -- no bindings are supplied.
-    if #request.parameters > 0 then data.parameters = request.parameters end
-    local meta: {[string]: unknown} = {}
-    for _, root in ipairs(prepared.installed.roots) do if root.id == displayed.root_id then meta = root.meta; break end end
-    local entry = {id = displayed.root_id, kind = "ns.dependency", dependency_root = true, meta = meta, data = data}
-    local staged, stage_error
-    if displayed.conversion and displayed.root_operation == "update" and request.component ~= "bee/bee" then
-        local deleted, delete_error = changes:delete(displayed.root_id)
-        if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
-        staged, stage_error = changes:create(entry)
-    elseif displayed.root_operation == "create" then staged, stage_error = changes:create(entry)
-    elseif displayed.root_operation == "update" then staged, stage_error = changes:update(entry)
-    else staged, stage_error = changes:delete(displayed.root_id) end
-    if not staged then return transaction.failure("FAILED", tostring(stage_error)) end
+    local measured_effect = effect(displayed)
+    if not measured_effect then return transaction.failure("INTERNAL", "cannot measure lifecycle effect") end
     local expected: {ExpectedModule} = {}
-    for _, item in ipairs(displayed.modules) do
-        expected[#expected + 1] = {component = item.component, version = item.version, change = item.change}
-    end
-    local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest, component = request.component, action = request.action,
-        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected,
-        migration_work = work, request = request_value(request), root_id = displayed.root_id, conversion = displayed.conversion}
-    local recorded, record_error = changes:create({id = receipt_id(measured), kind = "registry.entry", data = receipt})
-    if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
-    local applied, apply_error = changes:apply()
-    if not applied then return failed_apply(receipt, apply_error) end
-    local actual, inventory_error = inventory_reader.read()
-    local mismatch: string? = inventory_error
-    if actual then mismatch = verify(expected, actual)
-    else mismatch = inventory_error or "cannot verify installed module inventory" end
-    if mismatch then
-        receipt.state, receipt.message = "recovery_required", mismatch
-        local current = registry.snapshot()
-        if current and current:version():id() == applied:id() then
-            local restored, restore_error = registry.apply_version(baseline:version())
-            if restored then receipt.state = "failed"; receipt.message = mismatch .. "; registry restored to baseline"
-            else receipt.message = mismatch .. "; registry restore failed: " .. tostring(restore_error) end
-        else receipt.message = mismatch .. "; registry changed after publication; review recovery" end
-        return save(receipt)
-    end
-    receipt.state, receipt.message = "complete", "Dependency root " .. request.action .. " completed"
-    return migrate(receipt)
+    for _, item in ipairs(displayed.modules) do expected[#expected + 1] = {component = item.component, version = item.version, change = item.change} end
+    local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest,
+        component = request.component, action = request.action, baseline_revision = displayed.base_revision,
+        state = "prepared", message = "Service lifecycle intent recorded; definitions remain installed",
+        expected_modules = expected, migration_work = work, request = request_value(request), root_id = displayed.root_id,
+        conversion = displayed.conversion, lifecycle_work = intent, effect_digest = measured_effect}
+    local recorded = save(receipt)
+    if not recorded.ok then return recorded end
+    return publish_intent(receipt)
 end
 return M

@@ -72,3 +72,17 @@ The read-only `bee.sessions.binding:attention_count` display binding returns
 workspace. It refuses a different workspace and bounds scanning to 16 pages;
 it creates no approval and grants no authority. Desktop Needs you adds this
 count to pending approvals and opens Sessions when only sessions need attention.
+
+The scheduler service exposes the host-selected
+`bee.sessions.binding:lifecycle` owner callback for Hub component transitions.
+Its admission fence comes from Hub's existing durable operation receipt, not a
+second state store. `open`, `run`, `send` and `attach` refuse while fenced; reads,
+cancellation and close remain available. Quiesce waits for active pull turns,
+then checks the Threads journal for unresolved reserved/accepted work or
+uncertainty. Interactive sessions must close through their existing proved-exit
+path before a component transition. A full bounded scan cannot prove absence and refuses the drain.
+Queued work and all session data remain in Threads. Missing scheduler readiness
+or an uncertain obligation leaves the Hub receipt recoverable. Ready identifies
+the exact scheduler boot definition after the existing supervisor restarts it.
+Other process hosts and interactive placements have no component drain protocol
+here and keep their existing ownership and stop paths.

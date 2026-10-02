@@ -1,10 +1,11 @@
 # Hub module management
 
 This optional Bee component uses the existing native Hub reader and registry
-APIs. It has no Keeper dependency. The pinned runtime currently rejects a
-deployment-root update that also changes its composed dependency-root versions.
-`make hub-self-update-runtime-check` reproduces this conflict; completing a Bee
-release-closure update requires a runtime correction in a new executable.
+APIs. It has no Keeper dependency. The pinned runtime rejects a deployment-root
+artifact that changes versions of its nested composed dependency declarations.
+`make hub-self-update-runtime-check` reproduces this limitation. Update Bee uses
+a dependency-free core artifact and updates host-selected component roots in the
+existing publication transaction.
 
 Hub now ships as an independently resolved component. Existing immutable
 artifacts retain their recorded definition, receipt, migration, and policy
@@ -56,19 +57,30 @@ See [the API and acceptance status](../../../docs/guides/hub.md) for request exa
 Management operations are `plan`, `apply` and `status`, plus publication
 operations `publish_request` and `publish_apply` for person-approved Hub
 uploads (see the publication section of the Hub guide).
-Planning preserves other
+Update Bee selects the core and every host-selected `bee.deps` Bee component
+root together, independent or required, through one measured plan and receipt.
+It preserves parameters, removed components and third-party root selections.
+Retained components include a reason when a newer compatible release is unavailable;
+native requirements and active Hub installer code constrain candidates.
+Changed component services use the same owner drain and readiness evidence as
+independent updates; the core retains its existing process lifecycles.
+
+Ordinary component planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. The planner uses the runtime selection rule: preserve a live installed
 version's captured definitions when that component is unchanged; inspect the
 requested component and changed versions as candidate artifacts. This also keeps
 unrelated package planning independent of local development artifact publication.
-The version solver preserves a live installed
+The version solver ordinarily preserves a live installed
 version, including a selected prerelease, when every incoming constraint permits
 it; otherwise it chooses the highest
 compatible stable release (or a compatible prerelease when no stable release
-matches and the range explicitly admits that prerelease). Changed selections retract their old dependencies and re-evaluate
+matches and the range explicitly admits that prerelease). Update Bee instead
+selects the newest compatible host-root releases; an explicitly admitted newer
+prerelease can take precedence over an older stable release.
+Changed selections retract their old dependencies and re-evaluate
 intersections; a parent is never downgraded to satisfy its children. Exact pins
-and compatible installed selections do not list release history; other ranges
+and ordinary compatible installed selections do not list release history; other ranges
 inspect the complete bounded catalog, whose pages are ordered by publication time.
 Standalone inventory identifies the deployment root from
 `snapshot:state().resolution.lock.root_module`, under the Hub execution scope's
@@ -86,7 +98,7 @@ from those dependencies and the live resolution/lock; there is no second list.
 The first operation transfers package-owned Bee dependency roots to host
 ownership in the same Registry transaction as its existing operation receipt,
 without changing dependency IDs or requirement values. Converted roots pin the
-live version and retain their metadata. Third-party roots remain unchanged.
+planned version and retain their metadata. Third-party roots remain unchanged.
 Inventory derives `managed`; the plan and operation receipt's optional
 `conversion` (version 1, roots with `id` and `component`) records only the
 conversion effect for confirmation and interrupted-operation verification.
@@ -141,8 +153,9 @@ recovers the same receipt before their definitions are removed; normal broker
 stop closes resources and revokes execution grants.
 
 A host that selects component management updates `bee/bee` using a core artifact
-that contains no Bee-component dependency declarations. The plan retains each
-explicit component root and its requirement parameters alongside the core update.
+that contains no Bee-component dependency declarations. The plan selects the
+newest compatible version for each explicit component root and retains its
+requirement parameters alongside the core update.
 A candidate that declares Bee-component dependencies is refused with its entry ID:
 it would reclaim host selection, collide with host-owned roots or reinstall a
 removed component. This applies to the initial self-update conversion as well as

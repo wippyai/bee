@@ -65,7 +65,7 @@ entries:
     resources: [bee.placement.native.binding:prepare, bee.placement.native.binding:start, bee.placement.native.binding:status, bee.placement.native.binding:stop,
       bee.placement.native.binding:reconcile, bee.placement.native.binding:cleanup, bee.placement.native.binding:evidence, bee.placement.native.binding:attach,
       bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:revoke,
-      bee.placement.native:fixture_stop_materialization]
+      bee.placement.native:fixture_stop_materialization, bee.placement.native:fixture_start_unacknowledged]
     effect: allow
 - name: fixture_stop_materialization_policy
   kind: security.policy
@@ -114,6 +114,26 @@ entries:
   method: main
   meta: {type: test_support}
   modules: [process]
+- name: startup_runner
+  kind: process.lua
+  source: file://startup_runner.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    service: bee.placement.native.service:service
+    store: bee.placement.native.persist:store
+- name: fixture_start_unacknowledged
+  kind: function.lua
+  source: file://startup_runner.lua
+  method: start
+  meta: {type: test_support}
+  modules: [process]
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy]
+  imports:
+    service: bee.placement.native.service:service
+    store: bee.placement.native.persist:store
 - name: preparer_temp_root
   kind: env.variable
   meta: {type: test_support}
@@ -135,7 +155,7 @@ entries:
     store: bee.placement.native.persist:store
     migrations: bee.placement.native.migrations:migrations
     request_codec: bee.placement:request
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     types: bee.placement:types
 - name: codex_test_provider
   kind: registry.entry
@@ -192,7 +212,7 @@ entries:
   modules: [hash]
   imports:
     bounds: bee.values:bounds
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
 - name: fixture_agent_dispatch
   kind: function.lua
   source: file://fixture_agent.lua
@@ -200,7 +220,7 @@ entries:
   modules: [hash]
   imports:
     bounds: bee.values:bounds
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
 - name: fixture_agent_normalize
   kind: function.lua
   source: file://fixture_agent.lua
@@ -208,7 +228,7 @@ entries:
   modules: [hash]
   imports:
     bounds: bee.values:bounds
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
 - name: fixture_agent_configure
   kind: function.lua
   source: file://fixture_agent.lua
@@ -216,7 +236,7 @@ entries:
   modules: [hash]
   imports:
     bounds: bee.values:bounds
-    configure_protocol: bee.driver.configuration:configuration
+    configure_protocol: bee.driver.binding:configuration
 - name: test_launch_policy
   kind: registry.entry
   meta:
@@ -285,7 +305,7 @@ entries:
     agy_launch: bee.driver.agy.binding:launch
     muse_launch: bee.driver.muse.binding:launch
     opencode_launch: bee.driver.opencode.binding:launch
-    configuration_protocol: bee.driver.configuration:configuration
+    configuration_protocol: bee.driver.binding:configuration
     preferences: bee.driver.profiles:preferences
     test: wippy.test:test
     runner_fixture: bee.placement.native:materialization_runner
@@ -300,7 +320,7 @@ entries:
     resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
     output_buffer: bee.placement.native.service:output_buffer
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     types: bee.placement:types
 - name: provider_configuration_test
   kind: function.lua
@@ -315,8 +335,8 @@ entries:
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     homes: bee.placement.native.service:homes
-    quote: bee.driver.kit:quote
-    configuration_protocol: bee.driver.configuration:configuration
+    quote: bee.driver.binding:quote
+    configuration_protocol: bee.driver.binding:configuration
 - name: grok_login_fixture
   kind: fs.directory
   meta: {type: test_support}
@@ -334,7 +354,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.test.principals:bound
-    quote: bee.driver.kit:quote
+    quote: bee.driver.binding:quote
     grok_launch: bee.driver.grok.binding:launch
     grok_configuration: bee.driver.grok.binding:configuration
     placement_service: bee.placement.native.service:service
@@ -411,8 +431,8 @@ entries:
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     homes: bee.placement.native.service:homes
-    quote: bee.driver.kit:quote
-    configuration_protocol: bee.driver.configuration:configuration
+    quote: bee.driver.binding:quote
+    configuration_protocol: bee.driver.binding:configuration
     canonical: bee.values:canonical
     fixture_builder: bee.placement.native:fixture_instruction_builder
 - name: preparer_fixture_config

@@ -119,10 +119,11 @@ local function forward_defaults(packages: {Package}): ({Package}?, string?)
 end
 
 -- Use the runtime resolver's worklist rule: retain a compatible installed
--- selection, otherwise choose the best catalog match. Retract superseded
+-- selection, otherwise choose the best catalog match. Explicit newest roots
+-- use catalog selection even when the installed version remains compatible. Retract superseded
 -- dependencies and resolve their intersections again; never choose a lower
 -- parent version to make its descendants succeed.
-function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?): (Result?, string?)
+function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?, newest: {[string]: boolean}?): (Result?, string?)
     if #roots > 128 then return nil, "too many dependency roots" end
     local assigned: {[string]: Package} = {}
     local demands: {[string]: {[string]: string}} = {}
@@ -159,14 +160,14 @@ function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?
     end
     local function choose(name: string, constraints: {string}): (string?, string?)
         local retained = installed and installed[name] or nil
-        if retained then
+        if retained and not (newest and newest[name]) then
             local matches, problem = allowed(retained, constraints, true)
             if matches == nil then return nil, problem end
             if matches then return retained, nil end
         end
         for _, constraint in ipairs(constraints) do
             if semver.parse(constraint) then
-                local matches, problem = allowed(constraint, constraints)
+                local matches, problem = allowed(constraint, constraints, retained == constraint or (newest and newest[name]))
                 if matches == nil then return nil, problem end
                 if matches then return constraint, nil end
                 return nil, name .. " has conflicting constraints: " .. table.concat(constraints, ", ")
@@ -187,7 +188,7 @@ function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?
                 cached = {items = listed, more = more}; versions_cache[key] = cached
             end
             for _, version in ipairs(cached.items) do
-                local matches, problem = allowed(version, constraints)
+                local matches, problem = allowed(version, constraints, retained == version or (newest and newest[name]))
                 if matches == nil then return nil, problem end
                 if matches then
                     local parsed = semver.parse(version)
@@ -197,6 +198,10 @@ function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?
                 end
             end
             if not cached.more then
+                if newest and newest[name] and best_prerelease
+                    and (not best_stable or (semver.compare(best_prerelease, best_stable) or 0) > 0) then
+                    return best_prerelease, nil
+                end
                 if best_stable or best_prerelease then return best_stable or best_prerelease, nil end
                 return nil, name .. " has no version satisfying " .. table.concat(constraints, ", ")
             end

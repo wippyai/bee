@@ -289,11 +289,6 @@ entries:
         kind: config
         optional: true
         write_back: false
-- name: locate
-  kind: library.lua
-  source: file://locate.lua
-  imports:
-    universal: bee.driver.binding:universal
 - name: command
   kind: registry.entry
   meta:

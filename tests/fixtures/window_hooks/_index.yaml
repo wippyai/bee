@@ -143,8 +143,8 @@ entries:
   method: configure
   modules: [hash]
   imports:
-    configuration: bee.driver.configuration:configuration
-    quote: bee.driver.kit:quote
+    configuration: bee.driver.binding:configuration
+    quote: bee.driver.binding:quote
 - name: fixture_policy
   kind: security.policy
   meta: {type: test_support}
@@ -264,7 +264,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.host:main
-    - bee.session:main
+    - bee.desktop.service:main
     - bee.apps:broker
     - bee.terminal:main
     effect: allow

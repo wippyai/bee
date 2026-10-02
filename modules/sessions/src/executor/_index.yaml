@@ -14,6 +14,9 @@ entries:
   source: file://driver_route.lua
   modules:
   - registry
+  imports:
+    bounds: bee.values:bounds
+    resolver: bee.driver.binding:resolver
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua

@@ -67,7 +67,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     hooks: bee.gateway.hooks:hooks
-    configuration: bee.driver.configuration:configuration
+    configuration: bee.driver.binding:configuration
     codex_configuration: bee.driver.codex.binding:configuration
 - name: mcp_test
   kind: function.lua

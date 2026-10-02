@@ -1,6 +1,17 @@
 version: '1.0'
 namespace: bee.tests.sessions
 entries:
+- name: owner_boundary_test
+  kind: function.lua
+  source: file://owner_boundary_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+  security:
+    policies: [bee.tests.sessions:probe_policy]
 - name: interactive_test
   kind: function.lua
   source: file://interactive_test.lua
@@ -29,7 +40,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    locate: bee.sessions.service:locate
+    locate: bee.sessions.binding:locate
 - name: catalog_service_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -49,7 +60,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    catalog: bee.sessions.service:catalog
+    catalog: bee.sessions.binding:catalog_service
     machine: bee.harness.carrier:machine
     materialization: bee.placement.native.service:materialization
 - name: scheduler_test
@@ -290,3 +301,7 @@ entries:
   imports:
     test: wippy.test:test
     route: bee.sessions.executor:driver_route
+    bounds: bee.values:bounds
+    materializer: bee.gov.delivery:materializer
+  modules:
+  - registry

@@ -426,7 +426,7 @@ entries:
   - sql
   - uuid
   imports:
-    events: bee.driver.kit:events
+    events: bee.driver.codec:events
     test: wippy.test:test
     harness: bee.threads:harness
     owner: bee.threads.persist:owner

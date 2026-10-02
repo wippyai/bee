@@ -34,6 +34,10 @@ component inventory has no dangling requirement targets and caps root Lua at
 The persisted map covers exactly the 234 persisted identities removed from
 main. Step 2 adds only nonpersisted helper relocations to the cumulative map;
 the step 1 persisted map and applied migration definitions remain unchanged.
+Credentials' source resolver now lives in `bee.credentials.binding:sources`;
+the cumulative map resolves both earlier helper IDs to that implementation.
+The host-selected source catalog and resource reference remain in
+`bee.credentials.env`; the historical root map and applied SQL stay unchanged.
 Shared root declarations and the exact library set are
 specified in the conventions and `build/layout_roots.json`. Lint rejects new
 root entries outside that set and known composition names with the wrong kind,
@@ -49,6 +53,15 @@ bindings, policies, resource defaults and profile declarations move to
 helpers join the owning concept's child, including driver configuration,
 Hive exposure, governance delivery and activation, and Hub package inspection.
 No forwarding implementations are introduced.
+
+Driver role correction places shared configuration calls and option rendering
+in `bee.driver.binding`, observation helpers in `bee.driver.codec`, and framing
+in `bee.driver.transport`. Provider bindings retain their fixed descriptors and
+provider-specific configuration. The six duplicate descriptor locate libraries
+are removed; tests consume each provider's existing binding operation directly.
+These M0 helper moves retain every persisted binding/profile ID, topic, schema
+and applied migration. Their current destinations are recorded in the layout
+identity map without rewriting owner state or immutable migration SQL.
 
 Placement 9 migrates the remaining saved binding identity and exact cleanup
 markers, plus request/grant references. Sync 9 and Gateway 17 migrate stored
@@ -74,7 +87,7 @@ reviewed binding, and the application journey fixture edits that host selection.
 
 Application entries, renderers, screen models and rendering helpers live under
 component `app/` namespaces. The public rendering kit remains in `application`;
-core desktop and terminal sources implement the desktop shell. Placement's
+the desktop component and core terminal sources implement the desktop shell. Placement's
 process-local native terminal facade is an executor contract, not an application
 screen: it consumes the caller's terminal grant. Docker's short window adapter
 selects its backend; it does not duplicate the native facade. Retained
@@ -267,7 +280,7 @@ The following paths group overlays rather than production namespace children:
 | `tests/lua/protocol/admission/_index.yaml` | `bee.protocol` |
 | `tests/lua/reference_apps/_index.yaml` | `bee.app.reference.test` |
 | `tests/lua/resources/_index.yaml` | `bee.resources` |
-| `tests/lua/session/_index.yaml` | `bee.session` |
+| `tests/lua/session/_index.yaml` | `bee.desktop.service` |
 | `tests/lua/sessions/_index.yaml` | `bee.tests.sessions` |
 | `tests/lua/settings/_index.yaml` | `bee.settings` |
 | `tests/lua/status_reader/_index.yaml` | `bee.status.reader` |
@@ -293,6 +306,14 @@ the documented examples. Agent-author probes point at Timeline's `app/` sources.
 | `tests/fixtures/hub_manage/sync/env/_index.yaml` | `bee.sync.env` |
 | `tests/fixtures/hub_preview/sync/env/_index.yaml` | `bee.sync.env` |
 
+Sessions admission and catalog implementations live in `bee.sessions.binding`;
+its pull scheduler and turn workers live in `bee.sessions.service`, and selected
+executor/driver routing lives in `bee.sessions.executor`. Threads remains the
+journal owner. Sessions has no empty persistence, migrations or traits children.
+The former Sessions owner library and its nonpersisted move-map entries are
+removed; existing public function and binding IDs resolve directly to the owner
+source without a forwarding layer.
+
 ## Component root placement map
 
 Every name in a row moves from the source namespace to the owning child shown.
@@ -309,43 +330,43 @@ conventions and `build/layout_roots.json`.
 | `bee.approvals` | `bee.approvals.binding` | `local` |
 | `bee.approvals` | `bee.approvals.service` | `runtime_lease`, `service` |
 | `bee.console` | `bee.console.app` | `command` |
-| `bee.credentials` | `bee.credentials.env` | `credential_sources`, `database_ref`, `db`, `db_path`, `environment`, `materializer_ref`, `node_identity_migration_source`, `sources`, `sources_ref` |
-| `bee.credentials` | `bee.credentials.binding` | `local` |
+| `bee.credentials` | `bee.credentials.env` | `credential_sources`, `database_ref`, `db`, `db_path`, `environment`, `materializer_ref`, `node_identity_migration_source`, `sources_ref` |
+| `bee.credentials` | `bee.credentials.binding` | `local`, `sources` |
 | `bee.docs` | `bee.docs.binding` | `corpus` |
 | `bee.docs` | `bee.docs.env` | `corpus_ref`, `resources` |
-| `bee.driver.agy` | `bee.driver.agy.binding` | `binding`, `configuration`, `launch`, `protocol` |
-| `bee.driver.agy` | `bee.driver.agy.descriptor` | `command`, `locate` |
+| `bee.driver.agy` | `bee.driver.agy.binding` | `binding`, `configuration`, `launch`, `protocol`, `locate` |
+| `bee.driver.agy` | `bee.driver.agy.descriptor` | `command` |
 | `bee.driver.agy` | `bee.driver.agy.credentials` | `credential_format` |
 | `bee.driver.agy` | `bee.driver.agy.profiles` | `default_window`, `profiles`, `research_batch` |
 | `bee.driver.agy` | `bee.driver.agy.env` | `executable` |
 | `bee.driver.agy` | `bee.driver.agy.security` | `launch_policy_agy_batch`, `launch_policy_agy_window` |
 | `bee.driver.claude` | `bee.driver.claude.env` | `api_key`, `config_home`, `executable` |
-| `bee.driver.claude` | `bee.driver.claude.binding` | `binding`, `launch`, `protocol` |
-| `bee.driver.claude` | `bee.driver.claude.descriptor` | `command`, `locate` |
+| `bee.driver.claude` | `bee.driver.claude.binding` | `binding`, `launch`, `protocol`, `locate` |
+| `bee.driver.claude` | `bee.driver.claude.descriptor` | `command` |
 | `bee.driver.claude` | `bee.driver.claude.credentials` | `credential_format` |
 | `bee.driver.claude` | `bee.driver.claude.profiles` | `default_window`, `profiles`, `research_batch` |
 | `bee.driver.claude` | `bee.driver.claude.security` | `launch_policy_claude_batch`, `launch_policy_claude_window` |
 | `bee.driver.claude` | `bee.driver.claude.permission` | `permission_adapter` |
-| `bee.driver.codex` | `bee.driver.codex.binding` | `binding`, `configuration`, `launch`, `protocol` |
-| `bee.driver.codex` | `bee.driver.codex.descriptor` | `command`, `default_provider`, `locate` |
+| `bee.driver.codex` | `bee.driver.codex.binding` | `binding`, `configuration`, `launch`, `protocol`, `locate` |
+| `bee.driver.codex` | `bee.driver.codex.descriptor` | `command`, `default_provider` |
 | `bee.driver.codex` | `bee.driver.codex.env` | `config_home`, `executable` |
 | `bee.driver.codex` | `bee.driver.codex.credentials` | `credential_format` |
 | `bee.driver.codex` | `bee.driver.codex.profiles` | `default_window`, `named_batch`, `profiles`, `research_batch` |
 | `bee.driver.codex` | `bee.driver.codex.security` | `launch_policy_codex_batch`, `launch_policy_codex_named_batch`, `launch_policy_codex_window` |
-| `bee.driver.grok` | `bee.driver.grok.binding` | `binding`, `configuration`, `launch`, `protocol` |
-| `bee.driver.grok` | `bee.driver.grok.descriptor` | `command`, `locate` |
+| `bee.driver.grok` | `bee.driver.grok.binding` | `binding`, `configuration`, `launch`, `protocol`, `locate` |
+| `bee.driver.grok` | `bee.driver.grok.descriptor` | `command` |
 | `bee.driver.grok` | `bee.driver.grok.credentials` | `credential_format` |
 | `bee.driver.grok` | `bee.driver.grok.profiles` | `default_window`, `profiles`, `research_batch` |
 | `bee.driver.grok` | `bee.driver.grok.env` | `executable` |
 | `bee.driver.grok` | `bee.driver.grok.security` | `launch_policy_grok_batch`, `launch_policy_grok_window` |
-| `bee.driver.muse` | `bee.driver.muse.binding` | `binding`, `configuration`, `launch`, `protocol` |
-| `bee.driver.muse` | `bee.driver.muse.descriptor` | `command`, `locate` |
+| `bee.driver.muse` | `bee.driver.muse.binding` | `binding`, `configuration`, `launch`, `protocol`, `locate` |
+| `bee.driver.muse` | `bee.driver.muse.descriptor` | `command` |
 | `bee.driver.muse` | `bee.driver.muse.credentials` | `credential_format` |
 | `bee.driver.muse` | `bee.driver.muse.profiles` | `default_window`, `profiles`, `research_batch` |
 | `bee.driver.muse` | `bee.driver.muse.env` | `executable` |
 | `bee.driver.muse` | `bee.driver.muse.security` | `launch_policy_muse_batch`, `launch_policy_muse_window` |
-| `bee.driver.opencode` | `bee.driver.opencode.binding` | `binding`, `configuration`, `launch`, `protocol` |
-| `bee.driver.opencode` | `bee.driver.opencode.descriptor` | `command`, `locate` |
+| `bee.driver.opencode` | `bee.driver.opencode.binding` | `binding`, `configuration`, `launch`, `protocol`, `locate` |
+| `bee.driver.opencode` | `bee.driver.opencode.descriptor` | `command` |
 | `bee.driver.opencode` | `bee.driver.opencode.credentials` | `credential_format` |
 | `bee.driver.opencode` | `bee.driver.opencode.profiles` | `default_window`, `profiles`, `research_batch` |
 | `bee.driver.opencode` | `bee.driver.opencode.env` | `executable` |
@@ -355,12 +376,14 @@ conventions and `build/layout_roots.json`.
 | `bee.driver.wippy` | `bee.driver.wippy.profiles` | `profiles` |
 | `bee.driver.wippy` | `bee.driver.wippy.service` | `runner` |
 | `bee.driver` | `bee.driver.codec` | `codec_registry` |
-| `bee.driver` | `bee.driver.configuration` | `configuration`, `option_render` |
 | `bee.driver` | `bee.driver.descriptor` | `descriptor`, `schema_values` |
 | `bee.driver` | `bee.driver.profiles` | `instructions`, `preferences`, `profile`, `profile_access` |
 | `bee.driver` | `bee.driver.locate` | `locate`, `login_evidence`, `probe_capture` |
 | `bee.driver` | `bee.driver.permission` | `permission_request_hook` |
-| `bee.driver` | `bee.driver.binding` | `resolver`, `universal` |
+| `bee.driver` | `bee.driver.binding` | `configuration`, `option_render`, `resolver`, `universal` |
+| `bee.driver.kit` | `bee.driver.binding` | `quote`, `toml` |
+| `bee.driver.kit` | `bee.driver.codec` | `events`, `normalize` |
+| `bee.driver.kit` | `bee.driver.transport` | `framing` |
 | `bee.files` | `bee.files.app` | `gitignore`, `source`, `syntax`, `tree` |
 | `bee.files` | `bee.files.env` | `workspace_root_ref` |
 | `bee.gateway` | `bee.gateway.api` | `address_value`, `mcp` |
@@ -407,7 +430,6 @@ conventions and `build/layout_roots.json`.
 | `bee.resources` | `bee.resources.env` | `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `resource_roots`, `resources`, `roots_ref` |
 | `bee.resources` | `bee.resources.binding` | `local`, `resources_workspace_extension` |
 | `bee.sessions` | `bee.sessions.executor` | `driver_route`, `executor_registry`, `executor_selection` |
-| `bee.sessions` | `bee.sessions.service` | `owner` |
 | `bee.sessions` | `bee.sessions.binding` | `threads_journal` |
 | `bee.sessions` | `bee.sessions.env` | `threads_journal_ref` |
 | `bee.settings` | `bee.settings.app` | `build_info` |

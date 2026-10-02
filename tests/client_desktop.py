@@ -277,7 +277,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
 ''', 1)
             client.write_text(code)
         if failed_session_upgrade:
-            session = project / "src/session/main.lua"
+            session = project / "modules/desktop/src/service/main.lua"
             code = session.read_text()
             anchor = '                process.upgrade("", owner, width, height, preferences, initial, saved)\n'
             assert code.count(anchor) == 1

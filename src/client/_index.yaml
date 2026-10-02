@@ -57,7 +57,7 @@ entries:
     input_decode: bee.protocol:input
     contract: bee.protocol:application
     inventory: bee.host:inventory
-    status_bindings: bee.session:bindings
+    status_bindings: bee.desktop.types:bindings
     status_surface: bee.app:status_surface
     host_protocol: bee.host:protocol
     transfer: bee.host:transfer
@@ -69,6 +69,7 @@ entries:
     interaction: bee.app:interaction
     physical: bee.terminal:display
     appearance: bee.ui:appearance
+    projection: bee.desktop.types:projection
 - name: local
   kind: process.lua
   source: file://main.lua
@@ -134,7 +135,7 @@ entries:
   source: file://state.lua
   modules: [hash]
   imports:
-    decode: bee.protocol:decode
+    decode: bee.desktop.types:projection
     contract: bee.protocol:application
     model: bee.desktop:model
     appearance: bee.ui:appearance

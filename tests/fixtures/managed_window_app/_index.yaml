@@ -244,7 +244,7 @@ entries:
     resources:
     - bee.test.gateway
     - bee.host:main
-    - bee.session:main
+    - bee.desktop.service:main
     - bee.apps:broker
     - bee.terminal:main
     effect: allow

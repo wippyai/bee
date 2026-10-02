@@ -1,0 +1,26 @@
+version: '1.0'
+namespace: bee.desktop.types
+entries:
+- name: commands
+  kind: library.lua
+  source: file://commands.lua
+  imports:
+    appearance: bee.ui:appearance
+- name: projection
+  kind: library.lua
+  source: file://projection.lua
+  imports:
+    model: bee.desktop:model
+    appearance: bee.ui:appearance
+- name: bindings
+  kind: library.lua
+  source: file://bindings.lua
+  imports:
+    model: bee.desktop:model
+- name: handoff
+  kind: library.lua
+  source: file://handoff.lua
+  imports:
+    decode: bee.desktop.types:projection
+    commands: bee.desktop.types:commands
+    bindings: bee.desktop.types:bindings

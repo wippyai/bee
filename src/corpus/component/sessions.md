@@ -6,6 +6,14 @@ transactional work, claim, turn and result records; Sessions never writes its
 tables. Executors are selected by the host and operate through the fenced
 worker contract.
 
+`bee.sessions.binding` implements admission, catalog and control operations
+directly from its owner source; it also owns readiness observations and the
+Threads journal adapter. `bee.sessions.service` owns the pull scheduler and turn
+workers. `bee.sessions.executor` resolves host-selected executors and driver
+methods exactly as declared by the metadata-discovered, host-activated binding,
+with callable targets read from one pinned registry snapshot. Sessions has no persistence,
+migration or tool namespace: Threads owns its durable records and migrations.
+
 A launch definition may select `session_profile_id` for structured executor
 turns and `session_credentials` for their explicit broker projections. Sessions admission pins that driver profile while native manual windows
 retain the definition's window profile. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes remain addressable. Catalog readiness measures the same

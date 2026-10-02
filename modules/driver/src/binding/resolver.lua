@@ -111,8 +111,9 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
 end
 
 function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?): (string?, string?, descriptor.Descriptor?)
-    local namespace = binding_ref:match("^(.*)%.binding:binding$")
-    if not namespace or (target ~= nil and target ~= namespace .. ".binding:configure") then return nil, nil end
+    local declared, declaration_error = M.configure(pinned, binding_ref)
+    if not declared then return nil, declaration_error end
+    if target ~= nil and target ~= declared then return nil, "configuration target differs from the selected driver binding" end
     local binding = M.entry(pinned, binding_ref)
     local meta = binding and bounds.object(binding.meta) or nil
     local provider = meta and bounds.id(meta.driver_id) or nil
@@ -126,12 +127,6 @@ function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, ta
     if descriptor_error then return nil, descriptor_error end
     if selected and selected.provider ~= provider then return nil, "driver binding descriptor provider does not match driver_id" end
     return selected and selected.configure or nil, nil, selected
-end
-
-function M.configure_renderer_for_target(pinned: registry.Snapshot, target: string): (string?, string?, descriptor.Descriptor?)
-    local namespace = target:match("^(.*)%.binding:configure$")
-    if not namespace then return nil, nil end
-    return M.configure_renderer(pinned, namespace .. ".binding:binding", target)
 end
 
 -- The selected immutable driver profile may name a typed CLI adapter for

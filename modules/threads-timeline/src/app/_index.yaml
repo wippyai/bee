@@ -13,9 +13,9 @@ entries:
   - uuid
   - funcs
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     client: bee.app:client
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     caller: bee.app:caller
     model: bee.threads.timeline.app:model
     view: bee.threads.timeline.app:view
@@ -36,7 +36,7 @@ entries:
   kind: library.lua
   source: file://format.lua
   imports:
-    text: bee.app:text
+    text: bee.ui:text
     record_types: bee.threads:record_types
 - name: model
   kind: library.lua
@@ -44,7 +44,7 @@ entries:
   modules:
   - json
   imports:
-    text: bee.app:text
+    text: bee.ui:text
     caller: bee.app:caller
     session: bee.threads.delivery:session
     record: bee.threads.records:record
@@ -57,6 +57,6 @@ entries:
   kind: library.lua
   source: file://view.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     model: bee.threads.timeline.app:model

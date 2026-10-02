@@ -20,31 +20,3 @@ entries:
     bounds: bee.values:bounds
     budgets: bee.threads.records:budgets
     canonical: bee.values:canonical
-- name: validation
-  kind: library.lua
-  source: file://validation.lua
-  modules: [registry]
-  imports:
-    budgets: bee.threads.records:budgets
-    bounds: bee.values:bounds
-    descriptors: bee.driver.descriptor:descriptor
-    protocol: bee.harness.profiles:protocol
-- name: migration
-  kind: library.lua
-  source: file://migration.lua
-  imports:
-    bounds: bee.values:bounds
-    protocol: bee.harness.profiles:protocol
-- name: service
-  kind: library.lua
-  source: file://service.lua
-  modules: [security, ctx, system, registry, sql, hash]
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    sync: bee.sync.persist:store
-    transaction: bee.persist.persist:transaction
-    protocol: bee.harness.profiles:protocol
-    migration: bee.harness.profiles:migration
-    validation: bee.harness.profiles:validation
-    driver_profile: bee.driver.profiles:profile

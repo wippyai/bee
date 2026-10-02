@@ -369,7 +369,7 @@ Terminal key events use `key_type` values such as `runes`, `space`, `enter`,
 the payload also carries `key`, `ctrl`, `alt` and `shift`. Mouse wheel events
 have `type = "mouse"`, `action = "wheel"` and `button = "wheel_up"` or
 `"wheel_down"` (some senders use `"up"` or `"down"`).
-`bee.app:text.bound(value, limit)` replaces control
+`bee.ui:text.bound(value, limit)` replaces control
 characters, including newlines, with spaces and truncates on a UTF-8
 character boundary.
 

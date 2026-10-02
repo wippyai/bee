@@ -110,6 +110,8 @@ local function dependency_line(item: Object): string?
         return "update " .. component .. " " .. tostring(item.previous_version) .. " -> " .. tostring(item.version)
     end
     if change == "remove" then return "remove " .. component .. " " .. tostring(item.previous_version) end
+    local reason = bounds.line(item.reason, 4096)
+    if reason then return "keep " .. component .. " " .. tostring(item.version) .. ": " .. reason end
     return ""
 end
 

@@ -79,4 +79,4 @@ entries:
     test: wippy.test:test
     persistence: bee.workspace.persist:checkpoint
     model: bee.desktop:model
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance

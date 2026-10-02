@@ -5,7 +5,13 @@ entries:
   kind: function.lua
   source: file://method.lua
   method: handle
-  imports: {service: bee.harness.profiles:service}
+  modules: [security, ctx, system, registry]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+    validation: bee.harness.profiles.binding:validation
+    store: bee.harness.profiles.persist:store
+    transaction: bee.persist.persist:transaction
   security: {policies: [bee.harness.security:profile_store_policy]}
 - name: capabilities
   kind: function.lua
@@ -92,3 +98,9 @@ entries:
   - contract: bee.harness:profiles
     methods:
       call: bee.harness.binding:call
+- name: windows
+  kind: library.lua
+  source: file://windows.lua
+  imports:
+    window: bee.placement.native.service:window
+    docker_window: bee.placement.docker.service:window

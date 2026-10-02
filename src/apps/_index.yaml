@@ -24,7 +24,7 @@ entries:
     binding_protocol: bee.host:binding_protocol
     thread_binding: bee.apps:thread_binding
     thread_binding_reducer: bee.apps:thread_binding_reducer
-    thread_protocol: bee.app:thread_protocol
+    thread_protocol: bee.app.threads.types:protocol
     app_identity: bee.threads.records:app_identity
   security:
     policies: [bee.security.desktop:broker_policy, bee.security.threads:application_thread_membership_policy,

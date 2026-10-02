@@ -10,7 +10,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SDK = {"application": "bee.app"}
+SDK = {"application": "bee.app", "application-threads": "bee.app.threads"}
 NATIVE_ENTRIES = {"bee.harness.host:environment"}
 ROOT_ENTRIES = json.loads((ROOT / "build/layout_roots.json").read_text())
 ROOT_DECLARATIONS = {"ns.definition", "ns.dependency", "ns.requirement", "contract.definition"}

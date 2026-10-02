@@ -7,8 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee application SDK
-    comment: Public application-side values, presentation helpers, and bounded thread
-      facade messages; helpers grant no application, workspace, or thread authority
+    comment: Public application-side values and presentation helpers; helpers grant no application, workspace, or thread authority
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -22,8 +21,6 @@ entries:
   imports:
     arguments: bee.app:arguments
     interaction: bee.app:interaction
-    thread_bounds: bee.threads.records:bounds
-    thread_protocol: bee.app:thread_protocol
     bounds: bee.values:bounds
 - name: sessions_protocol
   kind: library.lua
@@ -91,14 +88,6 @@ entries:
 - name: names
   kind: library.lua
   source: file://names.lua
-- name: thread_protocol
-  kind: library.lua
-  source: file://thread_protocol.lua
-  imports:
-    bounds: bee.values:bounds
-    record: bee.threads.records:record
-    record_types: bee.threads:record_types
-    record_bounds: bee.threads.records:bounds
 - name: viz
   kind: library.lua
   source: file://viz.lua

@@ -26,6 +26,7 @@ workspace:
     bee/gov-overlays: ./modules/gov-overlays
     bee/approvals: ./modules/approvals
     bee/approvals-inbox: ./modules/approvals-inbox
+    bee/application-threads: ./modules/application-threads
     bee/application: ./modules/application
     bee/ui: ./modules/ui
     bee/node: ./modules/node

@@ -215,6 +215,10 @@ entries:
   parameters:
   - name: target_workspace_root
     value: bee.env:files_root
+- name: application_threads
+  kind: ns.dependency
+  component: bee/application-threads
+  version: 0.1.0-dev
 - name: application
   kind: ns.dependency
   component: bee/application

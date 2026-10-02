@@ -91,6 +91,36 @@
       "source": "modules/application/src/status/_index.yaml"
     },
     {
+      "id": "bee.app.threads.types:protocol",
+      "kind": "library.lua",
+      "source": "modules/application-threads/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.app.threads:client",
+      "kind": "library.lua",
+      "source": "modules/application-threads/src/_index.yaml"
+    },
+    {
+      "id": "bee.app.threads:definition",
+      "kind": "ns.definition",
+      "source": "modules/application-threads/src/_index.yaml"
+    },
+    {
+      "id": "bee.app.threads:dependency_application",
+      "kind": "ns.dependency",
+      "source": "modules/application-threads/src/_index.yaml"
+    },
+    {
+      "id": "bee.app.threads:dependency_threads",
+      "kind": "ns.dependency",
+      "source": "modules/application-threads/src/_index.yaml"
+    },
+    {
+      "id": "bee.app.threads:dependency_values",
+      "kind": "ns.dependency",
+      "source": "modules/application-threads/src/_index.yaml"
+    },
+    {
       "id": "bee.app:arguments",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
@@ -172,11 +202,6 @@
     },
     {
       "id": "bee.app:status_surface",
-      "kind": "library.lua",
-      "source": "modules/application/src/_index.yaml"
-    },
-    {
-      "id": "bee.app:thread_protocol",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
     },
@@ -987,6 +1012,11 @@
     },
     {
       "id": "bee.deps:application",
+      "kind": "ns.dependency",
+      "source": "src/deps/_index.yaml"
+    },
+    {
+      "id": "bee.deps:application_threads",
       "kind": "ns.dependency",
       "source": "src/deps/_index.yaml"
     },
@@ -9264,6 +9294,20 @@
       "source": "modules/application/src/status/_index.yaml"
     },
     {
+      "namespace": "bee.app.threads",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.app.threads",
+      "source": "modules/application-threads/src/_index.yaml"
+    },
+    {
+      "namespace": "bee.app.threads.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.app.threads.types",
+      "source": "modules/application-threads/src/types/_index.yaml"
+    },
+    {
       "namespace": "bee.approvals",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -17263,14 +17307,14 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1830,
-    "namespace_count": 275,
+    "entry_count": 1836,
+    "namespace_count": 277,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 151,
-    "persisted_id_count": 837,
+    "persisted_id_count": 838,
     "requirement_count": 139,
     "requirement_target_count": 329,
     "root_src_lua_budget": 20851,
@@ -17462,7 +17506,7 @@
     },
     {
       "sources": [
-        "modules/application/src/client.lua",
+        "modules/application-threads/src/client.lua",
         "src/apps/broker.lua"
       ],
       "topic": "bee.app.thread.request"

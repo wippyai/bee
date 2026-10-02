@@ -18,8 +18,10 @@
     "sessions_protocol": "library.lua",
     "status_reader": "library.lua",
     "status_surface": "library.lua",
-    "thread_protocol": "library.lua",
     "viz": "library.lua"
+  },
+  "bee.app.threads": {
+    "client": "library.lua"
   },
   "bee.capability": {
     "model": "library.lua"

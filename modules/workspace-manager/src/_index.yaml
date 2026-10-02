@@ -30,5 +30,5 @@ entries:
     - bee.workspace.catalog:create
     - bee.workspace.catalog:roots
     - bee.workspace.catalog:folders
-    - bee.threads.service:list_workspace
+    - bee.threads.binding:list_workspace
     effect: allow

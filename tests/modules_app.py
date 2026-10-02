@@ -536,7 +536,7 @@ PUBLICATION_METHOD = r'''
 local prepared: {[string]: unknown}? = nil
 local function handle(raw: unknown): {[string]: unknown}
     assert(type(raw) == "table", "publication request must be an object")
-    local request = raw :: {[string]: unknown}
+    local request = raw
     assert(type(request.workspace_id) == "string" and #request.workspace_id == 32, "Modules must use its admitted workspace")
     assert(request.component == "acme/authored" and request.version == "2.4.0", "authored identity must be explicit")
     if request.operation == "prepare" then

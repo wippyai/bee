@@ -27,11 +27,15 @@ entries:
     - bee.workspace.db:*
     effect: deny
 - name: client_storage_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
     actions:
+    - env.get
+    - env.set
     - db.get
     resources:
+    - bee.persist:startup_progress
     - bee.env:client_db
     effect: allow
 - name: workspace_catalog_read_policy

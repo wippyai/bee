@@ -59,15 +59,15 @@ local function main()
     if not applied then error(tostring(apply_error)) end
     local listener: Object? = nil
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.binding:address", {})
         if not address_error then listener = bounds.object(raw) end
         if listener and type(listener.address) == "string" then break end
         time.sleep("100ms")
     end
     if not listener or type(listener.address) ~= "string" then error("native MCP listener did not become ready") end
-    local plan = call("bee.harness.launch:resolve", {definition_ref = definition})
-    reply("bee.harness.launch:setup", {workspace_id = "research-workspace", definition_ref = definition, expected_plan_digest = plan.plan_digest})
-    call("bee.threads.service:create", {thread_id = thread, idempotency_key = "create-live", title = "Live Gemini MCP proof"})
+    local plan = call("bee.harness.binding:resolve", {definition_ref = definition})
+    reply("bee.harness.binding:setup", {workspace_id = "research-workspace", definition_ref = definition, expected_plan_digest = plan.plan_digest})
+    call("bee.threads.binding:create", {thread_id = thread, idempotency_key = "create-live", title = "Live Gemini MCP proof"})
     local brief = "Use Bee MCP for research documents and all authoring. You may read your harness's own tool-output files when a tool response directs you there. "
         .. "Do not read unrelated files, use shell or delegates, or write source files or registry entries directly. "
         .. "If the same non-pending tool refusal happens twice, stop and report it; do not loop or invent results. "
@@ -94,7 +94,7 @@ local function main()
             .. ", message_kind progress, recipient_ids [bee.research.probe], and content {text: the frozen digest, artifact_ref: the frozen digest}. "
             .. "Do not claim tests passed; the host will lint and review before approving. Answer DONE only after the message succeeds."
     end
-    local started = call("bee.harness.launch:start", {request_id = "live-agent", definition_ref = definition, workspace_id = "research-workspace", thread_id = thread, brief = brief})
+    local started = call("bee.harness.binding:start", {request_id = "live-agent", definition_ref = definition, workspace_id = "research-workspace", thread_id = thread, brief = brief})
     local pid = tostring(started.carrier)
     local monitored, monitor_error = process.monitor(pid)
     if not monitored then error(tostring(monitor_error)) end
@@ -147,7 +147,7 @@ local function main()
     local found = false
     local frozen_digest: string? = nil
     for _ = 1, 64 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = thread, cursor = cursor, limit = 64})
         local records = page.records
         if type(records) ~= "table" then error("thread page records missing") end
         for _, raw_record in ipairs(records) do

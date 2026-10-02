@@ -154,7 +154,7 @@ end
 
 local function listener_ready()
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.binding:address", {})
         local address = not address_error and bounds.object(raw) or nil
         if address and type(address.address) == "string" then return end
         time.sleep("100ms")
@@ -240,7 +240,7 @@ end
 -- The findings a person would hand back: the host records them on the bound
 -- thread, where the repairing attempt reads them like any other record.
 local function deliver_findings(findings: string, round: string)
-    call("bee.threads.service:record", {thread_id = THREAD, idempotency_key = "findings-" .. round,
+    call("bee.threads.binding:record", {thread_id = THREAD, idempotency_key = "findings-" .. round,
         kind = "message", body = {message_id = "findings-" .. round, message_kind = "notification",
             recipient_ids = {}, content = {text = findings}}})
 end
@@ -306,7 +306,7 @@ local function reported_digest(started: Object, marker: string): (string?, strin
     local terminal = ""
     local sequence = 0
     for _ = 1, 64 do
-        local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
+        local page = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
         local records = page.records
         if type(records) ~= "table" then error("thread page records missing") end
         for _, raw_record in ipairs(records) do
@@ -393,10 +393,10 @@ local function main()
     local pinned_marker = bounds.text(values.marker, 160)
     local marker: string = (pinned_marker and pinned_marker ~= "") and pinned_marker
         or ("agent-app-" .. round .. "-" .. tostring(time.now():unix_nano()))
-    local plan = call("bee.harness.launch:resolve", {definition_ref = definition})
-    reply("bee.harness.launch:setup", {workspace_id = launch_workspace, definition_ref = definition,
+    local plan = call("bee.harness.binding:resolve", {definition_ref = definition})
+    reply("bee.harness.binding:setup", {workspace_id = launch_workspace, definition_ref = definition,
         expected_plan_digest = plan.plan_digest})
-    call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "create-" .. THREAD,
+    call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = "create-" .. THREAD,
         title = "Agent-authored Bee application"})
     -- A scripted provider that learns the contract from the guide is given the
     -- plain request instead of the host's contract-bearing brief.
@@ -416,7 +416,7 @@ local function main()
         end
     end
 
-    local started = call("bee.harness.launch:start", {request_id = "agent-app-" .. round,
+    local started = call("bee.harness.binding:start", {request_id = "agent-app-" .. round,
         definition_ref = definition, workspace_id = launch_workspace, thread_id = THREAD, brief = brief})
     started.workspace_id = launch_workspace
     local approved = await_carrier(started)

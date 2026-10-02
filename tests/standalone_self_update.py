@@ -25,6 +25,7 @@ local inventory = require("inventory")
 local view = require("view")
 local appearance = require("appearance")
 local live_updates = require("live_updates")
+local catalog = require("catalog")
 local REQUEST = {action = "update", component = "bee/bee", version = "__TARGET__", parameters = {}, migration_policy = "none"}
 local function call(operation: string, request: unknown?, digest: string?): {[string]: unknown}
     local raw, problem = funcs.new():call("bee.hub.binding:call", {operation = operation, request = request, expected_digest = digest})
@@ -61,6 +62,7 @@ local function check(expected: string)
 end
 local function live(): integer
     local pid = process.pid()
+    local running_code = catalog.code(assert(registry.snapshot()), "bee.settings.app:app")
     check("__BASELINE__")
     about("__BASELINE__", "baseline")
     for _, root in ipairs(captured().roots) do assert(root.component ~= "bee/bee", "invented standalone registry root") end
@@ -96,6 +98,13 @@ local function live(): integer
     local saved = call("status", nil, digest)
     local persisted = bounds.object(saved.value)
     assert(saved.ok == true and persisted and persisted.state == "complete", "completed receipt was not persisted")
+    local renderer = assert(registry.snapshot()):get("bee.settings.app:view")
+    local renderer_data = renderer and bounds.object(renderer.data)
+    local renderer_source = renderer_data and renderer_data.source
+    assert(type(renderer_source) == "string" and renderer_source:find("proof marker __TARGET__", 1, true),
+        "pack apply kept the old live Settings renderer despite changing its installed version")
+    assert(catalog.code(assert(registry.snapshot()), "bee.settings.app:app") ~= running_code,
+        "pack apply kept the old live Settings definition despite changing its installed version")
     check("__TARGET__")
     about("__TARGET__", "live")
     logger:info("STANDALONE_SELF_UPDATE_APPLIED", {owner_before = tostring(pid), owner_after = tostring(process.pid())})
@@ -124,14 +133,18 @@ def build_deployments(folder, seed):
     # Reuse sealed artifact resources and registrations while packing current
     # production Lua into both versions. No runtime pin or publication changes.
     lock, paths = artifact_paths(seed)
-    sources = {}
+    sources, declarations = {}, {}
     for root in (ROOT / "src", ROOT / "modules"):
         for index in root.rglob("_index.yaml"):
             document = yaml.safe_load(index.read_text())
             for entry in document.get("entries", []):
                 source = entry.get("source", "")
                 if entry.get("kind") in {"library.lua", "function.lua", "process.lua"} and source.startswith("file://"):
-                    sources[f"{document['namespace']}:{entry['name']}"] = str(index.parent / source.removeprefix("file://"))
+                    identity = f"{document['namespace']}:{entry['name']}"
+                    sources[identity] = str(index.parent / source.removeprefix("file://"))
+                    declarations[identity] = {"Component": "bee/bee" if root.name == "src" else "bee/" + index.relative_to(root).parts[0],
+                                              "Kind": entry["kind"], "Meta": entry.get("meta", {}),
+                                              "Data": {key: value for key, value in entry.items() if key not in {"name", "kind", "meta", "source"}}}
     packs, deployments = [], []
     for name, version in (("baseline", BASELINE), ("target", TARGET)):
         deployment = folder / name
@@ -144,7 +157,7 @@ def build_deployments(folder, seed):
             if org == "bee":
                 row["version"] = version
                 destination = deployment / ".wippy/vendor" / org / f"{module}-{version}.wapp"
-                packs.append({"Input": str(path), "Output": str(destination), "Version": version})
+                packs.append({"Input": str(path), "Output": str(destination), "Version": version, "Component": row["name"]})
             else:
                 destination = deployment / ".wippy/vendor" / org / path.name
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -158,7 +171,7 @@ def build_deployments(folder, seed):
     identity = {"runtime": manifest["runtime"]["repository"], "runtime_commit": manifest["runtime"]["commit"],
                 "native": native[0]["module"], "native_version": native[0]["version"],
                 "native_components": [{"package": item["package"], "version": item["version"]} for item in native]}
-    config.write_text(json.dumps({"Packs": packs, "Sources": sources, "Identity": identity}))
+    config.write_text(json.dumps({"Packs": packs, "Sources": sources, "Declarations": declarations, "Identity": identity}))
     result = subprocess.run(["go", "-C", str(ROOT / "native"), "run", "-mod=readonly",
                              str(ROOT / "tests/standalone_self_update_packs.go"), str(config)],
                             check=True, capture_output=True, text=True, timeout=120,
@@ -224,7 +237,8 @@ def native_attached(folder, baseline, target, url):
     versions = [next(row["version"] for row in lock["modules"] if row.get("root"))
                 for lock in (baseline_lock, target_lock)]
     args = SimpleNamespace(binary=binary, from_version=versions[0], to_version=versions[1],
-                           marker=versions[1], evidence=folder, hub_url=url)
+                           marker=versions[1], code_marker="proof marker " + versions[1],
+                           baseline_code_marker="proof marker " + versions[0], evidence=folder, hub_url=url)
     native_exercise(args, scratch, "live")
     return args, scratch
 
@@ -303,7 +317,7 @@ def exercise(folder, baseline, target):
             (probe / "main.lua").write_text(PROBE.replace("__BASELINE__", baseline_version).replace("__TARGET__", target_version))
             imports = {"bounds": "bee.threads.records:bounds", "inventory": "bee.hub:inventory",
                        "view": "bee.settings.app:view", "appearance": "bee.app:appearance",
-                       "live_updates": "bee.settings.app:live_updates"}
+                       "live_updates": "bee.settings.app:live_updates", "catalog": "bee.apps:catalog"}
             entries = [
                 {"name": "read", "kind": "security.policy", "policy": {
                     "actions": ["registry.get", "registry.resolution.get", "bee.hub.read"], "resources": "*", "effect": "allow"}},
@@ -377,7 +391,8 @@ def main(deployment=None):
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--native-offline":
         args = SimpleNamespace(binary=Path(sys.argv[2]), evidence=Path(sys.argv[4]),
-                               from_version=sys.argv[5], to_version=sys.argv[6], marker=sys.argv[6])
+                               from_version=sys.argv[5], to_version=sys.argv[6], marker=sys.argv[6],
+                               code_marker="proof marker " + sys.argv[6])
         native_exercise(args, Path(sys.argv[3]), "offline")
     else:
         main(sys.argv[1] if len(sys.argv) > 1 else None)

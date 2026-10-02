@@ -53,12 +53,12 @@ local function run(address: string)
     changes:update(entry)
     local applied, apply_error = changes:apply()
     if not applied then error(tostring(apply_error)) end
-    value(call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "create", title = "Agent access"}))
+    value(call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = "create", title = "Agent access"}))
     local tokens: {[string]: string} = {}
     for _, action in ipairs({"access-a", "access-b"}) do
-        value(call("bee.threads.service:admit_action", {thread_id = THREAD, idempotency_key = action, action_id = action,
+        value(call("bee.threads.binding:admit_action", {thread_id = THREAD, idempotency_key = action, action_id = action,
             admitted = {request_id = action, principal_id = ACTOR, binding_ref = "b", binding_digest = "d", grant_refs = {}, budget_ref = "budget", input = {text = "test"}}}))
-        value(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = action .. "-prepare", action_id = action, attempt_id = action .. "-attempt",
+        value(call("bee.threads.binding:prepare_attempt", {thread_id = THREAD, idempotency_key = action .. "-prepare", action_id = action, attempt_id = action .. "-attempt",
             prepared = {binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", placement_binding = "bee.placement.native.binding:binding", placement_attempt_id = action, plan_digest = "plan"}}))
         local admitted = value(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD,
             owner_incarnation = 1, carrier_epoch = 1, workspace_id = WORKSPACE, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,

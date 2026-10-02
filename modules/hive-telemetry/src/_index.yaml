@@ -21,189 +21,51 @@ entries:
   meta:
     capability: hive.expose
     parameters:
-      operations: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list,
-        bee.hive.telemetry:holdings, bee.hive.telemetry:cluster]
+      operations: [bee.hive.telemetry.binding:presence, bee.hive.telemetry.binding:stats, bee.hive.telemetry.binding:catalog_list,
+        bee.hive.telemetry.binding:holdings, bee.hive.telemetry.binding:cluster]
       mode: open
       audiences: ['*']
     reason: Expose the package open telemetry operations to Hive peers
     value_kind: security.policy
   targets:
-  - entry: bee.hive.telemetry:presence
+  - entry: bee.hive.telemetry.binding:presence
     path: .security.policies +=
-- name: presence
-  kind: function.lua
-  source: file://presence.lua
-  method: handle
-  modules: [system]
-  imports:
-    types: bee.hive:types
-    sampling: bee.hive.telemetry:sampling
-    clock: bee:clock
-  meta:
-    hive: open
-    hive_operation:
-      revision: '1'
-      title: Node presence
-      input: {type: object, properties: {}, additionalProperties: false}
-      output:
-        type: object
-        additionalProperties: false
-        properties:
-          protocol_revision: {type: string}
-          node_id: {type: string}
-          role: {type: string}
-          cluster_size: {type: integer}
-          sampled_at: {type: string}
-  security:
-    policies: [bee.security.hive:hive_telemetry_policy]
 - name: sampling
   kind: library.lua
   source: file://sampling.lua
   imports:
     bounds: bee.protocol:bounds
-- name: stats
-  kind: function.lua
-  source: file://stats.lua
-  method: handle
-  modules: [system]
-  imports:
-    sampling: bee.hive.telemetry:sampling
-    clock: bee:clock
+- name: target_presence_policies
+  kind: ns.requirement
+  default: []
   meta:
-    hive: open
-    hive_operation:
-      revision: '1'
-      title: Runtime statistics
-      input: {type: object, properties: {}, additionalProperties: false}
-      output:
-        type: object
-        additionalProperties: false
-        properties:
-          memory:
-            type: object
-            additionalProperties: false
-            properties:
-              alloc: {type: integer}
-              total_alloc: {type: integer}
-              sys: {type: integer}
-              heap_alloc: {type: integer}
-              heap_objects: {type: integer}
-              num_gc: {type: integer}
-          goroutines: {type: integer}
-          cpu_count: {type: integer}
-          sampled_at: {type: string}
-  security:
-    policies: [bee.security.hive:hive_telemetry_policy]
-- name: catalog_list
-  kind: function.lua
-  source: file://catalog_list.lua
-  method: handle
-  imports:
-    catalog: bee.hive:catalog
-    bounds: bee.protocol:bounds
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.hive.telemetry.binding:presence
+    path: .security.policies
+  - entry: bee.hive.telemetry.binding:stats
+    path: .security.policies
+- name: target_catalog_list_policies
+  kind: ns.requirement
+  default: []
   meta:
-    hive: open
-    hive_operation:
-      revision: '1'
-      title: Public operation catalog
-      input:
-        type: object
-        additionalProperties: false
-        properties:
-          after_operation_ref: {type: string}
-      output:
-        type: object
-        additionalProperties: false
-        properties:
-          operations: {type: array}
-          generation: {type: integer}
-          has_more: {type: boolean}
-          next_after_operation_ref: {type: string}
-          unavailable: {type: string}
-  security:
-    policies: [bee.security.hive:hive_catalog_policy, bee.security.hive:hive_exposure_policy, bee.security.hive:hive_exposure_facade_policy]
-- name: holdings
-  kind: function.lua
-  source: file://holdings.lua
-  method: handle
-  modules: [process, system]
-  imports:
-    bounds: bee.protocol:bounds
-    leases: bee.app:host_leases
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.hive.telemetry.binding:catalog_list
+    path: .security.policies
+- name: target_holdings_policies
+  kind: ns.requirement
+  default: []
   meta:
-    comment: Open Hive operation paging this node's live workspace holdings with each host phase and lease count
-    hive: open
-    hive_operation:
-      revision: '1'
-      title: Node workspace holdings
-      input:
-        type: object
-        additionalProperties: false
-        properties:
-          after: {type: string, minLength: 1, maxLength: 160}
-          limit: {type: integer, minimum: 1, maximum: 50}
-      output:
-        type: object
-        additionalProperties: false
-        required: [node_id, workspaces, has_more]
-        properties:
-          node_id: {type: string}
-          has_more: {type: boolean}
-          next_after: {type: string}
-          workspaces:
-            type: array
-            maxItems: 50
-            items:
-              type: object
-              additionalProperties: false
-              required: [workspace_id, phase, lease_count]
-              properties:
-                workspace_id: {type: string}
-                phase: {type: string}
-                lease_count: {type: integer}
-  security:
-    policies: [bee.security.hive:hive_telemetry_policy, bee.hive.telemetry.security:holdings_policy]
-- name: cluster
-  kind: function.lua
-  source: file://cluster.lua
-  method: handle
-  modules: [system]
-  imports:
-    bounds: bee.protocol:bounds
-    contract: bee.protocol:application
-    types: bee.hive:types
-    client: bee.hive:client
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.hive.telemetry.binding:holdings
+    path: .security.policies
+- name: target_cluster_policies
+  kind: ns.requirement
+  default: []
   meta:
-    comment: Open Hive operation aggregating workspace holdings and local peer link state
-    hive: open
-    hive_operation:
-      revision: '1'
-      title: Cluster workspace holdings
-      input:
-        type: object
-        additionalProperties: false
-        properties:
-          nodes: {type: array, minItems: 1, maxItems: 8, items: {type: string}}
-          limit: {type: integer, minimum: 1, maximum: 50}
-      output:
-        type: object
-        additionalProperties: false
-        required: [nodes]
-        properties:
-          nodes:
-            type: array
-            maxItems: 8
-            items:
-              type: object
-              additionalProperties: false
-              required: [node_id, status, connected]
-              properties:
-                node_id: {type: string}
-                status: {type: string}
-                connected: {type: boolean}
-                direction: {type: string, enum: [outbound, inbound]}
-                remote_address: {type: string}
-                workspace_count: {type: integer}
-                has_more: {type: boolean}
-  security:
-    policies: [bee.hive.telemetry.security:cluster_policy, bee.security.hive:hive_telemetry_policy]
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.hive.telemetry.binding:cluster
+    path: .security.policies

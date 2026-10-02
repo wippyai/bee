@@ -8,7 +8,7 @@ local function define_tests()
         test.it("decodes the host table and refuses malformed rows", function()
             local decoded = assert(audiences.decode({audiences = {
                 {operation_ref = "bee.hive:probe_open", peers = {"node-2", "node-1"}},
-                {operation_ref = "bee.hive.telemetry:presence", peers = {"node-1"}},
+                {operation_ref = "bee.hive.telemetry.binding:presence", peers = {"node-1"}},
             }}))
             test.eq(#decoded.list, 2)
             test.is_true(decoded.by_operation["bee.hive:probe_open"].peers["node-1"])

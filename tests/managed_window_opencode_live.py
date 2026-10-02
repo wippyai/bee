@@ -75,6 +75,17 @@ local time = require("time")
 local security = require("security")
 local tty = require("tty")
 local funcs = require("funcs")
+local function object(value: unknown): {[string]: unknown}
+    assert(type(value) == "table", "fixture value must be an object")
+    return value
+end
+local function objects(value: unknown): {{[string]: unknown}}
+    assert(type(value) == "table", "fixture value must be an array")
+    local result: {{[string]: unknown}} = {}
+    for index, item in ipairs(value) do result[index] = object(item) end
+    return result
+end
+
 local json = require("json")
 local appearance = require("appearance")
 local M = {}
@@ -84,20 +95,20 @@ local function plain(value: string): string
 end
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
-    return value :: {[string]: unknown}
+    return object(value)
 end
 local function call(target: string, value: unknown): {[string]: unknown}
     local raw, call_error = funcs.call(target, value)
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
+        local fault = type(result.error) == "table" and object(result.error) or {}
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
     return result
 end
 local channel = require("channel")
-local function receive_reply(replies: any, request_id: string, operation: string, budget: string): {[string]: unknown}
+local function receive_reply(replies: channel.Channel<process.Message>, request_id: string, operation: string, budget: string): {[string]: unknown}
     local deadline = time.after(budget or "20s")
     while true do
         local received = channel.select({replies:case_receive(), deadline:case_receive()})
@@ -105,14 +116,14 @@ local function receive_reply(replies: any, request_id: string, operation: string
         local message = received.value
         local data = message:payload():data()
         if type(data) == "table" and data.request_id == request_id and data.op == operation then
-            return data :: {[string]: unknown}
+            return object(data)
         end
     end
     return {}
 end
 function M.run()
     local thread = "managed_opencode_live_thread"
-    call("bee.threads.service:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open OpenCode window"})
+    call("bee.threads.binding:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open OpenCode window"})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -150,10 +161,10 @@ function M.run()
     assert(closed.error_code == "", "managed OpenCode close failed")
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "opencode-live-bind2", op = "bind", workspace_id = WORKSPACE, recipient = ""}))
     view:close()
-    local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32})
+    local records = call("bee.threads.binding:read_after", {thread_id = thread, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
-    local value = records.value :: {[string]: unknown}
-    for _, item in ipairs(value.records :: {{[string]: unknown}}) do kinds[tostring(item.kind)] = true end
+    local value = object(records.value)
+    for _, item in ipairs(objects(value.records)) do kinds[tostring(item.kind)] = true end
     assert(kinds["attempt.prepared"] and kinds["attempt.started"] and kinds["receipt"], "live OpenCode attempt lifecycle was incomplete")
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies)

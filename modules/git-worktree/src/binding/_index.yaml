@@ -1,0 +1,36 @@
+version: '1.0'
+namespace: bee.git.worktree.binding
+entries:
+- name: plan
+  kind: function.lua
+  source: file://setup_method.lua
+  method: plan
+  modules: [security]
+  imports:
+    worktree: bee.git.worktree:worktree
+    bounds: bee.threads.records:bounds
+    types: bee.placement:types
+  security:
+    policies: [bee.git.worktree:worktree_policy]
+- name: setup
+  kind: function.lua
+  source: file://setup_method.lua
+  method: handle
+  modules: [security]
+  imports:
+    worktree: bee.git.worktree:worktree
+    bounds: bee.threads.records:bounds
+    types: bee.placement:types
+  security:
+    policies: [bee.git.worktree:worktree_policy]
+- name: cleanup
+  kind: function.lua
+  source: file://cleanup_method.lua
+  method: handle
+  modules: [security]
+  imports:
+    worktree: bee.git.worktree:worktree
+    bounds: bee.threads.records:bounds
+    types: bee.placement:types
+  security:
+    policies: [bee.git.worktree:worktree_policy]

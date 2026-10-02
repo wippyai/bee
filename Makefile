@@ -1,5 +1,6 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
+TEST_JOBS ?= 4
 # Runtime Lua cache fingerprints include the toolchain, entry source and
 # dependencies. A shared test cache survives each fixture's disposable HOME.
 RUNTIME_CACHE_KEY := $(shell python3 -c 'import json; print(json.load(open("wippy.build.json"))["runtime"]["commit"][:12])')
@@ -142,7 +143,7 @@ run:
 .PHONY: idle-cpu-check
 idle-cpu-check:
 	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
-lint:
+lint: layout-check lua-boundary-check
 	$(WIPPY) lint $(LINT_FLAGS) --strict-any --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
@@ -153,8 +154,8 @@ fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client
 	python3 -m unittest discover -s tests -p 'test_*.py'
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
-fixture-lint:
+	BEE_TEST_JOBS="$(TEST_JOBS)" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
+fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 .PHONY: compile-cache-check
 compile-cache-check:
@@ -669,6 +670,24 @@ app-layout-standalone-check:
 app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
+
+.PHONY: persist-migration-check
+persist-migration-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
+check: persist-migration-check
+check-shard-services-storage: persist-migration-check
+.PHONY: layout-check
+layout-check:
+	python3 build/layout_check.py
+
+.PHONY: lua-boundary-check
+lua-boundary-check:
+	python3 build/lua_boundary_check.py
+
+.PHONY: layout-upgrade-check
+layout-upgrade-check:
+	@test -n "$(LAYOUT_PREVIOUS_BEE)" -a -n "$(LAYOUT_PREVIOUS_SOURCE)" || { echo 'Set LAYOUT_PREVIOUS_BEE and LAYOUT_PREVIOUS_SOURCE to origin/main build and source.'; exit 1; }
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/layout_upgrade.py --previous "$(abspath $(LAYOUT_PREVIOUS_BEE))" --binary "$(abspath $(BEE_BINARY))" --previous-source "$(abspath $(LAYOUT_PREVIOUS_SOURCE))"
 
 .PHONY: login-links-check
 # Explicit proof against the local runtime PR build; the production pin stays unchanged.

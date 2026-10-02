@@ -295,12 +295,12 @@ entries:
     comment: Host-selected forwarding routes; the supervisor maps each thread and replica operation to the feature-owned admission worker in the package that owns it, and that worker still runs under the host-selected policies its package declares
   data:
     adapters:
-    - operations: [bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:inbox_resolve,
-        bee.threads.service:inbox_describe, bee.threads.service:inbox_send, bee.threads.service:inbox_reply,
-        bee.threads.service:notify, bee.threads.delivery:watch]
+    - operations: [bee.threads.binding:send, bee.threads.binding:send_status, bee.threads.binding:inbox_resolve,
+        bee.threads.binding:inbox_describe, bee.threads.binding:inbox_send, bee.threads.binding:inbox_reply,
+        bee.threads.binding:notify, bee.threads.binding:watch]
       worker: bee.threads.hive:admit
     - operations: [bee.sync.binding:replica_receive]
-      worker: bee.sync.hive:admit
+      worker: bee.sync.binding:admit
 - name: protected_kernel
   kind: registry.entry
   meta:
@@ -424,4 +424,4 @@ entries:
   meta:
     type: bee.placement_workdir_preparers
   data:
-    preparers: [bee.git_worktree:binding]
+    preparers: [bee.git.worktree:binding]

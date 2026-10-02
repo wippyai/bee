@@ -464,7 +464,7 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
     local request = bounds.object(value)
     if not request then return nil, "turn request must be an object" end
     local function progress(stage: string, label: string): string?
-        local _, append_error = service_call("bee.threads.service:turn_observation", {turn = request.attempt_id,
+        local _, append_error = service_call("bee.threads.binding:turn_observation", {turn = request.attempt_id,
             claim = request.claim, operation_key = "executor-progress:" .. tostring(request.attempt_id):sub(-72) .. ":" .. stage,
             observation = {type = "text", event_key = "executor:" .. stage,
                 data = {type = "text", segment_id = "executor-progress", operation = "replace", channel = "progress", text = label}}})

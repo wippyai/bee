@@ -187,7 +187,7 @@ local function define_tests()
             local io: machine.IO = {
                 call = function(target: string, value: unknown): (unknown, string?)
                     calls[#calls + 1] = target
-                    if target == "bee.threads.service:admit_action" then
+                    if target == "bee.threads.binding:admit_action" then
                         if type(value) ~= "table" then error("missing action request") end
                         local admitted = value.admitted
                         if type(admitted) ~= "table" then error("missing admitted action") end
@@ -195,7 +195,7 @@ local function define_tests()
                         if type(input) ~= "table" then error("missing action content") end
                         test.eq(input.text, "Open Codex window")
                     end
-                    if target == "bee.threads.carrier:claim" then return claim_reply(7), nil end
+                    if target == "bee.threads.binding:claim" then return claim_reply(7), nil end
                     if target == "bee.placement.native.binding:prepare" then
                         return prepare_reply({code = "LOGIN_REQUIRED", provider = "codex", command = "codex login"}), nil
                     end
@@ -212,12 +212,12 @@ local function define_tests()
             test.is_nil(prepared.gateway_binding)
             test.eq(prepared.notice and prepared.notice.code, "LOGIN_REQUIRED")
             test.eq(prepared.notice and prepared.notice.command, "codex login")
-            test.eq(table.concat(calls, ","), "bee.threads.service:admit_action,bee.threads.service:prepare_attempt,bee.threads.carrier:claim,bee.placement.native.binding:prepare")
+            test.eq(table.concat(calls, ","), "bee.threads.binding:admit_action,bee.threads.binding:prepare_attempt,bee.threads.binding:claim,bee.placement.native.binding:prepare")
         end)
         test.it("rejects a malformed placement login notice", function()
             local io: machine.IO = {
                 call = function(target: string, value: unknown): (unknown, string?)
-                    if target == "bee.threads.carrier:claim" then return claim_reply(7), nil end
+                    if target == "bee.threads.binding:claim" then return claim_reply(7), nil end
                     if target == "bee.placement.native.binding:prepare" then
                         return prepare_reply({code = "LOGIN_REQUIRED", provider = "codex", command = "codex login\nextra"}), nil
                     end
@@ -247,7 +247,7 @@ local function define_tests()
                 call = function(target: string, value: unknown): (unknown, string?)
                     calls[#calls + 1] = target
                     if target == "example.placement:prepare" then test.eq(value, selected.placement_request) end
-                    if target == "bee.threads.carrier:claim" then return claim_reply(7), nil end
+                    if target == "bee.threads.binding:claim" then return claim_reply(7), nil end
                     if target == "example.placement:prepare" then return prepare_reply(nil), nil end
                     return {ok = true, value = {}}, nil
                 end,
@@ -267,19 +267,19 @@ local function define_tests()
             local prepared_body: {[string]: unknown}? = nil
             local io: machine.IO = {
                 call = function(target: string, value: unknown): (unknown, string?)
-                    if target == "bee.threads.service:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
-                    if target == "bee.threads.service:read_after" then
+                    if target == "bee.threads.binding:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
+                    if target == "bee.threads.binding:read_after" then
                         return {ok = true, value = {records = {
                             thread_record("action.admitted", 2, "admitted-record", "action", {request_id = "request", principal_id = "actor",
                                 binding_ref = "binding", binding_digest = string.rep("a", 64), grant_refs = {}, budget_ref = "budget", input = {text = "request"}}),
                             thread_record("receipt", 9, "receipt-record", "action", {scope = "attempt", outcome = "succeeded", evidence_refs = {}}, "attempt-1"),
                         }, has_more = false, scanned_through = 9}}, nil
                     end
-                    if target == "bee.threads.service:prepare_attempt" then
+                    if target == "bee.threads.binding:prepare_attempt" then
                         prepared_body = assert(bounds.object(value))
                         return {ok = true, value = {}}, nil
                     end
-                    if target == "bee.threads.carrier:claim" then return claim_reply(2), nil end
+                    if target == "bee.threads.binding:claim" then return claim_reply(2), nil end
                     if target == "bee.placement.native.binding:prepare" then return prepare_reply(nil), nil end
                     return {ok = true, value = {}}, nil
                 end,
@@ -293,8 +293,8 @@ local function define_tests()
             test.eq(prepared_body and prepared_body.expected_previous_attempt_id, "attempt-1")
             local foreign: machine.IO = {
                 call = function(target: string, value: unknown): (unknown, string?)
-                    if target == "bee.threads.service:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
-                    if target == "bee.threads.service:read_after" then
+                    if target == "bee.threads.binding:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
+                    if target == "bee.threads.binding:read_after" then
                         return {ok = true, value = {records = {
                             thread_record("action.admitted", 2, "foreign-admitted-record", "action", {request_id = "request", principal_id = "someone-else",
                                 binding_ref = "binding", binding_digest = string.rep("a", 64), grant_refs = {}, budget_ref = "budget", input = {text = "request"}}),
@@ -309,7 +309,7 @@ local function define_tests()
             }
             local refused, refuse_error = machine.prepare_attempt(foreign, selected)
             test.is_nil(refused)
-            test.eq(refuse_error, "bee.threads.service:admit_action: CONFLICT: action already exists")
+            test.eq(refuse_error, "bee.threads.binding:admit_action: CONFLICT: action already exists")
         end)
         test.it("refuses window and nonstructured profiles before opening or claiming an attempt", function()
             local calls = 0

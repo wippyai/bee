@@ -49,7 +49,7 @@ AUTHORING_THREAD = "agent-app-authoring"
 ADMITTED_TOOLS = ["app_docs", "overlay", "thread_message", "thread_read"]
 ACTIVE_TRAITS = ["app:author", "app:read"]
 MATERIAL = {"contract": "tests/fixtures/agent_app/CONTRACT.md", "client": "modules/application/src/client.lua",
-            "example": "modules/threads-timeline/src/app.lua", "view": "modules/threads-timeline/src/view.lua"}
+            "example": "modules/threads-timeline/src/app/app.lua", "view": "modules/threads-timeline/src/app/view.lua"}
 
 
 def evidence_root():

@@ -10,20 +10,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/wippyai/wapp"
 )
 
 type fixturePack struct {
-	Input, Output, Version string
+	Input, Output, Version, Component string
+}
+type codeDeclaration struct {
+	Component, Kind string
+	Meta            map[string]any
+	Data            map[string]any
 }
 
 func main() {
 	var config struct {
-		Packs    []fixturePack
-		Sources  map[string]string
-		Identity map[string]any
+		Packs        []fixturePack
+		Sources      map[string]string
+		Identity     map[string]any
+		Declarations map[string]codeDeclaration
 	}
 	data, err := os.ReadFile(os.Args[1])
 	mustPack(err)
@@ -44,15 +51,46 @@ func main() {
 			}
 		}
 		entries = filtered
+		resident := map[string]bool{}
+		for _, entry := range entries {
+			resident[entry.ID.String()] = true
+		}
+		missing := []string{}
+		for id, declaration := range config.Declarations {
+			if declaration.Component == pack.Component && !resident[id] {
+				missing = append(missing, id)
+			}
+		}
+		sort.Strings(missing)
+		for _, id := range missing {
+			declaration := config.Declarations[id]
+			namespace, name, found := strings.Cut(id, ":")
+			if !found {
+				panic("invalid source declaration identity")
+			}
+			entries = append(entries, wapp.Entry{ID: wapp.NewID(namespace, name), Kind: declaration.Kind, Meta: declaration.Meta, Data: declaration.Data})
+		}
 		for i := range entries {
 			entry := &entries[i]
 			fields, ok := entry.Data.(map[string]any)
 			if !ok {
 				continue
 			}
+			if declaration, found := config.Declarations[entry.ID.String()]; found {
+				for _, key := range []string{"imports", "modules", "method"} {
+					value, found := declaration.Data[key]
+					delete(fields, key)
+					if found {
+						fields[key] = value
+					}
+				}
+			}
 			if source := config.Sources[entry.ID.String()]; source != "" {
 				code, err := os.ReadFile(source)
 				mustPack(err)
+				if entry.ID.String() == "bee.settings.app:view" {
+					code = bytes.ReplaceAll(code, []byte("BEE SETTINGS · ABOUT"), []byte("BEE SETTINGS · ABOUT proof marker "+pack.Version))
+				}
 				fields["source"] = string(code)
 			}
 			if entry.Kind == "ns.dependency" {

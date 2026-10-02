@@ -82,7 +82,7 @@ local function fixture_paths(): FixturePaths
 end
 
 local function page(thread_id: string): {[string]: unknown}
-    return call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64})
+    return call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, limit = 64})
 end
 
 local function records(thread_id: string): {string}
@@ -109,7 +109,7 @@ local function await_receipt(thread_id: string, attempt_id: string): {[string]: 
     local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
     local cursor = 0
     while true do
-        local result_page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor,
+        local result_page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor,
             limit = 64, filter = {kinds = {"receipt"}}})
         for _, item in ipairs(principals.objects(result_page.records)) do
             if item.attempt_id == attempt_id then
@@ -124,7 +124,7 @@ local function await_receipt(thread_id: string, attempt_id: string): {[string]: 
                 error("profile attempt did not retain its receipt; attempt=" .. attempt_id ..
                     "; thread records=" .. table.concat(records(thread_id), ","))
             end
-            call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
+            call("bee.threads.binding:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
         end
     end
     error("receipt wait ended without a result")
@@ -220,8 +220,8 @@ local function define_tests()
                 local applied, apply_error = changes:apply()
                 if not applied then error("configure profile fixtures: " .. tostring(apply_error)) end
 
-                local alpha_plan = call("bee.harness.launch:resolve", {definition_ref = ALPHA})
-                local beta_plan = call("bee.harness.launch:resolve", {definition_ref = BETA})
+                local alpha_plan = call("bee.harness.binding:resolve", {definition_ref = ALPHA})
+                local beta_plan = call("bee.harness.binding:resolve", {definition_ref = BETA})
                 test.eq(alpha_plan.binding_ref, beta_plan.binding_ref)
                 test.eq(alpha_plan.profile_id, "batch")
                 test.eq(beta_plan.profile_id, "batch")
@@ -233,9 +233,9 @@ local function define_tests()
                 call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
                 call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
                 local events = assert(process.events())
-                local alpha = call("bee.harness.launch:start", {request_id = fresh("profile-alpha"), definition_ref = ALPHA, workspace_id = workspace, brief = "ping"})
+                local alpha = call("bee.harness.binding:start", {request_id = fresh("profile-alpha"), definition_ref = ALPHA, workspace_id = workspace, brief = "ping"})
                 attempts[#attempts + 1] = tostring(alpha.attempt_id)
-                local beta = call("bee.harness.launch:start", {request_id = fresh("profile-beta"), definition_ref = BETA, workspace_id = workspace, brief = "ping"})
+                local beta = call("bee.harness.binding:start", {request_id = fresh("profile-beta"), definition_ref = BETA, workspace_id = workspace, brief = "ping"})
                 attempts[#attempts + 1] = tostring(beta.attempt_id)
                 for _, started in ipairs({alpha, beta}) do
                     local status = await_receipt(tostring(started.thread_id), tostring(started.attempt_id))
@@ -250,7 +250,7 @@ local function define_tests()
                     test.eq(count(durable, "attempt.started"), 1)
                     test.eq(count(durable, "receipt"), 1)
                     test.eq(receipt_outcome(tostring(started.thread_id)), "succeeded")
-                    local checkpoint = call("bee.threads.carrier:checkpoint", {thread_id = tostring(started.thread_id), attempt_id = tostring(started.attempt_id)})
+                    local checkpoint = call("bee.threads.binding:checkpoint", {thread_id = tostring(started.thread_id), attempt_id = tostring(started.attempt_id)})
                     test.eq((assert(bounds.object((assert(bounds.object(checkpoint.checkpoint))).terminal))).answer, "pong")
                     test.eq((assert(bounds.object(status.attempt))).attempt_id, started.attempt_id)
                     local thread_json = assert(json.encode(page(tostring(started.thread_id))))

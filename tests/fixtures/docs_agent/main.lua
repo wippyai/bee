@@ -25,11 +25,11 @@ local function call(target: string, request: Object): Object
     return assert(bounds.object((assert(bounds.object(reply))).value))
 end
 local function endpoint(): string
-    local selected, err = funcs.call("bee.gateway:address", {})
+    local selected, err = funcs.call("bee.gateway.binding:address", {})
     for _ = 1, 100 do
         if not err or not tostring(err):find("gateway listener is starting", 1, true) then break end
         time.sleep("20ms")
-        selected, err = funcs.call("bee.gateway:address", {})
+        selected, err = funcs.call("bee.gateway.binding:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
     local address = (assert(bounds.object(selected))).address
@@ -149,7 +149,7 @@ end
 local function main()
     ADDRESS = endpoint()
     call("bee.gateway.binding:open", {address = ADDRESS})
-    call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = key(), title = "Docs agent"})
+    call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = key(), title = "Docs agent"})
     local token, binding_id = binding()
     local status, listed = rpc(token, "tools/list", {})
     assert(status == 200 and listed and listed.result, "tools/list failed")

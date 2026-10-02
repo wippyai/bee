@@ -99,7 +99,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         root_ref = "bee.window.hooks.fixture:session_root", subpath = "", allowed_access = "write"})
 
     -- 2. Create the target thread
-    call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "window-hooks-create", title = "Window hooks fixture"})
+    call("bee.threads.binding:create", {thread_id = THREAD, idempotency_key = "window-hooks-create", title = "Window hooks fixture"})
 
     -- 3. Spawn real native application broker
     local owner = tostring(process.pid())
@@ -151,7 +151,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         end
     end
     if opened.error_code ~= "" then
-        local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0})
+        local page = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0})
         local records = page.value and (assert(bounds.object(page.value))).records or {}
         local last_receipt = ""
         for _, rec in ipairs(assert(bounds.array(records))) do
@@ -252,7 +252,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local committed_record: {[string]: unknown}? = nil
 
     for _ = 1, 200 do
-        local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
+        local records = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
         local value = reply(records.value)
         for _, item in ipairs(assert(bounds.array(value.records))) do
         local item = assert(bounds.object(item))
@@ -387,7 +387,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(closed, "managed window close failed")
 
     -- Broker completion observes EXIT, so the durable receipt must exist now.
-    local final_page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
+    local final_page = reply(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
     local receipts = 0
     for _, item in ipairs(assert(bounds.array(final_page.records))) do
         local item = assert(bounds.object(item))
@@ -447,7 +447,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         end
     end
     if continued.error_code ~= "" then
-        local checkpoint = reply(call("bee.threads.carrier:checkpoint", {thread_id = THREAD, attempt_id = previous_attempt_id}).value)
+        local checkpoint = reply(call("bee.threads.binding:checkpoint", {thread_id = THREAD, attempt_id = previous_attempt_id}).value)
         local status_db = assert(store.open())
         local attempt = assert(store.attempt(status_db, previous_attempt_id), "previous placement attempt is missing")
         status_db:release()
@@ -548,7 +548,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local continuation_binding_id: string? = nil
     local continuation_session_id: string? = nil
     for _ = 1, 200 do
-        local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
+        local records = call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
         local value = reply(records.value)
         total_hooks = 0
         continuation_attempt_id, continuation_binding_id, continuation_session_id = nil, nil, nil
@@ -623,7 +623,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         end
     end
     assert(closed_two, "window continuation close failed")
-    local continued_page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
+    local continued_page = reply(call("bee.threads.binding:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
     local continued_receipts = 0
     for _, item in ipairs(assert(bounds.array(continued_page.records))) do
         local item = assert(bounds.object(item))

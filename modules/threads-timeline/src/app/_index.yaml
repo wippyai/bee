@@ -37,7 +37,7 @@ entries:
   source: file://format.lua
   imports:
     text: bee.app:text
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
 - name: model
   kind: library.lua
   source: file://model.lua
@@ -48,7 +48,7 @@ entries:
     caller: bee.app:caller
     session: bee.threads.delivery:session
     record: bee.threads.records:record
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
     bounds: bee.threads.records:bounds
     contract: bee.protocol:application
     format: bee.threads.timeline.app:format

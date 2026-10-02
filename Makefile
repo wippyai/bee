@@ -175,6 +175,16 @@ values-module:
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py
+
+.PHONY: boot-measure boot-measure-unit-check
+BOOT_BASELINE ?= .wippy/boot-measure/baseline.json
+BOOT_RUNS ?= 3
+boot-measure:
+	@test -x "$(or $(BEE_BINARY),dist/bee)" || { echo 'Run make standalone before boot-measure.' >&2; exit 1; }
+	@test -n "$(BOOT_PREVIOUS_BEE)" || { echo 'BOOT_PREVIOUS_BEE must name the previous standalone build.' >&2; exit 1; }
+	python3 tests/boot_measure.py "$(abspath $(or $(BEE_BINARY),dist/bee))" --previous "$(abspath $(BOOT_PREVIOUS_BEE))" --baseline "$(BOOT_BASELINE)" --runs "$(BOOT_RUNS)" $(if $(filter 1,$(BOOT_RECORD)),--record,) $(if $(filter 1,$(BOOT_DIAGNOSTIC)),--diagnostic,)
+boot-measure-unit-check:
+	python3 -m unittest discover -s tests -p test_boot_measure.py
 .PHONY: clipboard-contract-check
 clipboard-contract-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/clipboard_contract.py

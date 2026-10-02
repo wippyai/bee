@@ -132,7 +132,6 @@ local function main(value: unknown)
     end
     local function records(raw: unknown, label: string, thread_id: string): {Object}
         if type(raw) ~= "table" then error(label .. " records are not a list") end
-        local list = raw
         local result: {Object} = {}
         for index, item in ipairs(raw) do
             local record = object(item, label .. " record")

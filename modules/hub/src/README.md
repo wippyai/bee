@@ -13,6 +13,14 @@ identities; upgrading an older assembled artifact to this component layout is
 a reviewed installation change, not a compatibility alias or an automatic
 registry rewrite.
 
+Workspace-host startup invokes the host-admitted `bee.hub.binding:receipt_metadata`
+migration 1. The workspace host policy admits only that migration function; its
+executor receives the separate host-selected receipt migration grant.
+It appends a registry revision tagging historical operation entries
+with `meta.type: bee.hub_operation`; IDs, data, digests and prior revisions remain
+unchanged. Repeated calls make no registry change. Receipt discovery uses this
+metadata, and malformed tagged receipts report their exact decoder error.
+
 The public `bee.hub.binding:call` function accepts `{operation, request?, expected_digest?}`
 and returns `{ok, value?, code?, message?, replayed}`. The host grants
 `bee.hub.read` or `bee.hub.manage` for ordinary package operations. Planning
@@ -116,6 +124,12 @@ with migration rollback requires root conversion through an update first.
 
 
 Independent component service transitions use the runtime's existing supervisor.
+An unchanged registration, process and retained library imports need no service
+transition when only the package version advances. Changed code or registration
+still requires owner drain and readiness evidence. Candidate service definitions
+come from the native registry plan for the exact dependency-root transaction,
+including the preserved host requirement parameters. Unlinked artifact entries
+are not compared with installed, linked definitions.
 Each changed `process.service` names an owner `function.lua` in
 `meta.component_lifecycle`; the host selects its exact call grant through
 `bee.hub.binding:target_lifecycle_owners`. Metadata grants no permission.

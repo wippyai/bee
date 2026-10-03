@@ -11,6 +11,7 @@ import shutil
 import selectors
 import sqlite3
 import subprocess
+import tempfile
 import time
 
 from native_client import hold_owner, live_owners, stop_owner
@@ -95,6 +96,12 @@ def rows(state, database, query, parameters=()):
 
 def table_exists(state, database, name):
     return bool(rows(state, database, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)))
+
+
+def governance_failure(text):
+    return (re.search(r"\b[A-Z][A-Z_]+: ", text) is not None
+            or "Request failed:" in text or "No answer from the destination" in text
+            or "Owner acknowledged the step without a new activation" in text)
 
 
 def applications(state):
@@ -247,27 +254,33 @@ class JourneyDesktop(NativeDesktop):
         return time.monotonic() - started
 
     def open_start(self):
+        visible = lambda: any("Apps " in line and "│" in line and line.index("│") < line.index("Apps ")
+                              for line in self.screen.display[1:])
+        if visible():
+            return
         if " BEE ▴" in self.text():
-            self.key(b"\x1bOP")
+            self.mouse(0, 3, 1)
+            self.mouse(0, 3, 1, True)
             self.wait(" BEE ▾")
-        self.key(b"\x1bOP")
-        self.wait_until(lambda: any("Apps " in line and "│" in line and line.index("│") < line.index("Apps ")
-                                  for line in self.screen.display[1:]), "launcher")
+        self.mouse(0, 3, 1)
+        self.mouse(0, 3, 1, True)
+        self.wait_until(visible, "launcher")
 
 
 class Journey:
-    def __init__(self, binary, source, output, hang_seconds=600):
+    def __init__(self, binary, source, output, hang_seconds=600, author_provider="Claude Code"):
         self.binary, self.source, self.output = binary.resolve(), source.resolve(), output.resolve()
         self.hang_seconds = hang_seconds
+        self.author_provider = author_provider
         work_root = (ROOT / ".wippy/owner-journey-work").resolve()
         require(self.source != self.output and self.source not in self.output.parents
                 and self.source != work_root and self.source not in work_root.parents,
                 "source must not contain the evidence or scratch roots")
         self.output.mkdir(parents=True, exist_ok=True)
-        self.scratch = self.output / ("run-" + time.strftime("%Y%m%d-%H%M%S") + "-" + str(os.getpid()))
+        work_root.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(dir=work_root, prefix="run-"))
+        self.scratch = self.output / self.work.name
         self.scratch.mkdir(mode=0o700)
-        self.work = ROOT / ".wippy/owner-journey-work" / self.scratch.name
-        self.work.mkdir(parents=True, mode=0o700)
         self.state, self.folder = self.work / "state", self.work / "project"
         self.folder.mkdir()
         (self.work / "tmp").mkdir()
@@ -293,9 +306,11 @@ class Journey:
         self.stub_bin = self.folder / "bin"
         self.stub_bin.mkdir()
         stub = self.stub_bin / "claude"
-        compiled = subprocess.run(["cc", "-std=c99", "-Wall", "-Wextra", "-Werror", "-O2", "-o", str(stub),
-                                   str(ROOT / "tests/fixtures/owner_journey/claude.c")],
-                                  env=self.environment, capture_output=True, text=True)
+        compiled = subprocess.run(["go", "build", "-o", str(stub),
+                                   str(ROOT / "tests/fixtures/owner_journey/claude.go")],
+                                  env={**self.environment, "HOME": self.subscription_home,
+                                       "GOWORK": "off", "GOTOOLCHAIN": "go1.27.0",
+                                       "CGO_ENABLED": "0", "GOOS": "linux"}, capture_output=True, text=True)
         require(compiled.returncode == 0, f"journey fixture compiler EXIT {compiled.returncode}: " + compiled.stderr)
         stub.chmod(0o755)
         self.environment["PATH"] = str(self.stub_bin) + ":" + self.original_path
@@ -556,11 +571,11 @@ class Journey:
             if "Unavailable" in self.ui.text():
                 reason = next((line.strip() for line in self.ui.screen.display if "Unavailable ·" in line), "no readiness cause was rendered")
                 raise JourneyFailure("saved Docker profile unavailable: " + reason)
-        prior = {item["session_ref"] for item in sessions(self.state)}
+        prior = {item["session_ref"] for item in sessions(self.ui.state)}
         self.ui.key(b"\r")
         self.ui.wait_until(lambda: "Ready for work" in self.ui.text() or "Unavailable" in self.ui.text() or "Setup:" in self.ui.text() or "INVALID:" in self.ui.text() or "START_FAILED:" in self.ui.text(), "session admission")
         require("Ready for work" in self.ui.text(), f"{provider} session was not admitted: {self.ui.text()}")
-        new = [item for item in sessions(self.state) if item["session_ref"] not in prior]
+        new = [item for item in sessions(self.ui.state) if item["session_ref"] not in prior]
         require(len(new) == 1, f"session admission did not persist exactly one session: {len(new)}")
         return new[0]
 
@@ -646,14 +661,21 @@ class Journey:
 
     def restart(self):
         before_apps = applications(self.state)
+        checkpoints = {"before_detach": before_apps}
         before_sessions = {item["session_ref"] for item in sessions(self.state)}
         self.ui.quit()
         self.ui.close()
         self.ui = None
+        checkpoints["after_detach"] = applications(self.state)
         self.command(["stop"])
+        checkpoints["after_stop"] = applications(self.state)
         require(not live_owners(self.binary, self.state), "bee stop acknowledged while owner remained")
         self.attach()
         after_apps = applications(self.state)
+        checkpoints["after_attach"] = after_apps
+        evidence = {stage: [{field: app.get(field) for field in ("definition_id", "instance_id", "restart_policy")}
+                            for app in apps] for stage, apps in checkpoints.items()}
+        (self.scratch / f"{self.current.number:02d}-restart-checkpoints.json").write_text(json.dumps(evidence, indent=2) + "\n")
         for app in before_apps:
             require(any(item.get("instance_id") == app.get("instance_id") for item in after_apps), f"restart lost retained app {app.get('definition_id')}")
         require(before_sessions <= {item["session_ref"] for item in sessions(self.state)}, "restart lost session history")
@@ -759,28 +781,30 @@ class Journey:
     def self_edit(self):
         def component():
             self.edit_mode("bee.desktop")
-            # Exact host grant precedes the agent's component authoring action.
             pid = live_owners(self.binary, self.state)
-            self.turn("Read Bee's authoring guide. Change component bee/desktop through approved component publication, "
-                      "not an app overlay: add visible desktop label OWNER JOURNEY CORE. Freeze, publish and stage it "
-                      "for person review; do not apply. Return its exact candidate or Bee's precise refusal.", "OWNER JOURNEY CORE")
-            self.launch("Modules", "MODULES", ("Apps", "Advanced"))
-            self.click("Installed", "Installed")
-            self.ui.wait("bee/desktop")
-            self.click("bee/desktop")
-            self.ui.key(b"u")
-            self.ui.wait("Ready for confirmation")
-            self.ui.key(b"\r")
-            self.ui.wait("MODULES  CONFIRM")
-            self.record_person_prompt("Publish Bee desktop component", self.ui.text())
-            self.ui.key(b"\r")
-            self.ui.wait("MODULES  RESULT")
-            self.frame("component-publication-result")
-            require("Receipt state: complete" in self.ui.text(), "component publication failed: " + self.ui.text())
-            self.ui.wait("OWNER JOURNEY CORE")
+            marker = "OWNER JOURNEY CORE"
+            self.turn("Read Bee's authoring guide. Use the Settings-granted exact bee.desktop namespace to edit "
+                      "only the Lua source of bee.desktop:model (library.lua) through governed base-component publication. "
+                      "Preserve its id, kind, imports and native modules. Keep ns.definition and package version metadata unchanged; "
+                      "the delivery artifact version is separate from registry package metadata. "
+                      "Add a visible desktop window label OWNER JOURNEY CORE using desktop-owned layout or title values. "
+                      "This is a base component edit: do not create an application. Freeze, publish and stage its exact "
+                      "candidate for person review; do not apply. Return its candidate or Bee's precise refusal.", marker, provider=self.author_provider)
+            self.activate_staged("bee.desktop")
+            # The terminal presenter follows its documented explicit F12 reload.
+            self.ui.key(b"\x1b[24~")
+            self.ui.wait(marker)
+            self.frame("component-live-label")
             require(live_owners(self.binary, self.state) == pid, "component self-edit replaced owner PID")
             self.restart()
-            self.ui.wait("OWNER JOURNEY CORE")
+            self.ui.wait(marker)
+            self.frame("component-restarted-label")
+            self.remove_edit_mode()
+            self.ui.key(b"\x1b[24~")
+            self.click("About", "Themes")
+            self.ui.wait("Website")
+            self.ui.wait_until(lambda: marker not in self.ui.text(), "component removal rendered")
+            require(marker not in self.ui.text(), "component removal did not restore the desktop label")
         def hub_update():
             self.update_plan()
             pid = live_owners(self.binary, self.state)
@@ -813,38 +837,62 @@ class Journey:
                  f"Set the label to {marker}. Freeze, publish and stage the exact candidate for this workspace. "
                  "Do not apply, do not write registry or credentials; the person will approve in Bee. "
                  "Return the candidate identity, or the precise refusal from Bee if this path is unavailable.")
-        self.turn(brief, marker)
-        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
-        require("No overlay versions are available" not in self.ui.text(), "agent produced no Governance version for built-in About; Overlays reports No overlay versions are available")
-        self.ui.key(b"\r")
-        self.ui.wait("Staged")
-        self.click("Staged", "Available")
-        self.ui.key(b"\r")
-        self.ui.wait("Preflight")
-        require("blocked" not in self.ui.text().lower(), "Governance preflight refused: " + self.ui.text())
-        self.ui.key(b"\r")
-        self.launch("Needs you", "NEEDS YOU")
-        self.approve()
-        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
-        self.ui.key(b"t")
-        self.click("Apply")
-        self.ui.wait_until(lambda: "settled" in self.ui.text() or "failed" in self.ui.text(), "governed activation outcome")
-        require("failed" not in self.ui.text(), "governed activation failed: " + self.ui.text())
+        self.turn(brief, marker, provider=self.author_provider)
+        self.activate_staged("bee.settings.app")
         self.launch("Settings", "BEE SETTINGS", ("Settings/Help",))
         self.ui.wait(marker)
         require(live_owners(self.binary, self.state) == pid, "authoring change replaced owner PID")
         self.restart()
         self.click("About", "Themes")
         self.ui.wait(marker)
+        self.remove_edit_mode()
+        self.click("About", "Themes")
+        self.ui.wait("Website")
+        require(marker not in self.ui.text(), "removing overlay did not restore original About label")
+
+    def activate_staged(self, source_workspace):
+        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
+        self.click("Available", "Staged")
+        self.ui.key(b"r")
+        self.ui.wait(source_workspace)
+        self.click(source_workspace)
+        self.ui.key(b"\r")
+        self.ui.wait("Read review")
+        self.click("Staged", "Available")
+        self.ui.wait(source_workspace)
+        self.click(source_workspace)
+        self.ui.key(b"\r")
+        self.ui.wait("Preflight")
+        require("blocked" not in self.ui.text().lower(), "Governance preflight refused: " + self.ui.text())
+        self.ui.key(b"\r")
+        self.ui.wait_until(lambda: "Activation approval_bound" in self.ui.text()
+                           or governance_failure(self.ui.text()),
+                           "governed approval preparation acknowledgement or refusal")
+        require("Activation approval_bound" in self.ui.text(), "Governance preparation refused: " + self.ui.text())
+        self.launch("Needs you", "NEEDS YOU")
+        self.approve()
+        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
+        if not re.search(r"\bApply\b", self.ui.text()):
+            self.ui.key(b"t")
+            self.ui.wait("Apply")
+        self.click("Apply")
+        self.ui.wait_until(lambda: "Activation settled" in self.ui.text() or governance_failure(self.ui.text()),
+                           "governed activation outcome or explicit owner refusal")
+        require(re.search(r"(?m)^\s*(?:Activation\s+)?settled\s+(?:·\s*)?applied(?:\s|$)", self.ui.text()),
+                "governed activation did not settle as applied: " + self.ui.text())
+
+    def remove_edit_mode(self):
+        self.launch("Settings", "BEE SETTINGS", ("Settings/Help",))
         self.click("Edit mode", "Themes")
         self.ui.wait("Edit mode")
         self.ui.key(b"d")
         self.ui.wait("Disable")
         self.record_person_prompt("Remove overlay", self.ui.text())
         self.ui.key(b"\t\r")
-        self.click("About", "Themes")
-        self.ui.wait("Website")
-        require(marker not in self.ui.text(), "removing overlay did not restore original About label")
+        self.ui.wait_until(lambda: any(message in self.ui.text() for message in ("Disabled edit mode for this workspace", "Edit mode is disabled for this workspace"))
+                           or any(label in self.ui.text() for label in ("Edit mode refused:", "Edit mode failed:")),
+                           "host edit-mode removal acknowledgement or exact refusal")
+        require(any(message in self.ui.text() for message in ("Disabled edit mode for this workspace", "Edit mode is disabled for this workspace")), "host edit-mode removal: " + self.ui.text())
 
     def record_person_prompt(self, subject, text):
         # An Inbox detail is the rendered presentation of its existing request,
@@ -888,9 +936,10 @@ class Journey:
         self.ui.wait("SESSION")
 
     def approve(self, approval_id=None):
-        self.ui.wait("pending   ")
-        self.click("pending   ")
-        self.ui.key(b"\r")
+        if "Allow once" not in self.ui.text():
+            self.ui.wait("pending   ")
+            self.click("pending   ")
+            self.ui.key(b"\r")
         self.ui.wait("Allow once")
         self.frame("approval-detail")
         text = self.ui.text()
@@ -903,6 +952,46 @@ class Journey:
                 "exact owner approval decision")
         self.ui.wait_until(lambda: "approved" in self.ui.text().lower(), "owner approval decision")
         self.frame("approval-decided")
+
+    def control_hive_workspace(self):
+        # Leave the read-only viewer before asking the owning host for control.
+        # Hive membership does not enroll remote approval feeds in the local inbox.
+        self.ui.key(b"\x1bq")
+        self.ui.wait("HIVE MANAGER")
+        self.ui.key(b"c")
+        self.ui.wait("Control this workspace here?")
+        self.record_person_prompt("Control node 2 workspace", self.ui.text())
+        self.ui.key(b"\t\r")
+        self.ui.wait_until(lambda: "Alt+Q leave" in self.ui.text() or "Hive Manager fail" in self.ui.text()
+                           or "Remote desktop ended:" in self.ui.text(), "controlled peer desktop or observed viewer failure")
+        if "Alt+Q leave" not in self.ui.text():
+            self.ui.resize(640, 48)
+            self.ui.wait_until(lambda: "Hive Manager fail" in self.ui.text() or "Remote desktop ended:" in self.ui.text(),
+                               "rendered control-view failure")
+            self.frame("control-view-failure")
+            cause = next(line.strip() for line in self.ui.screen.display
+                         if "Hive Manager fail" in line or "Remote desktop ended:" in line)
+            raise JourneyFailure("Hive Control: " + cause)
+        self.ui.wait("Control")
+
+    def open_remote_inbox(self):
+        # F1 belongs to the local presenter; click the controlled desktop's bar.
+        for y, line in enumerate(self.ui.screen.display[1:], 2):
+            if " BEE " in line and "Needs you" in line:
+                x = line.index("Needs you") + 1
+                self.ui.mouse(0, x, y)
+                self.ui.mouse(0, x, y, True)
+                self.ui.wait("NEEDS YOU")
+                self.frame("remote-inbox")
+                return
+        raise JourneyFailure("controlled peer desktop does not expose Needs you")
+
+    def allow_remote_review(self):
+        self.ui.key(b"k\r")
+        self.ui.wait("Allow once")
+        self.frame("remote-approval-detail")
+        self.record_person_prompt("governed candidate", self.ui.text())
+        self.ui.key(b"a")
 
     def hive(self):
         folder, state = self.work / "node2-project", self.work / "node2-state"
@@ -917,7 +1006,9 @@ class Journey:
         finally:
             invitation = ""
             invite.unlink()
-        self.secondary = JourneyDesktop(self, folder, state, self.environment)
+        peer_environment = dict(self.environment, PATH=str(self.stub_bin) + ":" + self.original_path,
+                                HOME=str(self.fixture_home), XDG_CONFIG_HOME=str(self.fixture_home / ".config"))
+        self.secondary = JourneyDesktop(self, folder, state, peer_environment)
         self.secondary.wait(" BEE ")
         self.secondary.resize(160, 48)
         self.command(["hive", "peers"])
@@ -978,20 +1069,55 @@ class Journey:
             require("established" in self.command(["hive", "peers"]), "live app observation lost its admitted peer session")
 
         def remote_approval():
-            primary = self.ui
-            self.ui = peer
-            try:
-                self.choose_agent(docker=True)
-                peer.key(b"Reply with " + MARKER.encode() + b"\r")
-                peer.wait_until(lambda: bool(rows(state, "approvals.db",
-                    "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")), "node 2 first-use Docker approval")
-            finally:
-                self.ui = primary
-            self.launch("Needs you", "NEEDS YOU")
-            self.approve()
-            self.ui.wait_until(lambda: bool(rows(state, "approvals.db",
-                "SELECT approval_id FROM bee_approval_requests WHERE decision='approved'")), "node 2 observes node 1 decision")
-            self.frame("remote-approval-decided")
+            gate = self.work / "hive-approval-release"
+            os.mkfifo(gate, 0o600)
+            with os.fdopen(os.open(gate, os.O_RDWR | os.O_NONBLOCK), "wb", buffering=0) as release:
+                primary = self.ui
+                self.ui = peer
+                try:
+                    session = self.choose_agent()
+                    peer.key(("JOURNEY_HIVE_APPROVAL JOURNEY_GATE=" + str(gate) + "\r").encode())
+                    peer.wait_until(lambda: "OWNER JOURNEY REVIEW STAGED" in peer.text() or bool(rows(state, "threads.db",
+                        "SELECT result_json FROM bee_session_work WHERE session_ref=? AND phase='settled'", (session["session_ref"],))),
+                        "native session stages its review or observed work settlement")
+                    if "OWNER JOURNEY REVIEW STAGED" not in peer.text():
+                        settled = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? AND phase='settled'",
+                                       (session["session_ref"],))
+                        raise JourneyFailure("native review settled before staging: " + settled[-1]["result_json"])
+                    self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
+                    peer.key(b"\r")
+                    peer.wait("Staged")
+                    self.click("Staged", "Available")
+                    peer.key(b"\r")
+                    peer.wait("Preflight")
+                    require("blocked" not in peer.text().lower(), "native review preflight refused: " + peer.text())
+                    peer.key(b"\r")
+                    peer.wait_until(lambda: bool(rows(state, "approvals.db",
+                        "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")), "node 2 native review approval")
+                    pending = rows(state, "approvals.db", "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")
+                    if not pending:
+                        settled = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? AND phase='settled'",
+                                       (session["session_ref"],))
+                        raise JourneyFailure("native review settled before approval: " + settled[-1]["result_json"])
+                    require(len(pending) == 1, f"node 2 raised {len(pending)} pending approvals for one review")
+                    approval_id = pending[0]["approval_id"]
+                finally:
+                    self.ui = primary
+                self.control_hive_workspace()
+                self.open_remote_inbox()
+                self.ui.wait("pending")
+                self.allow_remote_review()
+                self.ui.wait_until(lambda: bool(rows(state, "approvals.db",
+                    "SELECT approval_id FROM bee_approval_requests WHERE approval_id=? AND decision='approved'", (approval_id,))),
+                    "node 2 observes node 1 decision")
+                self.frame("remote-approval-decided")
+                release.write(b"observed exact remote approval\n")
+                peer.wait_until(lambda: bool(rows(state, "threads.db",
+                    "SELECT work_ref FROM bee_session_work WHERE session_ref=? AND phase='settled'", (session["session_ref"],))),
+                    "native fixture completes after the exact remote decision is observed")
+                work = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? ORDER BY sequence",
+                            (session["session_ref"],))
+                require(STUB_MARKER in work[-1]["result_json"], "native Hive approval work settled with " + work[-1]["result_json"])
         self.cases([("Hive live app counts 0 to 1 to 0", remote_visibility),
                     ("Hive remote approval", remote_approval)])
         peer.quit()
@@ -1043,18 +1169,27 @@ class Journey:
         attempt(lambda: shutil.rmtree(self.work))
         require(not errors, "cleanup failed: " + "; ".join(errors))
 
-    def run(self):
+    def run(self, selected_steps=None):
         try:
             self.run_step(1, "copied-state startup and retained applications", self.start, desktop=False)
-            self.run_step(2, "launcher Sessions, Apps, Settings/About, Inbox, Modules", self.open_apps)
-            self.run_step(3, "native deterministic agent running/output/stop", self.native_stub)
-            self.run_step(4, "Docker starting/running or exact daemon start_failed", self.docker_session)
-            self.run_step(5, "full owner restart preserves apps and sessions history", self.restart)
-            self.run_step(6, "Update Bee plan through Settings/About and Modules", self.update_plan)
-            self.run_step(8, "real Claude and available Codex subscriptions, native and Docker", self.subscriptions)
-            self.run_step(9, "agent overlay, approval, live About, restart and removal", self.authored_change)
-            self.run_step(10, "agent Bee component self-edit and local Hub live update", self.self_edit)
-            self.run_step(11, "two-node Hive live counts and remote approval decision", self.hive)
+            if selected_steps is None or 2 in selected_steps:
+                self.run_step(2, "launcher Sessions, Apps, Settings/About, Inbox, Modules", self.open_apps)
+            if selected_steps is None or 3 in selected_steps:
+                self.run_step(3, "native deterministic agent running/output/stop", self.native_stub)
+            if selected_steps is None or 4 in selected_steps:
+                self.run_step(4, "Docker starting/running or exact daemon start_failed", self.docker_session)
+            if selected_steps is None or 5 in selected_steps:
+                self.run_step(5, "full owner restart preserves apps and sessions history", self.restart)
+            if selected_steps is None or 6 in selected_steps:
+                self.run_step(6, "Update Bee plan through Settings/About and Modules", self.update_plan)
+            if selected_steps is None or 8 in selected_steps:
+                self.run_step(8, "real Claude and available Codex subscriptions, native and Docker", self.subscriptions)
+            if selected_steps is None or 9 in selected_steps:
+                self.run_step(9, "agent overlay, approval, live About, restart and removal", self.authored_change)
+            if selected_steps is None or 10 in selected_steps:
+                self.run_step(10, "agent Bee component self-edit and local Hub live update", self.self_edit)
+            if selected_steps is None or 11 in selected_steps:
+                self.run_step(11, "two-node Hive live counts and remote approval decision", self.hive)
             self.run_step(7, "bee stop observes clean owner EXIT", self.stop, desktop=False)
         finally:
             try:
@@ -1073,11 +1208,16 @@ def main():
     parser.add_argument("--source-state", required=True, type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / ".wippy/owner-journey")
     parser.add_argument("--hang-seconds", type=float, default=600, help="no-progress diagnostic bound; never a speed requirement")
+    parser.add_argument("--author-provider", choices=("Claude Code", "Codex"), default="Claude Code",
+                        help="existing subscription provider for the two owned authoring proofs")
+    parser.add_argument("--steps", help="comma-separated journey steps; startup and stop always run")
     args = parser.parse_args()
     require(args.binary.is_file() and os.access(args.binary, os.X_OK), f"BEE_BINARY is not executable: {args.binary}")
     require(args.hang_seconds > 0, "hang bound must be positive")
     require((ROOT / ".wippy").resolve() in args.output.resolve().parents, "evidence and scratch state must be under repository .wippy/")
-    return Journey(args.binary, args.source_state, args.output, args.hang_seconds).run()
+    selected_steps = {int(value) for value in args.steps.split(",")} if args.steps else None
+    require(selected_steps is None or selected_steps <= set(range(1, 12)), "journey steps must be 1 through 11")
+    return Journey(args.binary, args.source_state, args.output, args.hang_seconds, args.author_provider).run(selected_steps)
 
 
 if __name__ == "__main__":

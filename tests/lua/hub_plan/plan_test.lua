@@ -12,7 +12,7 @@ local bounds = require("bounds")
 local function root(component: string, version: string): {[string]: unknown}
     local id, problem = plan.root_id(component)
     if not id then error(problem or "cannot make root id") end
-    return {id = id, kind = "ns.dependency", registry = {owner = "", root = true},
+    return {id = id, kind = "ns.dependency", meta = {type = "bee.hub_dependency"}, registry = {owner = "", root = true},
         data = {component = component, version = version, parameters = {}}}
 end
 
@@ -346,18 +346,18 @@ local function define_tests()
             }, {{name = "acme/app", version = "1.0.0", source = "local"}}), 4,
                 request({action = "update", component = "acme/app", version = "1.1.0"}), source({}))
             test.is_nil(prepared)
-            test.eq(problem, "component is managed by the host deployment")
+            test.eq(problem, "protected boot/installer component cannot be updated independently: acme/app; required by host.config:app")
         end)
 
-        test.it("requires host selection before managing Bee components", function()
+        test.it("admits an unselected package without inferring host ownership from its brand", function()
             local prepared, problem = plan.prepare(state({}), 1,
-                request({action = "install", component = "bee/application", version = "0.2.0"}), source({}))
-            test.is_nil(prepared)
-            test.eq(problem, "Bee component management requires explicit host-selected roots")
+                request({action = "install", component = "bee/application", version = "0.2.0"}), source({["bee/application@0.2.0"] = package("bee/application", "0.2.0", "a")}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
         end)
 
         test.it("converts host-selected component roots while preserving third-party parameters", function()
-            local selected = {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+            local selected = {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "bee/bee", root = true},
                 data = {component = "bee/files", version = "1.0.0", parameters = {{name = "folder", value = "bee.env:files_root"}}}}
             local captured = state({selected, root("acme/app", "1.0.0"),},
                 {{name = "bee/files", version = "1.0.0"}, {name = "acme/app", version = "1.0.0"}})
@@ -386,7 +386,7 @@ local function define_tests()
         for _, action in ipairs({"update", "uninstall"}) do
             test.it("protects the installed Hub from independent " .. action, function()
                 local captured = state({
-                    {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                    {id = "bee.deps:hub", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "bee/bee", root = true},
                         data = {component = "bee/hub", version = "1.0.0"}},
                 }, {{name = "bee/hub", version = "1.0.0"}})
                 local raw: {[string]: unknown} = {action = action, component = "bee/hub"}
@@ -409,7 +409,7 @@ local function define_tests()
         end)
         test.it("refuses removing an optional component needed by a third-party root", function()
             local captured = state({root("acme/app", "1.0.0"),
-                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "bee/bee", root = true},
                     data = {component = "bee/files", version = "1.0.0"}},
                 {id = "acme.app:files", kind = "ns.dependency", registry = {owner = "acme/app"},
                     data = {component = "bee/files", version = "1.0.0"}},
@@ -420,9 +420,9 @@ local function define_tests()
         end)
         test.it("derives protection for the Hub dependency closure at plan time", function()
             local captured = state({
-                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "", root = true},
+                {id = "bee.deps:hub", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                     data = {component = "bee/hub", version = "1.0.0"}},
-                {id = "bee.deps:values", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "", root = true},
+                {id = "bee.deps:values", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "", root = true},
                     data = {component = "bee/values", version = "1.0.0"}},
                 {id = "bee.hub:values", kind = "ns.dependency", registry = {owner = "bee/hub"},
                     data = {component = "bee/values", version = "1.0.0"}},
@@ -433,7 +433,7 @@ local function define_tests()
         end)
         test.it("refuses removing a target of a retained host requirement", function()
             local captured = state({
-                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "bee/bee", root = true},
                     data = {component = "bee/files", version = "1.0.0"}},
                 {id = "bee.files:main", kind = "registry.entry", registry = {owner = "bee/files"}, data = {}},
                 {id = "host:required_folder", kind = "ns.requirement", registry = {owner = ""},
@@ -456,7 +456,7 @@ local function define_tests()
         end)
         test.it("keeps a converted optional root removed across self-update and refuses its resurrection", function()
             local captured = state({root("bee/bee", "1.0.0"),
-                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "", root = true}, data = {component = "bee/hub", version = "1.0.0"}}}, {{name = "bee/bee", version = "1.0.0"}})
+                {id = "bee.deps:hub", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true}, data = {component = "bee/hub", version = "1.0.0"}}}, {{name = "bee/bee", version = "1.0.0"}})
             local identity = binary_identity("github.com/wippyai/bee/native", "1.0.0")
             local selected = request({action = "update", component = "bee/bee", version = "2.0.0"})
             local safe, problem = plan.prepare(captured, 2, selected,
@@ -465,14 +465,14 @@ local function define_tests()
             test.is_nil(problem); test.not_nil(safe)
             local unsafe, unsafe_error = plan.prepare(captured, 2, selected,
                 source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {identity,
-                    {id = "bee.deps:files", kind = "ns.dependency", meta = {}, data = {component = "bee/files", version = "1.0.0"}},
+                    {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection"}, data = {component = "bee/files", version = "1.0.0"}},
                 })}), baked_identity("1.0.0"))
             test.is_nil(unsafe)
             test.eq(unsafe_error, "Bee self-update must leave component selection to host roots: bee.deps:files")
         end)
         test.it("converts an authored legacy composition during its first core self-update", function()
             local captured = state({root("bee/bee", "1.0.0"),
-                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "bee/bee", root = true},
                     data = {component = "bee/files", version = "1.0.0"}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/files", version = "1.0.0"}})
             local prepared, problem = plan.prepare(captured, 1, request({action = "update", component = "bee/bee", version = "2.0.0"}),
@@ -484,7 +484,7 @@ local function define_tests()
         test.it("updates the core and selected components together while retaining parameters", function()
             local captured = state({
                 root("bee/bee", "1.0.0"),
-                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "", root = true},
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "", root = true},
                     data = {component = "bee/files", version = "1.5.0", parameters = {{name = "folder", value = "selected"}}}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/files", version = "1.5.0"}})
             local prepared, problem = plan.prepare(captured, 2, request({action = "update", component = "bee/bee", version = "2.0.0"}),
@@ -503,7 +503,7 @@ local function define_tests()
         for _, independent in ipairs({false, true}) do
             test.it("updates host-selected Settings with the core; independent=" .. tostring(independent), function()
                 local captured = state({root("bee/bee", "1.0.0"), root("acme/app", "1.0.0"),
-                    {id = "bee.deps:settings", kind = "ns.dependency", meta = {independent = independent},
+                    {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = independent},
                         registry = {owner = "", root = true}, data = {component = "bee/settings", version = "1.0.0"}},
                 }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"},
                     {name = "acme/app", version = "1.0.0"}})
@@ -525,10 +525,30 @@ local function define_tests()
                 end
             end)
         end
+        test.it("updates the Settings prerelease during first host-root conversion", function()
+            local captured = state({root("bee/bee", "0.1.0-0.boot.dev"),
+                {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection"},
+                    registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/settings", version = "0.1.0-dev"}},
+            }, {{name = "bee/bee", version = "0.1.0-0.boot.dev"}, {name = "bee/settings", version = "0.1.0-dev"}})
+            local target = "0.1.0-ownerjourney.1"
+            local prepared, problem = plan.prepare(captured, 0,
+                request({action = "update", component = "bee/bee", version = target}), source({
+                    ["bee/bee@" .. target] = package("bee/bee", target, "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                    ["bee/settings@" .. target] = package("bee/settings", target, "b"),
+                    ["bee/settings@0.1.0-dev"] = package("bee/settings", "0.1.0-dev", "c"),
+                }), baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                test.not_nil(prepared.plan.conversion)
+                local settings = assert(module_for(prepared.plan.modules, "bee/settings"))
+                test.eq(settings.version, target); test.eq(settings.change, "update")
+            end
+        end)
         for _, pinned in ipairs({false, true}) do
             test.it("lists retained component reason; pinned=" .. tostring(pinned), function()
                 local resident: {unknown} = {root("bee/bee", "1.0.0"), root("acme/app", "1.0.0"),
-                    {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                    {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                         data = {component = "bee/settings", version = "1.0.0"}}}
                 local dependencies: {inspect.Entry} = {}
                 if pinned then
@@ -557,7 +577,7 @@ local function define_tests()
         end
         test.it("retains a third-party wildcard root when a newer Bee component requires replacing it", function()
             local captured = state({root("bee/bee", "1.0.0"), root("acme/app", "*"),
-                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                     data = {component = "bee/settings", version = "1.0.0"}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"},
                 {name = "acme/app", version = "1.0.0"}})
@@ -583,7 +603,7 @@ local function define_tests()
         end)
         test.it("lists a selected component whose advertised update artifact is unavailable", function()
             local captured = state({root("bee/bee", "1.0.0"),
-                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                     data = {component = "bee/settings", version = "1.0.0"}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"}})
             local artifacts = source({
@@ -602,9 +622,9 @@ local function define_tests()
         end)
         test.it("selects a coordinated prerelease closure without retaining its old dependency pins", function()
             local captured = state({root("bee/bee", "1.0.0"),
-                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                     data = {component = "bee/settings", version = "1.0.0"}},
-                {id = "bee.deps:application", kind = "ns.dependency", registry = {owner = "", root = true},
+                {id = "bee.deps:application", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                     data = {component = "bee/application", version = "1.0.0"}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"},
                 {name = "bee/application", version = "1.0.0"}})
@@ -623,7 +643,7 @@ local function define_tests()
         end)
         test.it("selects the newest core-compatible release and rejects a removed dependency", function()
             local captured = state({root("bee/bee", "1.0.0"),
-                {id = "bee.deps:settings", kind = "ns.dependency", registry = {owner = "", root = true},
+                {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                     data = {component = "bee/settings", version = "*"}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"}})
             captured.resolution = {modules = {{name = "bee/bee", version = "1.0.0"}, {name = "bee/settings", version = "1.0.0"}},
@@ -649,13 +669,13 @@ local function define_tests()
             end
         end)
         test.it("refuses self-update that resets an independently selected version", function()
-            local selected_root = {id = "bee.deps:files", kind = "ns.dependency", registry = {owner = "", root = true},
+            local selected_root = {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                 data = {component = "bee/files", version = "1.5.0"}}
             local captured = state({selected_root, root("bee/bee", "1.0.0")},
                 {{name = "bee/bee", version = "1.0.0"}, {name = "bee/files", version = "1.5.0"}})
             local prepared, problem = plan.prepare(captured, 2, request({action = "update", component = "bee/bee", version = "2.0.0"}),
                 source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {
-                    {id = "bee.deps:files", kind = "ns.dependency", meta = {}, data = {component = "bee/files", version = "2.0.0"}},
+                    {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection"}, data = {component = "bee/files", version = "2.0.0"}},
                 })}), baked_identity("1.0.0"))
             test.is_nil(prepared)
             test.eq(problem, "Bee self-update must leave component selection to host roots: bee.deps:files")
@@ -663,13 +683,13 @@ local function define_tests()
 
         test.it("refuses self-update that replaces the active Hub installer code", function()
             local captured = state({root("bee/bee", "1.0.0"),
-                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                {id = "bee.deps:hub", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "bee/bee", root = true},
                     data = {component = "bee/hub", version = "1.0.0"}},
                 {id = "bee.hub.package:plan", kind = "library.lua", registry = {owner = "bee/hub"}, data = {source = "return {}"}},
             }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/hub", version = "1.0.0"}})
             local prepared, problem = plan.prepare(captured, 3, request({action = "update", component = "bee/bee", version = "2.0.0"}),
                 source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {
-                    {id = "bee.deps:hub", kind = "ns.dependency", meta = {}, data = {component = "bee/hub", version = "2.0.0"}},
+                    {id = "bee.deps:hub", kind = "ns.dependency", meta = {type = "bee.component_selection"}, data = {component = "bee/hub", version = "2.0.0"}},
                 }), ["bee/hub@2.0.0"] = package("bee/hub", "2.0.0", "b", {
                     {id = "bee.hub.package:plan", kind = "library.lua", meta = {}, data = {source = "return {changed = true}"}},
                 })}), baked_identity("1.0.0"))

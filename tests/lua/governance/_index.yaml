@@ -73,15 +73,15 @@ entries:
   kind: function.lua
   source: file://destination_public_test.lua
   method: run
-  modules: [funcs]
+  modules: [funcs, registry]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.gov:destination_public_test_policy]}
-  imports: {principals: bee.test.principals:bound, bounds: bee.values:bounds, test: wippy.test:test}
+  security: {policies: [bee.gov:destination_public_test_policy, bee.gov:gateway_test_policy]}
+  imports: {principals: bee.test.principals:bound, bounds: bee.values:bounds, test: wippy.test:test, caller: bee.app:caller}
 - name: destination_service_test
   kind: function.lua
   source: file://destination_service_test.lua
   method: run
-  modules: [registry]
+  modules: [registry, funcs, security]
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
@@ -92,13 +92,15 @@ entries:
   kind: function.lua
   source: file://super_edit_test.lua
   method: run
-  modules: [hash]
+  security: {policies: [bee.gov:plan_test_policy]}
+  modules: [hash, security, funcs, registry]
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     super_edit: bee.gov.security:super_edit
+    principal: bee.apps:principal
 - name: headless_revert_test
   kind: function.lua
   source: file://headless_revert_test.lua
@@ -119,6 +121,8 @@ entries:
   imports:
     test: wippy.test:test
     publication_profiles: bee.gov.types:publication_profile_decoder
+    activation_profiles: bee.gov.types:activation_profile_decoder
+    super_edit: bee.gov.security:super_edit
 - name: workspace_applications_test
   kind: function.lua
   source: file://workspace_applications_test.lua
@@ -248,6 +252,72 @@ entries:
   kind: function.lua
   source: file://activation_owner_test.lua
   method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
+- name: activation_owner_admission_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: admission
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
+- name: activation_owner_recovery_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: recovery
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
+- name: activation_owner_migration_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: migration
   modules: [hash]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
@@ -483,7 +553,7 @@ entries:
   kind: function.lua
   source: file://capability_gateway_test.lua
   method: run
-  modules: [registry, hash]
+  modules: [registry, hash, security, funcs]
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
@@ -538,6 +608,7 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     application_admission: bee.gov.types:governed_application_admission
     preflight: bee.gov.binding:preflight
+    activation_measure: bee.gov.binding:activation_measure
 
 - name: publication_test_policy
   kind: security.policy.expr
@@ -546,4 +617,73 @@ entries:
     expression: '(action == "funcs.call" && resource in ["bee.gov.binding:publication_call", "bee.gov.binding:publication_backend_call"]) || (action == "bee.gov.delivery.manage" && resource == actor.meta.workspace_id)'
     actions: [funcs.call, bee.gov.delivery.manage]
     resources: '*'
+    effect: allow
+- name: shadow_materializer_probe
+  kind: function.lua
+  source: file://shadow_materializer_probe.lua
+  method: apply
+  modules: [registry, hash]
+  meta: {type: test_support}
+  imports:
+    bounds: bee.values:bounds
+    materializer: bee.gov.binding:materializer
+
+- name: source_test
+  kind: function.lua
+  source: file://source_test.lua
+  modules: [fs]
+  security: {policies: [bee.gov:source_test_policy]}
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    source: bee.gov.binding:source
+    protocol: bee.gov.types:workspace_protocol
+    bounds: bee.values:bounds
+
+- name: source_test_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get]
+    resources: [bee.gov:source_test_dir]
+    effect: allow
+- name: source_test_dir
+  kind: fs.directory
+  directory: .wippy/source-fixture
+  base: project
+  auto_init: true
+- name: driver_link_test
+  kind: function.lua
+  source: file://driver_link_test.lua
+  method: run
+  modules: [registry, security, funcs, hash, system]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:driver_link_test_policy, bee.gov:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    materializer: bee.gov.binding:materializer
+    activation: bee.gov.types:driver_admission
+    resolver: bee.driver.binding:resolver
+    bounds: bee.values:bounds
+    activation_store: bee.gov.persist:activation_store
+    artifact: bee.gov.types:artifact
+    canonical: bee.values:canonical
+    resources: bee.gov.binding:staging_resources
+    destination_service: bee.gov.binding:destination_service
+- name: driver_link_test_policy
+  kind: security.policy
+  policy:
+    actions: [security.policy.get, security.scope.create, funcs.security, funcs.call, registry.get, registry.snapshot, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+    resources: '*'
+    effect: allow
+- name: admission_scope_probe
+  kind: function.lua
+  source: file://admission_scope_probe.lua
+  method: check
+  modules: [security]
+- name: admission_probe_call
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gov:admission_scope_probe]
     effect: allow

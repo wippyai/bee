@@ -10,6 +10,9 @@ An empty source directory exercises fresh state. The target never builds a Bee
 binary, pushes changes, changes the source state, or applies a public Hub update.
 It uses `NativeDesktop` and the existing synchronized-frame PTY decoder.
 
+Run an owned step with `BEE_JOURNEY_STEPS=11` (or a comma-separated list).
+Startup and clean owner stop always run; omitting the selection runs every step.
+
 State is copied under `.wippy/owner-journey-work/`: SQLite read-only backups for
 `*.db`, `*.db.*` and `*.sqlite` include committed WAL data; other files and links
 use `cp -a` without following links. Names matching `credentials.db*` or
@@ -26,8 +29,8 @@ startup refusal. Step 7 runs last, after the extended cases. Step 4 accepts only
 running or an explicit `start_failed` carrying the Docker daemon's cause; the
 real subscription case still fails if Docker cannot run. Claude is required;
 Codex is exercised when its OS-user subscription login evidence exists. The
-deterministic fixture is compiled as a Linux ELF runtime artifact for both
-native and Docker placement. Its private fixture home has fake login evidence,
+deterministic fixture is compiled from Go with CGO disabled as a Linux ELF
+runtime artifact for both native and Docker placement. Its private fixture home has fake login evidence,
 projected through the same broker as a subscription. It emits protocol initialization and waits on a named pipe until
 the test observes both a rendered working state and placement's running state.
 Real agents use Bee's credential projection and the OS user's subscription;
@@ -40,7 +43,14 @@ UI location. The test starts the repository's loopback Hub fixture from the
 binary's sibling `portable-deployment/hub` sealed artifacts. Its private
 candidate changes About's code marker. No public release is installed. The
 Hive case uses two isolated state directories and a single-use invite on the
-same machine; it asserts remote live app counts and an Inbox decision.
+same machine. Node 1 observes node 2's live application count move 0→1→0.
+A native fixture session on node 2 stages the authoring guide's worked example
+through its admitted gateway. The person requests its review in Overlays on
+node 2. On node 1, the person grants Control of node 2’s desktop and decides
+that exact request through its Inbox. After the test observes node 2's recorded
+decision, it releases the fixture and checks work settlement. This case uses no
+Docker placement or provider subscription. Observe and Control confirmations
+state their workspace, node, capability and view lifetime.
 
 Governance steps request the actual host edit-mode grant, have an agent author
 through its admitted tools, and assert the reviewed candidate, approval, live
@@ -67,5 +77,5 @@ Allow once commits that decision without another confirmation dialog.
 Harness safety regressions run with:
 
 ```sh
-python3 -m unittest discover -s tests -p test_owner_journey.py
+make owner-journey-unit-check
 ```

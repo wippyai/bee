@@ -19,7 +19,6 @@ entries:
     view: bee.settings.app:view
     build_info: bee.settings.app:build_info
     client: bee.app:client
-    super_edit: bee.gov.binding:super_edit_call
     live_updates: bee.settings.app:live_updates
   meta:
     type: bee.app

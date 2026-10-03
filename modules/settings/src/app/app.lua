@@ -141,18 +141,13 @@ local function main(value: unknown)
         end
         update_read = {future = future, response = response}
     end
-    local function switch(next_pane: view.Pane)
-        pane = next_pane; offset = 0; reveal(); dirty = true
-        if pane == "about" and not live_status then request_live_updates() end
-    end
     local function query_edit_mode(kind: "text" | "confirm", operation: string, initial: string?)
         if kind == "confirm" and initial then edit_input = initial end
         if edit_query ~= "" then status = "Finish the current edit-mode prompt first"; dirty = true; return end
         local title = kind == "text" and "Enable edit mode" or (operation == "enable_confirm" and "Confirm edit mode" or "Disable edit mode")
         local message = kind == "text"
             and "Enter exact namespaces followed by --for DURATION (maximum 24h)."
-            or (operation == "enable_confirm" and view.confirm_message(edit_input)
-                or "Remove this workspace's super-edit profiles and active overlays?")
+            or view.confirm_message(edit_input, operation ~= "enable_confirm")
         local accept = kind == "text" and "Review" or (operation == "enable_confirm" and "Enable" or "Disable")
         local request_id, query_error = client.query(launch, {kind = kind, title = title, message = message,
             accept = accept, initial = kind == "text" and (initial or "") or ""})
@@ -163,7 +158,7 @@ local function main(value: unknown)
         status = kind == "text" and "Waiting for namespace list" or "Waiting for confirmation"
         dirty = true
     end
-    local function apply_edit_mode(operation: "enable" | "disable", input: string?): boolean
+    local function apply_edit_mode(operation: "enable" | "disable" | "status", input: string?): boolean
         local request: {[string]: unknown} = {operation = operation, workspace_id = launch.workspace_id}
         if input then request.input = input end
         local ok, result, call_error = pcall(function()
@@ -183,6 +178,12 @@ local function main(value: unknown)
         dirty = true
         return true
     end
+    local function switch(next_pane: view.Pane)
+        pane = next_pane; offset = 0; reveal(); dirty = true
+        if pane == "edit_mode" then apply_edit_mode("status", nil) end
+        if pane == "about" and not live_status then request_live_updates() end
+    end
+    if pane == "edit_mode" then apply_edit_mode("status", nil) end
     if pane == "about" then request_live_updates() end
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
@@ -236,10 +237,10 @@ local function main(value: unknown)
                     -- An older acknowledgement must not undo a newer key/click.
                     if pending == "" or pending == payload.request_id then
                         preferences = confirmed
+                        status = view.appearance_notice(status, pending, type(payload.error) == "string" and payload.error or "")
                         pending = ""
                         if pending_timeout then pending_timeout:stop(); pending_timeout = nil end
                         dirty = true
-                        status = type(payload.error) == "string" and payload.error or ""
                     end
                 end
             end

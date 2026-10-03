@@ -7,6 +7,7 @@ local registry = require("registry")
 local funcs = require("funcs")
 local machine = require("machine")
 local materialization = require("materialization")
+local admission = require("admission")
 
 type Object = {[string]: unknown}
 type Candidate = {ref: string, kind: string, status: string, reasons: {string}}
@@ -21,6 +22,36 @@ end
 
 local function define_tests()
     test.describe("Sessions catalog route readiness", function()
+        test.it("refuses headless session routes without their retained resource before offering them", function()
+            local ref = "bee.driver.claude.profiles:default_window"
+            local entry = assert(registry.get(ref))
+            local original = entry.data
+            local changed: Object = {}
+            for key, value in pairs(assert(bounds.object(original))) do changed[key] = value end
+            changed.session_resource = nil
+            entry.data = changed
+            local edit = assert(registry.snapshot()):changes()
+            edit:update(entry)
+            assert(edit:apply())
+            local ok, failure = pcall(function()
+                local ephemeral, refused = admission.read(assert(registry.snapshot()), ref, nil, false)
+                test.not_nil(ephemeral)
+                test.is_nil(refused)
+                local found: Candidate? = nil
+                for _, candidate in ipairs(listed(true).items) do
+                    if candidate.ref == ref then found = candidate end
+                end
+                test.not_nil(found)
+                test.eq(found and found.status, "unconfigured")
+                test.not_nil((string.find(table.concat(found and found.reasons or {}, "; "), "no retained session resource", 1, true)))
+                for _, candidate in ipairs(listed(false).items) do test.is_true(candidate.ref ~= ref) end
+            end)
+            entry.data = original
+            local restore = assert(registry.snapshot()):changes()
+            restore:update(entry)
+            assert(restore:apply())
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("retains a saved profile's identity and title beside its definition", function()
             local saved = assert(funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",

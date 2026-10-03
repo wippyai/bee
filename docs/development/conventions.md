@@ -33,7 +33,20 @@ parallel registry records or stored state for the same information.
 paths, component roots, local sources, application entries, process placement,
 host-free requirement defaults, duplicate Lua sources, orphan files and
 requirement/import and named approver definition targets. Domain ownership, dynamic registry discovery and
-public API reachability also require review.
+public API reachability also require review. The same lint gate runs
+`build/registry_discovery_check.py` after strict Lua lint. Its allowlist records
+exact expressions, occurrence counts and review reasons for declared target
+resolution, host policy scope validation and immutable persisted identity codecs.
+
+Discover entries with `registry.find` by kind, contract binding and typed
+metadata. Follow the binding's declared method target exactly. Namespace or ID
+spelling cannot classify a provider, application, service or installed package,
+and metadata never authorizes an entry: the host admits the exact entry and
+its policies. Relative requirement targets resolve in their declared namespace;
+namespace collision and protected host-scope checks are publication constraints.
+Existing measured history is decoded and verified against its exact persisted
+record identity. Hub receipt migration 1 appends metadata tags in a new registry
+revision; it preserves earlier revisions and the receipt data and digests.
 
 The generated [component inventory](component-inventory.json) records current
 namespace and entry IDs, requirement targets, topics, owner resources and
@@ -267,12 +280,20 @@ lock and an unreachable daemon fails with its exact error. The runner prints whe
 The wait has no timeout and can be interrupted. Failures release the lock and
 retain their cause. The remaining entries retain their balanced parallel shards.
 
-`make native-placement-unit-check` runs native launch, configuration, supervision
-and credential suites together with provider configuration and instruction-builder
+`make native-placement-unit-check` runs native home/admission, execution,
+configuration, output, credential, cleanup and startup suites together with
+workdir preparation, provider configuration and instruction-builder
 checks. Each native suite captures and restores shared fixture registry state
 independently within the existing test entry timeout. The bounded sweep regression
 accounts for earlier cases' retained attempts in the same owner store and verifies
 every reconciliation outcome.
+
+`make docker-placement-unit-check` runs Docker admission, failure reporting,
+image, environment and real container lifecycle tests under the shared daemon
+lock. Docker and native placement checks observe startup acknowledgements,
+runner exit and both output EOFs through one fixture observer. Failed launches
+report their retained cause before waiting for output; the test entry timeout
+bounds a broken fixture.
 
 `make harness-drain-unit-check` covers carrier post-exit draining. Its silent
 consumer fixture holds descendant pipes behind a FIFO until the test releases

@@ -10,7 +10,7 @@ application, select a workspace, open a store, or grant access to a thread.
 | `client`, `arguments`, `interaction` | Application launch and broker-facing values used by standalone application processes |
 | `caller` | Typed owner replies decoded through the shared `bee.values:reply` boundary |
 | `names` | Shared naming values for applications and desktop consumers |
-| `bee.app.status:startup_progress` | Pure retained-startup phase decoding; callers authenticate progress senders and follow owner readiness and failure events |
+| `bee.app.status:startup_progress` | Pure retained-startup phase decoding shared by launch and desktop clients; callers authenticate progress senders and follow owner readiness and failure events |
 
 Shared frame, appearance, bounded text and presentation kits are owned by
 [bee.ui](../../ui/src/README.md). Import `bee.ui:frame`, `bee.ui:appearance`,

@@ -93,7 +93,6 @@ local function measured(config: Config, spec: Object): (Object?, Result?)
     end
     local result, measurement_error = measure.measure(spec, candidate, context)
     if not result then return nil, failure("BLOCKED", tostring(measurement_error)) end
-    result.registry_revision = context.registry_revision
     return result, nil
 end
 
@@ -123,7 +122,7 @@ local function desired_intent(config: Config, intent: Object): ({unknown}?, Obje
     if type(bytes) ~= "string" or type(digest) ~= "string" then
         return nil, nil, failure("CONFLICT", "immutable application admission blob is incomplete")
     end
-    local measured, admission_error = application_admission.decode(bytes, digest)
+    local measured, admission_error = application_admission.decode(bytes, digest, intent.application_admission_generation)
     if not measured then return nil, nil, failure("CONFLICT", tostring(admission_error)) end
     local record = measured.record
     if record.workspace_id ~= intent.workspace_id or record.overlay_owner ~= config.overlay_owner
@@ -131,7 +130,7 @@ local function desired_intent(config: Config, intent: Object): ({unknown}?, Obje
         or record.source_workspace ~= intent.source_workspace or record.artifact_digest ~= intent.artifact_digest then
         return nil, nil, failure("CONFLICT", "immutable application admission does not match activation identity")
     end
-    return entries, {bytes = measured.bytes, digest = measured.digest}, nil
+    return entries, {bytes = measured.bytes, digest = measured.digest, identity_generation = intent.application_admission_generation}, nil
 end
 
 local function composed_base_diagnostic(intent: Object, current: Object): string?
@@ -528,16 +527,9 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
                 return uncertain(observed == nil and tostring(applied_observe_error)
                     or "overlay apply completed without an exact observed match")
             end
-            local read_revision = config.resolver.revision
-            if read_revision then
-                local current_revision = read_revision(config.resolver)
-                if current_revision == spec.registry_revision then
-                    -- The materializer writes only this owner's overlay, which
-                    -- does not advance the captured base revision. Yield here;
-                    -- the next step fully remeasures before recording outcome.
-                    return transaction.success(intent, false)
-                end
-            end
+            -- Owner overlays advance their own generation rather than the
+            -- durable registry base revision. Exact effect observation permits
+            -- fresh remeasurement now; revision equality cannot decide progress.
             local reverified, reverify_error = remeasure_progress(config, intent)
             if not reverified then
                 return uncertain(tostring((reverify_error).message

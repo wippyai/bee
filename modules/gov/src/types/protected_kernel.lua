@@ -3,8 +3,7 @@
 -- definition no overlay profile can open. Preflight refuses a plan that edits
 -- a named definition, one of its transitive dependencies or a requirement
 -- selector aimed at them. The one carve-out is the host's explicit super-edit
--- set: namespaces it has deliberately opened to a super-edit profile, empty in
--- the shipped composition.
+-- set: namespaces it has deliberately opened to a super-edit profile.
 local M = {}
 M.ID = "bee.security.gov:protected_kernel"
 M.TYPE = "bee.protected_kernel"
@@ -83,12 +82,17 @@ function M.follows(kind: string): boolean
         or kind == "contract.definition" or kind == "ns.dependency" or kind == "ns.requirement"
 end
 
--- Whether a namespace is protected: a protected namespace or a child of one
--- that the host has not explicitly opened in its super-edit set.
-function M.namespace(manifest: Manifest, namespace: string): boolean
+-- The host's explicit carve-out, independent of a caller's exact namespace grant.
+function M.opened(manifest: Manifest, namespace: string): boolean
     for _, open in ipairs(manifest.super_edit) do
-        if namespace == open or namespace:sub(1, #open + 1) == open .. "." then return false end
+        if namespace == open or namespace:sub(1, #open + 1) == open .. "." then return true end
     end
+    return false
+end
+
+-- Whether a namespace is protected by the manifest outside that carve-out.
+function M.namespace(manifest: Manifest, namespace: string): boolean
+    if M.opened(manifest, namespace) then return false end
     for _, protected in ipairs(manifest.namespaces) do
         if namespace == protected or namespace:sub(1, #protected + 1) == protected .. "." then return true end
     end

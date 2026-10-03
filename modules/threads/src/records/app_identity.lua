@@ -10,9 +10,6 @@ local hash = require("hash")
 local bounds = require("bounds")
 local M = {}
 M.PREFIX = "bee.application:"
-M.GOV_OWNER_PREFIX = "bee.gov.apps:"
-M.APP_NAMESPACE = "app."
-M.APP_ENTRY = "app"
 M.MAX_DEFINITION_BYTES = 160
 M.READABLE_BYTES = 48
 M.DIGEST_BYTES = 24
@@ -28,28 +25,18 @@ local function definition(value: unknown): string?
     return value
 end
 
--- The overlay a workspace-application definition was delivered from,
--- mirroring the workspace-application naming rule: namespace app.<name>
--- carrying entry app. Any other definition has no overlay component.
-local function overlay_owner(workspace_id: string, definition_id: string): string?
-    local namespace = definition_id:match("^(.*):" .. M.APP_ENTRY .. "$")
-    if not namespace or namespace:sub(1, #M.APP_NAMESPACE) ~= M.APP_NAMESPACE then return nil end
-    local name = namespace:sub(#M.APP_NAMESPACE + 1)
-    if #name == 0 or #name > 48 or not name:match("^[a-z][a-z0-9_]*$") then return nil end
-    return M.GOV_OWNER_PREFIX .. workspace_id .. "." .. name
-end
-
 local function readable(definition_id: string): string
     local text = definition_id:gsub("[^A-Za-z0-9_.-]", "-"):sub(1, M.READABLE_BYTES)
     if text == "" then return "app" end
     return text
 end
 
-function M.stable(workspace_id: unknown, definition_id: unknown): Stable?
+function M.stable(workspace_id: unknown, definition_id: unknown, overlay_owner: unknown?): Stable?
     local workspace = workspace(workspace_id)
     local definition = definition(definition_id)
     if not workspace or not definition then return nil end
-    local owner = overlay_owner(workspace, definition)
+    local owner = overlay_owner ~= nil and bounds.id(overlay_owner) or nil
+    if overlay_owner ~= nil and not owner then return nil end
     local digest, digest_error = hash.sha256(workspace .. "\0" .. definition .. "\0" .. (owner or ""))
     if not digest or digest_error then return nil end
     local id = M.PREFIX .. workspace .. ":" .. readable(definition) .. "-" .. digest:sub(1, M.DIGEST_BYTES)

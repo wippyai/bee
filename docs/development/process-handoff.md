@@ -41,6 +41,10 @@ supervised replacement on `OUTDATED`. Its supervisor keeps the viewport and
 physical attachments, starts a new client, admits the same display identity,
 and announces readiness after the presenter renders. The replacement replays
 accepted tabs from committed layout and receives a fresh terminal grant.
+Native presenters renew expired mounts through the existing exact attachment
+operation. Reattachment waits for retained activation and the replacement's
+matching host render admission and client render acknowledgement before receiving
+a fresh mount in the same session.
 `make client-upgrade-check` and `make retained-client-upgrade-check` change the
 client definition while two live shells remain attached in source and packed
 launches. If the wire checkpoint is incompatible, the authenticated child is
@@ -121,6 +125,11 @@ Direct Registry changes to a `process.service` registration follow the runtime
 supervisor's own stop/start lifecycle; direct code-only changes with equal
 service configuration do not replace that controller. Hub transitions below
 also restart code-only service updates.
+An unchanged service registration, process and retained library imports stay
+running across a package version change. A changed registration or retained
+code still requires the owner's admitted lifecycle function. Hub compares the
+installed definitions with the native registry plan for its dependency changes,
+so host requirement parameters participate in that comparison.
 Independent component `process.service` changes now use Hub durable receipt
 intent, owner admission/drain and the runtime supervisor stop/start path. Hub
 verifies exact process/handler definitions and the registry revision before
@@ -129,6 +138,10 @@ the first production owner; unsupported service/process-host owners refuse the
 change. Removal retains owned data and refuses while departing applications or
 other processes remain alive. Existing broker closure revokes their grants and
 resources. Crashes preserve the original operation for explicit recovery.
+
+Hive and the workspace host manager wait for the existing governance recovery
+service to complete before admitting workspaces. A retained component shadow is
+restored before their first desktop processes load its code.
 
 Bee does not add checkpoint handoff for running drivers,
 managed agent sessions or the Hive supervisor here. Their running executions

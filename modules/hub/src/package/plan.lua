@@ -118,9 +118,6 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     if not installed then return nil, inventory_error end
     local self_update = request.component == "bee/bee"
     if self_update and request.action ~= "update" then return nil, "the Bee deployment root can only be updated" end
-    if request.component:match("^bee/") and not self_update and not installed.selected then
-        return nil, "Bee component management requires explicit host-selected roots"
-    end
     local raw_state = bounds.object(state)
     if not raw_state or type(raw_state.entries) ~= "table" then return nil, "invalid captured registry" end
     local controlled = inventory.dependency_members(installed, self_update)
@@ -150,7 +147,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             end
         end
     end
-    if not self_update and protected[request.component] and request.action ~= "install" and request.component:match("^bee/") then
+    if not self_update and protected[request.component] and request.action ~= "install" then
         return nil, "protected boot/installer component cannot be " .. (request.action == "uninstall" and "removed" or "updated")
             .. " independently: " .. request.component .. "; required by " .. protected[request.component]
     end
@@ -179,7 +176,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
                 existing = root
             elseif controlled[root.component] then
                 local selected = root.version
-                if self_update and not root.component:match("^bee/") then
+                if self_update and not inventory.host_component(root) then
                     for _, item in ipairs(installed.modules) do
                         if item.component == root.component and item.version ~= "" then selected = item.version; break end
                     end
@@ -254,7 +251,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             if entry.kind == "ns.dependency" then
                 local edge, edge_error = graph.edge(entry.data)
                 if not edge then return nil, edge_error end
-                if edge.component:match("^bee/") then
+                if entry.meta.type == "bee.component_selection" then
                     return nil, "Bee self-update must leave component selection to host roots: " .. entry.id
                 end
             end
@@ -267,7 +264,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         if lock and type(lock.modules) == "table" then
             for _, raw in ipairs(lock.modules) do
                 local item = bounds.object(raw)
-                if item and type(item.name) == "string" and item.name:match("^bee/") and not selections[item.name] then
+                if item and type(item.name) == "string" and not selections[item.name] then
                     removed_components[item.name] = true
                 end
             end

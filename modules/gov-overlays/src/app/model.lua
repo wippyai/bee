@@ -547,6 +547,10 @@ function M.prepare_request(state: State, item: Plan, intent_id: string, key: str
     return {operation = "prepare", workspace_id = state.workspace_id, source_node = item.source_node,
         source_workspace = item.source_workspace, version = item.version, intent_id = intent_id, receipt_key = key}
 end
+function M.can_advance(state: State): boolean
+    local phase = state.intent and state.intent.phase
+    return phase == "approval_bound" or phase == "consuming" or phase == "authorized" or phase == "applying"
+end
 function M.step_request(state: State, intent_id: string, key: string): Object
     return {operation = "step", workspace_id = state.workspace_id, intent_id = intent_id, receipt_key = key}
 end

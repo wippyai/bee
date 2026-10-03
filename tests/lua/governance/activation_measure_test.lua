@@ -60,6 +60,19 @@ local function define_tests()
             test.is_true((result.report).ready)
             test.is_nil(result.application_admission)
         end)
+        test.it("retains admitted durable shadow authority while normalizing registry revisions", function()
+            local plan, candidate, context = facts()
+            context.entries["demo:run"] = candidate_entry("demo:run", "function.lua", "installed/component", SHA)
+            context.super_edit = true
+            test.is_true(assert(preflight.check(candidate, context)).ready)
+            local result, err = measure.measure(plan, candidate, context)
+            if not result then error(tostring(err)) end
+            test.is_true(result.report.ready)
+            context.super_edit = false
+            local denied, denial = measure.measure(plan, candidate, context)
+            test.is_nil(denied)
+            test.is_true(tostring(denial):find("ENTRY_COLLISION", 1, true) ~= nil)
+        end)
         test.it("retains only a canonical measured application admission projection", function()
             local plan, candidate, context = facts()
             if type(plan.artifact_digest) ~= "string" then error("invalid fixture plan.artifact_digest") end

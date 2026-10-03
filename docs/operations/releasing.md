@@ -167,8 +167,8 @@ Artifacts accumulate in two places. During the run each target uploads an Action
 artifact named `bee-<goos>-<goarch>`; the release job then attaches
 `bee-<goos>-<goarch>.tar.gz` and its `.sha256` to the draft release, together with
 `install.sh` and the pack job's `bee-deployment.tar.gz` and `.sha256`. Each archive contains the executable `bee`, `bee.provenance.json`,
-`bee.LICENSES.txt`, the effective `bee.go.mod` and `bee.go.sum`, and
-`bee.runtime-patches.tar.gz`. The provenance sidecar records the sealed
+`bee.LICENSES.txt`, and the effective `bee.go.mod` and `bee.go.sum`.
+The provenance sidecar records the sealed
 application manifest, including every physical pack hash and the pinned native
 module version.
 
@@ -207,8 +207,7 @@ so `install.ps1` is not part of the release assets or checks.
 Production packs select `src/`; architecture acceptance checks loaded entries
 and the source/pack boundary. Tests, local databases, credentials and development
 stores must stay outside the application pack. The release archive contains the
-binary, provenance, effective Go module files, available dependency notices and
-any runtime patch sources the manifest lists. Runtime patches retain their upstream MPL-2.0 license.
+binary, provenance, effective Go module files and available dependency notices.
 
 Resolve missing dependency notices before a stable public release. Signing and
 Hub credentials require separate configuration. Keep private keys in

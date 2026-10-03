@@ -22,7 +22,12 @@ SLOW = {
     "bee.harness.catalog:carrier_test": 80.0,
     "bee.harness.catalog:carrier_stream_test": 90.0,
     "bee.harness.catalog:carrier_drain_test": 65.0,
-    "bee.placement.native:native_test": 25.0,
+    "bee.placement.native:native_test": 5.0,
+    "bee.placement.native:native_execution_test": 5.0,
+    "bee.placement.native:native_configuration_test": 5.0,
+    "bee.placement.native:native_output_test": 5.0,
+    "bee.placement.native:native_credentials_test": 5.0,
+    "bee.placement.native:native_cleanup_test": 5.0,
 }
 DEFAULT_WEIGHT = 1.0
 SHARDS = 4
@@ -89,11 +94,12 @@ def docker_daemon_lock():
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def run_shard(index, folder, entries, timeout=None):
+def run_shard(index, folder, entries, timeout=None, log=None, docker_locked=False):
     started = time.monotonic()
     with ExitStack() as resources:
-        if set(entries) & set(test_entries(resource="docker_daemon", source=folder / "src/tests")):
+        if not docker_locked and set(entries) & set(test_entries(resource="docker_daemon", source=folder / "src/tests")):
             resources.enter_context(docker_daemon_lock())
+        handle = resources.enter_context(Path(log).open("w")) if log is not None else None
         result = subprocess.run([
             str(RUNTIME), "test", "--host", "bee:terminal", "--override",
             "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
@@ -103,8 +109,9 @@ def run_shard(index, folder, entries, timeout=None):
             "--override", "bee.threads.service:thread_outbox_pump_service:lifecycle.auto_start=false",
             "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
             "test", *entries,
-        ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
-    output = result.stdout + result.stderr
+        ], cwd=folder, env=environment(folder), stdout=handle or subprocess.PIPE,
+            stderr=subprocess.STDOUT if handle is not None else subprocess.PIPE, text=True, timeout=timeout)
+    output = Path(log).read_text() if log is not None else result.stdout + result.stderr
     plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", output)
     selected = re.search(r"(\d+) tests in \d+ suites", plain)
     cases = re.findall(r"(\d+) tests\s+[\d.]+m?s", plain)

@@ -8,7 +8,13 @@ the replaceable `target_root` requirement.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.placement.native` | `service`: the eight contract operations; `runner`: the per-attempt process that materializes the home, starts the child, records its identity, pumps output and input, signals and records exit; `workdir_preparers`: discovery, host authorization, setup and cleanup of workdir preparers; `writable_roots_adapter`: driver profile writable roots argument formatting; `store` and `migrations`: attempts and append-only evidence; `capability`: the measured cleanup capability of this runtime; `identity`: leader pid, start ticks and boot id; `homes`: derived directory keys under the root; `protocol`: runner, service and recipient messages; `resources`: linked references |
+| `bee.placement.native` | Contracts, host requirements and runner/service wire protocol |
+| `bee.placement.native.binding` | Authenticated contract operations and the native process backend |
+| `bee.placement.native.service` | Attempt runner and startup supervision, windows, materialization, cleanup sweep, capability and identity checks, homes and workdir preparers |
+| `bee.placement.native.persist` | Attempts and append-only evidence |
+| `bee.placement.native.migrations` | Immutable schema migrations |
+| `bee.placement.native.env` | Selected resources and linked host references |
+| `bee.placement.native.security` | Permission policies selected by the host |
 
 ## Order of a start
 
@@ -39,7 +45,8 @@ the replaceable `target_root` requirement.
    and identity resolution, or `start_failed` with the exact refusal cause.
    Exit before acknowledgement records the runner's exit reason as a startup
    failure. Recipient notifications use `bee.placement.started` as a hint to
-   read the authenticated owner status; state and cause come from the store.
+   read the authenticated owner status; the store reads attempt state and its
+   failure and cancellation evidence in one SQL snapshot.
    Slow startup stays `starting` until acknowledgement, refusal, observed exit
    or an explicit stop. Each executor operation keeps its own runtime bound.
    `stop` before the runner claims startup atomically records exit and complete
@@ -132,12 +139,22 @@ retained byte-identical file replay remains unchanged. This permits Agy's
 `.agents/mcp_config.json` in a retained customization root without adopting
 or changing the user's global configuration directories.
 
+## Input closure
+
+`close_stdin` authenticates the attempt owner before checking its state. A child
+that has already exited returns its recorded attempt, `closed: false` and the
+exit reason; it creates no `stdin.closed` evidence. Callers can finish draining
+the output under that attempt's observed exit instead of reporting a closure
+failure solely because the short-lived child won the race.
+
 ## Provider login homes
 
 Private attempt homes are created empty. A private `provider_home` declaration
 selects the provider's machine-home source paths, private destinations, runtime
-home variables and whether its login can be returned after exit. The credential
-broker supplies bounded bytes only for source paths admitted by the host;
+home variables and whether its login can be returned after exit. The declaration's
+file list may be empty for an account-free CLI; its private home receives no
+ambient file projections. The credential broker supplies bounded bytes only
+for source paths admitted by the host;
 placement compares every returned login and setup path with the driver
 declaration before creating files. It never scans the source home or copies
 unlisted files. Optional absent logins leave the token destination absent.
@@ -214,7 +231,13 @@ to the bound recipient under the current attachment generation. The runner
 keeps unacknowledged chunks up to a spool bound; beyond it the pump blocks
 and the child blocks on its pipe. Input arrives with a write id and the
 generation; a repeated write id is acknowledged without a second write.
+`close_stdin` waits for the exact runner acknowledgement or monitored runner
+EXIT, draining queued acknowledgements before reporting their absence. Send,
+monitor, cancellation and runner failures retain their causes.
 EOF stops are separate messages from chunks, and exit is separate from EOF.
+The runner retains the two EOF markers even after acknowledgement, replays
+acknowledged markers to a newer attachment generation, and excludes them from
+unacknowledged output counts and retention obligations.
 
 ## Exit observation
 
@@ -414,7 +437,9 @@ budget. Time spent with reads paused at the output spool limit does not consume
 that budget. After child exit, the retention deadline bounds each continuous wait at the
 spool limit; acknowledged progress that resumes reads ends that wait. Once both
 streams end, one retention deadline bounds the remaining unacknowledged output. Drain expiration records forced
-truncation; retention expiration records output loss rather than consumption.
+truncation only after queued pipe chunks and EOFs have been consumed; retention
+expiration records output loss rather than consumption. Selecting an expired
+drain bound cannot discard pipe events already available to the runner.
 
 Native preparation decodes host prepare options through the same driver preferences
 decoder as the carrier planner before comparing the configuration digest. Empty

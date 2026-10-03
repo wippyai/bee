@@ -15,12 +15,15 @@ entries:
   source: file://model_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [json]
+  modules: [json, tty]
   imports:
     test: wippy.test:test
     model: bee.hive.manager.app:model
     directory: bee.hive.manager.app:directory
     types: bee.hive:types
+    interaction: bee.app:interaction
+    dialog: bee.terminal:dialog
+    appearance: bee.ui:appearance
 - name: view_test
   kind: function.lua
   source: file://view_test.lua

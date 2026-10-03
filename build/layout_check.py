@@ -11,15 +11,35 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK = {"application": "bee.app", "application-threads": "bee.app.threads"}
-NATIVE_ENTRIES = {"bee.harness.host:environment", "bee.hive.host:enrollment"}
 ROOT_ENTRIES = json.loads((ROOT / "build/layout_roots.json").read_text())
+REGISTRY_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_][A-Za-z0-9_.-]*(?![A-Za-z0-9_.:-])")
 ROOT_DECLARATIONS = {"ns.definition", "ns.dependency", "ns.requirement", "contract.definition"}
+
+
+def native_entries(root):
+    entries = set()
+    for path in sorted((root / "native").rglob("*.go")):
+        if path.name.endswith("_test.go"):
+            continue
+        source = re.sub(r"//[^\n]*|/\*.*?\*/", "", path.read_text(), flags=re.S)
+        constants = dict(re.findall(r'\b(\w+)\s*=\s*"([^"\n]+:[^"\n]+)"', source))
+        for constant in re.findall(r'registry.Entry\s*{\s*ID:\s*registry.ParseID\((\w+)\)', source):
+            if constant in constants:
+                entries.add(constants[constant])
+        helpers = dict(re.findall(r'func\s+(\w+)\(\)\s+registry.ID\s*{\s*return registry.ParseID\((\w+)\)\s*}', source))
+        for argument in re.findall(r'\.RegisterStorage\(\s*(\w+\(\)|registry.ParseID\(\w+\))\s*,', source):
+            match = re.fullmatch(r'registry.ParseID\((\w+)\)', argument)
+            constant = match[1] if match else helpers.get(argument[:-2])
+            if constant in constants:
+                entries.add(constants[constant])
+    return entries
 
 
 def audit(root):
     errors, entries, sources = [], {}, set()
     component_roots = {SDK.get(index.parent.parent.name, "bee." + index.parent.parent.name.replace("-", "."))
                        for index in (root / "modules").glob("*/src/_index.yaml")}
+    documents = {}
     graph = defaultdict(set)
     groups = defaultdict(set)
     indexes = [*sorted((root / "src").rglob("_index.yaml")),
@@ -29,6 +49,7 @@ def audit(root):
         module = relative.parts[1] if relative.parts[0] == "modules" else None
         source_root = root / "modules" / module / "src" if module else root / "src"
         document = yaml.safe_load(index.read_text())
+        documents[index] = document
         namespace = document["namespace"]
         expected = SDK.get(module, "bee." + module.replace("-", ".")) if module else "bee"
         children = index.parent.relative_to(source_root).parts
@@ -53,7 +74,7 @@ def audit(root):
             entries[identity] = (index, entry)
             for group in entry.get("groups", []):
                 groups[namespace + ":" + group].add(identity)
-            graph[identity].update(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", yaml.safe_dump(entry)))
+            graph[identity].update(REGISTRY_REFERENCE.findall(yaml.safe_dump(entry)))
             source = entry.get("source", "")
             if source.startswith("file://"):
                 path = index.parent / source[7:]
@@ -61,7 +82,7 @@ def audit(root):
                     errors.append(f"{identity}: source must exist beside its declaring index: {source}")
                 sources.add(path.resolve())
                 if path.is_file():
-                    graph[identity].update(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", path.read_text()))
+                    graph[identity].update(REGISTRY_REFERENCE.findall(path.read_text()))
                 if module and module != "application" and path.name in {"app.lua", "view.lua"} and children != ("app",):
                     errors.append(f"{identity}: application entry/rendering source belongs in src/app")
             if module and source == "file://types.lua" and children:
@@ -90,6 +111,12 @@ def audit(root):
         document = yaml.safe_load(index.read_text())
         if "_" in document["namespace"]:
             errors.append(f"{index.relative_to(root)}: test overlay namespace cannot contain underscores")
+    native_targets = native_entries(root)
+    external_targets = set()
+    if (root / "build/component-inventory-external.json").is_file():
+        from component_inventory import load_external_proofs
+        external, _ = load_external_proofs(documents)
+        external_targets.update(external)
     dangling, targets = 0, 0
     for identity, (index, entry) in entries.items():
         refs = list(entry.get("imports", {}).values())
@@ -109,19 +136,25 @@ def audit(root):
                         for approver in policy.get("approvers", [])
                         if isinstance(approver, dict) and "definition_id" in approver)
         if entry["kind"] == "ns.requirement":
-            refs.extend(target["entry"] for target in entry.get("targets", []))
-            refs.extend(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", yaml.safe_dump(entry.get("default"))))
+            for target in entry.get("targets", []):
+                ref = target["entry"]
+                if ":" not in ref:
+                    ref = identity.split(":", 1)[0] + ":" + ref
+                if ref not in entries and ref not in native_targets and ref not in external_targets:
+                    errors.append(f"{identity}: dangling requirement target {ref}")
+                    dangling += 1
+            refs.extend(REGISTRY_REFERENCE.findall(yaml.safe_dump(entry.get("default"))))
             targets += len(entry.get("targets", []))
             if isinstance(entry.get("default"), list) and any(
                 target["path"].rstrip().endswith("+=") for target in entry.get("targets", [])
             ):
                 errors.append(f"{identity}: append requirement cannot default to an array element")
         for ref in refs:
-            if (ref.startswith("bee:") or ref.startswith("bee.")) and ref not in entries and ref not in groups and ref not in NATIVE_ENTRIES:
+            if ":" in ref and ref not in entries and ref not in groups and ref not in native_targets and ref not in external_targets:
                 errors.append(f"{identity}: dangling linker/import target {ref}")
                 dangling += 1
         if index.relative_to(root).parts[0] == "modules" and entry["kind"] == "ns.requirement":
-            for ref in re.findall(r"bee(?:\.[a-z_]+)*:[a-z_]+", str(entry.get("default", ""))):
+            for ref in REGISTRY_REFERENCE.findall(str(entry.get("default", ""))):
                 if ref in entries and entries[ref][0].relative_to(root).parts[0] != "modules":
                     errors.append(f"{identity}: module requirement default names host entry {ref}")
     for edges in graph.values():
@@ -133,7 +166,7 @@ def audit(root):
         for path in folder.rglob("*"):
             if path.is_file() and path.suffix in {".lua", ".yaml", ".py", ".go", ".md", ".sh"}:
                 text = path.read_text()
-                roots.update(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", text))
+                roots.update(REGISTRY_REFERENCE.findall(text))
                 for reference in set(re.findall(r"modules/[a-z-]+/src/[A-Za-z0-9_./-]+\.lua", text)):
                     if not (root / reference).is_file():
                         errors.append(f"{path.relative_to(root)}: dangling production source reference {reference}")

@@ -89,7 +89,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         end
         if #catalog_items == 0 then
             if state.all_catalog and #state.all_catalog > 0 then
-                frame.line(painter, first, "No applications on this page", theme.text)
+                frame.line(painter, first, "No packages on this page", theme.text)
                 if roomy then frame.line(painter, first + 1, "Developer packages are hidden · enable Developer packages to show libraries.", theme.muted) end
             else
                 frame.empty(painter, first, "No packages found", "/ change the search · K change the keyword")
@@ -165,7 +165,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 frame.put(painter, width - version_width - 2, y, item.version, version_width, foreground, background)
                 local description = item.direct and "Direct installation" or "Dependency"
                 if #item.used_by > 0 then description = description .. " · Required by " .. table.concat(item.used_by, ", ") end
-                if item.component:match("^bee/") and update then
+                if update then
                     if update.available_version ~= "" then
                         description = description .. " · Hub " .. update.available_version
                         if item.component == "bee/bee" and state.bee_update and state.bee_update.needs_new_binary then
@@ -179,13 +179,11 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             else
                 local label = item.component .. "  " .. item.version
-                if item.component:match("^bee/") then
-                    for _, candidate in ipairs(state.pack_updates) do
-                        if candidate.component == item.component and candidate.available_version ~= "" then
-                            label = label .. " · Hub " .. candidate.available_version
-                            if candidate.update_available then label = label .. " · update available" end
-                            break
-                        end
+                for _, candidate in ipairs(state.pack_updates) do
+                    if candidate.component == item.component and candidate.available_version ~= "" then
+                        label = label .. " · Hub " .. candidate.available_version
+                        if candidate.update_available then label = label .. " · update available" end
+                        break
                     end
                 end
                 frame.row(painter, y, label, selected, "component", 0, item.component)
@@ -524,7 +522,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     end
     local actions = 2
     if state.phase == "confirm" then
-        frame.line(painter, height - 2, "Confirm this exact digest; changing package, version, policy, or JSON clears it.", theme.text)
+        frame.line(painter, height - 2, "Duration: once, for this exact digest; edits clear confirmation.", theme.text)
         actions = button(actions, height - 1, "confirm", " Confirm ", plan.ready)
         actions = button(actions, height - 1, "cancel", " Back ", true)
         frame.footer(painter, status, "Enter confirms · Esc returns to the plan")

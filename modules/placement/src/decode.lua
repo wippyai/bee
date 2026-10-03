@@ -152,7 +152,7 @@ function M.status(value: unknown): (types.Status?, string?)
     return {attempt = attempt, liveness = {observed = observed, alive = alive, at = at, detail = detail}, private_home = private_home}, nil
 end
 
-type StdinClosure = {closed: boolean, reason: string?}
+type StdinClosure = {attempt: types.Attempt, closed: boolean, reason: string?}
 function M.stdin_closure(value: unknown, attempt_id: string): (StdinClosure?, string?)
     local object = bounds.object(value)
     if not object then return nil, "close_stdin result must be an object" end
@@ -168,7 +168,7 @@ function M.stdin_closure(value: unknown, attempt_id: string): (StdinClosure?, st
         if not reason or reason == "" then return nil, "close_stdin refusal reason is invalid" end
     end
     if (object.closed == true and reason ~= nil) or (object.closed == false and reason == nil) then return nil, "close_stdin result and reason disagree" end
-    return {closed = object.closed, reason = reason}, nil
+    return {attempt = attempt, closed = object.closed, reason = reason}, nil
 end
 
 return M

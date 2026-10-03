@@ -5,7 +5,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, security, ctx, uuid, hash, time]
+  modules: [process, channel, security, ctx, uuid, hash, time, funcs]
   imports:
     clock: bee.values:clock
     persistence: bee.workspace.persist:checkpoint

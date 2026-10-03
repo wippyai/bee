@@ -198,7 +198,7 @@ entries:
   kind: function.lua
   source: file://broker_retained_test.lua
   method: run
-  modules: [process, channel, security]
+  modules: [process, channel, security, registry]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test

@@ -15,8 +15,8 @@ entries:
   meta:
     comment: Settings may enter the private host profile writer; the facade checks its broker-minted application identity
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "*") || (action == "security.scope.create" && resource == "*") || (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")'
-    actions: [funcs.security, security.actor.get, security.actor.create, security.scope.create, security.policy_group.get, funcs.call]
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "bee.gov.super_edit") || (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")'
+    actions: [funcs.security, security.actor.get, security.actor.create, security.policy_group.get, funcs.call]
     resources: [security, '*', bee.gov.security:super_edit_execution_scope, bee.gov.binding:super_edit_backend_call]
     effect: allow
 - name: super_edit_execution_policy
@@ -53,7 +53,7 @@ entries:
     expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions: [db.get, registry.get, registry.snapshot, registry.preview, registry.apply, system.read, env.get,
       funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get,
-      registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
+      registry.overlay.get, registry.overlay.apply, registry.overlay.shadow, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
     resources: '*'
     effect: allow
 - name: staging_policy
@@ -91,7 +91,7 @@ entries:
   meta: {comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action}
   policy:
     expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
-    actions: [db.get, registry.get, registry.preview, system.read, env.get, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
+    actions: [db.get, registry.get, registry.preview, system.read, env.get, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.shadow, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
     resources: '*'
     effect: allow
 - name: destination_execution_policy
@@ -144,7 +144,7 @@ entries:
   meta: {comment: Public delivery facade dependencies; profile access is injected as one exact host-selected entry}
   policy:
     actions: [funcs.call, security.actor.get, registry.get]
-    resources: [bee.gov.binding:publication_call, bee.gov.binding:destination_call, bee.gov.env:publication_profiles_ref]
+    resources: [bee.gov.binding:publication_call, bee.gov.binding:destination_call, bee.gov.env:publication_profiles_ref, bee.gov.env:activation_profiles_ref]
     effect: allow
 - name: gateway_policy
   kind: security.policy.expr
@@ -163,7 +163,26 @@ entries:
     actions: '*'
     resources: '*'
     effect: allow
+
+- name: source_policy
+  kind: security.policy
+  groups: [workspace_execution_scope]
+  meta: {comment: The private backend resolves the authenticated workspace before reading bounded source bytes}
+  policy:
+    actions: [registry.get, funcs.call, funcs.security, security.policy.get, security.actor.create, security.scope.create, fs.get]
+    resources: '*'
+    effect: allow
+- name: driver_bindings_policy
+  kind: security.policy.expr
+  meta: {comment: Read consumed driver admission from the existing owner store and exact installed overlays}
+  policy:
+    expression: '(action == "db.get" && resource == "bee.gov.env:db") || (action in ["registry.get", "registry.overlay.get", "registry.snapshot"] && resource != "") || (action == "system.read" && resource == "node") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress") || (action == "env.get" && resource == "bee.gov.env:node_identity_migration_source")'
+    actions: [db.get, registry.get, registry.overlay.get, registry.snapshot, system.read, env.get, env.set]
+    resources: '*'
+    effect: allow
 - name: super_edit
   kind: library.lua
   source: file://super_edit.lua
   modules: [hash]
+  imports:
+    protected_kernel: bee.gov.types:protected_kernel

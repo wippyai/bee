@@ -3,6 +3,8 @@ local funcs = require("funcs")
 local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")
+local registry = require("registry")
+local caller = require("caller")
 
 local function call(request: unknown): {[string]: unknown}
     local result, err = funcs.call("bee.gov.binding:destination_call", request)
@@ -20,6 +22,33 @@ local function define_tests()
             test.eq(#(principals.items(value.plans)), 0)
         end)
 
+        test.it("preserves a committed uncertainty fault through the application decoder", function()
+            local original = assert(registry.get("bee.gov.binding:destination_backend_call"))
+            local data = assert(bounds.object(original.data))
+            local replacement: {[string]: unknown} = {}
+            for field, value in pairs(data) do replacement[field] = value end
+            replacement.source = [[return {handle = function(_request)
+                return {ok = false, replayed = false, code = "UNCERTAIN",
+                    message = "not allowed to shadow durable entry: bee.settings.app:view",
+                    value = {phase = "settled", outcome = "uncertain", revision = 6}, commit = true}
+            end}]]
+            replacement.method = "handle"
+            local changes = registry.snapshot():changes()
+            assert(changes:update({id = original.id, kind = original.kind, meta = original.meta, data = replacement}))
+            assert(changes:apply())
+            local raw, err = funcs.call("bee.gov.binding:destination_call", {
+                operation = "step", workspace_id = "public-delivery-test"})
+            local restore = registry.snapshot():changes()
+            assert(restore:update(original)); assert(restore:apply())
+            test.is_nil(err, tostring(err))
+            local result = caller.decode(raw)
+            test.not_nil(result, "destination fault rejected by application decoder")
+            assert(result)
+            test.is_false(result.ok)
+            local fault = assert(result.error)
+            test.eq(fault.code, "UNCERTAIN")
+            test.eq(fault.message, "not allowed to shadow durable entry: bee.settings.app:view")
+        end)
         test.it("fails closed when no host activation profile exists", function()
             local result = call({operation = "prepare", workspace_id = "public-delivery-test",
                 source_node = "source-node", source_workspace = "vendor/app", version = "1.0.0",

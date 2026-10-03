@@ -17,7 +17,7 @@ must exist. Control mode reuses the first display without a controller and
 allocates a fresh durable identity only after definite `DESKTOP_CONTROLLED`
 refusals. Observe mode uses the first listed display. An explicit pair is exact
 and never allocates. Discovery order never selects a workspace. Each call owns a
-fresh actor and one mount. Attachment requests
+fresh actor and its current mount. Attachment requests
 and input are never replayed. Supervisor discovery and catalog readiness share
 a 15-second deadline. Only definite UNAVAILABLE catalog refusals trigger another
 read, after 50 ms with a fresh key; all other failures return immediately.
@@ -31,8 +31,13 @@ The caller owns physical files and the signal context. Ctrl+] detaches locally;
 applications remain owned by the remote runtime. When a presentation ends on its
 own (its mount expired), the session asks the owner for its current session
 (`Desktop.Current`); a different session on the same display means the display
-was switched to another workspace from inside the desktop, and the session
-presents the new mount on the same terminal and detaches that one at the end. Starting that owner and deciding
+was switched to another workspace from inside the desktop. A renewed mount in
+the same session follows a retained component handoff. If the owner still names
+the expired mount, the client requests one fresh grant through the existing
+exact attachment operation and requires the same session and selection with a
+changed mount. Lookup and attachment refusals retain their exact causes; failed
+input is never replayed or hidden by a renewal. The session presents the current
+mount on the same terminal and detaches that one at the end. Starting that owner and deciding
 its lifetime are launcher responsibilities, not side effects of a session.
 
 Waiting for an owner that is still preparing belongs to the launch route; it

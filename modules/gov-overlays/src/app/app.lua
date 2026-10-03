@@ -191,18 +191,33 @@ local function main(value: unknown)
     local function step_now()
         local intent_id = state.intent and state.intent.intent_id or state.restored_intent_id
         if not intent_id then state.notice = "Use Recover to find the desired activation first"; dirty = true; return end
-        local pending = state.pending_step
-        if pending and pending.intent_id ~= intent_id then
-            state.notice = "A previous step has no reply; check its activation status first"; dirty = true; return
+        if not state.intent and not model.apply_activation(state, invoke(model.status_request(state, intent_id))) then
+            dirty = true; return
         end
-        if not pending then
-            pending = {intent_id = intent_id, receipt_key = new_key()}
-            model.set_pending_step(state, intent_id, pending.receipt_key)
+        -- Each next request follows an acknowledged owner transition. Unknown
+        -- answers retain their exact receipt key and stop this person action.
+        while running and model.can_advance(state) do
+            local before = assert(state.intent)
+            local pending = state.pending_step
+            if pending and pending.intent_id ~= intent_id then
+                state.notice = "A previous step has no reply; check its activation status first"; dirty = true; return
+            end
+            if not pending then
+                pending = {intent_id = intent_id, receipt_key = new_key()}
+                model.set_pending_step(state, intent_id, pending.receipt_key)
+            end
+            changed()
+            local reply = invoke(model.step_request(state, pending.intent_id, pending.receipt_key))
+            local applied = model.apply_activation(state, reply)
+            if reply and (applied or not reply.ok) then state.pending_step = nil end
+            if not applied then dirty = true; return end
+            local observed = assert(state.intent)
+            state.restored_intent_id = observed.intent_id
+            if observed.phase == before.phase and observed.revision == before.revision then
+                state.notice = "Owner acknowledged the step without a new activation revision; inspect status before continuing"
+                dirty = true; return
+            end
         end
-        local reply = invoke(model.step_request(state, pending.intent_id, pending.receipt_key))
-        local applied = model.apply_activation(state, reply)
-        if reply and (applied or not reply.ok) then state.pending_step = nil end
-        if applied then state.restored_intent_id = state.intent and state.intent.intent_id or nil end
         dirty = true
     end
     local function activation_status_now()

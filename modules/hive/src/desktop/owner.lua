@@ -533,7 +533,7 @@ function M.request(state: State, message: process.Message, now: integer): ()
     elseif input.kind == "launch" then pending_op = "launch" end
     local pending: Pending = {id = uuid.v7(), op = pending_op,
         call = call, cache_key = key, digest = digest, due = now + remaining,
-        activating = input.kind == "attach" and input.mode == "control" and not client.session}
+        activating = input.kind == "attach" and (input.mode == "control" or client.session ~= nil)}
     state.receipt_count = state.receipt_count + 1
     client.pending = pending
     if input.kind == "attach" and client.session then

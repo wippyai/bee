@@ -73,7 +73,7 @@ entries:
     - bee.threads
     - bee.values
     - bee.workspace
-    super_edit: []
+    super_edit: [bee.settings.app, bee.desktop]
     entries:
     - bee.security.gov:protected_kernel
     - bee.security.approvals:approver_policies

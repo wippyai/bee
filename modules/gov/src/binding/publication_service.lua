@@ -17,6 +17,7 @@ local transaction = require("transaction")
 local materializer = require("materializer")
 local application_admission = require("application_admission")
 local publication_profiles = require("publication_profiles")
+local activation_profiles = require("activation_profiles")
 local workspace_applications = require("workspace_applications")
 local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
@@ -67,7 +68,13 @@ end
 local function load(): (publication_profiles.Configuration?, string?)
     local entry, entry_error = resources.publication_profiles()
     if not entry then return nil, tostring(entry_error or "publication profiles are unavailable") end
-    return publication_profiles.decode(entry.data)
+    local activation_entry, activation_error = resources.activation_profiles()
+    if not activation_entry then return nil, tostring(activation_error) end
+    local activation, decode_error = activation_profiles.decode(activation_entry.data)
+    if not activation then return nil, tostring(decode_error) end
+    local node, node_error = system.node.id()
+    if not node then return nil, tostring(node_error) end
+    return publication_profiles.configuration(entry.data, activation, node)
 end
 
 -- Returns the measured artifact, or a named refusal code with its reason. The
@@ -114,7 +121,7 @@ local function publish_intent(raw: unknown, profile: Profile, node_id: string,
     if type(bytes) ~= "string" or type(digest) ~= "string" then
         return nil, nil, nil, "immutable application admission blob is incomplete"
     end
-    local measured, admission_error = application_admission.decode(bytes, digest)
+    local measured, admission_error = application_admission.decode(bytes, digest, intent.application_admission_generation)
     if not measured then return nil, nil, nil, tostring(admission_error) end
     local record = measured.record
     if record.workspace_id ~= workspace_id or record.overlay_owner ~= profile.overlay_owner
@@ -122,7 +129,7 @@ local function publish_intent(raw: unknown, profile: Profile, node_id: string,
         or record.artifact_digest ~= intent.artifact_digest then
         return nil, nil, nil, "immutable application admission does not match publication identity"
     end
-    return intent, entries, {bytes = measured.bytes, digest = measured.digest}, nil
+    return intent, entries, {bytes = measured.bytes, digest = measured.digest, identity_generation = intent.application_admission_generation}, nil
 end
 
 local function same_intent(before: Object, after: Object): boolean
@@ -155,17 +162,21 @@ function M.call(raw: unknown): Result
     end
     local config, config_error = load()
     if not config then return failure("UNAVAILABLE", config_error or "publication configuration is unavailable") end
-    local chosen, refused = publication_profiles.for_component(config, workspace_id, component)
-    if not chosen then
-        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
-        return refusal("BLOCKED", reason.message, reason.remedy)
-    end
-
     local node_id, node_error = system.node.id()
     local governance_resource, governance_error = resources.database()
     local sync_resource, sync_error = sync_resources.database()
     if not node_id or node_error or not governance_resource or not sync_resource then
         return failure("UNAVAILABLE", tostring(node_error or governance_error or sync_error or "publication storage is unavailable"))
+    end
+    local source_store, open_error = staging.open(governance_resource, node_id)
+    if not source_store then return failure("UNAVAILABLE", open_error or "open authored overlay store") end
+    local sources, sources_error = staging.sources(source_store)
+    source_store:close()
+    if not sources then return failure("UNAVAILABLE", sources_error or "read authored overlays") end
+    local chosen, refused = publication_profiles.for_component(config, workspace_id, component, sources)
+    if not chosen then
+        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
+        return refusal("BLOCKED", reason.message, reason.remedy)
     end
 
     if request.operation == "prepare" then
@@ -213,7 +224,7 @@ function M.call(raw: unknown): Result
             local raw_catalog = registry.get("bee.security.capability:capability_catalog")
             local vocabulary, catalog_error = capability_model.decode(raw_catalog)
             local record, record_error = vocabulary and capability_grants.decode(installed, active.overlay_owner,
-                workspace_id, identity.definition_id, vocabulary) or nil
+                workspace_id, (bounds.object(installed) and bounds.object((bounds.object(installed)).data) or {}).application, vocabulary) or nil
             local live, live_error = false, nil
             if record then
                 live, live_error = capability_grants.live(record, function(id: string): unknown return registry.get(id) end)

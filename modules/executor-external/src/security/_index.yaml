@@ -8,6 +8,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources:
+    - bee.gov.binding:driver_bindings
     - bee.driver.*.binding:prepare
     - bee.driver.*.binding:dispatch
     - bee.driver.*.binding:normalize

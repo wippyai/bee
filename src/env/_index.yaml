@@ -112,6 +112,7 @@ entries:
   data:
     profiles: []
     workspace_applications: true
+    workspace_drivers: true
 - name: gov_activation_profiles
   kind: registry.entry
   meta:
@@ -119,6 +120,13 @@ entries:
     comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications a workspace's agents author for it, and with hive for the same applications received from another node, with permission approval at first install or widening; remote artifacts cannot edit this entry
   data:
     profiles: []
+    workspace_drivers:
+      approval_policy: workspace-application-delivery
+      kinds: [function.lua, library.lua, registry.entry, contract.binding, ns.requirement, security.policy, security.policy.expr]
+      modules: [json, hash, registry, time]
+      policies: []
+      thread_access: none
+      hive: false
     workspace_applications:
       approval_policy: workspace-application-delivery
       kinds: [process.lua, library.lua, ns.requirement]
@@ -195,3 +203,10 @@ entries:
   storage: bee.harness.host:environment
   variable: startup_phase
   default: starting
+- name: approved_driver_admission
+  kind: ns.requirement
+  meta: {value_kind: function.lua, comment: The host selects Gov's existing consumed driver admission for every launch resolver}
+  default: bee.gov.binding:driver_bindings
+  targets:
+  - entry: bee.harness.launch:harness_activation
+    path: .admission

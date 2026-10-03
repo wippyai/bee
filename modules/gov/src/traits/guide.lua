@@ -8,10 +8,11 @@
 -- guide's example and the proven example cannot drift apart.
 local preflight = require("preflight")
 local workspace_applications = require("workspace_applications")
+local drivers = require("drivers")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@10"
+M.REVISION = "bee.governance-component-guide@13"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -204,12 +205,11 @@ return {main = main}
 -- example delivers to the author's own workspace unchanged.
 M.OVERLAY_ID = "counter"
 M.NAMESPACE = workspace_applications.NAMESPACE_ROOT .. "." .. M.OVERLAY_ID
-M.DEFINITION_ID = M.NAMESPACE .. ":" .. workspace_applications.APPLICATION_NAME
 M.TITLE = "Counter App"
 M.VERSION = "1.0.0"
 
 function M.example(): {{[string]: unknown}}
-    return {{id = M.DEFINITION_ID, kind = "process.lua",
+    return {{id = "app.counter:app", kind = "process.lua",
         data = {source = M.SOURCE, method = "main",
             modules = {"tty", "process", "channel", "json"},
             imports = {client = "bee.app:client", appearance = "bee.ui:appearance",
@@ -230,10 +230,14 @@ local DELIVERY_STEPS = {"review the plan in Overlays", "select it there",
 
 -- The steps a person takes after an agent requests delivery. Exposed so the
 -- delivery tool and the guide cannot disagree about who does what.
-function M.delivery_steps(): {string}
+function M.delivery_steps(source_overlay_id: string?): ({string}, string)
     local copied: {string} = {}
     for index, step in ipairs(DELIVERY_STEPS) do copied[index] = step end
-    return copied
+    if drivers.name(source_overlay_id) then
+        copied[#copied] = "open Sessions, press N and select the new driver; E customizes a saved copy"
+        return copied, "Sessions"
+    end
+    return copied, "start menu"
 end
 
 -- Guide sections, each readable alone. The index names them; a section read
@@ -279,7 +283,7 @@ function M.rendering(): string
         .. " declare exactly the native modules and library imports the source uses."
 end
 function M.transport(): string
-    return "Every authoring operation except guide names its overlay_id; list without one returns only overlays owned by this caller. The overlay_id is distinct from the agent's runtime workspace."
+    return "Guide and source name no overlay_id; other authoring operations name an overlay_id; list without one returns only overlays owned by this caller. The overlay_id is distinct from the agent's runtime workspace."
         .. " An MCP put carries at most 65,536 decoded bytes of one file. For a larger entries.json,"
         .. " put the first chunk, then append chunks of at most 65,536 bytes. Each append supplies"
         .. " the current expected_revision, a new idempotency_key, offset equal to the current file"
@@ -296,12 +300,55 @@ function M.after_freeze(): string
     return "After freeze, publication prepare parses " .. M.ENTRIES_PATH
         .. " from that exact snapshot into the canonical artifact (" .. M.SCHEMA
         .. "). Requesting delivery stages the version at this destination and reads its preflight verdict;"
-        .. " a refusal names the diagnostic and its remedy. Then a person must " .. join(DELIVERY_STEPS)
+        .. " a refusal names the diagnostic and its remedy. A person-confirmed Settings edit grant uses its"
+        .. " exact namespace as overlay_id and source_overlay_id. Publication derives that source and overlay"
+        .. " owner from the existing activation profile and refuses an expired grant. Then a person must " .. join(DELIVERY_STEPS)
         .. ". Only the activation owner may write an overlay. A pack may append migration functions for an"
         .. " existing host-admitted database when every imported dependency is already installed and no"
         .. " auto-start consumer is present. Governance seals the exact functions and runs them before exposing"
         .. " the complete overlay. New databases, changed applied migrations and schema rollback are refused."
 end
+function M.driver_delivery(): string
+    return drivers.RULE .. "."
+        .. " Read a CLI script with overlay operation source and its absolute path or a path relative to"
+        .. " the authenticated workspace folder (no overlay_id); use a relative path for a project-relative root. Source returns a base64 window,"
+        .. " window_digest, next_offset and eof; page with offset and limit up to 16384."
+        .. " It refuses private paths, foreign folders and workspaces without their own filesystem root."
+        .. " Inspect the installed bee/driver package docs and built-in driver entries with components."
+        .. " Author entries.json, freeze and request delivery with source_overlay_id driver.<name>."
+        .. " The existing Overlays review, selection, preparation and Approvals approval admits the exact"
+        .. " candidate; no application admission or automatic start is created."
+        .. " A custom external CLI binding uses bee.driver:driver prepare, dispatch, normalize and configure"
+        .. " functions in .binding, and bee.driver:locate_facet locate. Its meta.type is harness.driver with"
+        .. " driver_id, descriptor_ref and profiles_ref. Declare a harness.profile record whose driver_ref"
+        .. " matches. A CLI descriptor uses bee.driver.cli-descriptor@3 and a supported codec."
+        .. " Select the shared implementation with universal.prepare/dispatch/normalize/locate(descriptor_ref)"
+        .. " and universal.protocol(descriptor_ref), importing bee.driver.binding:universal."
+        .. " For a CLI requiring no gateway/provider configuration, configure uses"
+        .. ' universal.configure("plain", {plain = function(_: unknown): {[string]: unknown}'
+        .. " return {ok = true, delivery = {files = {}, arguments = {}}} end}, descriptor_ref)"
+        .. " with descriptor configure plain. These factories bind the owned descriptor; do not copy the codec."
+        .. " A .security:descriptor_read policy may grant only registry.get and registry.snapshot;"
+        .. " function data.security.policies names it when descriptor access is needed."
+        .. " Add an ns.requirement in .binding with meta.value_kind contract.binding, data.default your own"
+        .. " harness binding ID and one data.targets entry {entry = bee.harness.launch:harness_activation,"
+        .. " path = .bindings +=}. This append is the only allowed host target; all targets must exist."
+        .. " In .profiles declare a bee.launch_definition with binding_ref, profile_id and session_profile_id."
+        .. " Set presentation.start_menu = true so the person can select it in Sessions (N opens the agent picker)."
+        .. " A false value keeps the definition programmatic and hides it from this picker, including saved copies."
+        .. " Structured CLI turns use default_mode session and a session_profile_id naming the headless profile."
+        .. " Set session_resource = session in the launch definition: the host's existing retained session"
+        .. " resource is required to open headless Sessions. This name selects an existing host resource;"
+        .. " do not create a resource entry, database or alternative session store."
+        .. " Select an owned bee.launch_policy in policy_ref with the reviewed executable mapping,"
+        .. " private HOME, no credentials for an account-free CLI and native placement."
+        .. " Inspect built-in definitions and policies for their required schema fields."
+        .. " Keep credentials, gateway tools and host HOME absent unless separately admitted by the host."
+        .. " After approval settles, open Sessions, press N and select the new driver to open an idle session."
+        .. " Enter a task to run the CLI. E customizes a saved copy of the selected definition; choose headless"
+        .. " for structured CLI turns. Existing sessions retain their pinned routes; new sessions use the new binding."
+end
+
 type Section = {id: string, title: string, body: fun(): string}
 local SECTIONS: {Section} = {
     {id = "pack", title = "Component pack shape", body = function(): string return M.pack_shape() end},
@@ -313,6 +360,7 @@ local SECTIONS: {Section} = {
     {id = "transport", title = "Overlay transport, freeze", body = function(): string return M.transport() end},
     {id = "delivery", title = "Delivery after freeze", body = function(): string return M.after_freeze() end},
     {id = "workspace", title = "Delivering to your own workspace", body = function(): string return M.workspace_delivery() end},
+    {id = "drivers", title = "Custom CLI drivers and source inspection", body = function(): string return M.driver_delivery() end},
     {id = "docs", title = "Platform documentation", body = function(): string return M.platform_documentation() end},
 }
 function M.section_list(): {{id: string, title: string}}
@@ -362,10 +410,12 @@ function M.document(): string
     lines[#lines + 1] = ""
     lines[#lines + 1] = M.workspace_delivery()
     lines[#lines + 1] = ""
+    lines[#lines + 1] = M.driver_delivery()
+    lines[#lines + 1] = ""
     lines[#lines + 1] = M.platform_documentation()
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Minimal example: create overlay " .. M.OVERLAY_ID .. ", put the JSON below at path "
-        .. M.ENTRIES_PATH .. " and freeze it. Its entry id is " .. M.DEFINITION_ID .. " and its title " .. M.TITLE .. "."
+        .. M.ENTRIES_PATH .. " and freeze it. Its entry id is " .. assert(workspace_applications.application(M.example())) .. " and its title " .. M.TITLE .. "."
     return table.concat(lines, "\n")
 end
 
@@ -475,7 +525,7 @@ function M.value(request: {[string]: unknown}?): {[string]: unknown}
     if not encoded then return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
         example_error = tostring(encode_error)} end
     return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
-        example = {path = M.ENTRIES_PATH, entries_json = encoded, definition_id = M.DEFINITION_ID,
+        example = {path = M.ENTRIES_PATH, entries_json = encoded, definition_id = "app.counter:app",
             title = M.TITLE, version = M.VERSION, source = M.SOURCE}}
 end
 

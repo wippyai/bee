@@ -12,7 +12,9 @@ type Result = transaction.Result
 
 local function reply(result: Result): {[string]: unknown}
     if result.ok then return {ok = true, value = result.value, replayed = result.replayed == true} end
-    return {ok = false, value = result.value, replayed = false,
+    -- Failure projections remain in the committed owner intent and are read
+    -- through status. The common application boundary accepts fault-only replies.
+    return {ok = false, replayed = false,
         error = {code = result.code or "INTERNAL", message = result.message or "destination operation failed"}}
 end
 

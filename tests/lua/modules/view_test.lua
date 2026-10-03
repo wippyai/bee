@@ -190,6 +190,7 @@ local function define_tests()
             test.is_true(table.concat(first.rows, "\n"):find("acme:capability", 1, true) == nil)
             test.is_nil(model.confirm(state))
             local last = view.draw(70, 18, appearance.defaults(), state, 999, "")
+            test.is_true(table.concat(last.rows, "\n"):find("Duration: once", 1, true) ~= nil)
             test.is_true(table.concat(last.rows, "\n"):find("acme:capability", 1, true) ~= nil)
             test.is_true(table.concat(last.rows, "\n"):find("acme:migrate", 1, true) ~= nil)
             test.eq(state.phase, "confirm")
@@ -269,6 +270,29 @@ local function define_tests()
             test.not_nil(receipt_at)
             test.is_true(status_at < reason_at and reason_at < receipt_at)
         end)
+        test.it("filters rendered packages by declared application metadata across arbitrary names", function()
+            local state = model.new()
+            model.apply_catalog(state, {ok = true, replayed = false, value = {total = 4, items = {
+                {component = "wippy/arbitrary", title = "Library", description = "Framework utilities", latest_version = "1.0.0", application = true},
+                {component = "bee/console", title = "App", description = "Application", latest_version = "1.0.0", application = false},
+                {component = "acme/editor", title = "Editor", description = "Editor", latest_version = "1.0.0", application = false},
+                {component = "wippy/test", title = "Test Framework", description = "Testing library", latest_version = "1.0.0"},
+            }}})
+            for _, dimensions in ipairs({{120, 36}, {80, 24}}) do
+                local rendered = table.concat(view.draw(dimensions[1], dimensions[2], appearance.defaults(), state, 0, "").rows, "\n")
+                test.is_true(rendered:find("wippy/arbitrary", 1, true) ~= nil)
+                test.is_true(rendered:find("wippy/test", 1, true) ~= nil)
+                test.is_true(rendered:find("bee/console", 1, true) == nil)
+                test.is_true(rendered:find("acme/editor", 1, true) == nil)
+            end
+            model.set_developer_packages(state, true)
+            for _, dimensions in ipairs({{120, 36}, {80, 24}}) do
+                local rendered = table.concat(view.draw(dimensions[1], dimensions[2], appearance.defaults(), state, 0, "").rows, "\n")
+                for _, name in ipairs({"wippy/arbitrary", "bee/console", "acme/editor", "wippy/test"}) do
+                    test.is_true(rendered:find(name, 1, true) ~= nil)
+                end
+            end
+        end)
         test.it("renders usable apps first with installed indicators and developer package filter at 120x36 and 80x24", function()
             local state = model.new()
             model.apply_installed(state, {ok = true, replayed = false, value = {modules = {
@@ -277,8 +301,8 @@ local function define_tests()
             }, roots = {}}})
             model.show(state, "catalog")
             model.apply_catalog(state, {ok = true, replayed = false, value = {total = 5, items = {
-                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19"},
-                {component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6"},
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false},
+                {component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6", application = false},
                 {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
                 {component = "bee/terminal", title = "Terminal", description = "Workspace terminal console", latest_version = "0.4.6"},
                 {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
@@ -352,7 +376,7 @@ local function define_tests()
             -- When only developer packages are in the catalog and filter is off, empty state explains
             local empty_state = model.new()
             model.apply_catalog(empty_state, {ok = true, replayed = false, value = {total = 1, items = {
-                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19"},
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false},
             }}})
             for _, dims in ipairs({{120, 36}, {80, 24}}) do
                 local w, h = dims[1], dims[2]
@@ -360,7 +384,7 @@ local function define_tests()
                 test.eq(#drawn.rows, h)
                 for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), w) end
                 local text = table.concat(drawn.rows, "\n")
-                test.is_true(text:find("No applications on this page", 1, true) ~= nil, "missing empty state line 1 in " .. tostring(w))
+                test.is_true(text:find("No packages on this page", 1, true) ~= nil, "missing empty state line 1 in " .. tostring(w))
                 test.is_true(text:find("Developer packages are hidden", 1, true) ~= nil, "missing empty state line 2 in " .. tostring(w))
             end
         end)

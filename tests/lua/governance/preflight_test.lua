@@ -182,11 +182,7 @@ local function define_tests()
             -- super-edit set can open one.
             local entry = assert(registry.get("bee.security.gov:protected_kernel"))
             local manifest = assert(protected_kernel.decode(entry))
-            local shipped = {"bee.gateway", "bee.harness", "bee.credentials", "bee.placement",
-                "bee.placement.native", "bee.resources", "bee.threads", "bee.hive", "bee.env", "bee.sync",
-                "bee.host", "bee.client", "bee.desktop", "bee.terminal", "bee.node",
-                "bee.workspace"}
-            for _, namespace in ipairs(shipped) do
+            for _, namespace in ipairs(manifest.namespaces) do
                 local shadowed: preflight.Candidate, shadow_context: preflight.Context = fixture()
                 shadow_context.protected = manifest
                 shadowed.artifacts[1].namespaces = {"demo", namespace}
@@ -197,11 +193,16 @@ local function define_tests()
                 shadowed.migrations = {}
                 shadowed.entries = {entry_of(namespace .. ":shadow")}
                 local report = checked(shadowed, shadow_context)
-                test.is_false(report.ready)
-                test.is_true(has(report, "PROTECTED_KERNEL"), "namespace " .. namespace .. " was not protected")
+                if protected_kernel.namespace(manifest, namespace) then
+                    test.is_false(report.ready)
+                    test.is_true(has(report, "PROTECTED_KERNEL"), "namespace " .. namespace .. " was not protected")
+                else test.is_true(report.ready) end
             end
             -- Every kernel namespace is a prefix-free root; a namespace the
             -- host did not name stays open to an ordinary profile.
+            test.is_false(protected_kernel.namespace(manifest, "bee.settings.app"))
+            test.is_false(protected_kernel.namespace(manifest, "bee.desktop"))
+            test.is_true(protected_kernel.namespace(manifest, "bee.security"))
             test.is_true(protected_kernel.namespace(manifest, "bee.gateway.api"))
             test.is_false(protected_kernel.namespace(manifest, "app.tally"))
             local opened = {revision = manifest.revision, namespaces = manifest.namespaces,
@@ -218,6 +219,31 @@ local function define_tests()
             open_candidate.migrations = {}
             open_candidate.entries = {entry_of("bee.gateway:shadow")}
             test.is_true(checked(open_candidate, open_context).ready)
+        end)
+        test.it("honors an exact host carve-out for a transitive kernel dependency", function()
+            local candidate, context = fixture()
+            local opened = {revision = 1, namespaces = {"host.kernel", "demo"},
+                super_edit = {"demo"}, entries = {"bee.security.gov:protected_kernel"}}
+            context.protected = opened
+            context.super_edit = true
+            context.kinds["library.lua"] = true
+            candidate.requirements, candidate.migrations = {}, {}
+            candidate.entries = {entry_of("demo:layout")}
+            context.entries["demo:layout"] = entry_of("demo:layout")
+            context.entries["host.kernel:presenter"] = candidate_entry("host.kernel:presenter",
+                "function.lua", "host/kernel", SHA, {"demo:layout"})
+            test.is_true(checked(candidate, context).ready)
+            context.super_edit = false
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            context.super_edit = true
+            context.namespaces.demo = false
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            context.namespaces.demo = true
+            opened.entries[#opened.entries + 1] = "demo:layout"
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            opened.entries[#opened.entries] = nil
+            opened.super_edit = {}
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
         end)
         test.it("decodes the super-edit set as an optional exact list", function()
             local base = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}}

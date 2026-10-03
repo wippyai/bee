@@ -34,7 +34,6 @@ type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, str
 type Resolver = resolution.Resolver
 type Instance = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?),
-    revision: (Resolver) -> (integer?, string?),
     resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 
 local function object(value: unknown): Object?
@@ -506,7 +505,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             or policy.source_workspace ~= spec.source_workspace or not bounds.id(policy.overlay_owner) then
             return nil, nil, "application admission policy does not match the selected activation profile"
         end
-        local projection, projection_error = application_admission.project({workspace_id = policy.workspace_id,
+        local projection, projection_error = application_admission.project({identity_generation = "current", workspace_id = policy.workspace_id,
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
             source_workspace = policy.source_workspace, artifact_digest = spec.artifact_digest,
             bindings = policy.applications, artifact_entries = expected,
@@ -524,14 +523,6 @@ end
 type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?)}
 
 function M.new(config: Config): Resolver
-    local function current_revision(): (integer?, string?)
-        local snapshot, snapshot_error = registry.snapshot()
-        if not snapshot then return nil, tostring(snapshot_error or "capture registry revision") end
-        local version = snapshot:version()
-        local revision = version and version:id() or nil
-        if type(revision) ~= "number" or revision < 0 then return nil, "registry snapshot has no valid revision" end
-        return math.floor(revision), nil
-    end
     local function capture(): (Captured?, string?)
         local snapshot, snapshot_error = registry.snapshot()
         if not snapshot then return nil, tostring(snapshot_error or "capture registry snapshot") end
@@ -592,7 +583,6 @@ function M.new(config: Config): Resolver
     end
     local value: Instance
     value = {capture = capture, root = config.root, policy = config.policy,
-        revision = function(_: Resolver): (integer?, string?) return current_revision() end,
         resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
             return M.resolve_with(value, spec)
         end}

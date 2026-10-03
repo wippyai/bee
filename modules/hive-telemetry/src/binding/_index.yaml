@@ -13,6 +13,7 @@ entries:
     clock: bee.values:clock
   meta:
     hive: open
+    hive_service: bee.hive.telemetry.binding
     hive_operation:
       revision: '1'
       title: Node presence
@@ -47,6 +48,7 @@ entries:
     clock: bee.values:clock
   meta:
     hive: open
+    hive_service: bee.hive.telemetry.binding
     hive_operation:
       revision: '1'
       title: Runtime statistics
@@ -91,6 +93,7 @@ entries:
     bounds: bee.values:bounds
   meta:
     hive: open
+    hive_service: bee.hive.telemetry.binding
     hive_operation:
       revision: '1'
       title: Public operation catalog
@@ -130,6 +133,7 @@ entries:
     comment: Open Hive operation paging this node's live workspace holdings with each
       host phase and lease count
     hive: open
+    hive_service: bee.hive.telemetry.binding
     hive_operation:
       revision: '1'
       title: Node workspace holdings
@@ -193,6 +197,7 @@ entries:
     comment: Open Hive operation aggregating workspace holdings and local peer link
       state
     hive: open
+    hive_service: bee.hive.telemetry.binding
     hive_operation:
       revision: '1'
       title: Cluster workspace holdings
@@ -297,6 +302,7 @@ entries:
     policies: []
   meta:
     hive: open
+    hive_service: bee.hive.telemetry.binding
     hive_operation:
       revision: '1'
       title: Node activity summary

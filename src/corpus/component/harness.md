@@ -79,10 +79,11 @@ the session active after that invocation exits. Native Terminal continues to
 run with the operating system user's authority.
 
 Child exit does not end carrier output delivery. The carrier monitors the
-placement runner and consumes its acknowledged output until stream EOF or a
-terminal envelope. Placement owns the bounded pipe drain and output retention;
-the carrier's fallback drain starts only after runner loss and consumes already
-queued output before its deadline can settle a missing envelope.
+placement runner and consumes output through both stream EOFs and the observed
+child exit before settlement. Placement owns the bounded pipe drain and output
+retention. After supervised runner EXIT, the carrier drains already queued
+delivery without a fallback deadline. Startup refusal waits for the startup
+owner's published state.
 
 ## Sessions application
 

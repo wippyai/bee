@@ -382,9 +382,13 @@ func presentWorkspace(ctx context.Context, operations context.Context, client *h
 	}
 	for {
 		err := presentMount(ctx, operations, client, mounted, cfg, stdin, stdout)
-		next, followed := followSwitch(operations, current, mounted, err)
+		reattach := func(ctx context.Context) (hive.DesktopMount, error) {
+			reads++
+			return client.Attach(ctx, fmt.Sprintf("session-reattach-%d", reads), mounted.Selection.Workspace, mounted.Selection.Desktop, mounted.Mode)
+		}
+		next, followed, followErr := followMount(operations, current, reattach, mounted, err)
 		if !followed {
-			return err
+			return errors.Join(err, followErr)
 		}
 		mounted = next
 	}
@@ -400,18 +404,30 @@ func detachMounted(ctx context.Context, client desktopDetacher, mounted hive.Des
 	return client.Detach(cleanup, "session-detach-"+mounted.Session, mounted)
 }
 
-// followSwitch asks for the client's current session after a presentation
-// ended on its own, not by a local detach, leave or cancellation. A new session
-// means the display now shows another workspace.
-func followSwitch(ctx context.Context, current func(context.Context) (hive.DesktopMount, error), mounted hive.DesktopMount, ended error) (hive.DesktopMount, bool) {
-	if ended == nil || errors.Is(ended, physical.ErrDetached) || ctx.Err() != nil {
-		return hive.DesktopMount{}, false
+// followMount uses owner observations to follow a workspace switch or renew an
+// expired grant through the existing exact attachment operation. It never
+// replays input, retries uncertain operations or turns lookup failures into an
+// unchanged-session result.
+func followMount(ctx context.Context, current, reattach func(context.Context) (hive.DesktopMount, error), mounted hive.DesktopMount, ended error) (hive.DesktopMount, bool, error) {
+	var delivery *physical.DeliveryError
+	if !errors.Is(ended, tty.ErrMountExpired) || errors.As(ended, &delivery) || ctx.Err() != nil {
+		return hive.DesktopMount{}, false, nil
 	}
 	next, err := current(ctx)
-	if err != nil || next.Session == mounted.Session {
-		return hive.DesktopMount{}, false
+	if err != nil {
+		return hive.DesktopMount{}, false, fmt.Errorf("read current desktop: %w", err)
 	}
-	return next, true
+	if next.Session != mounted.Session || next.Mount != mounted.Mount {
+		return next, true, nil
+	}
+	next, err = reattach(ctx)
+	if err != nil {
+		return hive.DesktopMount{}, false, fmt.Errorf("reattach desktop: %w", err)
+	}
+	if next.Session != mounted.Session || next.Selection != mounted.Selection || next.Mount == mounted.Mount {
+		return hive.DesktopMount{}, false, errors.New("desktop reattachment changed session identity or reused an expired mount")
+	}
+	return next, true, nil
 }
 
 // presentMount presents one mount until it ends.

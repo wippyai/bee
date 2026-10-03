@@ -2,6 +2,7 @@
 local test = require("test")
 local sql = require("sql")
 local ledger = require("ledger")
+local governance_migrations = require("governance_migrations")
 local transaction = require("transaction")
 local function open(): sql.DB
     return assert(sql.get("bee.persist:ledger_test_db"))
@@ -145,6 +146,33 @@ local function define_tests()
             local ok, err = ledger.apply(db, config, expected)
             test.is_false(ok); test.contains(tostring(err), "checksum changed")
             db:release()
+        end)
+        test.it("upgrades and reopens governance admission generation without replaying schema SQL", function()
+            local db = open()
+            local config: ledger.Ledger = {table = "bee_governance_migrations", label = "governance"}
+            local expected = governance_migrations.all()
+            local prior: {ledger.Migration} = {}
+            for _, migration in ipairs(expected) do
+                if migration.id <= 16 then prior[#prior + 1] = migration end
+            end
+            test.eq(expected[17].name, "governance_application_admission_generation")
+            assert(ledger.apply(db, config, prior))
+            local before = assert(ledger.rows(db, config))
+            test.eq(#assert(db:query([[SELECT name FROM pragma_table_info('bee_governance_activation_intents')
+                WHERE name = 'application_admission_generation']])), 0)
+            assert(ledger.apply(db, config, expected))
+            local after = assert(ledger.rows(db, config))
+            test.eq(#after, #expected)
+            for id, row in ipairs(before) do test.eq(after[id].checksum, row.checksum) end
+            test.eq(#assert(db:query([[SELECT name FROM pragma_table_info('bee_governance_activation_intents')
+                WHERE name = 'application_admission_generation']])), 1)
+            assert(db:release())
+            db = open()
+            assert(ledger.apply(db, config, expected))
+            local reopened = assert(ledger.rows(db, config))
+            test.eq(#reopened, #after)
+            for id, row in ipairs(after) do test.eq(reopened[id].checksum, row.checksum) end
+            assert(db:release())
         end)
         test.it("rejects changed checksums before applying pending SQL", function()
             local db = open()

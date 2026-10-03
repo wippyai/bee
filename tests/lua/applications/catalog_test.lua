@@ -61,7 +61,7 @@ local function project(binding_profile: Object, definition: Object, owner: strin
         bindings = selected, artifact_entries = {definition},
         registry_entries = {find(principals.objects(state.entries), POLICY)}, overlay_ids = {}})
     if not projected then error(tostring(project_error)) end
-    return {id = projected.id, kind = "registry.entry", data = projected.record}
+    return {id = projected.id, kind = "registry.entry", meta = {type = admission.SCHEMA}, data = projected.record}
 end
 
 local function measured(binding_profile: Object, definition: Object): Object
@@ -143,9 +143,21 @@ local function define_tests()
             test.is_true(observed ~= before)
             test.is_false(admitted)
         end)
+        test.it("reports malformed declared governed admission instead of omitting it", function()
+            local id = "fixture.admission:malformed"
+            local changes = assert(assert(registry.snapshot()):changes())
+            assert(changes:create({id = id, kind = "registry.entry", meta = {type = admission.SCHEMA}, data = {bindings = {}}}))
+            assert(changes:apply())
+            local valid, problem = pcall(catalog.read, WORKSPACE)
+            local cleanup = assert(assert(registry.snapshot()):changes())
+            assert(cleanup:delete(id)); assert(cleanup:apply())
+            test.is_false(valid)
+            test.contains(tostring(problem), "application admission record is invalid")
+        end)
         test.it("tracks imported renderer bytes without changing the application revision", function()
             local original = assert(registry.get("bee.settings.app:view"))
             local before = catalog.read(WORKSPACE)
+            local broker_before = broker_revision(WORKSPACE)
             local changed = assert(registry.get("bee.settings.app:view"))
             assert(type(changed.data) == "table" and type(changed.data.source) == "string")
             changed.data.source = changed.data.source .. "\n-- changed renderer bytes\n"
@@ -153,12 +165,32 @@ local function define_tests()
             assert(update:update(changed))
             assert(update:apply())
             local after = catalog.read(WORKSPACE)
+            test.is_true(broker_revision(WORKSPACE) ~= broker_before, "broker must observe imported renderer change")
             test.is_false(catalog.same(before, after))
             test.is_true(assert(before.codes)["bee.settings.app:app"] ~= assert(after.codes)["bee.settings.app:app"])
             test.eq(assert(before.codes)["bee.console.app:app"], assert(after.codes)["bee.console.app:app"])
             local restore = assert(registry.snapshot()):changes()
             assert(restore:update(original))
             assert(restore:apply())
+        end)
+        test.it("observes an edited Settings renderer without advancing registry history", function()
+            local changed = assert(registry.get("bee.settings.app:view"))
+            local data = assert(bounds.object(changed.data))
+            assert(type(data.source) == "string")
+            data.source = data.source .. "\n-- person-approved renderer edit\n"
+            local version = assert(registry.current_version()):string()
+            local before = broker_revision(WORKSPACE)
+            local owner = "bee.super_edit:" .. WORKSPACE .. "." .. assert(uuid.v7())
+            local overlay = assert(registry.overlay(owner))
+            local install = overlay:changes()
+            assert(install:update(changed)); assert(install:apply())
+            local observed = broker_revision(WORKSPACE)
+            local after_version = assert(registry.current_version()):string()
+            local cleanup = assert(registry.overlay(owner)):changes()
+            assert(cleanup:delete(changed.id)); assert(cleanup:apply())
+            test.eq(after_version, version)
+            test.is_true(observed ~= before, "broker must observe the edited imported renderer")
+            test.eq(broker_revision(WORKSPACE), before)
         end)
         test.it("scopes a measured binding and withdraws it with its host profile", function()
             local original = assert(registry.get("bee.env:gov_activation_profiles"))
@@ -322,7 +354,7 @@ local function define_tests()
                 bindings = selected_profile.applications, artifact_entries = {definition},
                 registry_entries = {find(principals.objects(state.entries), POLICY)}, overlay_ids = {}})
             if not measured then error("project restored admission: " .. tostring(measure_error)) end
-            local derived: Object = {id = measured.id, kind = "registry.entry", data = measured.record}
+            local derived: Object = {id = measured.id, kind = "registry.entry", meta = {type = admission.SCHEMA}, data = measured.record}
 
             local original_profiles = assert(registry.get("bee.env:gov_activation_profiles"))
             local original_database_ref = assert(registry.get("bee.gov.env:database_ref"))
@@ -428,6 +460,7 @@ local function define_tests()
             test.eq((principals.strings(files.policies))[1], "bee.security.files:read_policy")
             test.eq((principals.strings(files.policies))[2], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(files.thread_access, "observe_post")
+            test.is_nil(files.overlay_owner, "host-composed packages retain their existing thread identity")
             test.is_true(has(selected, "bee.settings.app:app"))
             test.is_true(selected.evidence ~= "")
             test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline.app:app"))

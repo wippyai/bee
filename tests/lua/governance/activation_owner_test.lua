@@ -113,8 +113,7 @@ local function installed_capability(review: capability_grants.Review?): prefligh
     return {kind = "installed", proposal = proposal, installed = installed, review = review or measured_review}
 end
 
-local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorld,
-    read_revision: boolean?): owner.Resolver
+local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorld): owner.Resolver
     local entry_bytes, encode_error = canonical.encode(entry)
     if not entry_bytes then error(tostring(encode_error)) end
     local selected_digest, digest_error = hash.sha256(entry_bytes)
@@ -148,9 +147,6 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
                 entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
                 migration_barrier = false, auto_start = true, host_evidence = host_evidence}
         return candidate, context, nil
-    end
-    if read_revision then
-        function value.revision(self: owner.Resolver): (integer?, string?) return world.revision, nil end
     end
     return value
 end
@@ -279,7 +275,7 @@ local function grant_lease(leases: lease_store.Store, max_applies: integer): {[s
         source_approval_owner_incarnation = 2, granted_by = "person-a", max_applies = max_applies}))
 end
 
-local function define_tests()
+local function authority_tests()
     test.describe("Governance activation owner", function()
         for _, phase in ipairs({"statement", "commit"}) do
             test.it("reports the SQLite " .. phase .. " cause through the owner", function()
@@ -560,6 +556,11 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+    end)
+end
+
+local function admission_tests()
+    test.describe("Destination activation admission", function()
         test.it("establishes only the approved desired version and ignores a newer selection", function()
             local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-owner")
             if not plans then error(tostring(plan_error)) end
@@ -596,7 +597,7 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
-        test.it("yields after exact materialization and remeasures before settling next step", function()
+        test.it("settles exact materialization after remeasurement even with an unchanged base revision", function()
             local workspace = "workspace-activation-yield"
             local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
             local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
@@ -606,7 +607,7 @@ local function define_tests()
             local world: ResolverWorld = {revision = 4, digest = SHA}
             local applied, apply_count = false, 0
             local config: owner.Config = {plans = plans, activations = activations,
-                resolver = shifting_resolver(entry, world, true), approvals = approvals(), actor_id = "host-a",
+                resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
                 consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?)
@@ -622,7 +623,8 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-yield", "activation-yield")).phase, "authorized")
             test.eq(ok(owner.step(config, "intent-yield", "activation-yield")).phase, "applying")
             local materialized = ok(owner.step(config, "intent-yield", "activation-yield"))
-            test.eq(materialized.phase, "applying")
+            test.eq(materialized.phase, "settled")
+            test.eq(materialized.outcome, "applied")
             test.is_true(applied)
             test.eq(apply_count, 1)
             local settled = ok(owner.step(config, "intent-yield", "activation-yield"))
@@ -803,6 +805,11 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+    end)
+end
+
+local function recovery_tests()
+    test.describe("Destination activation recovery", function()
         test.it("reconciles lost consume and apply replies without following a newer plan", function()
             local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-crash")
             if not plans then error(tostring(plan_error)) end
@@ -944,7 +951,7 @@ local function define_tests()
             assert(plan_store.close(plans))
         end)
 
-        test.it("leaves an apply uncertain when the base moves during the apply", function()
+        test.it("leaves an apply uncertain when the base digest changes without advancing its revision", function()
             local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-composed-apply")
             if not plans then error(tostring(plan_error)) end
             local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-composed-apply")
@@ -962,7 +969,7 @@ local function define_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
-                    world.revision, world.digest = 5, SHA_B
+                    world.digest = SHA_B
                     return {changed = true}, nil
                 end}
             ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
@@ -1045,6 +1052,11 @@ local function define_tests()
             assert(plan_store.close(again_plans))
         end)
 
+    end)
+end
+
+local function migration_tests()
+    test.describe("Destination activation migration", function()
         test.it("completes captured migrations before exposing the application overlay", function()
             local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-migration-owner"))
             local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-migration-owner"))
@@ -1106,4 +1118,5 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+return {run = test.run_cases(authority_tests), admission = test.run_cases(admission_tests),
+    recovery = test.run_cases(recovery_tests), migration = test.run_cases(migration_tests)}

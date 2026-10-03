@@ -2,7 +2,6 @@
 local preflight = require("preflight")
 
 local M = {}
-type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?),
-    revision: ((Resolver) -> (integer?, string?))?}
+type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 
 return M

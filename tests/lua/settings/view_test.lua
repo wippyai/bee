@@ -8,6 +8,26 @@ local live_updates = require("live_updates")
 local build_info = require("build_info")
 local function define_tests()
     test.describe("Appearance chooser", function()
+        test.it("retains edit outcomes across unsolicited appearance acknowledgements", function()
+            test.eq(view.appearance_notice("Disabled edit mode for this workspace", "", ""),
+                "Disabled edit mode for this workspace")
+            test.eq(view.appearance_notice("Enabled until grant expiry", "", ""), "Enabled until grant expiry")
+            test.eq(view.appearance_notice("Applying theme", "theme-request", ""), "")
+            test.eq(view.appearance_notice("Disabled edit mode for this workspace", "", "exact display refusal"),
+                "exact display refusal")
+        end)
+        test.it("decodes host-selected package updates without a brand prefix", function()
+            local reply = {ok = true, replayed = false, value = {
+                modules = {{component = "vendor/selected", installed_version = "1.0.0", locked_version = "1.0.0",
+                    available_version = "1.1.0", update_available = true}},
+                bee_update = {installed_version = "1.0.0", available_version = "", update_available = false,
+                    needs_new_binary = false, reason = ""}, catalog_error = ""}}
+            local status = live_updates.decode(reply)
+            test.eq(status.state, "ready")
+            test.eq(status.modules[1].component, "vendor/selected")
+            reply.value.modules[1].component = "unqualified"
+            test.eq(live_updates.decode(reply).state, "error")
+        end)
         test.it("shows errors in compact settings without losing selection controls", function()
             local frame = view.draw(28, 6, appearance.defaults(), "theme", 0, "Permission denied")
             test.is_true(table.concat(frame.rows, "\n"):find("Permission denied", 1, true) ~= nil)
@@ -129,7 +149,7 @@ local function define_tests()
             valid.unexpected = true
             test.eq(live_updates.decode(valid).state, "error")
             valid.unexpected = nil
-            valid.value.modules = {{component = "example/app", installed_version = "1.0.0",
+            valid.value.modules = {{component = "example/app/extra", installed_version = "1.0.0",
                 available_version = "2.0.0", update_available = true}}
             test.eq(live_updates.decode(valid).state, "error")
             valid.value.modules = {}
@@ -164,6 +184,16 @@ local function define_tests()
             local has_edit_tab = false
             for _, hit in ipairs(tabs) do if hit.kind == "edit_mode" then has_edit_tab = true end end
             test.is_true(has_edit_tab)
+        end)
+        test.it("states the workspace scope and duration of overlay removal in a decoder-valid confirmation", function()
+            local message = view.confirm_message("", true)
+            test.is_true(message:find("Remove this workspace", 1, true) ~= nil)
+            test.is_true(message:find("Duration: once", 1, true) ~= nil)
+            test.is_true(message:find("until edit mode is enabled again", 1, true) ~= nil)
+            test.is_nil((message:find("%c")))
+            test.not_nil(interaction.spec({version = 1, request_id = "r-2", id = "bee.settings:edit",
+                instance_id = "settings", kind = "confirm", title = "Disable edit mode",
+                message = message, accept = "Disable", initial = ""}))
         end)
         test.it("builds a decoder-valid single-line edit-mode confirmation", function()
             local message = view.confirm_message("bee.ux_demo --for 1m")

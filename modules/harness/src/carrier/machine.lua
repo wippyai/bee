@@ -588,7 +588,7 @@ local function new_session(plan: Plan, turn_id: string, epoch: integer, revision
     local output: OutputState = "open"
     if point.output == "complete" then output = "complete" elseif point.output == "truncated" then output = "truncated" end
     return {plan = plan, turn_id = turn_id, turn_open = true, epoch = epoch, revision = revision, checkpoint = point, decoder = decoder, normalizer = point.normalizer_state,
-        terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = false, stderr = false}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
+        terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = point.output == "complete", stderr = point.output == "complete"}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
         last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}, held_from = nil,
         dropping_stdout = point.dropping_stdout == true}
 end
@@ -1263,6 +1263,14 @@ end
 function M.on_output(io: IO, session: Session, sender: string, message: placement_protocol.Output): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
     if message.sequence <= session.last_sequence[message.stream] then
+        if message.eof and not session.eof[message.stream] then
+            session.eof[message.stream] = true
+            if message.truncated then mark_output(session, "truncated")
+            elseif session.eof.stdout and session.eof.stderr and session.output == "open" then mark_output(session, "complete") end
+            local committed, commit_error = M.commit(io, session, {})
+            if not committed then return false, commit_error end
+            step(io, message.stream .. "_ended")
+        end
         io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
         return true, nil
     end
@@ -1399,6 +1407,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     end
     session.last_sequence[message.stream] = message.sequence
     step(io, "committed")
+    if message.eof then step(io, message.stream .. "_ended") end
     if detected > 0 then step(io, "permission_intended") end
     io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
     step(io, "acknowledged")
@@ -1476,9 +1485,9 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
             local intended, intent_error = M.commit(io, session, {input_record(session, "close_intended", {})})
             if not intended then return "none", intent_error end
         end
-        -- A refusal (the attempt already gone, no runner) is a closure
-        -- that did not happen, on record with its reason; the stop path
-        -- then settles what remains.
+        -- A refused closure with an observed exit needs no signal.
+        -- A successful closure remains recorded even if the child exits
+        -- during the reply; other refusals retain the stop fallback.
         local close_target = session.plan.placement_binding.methods.close_stdin
         if not close_target then return "none", "selected placement cannot close stdin" end
         local raw, call_error = io.call(close_target, {attempt_id = session.plan.request.attempt_id})
@@ -1489,6 +1498,12 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
         if reply.ok then
             local answer, answer_error = placement_decode.stdin_closure(reply.value, session.plan.request.attempt_id)
             if not answer then return "none", "placement returned malformed close_stdin data: " .. tostring(answer_error) end
+            if answer.attempt.attachment_generation ~= session.epoch then return "none", "stdin closure belongs to another generation" end
+            if not answer.closed and answer.attempt.execution_state == "exited" and answer.attempt.exit_source then
+                local exit = answer.attempt.exit
+                session.exit = {code = exit and exit.code or nil, signal = exit and exit.signal or nil, uncertain = false}
+                return "none", nil
+            end
             closed = answer.closed
             if answer.reason then reason = answer.reason end
         else

@@ -8,6 +8,7 @@ local resolver = require("overlay_resolver")
 local capability_grants = require("capability_grants")
 local application_admission = require("application_admission")
 local preflight = require("preflight")
+local activation_measure = require("activation_measure")
 local canonical = require("canonical")
 local hash = require("hash")
 
@@ -42,8 +43,7 @@ local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured,
         revision = 19,
         entries = {
             {id = "bee.host:db", kind = "db.sql.sqlite", data = {}, registry = {owner = "bee/host"}},
-            {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"},
-                registry = {owner = "host/overlay"}},
+            {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"}},
             {id = "bee.security.gov:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
                 data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}},
                 registry = {owner = "bee/host"}},
@@ -96,7 +96,103 @@ local function changes(spec: Object, entries: {Entry})
     spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
 end
 
+local function driver_fixture(target_path: string?, action: string?): (Deps, Object)
+    local binding_id = "bee.driver.stub.binding:binding"
+    local items: {Entry} = {
+        {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = {}},
+        {id = "bee.driver.stub.binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
+            data = {default = binding_id, targets = {{entry = "bee.harness.launch:harness_activation", path = target_path or ".bindings +="}}}},
+        {id = "bee.driver.stub.security:descriptor_read", kind = "security.policy", data = {policy = {effect = "allow", actions = {action or "registry.get"}, resources = {"*"}}}},
+    }
+    local made = assert(artifact.create(items))
+    local deps, spec, facts = fixture()
+    facts.captured.entries[#facts.captured.entries + 1] = {id = "bee.harness.launch:harness_activation", kind = "registry.entry",
+        data = {bindings = {"bee.driver.claude.binding:binding"}}, registry = {owner = "bee/host"}}
+    for _, entry in ipairs(facts.captured.entries) do
+        if entry.id == "bee.security.gov:protected_kernel" then
+            entry.data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {},
+                entries = {"bee.security.gov:protected_kernel", "bee.harness.launch:harness_activation"}}
+        end
+    end
+    deps.root = function(_: unknown): (resolver.Root?, string?) return {component = "bee.driver.stub", version = "v1"}, nil end
+    deps.policy = function(_: unknown, _: resolver.Captured, _: resolver.Root): (Policy?, string?)
+        return {node_id = "node-destination", policy_digest = SHA, packages = {["bee.driver.stub"] = true},
+            namespaces = {["bee.driver.stub.binding"] = true, ["bee.driver.stub.security"] = true},
+            kinds = {["contract.binding"] = true, ["ns.requirement"] = true, ["security.policy"] = true},
+            databases = {}, grants = {["bee.driver.stub.security:descriptor_read"] = true}, modules = {}, applied = {}, migration_barrier = false}, nil
+    end
+    spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
+    return deps, spec
+end
+
 local function define_tests()
+    test.describe("Workspace driver admission", function()
+        test.it("measures an owned activation append through existing preflight", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            test.eq(facts.candidate.requirements[1].value, "bee.driver.stub.binding:binding")
+            test.eq(facts.candidate.requirements[1].targets[1], "bee.harness.launch:harness_activation")
+            local verdict = assert(preflight.check(facts.candidate, facts.context))
+            test.is_true(verdict.ready)
+        end)
+        test.it("retains the exact driver append while normalizing activation evidence", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            spec.plan_digest, spec.revision, spec.selection_revision = SHA, 1, 1
+            spec.selected, spec.review_status = true, "accepted"
+            local measured, problem = activation_measure.measure(spec, facts.candidate, facts.context)
+            if not measured then error(tostring(problem)) end
+            local report = assert(bounds.object(measured.report))
+            test.is_true(report.ready)
+            test.eq(report.base_revision, 0)
+            facts.context.driver_requirements = nil
+            test.is_nil(activation_measure.measure(spec, facts.candidate, facts.context))
+        end)
+        test.it("refuses a replacement of the host activation catalog", function()
+            local deps, spec = driver_fixture(".bindings")
+            local candidate, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_true(tostring(problem):find("may only append", 1, true) ~= nil)
+        end)
+        test.it("keeps the protected target closed without the exact host append measurement", function()
+            for _, change in ipairs({"missing", "binding", "digest"}) do
+                local deps, spec = driver_fixture()
+                local facts = resolve(deps, spec)
+                local appends = assert(facts.context.driver_requirements)
+                local append = assert(appends["bee.driver.stub.binding:activation"])
+                if change == "missing" then facts.context.driver_requirements = nil
+                elseif change == "binding" then append.binding = "bee.driver.claude.binding:binding"
+                else append.digest = string.rep("b", 64) end
+                local verdict = assert(preflight.check(facts.candidate, facts.context))
+                test.is_false(verdict.ready)
+                local protected = false
+                for _, diagnostic in ipairs(verdict.diagnostics) do
+                    if diagnostic.code == "PROTECTED_KERNEL" then protected = true end
+                end
+                test.is_true(protected)
+            end
+        end)
+        test.it("refuses editing the protected host entry even with an admitted append", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            local protected = assert(facts.context.entries["bee.harness.launch:harness_activation"])
+            facts.candidate.entries[#facts.candidate.entries + 1] = protected
+            local verdict = assert(preflight.check(facts.candidate, facts.context))
+            test.is_false(verdict.ready)
+            local refused = false
+            for _, diagnostic in ipairs(verdict.diagnostics) do
+                if diagnostic.code == "PROTECTED_KERNEL" and diagnostic.target == protected.id then refused = true end
+            end
+            test.is_true(refused)
+        end)
+        test.it("refuses executable authority disguised as descriptor access", function()
+            local deps, spec = driver_fixture(nil, "exec.run")
+            local candidate, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_true(tostring(problem):find("only read registry", 1, true) ~= nil)
+        end)
+    end)
+
     test.describe("private overlay artifact resolver", function()
         test.it("blocks checkpoint metadata the application catalog cannot open", function()
             local deps, spec = fixture(nil)
@@ -320,7 +416,7 @@ local function define_tests()
             local candidate, context, err = resolver.resolve_with(deps, spec)
             test.is_nil(candidate)
             test.is_nil(context)
-            test.is_true(tostring(err):find("selected overlay", 1, true) ~= nil)
+            test.eq(err, "cannot measure restored durable definition omitted by candidate: bee:ordinary-policy")
         end)
 
         test.it("projects a requested thread grant before its atomic install", function()
@@ -617,6 +713,87 @@ local function define_tests()
             test.is_nil((assert(bounds.object(facts.context.entries)))["private.app:old-overlay"])
             test.is_true((assert(bounds.object(facts.context.entries)))["bee.host:db"] ~= nil)
             test.eq(((principals.objects(facts.candidate.entries))[1]).id, "private.app:old-overlay")
+        end)
+
+        test.it("admits only granted durable shadows and binds their identity and external base", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},
+                applied = {}, migration_barrier = false, super_edit = true}
+            local deps, spec, state = fixture(policy)
+            state.captured.entries[2] = entry("private.app:main", "function.lua", "original")
+            state.captured.entries[2].registry = {owner = "bee/settings"}
+            state.captured.entries[#state.captured.entries + 1] = entry("private.app:sibling", "function.lua", "retained")
+            state.captured.entries[#state.captured.entries].registry = {owner = "bee/settings"}
+            local replacement = entry("private.app:main", "function.lua", "approved")
+            assert(bounds.object(replacement.data)).imports = {sibling = "private.app:sibling"}
+            changes(spec, {replacement})
+            local facts = resolve(deps, spec)
+            local report = assert(preflight.check(facts.candidate, facts.context))
+            if not report.ready then error(assert(canonical.encode(report.diagnostics))) end
+            test.eq(facts.context.entries["private.app:main"].package, "bee/settings")
+            test.is_true(facts.context.entries["private.app:sibling"] ~= nil)
+            local baseline = facts.candidate.base_digest
+            state.captured.entries[2].data = {source = "return 'changed original'"}
+            test.eq(resolve(deps, spec).candidate.base_digest, baseline)
+            state.captured.entries[2].registry = {owner = "bee/other"}
+            test.is_true(resolve(deps, spec).candidate.base_digest ~= baseline)
+            state.captured.entries[2].registry = {owner = "bee/settings"}
+            state.captured.entries[2].kind = "library.lua"
+            local changed_kind = resolve(deps, spec)
+            test.is_true(changed_kind.candidate.base_digest ~= baseline)
+            test.is_false(assert(preflight.check(changed_kind.candidate, changed_kind.context)).ready)
+            state.captured.entries[2].kind = "function.lua"
+            local kernel = assert(bounds.object(state.captured.entries[3].data))
+            kernel.namespaces = {"bee.gov", "private.app"}
+            local protected = resolve(deps, spec)
+            local protected_report = assert(preflight.check(protected.candidate, protected.context))
+            test.is_false(protected_report.ready)
+            local guarded = false
+            for _, diagnostic in ipairs(protected_report.diagnostics) do
+                if diagnostic.code == "PROTECTED_KERNEL" then guarded = true end
+            end
+            test.is_true(guarded)
+            kernel.namespaces = {"bee.gov"}
+            policy.namespaces["private.app"] = false
+            local denied, _, denied_error = resolver.resolve_with(deps, spec)
+            test.is_nil(denied)
+            test.is_true(tostring(denied_error):find("entry collides", 1, true) ~= nil)
+            policy.namespaces["private.app"] = true
+            policy.super_edit = false
+            local ordinary = resolver.resolve_with(deps, spec)
+            test.is_nil(ordinary)
+        end)
+
+        test.it("keeps a durable shadow's base stable after apply and refuses an unmeasured restoration", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},
+                applied = {}, migration_barrier = false, super_edit = true}
+            local deps, spec, state = fixture(policy)
+            local durable = entry("private.app:main", "function.lua", "durable")
+            durable.registry = {owner = "bee/settings"}
+            state.captured.entries[2] = durable
+            local shadow = entry("private.app:main", "function.lua", "shadow")
+            changes(spec, {shadow})
+            local before = resolve(deps, spec)
+            state.captured.entries[2] = shadow
+            shadow.registry = {owner = "bee/settings"}
+            assert(state.captured.overlay_ids)["private.app:main"] = true
+            local applied = resolve(deps, spec)
+            test.eq(applied.candidate.base_digest, before.candidate.base_digest)
+            local before_report = assert(preflight.check(before.candidate, before.context))
+            local applied_report = assert(preflight.check(applied.candidate, applied.context))
+            test.is_true(applied_report.ready)
+            test.eq(applied_report.plan_digest, before_report.plan_digest)
+            test.eq(applied.context.entries["private.app:main"].package, "bee/settings")
+            test.is_true(applied.context.installed_entries["private.app:main"] ~= nil)
+            local next_entry = entry("private.app:next", "function.lua", "next")
+            assert(bounds.object(next_entry.data)).imports = {original = "private.app:main"}
+            changes(spec, {next_entry})
+            local replaced, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(replaced)
+            test.eq(problem, "cannot measure restored durable definition omitted by candidate: private.app:main")
         end)
 
         test.it("rejects an entry collision with the composed destination registry", function()

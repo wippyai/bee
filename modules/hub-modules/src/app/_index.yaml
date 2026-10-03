@@ -40,7 +40,6 @@ entries:
     bounds: bee.values:bounds
     text: bee.ui:text
     canonical: bee.values:canonical
-    workspace_applications: bee.gov.types:workspace_applications
 - name: view
   kind: library.lua
   source: file://view.lua

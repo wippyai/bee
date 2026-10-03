@@ -36,7 +36,6 @@ def migrations(source):
             if part.startswith('[['):
                 values.append(part[2:-2].removeprefix('\n'))
             elif part.startswith('"'):
-                import json
                 values.append(json.loads(part))
             else:
                 values.append(resolve(constants[part]))

@@ -29,7 +29,6 @@ generator when the corpus is intentionally updated.
 | Hive network reachability and runtime proposal | [Reachability study](operations/hive-reachability.md) |
 | Runtime integration and upstream boundaries | [Runtime integration](development/runtime.md) |
 | Standalone startup timings and load-aware regression measurement | [Boot measurement](development/boot-measurement.md) |
-| Production Lua wall-clock bounds and supervised waits | [Timer audit](development/timer-audit.md) |
 | Live process code handoff and recovery status | [Process handoff](development/process-handoff.md) |
 | Release artifacts and publication | [Releasing](operations/releasing.md) |
 | GitHub protections and repository settings | [GitHub setup](development/github.md) |

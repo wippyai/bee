@@ -1,7 +1,9 @@
 """Balance Lua entries across four processes while keeping shared-daemon suites together."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
+import fcntl
 import os
+from pathlib import Path
 import re
 import subprocess
 import time
@@ -26,10 +28,11 @@ DEFAULT_WEIGHT = 1.0
 SHARDS = 4
 
 
-def test_entries(suites=None, *, resource=None):
+def test_entries(suites=None, *, resource=None, source=None):
+    source = ROOT / "tests/lua" if source is None else source
     entries = []
-    for index in sorted((ROOT / "tests/lua").rglob("_index.yaml")):
-        if suites is not None and index.relative_to(ROOT / "tests/lua").parts[0] not in suites:
+    for index in sorted(source.rglob("_index.yaml")):
+        if suites is not None and index.relative_to(source).parts[0] not in suites:
             continue
         document = yaml.safe_load(index.read_text())
         entries.extend(document["namespace"] + ":" + entry["name"]
@@ -60,18 +63,43 @@ def split(entries, shared=()):
     return groups
 
 
+@contextmanager
+def docker_daemon_lock():
+    override = os.environ.get("BEE_DOCKER_DAEMON_LOCK")
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if override:
+        path = Path(override)
+    elif runtime:
+        path = Path(runtime) / "bee-docker-daemon.lock"
+    else:
+        path = Path.home() / ".cache/bee/bee-docker-daemon.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        print(f"Docker daemon shard: waiting for lock {path}", flush=True)
+        started = time.monotonic()
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            print(f"Docker daemon shard: acquired lock {path} after {time.monotonic() - started:.3f}s", flush=True)
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def run_shard(index, folder, entries, timeout=None):
     started = time.monotonic()
-    result = subprocess.run([
-        str(RUNTIME), "test", "--host", "bee:terminal", "--override",
-        "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
-        # Effect worker tests drain the queues synchronously; avoid racing the workers.
-        "--override", "bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false",
-        "--override", "bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false",
-        "--override", "bee.threads.service:thread_outbox_pump_service:lifecycle.auto_start=false",
-        "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
-        "test", *entries,
-    ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
+    with ExitStack() as resources:
+        if set(entries) & set(test_entries(resource="docker_daemon", source=folder / "src/tests")):
+            resources.enter_context(docker_daemon_lock())
+        result = subprocess.run([
+            str(RUNTIME), "test", "--host", "bee:terminal", "--override",
+            "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
+            # Effect worker tests drain the queues synchronously; avoid racing the workers.
+            "--override", "bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false",
+            "--override", "bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false",
+            "--override", "bee.threads.service:thread_outbox_pump_service:lifecycle.auto_start=false",
+            "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
+            "test", *entries,
+        ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
     output = result.stdout + result.stderr
     plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", output)
     selected = re.search(r"(\d+) tests in \d+ suites", plain)

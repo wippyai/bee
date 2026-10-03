@@ -323,6 +323,14 @@ bee help | -h | --help
 bee update | recover | wippy [ARGUMENTS...]
 ```
 
+When a recorded owner PID no longer exists, `bee stop` verifies its absence
+while holding the runtime state lock, clears the exact stale owner descriptor
+under its publication lock, and exits 0 with
+`Bee was not running (stale owner record cleared)`. A live or reused PID keeps
+the record and reports an error; it is never signalled by stale-record cleanup.
+Observation errors and replacement descriptors are reported without clearing
+the record.
+
 `--state DIR` precedes every command. A first word that cannot name an
 application command (for example `-x` or `Agent`) and malformed route arguments
 fail before project selection and exit 1; the runtime's `app.Main` reports every

@@ -15,6 +15,7 @@ import (
 	"github.com/wippyai/runtime/api/registry"
 	bootsystem "github.com/wippyai/runtime/boot/components/system"
 	app "github.com/wippyai/runtime/cmd/app"
+	"go.uber.org/zap"
 )
 
 const (
@@ -179,6 +180,10 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			return app.Plan{}, err
 		}
 		host.ownerState, host.ownerLaunch = state, launched
+		if host.bootLog == nil {
+			host.bootLog = &bootLog{logger: zap.NewNop()}
+		}
+		host.bootLog.output = os.Stderr
 		plan.Prepare = func(ctx context.Context) (boot.Config, func() error, error) {
 			host.bootLog.phase("owner_prepare", "begin")
 			config, release, err := prepareOwnerForProject(state, launch.Dir, owner)
@@ -216,8 +221,8 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		selected.State = state
 		plan.DefaultState = ""
 		route := host.clientRoute
-		plan.Run = func(ctx context.Context) error {
-			defer host.bootLog.close()
+		plan.Run = func(ctx context.Context) (result error) {
+			defer func() { result = errors.Join(result, host.bootLog.close()) }()
 			return route(context.WithValue(ctx, bootLogKey{}, host.bootLog), selected, intent)
 		}
 		if intent.hive != nil {
@@ -317,9 +322,8 @@ func (host *Host) Start(ctx context.Context) error {
 }
 
 // Stop releases the owner components this host started.
-func (host *Host) Stop(ctx context.Context) error {
-	defer host.bootLog.close()
-	var result error
+func (host *Host) Stop(ctx context.Context) (result error) {
+	defer func() { result = errors.Join(result, host.bootLog.close()) }()
 	for _, component := range host.components {
 		if stopper, ok := component.(boot.Stopper); ok {
 			result = errors.Join(result, stopper.Stop(ctx))

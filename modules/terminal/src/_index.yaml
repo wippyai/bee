@@ -132,6 +132,7 @@ entries:
   - tty
   imports:
     appearance: bee.ui:appearance
+    interaction: bee.app:interaction
 - name: help
   kind: library.lua
   source: file://help.lua

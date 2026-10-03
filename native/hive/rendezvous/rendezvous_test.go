@@ -346,3 +346,53 @@ func TestDescriptorLaunchIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestClearPreservesAReplacementOwner(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := New(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := sample()
+	if err := store.Publish(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	replacement := first
+	replacement.Execution = strings.Repeat("b", 32)
+	if err := store.Publish(context.Background(), replacement); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Clear(context.Background(), first); err == nil {
+		t.Fatal("cleared a replacement owner")
+	}
+	actual, err := store.Read(context.Background())
+	if err != nil || actual.Execution != replacement.Execution {
+		t.Fatalf("replacement lost: %+v, %v", actual, err)
+	}
+}
+
+func TestClearIsIdempotentAfterRecordRemoval(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := New(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := sample()
+	if err := store.Publish(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := store.Clear(context.Background(), record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.Read(context.Background()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("cleared record reappeared: %v", err)
+	}
+}

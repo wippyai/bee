@@ -158,8 +158,20 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
     end
     local function input_focus(): string return routing_scene.focus end
+    local failure_focus: string? = nil
+    local function restoration_items(): {menu.Item}
+        local items: {menu.Item} = {}
+        for id, state in pairs(dialogs) do
+            if state.spec.restoration then
+                items[#items + 1] = {label = state.spec.instance_id, action = "restoration:" .. id, enabled = true}
+            end
+        end
+        table.sort(items, function(a, b) return a.label < b.label end)
+        return items
+    end
     local function dialog_target(): string
         if dialogs["bee.workspace:shutdown"] then return "bee.workspace:shutdown" end
+        if failure_focus and dialogs[failure_focus] then return failure_focus end
         return input_focus()
     end
     local function request_quit()
@@ -344,7 +356,11 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local function invoke(action: string, selected_target: string?)
         local target = selected_target or (start and start.target) or input_focus()
         start = nil
-        if action == "select_text" then begin_selection(target)
+        if action:sub(1, 12) == "restoration:" then
+            failure_focus = action:sub(13)
+            start = nil
+            dirty = true
+        elseif action == "select_text" then begin_selection(target)
         elseif action == "rename" then
             for _, win in ipairs(scene.windows) do
                 if win.id == target then editor = title_editor.open(win.id, model.display_title(win), win.accent or ""); break end
@@ -429,8 +445,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. (workspace_label or names.label(workspace_id)),
-            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated,
-            transfers, display_id, workspaces, attention_count)
+            preferences, start, initial_application ~= nil, catalog, editor, dialogs[dialog_target()], badges, active_selection, connection_info, connection_open, hydrated,
+            transfers, display_id, workspaces, attention_count and attention_count + #restoration_items() or nil, restoration_items())
         tab_hits = frame.tabs
         if help_open then
             local guide = help_view.draw(scene.width, scene.height, preferences, help_menu)
@@ -861,7 +877,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 if event.type == "key" then captured_releases[kind] = true else captured_mouse = true end
                 handled = true; dirty = true
             elseif start and event.type ~= "resize" and event.type ~= "close" then
-                local items = menu.entries(start, scene, initial_application ~= nil, catalog, transfers, display_id)
+                local items = menu.entries(start, scene, initial_application ~= nil, catalog, transfers, display_id, restoration_items())
                 local panel = menu.panel(width, height, #items, start)
                 local response = menu.respond(start, panel, items, event)
                 local menu_target = start and start.target
@@ -953,6 +969,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
                                     hit_tab = true
                                     if hit.action == "help" then
                                         help_open = true; start = nil; dirty = true
+                                    elseif hit.action == "attention" and #restoration_items() > 0 then
+                                        failure_focus = restoration_items()[1].action:sub(13)
+                                        start = nil; dirty = true
                                     elseif hit.action == "sessions" or hit.action == "attention" then
                                         local role = (hit.action == "sessions" or (approvals_count == 0 and blocked_count > 0)) and "sessions" or "approvals"
                                         for _, app in ipairs(catalog) do if app.role == role then application("open", app.definition_id, ""); break end end

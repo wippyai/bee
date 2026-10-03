@@ -152,7 +152,13 @@ sequence-bearing indexes without changing retained records), and 21
 `profile_budget_names_and_session_accounting` (budget field conversion and
 session consumption counters), 28 `app_child_definition_data` (the definition
 migration marker), and 29 `cancel_intent_admission_repair` (rebuild retained
-cancellation intents under the current admission constraints).
+cancellation intents under the current admission constraints), and 30
+`retained_app_definition_data` (preserve marker 1 and admit subsequent owner
+identity migrations). Definition migration 2 repairs historic Inbox, Workspace
+Manager, Hive Manager, Modules, Timeline and core application identities using
+the existing actor, membership, alias, sender-rule and mutable-receipt fanout.
+Instance identities, attestation creation times and active flags survive the
+conversion. Applied schema migrations and immutable thread records stay intact.
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and

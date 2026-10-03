@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 )
@@ -19,7 +20,7 @@ func holdOwnerProcessExit(pid int) (ownerExitObserver, error) {
 		return nil, errors.New("owner descriptor has no valid process ID")
 	}
 	if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
-		return nil, fmt.Errorf("owner process PID %d has already exited", pid)
+		return nil, os.ErrProcessDone
 	} else if err != nil && !errors.Is(err, syscall.EPERM) {
 		return nil, fmt.Errorf("inspect owner process PID %d: %w", pid, err)
 	}

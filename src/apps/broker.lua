@@ -1,5 +1,7 @@
 -- Instance lifecycle and terminal capability owner. No bundled-app identities.
 local process = require("process")
+local logger = require("logger")
+local log = logger:named("bee.apps")
 local security = require("security")
 local channel = require("channel")
 local tty = require("tty")
@@ -11,6 +13,7 @@ local ctx = require("ctx")
 local contract = require("contract")
 local bounds = require("bounds")
 local catalog = require("catalog")
+local recovery = require("recovery")
 local lifecycle = require("lifecycle")
 local decode = require("decode")
 local attachment = require("attachment")
@@ -28,7 +31,7 @@ local thread_binding = require("thread_binding")
 local thread_protocol = require("thread_protocol")
 type Admission = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor},
     descriptors: {[string]: contract.Descriptor}, codes: {[string]: string}, scopes: {[string]: security.Scope}}
-type AliasBackfill = {instance_id: string, definition_id: string}
+type AliasBackfill = recovery.Alias
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
@@ -42,7 +45,6 @@ type BindingCoordinator = thread_binding.Coordinator
 -- terminates it. A PTY application waits for its child, which the runtime's
 -- terminal proxy signals with TERM and escalates to KILL after its 3 s grace.
 local STOP_GRACE = "8s"
-local MAX_ALIAS_BACKFILL = 16
 local function now(): number return clock.epoch_seconds(time.now()) end
 local function application_actor(workspace_id: string, instance_id: string, definition_id: string,
     definition_revision: string, execution_generation: integer): security.Actor
@@ -56,34 +58,14 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
     if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end
     local workspace_id = contract.workspace_id(ctx.get("bee.workspace_id"))
-    if not workspace_id then
-        error("Invalid workspace identity bootstrap")
-    end
-    local function decode_alias_backfill(value: unknown): {AliasBackfill}?
-        if type(value) ~= "table" then return nil end
-        local input = value
-        local count = 0
-        for key in pairs(input) do
-            if type(key) ~= "number" or key < 1 or key > MAX_ALIAS_BACKFILL or key ~= math.floor(key) then return nil end
-            count = count + 1
-        end
-        local result: {AliasBackfill} = {}
-        local seen: {[string]: boolean} = {}
-        for index = 1, count do
-            local item = bounds.object(input[index])
-            if not item or bounds.fields(item, {"instance_id", "definition_id"}) then return nil end
-            local instance_id = bounds.id(item.instance_id)
-            local definition_id = bounds.id(item.definition_id)
-            if not instance_id or not definition_id or #definition_id > 160
-                or not thread_binding.actor(workspace_id, instance_id)
-                or not app_identity.stable(workspace_id, definition_id) or seen[instance_id] then return nil end
-            seen[instance_id] = true
-            result[#result + 1] = {instance_id = instance_id, definition_id = definition_id}
-        end
-        return result
-    end
-    local alias_backfill = decode_alias_backfill(raw_alias_backfill)
+    if not workspace_id then error("Invalid workspace identity bootstrap") end
+    local alias_backfill = recovery.aliases(raw_alias_backfill)
     if not alias_backfill then error("Invalid retained application identity projection") end
+    for _, record in ipairs(alias_backfill) do
+        if not thread_binding.actor(workspace_id, record.instance_id) or not app_identity.stable(workspace_id, record.definition_id) then
+            error("Invalid retained application identity projection")
+        end
+    end
     assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local shutdown_requests = assert(process.listen("bee.app.shutdown", {message = true}))
@@ -234,10 +216,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local left = funcs.new():with_scope(membership_scope):call("bee.threads.binding:leave", request)
         return type(left) == "table" and (left).ok == true
     end
-    -- Every opened instance receives a live authorization for its app's
-    -- stable identity, so a reopened instance inherits family threads only
-    -- while the broker still manages that instance.
-    -- Attestation is fail-closed: the open is refused when it cannot land.
     local function attest_instance(instance_id: string, definition_id: string): (boolean, string?, string?)
         local done, ok, code, message = pcall(function(): (boolean, string?, string?)
             local stable = app_identity.stable(workspace_id, definition_id)
@@ -252,7 +230,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             local reply, call_error = scoped:call("bee.threads.binding:register_app_alias", {stable = stable_id,
                 instance = instance_actor, workspace_id = workspace_id, definition_id = definition_id})
             if call_error then
-                return false, "permission_denied", "Application alias attestation call failed: " .. tostring(call_error):sub(1, 300)
+                return false, "permission_denied", "Application alias attestation call failed: " .. tostring(call_error)
             end
             if type(reply) ~= "table" then
                 return false, "permission_denied", "Application alias attestation is unavailable"
@@ -263,7 +241,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             end
             return true, nil, nil
         end)
-        if not done then return false, "permission_denied", "Application alias attestation raised: " .. tostring(ok):sub(1, 300) end
+        if not done then return false, "permission_denied", "Application alias attestation raised: " .. tostring(ok) end
         return ok, code, message
     end
     local function retire_instance(item: Instance): (boolean, string?)
@@ -295,24 +273,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local reply, call_error = scoped:call("bee.threads.binding:fence_app", {stable = stable_id})
         return not call_error and type(reply) == "table" and (reply).ok == true
     end
-    local function backfill_retained_aliases(records: {AliasBackfill})
-        local current = admission.current
-        if not current then error("Application admission is unavailable for alias recovery") end
-        for _, record in ipairs(records) do
-            -- The first catalog can precede governance/package recovery. A
-            -- missing definition here is not evidence of an admission loss:
-            -- the host keeps its checkpoint pending and may restore it when
-            -- the definition returns. Restore-open attests that exact
-            -- instance before starting it. Runtime admission removal is
-            -- fenced by refresh_admission's previous-to-current transition.
-            if current.descriptors[record.definition_id] then
-                local attested, _, message = attest_instance(record.instance_id, record.definition_id)
-                if not attested then
-                    error("Backfill retained application alias: " .. tostring(message or "thread owner refused the alias"))
-                end
-            end
-        end
-    end
     local function facade_call(actor_id: string, target: string, request: unknown)
         local actor, actor_error = security.new_actor(actor_id)
         if not actor then return nil, tostring(actor_error or "create application thread caller") end
@@ -329,11 +289,35 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local cleanup_request = ""
     local cleanup_deadline = 0
     local cleanup_complete = false
+    local restoration_failures: {[string]: interaction.Spec} = {}
     local function publish_dialogs()
         local items: {interaction.Wire} = {}
         for _, spec in ipairs(interactions.snapshot(dialogs)) do items[#items + 1] = interaction.wire(spec) end
+        for _, spec in pairs(restoration_failures) do items[#items + 1] = interaction.wire(spec) end
         process.send(owner, "bee.interaction.state", {version = 1, items = items, shutdown = shutdown_dialog and interaction.wire(shutdown_dialog) or nil})
     end
+    local function report_retained_failure(record: AliasBackfill, message: string)
+        local spec: interaction.Spec = {request_id = uuid.v7(), id = record.instance_id,
+            instance_id = record.instance_id, kind = "confirm", title = "Application restoration failed",
+            message = message, accept = "Acknowledge", initial = "", restoration = true}
+        restoration_failures[record.instance_id] = spec
+        log:error("Retained application restoration failed", {workspace_id = workspace_id,
+            instance_id = record.instance_id, definition_id = record.definition_id, error = message})
+    end
+    local function backfill_retained_aliases(records: {AliasBackfill})
+        local current = admission.current
+        if not current then error("Application admission is unavailable for alias recovery") end
+        for _, record in ipairs(records) do
+            if current.descriptors[record.definition_id] then
+                local attested, _, message = attest_instance(record.instance_id, record.definition_id)
+                if not attested then report_retained_failure(record, assert(message)) end
+            else
+                report_retained_failure(record, "Retained application is not admitted: " .. record.definition_id)
+            end
+        end
+        publish_dialogs()
+    end
+    local restoring: {[string]: contract.Request} = {}
     local pending: {[string]: boolean} = {}
     local fingerprints: {[string]: string} = {}
     local completed: {[string]: contract.Reply} = {}
@@ -425,6 +409,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 end
             end
             admission.current, admission.error, applied = selected, "", selected
+            if not initial then backfill_retained_aliases(alias_backfill) end
             assert(process.send(owner, "bee.app.catalog", {version = 1, items = selected.items}))
             -- A running application follows its applied
             -- definition behind the same viewport. Once an exit has been
@@ -447,6 +432,15 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     end
     local function emit(reply: contract.Reply, remember: boolean?)
         reply.workspace_id = workspace_id
+        local saved = restoring[reply.request_id]
+        if saved and reply.op == "open" then
+            restoring[reply.request_id] = nil
+            if reply.error_code ~= "" then
+                reply.id, reply.instance_id, reply.definition_id = saved.restore_view_id, saved.restore_instance_id, saved.definition_id
+                report_retained_failure({instance_id = saved.restore_instance_id, definition_id = saved.definition_id}, reply.error)
+            else restoration_failures[saved.restore_instance_id] = nil end
+            publish_dialogs()
+        end
         if remember and reply.request_id ~= "" then
             pending[reply.request_id] = nil
             if not completed[reply.request_id] then completed_order[#completed_order + 1] = reply.request_id end
@@ -1345,7 +1339,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if item and type(data) == "table"
                 and data.launch_token == item.launch_token then
                 local spec = interaction.spec(data)
-                if spec and spec.id == item.view_id and spec.instance_id == item.instance_id then
+                if spec and not spec.restoration and spec.id == item.view_id and spec.instance_id == item.instance_id then
                     local client_request_id = spec.request_id
                     spec.request_id = uuid.v7()
                     if (item.state.phase == "starting" or item.state.phase == "ready") and not shutdown_plan
@@ -1363,6 +1357,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 and response.request_id == shutdown_dialog.request_id and response.value == "" then
                 if response.action == "cancel" then abort_shutdown()
                 elseif not quit_sent then quit_sent = true; emit(contract.reply(response.request_id, "quit")) end
+            elseif response and restoration_failures[response.id]
+                and restoration_failures[response.id].request_id == response.request_id
+                and restoration_failures[response.id].instance_id == response.instance_id then
+                restoration_failures[response.id] = nil
+                publish_dialogs()
             elseif response then
                 local pending_dialog = interactions.resolve(dialogs, response)
                 if pending_dialog then
@@ -1597,6 +1596,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     else emit(cached) end
                 elseif not pending[req.request_id] then
                     pending[req.request_id] = true
+                    if req.restore_instance_id ~= "" then restoring[req.request_id] = req end
                     fingerprints[req.request_id] = fingerprint
                     if req.op == "shutdown" then
                         if cleanup_request == "" then

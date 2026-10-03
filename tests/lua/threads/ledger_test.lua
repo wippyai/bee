@@ -34,9 +34,42 @@ local function define_tests()
             test.eq(receipt.reply_json, '{"owner_actor":"' .. target.id .. '"}')
             upgraded:release()
             local reopened = assert(database.open(resource))
-            test.eq(#harness.query(reopened, "SELECT id FROM bee_thread_definition_migrations"), 1)
+            test.eq(#harness.query(reopened, "SELECT id FROM bee_thread_definition_migrations"), 2)
             test.eq(harness.query(reopened, "SELECT stable FROM bee_thread_app_alias")[1].stable, target.id)
             reopened:release()
+        end)
+
+        test.it("repairs remaining identities after the first definition migration already applied", function()
+            local resource = "bee.threads:retained_definition_test_db"
+            local workspace = string.rep("b", 32)
+            local original = assert(database.open_at(resource, 29))
+            local pairs = {
+                {"bee.approvals.inbox:app", "bee.approvals.inbox.app:app"},
+                {"bee.workspace.manager:app", "bee.workspace.manager.app:app"},
+                {"bee.modules:app", "bee.hub.modules.app:app"},
+            }
+            for index, pair in ipairs(pairs) do
+                local prior = assert(identity.stable(workspace, pair[1]))
+                harness.execute(original, "INSERT INTO bee_thread_app_alias VALUES (?, ?, ?, ?, 'original-attestation', ?)",
+                    {prior.id, "bee.application:" .. workspace .. ":retained-" .. tostring(index), workspace, pair[1], index == 2 and 0 or 1})
+                harness.execute(original, "INSERT INTO bee_thread_heads VALUES (?, ?, 'Retained', 'open', 1, 0, 'now', ?)",
+                    {"retained-" .. tostring(index), prior.id, workspace})
+                harness.execute(original, "INSERT INTO bee_thread_members VALUES (?, ?, 'owner', 1, 1)",
+                    {"retained-" .. tostring(index), prior.id})
+            end
+            original:release()
+            for pass = 1, 2 do
+                local upgraded = assert(database.open(resource))
+                local rows = harness.query(upgraded, "SELECT stable, definition_id, instance, active, created_at FROM bee_thread_app_alias ORDER BY instance")
+                for index, pair in ipairs(pairs) do
+                    test.eq(rows[index].stable, assert(identity.stable(workspace, pair[2])).id)
+                    test.eq(rows[index].definition_id, pair[2])
+                    test.eq(rows[index].active, index == 2 and 0 or 1)
+                    test.eq(rows[index].created_at, "original-attestation")
+                    test.eq(harness.query(upgraded, "SELECT actor FROM bee_thread_members WHERE thread_id = ?", {"retained-" .. tostring(index)})[1].actor, rows[index].stable)
+                end
+                upgraded:release()
+            end
         end)
 
         test.it("upgrades a populated version-1 store byte for byte", function()
@@ -76,7 +109,7 @@ local function define_tests()
                 end
             end
             local ledger_after = harness.query(upgraded, "SELECT id, name, checksum FROM bee_thread_schema_migrations ORDER BY id")
-            test.eq(#ledger_after, 29)
+            test.eq(#ledger_after, 30)
             test.eq(ledger_after[1].checksum, expected_checksum)
             test.eq(ledger_after[2].name, "thread_authority")
             test.eq(ledger_after[3].name, "work_lifecycle")
@@ -113,7 +146,7 @@ local function define_tests()
             local again, again_error = database.open(resource)
             if not again then error(tostring(again_error)) end
             local ledger_again = harness.query(again, "SELECT COUNT(*) AS count FROM bee_thread_schema_migrations")
-            test.eq(ledger_again[1].count, 29)
+            test.eq(ledger_again[1].count, 30)
             again:release()
         end)
         test.it("migrates historical app aliases as inactive until the broker reattests them", function()

@@ -28,7 +28,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     capture: layout.Capture?, preview: model.Rect?, status: string, label: string,
     preferences: appearance.Preferences?, start: menu.State?, initial: boolean?, catalog: {menu.Descriptor}?, editor: title_editor.State?, modal: dialog.State?,
     badges: {[string]: surface.Badge}?, active_selection: selection.State?, connection_info: connection.Info?, connection_open: boolean?, ready: boolean?,
-    transfers: display_transfer.Snapshot?, display_id: string?, workspaces: workspace_menu.Menu?, attention_count: integer?): Frame
+    transfers: display_transfer.Snapshot?, display_id: string?, workspaces: workspace_menu.Menu?, attention_count: integer?, failures: {menu.Item}?): Frame
     local prefs = preferences or appearance.defaults()
     local theme = appearance.theme(prefs.theme)
     local FRAME = appearance.style(theme.border, theme.surface)
@@ -101,7 +101,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
         canvas:put(1, 1, strip.text, width)
     end
     if start then
-        local items = menu.entries(start, scene, initial == true, catalog, transfers, display_id)
+        local items = menu.entries(start, scene, initial == true, catalog, transfers, display_id, failures)
         local panel = menu.panel(width, height, #items, start)
         menu.draw(canvas, panel, menu.fit(start, panel, #items), items, prefs)
         cursor.visible = false

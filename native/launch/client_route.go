@@ -44,8 +44,11 @@ func defaultClientSeams() clientSeams {
 		progressReport: os.Stderr,
 		released:       waitReleased,
 		holdOwnerExit:  holdOwnerProcessExit,
-		progress:       observeStartup,
-		abortOwner:     abortStartedOwner,
+		clearStaleOwner: func(ctx context.Context, state string) (bool, error) {
+			return clearStaleOwner(ctx, state, holdOwnerProcessExit)
+		},
+		progress:   observeStartup,
+		abortOwner: abortStartedOwner,
 	}
 }
 

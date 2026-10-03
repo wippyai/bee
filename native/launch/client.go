@@ -50,7 +50,8 @@ type clientSeams struct {
 	released func(ctx context.Context, state string) error
 	// holdOwnerExit pins the owner process before a stop request so success can
 	// wait for that exact process to exit, even after it releases the state lock.
-	holdOwnerExit func(pid int) (ownerExitObserver, error)
+	holdOwnerExit   func(pid int) (ownerExitObserver, error)
+	clearStaleOwner func(context.Context, string) (bool, error)
 }
 
 type ownerExitObserver interface {
@@ -184,6 +185,16 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	}
 	if join.Intent.stop {
 		if !owned {
+			if seams.clearStaleOwner != nil {
+				cleared, err := seams.clearStaleOwner(ctx, launch.State)
+				if err != nil {
+					return err
+				}
+				if cleared {
+					_, err := fmt.Fprintln(seams.report, "Bee was not running (stale owner record cleared)")
+					return err
+				}
+			}
 			_, err := fmt.Fprintln(seams.report, "Bee is not running for this project")
 			return err
 		}
@@ -299,6 +310,16 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 		ownerExit, err = seams.holdOwnerExit(owner.OwnerPID)
 		if err != nil {
+			if errors.Is(err, os.ErrProcessDone) && seams.clearStaleOwner != nil {
+				cleared, clearError := seams.clearStaleOwner(ctx, launch.State)
+				if clearError != nil {
+					return clearError
+				}
+				if cleared {
+					_, reportError := fmt.Fprintln(seams.report, "Bee was not running (stale owner record cleared)")
+					return reportError
+				}
+			}
 			return fmt.Errorf("cannot observe Bee owner process PID %d before stopping it: %w", owner.OwnerPID, err)
 		}
 		defer func() { result = errors.Join(result, ownerExit.close()) }()

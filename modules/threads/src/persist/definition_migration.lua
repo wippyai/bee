@@ -8,6 +8,20 @@ local definitions: {[string]: string} = {
     ["bee.host.processes:app"] = "bee.host.processes.app:app",
     ["bee.gov.overlays:app"] = "bee.gov.overlays.app:app",
 }
+local retained_definitions: {[string]: string} = {
+    ["bee.hive_manager:app"] = "bee.hive.manager.app:app",
+    ["bee.hive.manager:app"] = "bee.hive.manager.app:app",
+    ["bee.inbox:app"] = "bee.approvals.inbox.app:app",
+    ["bee.approvals.inbox:app"] = "bee.approvals.inbox.app:app",
+    ["bee.modules:app"] = "bee.hub.modules.app:app",
+    ["bee.hub.modules:app"] = "bee.hub.modules.app:app",
+    ["bee.overlays:app"] = "bee.gov.overlays.app:app",
+    ["bee.workspaces:app"] = "bee.workspace.manager.app:app",
+    ["bee.workspace.manager:app"] = "bee.workspace.manager.app:app",
+    ["bee.timeline:app"] = "bee.threads.timeline.app:app",
+    ["bee.threads.timeline:app"] = "bee.threads.timeline.app:app",
+    ["bee.processes:app"] = "bee.host.processes.app:app",
+}
 local columns: {{table: string, column: string}} = {
     {table = "bee_thread_heads", column = "owner_actor"},
     {table = "bee_thread_members", column = "actor"},
@@ -20,11 +34,11 @@ local columns: {{table: string, column: string}} = {
     {table = "bee_session_operations", column = "owner_actor"},
     {table = "bee_session_work", column = "sender_id"},
 }
-function M.apply(db: sql.DB): (boolean, string?)
+function M.apply(db: sql.DB, version: integer): (boolean, string?)
     local tx, begin_error = db:begin()
     if not tx then return false, "begin thread definition migration: " .. tostring(begin_error) end
     local function fail(message: string): (boolean, string?) tx:rollback(); return false, message end
-    local marker, marker_error = tx:query("SELECT id FROM bee_thread_definition_migrations WHERE id = 1")
+    local marker, marker_error = tx:query("SELECT id FROM bee_thread_definition_migrations WHERE id = ?", {version})
     if not marker or marker_error then return fail("read thread definition migration ledger") end
     if #marker > 0 then tx:rollback(); return true, nil end
     local rows, read_error = tx:query("SELECT DISTINCT stable, workspace_id, definition_id FROM bee_thread_app_alias")
@@ -32,7 +46,7 @@ function M.apply(db: sql.DB): (boolean, string?)
     for _, row in ipairs(rows) do
         local definition = row.definition_id
         if type(definition) ~= "string" then return fail("thread application definition is invalid") end
-        local target = definitions[definition]
+        local target = (version == 1 and definitions or retained_definitions)[definition]
         if target then
             local stable = row.stable
             local prior = identity.stable(row.workspace_id, definition)
@@ -54,7 +68,7 @@ function M.apply(db: sql.DB): (boolean, string?)
             if alias_error then return fail("migrate thread application aliases") end
         end
     end
-    local _, record_error = tx:execute("INSERT INTO bee_thread_definition_migrations (id) VALUES (1)")
+    local _, record_error = tx:execute("INSERT INTO bee_thread_definition_migrations (id) VALUES (?)", {version})
     if record_error then return fail("record thread definition migration") end
     local _, commit_error = tx:commit()
     if commit_error then return fail("commit thread definition migration") end

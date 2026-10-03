@@ -9513,6 +9513,10 @@
       },
       {
         "defined": true,
+        "make_target": "retained-startup-check"
+      },
+      {
+        "defined": true,
         "make_target": "session-fallback-check"
       },
       {
@@ -12806,6 +12810,12 @@
     },
     {
       "line": 849,
+      "owner_namespace": "bee.threads",
+      "source": "modules/threads/src/migrations/migrations.lua",
+      "table": "bee_thread_definition_migrations"
+    },
+    {
+      "line": 935,
       "owner_namespace": "bee.threads",
       "source": "modules/threads/src/migrations/migrations.lua",
       "table": "bee_thread_definition_migrations"
@@ -18998,12 +19008,12 @@
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
-    "owned_table_declaration_count": 153,
+    "owned_table_declaration_count": 154,
     "persisted_id_count": 894,
     "requirement_count": 173,
     "requirement_target_count": 448,
-    "root_src_lua_budget": 9010,
-    "root_src_lua_lines": 8990,
+    "root_src_lua_budget": 8991,
+    "root_src_lua_lines": 8991,
     "schema_tag_count": 71,
     "topic_count": 138
   },

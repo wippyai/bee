@@ -1,5 +1,6 @@
 -- Durable values only: no PIDs, grants, handles, security policies or native resources.
 local decode = require("decode")
+local bounds = require("bounds")
 local contract = require("contract")
 local json = require("json")
 local model = require("model")
@@ -8,7 +9,24 @@ type Record = {id: string, instance_id: string, definition_id: string, thread_id
     restart_policy: string, resume_state: string, window: model.Window?}
 type Desktop = {scene: model.Scene, tabs: {string}, preferences: appearance.Preferences}
 type Snapshot = {version: integer, desktop: Desktop, applications: {Record}}
+type Alias = {instance_id: string, definition_id: string}
 local M = {}
+function M.aliases(value: unknown): {Alias}?
+    local input = bounds.array(value, 16)
+    if not input then return nil end
+    local result: {Alias} = {}
+    local seen: {[string]: boolean} = {}
+    for _, raw in ipairs(input) do
+        local item = bounds.object(raw)
+        if not item or bounds.fields(item, {"instance_id", "definition_id"}) then return nil end
+        local instance_id, definition_id = bounds.id(item.instance_id), bounds.id(item.definition_id)
+        if not instance_id or not definition_id or #definition_id > 160 or seen[instance_id] then return nil end
+        seen[instance_id] = true
+        result[#result + 1] = {instance_id = instance_id, definition_id = definition_id}
+    end
+    return result
+end
+
 function M.record(value: unknown): Record?
     if type(value) ~= "table" then return nil end
     local id, instance = contract.text(value.id, 80), contract.text(value.instance_id, 80)

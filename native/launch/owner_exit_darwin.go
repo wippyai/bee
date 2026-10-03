@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -30,6 +31,9 @@ func holdOwnerProcessExit(pid int) (ownerExitObserver, error) {
 	unix.SetKevent(&change, pid, unix.EVFILT_PROC, unix.EV_ADD|unix.EV_ONESHOT)
 	if _, err := unix.Kevent(kq, []unix.Kevent_t{change}, nil, nil); err != nil {
 		_ = unix.Close(kq)
+		if errors.Is(err, unix.ESRCH) {
+			return nil, os.ErrProcessDone
+		}
 		return nil, fmt.Errorf("hold owner process PID %d: %w", pid, err)
 	}
 	return &darwinOwnerExit{pid: pid, kq: kq}, nil

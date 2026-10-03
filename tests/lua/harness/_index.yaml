@@ -796,6 +796,13 @@ entries:
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     exits: bee.harness.catalog:exits
+    orphan_gate: bee.harness.catalog:orphan_gate
+- name: orphan_gate
+  kind: library.lua
+  source: file://orphan_gate.lua
+  meta: {type: test_support}
+  modules: [exec]
+  imports: {quote: bee.driver.binding:quote}
 - name: carrier_drain_test
   kind: function.lua
   source: file://carrier_test.lua
@@ -817,12 +824,15 @@ entries:
     policies:
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
   imports:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     exits: bee.harness.catalog:exits
+    orphan_gate: bee.harness.catalog:orphan_gate
 - name: carrier_stream_test
   kind: function.lua
   source: file://carrier_test.lua
@@ -850,6 +860,7 @@ entries:
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     exits: bee.harness.catalog:exits
+    orphan_gate: bee.harness.catalog:orphan_gate
 - name: launch_sentinel_storage
   kind: env.storage.memory
   meta:

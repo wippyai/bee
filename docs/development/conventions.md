@@ -261,10 +261,24 @@ does not issue container creates from separate test processes against the same
 host daemon. That shard holds an exclusive `flock` across checkouts for its
 runtime process. The unit and focused Lua runners use the same lock, selected
 from the test entries' resource metadata. `BEE_DOCKER_DAEMON_LOCK` selects the
-lock file; otherwise it is `~/.cache/bee/bee-docker-daemon.lock`, one path
-shared by every checkout of the same user. The runner prints when it waits and when it acquires the lock, including the wait duration.
+lock file; otherwise it is `docker-daemon-<daemon ID>.lock` under `bee/` in the
+user's XDG cache directory, so every checkout using the same daemon shares one
+lock and an unreachable daemon fails with its exact error. The runner prints when it waits and when it acquires the lock, including the wait duration.
 The wait has no timeout and can be interrupted. Failures release the lock and
 retain their cause. The remaining entries retain their balanced parallel shards.
+
+`make native-placement-unit-check` runs native launch, configuration, supervision
+and credential suites together with provider configuration and instruction-builder
+checks. Each native suite captures and restores shared fixture registry state
+independently within the existing test entry timeout. The bounded sweep regression
+accounts for earlier cases' retained attempts in the same owner store and verifies
+every reconciliation outcome.
+
+`make harness-drain-unit-check` covers carrier post-exit draining. Its silent
+consumer fixture holds descendant pipes behind a FIFO until the test releases
+them, so host load cannot close those pipes before the declared drain expires.
+`make harness-fixture-unit-check` proves that fixture lifecycle; `make
+unit-runner-check` covers shard selection, failure reporting and Docker locking.
 
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's
@@ -280,7 +294,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 9,010 Lua line ceiling under `src/`, recorded in
+The root has an 8,991 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

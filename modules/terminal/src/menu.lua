@@ -12,7 +12,7 @@ type State = {selected: integer, offset: integer, kind: string?, target: string?
 type Panel = {x: integer, y: integer, width: integer, height: integer, capacity: integer, inset: integer}
 type Response = {state: State, action: string, close: boolean}
 local M = {}
-function M.items(focused: boolean, initial: boolean, has_windows: boolean?, catalog: {Descriptor}?): {Item}
+function M.items(focused: boolean, initial: boolean, has_windows: boolean?, catalog: {Descriptor}?, failures: {Item}?): {Item}
     local items: {Item} = {}
     local apps: {Item} = {}
     local advanced: {Item} = {}
@@ -25,6 +25,18 @@ function M.items(focused: boolean, initial: boolean, has_windows: boolean?, cata
         elseif descriptor.role == "inspection" or descriptor.role == "governance" or descriptor.role == "overlays" or descriptor.role == "hive" or descriptor.role == "timeline" or descriptor.role == "modules" then
             advanced[#advanced + 1] = item
         else apps[#apps + 1] = item end
+    end
+    if failures and #failures > 0 then
+        apps[#apps + 1] = {label = "Restoration failures", action = "group:restoration", enabled = true, children = failures}
+        for _, value in ipairs(items) do
+            local item: Item = value
+            if item.label == "Needs you" then
+                local original: Item = {label = "Approvals", action = item.action, enabled = true}
+                local children: {Item} = {original}
+                for _, failure in ipairs(failures) do children[#children + 1] = failure end
+                item.action, item.children = "group:attention", children
+            end
+        end
     end
     if #advanced > 0 then apps[#apps + 1] = {label = "Advanced", action = "group:advanced", enabled = true, children = advanced} end
     items[#items + 1] = {label = "Apps", action = "group:apps", enabled = true, children = apps}
@@ -40,7 +52,7 @@ local function descend(items: {Item}, path: {integer}?): {Item}
     end
     return items
 end
-function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: {Descriptor}?, transfers: TransferSnapshot?, display_id: string?): {Item}
+function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: {Descriptor}?, transfers: TransferSnapshot?, display_id: string?, failures: {Item}?): {Item}
     if state.kind == "window" then
         for _, win in ipairs(scene.windows) do
             if win.id == state.target then
@@ -90,7 +102,7 @@ function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: 
         items[#items + 1] = {label = "Reload desktop", shortcut = "F12", action = "rejoin", enabled = true}
         return items
     end
-    local items = M.items(scene.focus ~= "", initial, #scene.windows > 0, catalog)
+    local items = M.items(scene.focus ~= "", initial, #scene.windows > 0, catalog, failures)
     for _, index in ipairs(state.path or {}) do
         local item = items[index]
         if item and item.children then items = item.children else break end

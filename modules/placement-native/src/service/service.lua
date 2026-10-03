@@ -762,9 +762,11 @@ function M.close_stdin(value: unknown): Reply
     if probe_error or not probe then return fail("INTERNAL", "probe") end
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STDIN, {message = true}))
-    process.send(runner, protocol.TOPIC_CONTROL, {command = "close_stdin", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
     local events = assert(process.events())
-    assert(process.monitor(runner))
+    local monitored, monitor_error = process.monitor(runner)
+    if not monitored then process.unlisten(replies); return fail("UNAVAILABLE", "Monitor stdin closure runner: " .. tostring(monitor_error)) end
+    local sent, send_error = process.send(runner, protocol.TOPIC_CONTROL, {command = "close_stdin", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
+    if not sent then process.unmonitor(runner); process.unlisten(replies); return fail("UNAVAILABLE", "Send stdin closure: " .. tostring(send_error)) end
     local answer: protocol.StdinReply? = nil
     while not answer do
         local selected = channel.select({replies:case_receive(), events:case_receive()})
@@ -804,10 +806,11 @@ local function runner_status(row: store.Row?, attempt: types.Attempt): (string?,
     if probe_error or not probe then return nil, nil end
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STATUS, {message = true}))
-    process.send(runner, protocol.TOPIC_CONTROL, {command = "status", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
     local events = assert(process.events())
     local monitored, monitor_error = process.monitor(runner)
     if not monitored then process.unlisten(replies); return nil, "runner monitor failed: " .. tostring(monitor_error) end
+    local sent, send_error = process.send(runner, protocol.TOPIC_CONTROL, {command = "status", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
+    if not sent then process.unmonitor(runner); process.unlisten(replies); return nil, "runner status send failed: " .. tostring(send_error) end
     local detail: string? = nil
     local execution: string? = nil
     while true do
@@ -1134,9 +1137,11 @@ function M.attach(value: unknown): Reply
         -- caller holding the reply knows the previous recipient is fenced
         -- at the execution channel, not only at the thread.
         local fences = assert(process.listen(protocol.TOPIC_FENCED, {message = true}))
-        process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", control_token = control_token, recipient = recipient, generation = generation})
         local events = assert(process.events())
-        assert(process.monitor(runner))
+        local monitored, monitor_error = process.monitor(runner)
+        if not monitored then process.unlisten(fences); return fail("UNAVAILABLE", "Monitor fencing runner: " .. tostring(monitor_error)) end
+        local sent, send_error = process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", control_token = control_token, recipient = recipient, generation = generation})
+        if not sent then process.unmonitor(runner); process.unlisten(fences); return fail("UNAVAILABLE", "Send runner fence: " .. tostring(send_error)) end
         local fenced = false
         local answered = false
         local refused = false

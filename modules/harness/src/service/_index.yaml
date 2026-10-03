@@ -68,6 +68,7 @@ entries:
   - process
   - channel
   - time
+  - logger
   - funcs
   - uuid
   imports:

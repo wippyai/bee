@@ -140,7 +140,7 @@ entries:
 - name: interrupted
   kind: library.lua
   source: file://interrupted.lua
-  modules: [funcs, channel, time, uuid]
+  modules: [funcs, channel, process, time, uuid]
   imports:
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint

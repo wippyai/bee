@@ -35,7 +35,6 @@ local function open(extra: Object?): hooks.State
         session_ref = "session-home",
         gateway_binding = "bind-1",
         hooks_enabled = true,
-        drain_ms = 40,
         decoder = decoder,
     }
     if extra then
@@ -76,7 +75,6 @@ local function config(extra: Object?): hooks.Config
         session_ref = "session-home",
         gateway_binding = "bind-1",
         hooks_enabled = true,
-        drain_ms = 40,
         decoder = decoder,
     }
     if extra then

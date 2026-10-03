@@ -84,19 +84,20 @@ function M.handle(raw: unknown): {[string]: unknown}
         process.registry.unregister(caller_token, process.registry.LOCAL)
         return fail("UNAVAILABLE", tostring(listen_error or "open reply channel unavailable"))
     end
-    local sent, send_error = process.send(host, "bee.host.application", {version = 1, workspace_id = workspace_id,
-        request_id = request, definition_id = definition_id, arguments = args, caller_token = caller_token, origin_view = origin,
-        provenance = provenance, presentation = presentation_session ~= nil and true or nil})
-    if not sent then
-        process.unlisten(replies)
-        process.registry.unregister(caller_token, process.registry.LOCAL)
-        return fail("UNAVAILABLE", tostring(send_error or "workspace host rejected request"))
-    end
     local signals = assert(process.events())
     local monitored, monitor_error = process.monitor(host)
     if not monitored then
         process.unlisten(replies); process.registry.unregister(caller_token, process.registry.LOCAL)
         return fail("UNAVAILABLE", "Monitor application host: " .. tostring(monitor_error))
+    end
+    local sent, send_error = process.send(host, "bee.host.application", {version = 1, workspace_id = workspace_id,
+        request_id = request, definition_id = definition_id, arguments = args, caller_token = caller_token, origin_view = origin,
+        provenance = provenance, presentation = presentation_session ~= nil and true or nil})
+    if not sent then
+        process.unmonitor(host)
+        process.unlisten(replies)
+        process.registry.unregister(caller_token, process.registry.LOCAL)
+        return fail("UNAVAILABLE", tostring(send_error or "workspace host rejected request"))
     end
     local interrupted = "Application reply channel closed"
     local reply: protocol.Reply? = nil

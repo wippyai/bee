@@ -61,11 +61,15 @@ local function register_lifetime(owner_node: string): (string?, string?)
     ticket = ticket:gsub("-", "")
     local replies, listen_error = process.listen(protocol.LIFETIME_REPLY .. ticket, {message = true})
     if not replies then return nil, tostring(listen_error) end
+    local signals = assert(process.events())
+    local monitored, monitor_error = process.monitor(supervisor)
+    if not monitored then process.unlisten(replies); return nil, "Monitor lifetime supervisor: " .. tostring(monitor_error) end
     local sent, send_error = process.send(supervisor, protocol.LIFETIME,
         {version = 1, op = "register", ticket = ticket, owner_node = owner_node})
-    if not sent or send_error then process.unlisten(replies); return nil, "local lifetime registration unavailable" end
-    local signals = assert(process.events())
-    assert(process.monitor(supervisor))
+    if not sent or send_error then
+        process.unmonitor(supervisor); process.unlisten(replies)
+        return nil, "Send lifetime registration: " .. tostring(send_error)
+    end
     local result: string? = nil
     while true do
         local selected = channel.select({replies:case_receive(), signals:case_receive()})

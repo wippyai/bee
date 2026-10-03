@@ -1,12 +1,12 @@
 -- SPDX-License-Identifier: MIT
--- One bounded asynchronous read of this node's defaults. The host grants the
+-- One asynchronous read of this node's defaults. The host grants the
 -- function and read permission; this reader never selects an actor or scope.
 local funcs = require("funcs")
 local channel = require("channel")
 local appearance = require("appearance")
 type Channel = channel.Channel
 type Snapshot = {node_id: string, revision: integer, preferences: appearance.Preferences}
-type Pending = {future: funcs.Future, response: Channel<unknown>, deadline: integer}
+type Pending = {future: funcs.Future, response: Channel<unknown>}
 type Reader = {pending: Pending?, due: integer, closed: boolean}
 local M = {}
 function M.decode(value: unknown): Snapshot?
@@ -28,12 +28,7 @@ end
 function M.advance(reader: Reader, now: integer): Pending?
     if reader.closed then return nil end
     local pending = reader.pending
-    if pending then
-        if now < pending.deadline then return pending end
-        reader.pending = nil
-        pending.future:cancel()
-        reader.due = now + 5000
-    end
+    if pending then return pending end
     if now < reader.due then return nil end
     reader.due = now + 5000
     local future, err = funcs.async("bee.node.binding:get_appearance", {})
@@ -42,7 +37,7 @@ function M.advance(reader: Reader, now: integer): Pending?
     -- still leaves its generic element type unspecified.
     local response = future:response()
     if not response then future:cancel(); return nil end
-    local next: Pending = {future = future, response = response, deadline = now + 5000}
+    local next: Pending = {future = future, response = response}
     reader.pending = next
     return next
 end

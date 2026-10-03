@@ -8,6 +8,7 @@ local delivery = require("delivery")
 local records = require("records")
 local funcs = require("funcs")
 local channel = require("channel")
+local process = require("process")
 local time = require("time")
 local uuid = require("uuid")
 local M = {}
@@ -16,7 +17,6 @@ type Resume = (hooks.Config, checkpoint.Checkpoint?, integer) -> (hooks.State?, 
 local function placement_target(request: continuation.Request, method: string): string?
     return request.placement_methods[method]
 end
-local BUDGET_MS = 5000
 local function now(): integer return math.floor(time.now():unix_nano() / 1000000) end
 local function key(): string
     local id, err = uuid.v7()
@@ -85,13 +85,14 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
         epoch = epoch, binding_ref = previous.point.binding_ref, binding_digest = previous.point.binding_digest,
         profile_id = previous.point.profile_id, profile_digest = previous.point.profile_digest,
         plan_digest = point.plan_digest, session_ref = request.session_ref,
-        gateway_binding = previous.binding, hooks_enabled = true, drain_ms = BUDGET_MS, decoder = records.batch}, point, revision)
+        gateway_binding = previous.binding, hooks_enabled = true, decoder = records.batch}, point, revision)
     if not state then return false, state_error end
     local driver = delivery.new(state, function(intent: hooks.Intent): (funcs.Future?, string?)
         local future, err = funcs.async(intent.target, intent.request)
         if err then return nil, tostring(err) end
         return future, nil
     end, key)
+    local signals = assert(process.events())
     local draining = false
     while true do
         if hooks.may_start(state) and not draining then
@@ -101,7 +102,7 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
         if hooks.finished(state) then break end
         local pending = delivery.advance(driver, now())
         local timer: time.Timer? = nil
-        local cases = {}
+        local cases = {signals:case_receive()}
         if pending then cases[#cases + 1] = pending.response:case_receive()
         else
             timer = assert(time.timer(tostring(math.max(1, delivery.due(driver) - now())) .. "ms"))
@@ -110,6 +111,10 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
         local selected = channel.select(cases)
         if timer then timer:stop() end
         if not selected.ok then delivery.cancel(driver); return false, "interrupted window hook delivery channel closed" end
+        if selected.channel == signals and selected.value.kind == process.event.CANCEL then
+            delivery.cancel(driver)
+            return false, "interrupted window hook recovery cancelled"
+        end
         if pending and selected.channel == pending.response then delivery.complete(driver, pending, now()) end
     end
     delivery.cancel(driver)

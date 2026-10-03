@@ -17,6 +17,7 @@ entries:
   imports:
     test: wippy.test:test
     lifecycle: bee.client:lifecycle
+    node_appearance: bee.client:node_appearance
 - name: inbox_test
   kind: function.lua
   source: file://inbox_test.lua

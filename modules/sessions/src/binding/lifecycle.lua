@@ -38,7 +38,7 @@ local function handle(raw: unknown): unknown
     local inbox = assert(process.listen(topic, {message = true}))
     assert(process.monitor(scheduler))
     local sent, problem = process.send(scheduler, lifecycle.TOPIC, {request = request, topic = topic})
-    if not sent then process.unlisten(inbox); error(tostring(problem)) end
+    if not sent then process.unmonitor(scheduler); process.unlisten(inbox); error(tostring(problem)) end
     while true do
         local selected = channel.select({inbox:case_receive(), signals:case_receive()})
         if not selected.ok then process.unmonitor(scheduler); process.unlisten(inbox); error("scheduler lifecycle reply channel closed") end

@@ -326,7 +326,7 @@ local function define_tests()
                 local disabled: hooks.Config = {thread_id = config.thread_id, attempt_id = config.attempt_id, epoch = config.epoch,
                     binding_ref = config.binding_ref, binding_digest = config.binding_digest, profile_id = config.profile_id,
                     profile_digest = config.profile_digest, plan_digest = config.plan_digest, session_ref = config.session_ref,
-                    gateway_binding = nil, hooks_enabled = false, drain_ms = config.drain_ms, decoder = config.decoder}
+                    gateway_binding = nil, hooks_enabled = false, decoder = config.decoder}
                 local state = hooks.new(disabled)
                 state.started = true
                 return state, nil

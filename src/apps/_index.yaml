@@ -40,7 +40,7 @@ entries:
 - name: execution
   kind: library.lua
   source: file://execution.lua
-  modules: [process, security, channel, time]
+  modules: [process, security, channel, time, logger]
 - name: principal
   kind: library.lua
   source: file://principal.lua

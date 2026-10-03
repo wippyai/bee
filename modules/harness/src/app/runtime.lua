@@ -172,9 +172,10 @@ local function persist_checkpoint(state: hooks.State): (boolean, string?)
 end
 
 local function drain_hooks(driver: delivery.Driver)
+    local signals = assert(process.events())
     local pending = delivery.advance(driver, now_ms())
     while not hooks.finished(driver.state) do
-        local cases = {}
+        local cases = {signals:case_receive()}
         if pending then cases[#cases + 1] = pending.response:case_receive() end
         local timer: time.Timer? = nil
         if not pending then
@@ -184,6 +185,11 @@ local function drain_hooks(driver: delivery.Driver)
         end
         local selected = channel.select(cases)
         if timer then timer:stop() end
+        if not selected.ok then delivery.cancel(driver); error("Window hook drain channel closed") end
+        if selected.channel == signals and selected.value.kind == process.event.CANCEL then
+            delivery.cancel(driver)
+            error("Window hook drain cancelled")
+        end
         if pending and selected.channel == pending.response then
             delivery.complete(driver, pending, now_ms())
         end
@@ -368,9 +374,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     end
     if not selected and not restoring then
         -- Resolution, setup, admission, preparation and the native open are
-        -- durable work of unbounded length. Keep the broker's readiness
-        -- deadline independent of it, as the restore path does: the surface
-        -- is ready as soon as it says what it is doing.
+        -- durable work of unbounded length. The surface publishes
+        -- readiness as soon as it can show progress, as the restore path does.
         local output = assert(tty.surface())
         local width, height = tty.screen_size()
         local frame = restore_view.draw(width, height, appearance.defaults(), "Preparing the Agent launch…", "Starting Agent", "")
@@ -420,8 +425,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local request = recovery_request(request_id, restored.plan_digest, false)
 
         -- Admission may reconcile a dead native process and drain gateway
-        -- hooks. Keep the broker's readiness deadline independent of that
-        -- work: the surface is ready as soon as it can explain what it is
+        -- hooks. The surface is ready as soon as it can explain what it is
         -- doing and accept cancellation.
         local output = assert(tty.surface())
         local width, height = tty.screen_size()
@@ -746,7 +750,6 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         session_ref = plan.request.session_ref,
         gateway_binding = prepared.gateway_binding,
         hooks_enabled = gateway ~= nil and #gateway.hooks > 0,
-        drain_ms = plan.policy.drain_ms,
         decoder = records.batch,
     })
     local driver = delivery.new(state, start_intent, transport.key)

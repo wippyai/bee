@@ -21,13 +21,13 @@ entries:
   source: file://desktop_lifecycle.lua
   modules: [process, security, channel, time, uuid, logger]
   imports:
-    desktops: bee.client:desktops
-    attachments: bee.client:attachments
+    desktops: bee.client.binding:desktops
+    attachments: bee.client.binding:attachments
     decode: bee.protocol:decode
     protocol: bee.launch:protocol
     contract: bee.protocol:application
     retained_protocol: bee.launch:retained_protocol
-    handoff: bee.client:handoff
+    handoff: bee.client.types:handoff
 - name: desktop_storage
   kind: library.lua
   source: file://desktop_storage.lua
@@ -41,7 +41,7 @@ entries:
     types: bee.hive:types
     bounds: bee.values:bounds
     arguments: bee.app:arguments
-    clipboard: bee.client:clipboard
+    clipboard: bee.client.types:clipboard
     contract: bee.protocol:application
 - name: headless
   kind: process.lua
@@ -65,8 +65,8 @@ entries:
   source: file://bootstrap.lua
   modules: [process, channel, tty, security, time]
   imports:
-    physical: bee.terminal:display
-    input_decode: bee.protocol:input
+    physical: bee.launch:display
+    input_decode: bee.terminal.types:input
     contract: bee.protocol:application
     decode: bee.protocol:decode
     workspaces: bee.workspace.types:selection
@@ -88,12 +88,12 @@ entries:
   method: main
   modules: [process, channel, security, ctx, time, uuid, logger]
   imports: &supervisor_imports
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
     workspaces: bee.workspace.types:selection
     desktop_lifecycle: bee.launch:desktop_lifecycle
     desktop_storage: bee.launch:desktop_storage
-    desktops: bee.client:desktops
-    attachments: bee.client:attachments
+    desktops: bee.client.binding:desktops
+    attachments: bee.client.binding:attachments
     retained_protocol: bee.launch:retained_protocol
     protocol: bee.launch:protocol
     contract: bee.protocol:application
@@ -112,12 +112,12 @@ entries:
   - uuid
   - logger
   imports:
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
     workspaces: bee.workspace.types:selection
     desktop_lifecycle: bee.launch:desktop_lifecycle
     desktop_storage: bee.launch:desktop_storage
-    desktops: bee.client:desktops
-    attachments: bee.client:attachments
+    desktops: bee.client.binding:desktops
+    attachments: bee.client.binding:attachments
     retained_protocol: bee.launch:retained_protocol
     protocol: bee.launch:protocol
     contract: bee.protocol:application
@@ -151,7 +151,7 @@ entries:
   method: main
   modules: [process, channel, time, io, system, logger, env]
   imports:
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
     command_stop: bee.launch:command_stop
     types: bee.hive:types
   meta:
@@ -168,7 +168,7 @@ entries:
   source: file://command_stop.lua
   modules: [process, channel, system]
   imports:
-    owner_stop: bee.hive.supervisor:owner_stop
+    owner_stop: bee.hive.types:owner_stop
     types: bee.hive:types
 - name: hosts
   kind: library.lua
@@ -181,7 +181,14 @@ entries:
   imports:
     clock: bee.values:clock
     hosts: bee.launch:hosts
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
     protocol: bee.launch:protocol
     decode: bee.protocol:decode
     contract: bee.protocol:application
+- name: display
+  kind: library.lua
+  source: file://display.lua
+  modules: [tty]
+  imports:
+    chrome: bee.terminal:chrome
+    appearance: bee.ui:appearance

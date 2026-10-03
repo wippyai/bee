@@ -125,7 +125,7 @@ entries:
   - system
   imports:
     bounds: bee.values:bounds
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
   meta:
     comment: Open Hive operation paging this node's live workspace holdings with each
       host phase and lease count
@@ -267,8 +267,8 @@ entries:
     status: bee.hive.telemetry.binding:status_model
     client: bee.hive.binding:client
     types: bee.hive:types
-    capability_access: bee.gov.capability:capability_access
-    capability_gateway: bee.gov.capability:capability_gateway
+    capability_access: bee.gov.binding:capability_access
+    capability_gateway: bee.gov.types:capability_gateway
   security:
     policies: []
 - name: detail

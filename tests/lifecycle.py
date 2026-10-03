@@ -100,7 +100,7 @@ def run():
                     ui.close()
         # Retry the same operation identity. First launch is root-generated;
         # every later presenter open uses one fixed request ID in this fixture.
-        presenter = project / "src/terminal/main.lua"
+        presenter = project / "modules/terminal/src/service/main.lua"
         text = presenter.read_text()
         anchor = 'request_id = uuid.v7(), op = op, workspace_id = workspace_id,\n            definition_id'
         assert text.count(anchor) == 1, "Presenter retry injection point changed"

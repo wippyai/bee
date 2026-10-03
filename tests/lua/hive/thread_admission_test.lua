@@ -13,7 +13,6 @@ local registry = require("registry")
 local time = require("time")
 local uuid = require("uuid")
 local types = require("types")
-local principals = require("principals")
 local adapter = require("admission")
 local harness = require("harness")
 local sends = require("sends")
@@ -32,7 +31,7 @@ local ALPHA, BETA = subject("a1"), subject("a2")
 local MEMBER_POLICIES = {"bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.hive:hive_thread_invoke_policy"}
 local UNINVOKING = {"bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy"}
 local function install(mappings: {Object})
-    local entry = registry.get(principals.ENTRY)
+    local entry = registry.get(types.PRINCIPAL_MAPPINGS_ENTRY)
     if not entry then error("mappings entry") end
     (assert(bounds.object(entry.data))).mappings = mappings
     local changes = registry.snapshot():changes()
@@ -40,12 +39,12 @@ local function install(mappings: {Object})
     local applied, err = changes:apply()
     if not applied then error("install mappings: " .. tostring(err)) end
 end
-local ALPHA_ACTOR, BETA_ACTOR = principals.actor_of(REMOTE, ALPHA), principals.actor_of(REMOTE, BETA)
+local ALPHA_ACTOR, BETA_ACTOR = types.principal_actor(REMOTE, ALPHA), types.principal_actor(REMOTE, BETA)
 local function both()
     install({{issuer = REMOTE, subject_id = ALPHA, policies = MEMBER_POLICIES}, {issuer = REMOTE, subject_id = BETA, policies = MEMBER_POLICIES}})
 end
-local function current_mappings(): principals.Mappings
-    local mappings, err = adapter.mappings(registry.get(principals.ENTRY))
+local function current_mappings(): types.PrincipalMappings
+    local mappings, err = adapter.mappings(registry.get(types.PRINCIPAL_MAPPINGS_ENTRY))
     if not mappings then error(tostring(err)) end
     return mappings
 end
@@ -197,13 +196,13 @@ local function define_tests()
             both()
             local thread_id = thread_with_members()
             local request = forwarded("bee.threads.binding:send", send_input(thread_id, "k-1", "through the worker"), BETA)
-            local raw, err = funcs.call("bee.threads.hive:admit", request)
+            local raw, err = funcs.call("bee.threads.hive.binding:admit", request)
             if err then error("admit_thread: " .. tostring(err)) end
             local reply = raw
             test.eq(reply.request_id, request.request_id)
             test.eq(value(reply).sequence, 1)
             local denied = forwarded("bee.threads.binding:send", send_input(thread_id, "k-2", "unmapped"), subject("a9"))
-            local raw_denied = funcs.call("bee.threads.hive:admit", denied)
+            local raw_denied = funcs.call("bee.threads.hive.binding:admit", denied)
             test.eq(code(raw_denied), "DENIED")
         end)
     end)

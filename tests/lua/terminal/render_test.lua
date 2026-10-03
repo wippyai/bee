@@ -33,7 +33,7 @@ local function define_tests()
             test.eq(scene.windows[1].instance_id, "instance")
         end)
         test.it("accepts only exact aggregate attachment state for its display", function()
-            local info = connection.new("{Antares@bee.client:main|one}", string.rep("a", 32),
+            local info = connection.new("{Antares@bee.client.service:main|one}", string.rep("a", 32),
                 string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
             test.eq(info.hive, "Supervisor ready")
             test.eq(info.attachments, "Not reported")
@@ -69,7 +69,7 @@ local function define_tests()
         end)
         test.it("shows the saved workspace label with the identity behind Details", function()
             local workspace = string.rep("c", 32)
-            local info = connection.new("{Antares@bee.client:main|one}", workspace,
+            local info = connection.new("{Antares@bee.client.service:main|one}", workspace,
                 string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
             connection.set_workspace_label(info, "ux-demo")
             local canvas = tty.canvas(100, 18)

@@ -35,6 +35,7 @@ local MIGRATION_ID = "bee.app_journey_demo:001"
 
 local APP_SOURCE = [[local tty = require("tty")
 local client = require("client")
+local threads = require("threads")
 local process = require("process")
 local channel = require("channel")
 local json = require("json")
@@ -147,7 +148,7 @@ local function main(value: unknown)
 
     local function run_thread_probe(thread_id: string)
         local function await(operation: ThreadOperation, arguments: Object): Object
-            local request_id, request_error = client.thread_request(launch, operation, arguments)
+            local request_id, request_error = threads.request(launch, operation, arguments)
             if not request_id then error(operation .. " request failed: " .. tostring(request_error)) end
             while true do
                 local selected = channel.select({thread_results:case_receive(), lifecycle:case_receive()})
@@ -156,7 +157,7 @@ local function main(value: unknown)
                     if selected.value.kind == process.event.CANCEL then error(operation .. " cancelled") end
                 else
                     local message = selected.value
-                    local reply = client.thread_result(launch, message:from(), operation, message:payload():data())
+                    local reply = threads.result(launch, message:from(), operation, message:payload():data())
                     if reply and reply.request_id == request_id then
                         if not reply.ok then
                             local failure = reply.error
@@ -242,7 +243,7 @@ local function main(value: unknown)
     local function recheck(recipient: string?)
         if not launch.thread_id then return end
         thread_status = "checking"; paint()
-        local request_id, request_error = client.thread_request(launch, "read", {cursor = 0, limit = 1})
+        local request_id, request_error = threads.request(launch, "read", {cursor = 0, limit = 1})
         if not request_id then error("fresh read request failed: " .. tostring(request_error)) end
         local deadline = time.after("5s")
         while true do
@@ -252,7 +253,7 @@ local function main(value: unknown)
                 if selected.value.kind == process.event.CANCEL then error("fresh read cancelled") end
             else
                 local message = selected.value
-                local reply = client.thread_result(launch, message:from(), "read", message:payload():data())
+                local reply = threads.result(launch, message:from(), "read", message:payload():data())
                 if reply and reply.request_id == request_id then
                     local code = reply.error and tostring(reply.error.code) or ""
                     if reply.ok then thread_status = "active"
@@ -459,7 +460,7 @@ local function main()
 
     seed_shared_database()
     local entries = {{id = DEFINITION_ID, kind = "process.lua", data = {source = APP_SOURCE, method = "main",
-        modules = {"tty", "process", "channel", "json", "time"}, imports = {client = "bee.app:client"}},
+        modules = {"tty", "process", "channel", "json", "time"}, imports = {client = "bee.app:client", threads = "bee.app.threads:client"}},
         meta = {type = "bee.app", application = {api_version = 1, lifetime = "view", revision = "1",
             title = APP_TITLE, instance_policy = "multiple", resume_schema = "app-journey.v1",
             restart_policy = "automatic"}}},

@@ -18,7 +18,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    delivery: bee.terminal:delivery
+    delivery: bee.terminal.service:delivery
 - name: render_test
   kind: function.lua
   source: file://render_test.lua
@@ -33,12 +33,12 @@ entries:
     layout: bee.desktop:layout
     render: bee.terminal:render
     chrome: bee.terminal:chrome
-    bindings: bee.terminal:bindings
+    bindings: bee.terminal.types:bindings
     menu: bee.terminal:menu
     selection: bee.terminal:selection
     connection: bee.terminal:connection
     appearance: bee.ui:appearance
-    surface: bee.app:status_surface
+    surface: bee.app.threads.types:status_surface
     names: bee.app:names
 - name: title_editor_test
   kind: function.lua

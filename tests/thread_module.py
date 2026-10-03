@@ -9,16 +9,23 @@ from workspace import ROOT, RUNTIME, stage_values
 
 MODULE = ROOT / "modules/threads"
 PERSIST = ROOT / "modules/persist"
-HIVE = ROOT / "modules/hive"
 HOST = ROOT / "tests/fixtures/modules/threads/src"
 
 
 def stage(folder, mutate=None):
     shutil.copytree(MODULE, folder / "modules/threads")
     shutil.copytree(PERSIST, folder / "modules/persist")
-    shutil.copytree(HIVE, folder / "modules/hive")
     shutil.copytree(HOST, folder / "src/host")
     stage_values(folder)
+    # Compile the optional adapter against Hive's real public value contract;
+    # the isolated owner has no Hive implementation or supervisor dependency.
+    protocol = folder / "src/hive"
+    protocol.mkdir()
+    shutil.copy2(ROOT / "modules/hive/src/types.lua", protocol / "types.lua")
+    hive_index = yaml.safe_load((ROOT / "modules/hive/src/_index.yaml").read_text())
+    public_types = next(entry for entry in hive_index["entries"] if entry["name"] == "types")
+    (protocol / "_index.yaml").write_text(yaml.safe_dump(
+        {"version": "1.0", "namespace": "bee.hive", "entries": [public_types]}, sort_keys=False))
     # The staged services attach the production app policies.
     shutil.copytree(ROOT / "src/security/threads", folder / "src/security/threads")
     (folder / "wippy.lock").write_text("""directories:
@@ -28,8 +35,6 @@ modules:
   - name: bee/values
     version: 0.1.0-dev
   - name: bee/persist
-    version: 0.1.0-dev
-  - name: bee/hive
     version: 0.1.0-dev
   - name: bee/threads
     version: 0.1.0-dev
@@ -41,7 +46,6 @@ workspace:
   replacements:
     bee/values: ./modules/values
     bee/persist: ./modules/persist
-    bee/hive: ./modules/hive
     bee/threads: ./modules/threads
 """)
     if mutate:
@@ -61,7 +65,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bee-thread-module-") as directory:
         folder = stage(Path(directory))
         staged = sorted(str(p.relative_to(folder)) for p in folder.rglob("_index.yaml"))
-        expected = sorted([str(p.relative_to(ROOT)) for module in (MODULE, PERSIST, HIVE, ROOT / "modules/values") for p in module.rglob('_index.yaml')] + ['src/host/_index.yaml', 'src/security/threads/_index.yaml'])
+        expected = sorted([str(p.relative_to(ROOT)) for module in (MODULE, PERSIST, ROOT / "modules/values") for p in module.rglob('_index.yaml')] + ['src/host/_index.yaml', 'src/hive/_index.yaml', 'src/security/threads/_index.yaml'])
         assert staged == expected, staged
         run(folder, "lint")
         database = folder / "threads.db"

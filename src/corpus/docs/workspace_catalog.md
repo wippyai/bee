@@ -67,7 +67,7 @@ to offer a `create` or a launch folder. Browsing a root is its own action,
 `bee.workspace.manager.browse`: `bee.security.storage:workspace_catalog_manage_policy` grants it with
 management, and `bee.security.storage:workspace_folder_browse_policy` grants it with the
 catalog read `roots` needs and nothing else, which the Agent window holds for
-its folder choice. `bee.app:folder_picker` is the shared picker model
+its folder choice. `bee.ui.picker:folder` is the shared picker model
 and table both the Workspaces create flow and the Agent profile form use.
 
 **Inspect and search within.** `inspect` (`{workspace_id}`, read authority on
@@ -118,7 +118,7 @@ served (`managed = false`) instead of starting a second one.
 
 A lease is a process-registry name `bee.workspace.lease/<id>` its holder
 registers under the host-named policy `bee.security.desktop:workspace_host_lease_policy`.
-`bee.app:host_leases.acquire(workspace_id, timeout)` registers the name,
+`bee.workspace.client:host_leases.acquire(workspace_id, timeout)` registers the name,
 sends `bee.workspace.hosts.acquire` to the registered manager
 `bee.workspace.hosts` and waits for `bee.workspace.hosts.result`
 (`{host, managed}` or `error_code` `busy`, `unavailable`,
@@ -163,7 +163,7 @@ never stops the host, and its displays quit through their own lifecycle. A
 supervisor selected by the folder's root (classic mode and `bee start`) still
 spawns and owns its host.
 
-The desktop bridge in the Hive supervisor (`src/hive/desktop`) composes the
+The desktop bridge in the Hive supervisor (`modules/hive/src/desktop`) composes the
 folder workspace when the host selects it (`desktop.folder`, default true) and
 starts a leased supervisor for any other workspace a client attaches to, at
 most 32 at once; the workspace's last detach stops that supervisor and so
@@ -240,7 +240,7 @@ The command joins the owner as an enrolled local client and calls service
 an enrolled local client of its own node and only while the host grants it
 `bee.workspace.manager.command` on the operation (`bee.security.hive:workspace_command_policy`,
 selected for the supervisor service). It runs the command on its worker
-`bee.hive.supervisor:workspace_command`, which again requires that grant from
+`bee.hive.binding:workspace_command`, which again requires that grant from
 its caller and calls the catalog operation under the policies the host attaches
 to the worker (`bee.security.storage:workspace_catalog_read_policy`,
 `bee.security.storage:workspace_catalog_manage_policy`, `bee.security.hive:workspace_command_catalog_policy`);
@@ -265,7 +265,7 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   it; otherwise it shows a workspace picker (one catalog page, `/` label
   search, PgUp/PgDn paging, Enter to open). Ctrl+] detaches and returns to the
   picker; Ctrl+Q leaves.
-- **Hive member**: `bee.hive.api:workspaces` is an open Hive operation that
+- **Hive member**: `bee.hive.binding:workspaces` is an open Hive operation that
   pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
   next_after?}`, each row with whether a host serves it); the Hive app lists and
   searches the selected node's workspaces through it. A Hive display client
@@ -273,7 +273,7 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   `desktop.allowed_peers`) attaches to any of the
   node's workspaces by identity through the bridge's lease path. The Hive
   Manager's Control and Observe open the selected workspace of another node as
-  a remote view in its window: a view process (`bee.hive.desktop:viewer`) on
+  a remote view in its window: a view process (`bee.hive.service:viewer`) on
   the display client host lists the owner's displays naming no execution,
   attaches through that node's bridge (control reuses a display without a
   controller and allocates one only after definite `DESKTOP_CONTROLLED`

@@ -5,26 +5,26 @@ entries:
   kind: function.lua
   source: file://grant_window_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: node_summary
   kind: function.lua
   source: file://node_summary_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: request
   kind: function.lua
   source: file://request_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: feed_snapshot
   kind: function.lua
   source: file://feed_snapshot_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
   meta:
     hive: policy
@@ -54,7 +54,7 @@ entries:
   source: file://feed_read_after_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security:
     policies: []
   meta:
@@ -136,7 +136,7 @@ entries:
   source: file://decide_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security:
     policies: []
 - name: decide_batch
@@ -144,7 +144,7 @@ entries:
   source: file://decide_batch_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: withdraw
   kind: function.lua
@@ -175,7 +175,7 @@ entries:
   source: file://withdraw_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security:
     policies: []
 - name: consume
@@ -183,38 +183,38 @@ entries:
   source: file://consume_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: installation_effects
   kind: function.lua
   source: file://installation_effects_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: complete_installation_effect
   kind: function.lua
   source: file://complete_installation_effect_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: publication_effects
   kind: function.lua
   source: file://publication_effects_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: complete_publication_effect
   kind: function.lua
   source: file://complete_publication_effect_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: revalidate
   kind: function.lua
   source: file://revalidate_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: read
   kind: function.lua
@@ -245,7 +245,7 @@ entries:
   source: file://read_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security:
     policies: []
 - name: inbox
@@ -253,28 +253,28 @@ entries:
   source: file://inbox_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: list
   kind: function.lua
   source: file://list_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: reconcile
   kind: function.lua
   source: file://reconcile_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua
   method: handle
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
   security: {policies: []}
 - name: deliveries
   kind: function.lua
@@ -283,21 +283,21 @@ entries:
   modules: [security]
   imports:
     bounds: bee.values:bounds
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
     outbox: bee.approvals.persist:outbox
   security: {policies: []}
 - name: attention_count
   kind: function.lua
   source: file://attention_count_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 
 - name: runtime_lease
   kind: function.lua
   source: file://runtime_lease_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
+  imports: {service: bee.approvals.binding:service}
   security: {policies: []}
 - name: local
   kind: contract.binding
@@ -324,3 +324,21 @@ entries:
       deliveries: bee.approvals.binding:deliveries
       reconcile: bee.approvals.binding:reconcile
       capabilities: bee.approvals.binding:capabilities
+- name: service
+  kind: library.lua
+  source: file://service.lua
+  modules: [sql, hash, uuid, json, security, system, process, funcs]
+  imports:
+    windows: bee.approvals.types:windows
+    runtime_lease: bee.approvals.types:runtime_lease
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    values: bee.threads.records:values
+    clock: bee.values:clock
+    persist: bee.persist.persist:database
+    transaction: bee.persist.persist:transaction
+    migrations: bee.approvals.migrations:migrations
+    identity_migration: bee.approvals.persist:identity_migration
+    resources: bee.approvals.env:resources
+    store: bee.approvals.persist:store
+    outbox: bee.approvals.persist:outbox

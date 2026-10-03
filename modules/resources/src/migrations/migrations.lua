@@ -1078,6 +1078,54 @@ UPDATE bee_resource_associations SET root_ref = 'bee.persist.env:startup_progres
 UPDATE bee_resource_grants SET root_ref = 'bee.app.status:startup_progress' WHERE root_ref = 'bee.app:startup_progress';
 UPDATE bee_resource_grants SET root_ref = 'bee.persist.env:startup_progress' WHERE root_ref = 'bee.persist:startup_progress';
 ]]
+local HIVE_REFERENCES_SQL = [[
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:inbox_sender' WHERE root_ref = 'bee.hive.service:inbox_sender';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:replica_sender' WHERE root_ref = 'bee.hive.service:replica_sender';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:peers' WHERE root_ref = 'bee.hive.supervisor:peers';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:registration' WHERE root_ref = 'bee.hive.supervisor:registration';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:enrollment' WHERE root_ref = 'bee.hive.supervisor:enrollment';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:invites' WHERE root_ref = 'bee.hive.supervisor:invites';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:admission' WHERE root_ref = 'bee.hive.supervisor:admission';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.service:supervisor' WHERE root_ref = 'bee.hive.supervisor:main';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:owner_stop' WHERE root_ref = 'bee.hive.supervisor:owner_stop';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:workspace_commands' WHERE root_ref = 'bee.hive.supervisor:workspace_commands';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:workspace_command' WHERE root_ref = 'bee.hive.supervisor:workspace_command';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:advertise' WHERE root_ref = 'bee.hive.supervisor:advertise';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:audiences' WHERE root_ref = 'bee.hive.supervisor:audiences';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:policy_admission' WHERE root_ref = 'bee.hive.supervisor:policy_admission';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:admit_policy' WHERE root_ref = 'bee.hive.supervisor:admit_policy';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:adapters' WHERE root_ref = 'bee.hive.supervisor:adapters';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:dispatch' WHERE root_ref = 'bee.hive.supervisor:dispatch';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:execute' WHERE root_ref = 'bee.hive.supervisor:execute';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.binding:workspaces' WHERE root_ref = 'bee.hive.api:workspaces';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:workspaces_page' WHERE root_ref = 'bee.hive.api:workspaces_page';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.types:workspace_query' WHERE root_ref = 'bee.hive.workspace:workspace_query';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.service:display_command' WHERE root_ref = 'bee.hive.desktop:command';
+UPDATE bee_resource_associations SET root_ref = 'bee.hive.service:viewer' WHERE root_ref = 'bee.hive.desktop:viewer';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:inbox_sender' WHERE root_ref = 'bee.hive.service:inbox_sender';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:replica_sender' WHERE root_ref = 'bee.hive.service:replica_sender';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:peers' WHERE root_ref = 'bee.hive.supervisor:peers';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:registration' WHERE root_ref = 'bee.hive.supervisor:registration';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:enrollment' WHERE root_ref = 'bee.hive.supervisor:enrollment';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:invites' WHERE root_ref = 'bee.hive.supervisor:invites';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:admission' WHERE root_ref = 'bee.hive.supervisor:admission';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.service:supervisor' WHERE root_ref = 'bee.hive.supervisor:main';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:owner_stop' WHERE root_ref = 'bee.hive.supervisor:owner_stop';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:workspace_commands' WHERE root_ref = 'bee.hive.supervisor:workspace_commands';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:workspace_command' WHERE root_ref = 'bee.hive.supervisor:workspace_command';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:advertise' WHERE root_ref = 'bee.hive.supervisor:advertise';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:audiences' WHERE root_ref = 'bee.hive.supervisor:audiences';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:policy_admission' WHERE root_ref = 'bee.hive.supervisor:policy_admission';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:admit_policy' WHERE root_ref = 'bee.hive.supervisor:admit_policy';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:adapters' WHERE root_ref = 'bee.hive.supervisor:adapters';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:dispatch' WHERE root_ref = 'bee.hive.supervisor:dispatch';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:execute' WHERE root_ref = 'bee.hive.supervisor:execute';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.binding:workspaces' WHERE root_ref = 'bee.hive.api:workspaces';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:workspaces_page' WHERE root_ref = 'bee.hive.api:workspaces_page';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.types:workspace_query' WHERE root_ref = 'bee.hive.workspace:workspace_query';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.service:display_command' WHERE root_ref = 'bee.hive.desktop:command';
+UPDATE bee_resource_grants SET root_ref = 'bee.hive.service:viewer' WHERE root_ref = 'bee.hive.desktop:viewer';
+]]
 local DESKTOP_REFERENCES_SQL = [[
 UPDATE bee_resource_associations SET root_ref = 'bee.desktop.service:main' WHERE root_ref = 'bee.session:main';
 UPDATE bee_resource_grants SET root_ref = 'bee.desktop.service:main' WHERE root_ref = 'bee.session:main';
@@ -1088,6 +1136,7 @@ local list: {Migration} = {
     {id = 3, name = "resources_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
     {id = 4, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
     {id = 5, name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false},
+        {id = 6, name = "hive_component_references", sql = HIVE_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

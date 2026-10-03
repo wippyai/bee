@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 5172,
+      "bytes": 5274,
       "id": "docs/readme",
-      "sha256": "223ce1f8059d95521f1e97cf203345a33d0112d318045be89364b76987851e6f",
+      "sha256": "7bf23e276f139165fe15c2a42ed6e3bc6d46773792e97e1ebf9a656a11971f15",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 24798,
+      "bytes": 25263,
       "id": "docs/application_contracts",
-      "sha256": "db053eb239cbb7854ea14c6b0852b907bd6c9cc6250a3a439e17aded5c8ed4b6",
+      "sha256": "5bf806f22fcce228a97fe6264d5381133213d6d3b77c5aa888b54ab55a8e0593",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 10012,
+      "bytes": 9991,
       "id": "component/application",
-      "sha256": "319c3f3f9d919ea78953213dc7e9566355a4ae94baf52d3e3f61eec59f1eb98e",
+      "sha256": "ea63e5aaa63577054cedba9db7f64d695e5c0e5cd9af79efbb86211928b37c01",
       "source": "modules/application/src/README.md",
       "title": "bee.app",
       "topic": "component"
@@ -435,9 +435,9 @@
       "topic": "component"
     },
     {
-      "bytes": 13327,
+      "bytes": 13937,
       "id": "component/harness",
-      "sha256": "7bec6da49e1064f8123b62b04ca9384865f397185aef11eef41e2530ebd3dbc8",
+      "sha256": "9ea6e809b845c91136896fa21356c52a9ae5aa86159846d11fda7d8fa638ec12",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -499,9 +499,9 @@
       "topic": "component"
     },
     {
-      "bytes": 25033,
+      "bytes": 25100,
       "id": "component/placement:native",
-      "sha256": "bcab3739010c73912fb82d960114553611d320edded094b549ff0e68d29da85a",
+      "sha256": "1d0e5fdd679c67b7b0bda4abf0ac9168f86f9c9ee9eb337875d40030b476bf41",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -654,7 +654,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 773815,
+    "bytes": 775038,
     "documents": 81
   }
 }

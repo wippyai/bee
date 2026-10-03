@@ -17,7 +17,7 @@ application, select a workspace, open a store, or grant access to a thread.
 | `thread_protocol` | Exact bounded requests and replies for the authenticated application-to-broker thread facade |
 | `folder_picker` | A folder picker over the roots the host admits through the workspace catalog's `roots` and `folders` operations: the pure paging and navigation model and its table on the frame |
 | `sessions`, `sessions_protocol` | The typed `sessions` client: `call`, `open`, `send`, `await`, `join`, `cancel`, `close`, `get`, `work`, `history`, `list` and `catalog` over the `bee.sessions` owner contracts, with Session, Work and Operation handles; `sessions_protocol` holds the closed reply types and their decoders |
-| `startup_progress` | Pure retained-startup phase decoding and inactivity deadline values shared by launch and desktop clients; callers authenticate progress senders and select and enforce timeout bounds |
+| `startup_progress` | Pure retained-startup phase decoding and monotonic progress revisions; callers authenticate progress senders and await readiness, EXIT or lifecycle cancellation |
 | `host_leases` | Leases on node-managed workspace hosts: the holder registers a lease name, asks the node host manager for a workspace's host and releases it; the manager answers only the holder of that name, and the host policy `bee.security.desktop:workspace_host_lease_policy` decides who may name leases |
 
 Shared frame, appearance and bounded text are owned by [bee.ui](../../ui/src/README.md).

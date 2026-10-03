@@ -190,7 +190,7 @@ pending work. Reject invalid versions before changing state.
 
 Import generic bounds, canonical JSON, clock conversions and reply decoding
 directly from `bee.values`. Domain checks stay with their owning components;
-retained startup phases and deadlines live in `bee.app.status:startup_progress`.
+retained startup phase values live in `bee.app.status:startup_progress`.
 
 Authenticate `message:from()` and the relevant instance, launch token,
 execution generation or operation grant. A PID in a payload is not

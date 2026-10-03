@@ -1,4 +1,4 @@
--- Bounded wait state for the broker-owned application stop request.
+-- Correlation state for the broker-owned application stop request.
 local M = {}
 
 type Pending = {request_id: string}

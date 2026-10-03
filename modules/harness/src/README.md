@@ -135,3 +135,12 @@ Starting a new session from a closed conversation reuses its saved profile ID an
 revision, presentation and workspace through the public Sessions open operation.
 Admission revalidates the saved revision; a changed or removed profile refuses
 the new session instead of falling back to definition defaults.
+
+Local lifecycle waits use authenticated acknowledgements and monitored EXIT.
+Hook delivery and application checkpoints retain their pending request until
+completion or explicit lifecycle cancellation; elapsed time does not retire a
+live future. A cancellation observation with `wait_ms` keeps that caller-selected
+bound and reports `DEADLINE_EXCEEDED` with its duration and the recorded state.
+Runner output drain, stop grace, retention and takeover bounds remain declared
+protocol bounds. Their expiry records the bound and preserves incomplete output
+or unproven delivery rather than claiming completeness.

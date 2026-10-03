@@ -302,8 +302,8 @@ executor error text is never recorded; evidence carries fixed phrases.
 
 `attach` records the new generation and, when a runner lives, sends it the
 generation and waits for the runner's acknowledgment before returning; a
-runner that does not answer within the fence timeout leaves the attempt
-`uncertain`. After the fence the runner accepts input and acknowledgments
+runner remains pending until it acknowledges, exits or the caller cancels. A
+monitored EXIT before acknowledgement reports that fencing was not proven. After the fence the runner accepts input and acknowledgments
 from the new recipient only, and answers a refused write with the sender's
 own generation.
 

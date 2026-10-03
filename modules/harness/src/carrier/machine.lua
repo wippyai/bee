@@ -1480,8 +1480,8 @@ end
 -- attempt is settled; cleanup runs when the placement can prove its scope.
 function M.close(io: IO, session: Session): (placement_types.Attempt?, string?)
     local request = session.plan.request
-    -- Intake ends in order: seal, drain what was accepted within the host's
-    -- drain budget, reject explicitly what is left, then revoke.
+    -- Intake ends in order: seal, drain accepted work until its completion,
+    -- reject remaining unclaimed intake explicitly, then revoke.
     local binding_id = session.checkpoint.gateway_binding
     if binding_id and session.plan.gateway and #session.plan.gateway.hooks > 0 then
         io.call(M.GATEWAY .. ":seal", {binding_id = binding_id})

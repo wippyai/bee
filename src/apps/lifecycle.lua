@@ -1,17 +1,17 @@
 -- Pure lifecycle deadlines. Completion is emitted only after a process EXIT.
-type Phase = "starting" | "ready" | "close_requested" | "close_confirming" | "close_unresponsive"
+type Phase = "starting" | "ready" | "close_requested" | "close_confirming"
     | "stopping" | "terminating" | "stopped"
 type Event = "ready" | "exit" | "unexpected_exit" | "stop" | "force_stop" | "tick"
     | "request_close" | "confirm_close" | "accept_close" | "cancel_close"
 type State = {phase: Phase, deadline: number, failure: string}
 type Effect = "none" | "opened" | "close" | "terminate" | "closed" | "failed"
-    | "query_close" | "close_cancelled" | "close_timeout"
+    | "query_close" | "close_cancelled"
 local M = {}
 function M.accepts_updates(state: State): boolean
     return state.phase == "starting" or state.phase == "ready" or state.phase == "close_requested"
-        or state.phase == "close_confirming" or state.phase == "close_unresponsive"
+        or state.phase == "close_confirming"
 end
-function M.start(_: number): State return {phase = "starting", deadline = 0, failure = ""} end
+function M.start(): State return {phase = "starting", deadline = 0, failure = ""} end
 -- A ready producer that returns without an error result closed its own view.
 -- Only an error result from a ready producer is an unexpected exit.
 function M.exit_event(state: State, failed: boolean): Event
@@ -41,8 +41,7 @@ function M.reduce(state: State, event: Event, now: number, close_grace_ms: integ
     if event == "accept_close" and (state.phase == "close_requested" or state.phase == "close_confirming") then
         return {phase = "stopping", deadline = now + (close_grace_ms or 250) / 1000, failure = ""}, "close"
     end
-    if event == "cancel_close" and (state.phase == "close_requested" or state.phase == "close_confirming"
-        or state.phase == "close_unresponsive") then
+    if event == "cancel_close" and (state.phase == "close_requested" or state.phase == "close_confirming") then
         return {phase = "ready", deadline = 0, failure = ""}, "close_cancelled"
     end
     if event == "stop" and (state.phase == "starting" or state.phase == "ready") then

@@ -1,4 +1,4 @@
--- MIT. One bounded asynchronous storage operation inside the retained supervisor.
+-- MIT. One asynchronous storage operation inside the retained supervisor.
 -- Only the authenticated bootstrap owner may reach this adapter. It owns no SQL.
 local funcs = require("funcs")
 local channel = require("channel")

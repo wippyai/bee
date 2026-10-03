@@ -582,7 +582,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if not started.pid then view:close(); thread_binding.fail(binding_engine, binding_context, coordinator, started.error_code, started.error); return end
         instances[open.view_id] = {view_id = open.view_id, instance_id = open.instance_id, thread_id = stored.thread_id,
             execution_pid = started.pid, view = view, descriptor = descriptor, code = assert(assert(admission.current).codes[descriptor.definition_id]), binding = binding, launch_token = token, observers = {},
-            state = lifecycle.start(now()), open_request = open.request.request_id, opened = false, resume_state = open.request.resume_state,
+            state = lifecycle.start(), open_request = open.request.request_id, opened = false, resume_state = open.request.resume_state,
             arguments = open.request.arguments, replacement = nil, waiters = {}, attempts = 0, producer_generation = 1}
         coordinator.open = nil
     end
@@ -838,7 +838,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         item.descriptor, item.binding, item.code = replacement, replacement_binding, pending.code
         item.announced_title, item.title_dirty, item.negotiate_close = nil, nil, nil
         item.close_request_id, item.attempts = nil, 0
-        item.state = lifecycle.start(now())
+        item.state = lifecycle.start()
         -- The retired producer re-arms the viewport's one-shot grant; a
         -- rejected spawn restores it, so a failed start leaves nothing to cancel.
         local grant = item.view:grant()
@@ -909,11 +909,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             discard_dialog(item)
             process.send(item.execution_pid, "bee.app.close", {version = 1, request_id = item.close_request_id,
                 id = item.view_id, instance_id = item.instance_id})
-        elseif effect == "close_timeout" then
-            if shutdown_plan and shutdown_plan.pending[item.view_id] then
-                shutdown.record(shutdown_plan, item.view_id, item.announced_title or item.descriptor.title, "Application did not respond", true)
-                refresh_shutdown()
-            else close_prompt(item, "Application did not respond", "Force stopping may lose unsaved work.", "Force stop") end
         elseif effect == "close_cancelled" then
             discard_dialog(item)
             process.send(item.execution_pid, "bee.app.close.result", {version = 1, request_id = item.close_request_id,
@@ -1012,7 +1007,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         item.replacement = nil
         if force then item.attempts = 0 end
         if not force and item.negotiate_close and (item.state.phase == "ready" or item.state.phase == "close_requested"
-            or item.state.phase == "close_confirming" or item.state.phase == "close_unresponsive") then
+            or item.state.phase == "close_confirming") then
             if item.state.phase == "ready" then
                 item.close_request_id = uuid.v7()
                 transition(item, "request_close")
@@ -1041,7 +1036,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local ids: {string} = {}
         for id, item in pairs(instances) do
             if item.negotiate_close and (item.state.phase == "ready" or item.state.phase == "close_requested"
-                or item.state.phase == "close_confirming" or item.state.phase == "close_unresponsive") then ids[#ids + 1] = id end
+                or item.state.phase == "close_confirming") then ids[#ids + 1] = id end
         end
         shutdown_plan = shutdown.start(uuid.v7(), ids)
         local function ask(item: Instance)
@@ -1349,7 +1344,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     if pending_dialog.closing and item then
                         if response.action == "cancel" then transition(item, "cancel_close")
                         else
-                            local event = item.state.phase == "close_unresponsive" and "force_stop" or "accept_close"
+                            local event = "accept_close"
                             commit_explicit_close(item, event)
                         end
                     else
@@ -1594,8 +1589,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                                     -- no longer a live logical instance.
                                 else
                                     current.replacement = nil
-                                    if current.state.phase == "close_unresponsive" then transition(current, "force_stop")
-                                    elseif current.state.phase == "close_requested" or current.state.phase == "close_confirming" then transition(current, "accept_close")
+                                    if current.state.phase == "close_requested" or current.state.phase == "close_confirming" then transition(current, "accept_close")
                                     else transition(current, "stop") end
                                 end
                             end
@@ -1752,7 +1746,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                                         else
                                             local instance: Instance = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = started.pid, view = view,
                                                 descriptor = selected_descriptor, code = assert(assert(admission.current).codes[selected_descriptor.definition_id]), binding = selected_binding, launch_token = token, observers = {},
-                                                state = lifecycle.start(now()), open_request = req.request_id, opened = false,
+                                                state = lifecycle.start(), open_request = req.request_id, opened = false,
                                                 resume_state = req.resume_state, arguments = req.arguments, replacement = nil,
                                                 waiters = {}, attempts = 0, producer_generation = 1}
                                             instances[view_id] = instance

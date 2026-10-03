@@ -141,17 +141,10 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
         local announced = false
         local heartbeat = time.ticker("250ms")
         local heartbeats = heartbeat:channel()
-        local startup_phase = "starting"
+        local startup = startup_progress.new()
         local function observe_startup()
             local failure = retained.stored_startup_failure(env.get("bee.launch:startup_error"))
             if failure then error(failure) end
-            local raw = env.get("bee.env:startup_sequence")
-            local sequence = raw and tonumber(raw)
-            if sequence and sequence > 0 and sequence == math.floor(sequence) then
-                local phase = env.get("bee.env:startup_phase")
-                if phase and phase ~= "" then startup_phase = phase end
-
-            end
         end
         observe_startup()
         while true do
@@ -178,9 +171,8 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                         announcer = bridge and tostring(bridge) or ""
                     end
                     local phase = sender == announcer and startup_progress.decode(selected.value:payload():data()) or nil
-                    if phase then
+                    if phase and startup_progress.advance(startup, phase) then
                         logger:info("Retained workspace startup progressed", {phase = phase})
-                        startup_phase = phase
                         env.set("bee.env:startup_phase", phase)
                     end
                 end

@@ -228,7 +228,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
                 flush_queued()
             end
         elseif draining and selected.channel == drain_timer then
-            logger:warn("Carrier drain_ms=" .. tostring(plan.policy.drain_ms) .. " expired after observed runner exit; unresolved delivery remains incomplete")
+            logger:warn("Carrier delivery drain bound (runner_drain_ms=" .. tostring(plan.policy.runner_drain_ms) .. ", drain_ms=" .. tostring(plan.policy.drain_ms) .. ") expired after observed runner exit; unresolved delivery remains incomplete")
             drain_elapsed = true
         elseif poll_ms > 0 and selected.channel == poll_timer:channel() then
             refresh(true)

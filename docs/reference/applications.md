@@ -397,3 +397,10 @@ each has exited; an application still running eight seconds after its cancel is
 terminated. The Terminal application returns only after its PTY child is reaped,
 so a stopped owner leaves no shell behind. Closing a view stops its view-owned
 process; work that must outlive a view belongs to a supervised owner service.
+
+Application startup stays pending until the admitted execution publishes readiness,
+exits, or is explicitly stopped. Negotiated close stays pending until the
+application or person decides. Accepted close uses the host-selected stop grace
+before termination; monitored EXIT alone completes the close. Checkpoint writes
+and final client snapshots wait for their correlated acknowledgement or dependency
+EXIT, so slow storage does not synthesize an uncertain result.

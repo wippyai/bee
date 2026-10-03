@@ -132,13 +132,15 @@ retained byte-identical file replay remains unchanged. This permits Agy's
 `.agents/mcp_config.json` in a retained customization root without adopting
 or changing the user's global configuration directories.
 
-## Provider login homes
+## Input closure
 
 `close_stdin` authenticates the attempt owner before checking its state. A child
 that has already exited returns its recorded attempt, `closed: false` and the
 exit reason; it creates no `stdin.closed` evidence. Callers can finish draining
 the output under that attempt's observed exit instead of reporting a closure
 failure solely because the short-lived child won the race.
+
+## Provider login homes
 
 Private attempt homes are created empty. A private `provider_home` declaration
 selects the provider's machine-home source paths, private destinations, runtime

@@ -668,7 +668,7 @@ local function define_tests()
             test.is_nil(ordinary)
         end)
 
-        test.it("keeps a durable shadow's external base stable through application and replacement", function()
+        test.it("keeps a durable shadow's base stable after apply and refuses an unmeasured restoration", function()
             local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
                 packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
                 kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},

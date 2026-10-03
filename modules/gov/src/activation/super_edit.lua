@@ -21,11 +21,6 @@ local function namespace(value: unknown): string?
     return value
 end
 
-local function intersects(left: string, right: string): boolean
-    return left == right or left:sub(1, #right + 1) == right .. "."
-        or right:sub(1, #left + 1) == left .. "."
-end
-
 local function list(value: unknown, label: string): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
     local source = value

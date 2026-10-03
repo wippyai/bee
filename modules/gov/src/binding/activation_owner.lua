@@ -93,7 +93,6 @@ local function measured(config: Config, spec: Object): (Object?, Result?)
     end
     local result, measurement_error = measure.measure(spec, candidate, context)
     if not result then return nil, failure("BLOCKED", tostring(measurement_error)) end
-    result.registry_revision = context.registry_revision
     return result, nil
 end
 

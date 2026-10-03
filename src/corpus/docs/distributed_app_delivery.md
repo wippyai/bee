@@ -50,8 +50,14 @@ The activation owner re-resolves and re-preflights immediately before applying.
 It applies only the exact reviewed definitions through a generation-fenced
 overlay API and records the observed outcome. A generation conflict or a base
 that changes during the operation leaves an explicit uncertain or refused
-result; the owner does not infer success or write registry history. Restart
-recovery restores only the previously authorized desired intent.
+result; the owner does not infer success or write registry history. Public
+failures preserve the owner's code and cause; status reads the committed intent.
+Restart recovery restores only the previously authorized desired intent. Native
+durable-shadow permission belongs to the private activation and recovery owner
+scopes; applications still require exact host admission and person approval.
+After an exact native effect is observed, the owner remeasures the composed
+definitions before recording the outcome; an unchanged durable base revision
+does not postpone that observation.
 
 For an admitted durable shadow, the external base binds the replaced entry's
 identity, kind and registry-owned module. The exact incoming definition is
@@ -80,9 +86,12 @@ application admission records. The kernel also names the exact host selectors
 `bee.security.approvals:approver_policies`,
 `bee.security.capability:capability_catalog`, `bee.env:gov_activation_profiles`,
 `bee.env:gov_publication_profiles`, `bee.deps:gov`, `bee.deps:approvals` and
-itself. Its `super_edit` list is the host's explicit carve-out: an empty list
-in the shipped composition opens nothing, and a namespace the host deliberately
-names there is the only protected namespace a super-edit profile may replace.
+itself. Its `super_edit` list is the host's explicit carve-out: Bee selects
+`bee.settings.app` and `bee.desktop`. A namespace the host deliberately names
+there is the only protected namespace a super-edit profile may replace; an
+empty list opens nothing. An exact admitted super-edit grant keeps that opened
+namespace out of transitive kernel dependency traversal. Explicitly named kernel
+entries stay protected even within a carve-out.
 Both destination resolvers read it from the destination registry, include it in
 the approval base, and pass it to preflight, which fails closed without it. Preflight computes the
 kernel as the named definitions plus the code and wiring they reference
@@ -113,7 +122,9 @@ overlay owner from that existing activation profile, uses the overlay resolver,
 and refuses the source after the edit grant expires. Author the namespace as the
 overlay ID; freeze `entries.json` and request delivery of that source. Agents and overlays
 cannot call this writer. Settings can disable the current workspace's profiles
-and remove their overlay entries. Enabling a namespace that already has a
+and remove their overlay entries. The Edit mode pane reads the current host
+profiles on entry and after execution replacement, so removal remains visible
+when the initiating Settings execution is reloaded. Enabling a namespace that already has a
 super-edit profile requires disabling it first.
 
 If local startup fails before the host publishes readiness, Bee removes all

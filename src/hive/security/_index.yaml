@@ -9,4 +9,3 @@ entries:
     actions: [funcs.call]
     resources: [bee.workspace.binding:list, bee.workspace.binding:search]
     effect: allow
-

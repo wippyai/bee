@@ -113,8 +113,7 @@ local function installed_capability(review: capability_grants.Review?): prefligh
     return {kind = "installed", proposal = proposal, installed = installed, review = review or measured_review}
 end
 
-local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorld,
-    read_revision: boolean?): owner.Resolver
+local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorld): owner.Resolver
     local entry_bytes, encode_error = canonical.encode(entry)
     if not entry_bytes then error(tostring(encode_error)) end
     local selected_digest, digest_error = hash.sha256(entry_bytes)
@@ -148,9 +147,6 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
                 entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
                 migration_barrier = false, auto_start = true, host_evidence = host_evidence}
         return candidate, context, nil
-    end
-    if read_revision then
-        function value.revision(self: owner.Resolver): (integer?, string?) return world.revision, nil end
     end
     return value
 end
@@ -606,7 +602,7 @@ local function define_tests()
             local world: ResolverWorld = {revision = 4, digest = SHA}
             local applied, apply_count = false, 0
             local config: owner.Config = {plans = plans, activations = activations,
-                resolver = shifting_resolver(entry, world, true), approvals = approvals(), actor_id = "host-a",
+                resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
                 consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?)
@@ -957,7 +953,7 @@ local function define_tests()
             local applied = false
             local apply_count = 0
             local config: owner.Config = {plans = plans, activations = activations,
-                resolver = shifting_resolver(entry, world, true),
+                resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,

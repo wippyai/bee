@@ -21,6 +21,7 @@ local prestart = require("prestart")
 local bounds = require("bounds")
 local OWNER = "bee.test.docker"
 local PROFILE = "bee.placement.docker.tests:profile"
+local REFUSED_PROFILE = "bee.placement.docker.tests:refused_profile"
 local POLICY = "bee.placement.native:test_launch_policy_without_provider"
 local ROOT = "bee.placement.native:project_fixture"
 local function call(method: string, value: unknown, owner: string?): service.Reply
@@ -56,7 +57,7 @@ local function configure()
     local roots = assert(registry.get("bee.placement.native.env:placement_admitted_roots"))
     roots.data.roots = {{root_ref = ROOT, access = "write"}}; changes:update(roots)
     local policy = assert(registry.get(POLICY))
-    policy.data.placement_profiles = {PROFILE}; changes:update(policy)
+    policy.data.placement_profiles = {PROFILE, REFUSED_PROFILE}; changes:update(policy)
     local activation = assert(registry.get("bee.harness.launch:harness_activation"))
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
@@ -66,12 +67,13 @@ local function configure()
     changes:update(activation)
     assert(changes:apply())
 end
-local function request(id: string): types.LaunchRequest
-    local profile = assert(profiles.resolve(registry.snapshot(), PROFILE))
+local function request(id: string, profile_ref: string?): types.LaunchRequest
+    local ref = profile_ref or PROFILE
+    local profile = assert(profiles.resolve(registry.snapshot(), ref))
     local raw = {idempotency_key = id, owner_id = OWNER, owner_incarnation = 1, action_id = id, attempt_id = id,
         binding_ref = "bee.placement.native:fixture_agent_binding", policy_ref = POLICY, profile_id = "batch",
         binding_digest = string.rep("a", 64), profile_digest = string.rep("a", 64),
-        placement_binding_ref = spec.BINDING, placement_binding_digest = assert(placement_resolver.resolve(registry.snapshot(), spec.BINDING)).binding_digest, placement_profile_ref = PROFILE, placement_profile_digest = profile.digest,
+        placement_binding_ref = spec.BINDING, placement_binding_digest = assert(placement_resolver.resolve(registry.snapshot(), spec.BINDING)).binding_digest, placement_profile_ref = ref, placement_profile_digest = profile.digest,
         launch = {executable = "/bin/sh", argv = {"-c", "printf running; sleep 60"}, environment = {},
             working_directory_ref = "project", readiness = "none"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
@@ -157,28 +159,10 @@ local function run()
         configure()
         test.it("retains the real daemon start refusal as a failed launch", function()
             local id = "docker-start-refused-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
-            local profile = assert(registry.get(PROFILE))
-            local executor = assert(registry.get("bee.placement.docker.tests:executor"))
-            local original_user = profile.data.user
-            profile.data.user = "99999999999999999999:1000"
-            executor.data.user = profile.data.user
-            local invalid_user = registry.snapshot():changes()
-            invalid_user:update(profile); invalid_user:update(executor)
-            assert(invalid_user:apply())
-            local launched: service.Reply? = nil
-            local ok, failure = pcall(function()
-                value(call("prepare", request(id)))
-                local accepted = value(call("start", {attempt_id = id}))
-                test.eq(accepted.execution_state, "starting")
-                launched = {ok = true, value = running(id)}
-            end)
-            profile.data.user = original_user
-            executor.data.user = original_user
-            local restore = registry.snapshot():changes()
-            restore:update(profile); restore:update(executor)
-            assert(restore:apply())
-            if not ok then error(tostring(failure)) end
-            local reply = assert(launched)
+            value(call("prepare", request(id, REFUSED_PROFILE)))
+            local accepted = value(call("start", {attempt_id = id}))
+            test.eq(accepted.execution_state, "starting")
+            local reply: service.Reply = {ok = true, value = running(id)}
             test.is_true(reply.ok)
             local status = assert(placement_decode.status(call("status", {attempt_id = id}).value))
             local attempt = status.attempt

@@ -538,6 +538,7 @@ entries:
     capability_grants: bee.gov.capability:capability_grants
     application_admission: bee.gov.activation:governed_application_admission
     preflight: bee.gov.activation:preflight
+    activation_measure: bee.gov.activation:activation_measure
 
 - name: publication_test_policy
   kind: security.policy.expr

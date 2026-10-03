@@ -8,6 +8,7 @@ local resolver = require("overlay_resolver")
 local capability_grants = require("capability_grants")
 local application_admission = require("application_admission")
 local preflight = require("preflight")
+local activation_measure = require("activation_measure")
 local canonical = require("canonical")
 local hash = require("hash")
 
@@ -134,6 +135,19 @@ local function define_tests()
             test.eq(facts.candidate.requirements[1].targets[1], "bee.harness.launch:harness_activation")
             local verdict = assert(preflight.check(facts.candidate, facts.context))
             test.is_true(verdict.ready)
+        end)
+        test.it("retains the exact driver append while normalizing activation evidence", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            spec.plan_digest, spec.revision, spec.selection_revision = SHA, 1, 1
+            spec.selected, spec.review_status = true, "accepted"
+            local measured, problem = activation_measure.measure(spec, facts.candidate, facts.context)
+            if not measured then error(tostring(problem)) end
+            local report = assert(bounds.object(measured.report))
+            test.is_true(report.ready)
+            test.eq(report.base_revision, 0)
+            facts.context.driver_requirements = nil
+            test.is_nil(activation_measure.measure(spec, facts.candidate, facts.context))
         end)
         test.it("refuses a replacement of the host activation catalog", function()
             local deps, spec = driver_fixture(".bindings")

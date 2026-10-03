@@ -147,6 +147,10 @@ sign-in command and bounded alternative file paths relative to its selected
 provider home. Placement uses their existence to return a typed advisory
 notice; a login declaration grants no filesystem or credential authority.
 
+An account-free CLI may declare a private `provider_home` with `files: []`.
+Placement retains its private session home without importing ambient files;
+the host still admits the executable, launch policy and resource grants.
+
 ## Saved profiles
 
 A saved profile contains a title, a launch definition, bounded scalar options,

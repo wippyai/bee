@@ -29,7 +29,11 @@ An error caused by the check's own shutdown does not establish a startup failure
 Keep startup and cleanup captures separately, and preserve any startup refusal
 even when a desktop frame also appears. The external owner-copy harness accepts
 an optional source-state argument for disposable fixtures; exercise it with
-`python3 tests/owner_boot_check_regression.py /path/to/owner_boot_check.sh`.
+`make owner-boot-check-regression OWNER_BOOT_CHECK=/path/to/owner_boot_check.sh`.
+Copy failures stop before launch with the original database error. A client
+that exits before readiness reports its observed exit status.
+The report labels cleanup errors separately and a failed owner stop still fails
+the check.
 The existing runtime cache-statistics diagnostic records compile/typecheck hits
 and misses on owner shutdown; a fresh owner's counters also include the attach
 sample performed during that same owner lifetime.

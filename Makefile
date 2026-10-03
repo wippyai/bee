@@ -182,6 +182,11 @@ test: fixture-gateway-client values-module ui-module component-inventory-check
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 
+.PHONY: owner-boot-check-regression
+owner-boot-check-regression:
+	@test -n "$(OWNER_BOOT_CHECK)" || { echo 'Set OWNER_BOOT_CHECK to the owner-copy boot harness.' >&2; exit 2; }
+	python3 tests/owner_boot_check_regression.py "$(OWNER_BOOT_CHECK)"
+
 .PHONY: values-module
 values-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py

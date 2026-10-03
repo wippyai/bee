@@ -196,10 +196,14 @@ no diagnostic file. See the [measurement contract](../../docs/development/boot-m
 Retained startup publishes an owner-only `startup/progress.json` under the selected state.
 The launch identity and PID bind it to the elected owner. The first phase is
 `Loading application`, covering deployment and registry loading. `Installing Lua
-cache` appears only while the runtime's cache extraction staging directory exists;
+cache` appears only while the runtime's cache extraction staging directory exists.
 After extraction it reports `Loading registry`; an embedded cache read in place
-does not emit the installation phase. One observer carries
-phase output from publication into enrollment, so their shared phase prints once.
+does not emit the installation phase. One observer carries the current phase
+from publication into enrollment on a single line updated in place. The client
+clears that line before the desktop handshake or failure output. Owner log lines
+stay in the owner log during startup. A client that starts the elected owner
+begins forwarding new owner log writes only after that owner's retained readiness;
+it skips the existing boot log and stops forwarding when the client leaves.
 Cache creation/writes (and verification reads on Linux),
 owned migration publications and writes from migrations in flight advance its
 sequence. Clients show the current phase and bound publication and enrollment

@@ -44,7 +44,7 @@ type clientSeams struct {
 	// waitEnrolled blocks until the owner has registered the client's node in the
 	// local enrollment, or the context ends.
 	waitEnrolled func(ctx context.Context, state, node string, public ed25519.PublicKey, observe func() error) error
-	// report receives the foreground route line.
+	// report receives command results and detachment output.
 	report         io.Writer
 	progressReport io.Writer
 	progress       func(state string, previous startupSnapshot, report *startupLine) func() error
@@ -200,9 +200,6 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	}
 	progress := &startupLine{report: progressReport}
 	defer func() { result = errors.Join(result, progress.clear()) }()
-	// The route line describes routing only; the owner's publication and the
-	// authenticated join still decide whether startup succeeds. A join to a
-	// running Bee only names no route.
 	if join.Intent.refusal == "" && join.Intent.hive == nil && !join.Intent.stop {
 		route := "Starting Bee"
 		if owned {

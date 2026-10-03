@@ -27,8 +27,12 @@ registry state remain in the selected state directory.
 Retained startup first reports `Loading application…`. It reports `Installing Lua
 cache…` only during cache extraction; reading an embedded cache in place does not
 install it. Startup phases share one observer across owner publication and client
-enrollment. On failure, Bee prints the cause, the full owner log path and the
-exact recovery command with the selected state: `bee --state 'STATE' recover`.
+enrollment, updating a single line in place. The client clears that line before
+the desktop handshake or failure output. Owner log lines remain in the log during
+boot. A client that starts the elected owner forwards subsequent owner log writes
+after retained readiness, without replaying the boot log. On failure, Bee prints
+the cause, the full owner log path and the exact recovery command with the
+selected state: `bee --state 'STATE' recover`.
 The log keeps the full causal chain. Recovery boots the shipped bundle with fresh
 registry history while preserving workspace and application state.
 

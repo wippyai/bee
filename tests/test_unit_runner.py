@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -16,6 +17,21 @@ from workspace import ROOT
 
 
 class UnitRunnerTest(unittest.TestCase):
+    def test_gateway_setup_skips_cannot_pass_a_shard(self):
+        output = "1 tests in 1 suites\n19 tests 0.1s\n19 skipped 0.1s\n"
+        with patch("unit.environment", return_value={}), patch("unit.subprocess.run", return_value=
+                SimpleNamespace(returncode=0, stdout=output, stderr="")):
+            result = run_shard(0, ROOT, ["bee.example:gateway_test"])
+        self.assertFalse(result[4])
+        self.assertEqual(result[6], output)
+
+    def test_case_text_does_not_become_failure_statistics(self):
+        output = "1 tests in 1 suites\n    o describes 3 failed requests 1ms\n4 tests 0.1s\n"
+        with patch("unit.environment", return_value={}), patch("unit.subprocess.run", return_value=
+                SimpleNamespace(returncode=0, stdout=output, stderr="")):
+            result = run_shard(0, ROOT, ["bee.example:gateway_test"])
+        self.assertTrue(result[4])
+
     def test_shared_daemon_entries_run_in_one_shard_with_complete_coverage(self):
         entries = [f"fixture:{index}" for index in range(20)]
         shared = [entries[1], entries[7], entries[15]]

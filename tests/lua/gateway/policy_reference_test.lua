@@ -8,7 +8,6 @@ local bounds = require("bounds")
 local registry = require("registry")
 local security = require("security")
 local json = require("json")
-local time = require("time")
 
 local POLICY = "bee.gateway:policy_reference_target"
 local RESOURCE = "bee.gateway.probe:policy_reference_sentinel"
@@ -51,14 +50,10 @@ local function replace(value: Object)
 end
 
 local function resolved(decision: string, actor: security.Actor): security.Policy
-    for _ = 1, 100 do
-        local policy, err = security.policy(POLICY)
-        if not err and policy and policy:evaluate(actor, "funcs.call", RESOURCE) == decision then return policy end
-        time.sleep("10ms")
-    end
     local policy, err = security.policy(POLICY)
     if err or not policy then error("resolve policy reference fixture: " .. tostring(err)) end
-    error("policy reference did not settle to " .. decision)
+    test.eq(policy:evaluate(actor, "funcs.call", RESOURCE), decision)
+    return policy
 end
 
 local function run()
@@ -88,7 +83,9 @@ local function run()
                 if not actor then error("test actor is unavailable during restore") end
                 resolved("undefined", actor)
             end)
-            if not restored then error("restore policy fixture: " .. tostring(restore_error)) end
+            if not restored then
+                error((not ok and (tostring(failure) .. "; ") or "") .. "restore policy fixture: " .. tostring(restore_error))
+            end
             if not ok then error(tostring(failure)) end
         end)
     end)

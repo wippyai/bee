@@ -88,7 +88,7 @@ dropped. Only the executable and test harness are mounted. The Terminal tolerate
 an unset `USER` through Wippy's explicit empty placeholder fallback. Container
 images still need Bash and a compatible C library.
 
-The build manifest selects the runtime and any required patches. The builder
+The build manifest selects an unpatched upstream runtime commit. The builder
 checks out the selected runtime in a temporary directory before compiling.
 Uploads still require separate credentials. [Runtime integration](../development/runtime.md)
 describes the boundary between Bee and the selected runtime.
@@ -116,7 +116,7 @@ the contract, kit and transport. Installing a driver does not activate it or gra
 still selects its profile, executable and permissions.
 
 The pinned Go builder assembles only the sealed generated manifest. It verifies
-every WAPP and runtime-patch hash before embedding them. The input
+each WAPP's hash before embedding the pack. The input
 `wippy.build.json` remains the runtime/native/default-version input; a failed
 pack or seal leaves the previous manifest and portable-deployment pointer in
 place. WAPP timestamps are runtime-owned and can produce a new immutable
@@ -403,8 +403,7 @@ The reusable builder action is pinned by full commit and shared within the
 organization; native module fetching uses the consuming repository's token.
 
 Archives contain the executable, input manifest provenance, effective Go module
-files, available dependency license notices and any runtime patch sources the
-manifest lists.
+files and available dependency license notices.
 Archive timestamps and ownership are normalized; pack timestamps and the native
 C toolchain still affect binary reproducibility. Each release target needs its
 own dependency inventory and root license notices. See [dependency

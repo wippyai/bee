@@ -199,13 +199,13 @@ payloads retain an omission-size object rather than invalid partial JSON.
 Workspace-authored drivers use the governed `driver.<name>` overlay rule.
 Read the overlay guide's `drivers` section for ownership, descriptor-based method
 factories, the exact host activation append and delivery approval. After the
-person approves the artifact, open Sessions and press N to choose the driver.
+approved activation settles, open Sessions and press N to choose the driver.
 Its `.profiles` launch definition sets `presentation.start_menu: true`; false
 keeps it programmatic and hides it from the picker, including saved copies.
 Headless Sessions also require `session_resource: session` in that definition,
 selecting the host's existing retained resource. Shared launch admission refuses
 missing retained resources before the catalog offers the route.
 E customizes a saved copy of the selected definition. Structured CLI turns use
-a headless session profile. Driver activation
-persists through the existing Governance owner recovery; running sessions retain
+a headless session profile. Driver activation persists through the existing
+Governance owner recovery; running sessions retain
 their pinned routes until their lifecycle replaces them.

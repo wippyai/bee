@@ -29,7 +29,7 @@ func TestOwnerLogPreservesOutputFailure(t *testing.T) {
 func TestOwnerLogRetainsExactRestorationReasonsWithoutDiagnosticLogging(t *testing.T) {
 	var output bytes.Buffer
 	log := &bootLog{logger: zap.NewNop(), output: &output}
-	if err := log.capture(event.Event{Data: json.RawMessage(`{"entry":{"message":"Retained application restoration failed"},"fields":[{"key":"error","string":"application instance is attested for another app"},{"key":"instance_id","string":"retained-bad"},{"key":"workspace_id","string":"workspace"},{"key":"definition_id","string":"app"}]}`)}); err != nil {
+	if err := log.capture(event.Event{Data: json.RawMessage(`{"entry":{"message":"Retained application restoration failed"},"fields":[{"key":"error","type":"error","string":""},{"key":"reason","type":"string","string":"application instance is attested for another app"},{"key":"instance_id","string":"retained-bad"},{"key":"workspace_id","string":"workspace"},{"key":"definition_id","string":"app"}]}`)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := log.capture(event.Event{Data: json.RawMessage(`{"entry":{"message":"unrelated payload"},"fields":[{"key":"error","string":"unrelated"}]}`)}); err != nil {

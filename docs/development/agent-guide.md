@@ -60,6 +60,13 @@ host/client attachment grants and revocation. Use focused tests while editing,
 then the checks required by the changed boundary. Documentation-only changes
 need link and source consistency checks; they do not need a full terminal run.
 
+`make owner-journey BEE_BINARY=/path/to/bee BEE_SOURCE_STATE=/path/to/state`
+drives an existing standalone through the owner's desktop, agent, update,
+overlay, self-edit and two-node Hive journey. It copies state without credentials
+and reports each step, approval and failure under `.wippy/owner-journey/`.
+See the [journey fixture guide](../../tests/fixtures/owner_journey/README.md)
+for isolation, subscription requirements and evidence handling.
+
 Development loads the selected components' `src/` trees. `make native-pack` uses
 `wippy pack --module` for the root and every physical component; `make portable-deployment-check`
 boots their exact local vendor WAPPs with no source or replacements. Keep binaries, registry

@@ -19,7 +19,7 @@ local checkpoint = require("checkpoint")
 local placement_decode = require("placement_decode")
 local security = require("security")
 
-type Listener = {outputs: unknown, exits: unknown, events: unknown}
+type Listener = {outputs: unknown, exits: unknown, states: unknown, events: unknown}
 type Object = {[string]: unknown}
 
 local function error_text(value: unknown): string
@@ -91,6 +91,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry, plan_digest = plan.plan_digest}, generation)
         poller = time.ticker(tostring(plan.exchange.poll_ms) .. "ms")
     end
+    local starting = attempt_object.execution_state == "starting"
     local monitored = process.monitor(runner)
     local decoder = stream.new()
     local state: unknown = nil
@@ -152,6 +153,41 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         if budget_exceeded then return end
         budget_exceeded = kind
         budget_stop_error = stop_for_budget()
+    end
+    local function publish_startup(state: string, cause: string?): string?
+        local payload, encode_error = canonical.encode({execution_state = state, start_failure = cause})
+        if not payload then return "encode placement observation: " .. tostring(encode_error) end
+        local _, append_error = service_call(observation_target, {turn = attempt_id, claim = claim,
+            operation_key = "executor-placement:" .. attempt_id:sub(-72) .. ":" .. state,
+            observation = {type = "extension", event_key = "placement:" .. attempt_id .. ":" .. state,
+                data = {type = "extension", event_name = "bee.placement.attempt", event_revision = "1", payload_json = payload}}})
+        return append_error
+    end
+    local initial_state_error = publish_startup(tostring(attempt_object.execution_state), nil)
+    if initial_state_error then return nil, initial_state_error end
+    local function observe_startup(): string?
+        local raw, read_error = service_call(placement_target(request, "reconcile"), {attempt_id = attempt_id})
+        if read_error then return read_error end
+        local current, decode_error = placement_decode.attempt(raw)
+        if not current then return "startup state: " .. tostring(decode_error) end
+        if current.attempt_id ~= attempt_id or current.attachment_generation ~= generation then return "startup state identity differs from this turn" end
+        if current.start_cancelled then
+            stopped = true
+            stdout_eof, stderr_eof, exited = true, true, true
+            starting = false
+            return nil
+        end
+        if current.start_failure then
+            local append_error = publish_startup("start_failed", current.start_failure)
+            return append_error and (current.start_failure .. "; publish startup failure: " .. append_error) or current.start_failure
+        end
+        if current.execution_state == "starting" then return nil end
+        if starting and (current.execution_state == "running" or current.execution_state == "exited") then
+            starting = false
+            last_progress_ms = now_ms()
+            return publish_startup("running", nil)
+        end
+        return nil
     end
     local function completion_event(stage: string): string?
         local _, err = service_call(tostring(request.observation_target), {turn = request.attempt_id, claim = request.claim,
@@ -386,7 +422,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     while not (stdout_eof and stderr_eof and exited) do
         local close_error = finish_input()
         if close_error then output_error = output_error or close_error; break end
-        local cases = {listener.outputs:case_receive(), listener.exits:case_receive(), listener.events:case_receive(),
+        local cases = {listener.outputs:case_receive(), listener.exits:case_receive(), listener.states:case_receive(), listener.events:case_receive(),
             acks:case_receive()}
         if poller then cases[#cases + 1] = poller:channel():case_receive() end
         if wall_timer then cases[#cases + 1] = wall_timer:case_receive() end
@@ -406,13 +442,24 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                     if item.phase ~= "closed" and item.phase ~= "acknowledged" then waiting = true end
                 end
             end
-            if waiting then last_progress_ms = now_ms()
+            if starting or waiting then last_progress_ms = now_ms()
             elseif not stalled and now_ms() - last_progress_ms >= quiet_period then
                 stalled = true
                 budget_stop_error = stop_for_budget()
                 if budget_stop_error then output_error = output_error or budget_stop_error end
             end
+        elseif selected.channel == listener.states then
+            local message = selected.value
+            local hint = placement_protocol.decode_state_hint(message:payload():data())
+            if hint and hint.attempt_id == attempt_id and hint.generation == generation then
+                local cause = observe_startup()
+                if cause then output_error = cause; break end
+            end
         elseif selected.channel == listener.outputs then
+            if starting then
+                local cause = observe_startup()
+                if cause then output_error = cause; break end
+            end
             local message = selected.value
             accept_output(tostring(message:from()), message:payload():data())
         elseif selected.channel == listener.exits then
@@ -436,7 +483,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         else
             local event = selected.value
             if event.kind == process.event.CANCEL then output_error = output_error or "executor worker was interrupted"; break end
-            if event.kind == process.event.EXIT and tostring(event.from) == runner then
+            if event.kind == process.event.EXIT and tostring(event.from) == runner and not starting then
                 output_error = output_error or "placement runner exited before output completed"
                 break
             end
@@ -520,7 +567,8 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
         end,
         listen = function()
             return {outputs = assert(process.listen(placement_protocol.TOPIC_OUTPUT, {message = true})),
-                exits = assert(process.listen(placement_protocol.TOPIC_EXIT, {message = true})), events = assert(process.events())}, nil
+                exits = assert(process.listen(placement_protocol.TOPIC_EXIT, {message = true})),
+                states = assert(process.listen(placement_protocol.TOPIC_STARTED, {message = true})), events = assert(process.events())}, nil
         end,
         attach = function(attempt_id: string, generation: integer)
             return service_call(placement_target(request, "attach"), {attempt_id = attempt_id, recipient = process.pid(), generation = generation})
@@ -556,6 +604,7 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             if not listener then return end
             process.unlisten(listener.outputs)
             process.unlisten(listener.exits)
+            process.unlisten(listener.states)
         end,
     }
     local result, execution_error = turn.execute(io, value)

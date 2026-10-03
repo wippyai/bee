@@ -39,6 +39,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     -- output the moment placement starts it.
     local outputs = assert(process.listen(placement_protocol.TOPIC_OUTPUT, {message = true}))
     local exits = assert(process.listen(placement_protocol.TOPIC_EXIT, {message = true}))
+    local states = assert(process.listen(placement_protocol.TOPIC_STARTED, {message = true}))
     local acks = assert(process.listen(placement_protocol.TOPIC_ACK, {message = true}))
     local inputs = assert(process.listen(TOPIC_INPUT, {message = true}))
     local attached = assert(process.listen(placement_protocol.TOPIC_ATTACHED, {message = true}))
@@ -123,7 +124,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local settlement: unknown = nil
     local queued: {{write_id: string, data: string}} = {}
     local function flush_queued()
-        if not session.runner then return end
+        if not session.runner or session.placement_state == "starting" then return end
         local pending = queued
         queued = {}
         for _, item in ipairs(pending) do
@@ -159,7 +160,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         end
     end
     while true do
-        local cases = {outputs:case_receive(), exits:case_receive(), acks:case_receive(), inputs:case_receive(), attached:case_receive(), statuses:case_receive(), events:case_receive()}
+        local cases = {states:case_receive(), outputs:case_receive(), exits:case_receive(), acks:case_receive(), inputs:case_receive(), attached:case_receive(), statuses:case_receive(), events:case_receive()}
         if draining and not drain_elapsed then cases[#cases + 1] = drain_timer:case_receive() end
         if poll_ms > 0 then
             cases[#cases + 1] = poll_timer:channel():case_receive()
@@ -177,7 +178,19 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         end
         if not selected.ok then break end
         if hooking and selected.channel == hooks_ticker:channel() then drain_hooks() end
-        if selected.channel == outputs then
+        if selected.channel == states then
+            local message = selected.value
+            local hint = placement_protocol.decode_state_hint(message:payload():data())
+            if hint and hint.attempt_id == request.attempt_id and hint.generation == session.epoch then
+                local ok, err = machine.on_startup(io, session)
+                if not ok then error("startup state: " .. tostring(err)) end
+                flush_queued()
+            end
+        elseif selected.channel == outputs then
+            if session.placement_state == "starting" then
+                local ok, err = machine.on_startup(io, session)
+                if not ok then error("startup state before output: " .. tostring(err)) end
+            end
             local message = selected.value
             local data = placement_protocol.decode_output(message:payload():data())
             if data then
@@ -228,7 +241,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             refresh(false)
         elseif selected.channel == events then
             if selected.value.kind == process.event.CANCEL then break end
-            if selected.value.kind == process.event.EXIT and machine.on_runner_exit(session, tostring(selected.value.from)) and not draining then
+            if selected.value.kind == process.event.EXIT and machine.on_runner_exit(session, tostring(selected.value.from)) and session.placement_state ~= "starting" and not draining then
                 draining = true
                 drain_timer = time.after(tostring(plan.policy.drain_ms) .. "ms")
             end
@@ -270,6 +283,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         unregister_hints()
     end
     process.unlisten(hints)
+    process.unlisten(states)
     local attempt = machine.close(io, session)
     return {settlement = settlement, placement = attempt, epoch = session.epoch, revision = session.revision}
 end

@@ -65,14 +65,14 @@ function M.ensure_image(spec: spec_codec.Spec): (boolean, string?)
     if not client then return false, "Docker connection unavailable" end
     local inspected, inspect_error = client:inspect_image(spec.image)
     if inspected and not inspect_error then return true, nil end
-    if type(inspect_error) ~= "string" or inspect_error:sub(1, 9) ~= "HTTP 404:" then return false, "Docker runtime image inspection did not answer" end
+    if type(inspect_error) ~= "string" or inspect_error:sub(1, 9) ~= "HTTP 404:" then return false, "images/inspect: " .. tostring(inspect_error or "no image observation") end
     if not spec.image:find("@sha256:", 1, true) then return false, "local runtime image is missing; build it with make docker-runtime-image" end
     local fetching = M.change(spec.attempt_id, {evidence = {kind = "docker.image_fetching", detail = "fetching the admitted digest-pinned runtime image"}})
     if not fetching.ok then return false, "image fetch intent could not be recorded" end
     local _, pull_error = client:pull_image(spec.image)
-    if pull_error then return false, "Docker runtime image fetch failed" end
+    if pull_error then return false, "images/create: " .. tostring(pull_error) end
     local pulled, verify_error = client:inspect_image(spec.image)
-    if not pulled or verify_error then return false, "Docker runtime image fetch did not produce the admitted digest" end
+    if not pulled or verify_error then return false, "images/inspect: " .. tostring(verify_error or "fetch did not produce the admitted digest") end
     local fetched = M.change(spec.attempt_id, {evidence = {kind = "docker.image_ready", detail = "admitted runtime image is available"}})
     return fetched.ok, fetched.error and fetched.error.message or nil
 end
@@ -233,12 +233,8 @@ function M.reconcile(value: unknown): Reply
     return M.reconcile_loaded(loaded)
 end
 function M.reconcile_loaded(loaded: Loaded): Reply
-    if loaded.attempt.execution_state == "intended" then return succeed(loaded.attempt) end
-    if loaded.attempt.execution_state == "starting" then
-        local present, presence_error = local_attempts.runner_present(loaded.row)
-        if present == true then return succeed(loaded.attempt) end
-        if present == nil then return fail("UNAVAILABLE", presence_error or "Docker creator presence is unknown") end
-    end
+    if loaded.attempt.execution_state == "start_failed" or loaded.attempt.execution_state == "intended" then return succeed(loaded.attempt) end
+    if loaded.attempt.execution_state == "starting" then return succeed(loaded.attempt) end
     local found, find_error, absent = M.find(loaded)
     if find_error then
         if loaded.attempt.execution_state == "exited" then return fail("UNAVAILABLE", find_error) end
@@ -284,11 +280,12 @@ end
 function M.stop_loaded(loaded: Loaded, value: unknown): Reply
     if loaded.attempt.execution_state == "intended" then
         return M.change(loaded.attempt.attempt_id, {expected_execution = "intended", execution = "exited", cleanup = "complete",
-            evidence = {kind = "stop.before_start", detail = "stopped before Docker runner claim; no container exists"}})
+            evidence = {kind = "stop.before_start", detail = "explicit stop before Docker runner claim; no container dispatched"}})
     end
     if loaded.attempt.execution_state == "exited" then return succeed(loaded.attempt) end
+    if loaded.attempt.execution_state == "starting" then return local_attempts.stop_attempt(loaded.attempt, "cooperative") end
     local stopping: types.ExecutionState? = nil
-    if loaded.attempt.execution_state ~= "uncertain" then stopping = "stopping" end
+    if loaded.attempt.execution_state ~= "start_failed" and loaded.attempt.execution_state ~= "uncertain" then stopping = "stopping" end
     local requested = M.change(loaded.attempt.attempt_id, {execution = stopping, evidence = {kind = "docker.stop_requested", detail = "stop exact attempt container"}})
     if not requested.ok then
         local current, current_error = M.load({attempt_id = loaded.attempt.attempt_id}, true)
@@ -320,7 +317,7 @@ function M.cleanup_preparers(value: unknown): Reply
     return M.cleanup_preparers_loaded(loaded)
 end
 function M.cleanup_preparers_loaded(loaded: Loaded): Reply
-    if loaded.attempt.execution_state ~= "exited" then return fail("CONFLICT", "cleanup requires proven exit") end
+    if loaded.attempt.execution_state ~= "exited" and loaded.attempt.execution_state ~= "start_failed" then return fail("CONFLICT", "cleanup requires proven exit") end
     local found, find_error, absent = M.find(loaded)
     if find_error then return fail("UNAVAILABLE", find_error) end
     if not absent and (not found or (found.state ~= "stopped" and found.state ~= "exited")) then return fail("CONFLICT", "container remains live") end
@@ -335,7 +332,7 @@ function M.cleanup(value: unknown): Reply
 end
 function M.cleanup_loaded(loaded: Loaded): Reply
     if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
-    if loaded.attempt.execution_state ~= "exited" then return fail("CONFLICT", "cleanup requires proven container exit") end
+    if loaded.attempt.execution_state ~= "exited" and loaded.attempt.execution_state ~= "start_failed" then return fail("CONFLICT", "cleanup requires proven container exit") end
     local found, find_error, absent = M.find(loaded)
     if find_error then return fail("UNAVAILABLE", find_error) end
     if found then

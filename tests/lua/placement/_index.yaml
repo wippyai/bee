@@ -119,7 +119,7 @@ entries:
   source: file://startup_runner.lua
   method: main
   meta: {type: test_support}
-  modules: [process]
+  modules: [process, channel]
   imports:
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
@@ -128,7 +128,7 @@ entries:
   source: file://startup_runner.lua
   method: start
   meta: {type: test_support}
-  modules: [process]
+  modules: [process, channel]
   security:
     policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy]
   imports:
@@ -181,10 +181,10 @@ entries:
     type: bee.launch_policy
     test_support: true
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 1000
     runner_drain_ms: 500
@@ -244,10 +244,10 @@ entries:
     test_support: true
     comment: The host launch policy the placement suite's requests name; it selects the test provider
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -263,10 +263,10 @@ entries:
     test_support: true
     comment: The same policy selecting no provider, for the unauthorized-provider refusal
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -278,7 +278,7 @@ entries:
   kind: registry.entry
   meta: {type: bee.launch_policy, test_support: true}
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     placement_binding: bee.placement.fixture:binding
     required_cleanup: direct_process
     required_exit_observation: eof_gated
@@ -400,10 +400,10 @@ entries:
     type: bee.launch_policy
     test_support: true
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 1000
     runner_drain_ms: 500
@@ -473,3 +473,44 @@ entries:
     projection: bee.placement.native.service:provider_projection
     formats: bee.credentials:formats
     types: bee.driver:types
+- name: startup_test
+  kind: function.lua
+  source: file://startup_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "15s"}
+  modules: [process, channel, time, funcs, security, json, registry]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_service_policy]
+  imports:
+    test: wippy.test:test
+    store: bee.placement.native.persist:store
+    request: bee.placement:request
+    decode: bee.placement:decode
+    principals: bee.test.principals:bound
+- name: startup_legacy_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/startup-legacy.db
+  lifecycle: {auto_start: true}
+- name: startup_legacy_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.placement.native:startup_legacy_db]
+    effect: allow
+- name: startup_migration_test
+  kind: function.lua
+  source: file://startup_migration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  security: {policies: [bee.placement.native:startup_legacy_policy]}
+  imports:
+    test: wippy.test:test
+    database: bee.persist.persist:database
+    ledger: bee.persist.persist:ledger
+    migrations: bee.placement.native.migrations:migrations
+    request: bee.placement:request
+    store: bee.placement.native.persist:store
+    bounds: bee.values:bounds

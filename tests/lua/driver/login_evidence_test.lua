@@ -67,7 +67,7 @@ local function define_tests()
                     launch = case.launch, resources = {}, environment = {}, projections = {},
                     environment_refs = private and {} or {HOME = "bee.env:machine_home"}, required_cleanup = "process_group",
                     required_exit_observation = "independent",
-                    timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
+                    timeouts = {stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
                 local selected_home = private and "/fixture-attempt-home" or "/fixture-machine-home"
                 local expected = selected_home .. "/" .. (case.directory and (case.directory .. "/") or "") .. case.path
                 local notice = materialization.login_notice(request, selected_home, function(path: string): boolean

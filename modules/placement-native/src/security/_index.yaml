@@ -56,6 +56,7 @@ entries:
   policy:
     actions:
     - process.spawn
+    - process.spawn.monitored
     - process.host
     - process.monitor
     - process.unmonitor

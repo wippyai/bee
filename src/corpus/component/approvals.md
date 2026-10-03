@@ -69,7 +69,7 @@ publication worker, so an approved publication uploads without any status
 poll.
 
 Approver policies are host-owned under `bee.security.approvals:approver_policies`:
-each names its approvers and the longest lifetime a request may ask for. An
+each names its approvers and the longest request or approval-window lifetime it allows. An
 approver needs both the `bee.approvals.decide` action on the workspace and a
 place in the policy. Workspace membership alone exposes nothing. Approvals are
 node-local: `decide` and `withdraw` are never Hive-exposed, so a mapped remote
@@ -78,11 +78,12 @@ ceiling names only the feed, read and replica operations.
 
 | Slice | Responsibility |
 |---|---|
-| root `bee.approvals` | Contract, stable local binding, linked host references, default database, linked database and host-policy readers, and the owner domain library |
+| root `bee.approvals` | Contract, dependencies and host-selected requirements |
 | `binding/` | Callable approval operations, including the host-authorized installation effect queue and completion, and the Hive policy operations |
 | `persist/` | Approval request, history, inbox, incarnation and thread-projection outbox storage |
 | `migrations/` | Immutable approval schema ledger |
-| `service/` | Authority and outbox worker processes |
+| `service/` | Owner domain operations, authority and outbox worker processes |
+| `types/` | Window-grant decoder, exact scope measurement and capped duration choices |
 
 Approval views expose `requesting_session` when the authenticated requester is a SessionRef. The read-only `bee.approvals.binding:attention_count` accepts `{workspace_id}` and returns `{ok=true,value={count=N}}` for pending, unexpired requests. It requires the exact `bee.approvals.attention` grant for that workspace and provides neither request details nor decision authority.
 
@@ -96,3 +97,37 @@ empty object and requires `bee.approvals.summary` on `node`. It returns
 this native node. It exposes no request contents or decision authority.
 Applications reach Hive-wide counts through the approved Hive telemetry status
 contract.
+
+Person approval windows settle ordinary permission requests through the existing
+`decide` and `decide_batch` operations. `window_ttl_ms` is a positive duration
+within the current policy's `max_ttl_ms`; denial, question responses and invalid
+or excessive durations cannot create a window. The batch-level duration applies
+to every item atomically. Migration 6 (`approval_windows`, M5) appends the grant
+table and request settlement references; migrations 1–5 remain unchanged.
+
+Each grant belongs to the request's authoritative native node, exact workspace,
+requester, policy and measured proposal scope. Ordinary scopes include the
+entire canonical proposal. A validated managed-permission payload retains the
+attempt, action, plan, adapter reference/digest, tool and exact input digest;
+only `permission_request_id` and `correlation_id` identify the individual
+exchange and are excluded from window scope. Extra payload fields require a
+full-proposal match. Every new matching permission request settles through the
+same history, inbox and thread outbox transaction, with the grant's signer and
+an `allowed_by_grant` reference. Effect consumption and incarnation revalidation
+remain required. A changed scope, issuer policy removal, reduced policy ceiling,
+expiry or revocation prevents new automatic settlements.
+
+The source approval ID is the grant ID. A grant records its issuer actor and
+admitted application definition, creation time, expiry and revocation time. The
+source request remains retained while its window is active. Restart preserves
+the grants and records each new automatic approval under the new incarnation.
+`grant_window` accepts `operation=list`, `workspace_id`, optional `after_id` and
+returns up to 64 active grants, `more` and `next_id`; `operation=revoke` accepts
+`grant_id` and optional matching `workspace_id`. Both require workspace decision
+authority, and list/revoke are restricted to the issuing actor or the same
+admitted application definition. Grant administration has no Hive exposure;
+remote feed readers see settlements on the authoritative node without acquiring
+its decision authority.
+
+Expired windows are pruned after the owner's retention horizon once no retained
+settlement references them; an active window keeps its source request retained.

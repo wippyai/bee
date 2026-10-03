@@ -231,3 +231,15 @@ entries:
     types: bee.placement:types
     process_backend: bee.placement.native.binding:process_backend
     bounds: bee.values:bounds
+
+- name: startup
+  kind: process.lua
+  source: file://startup.lua
+  method: main
+  modules: [process, channel, sql]
+  imports:
+    store: bee.placement.native.persist:store
+    bounds: bee.values:bounds
+    protocol: bee.placement.native:protocol
+    service: bee.placement.native.service:service
+  security: {policies: []}

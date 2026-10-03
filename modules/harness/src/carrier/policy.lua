@@ -15,7 +15,7 @@ local surface = require("surface")
 local M = {}
 M.MAX_AGENT_DELEGATES = 16
 M.MAX_AGENT_MODELS = 16
-M.SCHEMA = "bee.launch-policy@2"
+M.SCHEMA = "bee.launch-policy@3"
 M.TYPE = placement_types.LAUNCH_POLICY_TYPE
 -- The launch overrides a host policy may admit. A request override takes
 -- effect only when the definition allows it and its policy admits it too.
@@ -36,7 +36,6 @@ type Policy = {
     prepare_options: {[string]: unknown},
     required_cleanup: placement_types.Capability,
     required_exit_observation: placement_types.ExitObservation,
-    start_ms: integer,
     stop_grace_ms: integer,
     drain_ms: integer,
     runner_drain_ms: integer,
@@ -143,7 +142,19 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
+    -- Revision two persisted a caller startup deadline. Its decoder validates
+    -- the retired field and removes it before revision-three validation.
+    if data.schema_revision == "bee.launch-policy@2" then
+        if data.start_ms ~= nil then
+            local retired = bounds.integer(data.start_ms)
+            if not retired or retired < 1 then return nil, ref .. ": legacy start_ms must be a positive integer" end
+        end
+        local revised: {[string]: unknown} = {}
+        for key, item in pairs(data) do if key ~= "start_ms" then revised[key] = item end end
+        revised.schema_revision = M.SCHEMA
+        data = revised
+    end
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -152,12 +163,10 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     local observation = bounds.member(data.required_exit_observation, placement_types.EXIT_OBSERVATIONS)
     if observation ~= "independent" and observation ~= "eof_gated" then return nil, ref .. ": required_exit_observation must be independent or eof_gated" end
     local required_observation: placement_types.ExitObservation = observation
-    local start_ms = bounds.integer(data.start_ms == nil and 15000 or data.start_ms)
     local stop_grace_ms = bounds.integer(data.stop_grace_ms == nil and 5000 or data.stop_grace_ms)
     local drain_ms = bounds.integer(data.drain_ms == nil and 5000 or data.drain_ms)
     local retain_ms = bounds.integer(data.retain_ms == nil and 30000 or data.retain_ms)
     local runner_drain_ms = bounds.integer(data.runner_drain_ms == nil and 5000 or data.runner_drain_ms)
-    if not start_ms or start_ms < 1 then return nil, ref .. ": start_ms must be a positive integer" end
     if not stop_grace_ms or stop_grace_ms < 0 then return nil, ref .. ": stop_grace_ms must be a nonnegative integer" end
     if not drain_ms or drain_ms < 0 then return nil, ref .. ": drain_ms must be a nonnegative integer" end
     if not retain_ms or retain_ms < 100 then return nil, ref .. ": retain_ms must be at least 100" end
@@ -332,7 +341,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, permission_answers = answer_mode, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = required_cleanup, required_exit_observation = required_observation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_profiles = placement_profiles, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
+        stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_profiles = placement_profiles, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end
 type SurfaceValue = {[string]: unknown}

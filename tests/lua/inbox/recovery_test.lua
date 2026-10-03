@@ -16,7 +16,6 @@ local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
 local model = require("model")
-local inbox = require("inbox")
 local app_caller = require("caller")
 local thread_harness = require("thread_harness")
 local REQUESTER, ALICE = "bee.test.inbox_requester", "bee.test.inbox_alice"
@@ -48,7 +47,7 @@ local unconsuming = caller(REQUESTER, {"bee.security.approvals:approval_request_
 local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
 local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)
 local function through(executor: funcs.Executor): app_caller.Client
-    return inbox.new(function(target: string, request: unknown): (unknown, string?)
+    return app_caller.new(function(target: string, request: unknown): (unknown, string?)
         local raw, err = executor:call(target, request)
         if err then return nil, tostring(err) end
         return raw, nil
@@ -251,7 +250,7 @@ local function define_tests()
             local workspace = "ws-" .. key():sub(1, 8)
             local approval_id, _, thread_id = file_on_thread(workspace)
             local lost = true
-            local flaky = inbox.new(function(target: string, request: unknown): (unknown, string?)
+            local flaky = app_caller.new(function(target: string, request: unknown): (unknown, string?)
                 if target == "bee.approvals.binding:inbox" and lost then return nil, "disconnected" end
                 local raw, err = alice:call(target, request)
                 if err then return nil, tostring(err) end

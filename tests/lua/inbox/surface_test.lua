@@ -16,7 +16,7 @@ local json = require("json")
 local bounds = require("bounds")
 local model = require("model")
 local leases = require("leases")
-local inbox = require("inbox")
+local app_caller = require("caller")
 local view = require("view")
 local appearance = require("appearance")
 local REQUESTER, ALICE, BOB, OUTSIDER = "bee.test.inbox_requester", "bee.test.inbox_alice", "bee.test.inbox_bob", "bee.test.inbox_outsider"
@@ -129,7 +129,7 @@ local function define_tests()
             local detail = assert(bounds.object(state.detail))
             test.eq(detail.approval_id, approval_id)
             test.eq(detail.state, "pending")
-            test.is_true(frame_text(state):find("Effect: Bash", 1, true) ~= nil)
+            test.is_true(frame_text(state):find("Capability: Bash", 1, true) ~= nil)
         end)
         test.it("records one decision when two viewers race and shows the other the committed outcome", function()
             local workspace = "ws-" .. key():sub(1, 8)
@@ -200,7 +200,7 @@ local function define_tests()
             local owner = through(alice)
             local decided = 0
             -- The owner commits; the answer never arrives.
-            local lossy = inbox.new(function(target: string, request: unknown): (unknown, string?)
+            local lossy = app_caller.new(function(target: string, request: unknown): (unknown, string?)
                 local raw, err = alice:call(target, request)
                 if target == "bee.approvals.binding:decide" then
                     decided = decided + 1

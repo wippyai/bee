@@ -529,7 +529,7 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
         binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_context = profile.mode == "window" and "window" or (resume_ref and "resume" or "first_turn"), configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
-        required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
+        required_exit_observation = launch_policy.required_exit_observation, timeouts = {stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
         options = request.options,
     }
     if not private_home then
@@ -565,7 +565,7 @@ function M.admitted_action(request: Request, binding_ref: string, binding_digest
 end
 local function placement_observation(io: IO, session: Session, attempt: placement_types.Attempt): (boolean, string?)
     local payload = json.encode({placement_attempt_id = attempt.attempt_id, execution_state = attempt.execution_state, cleanup_state = attempt.cleanup_state,
-        exit_source = attempt.exit_source, evidence_count = attempt.evidence_count, capability = attempt.capability})
+        exit_source = attempt.exit_source, start_failure = attempt.start_failure, evidence_count = attempt.evidence_count, capability = attempt.capability})
     local record = {source = "bee", body = {type = "extension", event_key = "placement:" .. attempt.attempt_id .. ":" .. tostring(attempt.evidence_count),
         data = {type = "extension", event_name = "bee.placement.attempt", event_revision = "1", payload_json = payload}}}
     return M.commit(io, session, {record})
@@ -888,6 +888,17 @@ local function settle_prestart_failure(io: IO, plan: Plan, epoch: integer, gatew
 end
 -- Structured execution requests a turn and starts the pipe runner only after
 -- shared preparation. Failures before execution retire the admitted gateway.
+local function record_started(io: IO, session: Session, attempt: placement_types.Attempt): string?
+    if session.attempt_started or attempt.start_cancelled or attempt.start_failure then return nil end
+    if attempt.execution_state ~= "running" and not (attempt.execution_state == "exited" and attempt.exit_source ~= nil) then return nil end
+    local request = session.plan.request
+    local _, started_error = thread_call(io, request, "start_attempt", {action_id = request.action_id, attempt_id = request.attempt_id,
+        started = {execution_kind = "process", execution_ref = attempt.attempt_id, owner_epoch = io.now_ms()}})
+    if started_error then return started_error end
+    session.attempt_started = true
+    step(io, "attempt_started")
+    return nil
+end
 function M.open(io: IO, plan: Plan): (Session?, string?)
     if plan.profile.mode == "window" or plan.profile.protocol ~= "stream-json" then
         return nil, "structured carrier requires a stream-json session or batch profile"
@@ -955,16 +966,33 @@ function M.open(io: IO, plan: Plan): (Session?, string?)
         return nil, reason
     end
     session.runner = attempt.runner
-    local _, started_error = thread_call(io, request, "start_attempt", {action_id = request.action_id, attempt_id = request.attempt_id,
-        started = {execution_kind = "process", execution_ref = attempt.attempt_id, owner_epoch = io.now_ms()}})
+    session.placement_state = attempt.execution_state
+    session.start_failure = attempt.start_failure
+    session.start_cancelled = attempt.start_cancelled
+    local started_error = record_started(io, session, attempt)
     if started_error then
         settle_prestart_failure(io, plan, epoch, gateway_binding, "recording placement start failed: " .. started_error, session, turn_id)
         return nil, started_error
     end
-    step(io, "attempt_started")
     local observed, observe_error = placement_observation(io, session, attempt)
     if not observed then return nil, observe_error end
     return session, nil
+end
+function M.on_startup(io: IO, session: Session): (boolean, string?)
+    local target = M.placement_target(session.plan, "status")
+    if not target then return false, "selected placement binds no status" end
+    local raw, read_error = must(io, target, {attempt_id = session.plan.request.attempt_id})
+    if read_error then return false, read_error end
+    local status, decode_error = placement_decode.status(raw)
+    if not status then return false, "startup state: " .. tostring(decode_error) end
+    local attempt = status.attempt
+    if attempt.attempt_id ~= session.plan.request.attempt_id or attempt.attachment_generation ~= session.epoch then return false, "startup state belongs to another attempt or generation" end
+    session.placement_state = attempt.execution_state
+    session.start_failure = attempt.start_failure
+    session.start_cancelled = attempt.start_cancelled
+    local started_error = record_started(io, session, attempt)
+    if started_error then return false, started_error end
+    return placement_observation(io, session, attempt)
 end
 -- resume: a replacement carrier continues from the stored checkpoint under
 -- a new epoch; the runner resends what the old carrier never acknowledged.
@@ -1005,6 +1033,7 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     point = fenced_point
     local session = new_session(plan, "turn:" .. request.attempt_id .. ":1", epoch, view.checkpoint_revision, checkpoint.rebind(point, epoch))
     session.recovered = true
+    session.attempt_started = view.attempt_state ~= "prepared"
     local status_target = M.placement_target(plan, "status")
     if not status_target then return nil, "selected placement binds no status" end
     local status_value, status_error = must(io, status_target, {attempt_id = request.attempt_id})
@@ -1012,6 +1041,7 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     local status, status_decode_error = placement_decode.status(status_value)
     if not status then return nil, "placement status is malformed: " .. tostring(status_decode_error) end
     local attempt = status.attempt
+    if attempt.start_failure then return nil, "failed start: " .. attempt.start_failure end
     -- Before placement starts, a plan that no longer digests as recorded
     -- refuses: nothing was materialized under it. A started attempt is
     -- still carried, and revalidation refuses any dispatch under it.
@@ -1051,11 +1081,10 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
         if not started_attempt then return abandon("placement start returned an invalid attempt: " .. tostring(started_decode_error)) end
         attempt = started_attempt
         session.runner = attempt.runner
+        session.placement_state = attempt.execution_state
         step(io, "placement_started")
-        local _, started_error = thread_call(io, request, "start_attempt", {action_id = request.action_id, attempt_id = request.attempt_id,
-            started = {execution_kind = "process", execution_ref = attempt.attempt_id, owner_epoch = io.now_ms()}})
+        local started_error = record_started(io, session, attempt)
         if started_error then return nil, started_error end
-        step(io, "attempt_started")
         local observed, observe_error = placement_observation(io, session, attempt)
         if not observed then return nil, observe_error end
         session.turn_open = view.open_turn_id ~= nil
@@ -1063,12 +1092,8 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
         step(io, "reattached")
         return session, nil
     end
-    if view.attempt_state == "prepared" then
-        local _, started_error = thread_call(io, request, "start_attempt", {action_id = request.action_id, attempt_id = request.attempt_id,
-            started = {execution_kind = "process", execution_ref = attempt.attempt_id, owner_epoch = io.now_ms()}})
-        if started_error then return nil, started_error end
-        step(io, "attempt_started")
-    end
+    local started_error = record_started(io, session, attempt)
+    if started_error then return nil, started_error end
     session.turn_open = view.open_turn_id ~= nil
     if view.open_turn_id then session.turn_id = view.open_turn_id end
     if attempt.execution_state == "exited" then
@@ -1099,6 +1124,11 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     local attached_attempt, attached_decode_error = placement_decode.attempt(attached_value)
     if not attached_attempt then return nil, "placement attach returned an invalid attempt: " .. tostring(attached_decode_error) end
     session.runner = attached_attempt.runner
+    session.placement_state = attached_attempt.execution_state
+    session.start_failure = attached_attempt.start_failure
+    session.start_cancelled = attached_attempt.start_cancelled
+    local attached_start_error = record_started(io, session, attached_attempt)
+    if attached_start_error then return nil, attached_start_error end
     step(io, "reattached")
     return session, nil
 end
@@ -1420,7 +1450,10 @@ end
 -- settlement records end the attempt.
 function M.ready_to_settle(session: Session, drain_elapsed: boolean): boolean
     if session.settled then return false end
-    local decided = settle.decide(evidence_of(session, drain_elapsed))
+    local decided: settle.Settlement? = nil
+    if session.start_cancelled then decided = {outcome = "cancelled", reason = "explicit stop before child creation", exit_reconciled = false}
+    elseif session.start_failure then decided = {outcome = "failed", reason = session.start_failure, exit_reconciled = false}
+    else decided = settle.decide(evidence_of(session, drain_elapsed)) end
     if not decided then return false end
     if #session.checkpoint.pending_writes > 0 and not drain_elapsed then return false end
     return true
@@ -1638,7 +1671,9 @@ end
 
 function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Settlement?, string?)
     if session.settled then return session.settled, nil end
-    local decided = settle.decide(evidence_of(session, drain_elapsed))
+    local decided: settle.Settlement? = nil
+    if session.start_failure then decided = {outcome = "failed", reason = session.start_failure, exit_reconciled = false}
+    else decided = settle.decide(evidence_of(session, drain_elapsed)) end
     if not decided then return nil, nil end
     -- Settling while the streams are still open, whether the carrier's own
     -- deadline won or a terminal envelope arrived first, is incomplete

@@ -10,7 +10,7 @@ type Resolver = (string) -> (string?, string?)
 
 local function entry(executables: {[string]: string}, executable_env: {[string]: string}?): Entry
     return {id = "test:policy", kind = "registry.entry", meta = {type = "bee.launch_policy"}, data = {
-        schema_revision = "bee.launch-policy@2",
+        schema_revision = "bee.launch-policy@3",
         required_cleanup = "direct_process",
         required_exit_observation = "eof_gated",
         fixture = true,
@@ -30,6 +30,18 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("retires the persisted revision-two startup deadline explicitly", function()
+            local raw = entry({sh = "/bin/sh"})
+            local data = assert(bounds.object(raw.data))
+            data.schema_revision = "bee.launch-policy@2"
+            data.start_ms = 1
+            local decoded = assert(policy.decode("test:policy", raw))
+            test.eq(decoded.stop_grace_ms, 5000)
+            data.schema_revision = policy.SCHEMA
+            local rejected, reason = policy.decode("test:policy", raw)
+            test.is_nil(rejected)
+            test.eq(reason, "test:policy: unknown field start_ms")
+        end)
         test.it("preserves explicit empty environment values for isolated children", function()
             local raw = entry({claude = "/bin/claude"})
             local data = assert(bounds.object(raw.data))

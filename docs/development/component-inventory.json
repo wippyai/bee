@@ -236,6 +236,11 @@
       "source": "modules/approvals/src/binding/_index.yaml"
     },
     {
+      "id": "bee.approvals.binding:grant_window",
+      "kind": "function.lua",
+      "source": "modules/approvals/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.approvals.binding:inbox",
       "kind": "function.lua",
       "source": "modules/approvals/src/binding/_index.yaml"
@@ -489,6 +494,11 @@
       "id": "bee.approvals.service:worker_service",
       "kind": "process.service",
       "source": "modules/approvals/src/service/_index.yaml"
+    },
+    {
+      "id": "bee.approvals.types:windows",
+      "kind": "library.lua",
+      "source": "modules/approvals/src/types/_index.yaml"
     },
     {
       "id": "bee.approvals:contract",
@@ -6406,6 +6416,11 @@
       "source": "modules/placement-native/src/service/_index.yaml"
     },
     {
+      "id": "bee.placement.native.service:startup",
+      "kind": "process.lua",
+      "source": "modules/placement-native/src/service/_index.yaml"
+    },
+    {
       "id": "bee.placement.native.service:sweeper",
       "kind": "process.lua",
       "source": "modules/placement-native/src/service/_index.yaml"
@@ -9332,6 +9347,13 @@
       "source": "modules/approvals/src/service/_index.yaml"
     },
     {
+      "namespace": "bee.approvals.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.approvals.types",
+      "source": "modules/approvals/src/types/_index.yaml"
+    },
+    {
       "namespace": "bee.apps",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -11862,10 +11884,16 @@
       "table": "bee_approval_runtime_leases"
     },
     {
-      "line": 28,
+      "line": 29,
       "owner_namespace": "bee.approvals.service",
       "source": "modules/approvals/src/service/service.lua",
       "table": "bee_approval_schema_migrations"
+    },
+    {
+      "line": 157,
+      "owner_namespace": "bee.approvals",
+      "source": "modules/approvals/src/migrations/migrations.lua",
+      "table": "bee_approval_window_grants"
     },
     {
       "line": 6,
@@ -12145,6 +12173,12 @@
     },
     {
       "line": 48,
+      "owner_namespace": "bee.placement.native",
+      "source": "modules/placement-native/src/migrations/migrations.lua",
+      "table": "bee_placement_attempts_next"
+    },
+    {
+      "line": 710,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
       "table": "bee_placement_attempts_next"
@@ -12799,6 +12833,11 @@
       "requirement": "bee.approvals:target_request_policies",
       "resolved_by": "registry source",
       "target": "bee.approvals.binding:feed_snapshot"
+    },
+    {
+      "requirement": "bee.approvals:target_request_policies",
+      "resolved_by": "registry source",
+      "target": "bee.approvals.binding:grant_window"
     },
     {
       "requirement": "bee.approvals:target_request_policies",
@@ -13681,6 +13720,11 @@
       "target": "bee.placement.native.binding:stop"
     },
     {
+      "requirement": "bee.placement.native:target_prepare_policies",
+      "resolved_by": "registry source",
+      "target": "bee.placement.native.service:startup"
+    },
+    {
       "requirement": "bee.placement.native:target_resource_mode",
       "resolved_by": "registry source",
       "target": "bee.placement.native.env:resource_mode_ref"
@@ -14549,6 +14593,10 @@
         },
         {
           "entry": "bee.approvals.binding:attention_count",
+          "path": ".security.policies"
+        },
+        {
+          "entry": "bee.approvals.binding:grant_window",
           "path": ".security.policies"
         },
         {
@@ -15998,6 +16046,10 @@
         {
           "entry": "bee.placement.native.binding:attach",
           "path": ".security.policies"
+        },
+        {
+          "entry": "bee.placement.native.service:startup",
+          "path": ".security.policies"
         }
       ]
     },
@@ -17165,6 +17217,12 @@
     },
     {
       "sources": [
+        "modules/harness/src/carrier/policy.lua"
+      ],
+      "tag": "bee.launch-policy@2"
+    },
+    {
+      "sources": [
         "modules/driver-agy/src/security/_index.yaml",
         "modules/driver-claude/src/security/_index.yaml",
         "modules/driver-codex/src/security/_index.yaml",
@@ -17173,7 +17231,7 @@
         "modules/driver-opencode/src/security/_index.yaml",
         "modules/harness/src/carrier/policy.lua"
       ],
-      "tag": "bee.launch-policy@2"
+      "tag": "bee.launch-policy@3"
     },
     {
       "sources": [
@@ -17322,19 +17380,19 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1831,
-    "namespace_count": 273,
+    "entry_count": 1834,
+    "namespace_count": 274,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
-    "owned_table_declaration_count": 151,
-    "persisted_id_count": 840,
+    "owned_table_declaration_count": 153,
+    "persisted_id_count": 841,
     "requirement_count": 141,
-    "requirement_target_count": 335,
+    "requirement_target_count": 337,
     "root_src_lua_budget": 19277,
     "root_src_lua_lines": 19276,
-    "schema_tag_count": 70,
+    "schema_tag_count": 71,
     "topic_count": 138
   },
   "topics": [

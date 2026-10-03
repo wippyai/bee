@@ -67,13 +67,13 @@ local function fail(db, backend: process_backend.Backend?, reason: string, gatew
     end
     if db and attempt_id then
         if not child_created then
-            store.transition(db, attempt_id, {execution = "exited", fields = {exit_source = "runner"},
-                evidence = {kind = "child.not_started", detail = reason}})
+            local recorded = materialization.fail_start(db, attempt_id, reason, backend ~= nil)
+            if not recorded.ok then reason = reason .. "; record failed start: " .. tostring(recorded.message) end
         end
         local attempt = store.attempt(db, attempt_id)
-        if attempt and attempt.execution_state == "exited" then
+        if attempt and (attempt.execution_state == "exited" or attempt.start_failure) then
             if backend then
-                local cleaned, cleanup_error = backend.cleanup(attempt, true)
+                local cleaned, cleanup_error = backend.cleanup(attempt)
                 if not cleaned then reason = reason .. "; cleanup: " .. tostring(cleanup_error) end
             else
                 local cleaned = service.cleanup_attempt(attempt, true)
@@ -159,7 +159,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     if not attempt then return fail(db, backend, "attempt is not recorded", nil) end
     local authorized_key, authorization_error = service.authorize_materialization(attempt, row, request, chosen.expected_binding)
     if authorization_error then
-        store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "window.authorization_failed", detail = tostring(authorization_error.error and authorization_error.error.message or "launch authorization failed")}})
+        store.transition(db, attempt_id, {evidence = {kind = "window.authorization_failed", detail = tostring(authorization_error.error and authorization_error.error.message or "launch authorization failed")}})
         return fail(db, backend, authorization_error.error and authorization_error.error.message or "launch authorization failed", nil)
     end
 
@@ -210,7 +210,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     local terminal: exec.TerminalProcess? = nil
     local controls = process.listen(protocol.TOPIC_CONTROL, {message = true})
     if not controls then
-        store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "child.not_started", detail = "window control listener unavailable before child creation"}})
+        materialization.fail_start(db, attempt_id, "window control listener unavailable before child creation", backend ~= nil)
         executor:release()
         return fail(db, backend, "window control listener unavailable", gateway_binding, attempt_id)
     end
@@ -274,7 +274,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     if not started then
         finished = true
         process.unlisten(controls)
-        store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "child.refused", detail = "executor refused the PTY command: " .. tostring(start_error)}})
+        store.transition(db, attempt_id, {evidence = {kind = "child.refused", detail = "executor refused the PTY command: " .. tostring(start_error)}})
         executor:release()
         return fail(db, backend, "start terminal: " .. tostring(start_error), gateway_binding, attempt_id)
     end

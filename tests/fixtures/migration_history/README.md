@@ -13,7 +13,7 @@ retain their SQL and IDs. Parallel component additions append after that prefix.
 
 Desktop reference migrations keep Credentials 8, Placement 10, Sync 11,
 Gateway 19 and Resources 5. Hive reference migrations follow them at
-Credentials 9, Placement 11, Sync 12, Gateway 20 and Resources 6.
+Credentials 9, Placement 12, Sync 12, Gateway 20 and Resources 6.
 
 The audit covers all 104 declared migration identities across the 999 first-parent
 commits of main through the installed baseline `893d1216`, following source moves

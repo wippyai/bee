@@ -172,11 +172,11 @@ entries:
     comment: Launch policy of the managed window readiness fixture; its constructor
       never starts the executable
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     allow_host_home: true
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 1000
+
     stop_grace_ms: 100
     drain_ms: 100
     runner_drain_ms: 100
@@ -300,10 +300,10 @@ entries:
     comment: Claude protocol fixture policy; eof_gated and bound to the fixture executable
       by the suite at runtime
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -320,10 +320,10 @@ entries:
     comment: Selection-only policy with a harmless absolute path; no carrier test
       executes it
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -341,10 +341,10 @@ entries:
     comment: The fixture policy with gateway tools admitted; bound to the fixture
       executable by the suite at runtime
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -370,10 +370,10 @@ entries:
     comment: The fixture policy with gateway tools admitted; bound to the fixture
       executable by the suite at runtime
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -420,10 +420,10 @@ entries:
       delivery and publish MCP tools and is bound to the fixture executable by the
       suite at runtime
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -446,10 +446,10 @@ entries:
     comment: The gateway fixture policy with a binding life short enough to expire
       while a child holds its token
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -470,10 +470,10 @@ entries:
     comment: Fixture policy for the real Claude executable with gateway tools admitted;
       the suite binds the executable and the loopback endpoint
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 30000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -499,10 +499,10 @@ entries:
     comment: Fixture policy for the real Codex executable with gateway tools admitted
       through the provider configuration; the suite binds the executable
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 30000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -1048,10 +1048,10 @@ entries:
     comment: Claude fixture policy extended with the host-approved agent model map,
       admitted delegates and agent gateway tools
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -1135,10 +1135,10 @@ entries:
     test_support: true
     comment: Profile-environment fixture policy selected by the alpha named definition
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -1157,10 +1157,10 @@ entries:
     test_support: true
     comment: Profile-environment fixture policy selected by the beta named definition
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -1539,10 +1539,10 @@ entries:
       the suite binds the executable, the acceptance record and the proven fixture
       digest at runtime
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     fixture: true
@@ -1558,10 +1558,10 @@ entries:
     comment: A production-shaped exchange policy naming the real Claude adapter, to
       prove what a production exchange refuses on this host once the profile pin holds
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: process_group
     required_exit_observation: independent
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     executables: {}
@@ -1576,10 +1576,10 @@ entries:
     comment: A production-shaped exchange policy naming the fixture adapter no profile
       pins, to prove the pin refusal
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: process_group
     required_exit_observation: independent
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     executables: {}
@@ -1857,10 +1857,10 @@ entries:
     comment: Fixture policy for the real Codex executable with the loopback provider;
       the suite binds the executable
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 20000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -1878,10 +1878,10 @@ entries:
     comment: The same fixture policy without a provider, for the missing-configuration
       refusal
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 20000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -1918,10 +1918,10 @@ entries:
     comment: Fixture policy for the real Claude executable; the suite binds the executable
       and the host-selected loopback endpoint through the policy environment
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 20000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -1997,10 +1997,10 @@ entries:
       binds the executable, the loopback endpoint, the acceptance record and the proven
       capture digest
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 20000
+
     stop_grace_ms: 1500
     drain_ms: 2000
     runner_drain_ms: 1000
@@ -2467,3 +2467,11 @@ entries:
   meta: {type: test, suite: bee}
   modules: [process]
   imports: {test: 'wippy.test:test', exits: 'bee.harness.catalog:exits'}
+- name: startup_view_test
+  kind: function.lua
+  source: file://startup_view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    agents: bee.harness.app:agents

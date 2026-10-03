@@ -220,10 +220,26 @@ local function resource_call(method: string, value: unknown): {[string]: unknown
     return assert(bounds.object(typed.value))
 end
 local function call(actor: string, method: string, value: unknown): service.Reply
-    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native.binding:" .. method, value)
+    local client = caller(actor, principals.workspace(value))
+    local raw, err = client:call("bee.placement.native.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    return principals.reply(reply)
+    local reply = principals.reply(raw)
+    if method ~= "start" or not reply.ok then return reply end
+    local attempt = assert(placement_decode.attempt(reply.value))
+    local deadline = time.after("30s")
+    while attempt.execution_state == "starting" do
+        local tick = time.after("10ms")
+        local selected = channel.select({tick:case_receive(), deadline:case_receive()})
+        assert(selected.ok and selected.channel ~= deadline, "test runner did not finish startup")
+        local status_value, status_error = client:call("bee.placement.native.binding:status", {attempt_id = attempt.attempt_id})
+        assert(not status_error, tostring(status_error))
+        local status = principals.reply(status_value)
+        assert(status.ok, status.error and status.error.message)
+        attempt = assert(placement_decode.status(status.value)).attempt
+    end
+    return {ok = true, value = attempt}
 end
+
 local function value(reply: service.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return assert(bounds.object(reply.value))
@@ -248,7 +264,7 @@ local function launch(command: {string}, required: string): {[string]: unknown}
         binding_ref = FIXTURE_BINDING, policy_ref = NO_PROVIDER_POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
         launch = {executable = command[1], argv = argv, environment = {"PROBE_VALUE"}, working_directory_ref = "project", readiness = "none"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500}}
+        environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {stop_grace_ms = 500}}
 end
 local function provider_home_fixtures(): {{provider: string, launch: {[string]: unknown}}}
     local result: {{provider: string, launch: {[string]: unknown}}} = {}
@@ -334,7 +350,7 @@ local function grok_composition_request(attempt_id: string, session_ref: string,
         },
         environment = {}, environment_refs = {}, projections = {projection_id},
         required_cleanup = "direct_process", required_exit_observation = "eof_gated",
-        timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
+        timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
         delivery = {arguments = {}, files = {gateway_file}},
     }
     return value
@@ -1109,7 +1125,7 @@ local function define_tests()
             test.eq(tostring(selected.value:from()), tostring(duplicate))
             local reply = selected.value:payload():data()
             test.is_false(reply.started)
-            test.is_true((reply.reason or ""):find("not the expected intended", 1, true) ~= nil)
+            test.is_true((reply.reason or ""):find("attempt belongs to another runner", 1, true) ~= nil)
             local row = store.row(db, prepared.attempt_id)
             if not row then db:release(); error("attempt disappeared") end
             test.eq(row.runner_pid, winner)
@@ -1338,7 +1354,9 @@ local function define_tests()
                 test.is_false(liveness.observed)
             end
             local recorded = kinds(prepared.attempt_id)
-            for _, expected in ipairs({"intent.recorded", "attach", "runner.started", "home.created", "child.started", "child.exited"}) do
+            for _, expected in ipairs({"intent.recorded", "attach", "runner.start_accepted", "runner.started", "home.created", "runner.materialized",
+                "child.start_returned", "child.streams_ready", "child.identity_requested", "child.identity_returned",
+                "child.started", "runner.ack_sending", "runner.ack_sent", "runner.ack_received", "child.exited"}) do
                 test.is_true(has(recorded, expected))
             end
             test.eq(attempt.cleanup_state, "pending")
@@ -1402,7 +1420,8 @@ local function define_tests()
             request.executable = {revision = "bee.executable-measurement@1", kind = "script", digest = string.rep("0", 64)}
             local stale = attempt_of(call(OWNER, "prepare", request))
             local refused = call(OWNER, "start", {attempt_id = stale.attempt_id})
-            test.is_false(refused.ok)
+            test.is_true(refused.ok)
+            test.eq(attempt_of(refused).execution_state, "start_failed")
             test.is_true(has(kinds(stale.attempt_id), "executable.changed"))
             local fresh_request = launch({script}, "direct_process")
             fresh_request.executable = {revision = "bee.executable-measurement@1", kind = "script", digest = measured.digest}
@@ -1542,7 +1561,8 @@ local function define_tests()
             test.eq(replayed.delivery and replayed.delivery.files[1].digest, rendered.digest)
             test.eq(replayed.delivery and replayed.delivery.files[1].content, rendered.content)
             local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            test.eq(started.execution_state, "running")
+            test.is_true(started.execution_state == "running" or started.execution_state == "exited")
+            test.is_nil(started.start_failure)
             time.sleep("500ms")
             local recorded = kinds(prepared.attempt_id)
             test.is_true(has(recorded, "configuration.materialized"))
@@ -1615,9 +1635,9 @@ local function define_tests()
             if write_error then error("corrupt overlap fixture: " .. tostring(write_error)) end
 
             local started = call(OWNER, "start", {attempt_id = prepared.attempt_id})
-            test.is_false(started.ok)
-            test.eq(started.error and started.error.code, "UNAVAILABLE")
-            test.eq(started.error and started.error.message, "configuration overlaps retained login identity")
+            test.is_true(started.ok)
+            test.eq(attempt_of(started).execution_state, "start_failed")
+            test.eq(attempt_of(started).start_failure, "configuration overlaps retained login identity")
             test.is_true(has(kinds(prepared.attempt_id), "configuration.refused"))
             local home_key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
             test.is_false(homes.attempt_exists(home_key))
@@ -1723,7 +1743,7 @@ local function define_tests()
             local blocked = call(OWNER, "prepare", competing)
             test.eq(blocked.error and blocked.error.code, "CONFLICT")
             test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
-            test.eq(attempt_of(call(OWNER, "start", {attempt_id = first_prepared.attempt_id})).execution_state, "running")
+            test.is_nil(attempt_of(call(OWNER, "start", {attempt_id = first_prepared.attempt_id})).start_failure)
             test.is_true(wait_for(function()
                 return (value(call(OWNER, "status", {attempt_id = first_prepared.attempt_id})).attempt).execution_state == "exited"
             end, 8000))
@@ -1735,7 +1755,7 @@ local function define_tests()
             local second_configuration = provider_configuration().content
             local second = retained_launch(OWNER, session_ref, "second")
             local second_prepared = attempt_of(call(OWNER, "prepare", second))
-            test.eq(attempt_of(call(OWNER, "start", {attempt_id = second_prepared.attempt_id})).execution_state, "running")
+            test.is_nil(attempt_of(call(OWNER, "start", {attempt_id = second_prepared.attempt_id})).start_failure)
             test.is_true(wait_for(function()
                 return (value(call(OWNER, "status", {attempt_id = second_prepared.attempt_id})).attempt).execution_state == "exited"
             end, 8000))
@@ -1765,7 +1785,9 @@ local function define_tests()
             local other_owner = "bee.test.session_other"
             local other = retained_launch(other_owner, session_ref, "other")
             local other_prepared = attempt_of(call(other_owner, "prepare", other))
-            test.eq(attempt_of(call(other_owner, "start", {attempt_id = other_prepared.attempt_id})).execution_state, "running")
+            local other_started = attempt_of(call(other_owner, "start", {attempt_id = other_prepared.attempt_id}))
+            test.is_true(other_started.execution_state == "running" or other_started.execution_state == "exited")
+            test.is_nil(other_started.start_failure)
             test.is_true(wait_for(function()
                 return (value(call(other_owner, "status", {attempt_id = other_prepared.attempt_id})).attempt).execution_state == "exited"
             end, 8000))
@@ -2136,26 +2158,29 @@ local function define_tests()
             test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
         end)
         test.it("drains for a bounded time after an independently observed exit while descendants hold the pipes", function()
-            local request = launch({"sh", "-c", "sleep 2 & echo hi"}, "direct_process")
-            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 300, retain_ms = 300}
+            local release = ".wippy/" .. fresh("descendant-drain")
+            local script = "while [ ! -e " .. quote.posix(release) .. " ]; do sleep 0.01; done & echo hi"
+            local request = launch({"sh", "-c", script}, "direct_process")
+            request.timeouts = {stop_grace_ms = 500, drain_ms = 300, retain_ms = 300}
             local prepared = attempt_of(call(OWNER, "prepare", request))
-            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            time.sleep("1200ms")
-            local recorded = kinds(prepared.attempt_id)
-            if started.exit_observation == "independent" then
-                test.is_true(has(recorded, "child.exited"))
-                test.is_true(has(recorded, "output.drain_elapsed"))
-            else
-                test.is_false(has(recorded, "output.drain_elapsed"))
-                time.sleep("1500ms")
-                test.is_true(has(kinds(prepared.attempt_id), "child.exited"))
-            end
+            local ok, problem = pcall(function()
+                local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                if started.exit_observation == "independent" then
+                    test.is_true(wait_for(function() return has(kinds(prepared.attempt_id), "child.exited") end, 5000))
+                    test.is_true(wait_for(function() return has(kinds(prepared.attempt_id), "output.drain_elapsed") end, 5000))
+                else
+                    test.is_false(has(kinds(prepared.attempt_id), "output.drain_elapsed"))
+                end
+            end)
+            shell("touch " .. quote.posix(release))
+            if not ok then error(tostring(problem)) end
+            test.is_true(wait_for(function() return has(kinds(prepared.attempt_id), "child.exited") end, 5000))
         end)
         test.it("retains pipe data across post-exit consumer backpressure without false truncation", function()
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
             local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
             local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
-            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 100, retain_ms = 1500}
+            request.timeouts = {stop_grace_ms = 500, drain_ms = 100, retain_ms = 1500}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
             attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -2188,7 +2213,7 @@ local function define_tests()
         end)
         test.it("records unacknowledged output as lost once the retention deadline passes after exit", function()
             local request = launch({"sh", "-c", "echo one; echo two"}, "direct_process")
-            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, retain_ms = 300}
+            request.timeouts = {stop_grace_ms = 500, retain_ms = 300}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
             attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -2208,7 +2233,7 @@ local function define_tests()
         end)
         test.it("bounds post-exit retention when an unacknowledged burst fills the spool", function()
             local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
-            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 100, retain_ms = 300}
+            request.timeouts = {stop_grace_ms = 500, drain_ms = 100, retain_ms = 300}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
             attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -2320,7 +2345,7 @@ local function define_tests()
             test.eq(late.error and late.error.code, "EXPIRED")
             test.is_true(has(kinds(short_attempt), "grant.refused"))
             local started = attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
-            test.eq(started.execution_state, "running")
+            test.is_true(started.execution_state == "running" or started.execution_state == "exited")
             resource_mode("host_configured")
         end)
         test.it("stops a running attempt whose grant is revoked, with enforcement pending until the exit is proven", function()
@@ -2610,8 +2635,8 @@ local function define_tests()
             changed_request.projections = {issue(changed_id).projection_id}
             attempt_of(call(OWNER, "prepare", changed_request))
             local refused = call(OWNER, "start", {attempt_id = changed_id})
-            test.is_false(refused.ok)
-            test.eq(refused.error and refused.error.code, "UNAVAILABLE")
+            test.is_true(refused.ok)
+            test.eq(attempt_of(refused).execution_state, "start_failed")
             test.is_true(has(kinds(changed_id), "credential.refused"))
             test.is_nil((shell("cat " .. home .. "/marker"):find("changed-login", 1, true)))
         end)
@@ -2849,12 +2874,14 @@ local function define_tests()
             -- Both asynchronous calls have returned, so remove the source
             -- FIFO before any assertion can abort the test and strand it.
             test.eq(shell("rm -f " .. source_root .. "/auth.json"), "")
-            if started.ok ~= false then error("fenced start unexpectedly succeeded") end
-            test.eq(started.error and started.error.code, "UNAVAILABLE")
+            test.is_true(started.ok)
+            test.eq(attempt_of(started).execution_state, "starting")
+            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = attempt_id})).attempt.execution_state == "exited" end, 3000))
 
             local stopped = value(call(OWNER, "status", {attempt_id = attempt_id})).attempt
             test.eq(stopped.execution_state, "exited")
-            test.eq(stopped.exit_source, "runner")
+            test.is_nil(stopped.exit_source)
+            test.is_true(stopped.start_cancelled)
             local session_key = assert(homes.session_key(OWNER, session_ref))
             local session_path = assert(homes.ensure_session(session_key))
             local home = assert(homes.os_path(session_path .. "/home"))
@@ -2867,7 +2894,13 @@ local function define_tests()
                 test.is_false(item.kind == "configuration.materialized")
                 test.is_false(item.kind == "credential.refused")
             end
-            test.eq(stopped.evidence_count, evidence_count)
+            local receipt_db = assert(store.open())
+            local counts = assert(receipt_db:query([[SELECT evidence_count,
+                (SELECT COUNT(*) FROM bee_placement_evidence e WHERE e.attempt_id = a.attempt_id) AS actual_count
+                FROM bee_placement_attempts a WHERE attempt_id = ?]], {attempt_id}))
+            receipt_db:release()
+            test.eq(counts[1].evidence_count, counts[1].actual_count)
+            test.is_true(evidence_count > 0)
 
             -- A partial native identity must not be mistaken for an empty
             -- execution scope, even with a genuine pre-creation receipt.
@@ -2896,31 +2929,27 @@ local function define_tests()
             end, 8000) then error("successor retained launch did not exit") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
         end)
-        test.it("reports an unacknowledged startup deadline as uncertain and leaves the runner supervised", function()
+        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
-            local timeouts = assert(bounds.object(request.timeouts))
-            timeouts.start_ms = 100
             local prepared = attempt_of(call(OWNER, "prepare", request))
             local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
             local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
-            local deadline = time.after("10s")
-            local selected = channel.select({pending:case_receive(), deadline:case_receive()})
+            assert(not call_error, tostring(call_error))
+            local started = attempt_of(principals.reply(raw))
+            test.eq(started.execution_state, "starting")
+            local selected = channel.select({pending:case_receive(), time.after("5s"):case_receive()})
             process.unlisten(pending)
-            if not selected.ok or selected.channel == deadline then error("startup fixture did not claim the attempt") end
-            local message = selected.value
-            local data = assert(bounds.object(message:payload():data()))
-            local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-            local stopped = process.terminate(tostring(message:from()))
-            test.is_true(stopped)
-            test.eq(data.attempt_id, prepared.attempt_id)
-            if call_error then error(tostring(call_error)) end
-            local reply = principals.reply(raw)
-            test.is_false(reply.ok)
-            test.eq(reply.error and reply.error.code, "UNCERTAIN")
-            test.eq(reply.error and reply.error.message, "runner did not acknowledge startup within 100ms; startup outcome is unknown")
-            test.eq(current.execution_state, "starting")
-            test.is_false(has(kinds(prepared.attempt_id), "child.started"))
+            assert(selected.ok and selected.channel == pending, "fixture did not begin")
+            local runner = tostring(selected.value:from())
+            test.eq(started.runner, runner)
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt.execution_state == "running" end, 3000))
+            assert(process.terminate(runner))
+            local recorded = kinds(prepared.attempt_id)
+            test.is_true(has(recorded, "runner.start_accepted"))
+            test.is_false(has(recorded, "runner.start_deadline"))
+            test.is_true(has(recorded, "child.started"))
         end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()
@@ -2999,8 +3028,9 @@ local function define_tests()
             unrunnable.projections = {missing.projection_id}
             attempt_of(call(OWNER, "prepare", unrunnable))
             local failed = call(OWNER, "start", {attempt_id = missing_attempt})
-            test.is_false(failed.ok, "a nonexistent executable returned a successful start reply")
-            if tostring(failed.error and failed.error.message):find(SENTINEL, 1, true) then error("sentinel leaked into the start reply") end
+            test.is_true(failed.ok)
+            test.eq(attempt_of(failed).execution_state, "start_failed")
+            if tostring(attempt_of(failed).start_failure):find(SENTINEL, 1, true) then error("sentinel leaked into the start reply") end
             local failed_page = value(call(OWNER, "evidence", {attempt_id = missing_attempt, limit = 64}))
             for _, item in ipairs(principals.objects(failed_page.evidence)) do
                 if tostring(item.detail):find(SENTINEL, 1, true) then error("sentinel leaked into failure evidence") end
@@ -3031,8 +3061,9 @@ local function define_tests()
                 end
                 attempt_of(call(OWNER, "prepare", request))
                 local failed = call(OWNER, "start", {attempt_id = attempt_id})
-                test.is_false(failed.ok)
-                local message = tostring(failed.error and failed.error.message)
+                test.is_true(failed.ok)
+                test.eq(attempt_of(failed).execution_state, "start_failed")
+                local message = tostring(attempt_of(failed).start_failure)
                 test.is_true(message:find("ANTHROPIC_API_KEY is already assigned", 1, true) ~= nil)
                 test.is_nil((message:find(SENTINEL, 1, true)))
                 local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))

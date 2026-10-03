@@ -1,30 +1,66 @@
--- MIT. A hosted runner claims the attempt but leaves startup unacknowledged.
+-- SPDX-License-Identifier: MIT
 local process = require("process")
+local channel = require("channel")
 local service = require("service")
 local store = require("store")
-
 local M = {}
-
 function M.start(request: unknown): service.Reply
     return service.start_local(request, "bee.placement.native:startup_runner")
 end
-
-function M.main(attempt_id: string)
+function M.main(attempt_id: string, supervisor: string, reply_topic: string, _binding: string?, _key: string?, control_token: string, _materialization_epoch: integer)
     local events = assert(process.events())
+    local advances = assert(process.listen("bee.test.startup.advance", {message = true}))
+    local controls = assert(process.listen("bee.placement.control", {message = true}))
+    local launch = assert(process.listen(reply_topic .. ".launch", {message = true}))
+    assert(process.send(supervisor, reply_topic, {ready = true}))
+    local released = channel.select({launch:case_receive(), events:case_receive()})
+    if released.channel ~= launch then return end
+    process.unlisten(launch)
     local db = assert(store.open())
-    local claimed = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting",
-        fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "startup fixture"}})
+    local pending = assert(store.row(db, attempt_id))
+    local cancelled = pending.execution_state == "stopping"
+    local claimed = store.transition(db, attempt_id, {expected_execution = cancelled and "stopping" or "starting", fields = {runner_pid = process.pid()},
+        evidence = {kind = "runner.started", detail = "controllable fixture"}})
     assert(claimed.ok, claimed.message)
     local row = assert(store.row(db, attempt_id))
+    local request = assert(store.request(row))
     assert(type(row.recipient) == "string")
     assert(process.send(row.recipient, "bee.test.startup.pending", {attempt_id = attempt_id}))
-    while true do
-        local event = events:receive()
-        if event.kind == process.event.CANCEL then break end
+    if cancelled then
+        assert(store.transition(db, attempt_id, {execution = "exited", cleanup = "complete",
+            evidence = {kind = "child.not_started", detail = "explicit cancellation before child creation"}}).ok)
     end
-    assert(store.transition(db, attempt_id, {execution = "exited", fields = {exit_source = "runner"},
-        evidence = {kind = "child.not_started", detail = "startup fixture released without creating a child"}}).ok)
+    while true do
+        local selected = channel.select({advances:case_receive(), controls:case_receive(), events:case_receive()})
+        if selected.channel == events then
+            db:release()
+            return
+        elseif selected.channel == controls then
+            local data: unknown = selected.value:payload():data()
+            if type(data) == "table" and data.control_token == control_token and data.command == "stop" then
+                cancelled = true
+                assert(store.transition(db, attempt_id, {execution = "exited", cleanup = "complete",
+                    evidence = {kind = "child.not_started", detail = "explicit cancellation before child creation"}}).ok)
+            end
+        else break end
+    end
+    if cancelled then
+        assert(process.send(supervisor, reply_topic, {started = true}))
+    elseif request.launch.argv[1] == "exit" then
+        db:release()
+        error("fixture runner crashed before acknowledgement")
+    elseif request.launch.argv[1] == "refuse" then
+        local reason = "fixture daemon refused containers/create"
+        assert(store.transition(db, attempt_id, {execution = "start_failed", evidence = {kind = "child.start_failed", detail = reason}}).ok)
+        assert(process.send(supervisor, reply_topic, {started = false, reason = reason}))
+        db:release()
+        return
+    else
+        local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", evidence = {kind = "child.started", detail = "fixture acknowledged"}})
+        assert(running.ok, running.message)
+        assert(process.send(supervisor, reply_topic, {started = true}))
+    end
+    events:receive()
     db:release()
 end
-
 return M

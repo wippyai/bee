@@ -6,13 +6,13 @@ entries:
   source: file://apps/deploy_board.lua
   imports:
     frame: bee.ui:frame
-    viz: bee.app:viz
+    viz: bee.ui.viz:viz
 - name: ci_bench
   kind: library.lua
   source: file://apps/ci_bench.lua
   imports:
     frame: bee.ui:frame
-    viz: bee.app:viz
+    viz: bee.ui.viz:viz
 - name: inbox
   kind: library.lua
   source: file://apps/inbox.lua
@@ -28,27 +28,27 @@ entries:
   source: file://apps/topology.lua
   imports:
     frame: bee.ui:frame
-    viz: bee.app:viz
-    diagram: bee.app:diagram
+    viz: bee.ui.viz:viz
+    diagram: bee.ui.diagram:diagram
 - name: workflow
   kind: library.lua
   source: file://apps/workflow.lua
   imports:
     frame: bee.ui:frame
-    viz: bee.app:viz
-    diagram: bee.app:diagram
+    viz: bee.ui.viz:viz
+    diagram: bee.ui.diagram:diagram
 - name: metrics
   kind: library.lua
   source: file://apps/metrics.lua
   imports:
     frame: bee.ui:frame
-    viz: bee.app:viz
+    viz: bee.ui.viz:viz
 - name: deploy_form
   kind: library.lua
   source: file://apps/deploy_form.lua
   imports:
     frame: bee.ui:frame
-    forms: bee.app:forms
+    forms: bee.ui.forms:forms
 - name: overlays
   kind: library.lua
   source: file://apps/overlays.lua
@@ -63,7 +63,7 @@ entries:
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
-    forms: bee.app:forms
+    forms: bee.ui.forms:forms
     appearance: bee.ui:appearance
     deploy_board: bee.app.reference.test:deploy_board
     ci_bench: bee.app.reference.test:ci_bench

@@ -38,23 +38,17 @@ type Snapshot = {
 type ResolvedCall = {operation: Operation, input: {[string]: unknown}, input_digest: string, generation: integer}
 M.INTERFACE_TYPE = "hive.interface"
 local MAX_DIAGNOSTICS = 64
-local function exposure_action(mode: string): string
-    return "hive.expose." .. mode
-end
-function M.exposure_action(mode: string): string
-    return exposure_action(mode)
-end
 M.EXPOSURE_SCOPE = "bee.security.hive:hive_exposure_scope"
 -- The host ceiling for one operation: the caller's direct grant, or the
 -- exposure scope the supervisor loads through the host facade policy.
 -- Install grants join that scope; fixed host policies keep working.
 function M.admits(mode: string, operation_ref: string): boolean
-    if security.can(exposure_action(mode), operation_ref) then return true end
+    if security.can(types.exposure_action(mode), operation_ref) then return true end
     local actor = security.actor()
     if actor == nil then return false end
     local scope, scope_error = security.named_scope(M.EXPOSURE_SCOPE)
     if scope == nil or scope_error ~= nil then return false end
-    return scope:evaluate(actor, exposure_action(mode), operation_ref) == "allow"
+    return scope:evaluate(actor, types.exposure_action(mode), operation_ref) == "allow"
 end
 -- The invocation action a principal's own scope must grant on an
 -- operation; exposure publishes, invocation authorizes.

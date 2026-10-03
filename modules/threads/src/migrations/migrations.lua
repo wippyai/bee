@@ -930,6 +930,12 @@ ALTER TABLE bee_sessions ADD COLUMN tokens INTEGER NOT NULL DEFAULT 0 CHECK(toke
 ]]},
     {id = 28, name = "app_child_definition_data", sql = APP_DEFINITION_SQL, rebuild = false},
     {id = 29, name = "cancel_intent_admission_repair", sql = CANCEL_INTENT_REPAIR_SQL, rebuild = true},
+    {id = 30, name = "retained_app_definition_data", rebuild = false, sql = [[
+ALTER TABLE bee_thread_definition_migrations RENAME TO bee_thread_definition_migrations_prior;
+CREATE TABLE bee_thread_definition_migrations (id INTEGER PRIMARY KEY CHECK(id >= 1));
+INSERT INTO bee_thread_definition_migrations SELECT id FROM bee_thread_definition_migrations_prior;
+DROP TABLE bee_thread_definition_migrations_prior;
+]]},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

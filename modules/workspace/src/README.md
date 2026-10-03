@@ -34,3 +34,13 @@ See [storage](../../../docs/reference/storage.md),
 [workspace catalog](../../../docs/reference/workspace-catalog.md) for the
 implemented operations and persistence contracts. Function publication refreshes
 future calls; running hosts use their existing handoff or restart lifecycle.
+
+## Host lease client
+
+`bee.workspace.client:host_leases` acquires and releases leases on node-managed
+workspace hosts. The holder registers a lease name and asks the existing node
+host manager for the workspace's host. The manager answers only that holder;
+`bee.security.desktop:workspace_host_lease_policy` selects who may name leases.
+A timed-out acquire releases its lease and leaves attachment status unknown.
+The client opens no store and selects no host permissions. Existing lease names,
+`bee.workspace.hosts.*` topics and host lifecycle remain unchanged.

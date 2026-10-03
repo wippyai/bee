@@ -19,7 +19,7 @@ local function define_tests()
                 policies[#policies + 1] = policy
             end
             local supervisor = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-                :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {}})))
+                :spawn_monitored("bee.hive.service:supervisor", types.SUPERVISOR_HOST, {configured_nodes = {}})))
             local handle = assert(client.open())
             local ok, err = pcall(function()
                 local timeout = time.now():add("3s")

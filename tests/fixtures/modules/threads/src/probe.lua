@@ -14,7 +14,7 @@ local function main()
     local reference = assert(registry.get("bee.threads.env:database_ref"), "database_ref missing")
     assert(reference.data.resource_ref == "bee.threads.env:db", "target_db default was not linked into database_ref: " .. tostring(reference.data.resource_ref))
 
-    for _, id in ipairs({"bee.ui:appearance", "bee.host:main", "bee.console.app:app", "bee.workspace:main"}) do
+    for _, id in ipairs({"bee.ui:appearance", "bee.host:main", "bee.console.app:app", "bee.workspace:main", "bee.hive.service:supervisor", "bee.hive.binding:policy_admission", "bee.hive.exposure:catalog"}) do
         assert(registry.get(id) == nil, id .. " leaked into the threads closure")
     end
 

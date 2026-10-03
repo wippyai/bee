@@ -70,6 +70,6 @@ entries:
   data:
     adapters:
     - operations: [bee.threads.service:send, bee.threads.service:send_status]
-      worker: bee.threads.hive:admit
+      worker: bee.threads.hive.binding:admit
     - operations: [bee.sync.binding:replica_receive]
       worker: bee.sync.hive:admit

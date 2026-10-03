@@ -12,24 +12,12 @@ local logger = require("logger")
 local leases = require("leases")
 local command_stop = require("command_stop")
 local types = require("types")
-local startup_progress = require("startup_progress")
 
 local function main()
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     -- The node serves once its host manager and Hive supervisor run.
-    local started = time.now()
-    local startup = startup_progress.new(0, 10000)
-    local phase = "starting services"
     while not process.registry.lookup(leases.MANAGER) or not process.registry.lookup(types.SUPERVISOR_NAME) do
-        local now_ms = math.floor(time.now():sub(started):milliseconds())
-        local raw = env.get("bee.env:startup_sequence")
-        local sequence = raw and tonumber(raw)
-        if sequence and sequence > 0 and sequence == math.floor(sequence) then
-            startup_progress.advance(startup, "starting", now_ms, math.floor(sequence))
-            phase = env.get("bee.env:startup_phase") or phase
-        end
-        if startup_progress.expired(startup, now_ms) then error("Node startup stalled during " .. phase .. ": no progress for 10s") end
         local selected = channel.select({time.after("50ms"):case_receive(), events:case_receive()})
         if selected.channel == events and selected.value.kind == process.event.CANCEL then return end
     end

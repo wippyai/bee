@@ -139,7 +139,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.desktop.service:main
-    - bee.terminal:main
+    - bee.terminal.service:main
     effect: allow
 - name: host_spawn_policy
   kind: security.policy
@@ -156,8 +156,8 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.client:list_desktops
-    - bee.client:allocate_desktop
+    - bee.client.binding:list_desktops
+    - bee.client.binding:allocate_desktop
     effect: allow
 - name: desktop_catalog_resource_policy
   kind: security.policy
@@ -176,7 +176,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.host:main
-    - bee.client:main
+    - bee.client.service:main
     effect: allow
 - name: retained_owner_spawn_policy
   kind: security.policy

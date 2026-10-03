@@ -17,14 +17,6 @@ import (
 	"github.com/wippyai/wapp"
 )
 
-type packageEntry struct {
-	Namespace string         `json:"ns"`
-	Name      string         `json:"name"`
-	Kind      string         `json:"kind"`
-	Data      map[string]any `json:"data,omitempty"`
-	Meta      map[string]any `json:"meta,omitempty"`
-}
-
 func repoRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -54,18 +46,22 @@ func prepareFixture(root, repo string) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "tests/fixtures/hub_manage"))); err != nil {
 		return fmt.Errorf("copy Hub fixture: %w", err)
 	}
-	for _, module := range []string{"values", "hub", "persist", "sync", "threads", "hive", "driver", "placement"} {
+	for _, module := range []string{"values", "hub", "persist", "sync", "threads", "hive", "driver", "placement", "application", "ui"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", module), os.DirFS(filepath.Join(repo, "modules", module))); err != nil {
 			return fmt.Errorf("stage Hub component dependency %s: %w", module, err)
 		}
 	}
-	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/values\n  version: 0.1.0-dev\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n- name: bee/driver\n  version: 0.1.0-dev\n- name: bee/placement\n  version: 0.1.0-dev\n"
+	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/values\n  version: 0.1.0-dev\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n- name: bee/driver\n  version: 0.1.0-dev\n- name: bee/placement\n  version: 0.1.0-dev\n- name: bee/application\n  version: 0.1.0-dev\n- name: bee/ui\n  version: 0.1.0-dev\n"
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write fixture lock: %w", err)
 	}
-	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/values: ./modules/values\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/hive: ./modules/hive\n    bee/driver: ./modules/driver\n    bee/placement: ./modules/placement\n"
+	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/values: ./modules/values\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/hive: ./modules/hive\n    bee/driver: ./modules/driver\n    bee/placement: ./modules/placement\n    bee/application: ./modules/application\n    bee/ui: ./modules/ui\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write fixture configuration: %w", err)
+	}
+	command := exec.Command("python3", filepath.Join(repo, "tests", "hive_component_fixture.py"), root)
+	if output, err := command.CombinedOutput(); err != nil {
+		return fmt.Errorf("compose Hive host libraries: %w\n%s", err, output)
 	}
 	return nil
 }

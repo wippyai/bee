@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"golang.org/x/sys/windows"
@@ -24,6 +25,9 @@ func holdOwnerProcessExit(pid int) (ownerExitObserver, error) {
 	}
 	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
 	if err != nil {
+		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+			return nil, os.ErrProcessDone
+		}
 		return nil, fmt.Errorf("hold owner process: %w", err)
 	}
 	return &windowsOwnerExit{pid: pid, handle: handle}, nil

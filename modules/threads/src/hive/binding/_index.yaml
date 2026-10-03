@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: bee.threads.hive.binding
+entries:
+- name: admission
+  kind: library.lua
+  source: file://admission.lua
+  modules:
+  - funcs
+  - security
+  - time
+  imports:
+    types: bee.hive:types
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    clock: bee.values:clock
+- name: admit
+  kind: function.lua
+  source: file://admit.lua
+  method: handle
+  modules:
+  - registry
+  - time
+  imports:
+    types: bee.hive:types
+    admission: bee.threads.hive.binding:admission
+  security:
+    policies: []

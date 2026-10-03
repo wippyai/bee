@@ -59,7 +59,7 @@ hub-self-update-runtime-check:
 	python3 tests/runtime_self_update_check.py
 .PHONY: hub-self-update-standalone-check
 hub-self-update-standalone-check:
-	BEE_RUNTIME="$(or $(BEE_RUNTIME),$(abspath $(WIPPY)))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
 .PHONY: hub-core-artifact-check
 hub-core-artifact-check: native-pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/core_artifact.py "$(abspath $(BEE_DEPLOYMENT))" "$(abspath $(BEE_BUNDLE_MANIFEST))"
@@ -176,20 +176,39 @@ codex-native-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
-test: fixture-gateway-client values-module component-inventory-check
+test: fixture-gateway-client values-module ui-module component-inventory-check
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_TEST_JOBS="$(TEST_JOBS)" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 
+.PHONY: owner-boot-check-regression
+owner-boot-check-regression:
+	@test -n "$(OWNER_BOOT_CHECK)" || { echo 'Set OWNER_BOOT_CHECK to the owner-copy boot harness.' >&2; exit 2; }
+	python3 tests/owner_boot_check_regression.py "$(OWNER_BOOT_CHECK)"
+
 .PHONY: values-module
 values-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py
+.PHONY: application-module
+application-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/application_module.py
+test: application-module
 .PHONY: sessions-unit-check
 sessions-unit-check: $(TOOLCHAIN_CURRENT)
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.tests.sessions interactive_test executor_registry_test locate_test catalog_service_test scheduler_test protocol_test client_test wiring_test attention_test driver_route_test owner_boundary_test
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gateway sessions_test session_tools_test session_boundary_test
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py tests.hub.lifecycle lifecycle_test
+.PHONY: native-placement-unit-check
+native-placement-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_test native_configuration_test native_supervision_test native_credentials_test provider_configuration_test instruction_builder_test
+.PHONY: harness-drain-unit-check harness-fixture-unit-check unit-runner-check
+harness-drain-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.harness.catalog carrier_drain_test
+harness-fixture-unit-check:
+	python3 -m unittest discover -s tests -p test_harness_fixture.py
+unit-runner-check:
+	python3 -m unittest discover -s tests -p test_unit_runner.py
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py
@@ -217,6 +236,13 @@ client-desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
 local-launcher-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
+.PHONY: terminal-component-unit-check
+terminal-component-unit-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.terminal selection_test delivery_test render_test title_editor_test dialog_test workspace_menu_test help_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.client clipboard_test lifecycle_test inbox_test state_test handoff_test assignments_test store_test workspace_pages_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.launch startup_failure_test ownership_test owner_handoff_test protocol_test retained_protocol_test hosts_test holdings_test desktop_lifecycle_test boot_fallback_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.desktop.service handoff_test handoff_process_test
+
 .PHONY: terminal-scroll-check terminal-selection-check
 terminal-selection-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_selection.py
@@ -741,14 +767,20 @@ layout-upgrade-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/layout_upgrade.py --previous "$(abspath $(LAYOUT_PREVIOUS_BEE))" --binary "$(abspath $(BEE_BINARY))" --previous-source "$(abspath $(LAYOUT_PREVIOUS_SOURCE))"
 
 .PHONY: login-links-check
-# Explicit proof against the local runtime PR build; the production pin stays unchanged.
-login-links-check:
-	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
-	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)
+# Synthetic login-link acceptance against the pinned upstream toolchain.
+login-links-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/login_links.py
 
 .PHONY: ui-module
 ui-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/ui_module.py
+
+.PHONY: retained-startup-check
+RETAINED_STATE_COPY ?=
+RETAINED_EVIDENCE ?= .wippy/retained-proof
+retained-startup-check:
+	@test -n "$(RETAINED_STATE_COPY)" || { echo 'Set RETAINED_STATE_COPY to a non-credential database copy directory.' >&2; exit 1; }
+	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"
 
 .PHONY: owner-journey
 owner-journey:

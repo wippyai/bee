@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,14 +16,16 @@ import (
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/logs"
+	"github.com/wippyai/runtime/cmd/app"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 const bootLogVariable = "BEE_BOOT_LOG_DIR"
 
-// BootLogger supplies phase logging to application runners that support the
-// early boot hook, before their event bus and native components are loaded.
+var _ app.BootLogger = (*Host)(nil)
+
+// BootLogger supplies early runner phases before native components are loaded.
 func (host *Host) BootLogger() *zap.Logger {
 	if host.bootLog == nil {
 		return nil
@@ -61,6 +64,8 @@ type bootLogKey struct{}
 type bootLog struct {
 	logger       *zap.Logger
 	file         *os.File
+	output       io.Writer
+	failure      error
 	bus          event.Bus
 	subscription event.SubscriberID
 	done         chan struct{}
@@ -99,9 +104,9 @@ func bootPhase(ctx context.Context, phase, stage string) {
 }
 
 // The runtime's event log carries its original emission timestamp even when
-// stdout logging is silent. The diagnostic sink retains only boot messages
-// and phase fields, without retaining arbitrary log payloads.
-func (b *bootLog) capture(value event.Event) {
+// stdout logging is silent. The owner output retains restoration identifiers
+// and exact errors; the optional diagnostic file retains boot phase fields.
+func (b *bootLog) capture(value event.Event) error {
 	var record struct {
 		Entry struct {
 			Message string `json:"message"`
@@ -115,7 +120,19 @@ func (b *bootLog) capture(value event.Event) {
 	}
 	data, err := json.Marshal(value.Data)
 	if err != nil || json.Unmarshal(data, &record) != nil {
-		return
+		return nil
+	}
+	if b.output != nil && record.Entry.Message == "Retained application restoration failed" {
+		fields := make(map[string]string)
+		for _, field := range record.Fields {
+			fields[field.Key] = field.String
+		}
+		_, err := fmt.Fprintf(b.output, "Retained application restoration failed: %s [workspace=%s, instance=%s, definition=%s]\n",
+			fields["reason"], fields["workspace_id"], fields["instance_id"], fields["definition_id"])
+		return err
+	}
+	if b.file == nil {
+		return nil
 	}
 	phases := map[string]string{
 		"components loaded successfully":          "runtime_loaded",
@@ -131,7 +148,7 @@ func (b *bootLog) capture(value event.Event) {
 	}
 	phase, known := phases[record.Entry.Message]
 	if !known && record.Entry.Message != "Boot phase" {
-		return
+		return nil
 	}
 	fields := []zap.Field{zap.Int64("origin_ns", record.Entry.Time)}
 	if known {
@@ -152,6 +169,7 @@ func (b *bootLog) capture(value event.Event) {
 		}
 	}
 	b.logger.Info("Boot phase", fields...)
+	return nil
 }
 
 func (b *bootLog) subscribe(ctx context.Context) error {
@@ -171,7 +189,7 @@ func (b *bootLog) subscribe(ctx context.Context) error {
 	go func() {
 		defer close(b.done)
 		for value := range events {
-			b.capture(value)
+			b.failure = errors.Join(b.failure, b.capture(value))
 		}
 	}()
 	// Unsubscribe is the send barrier; closing this channel afterwards drains
@@ -180,9 +198,9 @@ func (b *bootLog) subscribe(ctx context.Context) error {
 	return nil
 }
 
-func (b *bootLog) close() {
+func (b *bootLog) close() error {
 	if b == nil {
-		return
+		return nil
 	}
 	b.once.Do(func() {
 		if b.bus != nil {
@@ -190,7 +208,10 @@ func (b *bootLog) close() {
 			close(b.events)
 			<-b.done
 		}
-		_ = b.logger.Sync()
-		_ = b.file.Close()
+		b.failure = errors.Join(b.failure, b.logger.Sync())
+		if b.file != nil {
+			b.failure = errors.Join(b.failure, b.file.Close())
+		}
 	})
+	return b.failure
 }

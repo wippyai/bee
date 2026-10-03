@@ -34,7 +34,7 @@ entries:
   - logger
   imports:
     bounds: bee.values:bounds
-    staging: bee.gov.delivery:staging_resources
+    staging: bee.gov.binding:staging_resources
     lease_store: bee.gov.persist:lease_store
   security:
     policies:

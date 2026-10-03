@@ -10,8 +10,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SDK = {"application": "bee.app"}
-NATIVE_ENTRIES = {"bee.harness.host:environment"}
+SDK = {"application": "bee.app", "application-threads": "bee.app.threads"}
+NATIVE_ENTRIES = {"bee.harness.host:environment", "bee.hive.host:enrollment"}
 ROOT_ENTRIES = json.loads((ROOT / "build/layout_roots.json").read_text())
 ROOT_DECLARATIONS = {"ns.definition", "ns.dependency", "ns.requirement", "contract.definition"}
 
@@ -74,7 +74,7 @@ def audit(root):
                 errors.append(f"{identity}: component definition belongs in its source root")
             if module and entry.get("meta", {}).get("type") == "bee.app" and children != ("app",):
                 errors.append(f"{identity}: application identity belongs in src/app")
-            if module and entry["kind"] == "function.lua" and children not in {("app",), ("binding",), ("api",), ("service",), ("traits",)}:
+            if module and entry["kind"] == "function.lua" and children != ("app",) and children[-1:] not in {("binding",), ("api",), ("service",), ("traits",)}:
                 errors.append(f"{identity}: callable implementations belong in src/binding, api, service or traits")
             if module and entry["kind"] in {"process.lua", "process.service"} and children not in {("app",), ("service",)}:
                 errors.append(f"{identity}: long-running processes belong in src/service")
@@ -93,6 +93,13 @@ def audit(root):
     dangling, targets = 0, 0
     for identity, (index, entry) in entries.items():
         refs = list(entry.get("imports", {}).values())
+        if entry["kind"] == "ns.dependency":
+            component = entry["component"].split("/", 1)
+            namespace = SDK.get(component[-1], ".".join(component).replace("-", "."))
+            for parameter in entry.get("parameters", []):
+                name = parameter["name"]
+                refs.append(name if ":" in name else namespace + ":" + name)
+                refs.extend(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", yaml.safe_dump(parameter.get("value"))))
         if entry["kind"] == "contract.binding":
             for contract in entry.get("contracts", []):
                 refs.append(contract["contract"])
@@ -103,13 +110,14 @@ def audit(root):
                         if isinstance(approver, dict) and "definition_id" in approver)
         if entry["kind"] == "ns.requirement":
             refs.extend(target["entry"] for target in entry.get("targets", []))
+            refs.extend(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", yaml.safe_dump(entry.get("default"))))
             targets += len(entry.get("targets", []))
             if isinstance(entry.get("default"), list) and any(
                 target["path"].rstrip().endswith("+=") for target in entry.get("targets", [])
             ):
                 errors.append(f"{identity}: append requirement cannot default to an array element")
         for ref in refs:
-            if (ref.startswith("bee:") or ref.startswith("bee.")) and ref not in entries and ref not in NATIVE_ENTRIES:
+            if (ref.startswith("bee:") or ref.startswith("bee.")) and ref not in entries and ref not in groups and ref not in NATIVE_ENTRIES:
                 errors.append(f"{identity}: dangling linker/import target {ref}")
                 dangling += 1
         if index.relative_to(root).parts[0] == "modules" and entry["kind"] == "ns.requirement":

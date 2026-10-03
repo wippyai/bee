@@ -70,7 +70,7 @@ local function define_tests()
                     principal_assertion = {method = types.ASSERTION_METHOD, audience = node,
                         issued_at = "2026-09-08T10:00:00.000Z", expires_at = "2026-09-08T10:05:00.000Z"},
                     delegation_refs = {}, deadline = "2026-09-08T10:05:00.000Z"}))
-                local reply, err = funcs.call("bee.hive.supervisor:execute", request)
+                local reply, err = funcs.call("bee.hive.binding:execute", request)
                 if err then error(tostring(err)) end
                 local decoded = assert(types.decode_reply(reply))
                 if not decoded.ok then error(decoded.error and decoded.error.message or "dispatch failed") end

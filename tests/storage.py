@@ -737,7 +737,7 @@ def client_storage():
 
         # Seed the actual v1 schema and preserve a populated default layout.
         # The fixed checksum prevents this proof from accepting edits to v1 SQL.
-        v1_sql = re.search(r"local SCHEMA = \[\[(.*?)\]\]", (ROOT / "src/client/store.lua").read_text(), re.S).group(1).removeprefix("\n")
+        v1_sql = re.search(r"local SCHEMA = \[\[(.*?)\]\]", (ROOT / "modules/client/src/migrations/migrations.lua").read_text(), re.S).group(1).removeprefix("\n")
         v1_checksum = hashlib.sha256(("client_layout_v1\n" + v1_sql).encode()).hexdigest()
         assert v1_checksum == "f35f913f50cfd4b0dbe6c8b448a063f2de35be2c2a469c04b26f7720faa029e6"
         for packed in (False, True):
@@ -834,14 +834,14 @@ def client_storage():
             probe(interrupted, "seed", packed)
         # A failed first migration must not leave a ledger claiming success or a
         # half-created identity. Only this disposable staged source is changed.
-        staged_store = project / "src/client/store.lua"
-        healthy = staged_store.read_text()
-        staged_store.write_text(healthy.replace("INSERT INTO client_state", "INVALID MIGRATION;\nINSERT INTO client_state", 1))
+        staged_migrations = project / "modules/client/src/migrations/migrations.lua"
+        healthy = staged_migrations.read_text()
+        staged_migrations.write_text(healthy.replace("INSERT INTO client_state", "INVALID MIGRATION;\nINSERT INTO client_state", 1))
         failed_migration = root / "failed-migration"
         probe(failed_migration, "open", failure="syntax error")
         with sqlite3.connect(failed_migration / "client.db") as db:
             assert db.execute("SELECT count(*) FROM sqlite_master WHERE name IN ('client_state', 'client_schema_migrations')").fetchone()[0] == 0
-        staged_store.write_text(healthy)
+        staged_migrations.write_text(healthy)
         probe(failed_migration, "seed")
     print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified per-workspace layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial; independent desktop catalog/isolation/CAS/capacity/restart, catalog corruption denial and populated-v1 upgrade with layout adoption")
 

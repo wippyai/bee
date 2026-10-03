@@ -22,4 +22,5 @@ entries:
   imports:
     test: wippy.test:test
     ledger: bee.persist.persist:ledger
+    transaction: bee.persist.persist:transaction
   security: {policies: [bee.persist:ledger_test_policy]}

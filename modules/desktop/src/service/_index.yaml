@@ -20,7 +20,7 @@ entries:
     status_bindings: bee.desktop.types:bindings
     statuses: bee.desktop.service:statuses
     status_driver: bee.desktop.service:status
-    status_reader: bee.app:status_reader
+    status_reader: bee.app.threads.client:status_reader
     handoff: bee.desktop.types:handoff
   security:
     policies: []
@@ -31,7 +31,7 @@ entries:
   - funcs
   - channel
   imports:
-    reader: bee.app:status_reader
+    reader: bee.app.threads.client:status_reader
     caller: bee.app:caller
 - name: statuses
   kind: library.lua
@@ -39,5 +39,5 @@ entries:
   imports:
     bindings: bee.desktop.types:bindings
     driver: bee.desktop.service:status
-    reader: bee.app:status_reader
+    reader: bee.app.threads.client:status_reader
     model: bee.desktop:model

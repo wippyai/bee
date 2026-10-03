@@ -754,4 +754,4 @@ ui-module:
 owner-journey:
 	@test -n "$(BEE_BINARY)" || { echo 'BEE_BINARY must name an existing standalone Bee.' >&2; exit 1; }
 	@test -n "$(BEE_SOURCE_STATE)" || { echo 'BEE_SOURCE_STATE must name an existing state directory (an empty directory is a fresh-state proof).' >&2; exit 1; }
-	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)")
+	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)") $(if $(BEE_JOURNEY_STEPS),--steps "$(BEE_JOURNEY_STEPS)")

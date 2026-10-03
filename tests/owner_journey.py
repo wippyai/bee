@@ -553,11 +553,11 @@ class Journey:
             if "Unavailable" in self.ui.text():
                 reason = next((line.strip() for line in self.ui.screen.display if "Unavailable ·" in line), "no readiness cause was rendered")
                 raise JourneyFailure("saved Docker profile unavailable: " + reason)
-        prior = {item["session_ref"] for item in sessions(self.state)}
+        prior = {item["session_ref"] for item in sessions(self.ui.state)}
         self.ui.key(b"\r")
         self.ui.wait_until(lambda: "Ready for work" in self.ui.text() or "Unavailable" in self.ui.text() or "Setup:" in self.ui.text() or "INVALID:" in self.ui.text() or "START_FAILED:" in self.ui.text(), "session admission")
         require("Ready for work" in self.ui.text(), f"{provider} session was not admitted: {self.ui.text()}")
-        new = [item for item in sessions(self.state) if item["session_ref"] not in prior]
+        new = [item for item in sessions(self.ui.state) if item["session_ref"] not in prior]
         require(len(new) == 1, f"session admission did not persist exactly one session: {len(new)}")
         return new[0]
 
@@ -909,7 +909,9 @@ class Journey:
         finally:
             invitation = ""
             invite.unlink()
-        self.secondary = JourneyDesktop(self, folder, state, self.environment)
+        peer_environment = dict(self.environment, PATH=str(self.stub_bin) + ":" + self.original_path,
+                                HOME=str(self.fixture_home), XDG_CONFIG_HOME=str(self.fixture_home / ".config"))
+        self.secondary = JourneyDesktop(self, folder, state, peer_environment)
         self.secondary.wait(" BEE ")
         self.secondary.resize(160, 48)
         self.command(["hive", "peers"])
@@ -973,10 +975,13 @@ class Journey:
             primary = self.ui
             self.ui = peer
             try:
-                self.choose_agent(docker=True)
-                peer.key(b"Reply with " + MARKER.encode() + b"\r")
+                session = self.choose_agent()
+                peer.key(b"JOURNEY_HIVE_APPROVAL\r")
                 peer.wait_until(lambda: bool(rows(state, "approvals.db",
-                    "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")), "node 2 first-use Docker approval")
+                    "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")), "node 2 native tool permission approval")
+                pending = rows(state, "approvals.db", "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")
+                require(len(pending) == 1, f"node 2 raised {len(pending)} pending approvals for one tool request")
+                approval_id = pending[0]["approval_id"]
             finally:
                 self.ui = primary
             self.launch("Needs you", "NEEDS YOU")
@@ -984,8 +989,15 @@ class Journey:
             self.ui.key(b"\r")
             self.approve()
             self.ui.wait_until(lambda: bool(rows(state, "approvals.db",
-                "SELECT approval_id FROM bee_approval_requests WHERE decision='approved'")), "node 2 observes node 1 decision")
+                "SELECT approval_id FROM bee_approval_requests WHERE approval_id=? AND decision='approved'", (approval_id,))),
+                "node 2 observes node 1 decision")
             self.frame("remote-approval-decided")
+            peer.wait_until(lambda: bool(rows(state, "threads.db",
+                "SELECT work_ref FROM bee_session_work WHERE session_ref=? AND phase='settled'", (session["session_ref"],))),
+                "native fixture consumes the remote approval and settles")
+            work = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? ORDER BY sequence",
+                        (session["session_ref"],))
+            require(STUB_MARKER in work[-1]["result_json"], "native Hive approval work settled with " + work[-1]["result_json"])
         self.cases([("Hive live app counts 0 to 1 to 0", remote_visibility),
                     ("Hive remote approval", remote_approval)])
         peer.quit()
@@ -1037,18 +1049,27 @@ class Journey:
         attempt(lambda: shutil.rmtree(self.work))
         require(not errors, "cleanup failed: " + "; ".join(errors))
 
-    def run(self):
+    def run(self, selected_steps=None):
         try:
             self.run_step(1, "copied-state startup and retained applications", self.start, desktop=False)
-            self.run_step(2, "launcher Sessions, Apps, Settings/About, Inbox, Modules", self.open_apps)
-            self.run_step(3, "native deterministic agent running/output/stop", self.native_stub)
-            self.run_step(4, "Docker starting/running or exact daemon start_failed", self.docker_session)
-            self.run_step(5, "full owner restart preserves apps and sessions history", self.restart)
-            self.run_step(6, "Update Bee plan through Settings/About and Modules", self.update_plan)
-            self.run_step(8, "real Claude and available Codex subscriptions, native and Docker", self.subscriptions)
-            self.run_step(9, "agent overlay, approval, live About, restart and removal", self.authored_change)
-            self.run_step(10, "agent Bee component self-edit and local Hub live update", self.self_edit)
-            self.run_step(11, "two-node Hive live counts and remote approval decision", self.hive)
+            if selected_steps is None or 2 in selected_steps:
+                self.run_step(2, "launcher Sessions, Apps, Settings/About, Inbox, Modules", self.open_apps)
+            if selected_steps is None or 3 in selected_steps:
+                self.run_step(3, "native deterministic agent running/output/stop", self.native_stub)
+            if selected_steps is None or 4 in selected_steps:
+                self.run_step(4, "Docker starting/running or exact daemon start_failed", self.docker_session)
+            if selected_steps is None or 5 in selected_steps:
+                self.run_step(5, "full owner restart preserves apps and sessions history", self.restart)
+            if selected_steps is None or 6 in selected_steps:
+                self.run_step(6, "Update Bee plan through Settings/About and Modules", self.update_plan)
+            if selected_steps is None or 8 in selected_steps:
+                self.run_step(8, "real Claude and available Codex subscriptions, native and Docker", self.subscriptions)
+            if selected_steps is None or 9 in selected_steps:
+                self.run_step(9, "agent overlay, approval, live About, restart and removal", self.authored_change)
+            if selected_steps is None or 10 in selected_steps:
+                self.run_step(10, "agent Bee component self-edit and local Hub live update", self.self_edit)
+            if selected_steps is None or 11 in selected_steps:
+                self.run_step(11, "two-node Hive live counts and remote approval decision", self.hive)
             self.run_step(7, "bee stop observes clean owner EXIT", self.stop, desktop=False)
         finally:
             try:
@@ -1067,11 +1088,14 @@ def main():
     parser.add_argument("--source-state", required=True, type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / ".wippy/owner-journey")
     parser.add_argument("--hang-seconds", type=float, default=600, help="no-progress diagnostic bound; never a speed requirement")
+    parser.add_argument("--steps", help="comma-separated journey steps; startup and stop always run")
     args = parser.parse_args()
     require(args.binary.is_file() and os.access(args.binary, os.X_OK), f"BEE_BINARY is not executable: {args.binary}")
     require(args.hang_seconds > 0, "hang bound must be positive")
     require((ROOT / ".wippy").resolve() in args.output.resolve().parents, "evidence and scratch state must be under repository .wippy/")
-    return Journey(args.binary, args.source_state, args.output, args.hang_seconds).run()
+    selected_steps = {int(value) for value in args.steps.split(",")} if args.steps else None
+    require(selected_steps is None or selected_steps <= set(range(1, 12)), "journey steps must be 1 through 11")
+    return Journey(args.binary, args.source_state, args.output, args.hang_seconds).run(selected_steps)
 
 
 if __name__ == "__main__":

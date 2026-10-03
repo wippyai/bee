@@ -6,6 +6,7 @@ local test = require("test")
 local model = require("model")
 local directory = require("directory")
 local types = require("types")
+local interaction = require("interaction")
 type Object = {[string]: unknown}
 local OWNER_ONE = string.rep("a", 32)
 local OWNER_TWO = string.rep("b", 32)
@@ -29,6 +30,18 @@ local function catalog(): directory.Catalog
 end
 local function define_tests()
     test.describe("Hive Manager model", function()
+        test.it("states the remote scope and lifetime for observation and control", function()
+            local modes: {directory.Mode} = {"observe", "control"}
+            for _, mode in ipairs(modes) do
+                local message = model.attach_message("Main", "workspace-1", "Forge", mode)
+                test.is_true(message:find("workspace-1", 1, true) ~= nil)
+                test.is_true(message:find("Forge", 1, true) ~= nil)
+                test.is_true(message:find(mode == "observe" and "Read-only" or "Input and resize", 1, true) ~= nil)
+                test.is_true(message:find("Duration: until you leave", 1, true) ~= nil)
+                test.not_nil(interaction.spec({version = 1, request_id = "confirm", id = "view", instance_id = "instance",
+                    kind = "confirm", title = "Observe this workspace here?", message = message, accept = "Observe", initial = ""}))
+            end
+        end)
         test.it("retires departed rows after 60s and cancels retirement on return or uncertain membership", function()
             local state = model.new({})
             local both = members({"forge", "display"}, "forge")

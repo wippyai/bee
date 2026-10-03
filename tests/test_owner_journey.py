@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -77,6 +78,48 @@ class CopyTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
+    def test_session_admission_reads_the_selected_desktops_owner_store(self):
+        journey = Journey.__new__(Journey)
+        journey.state = Path('node-one-state')
+        peer_state = Path('node-two-state')
+        journey.ui = Mock(state=peer_state)
+        journey.ui.text.return_value = 'SESSIONS Workspace: NEW SESSION Ready for work'
+        journey.ui.screen.display = [''] * 3 + ['Claude Code'] + [''] * 6
+        journey.launch = Mock()
+        journey.click = Mock()
+        journey.frame = Mock()
+        admitted = {'session_ref': 'node-two-session'}
+        with patch('owner_journey.sessions', side_effect=[[], [admitted]]) as stores:
+            self.assertEqual(journey.choose_agent(), admitted)
+            self.assertEqual([call.args[0] for call in stores.call_args_list], [peer_state, peer_state])
+
+    def test_selected_hive_journey_keeps_start_and_stop(self):
+        journey = Journey.__new__(Journey)
+        journey.run_step = Mock()
+        journey.steps = []
+        journey.cleanup = Mock()
+        journey.report = Mock(return_value='')
+        for name in ('start', 'open_apps', 'native_stub', 'docker_session', 'restart', 'update_plan',
+                     'subscriptions', 'authored_change', 'self_edit', 'hive', 'stop'):
+            setattr(journey, name, Mock())
+        self.assertEqual(journey.run(selected_steps={11}), 0)
+        self.assertEqual([call.args[0] for call in journey.run_step.call_args_list], [1, 11, 7])
+
+    def test_native_fixture_waits_for_correlated_tool_approval(self):
+        fixture = ROOT / 'tests/fixtures/owner_journey/claude.sh'
+        with subprocess.Popen(['sh', str(fixture), 'JOURNEY_HIVE_APPROVAL'], stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, text=True) as process:
+            self.assertEqual(json.loads(process.stdout.readline())['subtype'], 'init')
+            request = json.loads(process.stdout.readline())
+            self.assertEqual(request['request']['subtype'], 'can_use_tool')
+            self.assertEqual(request['request']['tool_name'], 'Bash')
+            process.stdin.write(json.dumps({'type': 'control_response', 'response': {
+                'request_id': request['request_id'], 'response': {'behavior': 'allow'}}}, separators=(',', ':')) + '\n')
+            process.stdin.flush()
+            remainder, _ = process.communicate()
+            self.assertEqual(process.returncode, 0)
+            self.assertIn('OWNER JOURNEY STUB OUTPUT', remainder)
+
     def test_cycling_loading_frames_do_not_hide_a_hang(self):
         (ROOT / '.wippy').mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='journey-hang-', dir=ROOT / '.wippy') as temporary:

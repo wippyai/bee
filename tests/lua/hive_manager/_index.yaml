@@ -21,6 +21,7 @@ entries:
     model: bee.hive.manager.app:model
     directory: bee.hive.manager.app:directory
     types: bee.hive:types
+    interaction: bee.app:interaction
 - name: view_test
   kind: function.lua
   source: file://view_test.lua

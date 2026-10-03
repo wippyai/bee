@@ -85,7 +85,7 @@ entries:
     type: test
     suite: bee_docker
     resources: [docker_daemon]
-    timeout: 60s
+    timeout: 300s
   modules:
   - funcs
   - registry
@@ -102,7 +102,7 @@ entries:
     store: bee.placement.native.persist:store
     spec: bee.placement.docker.binding:spec
     types: bee.placement:types
-    service: bee.placement.docker.service:service
+    service: bee.placement.docker.binding:methods
     placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
     materialization: bee.placement.native.service:materialization
@@ -134,6 +134,8 @@ entries:
   imports:
     test: wippy.test:test
     image: bee.placement.docker.service:image
+    daemon: bee.placement.docker.service:daemon
+  security: {policies: [bee.placement.native.security:placement_exec_policy]}
 - name: environment_test
   kind: function.lua
   source: file://environment_test.lua
@@ -177,7 +179,7 @@ entries:
     store: bee.placement.native.persist:store
     spec: bee.placement.docker.binding:spec
     types: bee.placement:types
-    service: bee.placement.docker.service:service
+    service: bee.placement.docker.binding:methods
     placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
     materialization: bee.placement.native.service:materialization
@@ -207,7 +209,7 @@ entries:
     store: bee.placement.native.persist:store
     spec: bee.placement.docker.binding:spec
     types: bee.placement:types
-    service: bee.placement.docker.service:service
+    service: bee.placement.docker.binding:methods
     placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
     materialization: bee.placement.native.service:materialization

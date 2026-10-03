@@ -4,7 +4,14 @@ local channel = require("channel")
 local service = require("service")
 local store = require("store")
 local protocol = require("protocol")
+local bounds = require("bounds")
 local M = {}
+function M.read_attempt(value: unknown): unknown
+    local db = assert(store.open())
+    local attempt, err = store.attempt(db, assert(bounds.id(value)))
+    db:release()
+    return assert(attempt, err)
+end
 function M.start(request: unknown): service.Reply
     return service.start_local(request, "bee.placement.native:startup_runner")
 end

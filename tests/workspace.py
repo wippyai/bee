@@ -250,6 +250,25 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
                                                  "if close_gate then process.unlisten(close_gate) end\n    " + cleanup_anchor)
             broker.write_text(broker_source)
             observe_carrier(folder)
+            store = folder / "modules/placement-native/src/persist/store.lua"
+            store_source = store.read_text().replace('local sql = require("sql")',
+                'local sql = require("sql")\nlocal process = require("process")\nlocal ctx = require("ctx")')
+            projection = "    local attempt, project_error = project(row)"
+            assert store_source.count(projection) == 1
+            store_source = store_source.replace(projection, '''    local controller = ctx.get("bee.test.attempt.snapshot")
+    if type(controller) == "string" then
+        local release = assert(process.listen("bee.test.attempt.release", {message = true}))
+        assert(process.send(controller, "bee.test.attempt.snapshot", {attempt_id = attempt_id}))
+        local released = assert((release:receive()))
+        assert(tostring(released:from()) == controller, "attempt snapshot barrier sender")
+        process.unlisten(release)
+    end
+    local attempt, project_error = project(row)''')
+            store.write_text(store_source)
+            store_index = folder / "modules/placement-native/src/persist/_index.yaml"
+            store_document = yaml.safe_load(store_index.read_text())
+            next(entry for entry in store_document["entries"] if entry["name"] == "store")["modules"] += ["process", "ctx"]
+            store_index.write_text(yaml.safe_dump(store_document, sort_keys=False))
             runner = folder / "modules/placement-native/src/service/runner.lua"
             runner_source = runner.read_text()
             selection = "selected = channel.select(cases)"

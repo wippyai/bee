@@ -766,6 +766,10 @@ ui-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/ui_module.py
 
 .PHONY: carrier-races-check
+.PHONY: carrier-startup-check
+carrier-startup-check: fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native startup_test
+
 CARRIER_RUNS ?= 1
 CARRIER_LOGS ?= .wippy/carrier-races/layout
 carrier-races-check: fixture-gateway-client component-inventory-check

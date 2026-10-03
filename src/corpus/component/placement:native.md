@@ -39,7 +39,8 @@ the replaceable `target_root` requirement.
    and identity resolution, or `start_failed` with the exact refusal cause.
    Exit before acknowledgement records the runner's exit reason as a startup
    failure. Recipient notifications use `bee.placement.started` as a hint to
-   read the authenticated owner status; state and cause come from the store.
+   read the authenticated owner status; the store reads attempt state and its
+   failure and cancellation evidence in one SQL snapshot.
    Slow startup stays `starting` until acknowledgement, refusal, observed exit
    or an explicit stop. Each executor operation keeps its own runtime bound.
    `stop` before the runner claims startup atomically records exit and complete

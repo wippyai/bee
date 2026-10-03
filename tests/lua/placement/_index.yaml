@@ -65,7 +65,8 @@ entries:
     resources: [bee.placement.native.binding:prepare, bee.placement.native.binding:start, bee.placement.native.binding:status, bee.placement.native.binding:stop,
       bee.placement.native.binding:reconcile, bee.placement.native.binding:cleanup, bee.placement.native.binding:evidence, bee.placement.native.binding:attach,
       bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:revoke,
-      bee.placement.native:fixture_stop_materialization, bee.placement.native:fixture_start_unacknowledged]
+      bee.placement.native:fixture_stop_materialization, bee.placement.native:fixture_start_unacknowledged,
+      bee.placement.native:fixture_read_attempt]
     effect: allow
 - name: fixture_stop_materialization_policy
   kind: security.policy
@@ -121,6 +122,7 @@ entries:
   meta: {type: test_support}
   modules: [process, channel]
   imports:
+    bounds: bee.values:bounds
     protocol: bee.placement.native:protocol
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
@@ -133,6 +135,20 @@ entries:
   security:
     policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy]
   imports:
+    bounds: bee.values:bounds
+    protocol: bee.placement.native:protocol
+    service: bee.placement.native.service:service
+    store: bee.placement.native.persist:store
+- name: fixture_read_attempt
+  kind: function.lua
+  source: file://startup_runner.lua
+  method: read_attempt
+  meta: {type: test_support}
+  modules: [process, channel]
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_service_policy]
+  imports:
+    bounds: bee.values:bounds
     protocol: bee.placement.native:protocol
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store

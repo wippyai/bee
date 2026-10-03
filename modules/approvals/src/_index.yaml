@@ -36,7 +36,7 @@ entries:
   kind: ns.requirement
   default: []
   meta:
-    comment: The host's approver policies; each names its approvers and the longest request lifetime it allows
+    comment: The host's approver policies; each names its approvers and the longest request or window lifetime it allows
   targets:
   - entry: bee.approvals.env:policies_ref
     path: .resource_ref
@@ -49,6 +49,8 @@ entries:
     description: Snapshot authorized inbox projections with an owner cursor and visibility revision
   - name: feed_read_after
     description: Catch up authorized approval changes using the shared sync envelope
+  - name: grant_window
+    description: List the caller's active approval windows or revoke one immediately on its authoritative node
   - name: runtime_lease
     description: Grant an approved exact runtime lease, check references, consume one effect idempotently, list or revoke
   - name: request
@@ -128,6 +130,8 @@ entries:
   - entry: bee.approvals.binding:deliveries
     path: .security.policies
   - entry: bee.approvals.binding:attention_count
+    path: .security.policies
+  - entry: bee.approvals.binding:grant_window
     path: .security.policies
   - entry: bee.approvals.binding:runtime_lease
     path: .security.policies

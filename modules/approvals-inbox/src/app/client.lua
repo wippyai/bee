@@ -1,8 +1,5 @@
--- MIT. The inbox's caller toward the approval owner is the shared
--- application caller; this module adds only what the inbox reads.
-local caller = require("caller")
+-- MIT. The host-admitted workspaces the Inbox reads.
 local M = {}
-M.new = caller.new
 -- The workspaces this viewer's inbox reads: the launch workspace and what
 -- the host admitted beside it.
 function M.workspaces(launch_workspace: string, admitted: unknown): {string}

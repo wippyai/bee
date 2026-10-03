@@ -906,6 +906,7 @@
     "table:bee_approval_runtime_lease_uses",
     "table:bee_approval_runtime_leases",
     "table:bee_approval_schema_migrations",
+    "table:bee_approval_window_grants",
     "table:bee_credential_definitions",
     "table:bee_credential_definitions_next",
     "table:bee_credential_epochs",

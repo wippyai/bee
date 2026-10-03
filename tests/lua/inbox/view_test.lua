@@ -23,6 +23,28 @@ local function request(id: string, state: string, prompt: string): Object
 end
 local function define_tests()
     test.describe("Inbox frame", function()
+        test.it("offers only capped windows and one-key re-allow choices on a short prompt", function()
+            local state = model.new({"ws-1"})
+            local item = request("window", "pending", "Write exactly one file")
+            item.window_max_ttl_ms = 1800000
+            item.reallow = true
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+            model.select(state, "window")
+            model.apply_read(state, "window", reply({ok = true, value = item}))
+            local drawn = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            local text = table.concat(drawn.rows):gsub("\27%[[0-9;]*m", "")
+            test.ok(text:find("Subject:", 1, true) ~= nil)
+            test.ok(text:find("Capability:", 1, true) ~= nil)
+            test.ok(text:find("Scope:", 1, true) ~= nil)
+            test.ok(text:find("Re-allow 30 min", 1, true) ~= nil)
+            for _, hit in ipairs(drawn.hits) do test.ok(hit.kind ~= "allow_longer") end
+            item.window_max_ttl_ms = 14400000
+            model.apply_read(state, "window", reply({ok = true, value = item}))
+            drawn = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            text = table.concat(drawn.rows)
+            test.ok(text:find("Re-allow longer", 1, true) ~= nil)
+        end)
+
         test.it("keeps Leases discoverable and selectable through shared More at both sizes", function()
             for _, size in ipairs({{80, 24}, {120, 36}}) do
                 local state, slice = model.new({"ws-1"}), leases.new()
@@ -108,7 +130,7 @@ local function define_tests()
             local text = table.concat(frame.rows, "\n")
             test.is_true(text:find("Effect: Bash", 1, true) ~= nil)
             test.is_true(text:find("Digest", 1, true) ~= nil)
-            test.is_true(text:find("Approve", 1, true) ~= nil)
+            test.is_true(text:find("Allow once", 1, true) ~= nil)
             local approve = false
             for _, hit in ipairs(frame.hits) do if hit.kind == "approve" then approve = true end end
             test.is_true(approve)

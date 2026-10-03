@@ -221,6 +221,11 @@
       "source": "modules/approvals/src/binding/_index.yaml"
     },
     {
+      "id": "bee.approvals.binding:grant_window",
+      "kind": "function.lua",
+      "source": "modules/approvals/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.approvals.binding:inbox",
       "kind": "function.lua",
       "source": "modules/approvals/src/binding/_index.yaml"
@@ -472,6 +477,11 @@
     },
     {
       "id": "bee.approvals.types:runtime_lease",
+      "kind": "library.lua",
+      "source": "modules/approvals/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.approvals.types:windows",
       "kind": "library.lua",
       "source": "modules/approvals/src/types/_index.yaml"
     },
@@ -12261,10 +12271,16 @@
       "table": "bee_approval_runtime_leases"
     },
     {
-      "line": 28,
+      "line": 29,
       "owner_namespace": "bee.approvals.binding",
       "source": "modules/approvals/src/binding/service.lua",
       "table": "bee_approval_schema_migrations"
+    },
+    {
+      "line": 157,
+      "owner_namespace": "bee.approvals",
+      "source": "modules/approvals/src/migrations/migrations.lua",
+      "table": "bee_approval_window_grants"
     },
     {
       "line": 6,
@@ -13204,6 +13220,11 @@
       "requirement": "bee.approvals:target_request_policies",
       "resolved_by": "registry source",
       "target": "bee.approvals.binding:feed_snapshot"
+    },
+    {
+      "requirement": "bee.approvals:target_request_policies",
+      "resolved_by": "registry source",
+      "target": "bee.approvals.binding:grant_window"
     },
     {
       "requirement": "bee.approvals:target_request_policies",
@@ -15514,6 +15535,10 @@
         },
         {
           "entry": "bee.approvals.binding:attention_count",
+          "path": ".security.policies"
+        },
+        {
+          "entry": "bee.approvals.binding:grant_window",
           "path": ".security.policies"
         },
         {
@@ -18967,16 +18992,16 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1887,
+    "entry_count": 1889,
     "namespace_count": 290,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
-    "owned_table_declaration_count": 152,
+    "owned_table_declaration_count": 153,
     "persisted_id_count": 894,
     "requirement_count": 173,
-    "requirement_target_count": 447,
+    "requirement_target_count": 448,
     "root_src_lua_budget": 9010,
     "root_src_lua_lines": 9009,
     "schema_tag_count": 71,

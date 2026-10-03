@@ -9,6 +9,7 @@ local leases = require("leases")
 local names = require("names")
 local tty = require("tty")
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
+local windows = require("windows")
 local M = {}
 local function prompt_lines(prompt: string, width: integer): {string}
     local rest = "Asked: " .. prompt
@@ -27,14 +28,12 @@ local function prompt_lines(prompt: string, width: integer): {string}
     return lines
 end
 local function state_label(row: model.Row): string
+    if model.history(row.view) then return model.history(row.view) or "approved" end
     if row.state == "decided" then return row.decision or "decided" end
     return row.state
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "A", verb = "approve"},
     {key = "D", verb = "deny"}, {key = "W", verb = "withdraw"}, {key = "R", verb = "refresh"}})
-local WIDE_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "A", verb = "approve"},
-    {key = "D", verb = "deny"}, {key = "W", verb = "withdraw"}, {key = "R", verb = "refresh"}, {key = "M", verb = "mark"},
-    {key = "B/N", verb = "batch"}, {key = "L", verb = "lease"}, {key = "G", verb = "grant"}, {key = "V", verb = "leases"}})
 local LEASE_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "X", verb = "revoke"}, {key = "R", verb = "refresh"}, {key = "V", verb = "requests"}})
 local function lease_label(row: leases.Row): string
     local used = tostring(row.applies_used) .. "/" .. (row.max_applies and tostring(row.max_applies) or "-")
@@ -101,11 +100,12 @@ local function draw_review(width: integer, height: integer, preferences: appeara
     end
     if height >= 4 then
         local idle = state.pending == nil
-        frame.actions(painter, height - 1, {
-            {kind = "approve", key = "A", label = "Approve", enabled = complete and idle, primary = true},
-            {kind = "deny", key = "D", label = "Deny", enabled = idle},
-            {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true},
-        })
+        local buttons: {frame.Button} = {{kind = "approve", key = "A", label = "Allow once", enabled = complete and idle, primary = true}}
+        if model.window_cap(state) >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = detail.reallow and "Re-allow 30 min" or "Allow 30 min", enabled = complete and idle} end
+        if model.window_cap(state) > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = "Allow longer", enabled = complete and idle} end
+        buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
+        buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true}
+        frame.actions(painter, height - 1, buttons)
     end
     local message = status
     if message == "" then message = state.notice end
@@ -113,12 +113,86 @@ local function draw_review(width: integer, height: integer, preferences: appeara
     frame.footer(painter, message, REVIEW_HINTS)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = visible, offset = 0}
 end
+local function draw_windows(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
+    local painter = frame.new(width, height, preferences)
+    frame.header(painter, "YOUR APPROVAL GRANTS", tostring(#state.grants) .. " active · this node")
+    local window = frame.window(#state.grants, height - 5, state.grant_selected, offset)
+    if #state.grants == 0 then frame.empty(painter, 3, "No active grants", "Choose a duration on a pending permission request") end
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
+        local grant = state.grants[index]
+        if not grant then break end
+        local source = state.rows[grant.grant_id]
+        local scope = source and (source.effect .. " · " .. source.prompt) or ("exact proposal " .. grant.scope_digest)
+        local label = model.text(grant.requester_id, 80) .. " · " .. scope .. " · " .. windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. grant.until_at
+        frame.row(painter, 2 + slot, label, index == state.grant_selected, "window_row", index, grant.grant_id)
+    end
+    if height >= 4 then frame.actions(painter, height - 1, {
+        {kind = "window_revoke", key = "X", label = "Revoke now", enabled = state.grants[state.grant_selected] ~= nil, primary = true},
+        {kind = "refresh", key = "R", label = "Refresh", enabled = true},
+        {kind = "window_back", key = "U", label = "Requests", enabled = true},
+    }) end
+    frame.footer(painter, status, frame.hints({{key = "↑↓", verb = "select"}, {key = "X", verb = "revoke"}, {key = "U", verb = "requests"}}))
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
+end
+local function draw_prompt(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, detail: model.ApprovalView, status: string): Frame
+    local painter = frame.new(width, height, preferences)
+    local group = model.decision_group(state)
+    local prefix = detail.reallow and "Re-allow" or "Allow"
+    frame.header(painter, "NEEDS YOU", tostring(#group) .. (#group == 1 and " request" or " requests · one decision"))
+    local lines: {string} = {"Subject: " .. model.text(detail.requester_id, 160), "Duration: choose once, 30 minutes or longer below"}
+    for _, item in ipairs(group) do
+        local summary = model.summary(item, 0)
+        lines[#lines + 1] = "Capability: " .. summary.effect .. " · " .. model.text(item.proposal.ref, 120)
+        lines[#lines + 1] = "Scope: " .. summary.target
+        if not item.proposal.payload.adapter_ref then
+            lines[#lines + 1] = model.text(table.concat(model.payload_lines(item), " · "), 512)
+        end
+        for _, line in ipairs(prompt_lines(summary.prompt, width)) do lines[#lines + 1] = line end
+        for _, line in ipairs(model.permission_lines(item)) do lines[#lines + 1] = line end
+    end
+    local y = 3
+    local reserved = state.longer and (1 + #state.longer_choices) or 0
+    for _, line in ipairs(lines) do
+        if y >= height - 3 - reserved then break end
+        frame.line(painter, y, line, painter.theme.text); y = y + 1
+    end
+    if state.longer then
+        frame.line(painter, y, prefix .. " for:", painter.theme.text); y = y + 1
+        for index, choice in ipairs(state.longer_choices) do
+            if y >= height - 2 then break end
+            frame.row(painter, y, tostring(index) .. "  " .. choice.label, false, "window_choice", index, tostring(choice.ttl_ms)); y = y + 1
+        end
+    end
+    local idle = state.pending == nil
+    local cap = model.window_cap(state)
+    local buttons: {frame.Button} = {{kind = "approve", key = "A", label = "Allow once", enabled = idle, primary = true}}
+    if cap >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = prefix .. " 30 min", enabled = idle} end
+    if cap > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = prefix .. " longer", enabled = idle} end
+    buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
+    if detail.proposal.ref == leases.ACTIVATION then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
+    buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Details", enabled = true, more = true}
+    buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your grants", enabled = true, more = true}
+    if detail.requesting_session then buttons[#buttons + 1] = {kind = "source", key = "S", label = "Return to source", enabled = true, more = true} end
+    if height >= 4 then frame.actions(painter, height - 1, buttons) end
+    if status ~= "" or state.notice ~= "" then frame.line(painter, height - 2, status ~= "" and status or state.notice, painter.theme.text) end
+    local hints: {frame.Hint} = {{key = "A", verb = "allow once"}}
+    if cap >= 1800000 then hints[#hints + 1] = {key = "F", verb = "30 min"} end
+    if cap > 1800000 then hints[#hints + 1] = {key = "L", verb = "longer"} end
+    hints[#hints + 1] = {key = "D", verb = "deny"}
+    frame.footer(painter, "", frame.hints(hints))
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0}
+end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice, workspace_names: {[string]: model.Workspace}?): Frame
+    if state.grants_view then return draw_windows(width, height, preferences, state, offset, status) end
     if slice.leases_view then return draw_leases(width, height, preferences, slice, offset, status, slice.notice) end
     local open = state.detail
     local chosen = model.selected_row(state)
-    if open and chosen and open.approval_id == chosen.approval_id and leases.is_review(open) then
+    if open and chosen and open.approval_id == chosen.approval_id and leases.is_review(open) and not (state.longer and slice.review_complete) then
         return draw_review(width, height, preferences, state, open, slice, status)
+    end
+    if open and chosen and open.approval_id == chosen.approval_id and open.state == "pending" and open.request_kind == "permission" and not state.technical then
+        return draw_prompt(width, height, preferences, state, open, status)
     end
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
@@ -193,7 +267,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local buttons: {frame.Button} = {}
         if can_open then buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = true, primary = true} end
         if pending_detail then
-            buttons[#buttons + 1] = {kind = "approve", key = "A", label = "Approve", enabled = idle, primary = true}
+            buttons[#buttons + 1] = {kind = "approve", key = "A", label = "Allow once", enabled = idle, primary = true}
+            if model.window_cap(state) >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = detail.reallow and "Re-allow 30 min" or "Allow 30 min", enabled = idle} end
+            if model.window_cap(state) > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = "Allow longer", enabled = idle} end
             buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
             buttons[#buttons + 1] = {kind = "withdraw", key = "W", label = "Withdraw", enabled = idle, more = true}
         end
@@ -207,8 +283,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             buttons[#buttons + 1] = {kind = "batch_approve", key = "B", label = "Approve " .. tostring(marked), enabled = idle, more = true}
             buttons[#buttons + 1] = {kind = "batch_deny", key = "N", label = "Deny " .. tostring(marked), enabled = idle, more = true}
         end
-        if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "L", label = "Lease", enabled = idle, more = true} end
+        if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
         if can_grant then buttons[#buttons + 1] = {kind = "grant", key = "G", label = "Grant", enabled = idle, more = true} end
+        buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your grants", enabled = true, more = true}
         buttons[#buttons + 1] = {kind = "leases", key = "V", label = "Leases", enabled = true, more = true}
         frame.actions(painter, height - 1, buttons)
     end

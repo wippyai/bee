@@ -7,6 +7,7 @@ shutdown:
   timeout: 3s
 workspace:
   replacements:
+    bee/terminal: ./modules/terminal
     bee/workspace: ./modules/workspace
     bee/values: ./modules/values
     bee/persist: ./modules/persist
@@ -26,6 +27,7 @@ workspace:
     bee/gov-overlays: ./modules/gov-overlays
     bee/approvals: ./modules/approvals
     bee/approvals-inbox: ./modules/approvals-inbox
+    bee/application-threads: ./modules/application-threads
     bee/application: ./modules/application
     bee/ui: ./modules/ui
     bee/node: ./modules/node
@@ -51,4 +53,5 @@ workspace:
     bee/sessions: ./modules/sessions
     bee/settings: ./modules/settings
     bee/console: ./modules/console
+    bee/client: ./modules/client
     bee/desktop: ./modules/desktop

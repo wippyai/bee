@@ -204,7 +204,7 @@ local function define_tests()
                 test.eq(identity.native_module, "github.com/wippyai/bee/native")
                 test.eq(identity.native_version, "v1.2.3")
                 test.eq(identity.native_modules[identity.native_module], "v1.2.3")
-                test.eq(identity.runtime_commit, "728b75942028080264aacbb16ef0420a0f8090b4")
+                test.eq(identity.runtime_commit, "5eb9901870e3a7ca72b608fc0f5e70b531d914b6")
             end
         end)
         test.it("measures a large policy closure without the message encoder limit", function()

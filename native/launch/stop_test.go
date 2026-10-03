@@ -139,3 +139,35 @@ func TestOwnerTakesItsLaunchIdentity(t *testing.T) {
 		t.Fatal("a malformed launch identity was accepted")
 	}
 }
+
+func TestStopClearsADeadRecordedOwnerWithoutJoining(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	var report bytes.Buffer
+	seams.report = &report
+	seams.holdOwnerExit = func(int) (ownerExitObserver, error) { return nil, os.ErrProcessDone }
+	cleared := false
+	seams.clearStaleOwner = func(context.Context, string) (bool, error) { cleared = true; return true, nil }
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: stopIntent(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if !cleared || owner.joined != 0 || report.String() != "Stopping Bee…\nBee was not running (stale owner record cleared)\n" {
+		t.Fatalf("cleared %v, joined %d, report %q", cleared, owner.joined, report.String())
+	}
+}
+
+func TestStopPreservesTheExactObserverFailure(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	denied := errors.New("process observation permission denied")
+	seams.holdOwnerExit = func(int) (ownerExitObserver, error) { return nil, denied }
+	seams.clearStaleOwner = func(context.Context, string) (bool, error) {
+		t.Fatal("cleared after an observation error")
+		return false, nil
+	}
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: stopIntent(t)}); !errors.Is(err, denied) {
+		t.Fatalf("observer error = %v", err)
+	}
+}

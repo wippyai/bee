@@ -254,7 +254,7 @@ func writeProbe(root string) error {
 		return err
 	}
 	code := string(owner)
-	entry := "local function main(controller_owner: string?, controller_checkpoint: unknown?)"
+	entry := "local function main(owner_log: string?, controller_owner: string?, controller_checkpoint: unknown?)"
 	registration := "    if not stops then error(stops_error) end"
 	controllerReady := "                    if not resumed then error(\"Owner controller did not validate its checkpoint\") end"
 	workspaceReady := "                    checkpoint = handoff.pack(self, value.workspace_id, value.desktop_id)"

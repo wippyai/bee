@@ -1,9 +1,6 @@
-"""Prove machine login links using a local runtime PR build via BEE_RUNTIME."""
-import os
-from pathlib import Path
+"""Prove machine login links using the pinned upstream runtime."""
 import shutil
 import subprocess
-import sys
 
 import yaml
 
@@ -12,8 +9,7 @@ from workspace import RUNTIME, ROOT, fixture_workspace
 
 
 def main():
-    assert os.environ.get("BEE_RUNTIME"), "Set BEE_RUNTIME to the proof-only runtime build"
-    cases = ("contained",) if "--contained-pin" in sys.argv else ("accepted", "refused-target", "refused-parent")
+    cases = ("accepted", "refused-target", "refused-parent")
     for case in cases:
         with fixture_workspace(managed_gateway=True) as folder:
             home = folder / "login-home"
@@ -38,23 +34,12 @@ def main():
                                             "bee.test.loginlinks:probe_policy"]},
                  "imports": {"test": "wippy.test:test", "bounds": "bee.values:bounds", "principals": "bee.test.principals:bound",
                              "locator": "bee.harness.launch:locate", "agents": "bee.harness.app:agents",
-                             "sessions": "bee.app:sessions", "sessions_fixtures": "bee.tests.sessions:fixtures"}},
+                             "sessions": "bee.sessions.client:sessions", "sessions_fixtures": "bee.tests.sessions:fixtures"}},
                 {"name": "probe_policy", "kind": "security.policy", "policy": {"actions": ["env.get"], "resources": ["bee.test.loginlinks:expected", "bee.test.loginlinks:target"], "effect": "allow"}},
             ]
-            # The proof explicitly copies only the production machine source's
-            # selected policy. No other directory gains external-link reads.
-            index = folder / "src/env/_index.yaml"
-            document = yaml.safe_load(index.read_text())
-            source = next(entry for entry in document["entries"] if entry["name"] == "machine_login_source")
-            source["link_policy"] = "owner_safe"
-            index.write_text(yaml.safe_dump(document, sort_keys=False))
-            host_index = folder / "src/tests/harness/host/_index.yaml"
-            host = yaml.safe_load(host_index.read_text())
-            executable = folder / "fixtures/harness/bin/codex-loginlinks"
+            executable = folder / "fixtures/harness/bin/codex"
             executable.write_text('#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-cli 1.2.3"; exit 0; fi\nexit 1\n')
             executable.chmod(0o700)
-            host["entries"][0]["data"]["values"]["codex"] = str(executable)
-            host_index.write_text(yaml.safe_dump(host, sort_keys=False))
             (probe / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee.test.loginlinks", "entries": entries}, sort_keys=False))
             selected = "bee.test.loginlinks:probe"
             for manifest in (folder / "src/tests").rglob("_index.yaml"):

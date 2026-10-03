@@ -32,7 +32,7 @@ entries:
   method: main
   modules: [process, channel, time, logger]
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
     outbox: bee.approvals.persist:outbox
 - name: authority
   kind: process.lua
@@ -40,7 +40,7 @@ entries:
   method: main
   modules: [process]
   imports:
-    service: bee.approvals.service:service
+    service: bee.approvals.binding:service
 - name: authority_service
   kind: process.service
   process: bee.approvals.service:authority
@@ -57,26 +57,3 @@ entries:
     security:
       actor: {id: bee.approvals.outbox}
       policies: []
-- name: runtime_lease
-  kind: library.lua
-  source: file://runtime_lease.lua
-  imports:
-    bounds: bee.values:bounds
-- name: service
-  kind: library.lua
-  source: file://service.lua
-  modules: [sql, hash, uuid, json, security, system, process, funcs]
-  imports:
-    windows: bee.approvals.types:windows
-    runtime_lease: bee.approvals.service:runtime_lease
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    values: bee.threads.records:values
-    clock: bee.values:clock
-    persist: bee.persist.persist:database
-    transaction: bee.persist.persist:transaction
-    migrations: bee.approvals.migrations:migrations
-    identity_migration: bee.approvals.migrations:identity_migration
-    resources: bee.approvals.env:resources
-    store: bee.approvals.persist:store
-    outbox: bee.approvals.persist:outbox

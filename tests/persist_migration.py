@@ -77,12 +77,17 @@ def bytes_check():
     baseline_paths = {parts[2]: parts[1] for line in moved.splitlines()
                       if (parts := line.split('\t'))[0].startswith('R')}
     baseline_paths[SOURCES['workspace']] = 'src/storage/store.lua'
-    paths = set(SOURCES.values()) | {'src/client/store.lua'}
+    baseline_paths['modules/client/src/migrations/migrations.lua'] = 'src/client/store.lua'
+    paths = set(SOURCES.values()) | {'modules/client/src/migrations/migrations.lua'}
     paths |= {str(path.relative_to(ROOT)) for path in (ROOT / 'modules').glob('*/src/migrations/*.lua')}
     for path in sorted(paths):
         current = declared_migrations((ROOT / path).read_text())
         for baseline in ['893d1216', 'origin/main']:
             baseline_path = baseline_paths.get(path, path) if baseline == '893d1216' else path
+            if path == 'modules/client/src/migrations/migrations.lua':
+                exists = subprocess.run(['git', 'cat-file', '-e', baseline + ':' + path], cwd=ROOT, capture_output=True)
+                if exists.returncode:
+                    baseline_path = 'src/client/store.lua'
             prior = subprocess.check_output(['git', 'show', baseline + ':' + baseline_path], cwd=ROOT, text=True)
             shipped = declared_migrations(prior)
             assert current[:len(shipped)] == shipped, (baseline, path)
@@ -95,7 +100,7 @@ def seed(path, owner, workspace_revision=7, original_nine=True):
         initial = re.search(r'local INITIAL = \[\[(.*?)\]\]', source, re.S)[1].removeprefix('\n')
         expected = [(1, 'owner_local_feed', initial)]
     else:
-        source = ROOT / ('modules/workspace/src/migrations/migrations.lua' if owner == 'workspace' else 'src/client/store.lua')
+        source = ROOT / ('modules/workspace/src/migrations/migrations.lua' if owner == 'workspace' else 'modules/client/src/migrations/migrations.lua')
         expected = declared_migrations(source.read_text())
     limit = workspace_revision if owner == 'workspace' else 1
     if owner == 'workspace' and workspace_revision == 9 and original_nine:
@@ -335,10 +340,13 @@ def startup_failure():
                 'allowed_nodes': [], 'local_clients': True}}]}}))
         owner = project / 'src/launch/owner.lua'
         owner_source = owner.read_text()
-        owner_source = owner_source.replace('if failure then error(failure) end',
-            'if failure then assert(io.print("OWNER_STARTUP_FAILURE_MS " .. tostring(startup_now_ms()))); error(failure) end', 1)
-        owner_source = owner_source.replace('if reason then error(reason) end',
-            'if reason then assert(io.print("OWNER_STARTUP_FAILURE_MS " .. tostring(startup_now_ms()))); error(reason) end', 1)
+        owner_source = owner_source.replace('    local failure_component, failure_subject, failure_code',
+            '    local startup_started = time.now()\n    local function startup_now_ms(): integer\n'
+            '        return math.floor(time.now():sub(startup_started):milliseconds())\n    end\n'
+            '    local failure_component, failure_subject, failure_code', 1)
+        for statement in ('failure_message = failure', 'failure_message = reason'):
+            owner_source = owner_source.replace(statement,
+                'assert(io.print("OWNER_STARTUP_FAILURE_MS " .. tostring(startup_now_ms()))); ' + statement, 1)
         owner.write_text(owner_source)
         started = time.monotonic()
         result = subprocess.run([str(RUNTIME), 'run', '--verbose', '--host', 'bee:terminal',
@@ -350,7 +358,11 @@ def startup_failure():
         digest = hashlib.sha256((expected[1] + '\n' + expected[2]).encode()).hexdigest()
         message = f'workspace migration 9 (nested_bee_names_v1) checksum changed: expected {digest}, found unknown'
         assert result.returncode and message in output, output
-        assert 'Hive supervisor failed before retained workspace readiness:' in output, output
+        record = re.search(r'^BEE_STARTUP_FAILED (.+)$', output, re.M)
+        assert record, output
+        fault = json.loads(record[1])
+        assert fault['code'] == 'HIVE_STARTUP_FAILED' and fault['component'] == 'bee.hive', fault
+        assert fault['subject'] and message in fault['message'], fault
         assert 'startup stalled' not in output, output
         measured = re.search(r'^OWNER_STARTUP_FAILURE_MS (\d+)$', output, re.M)
         assert measured and int(measured[1]) < 1000, output
@@ -540,7 +552,7 @@ def main(workspace_copy=None, upgrade_only=False):
                     'actions': ['db.get'], 'resources': [entry[0] for entry in OWNERS.values()] + ['bee.persistprobe:history'], 'effect': 'allow'}},
                 {'name': 'main', 'kind': 'process.lua', 'source': 'file://main.lua', 'method': 'main',
                  'modules': ['io', 'sql'],
-                 'imports': {'workspace': 'bee.workspace.persist:store', 'client': 'bee.client:store', 'sync': 'bee.sync.persist:database', 'ledger': 'bee.persist.persist:ledger',
+                 'imports': {'workspace': 'bee.workspace.persist:store', 'client': 'bee.client.persist:store', 'sync': 'bee.sync.persist:database', 'ledger': 'bee.persist.persist:ledger',
                      'threads_migrations': 'bee.threads.migrations:migrations',
                      'governance_migrations': 'bee.gov.migrations:schema',
                      'gateway_migrations': 'bee.gateway.migrations:migrations',

@@ -4,6 +4,16 @@ local retained = require("retained")
 
 local function define_tests()
     test.describe("retained workspace startup failure", function()
+        test.it("builds a structured failure without rewriting its message or subject", function()
+            local fault = retained.failure_record("CHECKPOINT_UNSUPPORTED", "bee.apps", "bee.settings.app:app",
+                "Bee owner startup: checkpoint schema is unsupported", "/state/owner.log")
+            test.eq(fault.code, "CHECKPOINT_UNSUPPORTED")
+            test.eq(fault.component, "bee.apps")
+            test.eq(fault.subject, "bee.settings.app:app")
+            test.eq(fault.message, "Bee owner startup: checkpoint schema is unsupported")
+            test.eq(fault.log, "/state/owner.log")
+        end)
+
         test.it("gets the local node identity from the owner process before Hive starts", function()
             test.eq(retained.startup_node("{node@bee.launch:owner|1}"), "node")
             test.is_nil(retained.startup_node("{bee.launch:owner|1}"))
@@ -31,10 +41,10 @@ local function define_tests()
             test.is_nil(retained.stored_startup_failure(string.rep("x", 4097)))
         end)
 
-        test.it("keeps a forwarded boot error on one line", function()
+        test.it("preserves the full forwarded boot error for the owner log", function()
             test.eq(retained.startup_failure("{node@bee.hive.service:supervisor_host|1}",
                 {version = 1, error = "bind failed\nsecond line"}, "node"),
-                "Hive supervisor failed before retained workspace readiness: bind failed second line")
+                "Hive supervisor failed before retained workspace readiness: bind failed\nsecond line")
         end)
     end)
 end

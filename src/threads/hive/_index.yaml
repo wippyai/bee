@@ -1,28 +1,6 @@
 version: '1.0'
 namespace: bee.threads.hive
 entries:
-- name: admission
-  kind: library.lua
-  source: file://admission.lua
-  modules: [funcs, security, time]
-  imports:
-    types: bee.hive:types
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    clock: bee.values:clock
-    catalog: bee.hive.exposure:catalog
-    principals: bee.hive.security:principals
-- name: admit
-  kind: function.lua
-  source: file://admit.lua
-  method: handle
-  modules: [registry, time]
-  imports:
-    types: bee.hive:types
-    admission: bee.threads.hive:admission
-    principals: bee.hive.security:principals
-  security:
-    policies: [bee.threads.hive:admission_policy, bee.threads.hive:identity_policy, bee.security.hive:hive_thread_exposure_policy]
 - name: admission_policy
   kind: security.policy
   meta:

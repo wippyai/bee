@@ -287,7 +287,7 @@ local function main(mode: string?)
         wait_text(right_screen, "CLIENT_BEFORE_right_")
         before = table.concat(assert(right_screen:snapshot()).rows, "\n")
         local right_shell = assert(before:match("CLIENT_BEFORE_right_(%d+)_END"))
-        local entry = assert(registry.get("bee.client:main"))
+        local entry = assert(registry.get("bee.client.service:main"))
         entry.meta.handoff_probe = "client-definition-changed"
         local changes = assert(registry.snapshot()):changes()
         changes:update(entry)

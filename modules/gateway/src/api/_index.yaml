@@ -86,7 +86,7 @@ entries:
     bounds: bee.values:bounds
     message: bee.threads.records:message
     arguments: bee.app:arguments
-    workspace_protocol: bee.gov.workspace:workspace_protocol
-    delivery_protocol: bee.gov.delivery:delivery_protocol
+    workspace_protocol: bee.gov.types:workspace_protocol
+    delivery_protocol: bee.gov.types:delivery_protocol
     docs_protocol: bee.docs:protocol
     record_bounds: bee.threads.records:bounds

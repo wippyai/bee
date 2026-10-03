@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.threads.hive
+entries:
+- name: target_admit_policies
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: bee.threads.hive.binding:admit
+    path: .security.policies

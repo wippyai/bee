@@ -179,6 +179,29 @@ def client_layout(database, workspace_id, desktop_id=None):
     return row[0], json.loads(row[1])
 
 
+def observe_carrier(folder):
+    """Report carrier steps only to a controller that explicitly opts in."""
+    carrier = folder / "modules/harness/src/service/process.lua"
+    carrier_source = carrier.read_text().replace('local process = require("process")',
+                                                'local process = require("process")\nlocal ctx = require("ctx")')
+    carrier_index = folder / "modules/harness/src/service/_index.yaml"
+    carrier_document = yaml.safe_load(carrier_index.read_text())
+    carrier_modules = next(entry for entry in carrier_document["entries"] if entry["name"] == "carrier")["modules"]
+    if "ctx" not in carrier_modules:
+        carrier_modules.append("ctx")
+    carrier_index.write_text(yaml.safe_dump(carrier_document, sort_keys=False))
+    io_anchor = "    local io = io_for(after)"
+    assert carrier_source.count(io_anchor) == 1
+    carrier_source = carrier_source.replace(io_anchor, '''    local observed = after
+    after = function(step: string)
+        if controller and ctx.get("bee.test.carrier.progress") == true then
+            assert(process.send(controller, "bee.test.carrier.progress", step))
+        end
+        if observed then observed(step) end
+    end
+    local io = io_for(after)''')
+    carrier.write_text(carrier_source)
+
 @contextmanager
 def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=True):
     fixtures = ROOT / ".wippy/fixtures"
@@ -226,6 +249,43 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             broker_source = broker_source.replace(cleanup_anchor,
                                                  "if close_gate then process.unlisten(close_gate) end\n    " + cleanup_anchor)
             broker.write_text(broker_source)
+            observe_carrier(folder)
+            store = folder / "modules/placement-native/src/persist/store.lua"
+            store_source = store.read_text().replace('local sql = require("sql")',
+                'local sql = require("sql")\nlocal process = require("process")\nlocal ctx = require("ctx")')
+            projection = "    local attempt, project_error = project(row)"
+            assert store_source.count(projection) == 1
+            store_source = store_source.replace(projection, '''    local controller = ctx.get("bee.test.attempt.snapshot")
+    if type(controller) == "string" then
+        local release = assert(process.listen("bee.test.attempt.release", {message = true}))
+        assert(process.send(controller, "bee.test.attempt.snapshot", {attempt_id = attempt_id}))
+        local released = assert((release:receive()))
+        assert(tostring(released:from()) == controller, "attempt snapshot barrier sender")
+        process.unlisten(release)
+    end
+    local attempt, project_error = project(row)''')
+            store.write_text(store_source)
+            store_index = folder / "modules/placement-native/src/persist/_index.yaml"
+            store_document = yaml.safe_load(store_index.read_text())
+            next(entry for entry in store_document["entries"] if entry["name"] == "store")["modules"] += ["process", "ctx"]
+            store_index.write_text(yaml.safe_dump(store_document, sort_keys=False))
+            runner = folder / "modules/placement-native/src/service/runner.lua"
+            runner_source = runner.read_text()
+            selection = "selected = channel.select(cases)"
+            assert selection in runner_source
+            runner_source = runner_source.replace(selection, '''selected = channel.select(drain_armed and not drain_expired and request.environment.PROBE_VALUE == "expire-pipe"
+            and {drain_timer:case_receive()} or cases)''')
+            start_anchor = "    local started, start_error = proc:start()"
+            assert runner_source.count(start_anchor) == 1
+            runner_source = runner_source.replace(start_anchor, '''    if request.environment.PROBE_VALUE == "hold-retention" then
+        local release = assert(process.listen("bee.test.native.release", {message = true}))
+        assert(process.send(assert(recipient), "bee.test.native.held", {attempt_id = attempt_id}))
+        local released = assert((release:receive()))
+        assert(tostring(released:from()) == recipient, "retention gate sender")
+        process.unlisten(release)
+    end
+    local started, start_error = proc:start()''')
+            runner.write_text(runner_source)
             # The reference applications are documentation sources; the test
             # composition compiles them against the library and never ships them.
             shutil.copytree(ROOT / "docs/reference/apps", folder / "src/tests/reference_apps/apps")

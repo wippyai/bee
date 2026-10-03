@@ -88,9 +88,9 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
   # then the fixture waits for a correlated control_response line on stdin.
   # allow continues the captured stream; deny reports the denial and ends;
   # an uncorrelated or malformed line is ignored and the wait continues;
-  # silence past the timeout ends with a permission_timeout result.
+  # An explicitly requested protocol bound ends with a permission_timeout result.
   id="$BEE_FIXTURE_PERMISSION"
-  timeout="${BEE_FIXTURE_PERMISSION_TIMEOUT:-2}"
+  timeout="${BEE_FIXTURE_PERMISSION_TIMEOUT:-}"
   # The stream comes in on descriptor 3 so the response is read from stdin.
   while IFS= read -r frame <&3 || [ -n "$frame" ]; do
     printf '%s\n' "$frame"
@@ -98,7 +98,9 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
       *'"type":"control_request"'*)
         decision=""
         while [ -z "$decision" ]; do
-          if read -t "$timeout" -r line; then
+          read_options=()
+          if [ -n "$timeout" ]; then read_options=(-t "$timeout"); fi
+          if read "${read_options[@]}" -r line; then
             case "$line" in
               *"\"request_id\":\"$id\""*)
                 case "$line" in
@@ -109,7 +111,7 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
               *) printf '%s\n' "uncorrelated:$line" >&2 ;;
             esac
           else
-            decision=timeout
+            if [ -n "$timeout" ]; then decision=timeout; else decision=eof; fi
           fi
         done
         case "$decision" in
@@ -117,13 +119,17 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
             printf '{"type":"system","subtype":"permission_denied","tool_name":"Bash","message":"denied by the owner","session_id":"fixture"}\n'
             printf '{"type":"result","subtype":"error_permission","is_error":true,"result":"permission denied","permission_denials":[{"tool_name":"Bash","tool_use_id":"%s"}],"session_id":"fixture"}\n' "$id"
             exit 0 ;;
+          eof)
+            printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_eof","result":"stdin ended before permission response","session_id":"fixture"}\n'
+            exit 2 ;;
           timeout)
-            printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_timeout","result":"no permission response","session_id":"fixture"}\n'
+            printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_timeout","result":"no permission response within %s seconds (fixture permission protocol bound)","session_id":"fixture"}\n' "$timeout"
             exit 2 ;;
         esac ;;
     esac
   done 3< "$stream"
 elif [ -n "${BEE_FIXTURE_FLOOD:-}" ]; then
+  if [ -n "${BEE_FIXTURE_STDERR_EOF:-}" ]; then exec 2>&-; fi
   count="$BEE_FIXTURE_FLOOD"
   pace="${BEE_FIXTURE_FLOOD_PACE:-0.01}"
   flood_text="${BEE_FIXTURE_FLOOD_TEXT:-80}"
@@ -179,6 +185,7 @@ if [ -n "$stream_json" ]; then
   # A stream-json session ends when stdin closes, as the real executable's does.
   while IFS= read -r _; do :; done
 fi
+if [ -n "${BEE_FIXTURE_AFTER_CLOSE:-}" ]; then printf '%s\n' "after:terminal" >&2; fi
 if [ -n "${BEE_FIXTURE_ORPHAN_FIFO:-}" ]; then
   exec 3<>"$BEE_FIXTURE_ORPHAN_FIFO"
   (IFS= read -r _ <&3) &

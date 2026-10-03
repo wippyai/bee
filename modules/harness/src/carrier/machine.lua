@@ -588,7 +588,7 @@ local function new_session(plan: Plan, turn_id: string, epoch: integer, revision
     local output: OutputState = "open"
     if point.output == "complete" then output = "complete" elseif point.output == "truncated" then output = "truncated" end
     return {plan = plan, turn_id = turn_id, turn_open = true, epoch = epoch, revision = revision, checkpoint = point, decoder = decoder, normalizer = point.normalizer_state,
-        terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = false, stderr = false}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
+        terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = point.output == "complete", stderr = point.output == "complete"}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
         last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}, held_from = nil,
         dropping_stdout = point.dropping_stdout == true}
 end
@@ -1263,6 +1263,14 @@ end
 function M.on_output(io: IO, session: Session, sender: string, message: placement_protocol.Output): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
     if message.sequence <= session.last_sequence[message.stream] then
+        if message.eof and not session.eof[message.stream] then
+            session.eof[message.stream] = true
+            if message.truncated then mark_output(session, "truncated")
+            elseif session.eof.stdout and session.eof.stderr and session.output == "open" then mark_output(session, "complete") end
+            local committed, commit_error = M.commit(io, session, {})
+            if not committed then return false, commit_error end
+            step(io, message.stream .. "_ended")
+        end
         io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
         return true, nil
     end
@@ -1399,6 +1407,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     end
     session.last_sequence[message.stream] = message.sequence
     step(io, "committed")
+    if message.eof then step(io, message.stream .. "_ended") end
     if detected > 0 then step(io, "permission_intended") end
     io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
     step(io, "acknowledged")

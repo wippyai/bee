@@ -13,6 +13,8 @@ local registry = require("registry")
 local env = require("env")
 local time = require("time")
 local channel = require("channel")
+local exec = require("exec")
+local quote = require("quote")
 local placement_fixture = require("placement_fixture")
 local exits = require("exits")
 local ACTOR = "bee.test.carrier"
@@ -61,6 +63,14 @@ local function fixture_bin(): string
     local bin, err = env.get("bee.harness.catalog:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
+end
+local function command(argv: {string})
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
+    local child = assert(executor:exec(quote.line(argv)))
+    assert(child:start())
+    local code, err = child:wait()
+    executor:release()
+    assert(code == 0, "fixture command: " .. tostring(err))
 end
 local function stream(name: string): string
     local base, err = env.get("bee.harness.catalog:fixture_streams")
@@ -121,25 +131,24 @@ end
 -- Exits arrive on one events channel, so several carriers are awaited
 -- together and every exit is kept.
 local exited: {[string]: Outcome} = {}
-local function await_carriers(pids: {string}, label: string?, timeout_ms: integer?): {[string]: Outcome}
+local function await_carriers(pids: {string}, label: string?): {[string]: Outcome}
     local events = assert(process.events())
-    local deadline = time.after(tostring(timeout_ms or 30000) .. "ms")
     return exits.collect(pids, exited, function(poll: boolean): unknown
         if poll then
             local selected = channel.select({events:case_receive(), default = true})
             if selected.default or not selected.ok then return nil end
             return selected.value
         end
-        local selected = channel.select({events:case_receive(), deadline:case_receive()})
+        local selected = channel.select({events:case_receive()})
         if selected.ok and selected.channel == events then return selected.value end
         return nil
     end, label or "carrier")
 end
-local function await_carrier(pid: string, label: string?, timeout_ms: integer?): Outcome
-    return assert(await_carriers({pid}, label, timeout_ms)[pid])
+local function await_carrier(pid: string, label: string?): Outcome
+    return assert(await_carriers({pid}, label)[pid])
 end
-local function run_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?, pause_after: string?, slow_commit_ms: number?, timeout_ms: integer?): Outcome
-    return await_carrier(spawn_carrier(entry, request_value, mode, crash_after, batch, pause_after, slow_commit_ms), nil, timeout_ms)
+local function run_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?, pause_after: string?, slow_commit_ms: number?): Outcome
+    return await_carrier(spawn_carrier(entry, request_value, mode, crash_after, batch, pause_after, slow_commit_ms), crash_after or mode)
 end
 local function kinds(thread_id: string): ({string}, {{[string]: unknown}})
     local list: {string} = {}
@@ -247,6 +256,35 @@ local function define_tests()
             local list = kinds(thread_id)
             test.eq(count(list, "receipt"), 1)
             test.eq(count(list, "turn.end"), 1)
+        end)
+        test.it("records stderr written after the terminal frame and both pipe ends before settlement", function()
+            local policy = assert(registry.get(POLICY))
+            local data = assert(bounds.object(policy.data))
+            local saved = data.gateway_hooks
+            data.gateway_hooks = {}
+            local selected = registry.snapshot():changes()
+            selected:update(policy)
+            assert(selected:apply())
+            local thread_id = thread()
+            local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("success.jsonl"), BEE_FIXTURE_AFTER_CLOSE = "1"})
+            local outcome = run_carrier("bee.harness.service:carrier", launch, "open")
+            data.gateway_hooks = saved
+            local restored = registry.snapshot():changes()
+            restored:update(policy)
+            assert(restored:apply())
+            assert(outcome.value, tostring(outcome.error))
+            local _, records = kinds(thread_id)
+            local late = 0
+            for _, item in ipairs(observations(records)) do
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
+                if data.type == "notice" and data.code == "stderr" and tostring((assert(bounds.object(data.content))).text):find("after:terminal", 1, true) then late = late + 1 end
+            end
+            test.eq(late, 1)
+            local output = observations(records, "bee.carrier.output")
+            test.eq(#output, 1)
+            local data = assert(bounds.object((assert(bounds.object(output[1].body))).data))
+            local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
+            test.eq(payload.state, "complete")
         end)
         test.it("settles a stream that ends without a result only after the child's exit and remaining output", function()
             local thread_id = thread()
@@ -505,7 +543,7 @@ local function define_tests()
             test.eq(table.concat(writes(records), ","), "w9:intended,w9:accepted")
         end)
         test.it("recovers from crash points without duplicate records or settlement", function()
-            for _, crash in ipairs({"placement_started", "committed", "turn_ended"}) do
+            for _, crash in ipairs({"placement_started", "committed", "stdout_ended", "stderr_ended", "turn_ended"}) do
                 local thread_id = thread()
                 local attempt_id = fresh("attempt")
                 local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_LINGER = "1"})
@@ -515,7 +553,7 @@ local function define_tests()
                 local resumed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
                 if not resumed.value then error(crash .. ": resume failed: " .. tostring(resumed.error)) end
                 local settlement = assert(bounds.object(resumed.value.settlement))
-                test.eq(settlement.outcome, "succeeded")
+                test.eq(settlement.outcome, "succeeded", crash .. ": " .. require("json").encode(settlement))
                 test.eq(settlement.answer, "pong")
                 local list, records = kinds(thread_id)
                 test.eq(count(list, "attempt.started"), 1)
@@ -550,9 +588,9 @@ local function define_stream_tests()
             test.is_true(expected_deltas * #fixture_delta > 256 * 1024,
                 "the emitted frames exceed the placement output spool")
             local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected_deltas),
-                BEE_FIXTURE_FLOOD_PACE = "0", BEE_FIXTURE_FLOOD_EXIT = "1"}
+                BEE_FIXTURE_FLOOD_PACE = "0", BEE_FIXTURE_FLOOD_EXIT = "1", BEE_FIXTURE_STDERR_EOF = "1"}
             local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
-                "open", nil, nil, nil, 40, 150000)
+                "open", nil, nil, nil, 40)
             if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end
             local settlement = assert(bounds.object(outcome.value.settlement))
             test.eq(settlement.outcome, "succeeded", require("json").encode(settlement))
@@ -614,7 +652,7 @@ local function define_drain_tests()
             local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected),
                 BEE_FIXTURE_FLOOD_TEXT = "2000", BEE_FIXTURE_FLOOD_PACE = "0"}
             local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
-                "open", nil, nil, nil, 800, 300000)
+                "open", nil, nil, nil, 800)
             data.runner_drain_ms = saved_drain
             data.drain_ms = saved_carrier_drain
             local widened = registry.snapshot():changes()
@@ -659,32 +697,49 @@ local function define_drain_tests()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
             local gate = require("orphan_gate")
-            local path = fixture_bin() .. "/" .. fresh("orphan") .. ".fifo"
-            gate.create(path)
+            local release = fixture_bin() .. "/" .. fresh("silent-orphan")
+            gate.create(release)
             local ok, problem = pcall(function()
                 local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
-                    BEE_FIXTURE_ORPHAN_FIFO = path})
-                local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed")
-                test.is_nil(crashed.value)
-                test.is_true(tostring(crashed.error):find("crash after committed", 1, true) ~= nil)
-                local drained, finished, exited, lost = false, false, false, false
-                for _ = 1, 300 do
-                    local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
-                    for _, item in ipairs(principals.objects(page.evidence)) do
-                        if item.kind == "output.drain_elapsed" then drained = true end
-                        if item.kind == "runner.finished" then finished = true end
-                        if item.kind == "child.exited" then exited = true end
-                        if item.kind == "output.lost" then lost = true end
-                    end
-                    if drained and finished then break end
-                    time.sleep("100ms")
+                    BEE_FIXTURE_ORPHAN_FIFO = release})
+                local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+                local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed", nil, "placement_started")
+                local events = assert(process.events())
+                exits.paused(pid, "placement_started", exited, function(poll: boolean): unknown
+                    local selected
+                    if poll then
+                        selected = channel.select({paused:case_receive(), default = true})
+                        if selected.default then return nil end
+                    else selected = channel.select({paused:case_receive(), events:case_receive()}) end
+                    assert(selected.ok, "silent-consumer barrier observation closed")
+                    if selected.channel == events then return selected.value end
+                    local message = selected.value
+                    return {kind = "pause", from = tostring(message:from()), step = message:payload():data()}
+                end)
+                local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
+                local runner = assert(bounds.text(assert(bounds.object(status.attempt)).runner, 256))
+                assert(process.monitor(runner))
+                assert(process.send(pid, "bee.carrier.continue", {}))
+                local outcomes = await_carriers({pid, runner}, "silent-consumer supervision")
+                test.is_nil(outcomes[pid].value)
+                test.is_true(tostring(outcomes[pid].error):find("crash after committed", 1, true) ~= nil)
+                test.is_nil(outcomes[runner].error)
+                process.unmonitor(runner)
+                process.unlisten(paused)
+                local drained, finished, child_exited, lost = false, false, false, false
+                local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
+                for _, item in ipairs(principals.objects(page.evidence)) do
+                    if item.kind == "output.drain_elapsed" then drained = true end
+                    if item.kind == "runner.finished" then finished = true end
+                    if item.kind == "child.exited" then child_exited = true end
+                    if item.kind == "output.lost" then lost = true end
                 end
-                test.is_true(exited, "the producer exits independently of its pipe-holding descendant")
+                test.is_true(child_exited, "the producer exits independently of its pipe-holding descendant")
                 test.is_true(drained, "open descendant pipes exhaust the declared post-exit drain")
                 test.is_true(lost, "the silent carrier leaves unacknowledged output for retention expiry")
                 test.is_true(finished)
             end)
-            gate.release(path)
+            gate.release(release)
             data.runner_drain_ms = saved_drain
             data.retain_ms = saved_retain
             local widened = registry.snapshot():changes()
@@ -696,7 +751,11 @@ local function define_drain_tests()
         test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_ORPHAN = "5"}), "open", nil)
+            local release = fixture_bin() .. "/" .. fresh("truncated-orphan")
+            local gate = require("orphan_gate")
+            gate.create(release)
+            local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_ORPHAN_FIFO = release}), "open", nil)
+            gate.release(release)
             if not outcome.value then error("orphan run failed: " .. tostring(outcome.error)) end
             local settlement = assert(bounds.object(outcome.value.settlement))
             test.eq(settlement.outcome, "uncertain")

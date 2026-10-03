@@ -11,6 +11,7 @@ import shutil
 import selectors
 import sqlite3
 import subprocess
+import tempfile
 import time
 
 from native_client import hold_owner, live_owners, stop_owner
@@ -264,10 +265,10 @@ class Journey:
                 and self.source != work_root and self.source not in work_root.parents,
                 "source must not contain the evidence or scratch roots")
         self.output.mkdir(parents=True, exist_ok=True)
-        self.scratch = self.output / ("run-" + time.strftime("%Y%m%d-%H%M%S") + "-" + str(os.getpid()))
+        work_root.mkdir(parents=True, exist_ok=True)
+        self.work = Path(tempfile.mkdtemp(dir=work_root, prefix="run-"))
+        self.scratch = self.output / self.work.name
         self.scratch.mkdir(mode=0o700)
-        self.work = ROOT / ".wippy/owner-journey-work" / self.scratch.name
-        self.work.mkdir(parents=True, mode=0o700)
         self.state, self.folder = self.work / "state", self.work / "project"
         self.folder.mkdir()
         (self.work / "tmp").mkdir()

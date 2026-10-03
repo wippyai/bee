@@ -40,7 +40,7 @@ OptionSpec value schemas, form labels, contexts, capability evidence and renders
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
 
-Agents discovers `contract.binding` entries with `meta.type: harness.driver`.
+The Harness catalog discovers `contract.binding` entries with `meta.type: harness.driver`.
 Each declares `driver_id`, `profiles_ref` and the four `bee.driver:driver`
 methods. CLI bindings also name `descriptor_ref`. The profiles entry has
 `meta.type: harness.profile` and `meta.driver_ref` naming that exact binding.
@@ -199,7 +199,10 @@ payloads retain an omission-size object rather than invalid partial JSON.
 Workspace-authored drivers use the governed `driver.<name>` overlay rule.
 Read the overlay guide's `drivers` section for ownership, descriptor-based method
 factories, the exact host activation append and delivery approval. After the
-person approves the artifact, create a saved profile in Agents and select its
-new binding. Structured CLI turns use a headless profile. Driver activation
+person approves the artifact, open Sessions and press N to choose the driver.
+Its `.profiles` launch definition sets `presentation.start_menu: true`; false
+keeps it programmatic and hides it from the picker, including saved copies.
+E customizes a saved copy of the selected definition. Structured CLI turns use
+a headless session profile. Driver activation
 persists through the existing Governance owner recovery; running sessions retain
 their pinned routes until their lifecycle replaces them.

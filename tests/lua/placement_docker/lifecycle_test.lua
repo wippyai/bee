@@ -163,18 +163,33 @@ local function run()
         configure()
         test.it("retains the real daemon start refusal as a failed launch", function()
             local id = "docker-start-refused-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
-            local selected = request(id)
-            selected.launch.executable = "/bee-fixture-missing-executable"
-            selected.launch.argv = {}
-            value(call("prepare", selected))
-            local reply = call("start", {attempt_id = id})
+            local profile = assert(registry.get(PROFILE))
+            local executor = assert(registry.get("bee.placement.docker.tests:executor"))
+            local original_user = profile.data.user
+            profile.data.user = "99999999999999999999:1000"
+            executor.data.user = profile.data.user
+            local invalid_user = registry.snapshot():changes()
+            invalid_user:update(profile); invalid_user:update(executor)
+            assert(invalid_user:apply())
+            local launched: service.Reply? = nil
+            local ok, failure = pcall(function()
+                value(call("prepare", request(id)))
+                launched = call("start", {attempt_id = id})
+            end)
+            profile.data.user = original_user
+            executor.data.user = original_user
+            local restore = registry.snapshot():changes()
+            restore:update(profile); restore:update(executor)
+            assert(restore:apply())
+            if not ok then error(tostring(failure)) end
+            local reply = assert(launched)
             test.is_false(reply.ok)
             local status = assert(placement_decode.status(call("status", {attempt_id = id}).value))
             local attempt = status.attempt
             test.eq(attempt.execution_state, "uncertain")
             local reason = assert(attempt.start_failure)
             test.is_true(reason:find("failed to start container", 1, true) ~= nil)
-            test.is_true(reason:find("bee-fixture-missing-executable", 1, true) ~= nil)
+            test.is_true(reason:find("user", 1, true) ~= nil)
             test.is_true(assert(reply.error).message:find(reason, 1, true) ~= nil)
             test.is_nil(attempt.exit)
             test.is_nil(attempt.exit_source)

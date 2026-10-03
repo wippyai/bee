@@ -1,11 +1,11 @@
 -- MIT. A pure, bounded interaction modal for the replaceable presenter.
 local tty = require("tty")
+local interaction = require("interaction")
 local appearance = require("appearance")
 
-type Kind = "confirm" | "text"
+type Kind = interaction.Kind
 type Action = "" | "accept" | "cancel"
-type Spec = {request_id: string, id: string, instance_id: string, kind: Kind,
-    title: string, message: string, accept: string, initial: string}
+type Spec = interaction.Spec
 type State = {spec: Spec, left: string, right: string, selected: boolean, focus: string}
 type Result = {state: State, action: Action, value: string}
 type Cursor = {x: integer, y: integer, visible: boolean}
@@ -18,10 +18,10 @@ local MAX_BYTES = 256
 local function copy_spec(spec: Spec): Spec
     return {request_id = spec.request_id, id = spec.id, instance_id = spec.instance_id,
         kind = spec.kind, title = spec.title, message = spec.message,
-        accept = spec.accept, initial = spec.initial}
+        accept = spec.accept, initial = spec.initial, restoration = spec.restoration}
 end
 
--- The interaction decoder already rejects controls and oversized initial values.
+-- The interaction decoder rejects oversized or control-bearing initial values.
 -- Keep the renderer defensive because it is also useful with directly-created
 -- values in pure tests and callers that have not crossed that decoder.
 local function utf8_size(first: integer): integer

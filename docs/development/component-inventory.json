@@ -9498,6 +9498,10 @@
       },
       {
         "defined": true,
+        "make_target": "retained-startup-check"
+      },
+      {
+        "defined": true,
         "make_target": "session-fallback-check"
       },
       {
@@ -12779,6 +12783,12 @@
     },
     {
       "line": 849,
+      "owner_namespace": "bee.threads",
+      "source": "modules/threads/src/migrations/migrations.lua",
+      "table": "bee_thread_definition_migrations"
+    },
+    {
+      "line": 935,
       "owner_namespace": "bee.threads",
       "source": "modules/threads/src/migrations/migrations.lua",
       "table": "bee_thread_definition_migrations"
@@ -18947,7 +18957,7 @@
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
-    "owned_table_declaration_count": 151,
+    "owned_table_declaration_count": 152,
     "persisted_id_count": 893,
     "requirement_count": 173,
     "requirement_target_count": 446,

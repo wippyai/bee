@@ -759,3 +759,10 @@ login-links-check: $(TOOLCHAIN_CURRENT)
 .PHONY: ui-module
 ui-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/ui_module.py
+
+.PHONY: retained-startup-check
+RETAINED_STATE_COPY ?=
+RETAINED_EVIDENCE ?= .wippy/retained-proof
+retained-startup-check:
+	@test -n "$(RETAINED_STATE_COPY)" || { echo 'Set RETAINED_STATE_COPY to a non-credential database copy directory.' >&2; exit 1; }
+	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"

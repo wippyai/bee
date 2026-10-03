@@ -203,6 +203,29 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             raise ValueError("The managed gateway belongs to the unit-test composition")
         if unit_tests:
             shutil.copytree(ROOT / "tests/lua", folder / "src/tests")
+            # Hold the broker between cooperative close and escalation while
+            # the test independently monitors the real producer's EXIT.
+            broker = folder / "src/apps/broker.lua"
+            broker_source = broker.read_text()
+            event_anchor = "local events = assert(process.events())"
+            close_anchor = 'local _, err = item.view:send({type = "close"})'
+            cleanup_anchor = "process.unlisten(requests)"
+            assert broker_source.count(event_anchor) == broker_source.count(close_anchor) == broker_source.count(cleanup_anchor) == 1
+            broker_source = broker_source.replace(event_anchor, '''local events = assert(process.events())
+    local close_gate = ctx.get("bee.test.close_exit_order") == true
+        and assert(process.listen("bee.test.close_release", {message = true})) or nil''')
+            broker_source = broker_source.replace(close_anchor, '''if close_gate then
+                assert(process.send(owner, "bee.test.close_gate", {pid = item.execution_pid}))
+                assert(tostring(assert(close_gate:receive()):from()) == owner)
+            end
+            local _, err = item.view:send({type = "close"})
+            if close_gate then
+                assert(tostring(assert(close_gate:receive()):from()) == owner)
+                transition(item, "force_stop")
+            end''')
+            broker_source = broker_source.replace(cleanup_anchor,
+                                                 "if close_gate then process.unlisten(close_gate) end\n    " + cleanup_anchor)
+            broker.write_text(broker_source)
             # The reference applications are documentation sources; the test
             # composition compiles them against the library and never ships them.
             shutil.copytree(ROOT / "docs/reference/apps", folder / "src/tests/reference_apps/apps")

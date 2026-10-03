@@ -301,7 +301,10 @@ implemented.
 Process control uses `bee.app.control` (`stop|force_stop`,
 `execution_pid`) and `bee.app.result`. The broker checks the caller's
 grant and target ownership; a successful stop is reported only after EXIT.
-`termination_pending` is not success. Desktop command messages are private to
+If escalation finds a producer that has already left the scheduler, the close
+waiter stays pending until the broker consumes its monitored EXIT. Denied
+termination authority still reports `termination_pending`, which is not success.
+Desktop command messages are private to
 the owning workspace and acknowledge committed scene, tabs, preferences and
 errors.
 
@@ -348,6 +351,17 @@ binding removes the saved record and prevents restoration. Stored JSON never
 contains credentials, grants, PIDs or runtime objects. Native Terminal has no
 cold-resume contract; a surviving session service would be required to rejoin
 a PTY.
+
+Retained-instance alias attestation and restore-open failures are isolated to
+that instance. The broker keeps the saved record, logs its exact reason with
+workspace, instance and definition identities, and publishes an acknowledgement
+notice through the existing question delivery channel. Apps → Restoration
+failures and Needs you expose these notices even without a live view. A missing
+admission reports `Retained application is not admitted: <definition ID>`.
+Other admitted applications continue restoring and opening. Acknowledgement
+clears the notice; it does not delete the record or authorize an application.
+Successful restoration clears its notice. Catalog admission changes recheck
+the retained aliases. Only the broker can publish restoration notices.
 
 ## Questions and close
 

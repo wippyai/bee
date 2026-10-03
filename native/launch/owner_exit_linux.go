@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -24,6 +25,9 @@ func holdOwnerProcessExit(pid int) (ownerExitObserver, error) {
 	}
 	fd, err := unix.PidfdOpen(pid, 0)
 	if err != nil {
+		if errors.Is(err, unix.ESRCH) {
+			return nil, os.ErrProcessDone
+		}
 		return nil, fmt.Errorf("hold owner process: %w", err)
 	}
 	return &linuxOwnerExit{pid: pid, fd: fd}, nil

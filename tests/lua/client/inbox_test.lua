@@ -4,6 +4,22 @@ local inbox = require("inbox")
 local workspace = "0123456789abcdef0123456789abcdef"
 local function define_tests()
     test.describe("Client question projection", function()
+        test.it("keeps restoration notices without live tabs and correlates their acknowledgements", function()
+            local state = inbox.new(workspace, "connection")
+            assert(inbox.select(state, {}))
+            test.is_true(inbox.observe(state, {version = 1, workspace_id = workspace, connection_id = "connection",
+                selection_revision = 1, revision = 1, items = {{version = 1, request_id = "retained-error", id = "retained",
+                    instance_id = "retained", kind = "confirm", title = "Restoration failed", message = "exact error",
+                    accept = "Acknowledge", initial = "", restoration = true}}}))
+            local response = assert(inbox.answer(state, {version = 1, request_id = "retained-error", id = "retained",
+                instance_id = "retained", action = "accept", value = ""}))
+            test.eq(response.id, "retained")
+            test.eq(response.selection_revision, 1)
+            test.is_nil(inbox.answer(state, {version = 1, request_id = "retained-error", id = "retained",
+                instance_id = "foreign", action = "accept", value = ""}))
+            test.not_nil(inbox.result(state, {version = 1, workspace_id = workspace, connection_id = "connection",
+                request_id = "retained-error", id = "retained", instance_id = "retained", error_code = "", error = ""}))
+        end)
         test.it("translates local tabs while preserving answer identity and correlation", function()
             local state = inbox.new(workspace, "connection")
             local targets = {{tab_id = "local-tab", workspace_id = workspace, view_id = "native-view", instance_id = "instance"}}

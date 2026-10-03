@@ -11,6 +11,10 @@ prefix follows its source relocation from `src/client/store.lua` into
 `modules/client/src/migrations/migrations.lua`; its three applied migrations
 retain their SQL and IDs. Parallel component additions append after that prefix.
 
+Desktop reference migrations keep Credentials 8, Placement 10, Sync 11,
+Gateway 19 and Resources 5. Hive reference migrations follow them at
+Credentials 9, Placement 11, Sync 12, Gateway 20 and Resources 6.
+
 The audit covers all 104 declared migration identities across the 999 first-parent
 commits of main through the installed baseline `893d1216`, following source moves
 by migration-1 identity. These are all SQL changes found under an existing ID/name:

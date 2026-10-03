@@ -7,18 +7,20 @@ local security = require("security")
 local time = require("time")
 local tty = require("tty")
 local appearance = require("appearance")
+local fixture = require("fixture")
 local WORKSPACE = string.rep("d", 32)
 
-local function journey(definition: string, check: (tty.Viewport, string, integer, integer) -> ())
+local function journey(scope: fixture.State, definition: string, check: (tty.Viewport, string, integer, integer) -> ())
     local owner = tostring(process.pid())
-    local events = assert(process.events())
-    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-    local replies = assert(process.listen("bee.app.reply", {message = true}))
+    local events = scope.events
+    local catalogs = scope.catalogs
+    local replies = scope.replies
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner,
         ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({
         assert(security.policy("bee.security.desktop:broker_policy")),
         assert(security.policy("bee.security:core_spawn_boundary"))}))
         :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
+    scope.brokers[broker] = true
     local function reply(id: string): {[string]: unknown}
         local deadline = time.after("10s")
         while true do
@@ -69,10 +71,8 @@ local function journey(definition: string, check: (tty.Viewport, string, integer
     while true do
         local selected = channel.select({events:case_receive(), deadline:case_receive()})
         assert(selected.ok and selected.channel == events, "broker cleanup timed out")
-        if selected.value.kind == process.event.EXIT and tostring(selected.value.from) == broker then break end
+        if selected.value.kind == process.event.EXIT and tostring(selected.value.from) == broker then scope.brokers[broker] = nil; break end
     end
-    process.unlisten(catalogs)
-    process.unlisten(replies)
     if not ok then error(fault) end
 end
 
@@ -92,11 +92,11 @@ local function preview(view: tty.Viewport, path: string, first: integer, last: i
 end
 local function define_tests()
     test.describe("Workspace broker singleton reopen", function()
-        test.it("moves the live Files preview to a second file and range without replacing the instance", function()
-            journey("bee.files.app:app", preview)
-        end)
-        test.it("delivers arguments to another singleton using the shared default topic", function()
-            journey("bee.apps:singleton_probe", function(view, path, first, last)
+        test.it("moves the live Files preview to a second file and range without replacing the instance", fixture.case(function(scope: fixture.State)
+            journey(scope, "bee.files.app:app", preview)
+        end))
+        test.it("delivers arguments to another singleton using the shared default topic", fixture.case(function(scope: fixture.State)
+            journey(scope, "bee.apps:singleton_probe", function(view, path, first, last)
                 local target = path .. ":" .. tostring(first) .. "-" .. tostring(last)
                 local deadline = time.after("5s")
                 while not table.concat(assert(view:snapshot()).rows):find(target, 1, true) do
@@ -105,7 +105,7 @@ local function define_tests()
                     assert(selected.ok and selected.channel == poll, "singleton did not receive " .. target)
                 end
             end)
-        end)
+        end))
     end)
 end
 return test.run_cases(define_tests)

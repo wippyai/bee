@@ -49,7 +49,7 @@ func stopCutoverCompatible(ctx context.Context, state, previous string) error {
 // startCutoverOwner starts executable as a detached owner of state and waits
 // for its fresh readiness publication. A publication from another contender
 // or an older protocol fails the start.
-func startCutoverOwner(ctx context.Context, state, dir, executable string) error {
+func startCutoverOwner(ctx context.Context, state, dir, executable string) (result error) {
 	if !filepath.IsAbs(state) || !filepath.IsAbs(dir) {
 		return errors.New("cutover owner start requires absolute state and project directories")
 	}
@@ -75,7 +75,9 @@ func startCutoverOwner(ctx context.Context, state, dir, executable string) error
 		return err
 	}
 	releaseLog := func() error { return errors.Join(wait(), log.Close()) }
-	observe := observeStartup(state, baseline, os.Stderr)
+	progress := &startupLine{report: os.Stderr}
+	defer func() { result = errors.Join(result, progress.clear()) }()
+	observe := observeStartup(state, baseline, progress)
 	held := func() (bool, error) { return app.Owned(state) }
 	published, err := waitDescriptorOrExit(ctx, readDescriptor, directory, previous, done, releaseLog, held, observe)
 	if err != nil {

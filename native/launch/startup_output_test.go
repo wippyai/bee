@@ -54,7 +54,7 @@ func TestStartupLoadsApplicationBeforeCacheInstallation(t *testing.T) {
 	}
 }
 
-func TestStartupObserverEmitsEachPhaseOnce(t *testing.T) {
+func TestStartupObserverUpdatesOneLineWithTheCurrentPhase(t *testing.T) {
 	state := t.TempDir()
 	monitor, err := beginStartup(context.Background(), state, "output", "")
 	if err != nil {
@@ -62,12 +62,13 @@ func TestStartupObserverEmitsEachPhaseOnce(t *testing.T) {
 	}
 	defer monitor.stop()
 	var output bytes.Buffer
-	observe := observeStartup(state, startupSnapshot{}, &output)
+	line := &startupLine{report: &output}
+	observe := observeStartup(state, startupSnapshot{}, line)
 	monitor.advance("Starting services")
 	if err := monitor.flush(); err != nil {
 		t.Fatal(err)
 	}
-	for _, phase := range []string{"Starting services", "Loading application", "Starting services"} {
+	for _, phase := range []string{"Starting services", "Loading application", "Starting services", "Starting services"} {
 		monitor.advance(phase)
 		if err := monitor.flush(); err != nil {
 			t.Fatal(err)
@@ -76,8 +77,28 @@ func TestStartupObserverEmitsEachPhaseOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := output.String(); got != "Starting services…\nLoading application…\n" {
+	if got := output.String(); got != "\r\x1b[2KStarting services…\r\x1b[2KLoading application…\r\x1b[2KStarting services…" {
 		t.Fatalf("phase output = %q", got)
+	}
+}
+
+func TestStartupProgressClearsBeforeDesktopOrFailureOutput(t *testing.T) {
+	var output bytes.Buffer
+	line := &startupLine{report: &output}
+	if err := line.show("Loading application"); err != nil {
+		t.Fatal(err)
+	}
+	if err := line.show("Starting services"); err != nil {
+		t.Fatal(err)
+	}
+	if err := line.clear(); err != nil {
+		t.Fatal(err)
+	}
+	if err := line.clear(); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "\r\x1b[2KLoading application…\r\x1b[2KStarting services…\r\x1b[2K" {
+		t.Fatalf("progress output = %q", got)
 	}
 }
 
@@ -115,5 +136,39 @@ func TestStartupFailureReportsOwnerCleanupAndLogReadFailures(t *testing.T) {
 	}
 	if !errors.Is(failure, cause) || !errors.Is(failure, abort) || !errors.Is(failure, os.ErrNotExist) {
 		t.Fatal("lost failure causes")
+	}
+}
+
+func TestStartupObserverKeepsOwnerLogOutOfProgress(t *testing.T) {
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	ownerOutput := "owner diagnostic before boot\nBEE_STARTUP_PROGRESS Checking data: workspace 1/1\n"
+	if err := os.WriteFile(log, []byte(ownerOutput), 0600); err != nil {
+		t.Fatal(err)
+	}
+	monitor, err := beginStartup(context.Background(), state, "quiet-startup", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	monitor.cancel()
+	<-monitor.done
+	if err := monitor.logProgress(); err != nil {
+		t.Fatal(err)
+	}
+	if err := monitor.flush(); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	observe := observeStartup(state, startupSnapshot{}, &startupLine{report: &output})
+	if err := observe(); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "\r\x1b[2KChecking data: workspace 1/1…" {
+		t.Fatalf("forwarded owner lines during boot: %q", got)
+	}
+	data, err := os.ReadFile(log)
+	if err != nil || string(data) != ownerOutput {
+		t.Fatalf("owner log changed: %q, %v", data, err)
 	}
 }

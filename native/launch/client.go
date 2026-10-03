@@ -47,7 +47,7 @@ type clientSeams struct {
 	// report receives the foreground route line.
 	report         io.Writer
 	progressReport io.Writer
-	progress       func(state string, previous startupSnapshot, report io.Writer) func() error
+	progress       func(state string, previous startupSnapshot, report *startupLine) func() error
 	abortOwner     func(state, launchID string) error
 	// released waits until no owner holds state.
 	released func(ctx context.Context, state string) error
@@ -194,15 +194,21 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 			return err
 		}
 	}
+	progressReport := seams.progressReport
+	if progressReport == nil {
+		progressReport = seams.report
+	}
+	progress := &startupLine{report: progressReport}
+	defer func() { result = errors.Join(result, progress.clear()) }()
 	// The route line describes routing only; the owner's publication and the
 	// authenticated join still decide whether startup succeeds. A join to a
 	// running Bee only names no route.
 	if join.Intent.refusal == "" && join.Intent.hive == nil && !join.Intent.stop {
-		route := "Starting Bee…"
+		route := "Starting Bee"
 		if owned {
-			route = "Connecting to Hive…"
+			route = "Connecting to Hive"
 		}
-		if _, err := fmt.Fprintln(seams.report, route); err != nil {
+		if err := progress.show(route); err != nil {
 			return err
 		}
 	}
@@ -219,11 +225,7 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		if owned {
 			previous = startupSnapshot{}
 		}
-		progressReport := seams.progressReport
-		if progressReport == nil {
-			progressReport = seams.report
-		}
-		observe = seams.progress(launch.State, previous, progressReport)
+		observe = seams.progress(launch.State, previous, progress)
 	}
 	defer func() {
 		if result != nil && launched != "" {
@@ -321,6 +323,20 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	enrolled = true
 	join.State = launch.State
 	bootPhase(ctx, "client_enrollment", "end")
+	if err := progress.clear(); err != nil {
+		return err
+	}
+	if started && ownerLog != "" {
+		joined, cancel := context.WithCancel(ctx)
+		defer cancel()
+		forwarder, err := beginOwnerLogForwarding(joined, launch.State, ownerLog,
+			startupSnapshot{Version: 1, PID: owner.OwnerPID, Launch: owner.Launch}, progressReport, cancel)
+		if err != nil {
+			return fmt.Errorf("start owner log forwarding: %w", err)
+		}
+		defer func() { result = errors.Join(result, forwarder.stop()) }()
+		ctx = joined
+	}
 	bootPhase(ctx, "client_join", "begin")
 	if err := seams.join(ctx, join); err != nil {
 		// An owner this client started only for a command it refused retains no

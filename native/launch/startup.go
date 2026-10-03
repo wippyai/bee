@@ -465,9 +465,35 @@ func (m *startupMonitor) List(ctx context.Context) (map[string]string, error) {
 	return map[string]string{"phase": phase, "sequence": sequence}, nil
 }
 
-func observeStartup(state string, previous startupSnapshot, report io.Writer) func() error {
+type startupLine struct {
+	report io.Writer
+	phase  string
+}
+
+func (line *startupLine) show(phase string) error {
+	if line.report == nil || line.phase == phase {
+		return nil
+	}
+	if _, err := fmt.Fprintf(line.report, "\r\x1b[2K%s…", phase); err != nil {
+		return err
+	}
+	line.phase = phase
+	return nil
+}
+
+func (line *startupLine) clear() error {
+	if line.phase == "" {
+		return nil
+	}
+	if _, err := io.WriteString(line.report, "\r\x1b[2K"); err != nil {
+		return err
+	}
+	line.phase = ""
+	return nil
+}
+
+func observeStartup(state string, previous startupSnapshot, report *startupLine) func() error {
 	wait := newStartupWait(time.Now(), waitOwnerTimeout)
-	emitted := map[string]bool{}
 	return func() error {
 		s, err := readStartup(state)
 		if errors.Is(err, os.ErrNotExist) {
@@ -481,12 +507,8 @@ func observeStartup(state string, previous startupSnapshot, report io.Writer) fu
 		if err := wait.observe(time.Now(), s); err != nil {
 			return err
 		}
-		if s.Version == 1 && !emitted[s.Phase] {
-			emitted[s.Phase] = true
-			if report != nil {
-				_, err := fmt.Fprintln(report, s.Phase+"…")
-				return err
-			}
+		if s.Version == 1 && !s.Ready && report != nil {
+			return report.show(s.Phase)
 		}
 		return nil
 	}

@@ -375,8 +375,8 @@ func TestClientReportsItsRoute(t *testing.T) {
 		running bool
 		want    string
 	}{
-		{name: "cold", running: false, want: "Starting Bee…\n" + detachedLine},
-		{name: "warm", running: true, want: "Connecting to Hive…\n" + detachedLine},
+		{name: "cold", running: false, want: "\r\x1b[2KStarting Bee…\r\x1b[2K" + detachedLine},
+		{name: "warm", running: true, want: "\r\x1b[2KConnecting to Hive…\r\x1b[2K" + detachedLine},
 	} {
 		t.Run(route.name, func(t *testing.T) {
 			state := t.TempDir()
@@ -756,7 +756,7 @@ func TestClientCarriesPhaseObserverFromPublicationIntoEnrollment(t *testing.T) {
 	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := report.String(); got != "Starting services…\n" {
+	if got := report.String(); got != "\r\x1b[2KStarting Bee…\r\x1b[2KStarting services…\r\x1b[2K" {
 		t.Fatalf("phase handoff output = %q", got)
 	}
 }
@@ -768,6 +768,7 @@ func TestClientStartupFailureUsesTheStartedOwnersLog(t *testing.T) {
 	if err := os.WriteFile(log, []byte("BEE_STARTUP_FAILED "+reason+"\nfull causal chain\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	var report bytes.Buffer
 	done := make(chan struct{})
 	close(done)
 	seams := clientSeams{
@@ -778,10 +779,73 @@ func TestClientStartupFailureUsesTheStartedOwnersLog(t *testing.T) {
 		waitDescriptor: func(context.Context, string) (rendezvous.Descriptor, error) {
 			return rendezvous.Descriptor{}, os.ErrNotExist
 		},
-		report: io.Discard,
+		report: &report,
 	}
 	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	if got := report.String(); got != "\r\x1b[2KStarting Bee…\r\x1b[2K" {
+		t.Fatalf("startup failure left progress or forwarded owner output: %q", got)
+	}
 	if err == nil || !strings.HasPrefix(err.Error(), "Bee could not start: "+reason+"\nFull owner log: "+log+"\n") || !strings.HasSuffix(err.Error(), " recover") {
 		t.Fatalf("startup failure output = %v", err)
+	}
+}
+
+func TestClientStartsOwnerLogForwardingOnlyAfterReadiness(t *testing.T) {
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	if err := os.WriteFile(log, []byte("owner before boot\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	monitor, err := beginStartup(context.Background(), state, "pending", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	start := seams.startOwner
+	seams.startOwner = func(ctx context.Context, launch app.Launch, id string) (<-chan struct{}, func() error, string, error) {
+		done, wait, _, err := start(ctx, launch, id)
+		monitor.mutex.Lock()
+		monitor.snapshot.Launch, monitor.dirty = id, true
+		monitor.mutex.Unlock()
+		if err := monitor.flush(); err != nil {
+			t.Fatal(err)
+		}
+		return done, wait, log, err
+	}
+	capture := &ownerLogCapture{writes: make(chan string, 1)}
+	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey, func() error) error {
+		select {
+		case got := <-capture.writes:
+			t.Fatalf("owner output forwarded during enrollment: %q", got)
+		default:
+		}
+		if err := monitor.Set(context.Background(), "phase", "running"); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	}
+	seams.progressReport = capture
+	seams.report = io.Discard
+	intent := clientIntent{hive: &hiveCommand{}}
+	seams.join = func(ctx context.Context, join joinRequest) error {
+		if err := os.WriteFile(log, []byte("owner before boot\nowner after boot\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case got := <-capture.writes:
+			if got != "owner after boot\n" {
+				t.Fatalf("forwarded output = %q", got)
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := runClientEnsuresOwner(ctx, clientLaunch(state), seams, joinRequest{Intent: intent}); err != nil {
+		t.Fatal(err)
 	}
 }

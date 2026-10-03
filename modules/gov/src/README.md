@@ -371,8 +371,8 @@ reader. The shared driver resolver combines the original host selection with
 bindings derived from consumed desired artifacts in the existing activation
 store whose exact code overlays are present. It adds no stored record or second
 catalog; boot recovery restores approved code before it becomes selectable.
-Preflight measures the exact owned append declaration with the same decoder used
-by recovery. Activation retains this measurement when normalizing the registry
+Preflight and recovery decode the exact owned append declaration through
+`bee.gov.types:driver_admission`. Activation retains this measurement when normalizing the registry
 revision for durable approval evidence. That host evidence admits the
 declaration's protected target; replacement requirements and edits to the
 protected host entry remain refused. Descriptor policies grant only registry
@@ -380,7 +380,7 @@ reads. Launch definitions,
 policies and executable mappings are part of the reviewed artifact; metadata
 alone never activates a driver.
 
-The overlay `source` operation reads a bounded window of a non-private file in
+The overlay `source` operation uses `bee.gov.binding:source` to read a bounded window of a non-private file in
 the authenticated workspace folder. It names no overlay or workspace; the caller
 needs `bee.gov.overlay.source` on its actor-metadata workspace. The backend uses
 the host-selected workspace folder catalog operation and filesystem root. Paths

@@ -1,4 +1,4 @@
--- MIT. Locate probes must drain both child pipes and stop on a fixed deadline.
+-- MIT. Probe capture drains both pipes and honors an explicit caller wait bound.
 local test = require("test")
 local env = require("env")
 local json = require("json")

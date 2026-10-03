@@ -1,4 +1,4 @@
--- MIT. Drain both output pipes while bounding the lifetime of a host probe.
+-- MIT. Drain both probe pipes and observe completion or a caller-declared wait bound.
 local channel = require("channel")
 local time = require("time")
 

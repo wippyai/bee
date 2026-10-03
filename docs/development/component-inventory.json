@@ -5896,6 +5896,11 @@
       "source": "modules/placement-docker/src/binding/_index.yaml"
     },
     {
+      "id": "bee.placement.docker.binding:methods",
+      "kind": "library.lua",
+      "source": "modules/placement-docker/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.placement.docker.binding:prepare",
       "kind": "function.lua",
       "source": "modules/placement-docker/src/binding/_index.yaml"
@@ -6027,11 +6032,6 @@
     },
     {
       "id": "bee.placement.docker.service:runtime_probe",
-      "kind": "library.lua",
-      "source": "modules/placement-docker/src/service/_index.yaml"
-    },
-    {
-      "id": "bee.placement.docker.service:service",
       "kind": "library.lua",
       "source": "modules/placement-docker/src/service/_index.yaml"
     },

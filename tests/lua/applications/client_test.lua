@@ -1,5 +1,6 @@
 local test = require("test")
 local client = require("client")
+local threads = require("threads")
 
 local function launch()
     local value = client.launch({version = 1, broker_pid = "broker-1", workspace_pid = "workspace-1",
@@ -20,20 +21,31 @@ local function subscription_reply()
 end
 
 local function define_tests()
-    test.describe("Application SDK thread result", function()
+    test.describe("Application SDK and optional Threads client", function()
         test.it("decodes only the expected operation from the bound broker execution", function()
             local opened = launch()
             local raw = subscription_reply()
-            local reply = client.thread_result(opened, "broker-1", "subscribe", raw)
+            local reply = threads.result(opened, "broker-1", "subscribe", raw)
             if not reply or not reply.ok then error("valid broker subscribe reply was refused") end
             test.eq(reply.request_id, "request-1")
             test.eq(reply.operation, "subscribe")
-            test.is_nil(client.thread_result(opened, "broker-1", "read", raw))
-            test.is_nil(client.thread_result(opened, "other-broker", "subscribe", raw))
+            test.is_nil(threads.result(opened, "broker-1", "read", raw))
+            test.is_nil(threads.result(opened, "other-broker", "subscribe", raw))
 
             local stale = subscription_reply()
             stale.execution_generation = 1
-            test.is_nil(client.thread_result(opened, "broker-1", "subscribe", stale))
+            test.is_nil(threads.result(opened, "broker-1", "subscribe", stale))
+        end)
+
+        test.it("refuses thread or actor selection before dispatch", function()
+            local opened = launch()
+            local request_id, err = threads.request(opened, "read", {cursor = 0, thread_id = "another-thread"})
+            test.is_nil(request_id)
+            test.eq(err, "Invalid application thread request")
+            request_id, err = threads.request(opened, "subscribe", {
+                idempotency_key = "subscribe-1", after_sequence = 0, actor_id = "another-actor"})
+            test.is_nil(request_id)
+            test.eq(err, "Invalid application thread request")
         end)
 
         test.it("accepts navigation only from the current authenticated broker execution", function()

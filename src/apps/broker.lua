@@ -280,9 +280,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         return true, nil
     end
-    -- A removed admission binding fences its stable family out of every
-    -- thread: a revoked or uninstalled app keeps no runs to follow. The
-    -- fence converges, so a tick that finds active rows fences again.
+    -- Fence a removed admission family from its threads; repeated fences converge.
     local function fence_stable(binding: contract.Binding): boolean
         local stable = app_identity.stable(workspace_id, binding.definition_id, binding.overlay_owner)
         if not stable or type(stable.id) ~= "string" then return false end

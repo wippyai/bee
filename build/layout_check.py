@@ -10,7 +10,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SDK = {"application": "bee.app"}
+SDK = {"application": "bee.app", "application-threads": "bee.app.threads"}
 ROOT_ENTRIES = json.loads((ROOT / "build/layout_roots.json").read_text())
 REGISTRY_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_][A-Za-z0-9_.-]*(?![A-Za-z0-9_.:-])")
 ROOT_DECLARATIONS = {"ns.definition", "ns.dependency", "ns.requirement", "contract.definition"}
@@ -23,6 +23,9 @@ def native_entries(root):
             continue
         source = re.sub(r"//[^\n]*|/\*.*?\*/", "", path.read_text(), flags=re.S)
         constants = dict(re.findall(r'\b(\w+)\s*=\s*"([^"\n]+:[^"\n]+)"', source))
+        for constant in re.findall(r'registry.Entry\s*{\s*ID:\s*registry.ParseID\((\w+)\)', source):
+            if constant in constants:
+                entries.add(constants[constant])
         helpers = dict(re.findall(r'func\s+(\w+)\(\)\s+registry.ID\s*{\s*return registry.ParseID\((\w+)\)\s*}', source))
         for argument in re.findall(r'\.RegisterStorage\(\s*(\w+\(\)|registry.ParseID\(\w+\))\s*,', source):
             match = re.fullmatch(r'registry.ParseID\((\w+)\)', argument)
@@ -92,7 +95,7 @@ def audit(root):
                 errors.append(f"{identity}: component definition belongs in its source root")
             if module and entry.get("meta", {}).get("type") == "bee.app" and children != ("app",):
                 errors.append(f"{identity}: application identity belongs in src/app")
-            if module and entry["kind"] == "function.lua" and children not in {("app",), ("binding",), ("api",), ("service",), ("traits",)}:
+            if module and entry["kind"] == "function.lua" and children != ("app",) and children[-1:] not in {("binding",), ("api",), ("service",), ("traits",)}:
                 errors.append(f"{identity}: callable implementations belong in src/binding, api, service or traits")
             if module and entry["kind"] in {"process.lua", "process.service"} and children not in {("app",), ("service",)}:
                 errors.append(f"{identity}: long-running processes belong in src/service")
@@ -117,6 +120,13 @@ def audit(root):
     dangling, targets = 0, 0
     for identity, (index, entry) in entries.items():
         refs = list(entry.get("imports", {}).values())
+        if entry["kind"] == "ns.dependency":
+            component = entry["component"].split("/", 1)
+            namespace = SDK.get(component[-1], ".".join(component).replace("-", "."))
+            for parameter in entry.get("parameters", []):
+                name = parameter["name"]
+                refs.append(name if ":" in name else namespace + ":" + name)
+                refs.extend(re.findall(r"bee(?:\.[a-z_]+)*:[A-Za-z_0-9]+", yaml.safe_dump(parameter.get("value"))))
         if entry["kind"] == "contract.binding":
             for contract in entry.get("contracts", []):
                 refs.append(contract["contract"])
@@ -133,13 +143,14 @@ def audit(root):
                 if ref not in entries and ref not in native_targets and ref not in external_targets:
                     errors.append(f"{identity}: dangling requirement target {ref}")
                     dangling += 1
+            refs.extend(REGISTRY_REFERENCE.findall(yaml.safe_dump(entry.get("default"))))
             targets += len(entry.get("targets", []))
             if isinstance(entry.get("default"), list) and any(
                 target["path"].rstrip().endswith("+=") for target in entry.get("targets", [])
             ):
                 errors.append(f"{identity}: append requirement cannot default to an array element")
         for ref in refs:
-            if ":" in ref and ref not in entries and ref not in native_targets and ref not in external_targets:
+            if ":" in ref and ref not in entries and ref not in groups and ref not in native_targets and ref not in external_targets:
                 errors.append(f"{identity}: dangling linker/import target {ref}")
                 dangling += 1
         if index.relative_to(root).parts[0] == "modules" and entry["kind"] == "ns.requirement":

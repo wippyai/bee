@@ -1,6 +1,6 @@
 [
   {
-    "path": "modules/application/src/host_leases.lua",
+    "path": "modules/workspace/src/client/host_leases.lua",
     "expression": "name:sub(1, #M.PREFIX)",
     "count": 1,
     "reason": "Validate the process-registry workspace-host fence wire format; no registry entry discovery or admission."
@@ -24,13 +24,13 @@
     "reason": "Verify an outbox event belongs to the exact approval ID supplied by the approval owner."
   },
   {
-    "path": "modules/approvals/src/service/service.lua",
+    "path": "modules/approvals/src/binding/service.lua",
     "expression": "approval_id .. \":\" .. tostring",
     "count": 2,
     "reason": "Encode approval event and notification IDs, or decode the existing Sessions requester wire type; owner records supply identities."
   },
   {
-    "path": "modules/approvals/src/service/service.lua",
+    "path": "modules/approvals/src/binding/service.lua",
     "expression": "row.requester_id:match(\"^bs:\")",
     "count": 1,
     "reason": "Encode approval event and notification IDs, or decode the existing Sessions requester wire type; owner records supply identities."
@@ -276,115 +276,115 @@
     "reason": "Validate the Git refs/heads wire format for recorded worktree ownership."
   },
   {
-    "path": "modules/gov/src/activation/activation_measure.lua",
+    "path": "modules/gov/src/binding/activation_measure.lua",
     "expression": "diagnostic.code .. \":\" .. diagnostic.target",
     "count": 1,
     "reason": "Format an owner-produced diagnostic code and target; not entry selection."
   },
   {
-    "path": "modules/gov/src/activation/activation_profiles.lua",
+    "path": "modules/gov/src/types/activation_profiles.lua",
     "expression": "grant:sub(1, #prefix + 1)",
     "count": 1,
     "reason": "Deny forbidden security action families within the host policy ceiling; not registry identities or capability grants."
   },
   {
-    "path": "modules/gov/src/activation/application_admission.lua",
+    "path": "modules/gov/src/types/application_admission.lua",
     "expression": "(raw):sub(1, #\"bee.gov.grants:\")",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
-    "path": "modules/gov/src/activation/application_admission.lua",
+    "path": "modules/gov/src/types/application_admission.lua",
     "expression": "(raw):sub(1, #M.RESERVED_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
-    "path": "modules/gov/src/activation/application_admission.lua",
+    "path": "modules/gov/src/types/application_admission.lua",
     "expression": "(raw):sub(1, #PRIOR_ADMISSION_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
-    "path": "modules/gov/src/activation/application_admission.lua",
+    "path": "modules/gov/src/types/application_admission.lua",
     "expression": "(raw):sub(1, #PRIOR_GRANTS_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
-    "path": "modules/gov/src/activation/application_admission.lua",
+    "path": "modules/gov/src/types/application_admission.lua",
     "expression": "id:match(\"^bee%.gov%.grants:policy%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
-    "path": "modules/gov/src/activation/application_admission.lua",
+    "path": "modules/gov/src/types/application_admission.lua",
     "expression": "id:match(\"^bee%.governance%.grants:policy%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
-    "path": "modules/gov/src/activation/application_admissions.lua",
+    "path": "modules/gov/src/binding/application_admissions.lua",
     "expression": "value.revision .. \":\" .. table.concat",
     "count": 1,
     "reason": "Encode an admission cache revision from observed registry and owner revisions."
   },
   {
-    "path": "modules/gov/src/activation/migration_work.lua",
+    "path": "modules/gov/src/types/migration_work.lua",
     "expression": "diagnostic.code .. \":\" .. diagnostic.target",
     "count": 1,
     "reason": "Format migration diagnostics or validate the declared SQL resource kind; no ID-spelling discovery."
   },
   {
-    "path": "modules/gov/src/activation/migration_work.lua",
+    "path": "modules/gov/src/types/migration_work.lua",
     "expression": "summary.kind:match(\"^db%.sql%.\")",
     "count": 1,
     "reason": "Format migration diagnostics or validate the declared SQL resource kind; no ID-spelling discovery."
   },
   {
-    "path": "modules/gov/src/activation/preflight.lua",
+    "path": "modules/gov/src/binding/preflight.lua",
     "expression": "database.kind:match(\"^db%.sql%.\")",
     "count": 1,
     "reason": "Validate a captured target entry declared SQL kind; its exact target and host database admission remain required."
   },
   {
-    "path": "modules/gov/src/activation/preflight.lua",
+    "path": "modules/gov/src/binding/preflight.lua",
     "expression": "id:match(\"^([^:]+):[^:]+$\")",
     "count": 1,
     "reason": "Declared host policy and artifact namespace ownership validation; collision/out-of-scope denial only, exact measured entries and policy grants still required."
   },
   {
-    "path": "modules/gov/src/activation/preflight.lua",
+    "path": "modules/gov/src/binding/preflight.lua",
     "expression": "item.id:match(\"^([^:]+):[^:]+$\")",
     "count": 1,
     "reason": "Declared host policy and artifact namespace ownership validation; collision/out-of-scope denial only, exact measured entries and policy grants still required."
   },
   {
-    "path": "modules/gov/src/activation/protected_kernel.lua",
+    "path": "modules/gov/src/types/protected_kernel.lua",
     "expression": "id:match(\"^([^:]+):\")",
     "count": 1,
     "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
   },
   {
-    "path": "modules/gov/src/activation/protected_kernel.lua",
+    "path": "modules/gov/src/types/protected_kernel.lua",
     "expression": "namespace:sub(1, #open + 1)",
     "count": 1,
     "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
   },
   {
-    "path": "modules/gov/src/activation/protected_kernel.lua",
+    "path": "modules/gov/src/types/protected_kernel.lua",
     "expression": "namespace:sub(1, #protected + 1)",
     "count": 1,
     "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
   },
   {
-    "path": "modules/gov/src/activation/super_edit.lua",
+    "path": "modules/gov/src/security/super_edit.lua",
     "expression": "left:sub(1, #right + 1)",
     "count": 1,
     "reason": "Check intersection of expressly declared namespace policy scopes; deny-only scope validation."
   },
   {
-    "path": "modules/gov/src/activation/super_edit.lua",
+    "path": "modules/gov/src/security/super_edit.lua",
     "expression": "right:sub(1, #left + 1)",
     "count": 1,
     "reason": "Check intersection of expressly declared namespace policy scopes; deny-only scope validation."
@@ -396,109 +396,109 @@
     "reason": "Encode activation operation idempotency keys; not registry identities."
   },
   {
-    "path": "modules/gov/src/capability/capability_files.lua",
+    "path": "modules/gov/src/types/capability_files.lua",
     "expression": "capability:sub(1, 16)",
     "count": 1,
     "reason": "Check private filesystem containment or decode the declared workspace.files capability family; no registry identities."
   },
   {
-    "path": "modules/gov/src/capability/capability_files.lua",
+    "path": "modules/gov/src/types/capability_files.lua",
     "expression": "path:sub(1, #PRIVATE_PREFIX)",
     "count": 1,
     "reason": "Check private filesystem containment or decode the declared workspace.files capability family; no registry identities."
   },
   {
-    "path": "modules/gov/src/capability/capability_gateway.lua",
+    "path": "modules/gov/src/types/capability_gateway.lua",
     "expression": "(actor_raw):match(\"^bee%.application:([0-9a-f]+):[^:]+$\")",
     "count": 1,
     "reason": "Decode the authenticated application actor wire schema or validate HTTPS origin/path scope; exact actor metadata and host grants still required."
   },
   {
-    "path": "modules/gov/src/capability/capability_gateway.lua",
+    "path": "modules/gov/src/types/capability_gateway.lua",
     "expression": "path:sub(1, #prefix + 1)",
     "count": 1,
     "reason": "Decode the authenticated application actor wire schema or validate HTTPS origin/path scope; exact actor metadata and host grants still required."
   },
   {
-    "path": "modules/gov/src/capability/capability_gateway.lua",
+    "path": "modules/gov/src/types/capability_gateway.lua",
     "expression": "url:match(\"^https://([^/?#]+)(.*)$\")",
     "count": 1,
     "reason": "Decode the authenticated application actor wire schema or validate HTTPS origin/path scope; exact actor metadata and host grants still required."
   },
   {
-    "path": "modules/gov/src/capability/capability_grants.lua",
+    "path": "modules/gov/src/types/capability_grants.lua",
     "expression": "(raw:sub(1, #M.PREFIX)",
     "count": 1,
     "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
   },
   {
-    "path": "modules/gov/src/capability/capability_grants.lua",
+    "path": "modules/gov/src/types/capability_grants.lua",
     "expression": "id:sub(1, #files.DATABASE_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
   },
   {
-    "path": "modules/gov/src/capability/capability_grants.lua",
+    "path": "modules/gov/src/types/capability_grants.lua",
     "expression": "id:sub(1, #files.VOLUME_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
   },
   {
-    "path": "modules/gov/src/capability/capability_grants.lua",
+    "path": "modules/gov/src/types/capability_grants.lua",
     "expression": "raw:sub(1, #PRIOR_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
   },
   {
-    "path": "modules/gov/src/delivery/hub_resolver.lua",
+    "path": "modules/gov/src/binding/hub_resolver.lua",
     "expression": "id:match(\"^([^:]+):\")",
     "count": 1,
     "reason": "Declared artifact namespace ownership/collision validation; measured registry ownership supplies package identity."
   },
   {
-    "path": "modules/gov/src/delivery/hub_resolver.lua",
+    "path": "modules/gov/src/binding/hub_resolver.lua",
     "expression": "value:sub(1, 7)",
     "count": 1,
     "reason": "Decode the immutable sha256 digest format returned by package resolution."
   },
   {
-    "path": "modules/gov/src/delivery/materializer.lua",
+    "path": "modules/gov/src/binding/materializer.lua",
     "expression": "(resource):match(\"^bee%.gov%.grants:database%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
   {
-    "path": "modules/gov/src/delivery/materializer.lua",
+    "path": "modules/gov/src/binding/materializer.lua",
     "expression": "(resource):match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
   {
-    "path": "modules/gov/src/delivery/materializer.lua",
+    "path": "modules/gov/src/binding/materializer.lua",
     "expression": "id:match(\"^bee%.gov%.grants:database%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
   {
-    "path": "modules/gov/src/delivery/materializer.lua",
+    "path": "modules/gov/src/binding/materializer.lua",
     "expression": "id:match(\"^bee%.gov%.grants:policy%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
   {
-    "path": "modules/gov/src/delivery/materializer.lua",
+    "path": "modules/gov/src/binding/materializer.lua",
     "expression": "id:match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
   {
-    "path": "modules/gov/src/delivery/materializer.lua",
+    "path": "modules/gov/src/binding/materializer.lua",
     "expression": "id:match(\"^bee%.governance%.grants:policy%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
   {
-    "path": "modules/gov/src/delivery/overlay_resolver.lua",
+    "path": "modules/gov/src/binding/overlay_resolver.lua",
     "expression": "id:match(\"^([^:]+):\")",
     "count": 3,
     "reason": "Declared artifact namespace ownership/collision and protected-host-scope validation; capability selection uses exact artifact IDs."
@@ -984,31 +984,31 @@
     "reason": "Encode the broker application actor wire identity; not registry discovery."
   },
   {
-    "path": "src/hive/service/replica_sender.lua",
+    "path": "modules/hive/src/binding/replica_sender.lua",
     "expression": "descriptor_digest .. \":\" .. action",
     "count": 1,
     "reason": "Measure a replication operation key from exact owner descriptor evidence."
   },
   {
-    "path": "src/terminal/main.lua",
+    "path": "modules/terminal/src/service/main.lua",
     "expression": "action:sub(1, 5)",
     "count": 1,
     "reason": "Decode desktop menu action strings after selecting a concrete action target."
   },
   {
-    "path": "src/terminal/main.lua",
+    "path": "modules/terminal/src/service/main.lua",
     "expression": "action:sub(1, 7)",
     "count": 1,
     "reason": "Decode desktop menu action strings after selecting a concrete action target."
   },
   {
-    "path": "src/terminal/main.lua",
+    "path": "modules/terminal/src/service/main.lua",
     "expression": "action:sub(1, 9)",
     "count": 1,
     "reason": "Decode desktop menu action strings after selecting a concrete action target."
   },
   {
-    "path": "src/terminal/workspace_menu.lua",
+    "path": "modules/terminal/src/workspace_menu.lua",
     "expression": "menu.query:sub(1, math.floor(math.max(0, #menu.query - 1)))",
     "count": 1,
     "reason": "Remove a character from the workspace search query; not registry discovery."

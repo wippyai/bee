@@ -19,7 +19,8 @@
       "source_module": "modules/placement-docker",
       "target_ids": [
         "wippy.bootloader:application_host",
-        "wippy.bootloader:bootloader.service"
+        "wippy.bootloader:bootloader.service",
+        "wippy.bootloader:env_storage"
       ]
     }
   ]

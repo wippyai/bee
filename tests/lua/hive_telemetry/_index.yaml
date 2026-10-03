@@ -29,7 +29,7 @@ entries:
   - time
   imports:
     test: wippy.test:test
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
     bounds: bee.values:bounds
 - name: cluster_test
   kind: function.lua

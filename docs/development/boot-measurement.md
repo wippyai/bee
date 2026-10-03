@@ -58,12 +58,9 @@ publication retains its bounded retry timer; successful idle enrollment does
 not poll.
 Work pending at the first frame remains explicitly listed in the result.
 
-The current runtime exposes no application-runner phase logs for deployment
-verification, embedded cache seeding or artifact-cache loading. These operations
-remain inside the interval from owner preparation to native runtime load;
-the report must not assign that interval to any one of them. Mesh transport
-and native client presentation are inside the client-join interval. Separate
-timestamps for those operations require upstream runtime instrumentation.
-The native host supplies an optional `BootLogger` hook for an application runner
-that supports early structured logging; support in the production runtime pin
-remains an upstream proposal.
+The native host implements `app.BootLogger`, so the pinned runtime writes its
+own deployment selection, deployment verification, embedded Lua cache seeding,
+artifact-cache seeding and runtime boot phases directly to the diagnostic sink.
+Bee retains only host-owned preparation and lifecycle phases plus existing
+runtime/Lua event observations. Mesh transport and native client presentation
+remain inside the client-join interval.

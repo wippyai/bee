@@ -58,7 +58,7 @@ local function define_tests()
         test.it("routes every application request to its archetype, the style rules and the kit", function()
             local document = guide.document()
             for _, needle in ipairs({"docs/guides/app-style.md", "80x24", "120x36", "160x48", "frame.size", "frame.layout",
-                "bee.app:viz", "viz = \"bee.app:viz\"", "tested example", "one-shot"}) do
+                "bee.ui.viz:viz", "viz = \"bee.ui.viz:viz\"", "tested example", "one-shot"}) do
                 test.eq(needle .. (string.find(document, needle, 1, true) and "" or " missing"), needle)
             end
             test.eq(#guide.ARCHETYPES, 6)

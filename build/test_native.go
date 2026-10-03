@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Run local native tests against the manifest's clean, patched runtime.
+// Run native tests against the manifest's exact unpatched module dependency.
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,78 +14,49 @@ import (
 
 type nativeTestManifest struct {
 	Runtime struct {
-		Repository string   `json:"repository"`
-		Commit     string   `json:"commit"`
-		Go         string   `json:"go"`
-		Tags       []string `json:"tags"`
-		Patches    []struct {
-			Path   string `json:"path"`
-			SHA256 string `json:"sha256"`
-		} `json:"patches"`
+		Repository string            `json:"repository"`
+		Commit     string            `json:"commit"`
+		Go         string            `json:"go"`
+		Tags       []string          `json:"tags"`
+		Patches    []json.RawMessage `json:"patches"`
 	} `json:"runtime"`
 }
 
-func nativeTestRun(dir string, env []string, name string, args ...string) error {
-	command := exec.Command(name, args...)
-	command.Dir, command.Env = dir, env
-	command.Stdout, command.Stderr = os.Stdout, os.Stderr
-	if err := command.Run(); err != nil {
-		return fmt.Errorf("%s failed: %w", name, err)
+type runtimeModule struct {
+	Version string
+	Replace *runtimeModule
+}
+
+func nativeTestInputs(manifestPath string) (nativeTestManifest, error) {
+	var manifest nativeTestManifest
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return manifest, err
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return manifest, err
+	}
+	if manifest.Runtime.Repository != "https://github.com/wippyai/runtime.git" ||
+		!regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(manifest.Runtime.Commit) ||
+		!regexp.MustCompile(`^1\.[0-9]+\.[0-9]+$`).MatchString(manifest.Runtime.Go) || len(manifest.Runtime.Patches) != 0 {
+		return manifest, fmt.Errorf("native tests require an exact unpatched upstream runtime")
+	}
+	return manifest, nil
+}
+
+func verifyRuntimeModule(manifest nativeTestManifest, module runtimeModule) error {
+	if module.Replace != nil || !strings.HasSuffix(module.Version, "-"+manifest.Runtime.Commit[:12]) {
+		return fmt.Errorf("native runtime %s does not match manifest commit %s without replacements", module.Version, manifest.Runtime.Commit)
 	}
 	return nil
 }
 
-// Freeze verified patch bytes before starting external commands.
-func nativeTestInputs(manifestPath, stage string) (nativeTestManifest, []string, error) {
-	var manifest nativeTestManifest
-	data, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return manifest, nil, err
-	}
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return manifest, nil, err
-	}
-	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(manifest.Runtime.Commit) ||
-		!regexp.MustCompile(`^1\.[0-9]+\.[0-9]+$`).MatchString(manifest.Runtime.Go) ||
-		manifest.Runtime.Repository == "" || strings.HasPrefix(manifest.Runtime.Repository, "-") {
-		return manifest, nil, fmt.Errorf("native test requires pinned runtime repository, commit and Go version")
-	}
-	var patches []string
-	for i, patch := range manifest.Runtime.Patches {
-		if !filepath.IsLocal(patch.Path) {
-			return manifest, nil, fmt.Errorf("patch path must be manifest-local")
-		}
-		data, err := os.ReadFile(filepath.Join(filepath.Dir(manifestPath), patch.Path))
-		if err != nil {
-			return manifest, nil, err
-		}
-		if fmt.Sprintf("%x", sha256.Sum256(data)) != patch.SHA256 {
-			return manifest, nil, fmt.Errorf("patch checksum mismatch: %s", patch.Path)
-		}
-		frozen := filepath.Join(stage, fmt.Sprintf("patch-%d", i))
-		if err := os.WriteFile(frozen, data, 0600); err != nil {
-			return manifest, nil, err
-		}
-		patches = append(patches, frozen)
-	}
-	return manifest, patches, nil
-}
-
 func testNative(manifestPath, module string) error {
-	manifestPath, err := filepath.Abs(manifestPath)
+	manifest, err := nativeTestInputs(manifestPath)
 	if err != nil {
 		return err
 	}
 	module, err = filepath.Abs(module)
-	if err != nil {
-		return err
-	}
-	stage, err := os.MkdirTemp("", "bee-native-test-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stage)
-	manifest, patches, err := nativeTestInputs(manifestPath, stage)
 	if err != nil {
 		return err
 	}
@@ -98,44 +68,31 @@ func testNative(manifestPath, module string) error {
 		}
 	}
 	env = append(env, "GOWORK=off", "GOTOOLCHAIN=go"+manifest.Runtime.Go, "GOFLAGS=")
-	source := filepath.Join(stage, "runtime")
-	if err := nativeTestRun("", env, "git", "clone", "--no-checkout", "--filter=blob:none", manifest.Runtime.Repository, source); err != nil {
+	command := exec.Command("go", "list", "-mod=readonly", "-m", "-json", "github.com/wippyai/runtime")
+	command.Dir, command.Env = module, env
+	data, err := command.Output()
+	if err != nil {
 		return err
 	}
-	if err := nativeTestRun(source, env, "git", "checkout", "--detach", manifest.Runtime.Commit); err != nil {
+	var dependency runtimeModule
+	if err := json.Unmarshal(data, &dependency); err != nil {
 		return err
 	}
-	for _, patch := range patches {
-		if err := nativeTestRun(source, env, "git", "apply", "--check", patch); err != nil {
-			return err
+	if err := verifyRuntimeModule(manifest, dependency); err != nil {
+		return err
+	}
+	for _, operation := range []string{"test", "vet"} {
+		args := []string{operation, "-mod=readonly", "-tags", strings.Join(manifest.Runtime.Tags, ","), "./..."}
+		if operation == "test" {
+			args = append([]string{"test", "-race"}, args[1:]...)
 		}
-		if err := nativeTestRun(source, env, "git", "apply", patch); err != nil {
-			return err
+		command := exec.Command("go", args...)
+		command.Dir, command.Env, command.Stdout, command.Stderr = module, env, os.Stdout, os.Stderr
+		if err := command.Run(); err != nil {
+			return fmt.Errorf("go %s: %w", operation, err)
 		}
 	}
-	for _, extension := range []string{"mod", "sum"} {
-		data, err := os.ReadFile(filepath.Join(module, "go."+extension))
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(stage, "native."+extension), data, 0600); err != nil {
-			return err
-		}
-	}
-	modfile := "-modfile=" + filepath.Join(stage, "native.mod")
-	if err := nativeTestRun(module, env, "go", "mod", "edit", modfile, "-replace=github.com/wippyai/runtime="+source); err != nil {
-		return err
-	}
-	// The replacement runtime may require a different dependency graph from the
-	// module's release baseline. Resolve only the disposable mod/sum copies;
-	// test and vet then consume that graph read-only.
-	if err := nativeTestRun(module, env, "go", "mod", "tidy", modfile); err != nil {
-		return err
-	}
-	if err := nativeTestRun(module, env, "go", "test", modfile, "-mod=readonly", "-race", "-tags", strings.Join(manifest.Runtime.Tags, ","), "./..."); err != nil {
-		return err
-	}
-	return nativeTestRun(module, env, "go", "vet", modfile, "-mod=readonly", "-tags", strings.Join(manifest.Runtime.Tags, ","), "./...")
+	return nil
 }
 
 func main() {

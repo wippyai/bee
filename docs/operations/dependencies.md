@@ -19,4 +19,4 @@ The native dependency and archive checks are part of the release procedure in
 [Releasing](releasing.md). For local native validation run:
 
     make -C native test
-    make -C native patched-check
+    make -C native pinned-check

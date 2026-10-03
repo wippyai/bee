@@ -10,8 +10,10 @@ type Body = (sql.Transaction) -> Result
 M.MAX_ATTEMPTS = 5
 M.BACKOFF_MS = 20
 function M.busy(err: unknown): boolean
-    local text = string.lower(tostring(err))
-    return text:find("locked", 1, true) ~= nil or text:find("busy", 1, true) ~= nil
+    if err == nil then return false end
+    local details: unknown = errors.wrap(err, "SQLite classification"):details()
+    if type(details) ~= "table" then return false end
+    return details.sqlite_code == 5 or details.sqlite_code == 6
 end
 function M.storage_failure(message: string): Result
     return {ok = false, code = "BUSY", message = message, replayed = false}

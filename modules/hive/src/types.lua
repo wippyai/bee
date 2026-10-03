@@ -375,4 +375,70 @@ function M.pid_parts(pid: string): (string?, string?)
     end
     return node, host
 end
+-- Host-selected principal mappings use the authenticated issuer/subject pair.
+-- The member identity encoding remains bee.hive.member@1 across restarts.
+M.PRINCIPAL_MAPPINGS_ENTRY = "bee.hive.supervisor:principal_mappings"
+M.PRINCIPAL_MAPPINGS_TYPE = "bee.hive.principal_mappings"
+M.MEMBER_ACTOR_PREFIX = "bee.hive.member."
+-- The identity encoding: sha256 over the issuer, a newline and the
+-- subject (identifiers never carry a newline, so the pair is unambiguous),
+-- the first 128 bits in hex after the prefix. Changing this is an identity
+-- migration, never a silent edit.
+M.MEMBER_ENCODING = "bee.hive.member@1"
+M.MAX_PRINCIPAL_MAPPINGS = 256
+M.MAX_PRINCIPAL_POLICIES = 16
+type PrincipalMapping = {issuer: string, subject_id: string, actor_id: string, policies: {string}}
+type PrincipalMappings = {list: {PrincipalMapping}, index: {[string]: PrincipalMapping}}
+local function pair(issuer: string, subject_id: string): string
+    return issuer .. "\n" .. subject_id
+end
+-- principal_actor: the one destination actor a pair maps to, a function of the
+-- pair and nothing else.
+function M.principal_actor(issuer: string, subject_id: string): string
+    local digest, err = hash.sha256(pair(issuer, subject_id))
+    if err or not digest then error("derive principal actor: " .. tostring(err)) end
+    return M.MEMBER_ACTOR_PREFIX .. digest:sub(1, 32)
+end
+-- decode_principal_mappings: an exact table or nothing; every pair once, every subject a
+-- principal in the issuer's namespace, no actor named by the host.
+function M.decode_principal_mappings(value: unknown): (PrincipalMappings?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "principal mappings must be an object" end
+    local unknown_field = bounds.fields(object, {"mappings"})
+    if unknown_field then return nil, unknown_field end
+    local raw = bounds.array(object.mappings, M.MAX_PRINCIPAL_MAPPINGS)
+    if not raw then return nil, "mappings must be a dense list of at most " .. tostring(M.MAX_PRINCIPAL_MAPPINGS) .. " entries" end
+    local list: {PrincipalMapping} = {}
+    local index: {[string]: PrincipalMapping} = {}
+    for position, item in ipairs(raw) do
+        local mapping = bounds.object(item)
+        if not mapping then return nil, "mappings[" .. tostring(position) .. "] must be an object" end
+        local unknown_mapping = bounds.fields(mapping, {"issuer", "subject_id", "policies"})
+        if unknown_mapping then return nil, "mappings[" .. tostring(position) .. "]: " .. unknown_mapping end
+        local issuer, subject_id = bounds.id(mapping.issuer), bounds.id(mapping.subject_id)
+        if not issuer then return nil, "mappings[" .. tostring(position) .. "] issuer is not an identifier" end
+        if not subject_id then return nil, "mappings[" .. tostring(position) .. "] subject_id is not an identifier" end
+        local subject_node = M.pid_parts(subject_id)
+        if subject_node ~= nil and subject_node ~= issuer then return nil, "mappings[" .. tostring(position) .. "] subject is outside the issuer's namespace" end
+        local policies, policies_error = bounds.ids(mapping.policies == nil and {} or mapping.policies)
+        if not policies then return nil, "mappings[" .. tostring(position) .. "] policies: " .. tostring(policies_error) end
+        if #policies > M.MAX_PRINCIPAL_POLICIES then return nil, "mappings[" .. tostring(position) .. "] policies exceeds " .. tostring(M.MAX_PRINCIPAL_POLICIES) end
+        local key = pair(issuer, subject_id)
+        if index[key] then return nil, "mappings[" .. tostring(position) .. "] repeats issuer " .. issuer .. " subject " .. subject_id end
+        local decoded: PrincipalMapping = {issuer = issuer, subject_id = subject_id, actor_id = M.principal_actor(issuer, subject_id), policies = policies}
+        index[key] = decoded
+        list[#list + 1] = decoded
+    end
+    return {list = list, index = index}, nil
+end
+-- resolve_principal: the mapping for a verified principal, or nothing. The caller
+-- passes the issuer and subject the ingress authenticated, never values
+-- read from the request payload.
+function M.resolve_principal(mappings: PrincipalMappings, principal: PrincipalRef): PrincipalMapping?
+    return mappings.index[pair(principal.issuer, principal.subject_id)]
+end
+function M.exposure_action(mode: string): string
+    return "hive.expose." .. mode
+end
+M.INVOKE_CHECK = "bee.hive.binding:invoke_check"
 return M

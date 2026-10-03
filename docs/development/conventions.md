@@ -15,9 +15,11 @@ folder re-declares its parent's namespace. There are no `host/` folders;
 host wiring lives in the app root or beside its component. The host component
 `src/host` is the documented desktop-owner namespace, not an installable
 component wiring subfolder. Module source roots map hyphen-separated package
-names to dotted namespaces (`git-worktree` → `bee.git.worktree`). The only
-package-root spelling exception is `modules/application/src` → `bee.app`, the
-public SDK. Namespace segments and mapped folders contain no underscores.
+names to dotted namespaces (`git-worktree` → `bee.git.worktree`). The SDK
+package-root spelling exceptions are
+`modules/application/src` → `bee.app` and
+`modules/application-threads/src` → `bee.app.threads`, its opt-in Threads client.
+Namespace segments and mapped folders contain no underscores.
 No child production `src/` path diverges from its namespace.
 
 Each entry lives in the namespace of the component that owns its concept,
@@ -59,21 +61,21 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/deps` | One `bee.deps:<module>` dependency per composed module with the host-selected requirement parameters |
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
 | `src/env` | Host environment and selected resources as `bee.env` |
-| `src/hive/service`, `src/hive/api`, `src/hive/security` | App-owned Hive supervisor, open workspaces operation and its policy |
-| `src/hive/supervisor`, `src/hive/desktop` | Generic Hive routing, host-selected adapter table, supervisor lifecycle and desktop bridge |
+| `src/hive/service`, `src/hive/supervisor`, `src/hive/desktop` | Native-known process hosts, supervisor service selection, protected adapter/audience/principal tables and host-selected admission policies |
 | `modules/hive-manager/src` | Hive management app as an installable package |
 | `modules/workspace/src` | Workspace catalog contracts, authorized bindings, SQL repositories, immutable migrations and checkpoint/selection values as `bee.workspace` and its `.catalog`, `.binding`, `.persist`, `.migrations` and `.types` children |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
-| `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
-| `src/client` | Desktop client, public commands, qualified layout and client store |
+| `src/launch` | Local startup, presenter selection, physical display ownership, coordinated exit and the node host manager |
+| `modules/client/src` | Desktop attachment actors and commands in `.service`, catalog and attachment operations in `.binding`, qualified layouts and handoff values in `.types`, SQL in `.persist`, immutable migrations in `.migrations` |
 | `src/interaction` | Bounded host/client questions and delivery state |
 | `src/apps` | Admission, application lifecycle, producer capabilities and routing as `bee.apps` |
 | `modules/desktop/src` | Pure scene, reducer and layout values as `bee.desktop`; shared decoders in `.types`, committed projection and status observation in `.service` |
 | `src/protocol` | Private core message decoders |
-| `src/terminal` | Replaceable presenter, input and composition |
+| `modules/terminal/src` | Replaceable presenter and asynchronous delivery in `.service`, input values in `.types`, desktop shell view helpers at `bee.terminal`; physical display ownership stays in `src/launch` |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
-| `modules/application/src` | Public SDK namespace `bee.app`: application client, owner clients and presentation kits |
-| `modules/ui/src` | Shared frame, appearance and bounded text helpers as `bee.ui` |
+| `modules/application/src` | Public SDK namespace `bee.app`: application client and owner reply decoding |
+| `modules/application-threads/src` | Opt-in authenticated Threads client as `bee.app.threads`, with status reader in `.client` and wire/presentation decoders in `.types` |
+| `modules/ui/src` | Shared frame, appearance and bounded text as `bee.ui`; forms, visualization, diagrams and folder picker in `.forms`, `.viz`, `.diagram` and `.picker` |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
 | `modules/approvals-inbox/src` | Approvals inbox app as an installable package |
@@ -82,14 +84,16 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `modules/host-processes/src` | Host process inspection app as an installable package |
 | `modules/hub-modules/src` | Hub Modules package policies and dependencies; UI in `src/app` as `bee.hub.modules.app` |
 | `modules/gov-overlays/src` | Governance Overlays app as an installable package |
-| `modules/hive/src` | Cross-node protocol envelopes, client, exposure catalog, shared principal identity and the `hive.invoke` check |
-| `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
+| `modules/hive/src` | Cross-node protocol envelopes, routing/admission and workspace functions in `.binding`, value decoders in `.types`, supervisor/display/viewer actors in `.service`, desktop bridge/helpers in `.desktop`, exposure catalog and security templates |
+| `src/threads/hive` | Host-selected Threads/Hive admission and identity policies with their existing IDs |
+| `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store, with the optional Hive adapter in `hive/binding` |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |
 | `modules/driver/src` | Driver contracts and shared types at the root; configuration, option rendering, quoting and TOML helpers in `.binding`, observations and normalization in `.codec`, and framing in `.transport` |
 | `modules/placement/src` | Shared placement contract, launch values, transition rules and binding resolution |
 | `modules/sync/src` | Owner-local projection, event and receipt ledger |
 | `modules/approvals/src` | Durable approval owner, inbox feed and outbox worker |
+| `modules/gov/src` | Public contracts and host requirements at `bee.gov`; schemas and domain values in `.types`, authorized resolution, admission and activation in `.binding`, SQL in `.persist`, recovery actors in `.service`, policy templates in `.security` |
 | `modules/placement-native/src` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `modules/node/src` | Authorized native-node descriptions and metadata |
 
@@ -119,7 +123,8 @@ entry: host wiring cannot leak implementations into a component root.
 
 | Component namespace | Shared root libraries |
 |---|---|
-| `bee.app` | `arguments`, `caller`, `client`, `diagram`, `folder_picker`, `forms`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `thread_protocol`, `viz` |
+| `bee.app` | `arguments`, `caller`, `client`, `interaction`, `names` |
+| `bee.app.threads` | `client` |
 | `bee.capability` | `model` |
 | `bee.credentials` | `formats`, `protocol` |
 | `bee.desktop` | `model`, `state`, `layout` |
@@ -134,15 +139,19 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.placement` | `decode`, `request`, `transitions`, `types` |
 | `bee.placement.native` | `protocol` |
 | `bee.sync` | `protocol`, `replica_protocol`, `types` |
+| `bee.terminal` | `bar`, `chrome`, `connection`, `dialog`, `help`, `menu`, `render`, `selection`, `title_editor`, `window_chrome`, `workspace_menu` |
 | `bee.threads` | `record_types`, `types` |
 | `bee.ui` | `appearance`, `frame`, `text` |
 | `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
 
-The SDK `bee.app` owns its documented public application helpers and presentation
-kits at its root. Shared frame, appearance and text values belong to `bee.ui`.
-Those entries are included in the same explicit set. New
-shared root libraries require a documented responsibility and a reviewed update
-to the set; a new implementation does not qualify simply because it is shared.
+The SDK `bee.app` owns its documented public application helpers at its root.
+Shared frame, appearance and text values belong to `bee.ui`; presentation kits
+live in `bee.ui.forms`, `bee.ui.viz`, `bee.ui.diagram` and `bee.ui.picker`.
+Sessions clients and their decoders belong to `bee.sessions.client` and
+`bee.sessions.types`; workspace host leases belong to `bee.workspace.client`.
+The listed root entries are included in the same explicit set. New shared root
+libraries require a documented responsibility and a reviewed update to the set;
+a new implementation does not qualify simply because it is shared.
 
 An append requirement (`+=`) contributes one element. It has no array default;
 an absent host selection contributes nothing instead of a nested empty array.
@@ -181,8 +190,10 @@ Application entries, renderers, screen models and view helpers live in
 `modules/<module>/src/app` as `<module namespace>.app`. The SDK root
 `bee.app` belongs only to `modules/application`; app children such as
 `bee.files.app` import its helpers and own their separate application entries.
-Desktop values and the projection actor live in `modules/desktop/src`; the
-terminal shell remains in `src/terminal`.
+Desktop values and the projection actor live in `modules/desktop/src`; desktop
+client actors and qualified layouts live in `modules/client/src`. The terminal
+shell and delivery live in `modules/terminal/src`; root launch owns the physical
+display.
 
 Within a module, keep shared domain types and contracts at the root. Public contract
 bindings live in `binding`. Workspace catalog contracts retain their existing
@@ -282,7 +293,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 19,277 Lua line ceiling under `src/`, recorded in
+The root has a 9,010 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.
@@ -302,9 +313,9 @@ rejection. The same build seals a Hub core with `bee.deps` excluded; the Hub
 composition supplies those host-selected roots. The bundled baseline and Hub
 core share the component artifacts, and host admission authorizes their use.
 
-New runtime patches require upstream Go tests, a refreshed runtime checksum and
-a clean pinned build. `make -C native patched-check` validates the native source
-against the manifest without modifying repository module files. Documentation
+Runtime updates require upstream Go tests, a refreshed runtime checksum and
+a clean pinned build. `make -C native pinned-check` validates the native module
+against the manifest without replacements or patches. Documentation
 edits need link/source consistency checks and an update to the relevant current
 contract; avoid machine-specific paths, credentials and local stores.
 

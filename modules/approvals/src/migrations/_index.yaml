@@ -4,9 +4,3 @@ entries:
 - name: migrations
   kind: library.lua
   source: file://migrations.lua
-- name: identity_migration
-  kind: library.lua
-  source: file://identity_migration.lua
-  modules: [sql, env]
-  imports:
-    bounds: bee.values:bounds

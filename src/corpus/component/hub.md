@@ -257,8 +257,8 @@ request belongs to that binding and attempt, and maps an apply reply to the
 agent's status. The gateway performs the calls.
 
 `make hub-self-update-standalone-check` builds local sealed baseline and core artifacts and
-serves their artifacts through a disposable fixture Hub. `BEE_RUNTIME` selects
-the proof executable without changing the repository runtime pin. The acceptance
+serves their artifacts through a disposable fixture Hub. The acceptance uses
+the pinned upstream toolchain. The acceptance
 checks running-service Files updates, retained work/data on removal and reinstall,
 crash during drain followed by exact-receipt recovery, optional telemetry install/removal, protected Hub
 removal refusal, a core self-update, another independent Files update, the older

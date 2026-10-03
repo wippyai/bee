@@ -21,6 +21,14 @@ IDEMPOTENT_REPAIRS = {
     'gateway': {'telemetry_owner_reference_repair', 'desktop_projection_references'},
     'sync': {'telemetry_owner_reference_repair', 'desktop_projection_references'},
 }
+ALL_SOURCES = {
+    **SOURCES,
+    'approvals': 'modules/approvals/src/migrations/migrations.lua',
+    'client': 'modules/client/src/migrations/migrations.lua',
+    'credentials': 'modules/credentials/src/migrations/migrations.lua',
+    'placement': 'modules/placement-native/src/migrations/migrations.lua',
+    'resources': 'modules/resources/src/migrations/migrations.lua',
+}
 
 
 def migrations(source):
@@ -83,11 +91,23 @@ def populate(db, owner, original):
 
 class MigrationHistories(unittest.TestCase):
     def test_main_migrations_remain_an_unchanged_prefix(self):
-        for owner, path in SOURCES.items():
+        for owner, path in ALL_SOURCES.items():
             with self.subTest(owner=owner):
-                prior = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
+                prior_path = path
+                if owner == 'client' and subprocess.run(
+                    ['git', 'cat-file', '-e', 'origin/main:' + path], cwd=ROOT,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                ).returncode:
+                    prior_path = 'src/client/store.lua'
+                prior = subprocess.check_output(['git', 'show', 'origin/main:' + prior_path], cwd=ROOT, text=True)
                 shipped = migrations(prior)
                 self.assertEqual(migrations((ROOT / path).read_text())[:len(shipped)], shipped)
+
+    def test_every_store_has_unique_ordered_migration_ids(self):
+        for owner, path in ALL_SOURCES.items():
+            with self.subTest(owner=owner):
+                identities = [identity for identity, _, _ in migrations((ROOT / path).read_text())]
+                self.assertEqual(identities, list(range(1, len(identities) + 1)))
 
     def test_governance_repair_preserves_reserved_and_fenced_approval_fields(self):
         current = migrations((ROOT / SOURCES['governance']).read_text())

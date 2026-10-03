@@ -113,7 +113,7 @@ entries:
     catalog: bee.workspace.persist:catalog
     decode: bee.protocol:decode
     recovery: bee.workspace.types:recovery
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
   meta:
     command:
       name: workspace-hosts-lazy-supervisor
@@ -137,7 +137,7 @@ entries:
     bounds: bee.values:bounds
     store: bee.workspace.persist:store
     catalog: bee.workspace.persist:catalog
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
   meta:
     command:
       name: workspace-hosts-attach-supervisor
@@ -156,7 +156,7 @@ entries:
     bounds: bee.values:bounds
     store: bee.workspace.persist:store
     catalog: bee.workspace.persist:catalog
-    leases: bee.app:host_leases
+    leases: bee.workspace.client:host_leases
   meta:
     command:
       name: workspace-hosts-attach-fallback

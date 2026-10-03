@@ -212,7 +212,7 @@ local function main(mode: string?)
         local extra_before = table.concat(assert(extra_screen:snapshot()).rows, "\n")
         extra_shell = assert(extra_before:match("RETAINED_BEFORE_EXTRA_(%d+)_END"))
         for revision = 1, mode == "client-upgrade" and 3 or 1 do
-            local entry = assert(registry.get("bee.client:main"))
+            local entry = assert(registry.get("bee.client.service:main"))
             entry.meta.handoff_probe = "retained-client-definition-changed-" .. tostring(revision)
             local changes = assert(registry.snapshot()):changes()
             changes:update(entry)

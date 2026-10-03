@@ -1,0 +1,9 @@
+organization: bee
+module: client
+type: library
+version: 0.1.0-dev
+description: Desktop attachment client, qualified layouts and local catalog
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

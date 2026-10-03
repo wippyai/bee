@@ -161,3 +161,38 @@ class DiscoveryCheckTest(unittest.TestCase):
             declaration.write_text('package native\nconst StorageID = "vendor.native:environment"\n'
                 '// environment.RegisterStorage(registryID(), storage)\n')
             self.assertEqual(layout_check.audit(tree)[4], 1)
+
+    def test_native_overlay_entries_need_an_entry_declaration(self):
+        import tempfile
+        import layout_check
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(dir=root / '.wippy', prefix='discovery-overlay-') as folder:
+            tree = Path(folder)
+            native = tree / 'native'
+            native.mkdir()
+            declaration = native / 'enrollment.go'
+            declaration.write_text('package native\nconst entryID = "vendor.native:enrollment"\n'
+                'func publish() { entry := registry.Entry{ID: registry.ParseID(entryID), Kind: "registry.entry"} }\n')
+            self.assertEqual(layout_check.native_entries(tree), {'vendor.native:enrollment'})
+            declaration.write_text('package native\nconst entryID = "vendor.native:enrollment"\n'
+                '// entry := registry.Entry{ID: registry.ParseID(entryID)}\n')
+            self.assertEqual(layout_check.native_entries(tree), set())
+
+    def test_requirement_defaults_are_checked_for_foreign_and_group_targets(self):
+        import tempfile
+        import layout_check
+        import yaml
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(dir=root / '.wippy', prefix='discovery-default-') as folder:
+            tree = Path(folder)
+            index = tree / 'src/wiring/_index.yaml'
+            index.parent.mkdir(parents=True)
+            document = {'namespace': 'bee.wiring', 'entries': [
+                {'name': 'policy', 'kind': 'security.policy', 'groups': ['selected']},
+                {'name': 'selection', 'kind': 'ns.requirement', 'targets': [],
+                 'default': 'vendor.plugin:missing'}]}
+            index.write_text(yaml.safe_dump(document))
+            self.assertEqual(layout_check.audit(tree)[4], 1)
+            document['entries'][1]['default'] = 'bee.wiring:selected'
+            index.write_text(yaml.safe_dump(document))
+            self.assertEqual(layout_check.audit(tree)[4], 0)

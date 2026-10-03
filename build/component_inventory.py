@@ -390,7 +390,7 @@ def build_inventory():
             if entry_id in entries:
                 raise ValueError(f"duplicate registry id {entry_id} in {rel(path)}")
             entries[entry_id] = {"id": entry_id, "kind": kind, "source": rel(path)}
-            if kind in PERSISTED_KINDS:
+            if kind in PERSISTED_KINDS or (kind == "function.lua" and entry.get("meta", {}).get("hive")):
                 persisted_ids.add(entry_id)
             if kind == "ns.requirement":
                 targets = entry.get("targets", []) or []

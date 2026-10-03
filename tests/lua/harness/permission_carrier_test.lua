@@ -250,16 +250,40 @@ end
 -- Waits for the carrier's report that it holds at the named step, instead
 -- of a fixed sleep guessing how long the carrier takes to reach it under a
 -- busy host. The caller listens for bee.carrier.paused before spawning.
+local exited: {[string]: Outcome} = {}
+local function remember_exit(event: process.Event): Outcome
+    local result = event.result or {}
+    local value: Object? = nil
+    if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
+    local outcome: Outcome = {value = value, error = result.error and tostring(result.error) or nil}
+    exited[tostring(event.from)] = outcome
+    return outcome
+end
 local function await_paused(paused: Channel<process.Message>, pid: string, wanted: string)
+    local events = assert(process.events())
     local deadline = time.after("60s")
     while true do
-        local selected = channel.select({paused:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error(pid .. " never held at " .. wanted) end
+        local known = exited[pid]
+        if known then error(pid .. " exited before " .. wanted .. ": " .. tostring(known.error or json.encode(known.value))) end
+        local selected = channel.select({paused:case_receive(), events:case_receive(), deadline:case_receive()})
+        if not selected.ok then error("fixture approval barrier channel closed before " .. wanted) end
+        if selected.channel == deadline then error("fixture approval barrier wait exceeded 60000 ms before " .. wanted) end
+        if selected.channel == events then
+            local event = selected.value
+            if event.kind == process.event.CANCEL then error("fixture approval barrier wait cancelled before " .. wanted) end
+            if event.kind == process.event.EXIT then
+                local outcome = remember_exit(event)
+                if tostring(event.from) == pid then
+                    error(pid .. " exited before " .. wanted .. ": " .. tostring(outcome.error or json.encode(outcome.value)))
+                end
+            end
+            goto next_pause_event
+        end
         local message = selected.value
         if tostring(message:from()) == pid and message:payload():data() == wanted then return end
+        ::next_pause_event::
     end
 end
-local exited: {[string]: Outcome} = {}
 local function await_carriers(pids: {string}, label: string?): {[string]: Outcome}
     local events = assert(process.events())
     local deadline = time.after("60s")
@@ -274,10 +298,7 @@ local function await_carriers(pids: {string}, label: string?): {[string]: Outcom
         if not selected.ok or selected.channel == deadline then error((label or "carrier") .. " did not finish") end
         local event = selected.value
         if event.kind == process.event.EXIT then
-            local result = event.result or {}
-            local value: Object? = nil
-            if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
-            exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
+            remember_exit(event)
         end
     end
     local outcomes: {[string]: Outcome} = {}
@@ -471,6 +492,19 @@ local function define_tests()
             test.eq(count(list, "acknowledged"), 1)
             test.eq(table.concat(writes(records), ","), "intended,accepted")
             test.eq(tool_results(records), 0)
+        end)
+        test.it("reports the carrier's exact crash when it exits before an approval barrier", function()
+            local thread_id, workspace = thread(), fresh("ws")
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted",
+                request(thread_id, fresh("attempt"), workspace, stream, "12"), "open", "approval_created", "approval_created")
+            local held, failure = pcall(await_paused, paused, pid, "approval_created")
+            process.unlisten(paused)
+            test.is_false(held)
+            test.is_true(tostring(failure):find("exited before approval_created", 1, true) ~= nil)
+            test.is_true(tostring(failure):find("crash after approval_created", 1, true) ~= nil)
+            local outcome = await_carrier(pid, "approval barrier crash")
+            test.is_true(tostring(outcome.error):find("crash after approval_created", 1, true) ~= nil)
         end)
         test.it("recovers every boundary before the response with one approval and one response", function()
             for _, crash in ipairs({"permission_intended", "approval_created", "permission_requested", "permission_consumed", "write_intended", "write_dispatched"}) do

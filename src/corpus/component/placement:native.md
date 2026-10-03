@@ -390,6 +390,16 @@ spool limit; acknowledged progress that resumes reads ends that wait. Once both
 streams end, one retention deadline bounds the remaining unacknowledged output. Drain expiration records forced
 truncation; retention expiration records output loss rather than consumption.
 
+After a monitored carrier fails, its gateway binding remains usable for a
+declared 3,000 ms authority-retention window. A newer attachment generation
+inherits the binding within that window; expiration revokes it and records the
+duration. This bound does not establish whether a replacement is pending or
+will attach. A replacement that attaches later cannot recover the revoked
+credential. Gateway sealing and revocation are terminal; credential reissue
+invalidates the token already held by the running child. The current protocol
+has no reversible suspension that would keep that token unusable until
+supervised replacement.
+
 Native preparation decodes host prepare options through the same driver preferences
 decoder as the carrier planner before comparing the configuration digest. Empty
 registry maps and absent options therefore select the same default options.

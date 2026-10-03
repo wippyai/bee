@@ -15,8 +15,9 @@ M.TOPIC_FENCED = "bee.placement.fenced"
 M.TOPIC_STATUS = "bee.placement.status"
 M.TOPIC_STDIN = "bee.placement.stdin"
 M.FENCE_TIMEOUT_MS = 2000
--- How long a runner keeps a lost carrier's gateway binding alive for a
--- replacement to take over; past it the binding is retired.
+-- Authority-retention bound after supervised carrier loss. The gateway
+-- has no reversible suspension; seal/revoke are terminal, and reissue
+-- invalidates the credential already held by the running child.
 M.TAKEOVER_GRACE_MS = 3000
 M.MAX_CHUNK_BYTES = 16384
 M.MAX_WRITE_BYTES = 65536

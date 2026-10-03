@@ -81,12 +81,12 @@ function M.frame(value: unknown, width: integer, height: integer): FrameResult
         if total_bytes > M.MAX_FRAME_BYTES then return {kind = "invalid", error = "Frame byte limit exceeded"} end
         rows[index] = raw
     end
-    local cursor: Cursor = {x = 0, y = 0, visible = false}
+    local cursor: Cursor = {x = 1, y = 1, visible = false}
     if object.cursor ~= nil then
         local raw_cursor = bounds.object(object.cursor)
         if not raw_cursor or bounds.fields(raw_cursor, {"x", "y", "visible"}) then return {kind = "invalid", error = "Invalid frame cursor"} end
         local x, y = bounds.integer(raw_cursor.x), bounds.integer(raw_cursor.y)
-        if not x or not y or x < 0 or y < 0 or x >= width or y >= height or type(raw_cursor.visible) ~= "boolean" then
+        if not x or not y or x < 1 or y < 1 or x > width or y > height or type(raw_cursor.visible) ~= "boolean" then
             return {kind = "invalid", error = "Invalid frame cursor coordinates or visibility"}
         end
         cursor = {x = x, y = y, visible = raw_cursor.visible}

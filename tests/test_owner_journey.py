@@ -99,13 +99,13 @@ class ReportTests(unittest.TestCase):
     def test_hive_decision_controls_the_peer_workspace_from_the_primary_display(self):
         journey = Journey.__new__(Journey)
         journey.ui = Mock()
-        journey.ui.text.return_value = 'Control this workspace here? Duration: until you leave'
+        journey.ui.text.return_value = 'Control this workspace here? Duration: until you leave Alt+Q leave'
         journey.record_person_prompt = Mock()
         journey.control_hive_workspace()
         self.assertEqual([call.args[0] for call in journey.ui.key.call_args_list],
                          [b"\x1bq", b"c", b"\t\r"])
         self.assertEqual([call.args[0] for call in journey.ui.wait.call_args_list],
-                         ['HIVE MANAGER', 'Control this workspace here?', 'Alt+Q leave', 'Control'])
+                         ['HIVE MANAGER', 'Control this workspace here?', 'Control'])
         journey.record_person_prompt.assert_called_once_with('Control node 2 workspace', journey.ui.text())
 
     def test_remote_inbox_click_uses_the_peer_bar_below_the_local_bar(self):
@@ -117,6 +117,16 @@ class ReportTests(unittest.TestCase):
         self.assertEqual([call.args for call in journey.ui.mouse.call_args_list],
                          [(0, 6, 3), (0, 6, 3, True)])
         journey.ui.wait.assert_called_once_with('NEEDS YOU')
+
+    def test_remote_review_selects_a_request_and_uses_allow_once(self):
+        journey = Journey.__new__(Journey)
+        journey.ui = Mock()
+        journey.ui.text.return_value = 'Allow once · exact reviewed scope'
+        journey.record_person_prompt = Mock()
+        journey.frame = Mock()
+        journey.allow_remote_review()
+        self.assertEqual([call.args[0] for call in journey.ui.key.call_args_list], [b"k\r", b"a"])
+        journey.ui.wait.assert_called_once_with('Allow once')
 
     def test_selected_hive_journey_keeps_start_and_stop(self):
         journey = Journey.__new__(Journey)
@@ -148,7 +158,7 @@ class ReportTests(unittest.TestCase):
         output = io.StringIO()
         with patch.dict('os.environ', {'BEE_GATEWAY_TOKEN': 'fixture-only'}), \
              patch.object(provider.urllib.request, 'urlopen', side_effect=respond), \
-             patch.object(provider.time, 'sleep'), redirect_stdout(output):
+             redirect_stdout(output):
             provider.main(['--mcp-config', json.dumps(config), 'JOURNEY_HIVE_APPROVAL'])
         return calls, output.getvalue()
 

@@ -905,7 +905,16 @@ class Journey:
         self.ui.wait("Control this workspace here?")
         self.record_person_prompt("Control node 2 workspace", self.ui.text())
         self.ui.key(b"\t\r")
-        self.ui.wait("Alt+Q leave")
+        self.ui.wait_until(lambda: "Alt+Q leave" in self.ui.text() or "Hive Manager fail" in self.ui.text()
+                           or "Remote desktop ended:" in self.ui.text(), "controlled peer desktop or observed viewer failure")
+        if "Alt+Q leave" not in self.ui.text():
+            self.ui.resize(640, 48)
+            self.ui.wait_until(lambda: "Hive Manager fail" in self.ui.text() or "Remote desktop ended:" in self.ui.text(),
+                               "rendered control-view failure")
+            self.frame("control-view-failure")
+            cause = next(line.strip() for line in self.ui.screen.display
+                         if "Hive Manager fail" in line or "Remote desktop ended:" in line)
+            raise JourneyFailure("Hive Control: " + cause)
         self.ui.wait("Control")
 
     def open_remote_inbox(self):
@@ -919,6 +928,13 @@ class Journey:
                 self.frame("remote-inbox")
                 return
         raise JourneyFailure("controlled peer desktop does not expose Needs you")
+
+    def allow_remote_review(self):
+        self.ui.key(b"k\r")
+        self.ui.wait("Allow once")
+        self.frame("remote-approval-detail")
+        self.record_person_prompt("governed candidate", self.ui.text())
+        self.ui.key(b"a")
 
     def hive(self):
         folder, state = self.work / "node2-project", self.work / "node2-state"
@@ -1033,8 +1049,7 @@ class Journey:
                 self.control_hive_workspace()
                 self.open_remote_inbox()
                 self.ui.wait("pending")
-                self.ui.key(b"\r")
-                self.approve()
+                self.allow_remote_review()
                 self.ui.wait_until(lambda: bool(rows(state, "approvals.db",
                     "SELECT approval_id FROM bee_approval_requests WHERE approval_id=? AND decision='approved'", (approval_id,))),
                     "node 2 observes node 1 decision")

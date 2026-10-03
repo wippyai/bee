@@ -3,6 +3,16 @@ local bounds = require("bounds")
 local types = require("types")
 local M = {}
 
+function M.preparation_progress(value: unknown): (types.PreparationProgress?, string?)
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"version", "profile_ref", "detail"}) or object.version ~= 1 then
+        return nil, "preparation progress has invalid fields or version"
+    end
+    local profile, detail = bounds.id(object.profile_ref), bounds.text(object.detail, 4096)
+    if not profile or not detail then return nil, "preparation progress requires a profile and bounded detail" end
+    return {version = 1, profile_ref = profile, detail = detail}, nil
+end
+
 local function digest(value: unknown): string?
     local decoded = bounds.text(value, 64)
     if not decoded or #decoded ~= 64 or not decoded:match("^[0-9a-f]+$") then return nil end

@@ -1,12 +1,36 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
 local image = require("image")
+local daemon = require("daemon")
 local function recipe(): {[string]: unknown}
     return {schema_revision = "bee.runtime-recipe@1", base = "node@sha256:" .. string.rep("a", 64),
         artifacts = {{name = "fixture", executable_ref = "bee.test:executable", candidates = {"../vendor/bin/fixture"}}}}
 end
 local function run()
     test.describe("Runtime image recipes", function()
+        test.it("waits for a slow daemon operation and preserves a command's exact failure", function()
+            local output, err = daemon.command({"/bin/sh", "-c", "sleep 6; printf ready"})
+            test.eq(output, "ready"); test.is_nil(err)
+            output, err = daemon.command({"/bin/sh", "-c", "printf 'daemon denied fixture operation' >&2; exit 42"})
+            test.is_nil(output)
+            test.not_nil(err)
+            test.is_true(assert(err):find("exit 42: daemon denied fixture operation", 1, true) ~= nil)
+        end)
+        test.it("distinguishes a daemon's absent image from daemon failures without guessing elapsed time", function()
+            local value, err, absent = daemon.decode_response('{"message":"No such image: fixture"}\n404')
+            test.is_nil(value); test.eq(absent, true); test.eq(err, "Docker HTTP 404: No such image: fixture")
+            value, err, absent = daemon.decode_response('{"message":"daemon failed inspecting fixture"}\n500')
+            test.is_nil(value); test.eq(absent, false); test.eq(err, "Docker HTTP 500: daemon failed inspecting fixture")
+            value, err = daemon.decode_response('{"Id":"fixture"}\n200')
+            test.not_nil(value); test.is_nil(err)
+        end)
+        test.it("retains multiline build failures instead of returning an empty successful result", function()
+            local detail = "docker exit 1: failed to fetch digest-pinned base\nconnection refused\n"
+            for _, operation in ipairs({"build", "environment"}) do
+                local output, route, failure = image.decode_result({error = detail}, operation == "build" and nil or operation)
+                test.is_nil(output); test.is_nil(route); test.eq(failure, detail)
+            end
+        end)
         test.it("measures Linux ELF architecture rather than assuming the host platform", function()
             local prefix = "\127ELF" .. string.char(2, 1) .. string.rep("\0", 12)
             test.eq(image.artifact_arch(prefix .. string.char(62, 0)), "amd64")

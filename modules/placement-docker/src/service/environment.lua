@@ -10,7 +10,7 @@ local bounds = require("bounds")
 local environment = require("environment")
 local resources = require("resources")
 local image = require("image")
-local docker_client = require("docker_client")
+local daemon = require("daemon")
 local hash = require("hash")
 local canonical = require("canonical")
 local events = require("events")
@@ -83,13 +83,12 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
     local function listener_action(kind: string, expected: string): string?
         local sent, send_error = events.send("supervisor", "service." .. kind, tostring(config.listener))
         if not sent then return tostring(send_error or "gateway listener lifecycle request refused") end
-        local deadline = time.after("15s")
         while true do
             local current, read_error = system.supervisor.state(tostring(config.listener))
             if read_error or not current then return tostring(read_error or "gateway listener state unavailable") end
             if current.status == expected then return nil end
-            local selected = channel.select({time.after("50ms"):case_receive(), deadline:case_receive()})
-            if not selected.ok or selected.channel == deadline then return "gateway listener did not become " .. expected end
+            local selected = channel.select({time.after("50ms"):case_receive()})
+            if not selected.ok then return "gateway listener state observation was interrupted" end
         end
     end
     if revoke then
@@ -119,7 +118,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
                 request_kind = "permission", policy = selected.policy,
                 proposal = {kind = "operation", ref = "bee.placement.docker.binding:prepare_environment", revision = selected.digest,
                     input_digest = selected.digest, payload = {network = selected.network, endpoint = config.endpoint, listener = config.listener, profile = selected.profile}},
-                prompt = {text = "Allow Bee to create the " .. selected.network .. " Docker network and bind the restricted agent gateway to its host bridge? This recorded admission can be revoked from the Agent window."}})
+                prompt = {text = "Allow Bee to create the " .. selected.network .. " Docker network and bind the restricted agent gateway to its host bridge? This network and gateway admission lasts until revoked from the Agent window."}})
             local decoded = filed and receipt({state = "pending", selection_digest = selected.digest, approval_id = filed.approval_id,
                 proposal_digest = filed.proposal_digest, owner_incarnation = filed.owner_incarnation})
             if not decoded then return nil, error or "approval owner returned an invalid Docker environment approval" end
@@ -127,16 +126,15 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
             return chosen, nil
         end,
         await = function(approval: environment.Approval): (string?, string?)
-            local deadline = time.after("10m")
             while true do
                 local current, error = approval_call("read", {approval_id = approval.approval_id})
                 if not current then return nil, error end
                 if current.proposal_digest ~= approval.proposal_digest then return nil, "Docker environment approval changed" end
                 if current.state ~= "pending" then return bounds.line(current.decision,32) or tostring(current.state), nil end
-                local cases = {time.after("250ms"):case_receive(), deadline:case_receive()}
+                local cases = {time.after("250ms"):case_receive()}
                 if cancel then cases[#cases + 1] = cancel:case_receive() end
                 local next_event = channel.select(cases)
-                if not next_event.ok or next_event.channel == cancel or next_event.channel == deadline then return nil, "Docker environment approval remains pending; no launch occurred" end
+                if not next_event.ok or next_event.channel == cancel then return nil, "Docker environment approval wait was cancelled; no launch occurred" end
             end
         end,
         consume = function(approval: environment.Approval): string?
@@ -146,13 +144,13 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
             return nil
         end,
         provision = function(selected: environment.Selection): (string?, string?)
-            local client = docker_client.new("/var/run/docker.sock")
-            if not client then return nil, "Docker daemon unavailable" end
-            local net = client:inspect_network(selected.network)
+            local net, network_error = daemon.inspect("network", selected.network, cancel)
+            if network_error then return nil, network_error end
             if not net then
-                local created, error = image.command({"docker", "network", "create", "--driver", "bridge", "--label", "bee.owner=bee.placement.docker", selected.network}, nil, cancel)
+                local created, error = daemon.command({"docker", "--host", "unix:///var/run/docker.sock", "network", "create", "--driver", "bridge", "--label", "bee.owner=bee.placement.docker", selected.network}, nil, cancel)
                 if not created then return nil, error end
-                net = client:inspect_network(selected.network)
+                net, network_error = daemon.inspect("network", selected.network, cancel)
+                if network_error then return nil, network_error end
             end
             local object = bounds.object(net)
             local labels = object and bounds.object(object.Labels)
@@ -193,13 +191,12 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
                 local started = listener_action("start", "running")
                 if started then return started end
             end
-            local deadline = time.after("15s")
-            while true do
+                while true do
                 local address = funcs.call("bee.gateway.binding:address", {})
                 local chosen = bounds.object(address)
                 if chosen and type(chosen.address) == "string" and chosen.address:match("^([^:]+):") == recorded.address:match("^([^:]+):") then return nil end
-                local selected = channel.select({time.after("50ms"):case_receive(), deadline:case_receive()})
-                if not selected.ok or selected.channel == deadline then return "approved Docker gateway listener has not become ready" end
+                local selected = channel.select({time.after("50ms"):case_receive()})
+                if not selected.ok then return "approved Docker gateway readiness observation was interrupted" end
             end
         end,
     }

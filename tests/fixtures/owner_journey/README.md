@@ -24,7 +24,9 @@ startup refusal. Step 7 runs last, after the extended cases. Step 4 accepts only
 running or an explicit `start_failed` carrying the Docker daemon's cause; the
 real subscription case still fails if Docker cannot run. Claude is required;
 Codex is exercised when its OS-user subscription login evidence exists. The
-native fixture emits protocol initialization and waits on a named pipe until
+deterministic fixture is compiled as a Linux ELF runtime artifact for both
+native and Docker placement. Its private fixture home has fake login evidence,
+projected through the same broker as a subscription. It emits protocol initialization and waits on a named pipe until
 the test observes both a rendered working state and placement's running state.
 Real agents use Bee's credential projection and the OS user's subscription;
 API-key environment variables are removed, and provider login-status metadata
@@ -56,6 +58,9 @@ files, safe owner-state snapshots, copied/excluded path inventory and subcase
 outcomes. Approval requests are recorded by owner identity, proposal scope,
 prompt, duration and previous grant; repeated grants, split decisions, routine
 opening prompts and incomplete/overlong prompt screens fail the journey.
+The driver selects the pending Inbox row, waits for its rendered Allow once
+action, and observes both the owner's exact decision and the approved frame.
+Allow once commits that decision without another confirmation dialog.
 
 Harness safety regressions run with:
 

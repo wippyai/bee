@@ -1234,7 +1234,7 @@ local function execution_tests()
             test.is_false(forged_stop_accepted, "unauthenticated stop ended the child")
         end)
         test.it("restores the prior attachment when the runner refuses a replacement recipient", function()
-            local request = launch({"sh", "-c", "sleep 3"}, "direct_process")
+            local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
             local prepared = attempt_of(call(OWNER, "prepare", request))
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
             local attached = attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
@@ -1246,6 +1246,8 @@ local function execution_tests()
             local db = assert(store.open())
             local after_row = store.row(db, prepared.attempt_id)
             db:release()
+            local stopped = call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
+            test.is_true(stopped.ok, "refusal fixture child did not accept stop")
             local eof_count = 0
             local deadline = time.after("5s")
             while eof_count < 2 do
@@ -2975,28 +2977,6 @@ local function credentials_tests()
             end, 8000) then error("successor retained launch did not exit") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
         end)
-        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
-            assert(not call_error, tostring(call_error))
-            local started = attempt_of(principals.reply(raw))
-            test.eq(started.execution_state, "starting")
-            local selected = channel.select({pending:case_receive(), time.after("5s"):case_receive()})
-            process.unlisten(pending)
-            assert(selected.ok and selected.channel == pending, "fixture did not begin")
-            local runner = tostring(selected.value:from())
-            test.eq(started.runner, runner)
-            assert(process.send(runner, "bee.test.startup.advance", {}))
-            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt.execution_state == "running" end, 3000))
-            assert(process.terminate(runner))
-            local recorded = kinds(prepared.attempt_id)
-            test.is_true(has(recorded, "runner.start_accepted"))
-            test.is_false(has(recorded, "runner.start_deadline"))
-            test.is_true(has(recorded, "child.started"))
-        end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()
             local workspace = fresh("ws")
@@ -3132,6 +3112,28 @@ end
 
 local function startup_tests()
     test.describe("Supervised placement startup", function()
+        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
+            assert(not call_error, tostring(call_error))
+            local started = attempt_of(principals.reply(raw))
+            test.eq(started.execution_state, "starting")
+            local selected = channel.select({pending:case_receive(), time.after("5s"):case_receive()})
+            process.unlisten(pending)
+            assert(selected.ok and selected.channel == pending, "fixture did not begin")
+            local runner = tostring(selected.value:from())
+            test.eq(started.runner, runner)
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt.execution_state == "running" end, 3000))
+            assert(process.terminate(runner))
+            local recorded = kinds(prepared.attempt_id)
+            test.is_true(has(recorded, "runner.start_accepted"))
+            test.is_false(has(recorded, "runner.start_deadline"))
+            test.is_true(has(recorded, "child.started"))
+        end)
         for _, command in ipairs({"acknowledge", "refuse", "crash"}) do
             test.it("retains monitored startup until runner " .. command, function()
                 local mode = command == "crash" and "exit" or command
@@ -3219,6 +3221,11 @@ local function cleanup_tests()
             -- as uncertain or exited is not swept again.
             local previous_bound = service.SWEEP_BOUND
             service.SWEEP_BOUND = 2
+            local db = assert(store.open())
+            local rows = assert(db:query("SELECT COUNT(*) AS total FROM bee_placement_attempts"))
+            db:release()
+            local retained = assert(bounds.integer(rows[1].total))
+            local sweep_bound = math.ceil(retained / service.SWEEP_BOUND)
             local function touched_count(): integer
                 local total = 0
                 for _, id in ipairs(ids) do
@@ -3233,9 +3240,12 @@ local function cleanup_tests()
                 return total
             end
             local sweeps = 0
-            while sweeps == 0 or (touched_count() < 3 and sweeps < 3) do
+            while sweeps == 0 or (touched_count() < 3 and sweeps < sweep_bound) do
                 local swept = value(service.sweep())
                 test.is_true((swept.reconciled) <= 2)
+                for _, outcome in ipairs(principals.objects(swept.outcomes)) do
+                    test.is_true(outcome.ok == true, "sweep " .. tostring(outcome.attempt_id) .. ": " .. tostring(outcome.code))
+                end
                 sweeps = sweeps + 1
             end
             service.SWEEP_BOUND = previous_bound
@@ -3349,7 +3359,6 @@ local function cleanup_tests()
     end)
 end
 local function suite(define_tests: () -> ())
-    local cases = test.run_cases(define_tests)
     return function(options)
         local originals: {{[string]: unknown}} = {}
         for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
@@ -3357,6 +3366,7 @@ local function suite(define_tests: () -> ())
         admit_root("bee.placement.native.env:placement_admitted_roots")
         admit_root("bee.resources.env:resource_roots")
         activate_fixture_binding()
+        local cases = test.run_cases(define_tests)
         local ok, result = pcall(cases, options)
         local changes = assert(registry.snapshot()):changes()
         for _, original in ipairs(originals) do changes:update(registry_input(original)) end

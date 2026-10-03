@@ -738,25 +738,19 @@
     "reason": "Validate an immutable Docker image digest; not a registry entry."
   },
   {
-    "path": "modules/placement-docker/src/service/service.lua",
+    "path": "modules/placement-docker/src/binding/methods.lua",
     "expression": "image_id:match(\"^sha256:[0-9a-f]+$\")",
     "count": 1,
     "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."
   },
   {
-    "path": "modules/placement-docker/src/service/service.lua",
-    "expression": "inspect_error:sub(1, 9)",
-    "count": 2,
-    "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."
-  },
-  {
-    "path": "modules/placement-docker/src/service/service.lua",
+    "path": "modules/placement-docker/src/binding/methods.lua",
     "expression": "known_image:match(\"^sha256:[0-9a-f]+$\")",
     "count": 1,
     "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."
   },
   {
-    "path": "modules/placement-docker/src/service/service.lua",
+    "path": "modules/placement-docker/src/binding/methods.lua",
     "expression": "request.gateway.endpoint:match(\"^localhost:\")",
     "count": 1,
     "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."

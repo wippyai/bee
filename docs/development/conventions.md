@@ -274,10 +274,25 @@ does not issue container creates from separate test processes against the same
 host daemon. That shard holds an exclusive `flock` across checkouts for its
 runtime process. The unit and focused Lua runners use the same lock, selected
 from the test entries' resource metadata. `BEE_DOCKER_DAEMON_LOCK` selects the
-lock file; otherwise it is `~/.cache/bee/bee-docker-daemon.lock`, one path
-shared by every checkout of the same user. The runner prints when it waits and when it acquires the lock, including the wait duration.
+lock file; otherwise it is `docker-daemon-<daemon ID>.lock` under `bee/` in the
+user's XDG cache directory, so every checkout using the same daemon shares one
+lock and an unreachable daemon fails with its exact error. The runner prints when it waits and when it acquires the lock, including the wait duration.
 The wait has no timeout and can be interrupted. Failures release the lock and
 retain their cause. The remaining entries retain their balanced parallel shards.
+
+`make native-placement-unit-check` runs native home/admission, execution,
+configuration, output, credential, cleanup and startup suites together with
+workdir preparation, provider configuration and instruction-builder
+checks. Each native suite captures and restores shared fixture registry state
+independently within the existing test entry timeout. The bounded sweep regression
+accounts for earlier cases' retained attempts in the same owner store and verifies
+every reconciliation outcome.
+
+`make harness-drain-unit-check` covers carrier post-exit draining. Its silent
+consumer fixture holds descendant pipes behind a FIFO until the test releases
+them, so host load cannot close those pipes before the declared drain expires.
+`make harness-fixture-unit-check` proves that fixture lifecycle; `make
+unit-runner-check` covers shard selection, failure reporting and Docker locking.
 
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's

@@ -289,7 +289,9 @@ namespace `app.<overlay_id>`, the rule's approval policy, kinds, modules, base a
 and a private overlay owner per destination workspace. The captured artifact
 selects exactly one `process.lua` application by `meta.type: bee.app`; its entry
 name is unrestricted. The instance is
-measured into the policy digest exactly like an explicit row. A live host grant
+measured into the policy digest exactly like an explicit row. Staging, plan
+comparison and activation select the same host base policy in the destination
+resolver before binding the captured application declaration. A live host grant
 record adds generated policy IDs to `allow.grants` and the application's
 admission binding; its recorded thread access also selects the application
 binding. Activation writes the generated policies, requirement defaults, grant

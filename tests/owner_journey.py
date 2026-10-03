@@ -908,6 +908,18 @@ class Journey:
         self.ui.wait("Alt+Q leave")
         self.ui.wait("Control")
 
+    def open_remote_inbox(self):
+        # F1 belongs to the local presenter; click the controlled desktop's bar.
+        for y, line in enumerate(self.ui.screen.display[1:], 2):
+            if " BEE " in line and "Needs you" in line:
+                x = line.index("Needs you") + 1
+                self.ui.mouse(0, x, y)
+                self.ui.mouse(0, x, y, True)
+                self.ui.wait("NEEDS YOU")
+                self.frame("remote-inbox")
+                return
+        raise JourneyFailure("controlled peer desktop does not expose Needs you")
+
     def hive(self):
         folder, state = self.work / "node2-project", self.work / "node2-state"
         self.peer_state, self.peer_folder = state, folder
@@ -1019,7 +1031,7 @@ class Journey:
                 finally:
                     self.ui = primary
                 self.control_hive_workspace()
-                self.launch("Needs you", "NEEDS YOU")
+                self.open_remote_inbox()
                 self.ui.wait("pending")
                 self.ui.key(b"\r")
                 self.approve()

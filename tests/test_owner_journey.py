@@ -108,6 +108,16 @@ class ReportTests(unittest.TestCase):
                          ['HIVE MANAGER', 'Control this workspace here?', 'Alt+Q leave', 'Control'])
         journey.record_person_prompt.assert_called_once_with('Control node 2 workspace', journey.ui.text())
 
+    def test_remote_inbox_click_uses_the_peer_bar_below_the_local_bar(self):
+        journey = Journey.__new__(Journey)
+        journey.ui = Mock()
+        journey.ui.screen.display = [' BEE Needs you 0', 'REMOTE Control', ' BEE Needs you 1']
+        journey.frame = Mock()
+        journey.open_remote_inbox()
+        self.assertEqual([call.args for call in journey.ui.mouse.call_args_list],
+                         [(0, 6, 3), (0, 6, 3, True)])
+        journey.ui.wait.assert_called_once_with('NEEDS YOU')
+
     def test_selected_hive_journey_keeps_start_and_stop(self):
         journey = Journey.__new__(Journey)
         journey.run_step = Mock()

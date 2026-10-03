@@ -179,13 +179,11 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             else
                 local label = item.component .. "  " .. item.version
-                do
-                    for _, candidate in ipairs(state.pack_updates) do
-                        if candidate.component == item.component and candidate.available_version ~= "" then
-                            label = label .. " · Hub " .. candidate.available_version
-                            if candidate.update_available then label = label .. " · update available" end
-                            break
-                        end
+                for _, candidate in ipairs(state.pack_updates) do
+                    if candidate.component == item.component and candidate.available_version ~= "" then
+                        label = label .. " · Hub " .. candidate.available_version
+                        if candidate.update_available then label = label .. " · update available" end
+                        break
                     end
                 end
                 frame.row(painter, y, label, selected, "component", 0, item.component)

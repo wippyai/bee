@@ -76,14 +76,12 @@ function M.writable(picker: Picker): boolean
     return root ~= nil and root.access == "write"
 end
 
-local ROOT_LABEL = "Workspace root"
-
 -- Where the picker stands, for people: the root and the folder inside it.
 function M.location(picker: Picker): string
     local root = picker.root
     if not root then return "" end
-    if picker.path == "" then return ROOT_LABEL end
-    return ROOT_LABEL .. "/" .. picker.path
+    if picker.path == "" then return "Workspace root" end
+    return "Workspace root/" .. picker.path
 end
 
 function M.roots_intent(): Intent
@@ -280,7 +278,7 @@ function M.draw(painter: frame.Painter, rect: frame.Rect, picker: Picker, offset
             return {offset = 0, capacity = 0}
         end
         for index, root in ipairs(picker.roots) do
-            cells[index] = {ROOT_LABEL, root.access == "write" and "write" or "read"}
+            cells[index] = {"Workspace root", root.access == "write" and "write" or "read"}
             keys[index] = root.root_ref
         end
         columns = {{title = "Root", width = 0}, {title = "Access", width = 6}}

@@ -6,6 +6,7 @@ entries:
   source: file://store.lua
   modules: [sql]
   imports:
+    windows: bee.approvals.types:windows
     bounds: bee.values:bounds
 - name: outbox
   kind: library.lua

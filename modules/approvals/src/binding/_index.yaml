@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.approvals.binding
 entries:
+- name: grant_window
+  kind: function.lua
+  source: file://grant_window_method.lua
+  method: handle
+  imports: {service: bee.approvals.service:service}
+  security: {policies: []}
 - name: node_summary
   kind: function.lua
   source: file://node_summary_method.lua
@@ -114,6 +120,7 @@ entries:
             - denied
           proposal_digest:
             type: string
+          window_ttl_ms: {type: integer, minimum: 1}
           response: {}
       output:
         type: object
@@ -299,6 +306,7 @@ entries:
     methods:
       feed_snapshot: bee.approvals.binding:feed_snapshot
       feed_read_after: bee.approvals.binding:feed_read_after
+      grant_window: bee.approvals.binding:grant_window
       runtime_lease: bee.approvals.binding:runtime_lease
       request: bee.approvals.binding:request
       decide: bee.approvals.binding:decide

@@ -301,6 +301,11 @@ local function define_tests()
                 if button.kind == "lease" and button.more then action = true end
             end
             test.is_true(action)
+            state.technical = true
+            local technical = view.draw(140, 30, appearance.defaults(), state, model.rows(state), 0, "", slice)
+            local lease_key: string? = nil
+            for _, button in ipairs(assert(technical.controls).buttons) do if button.kind == "lease" then lease_key = button.key end end
+            test.eq(lease_key, "E")
             leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "active", applies_used = 0,
                 revision = 1, granted_by = "p", uses = {}, envelope = {}, max_applies = 1}}}})
             leases.show_leases(slice, true)

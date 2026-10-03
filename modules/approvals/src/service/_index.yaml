@@ -67,6 +67,7 @@ entries:
   source: file://service.lua
   modules: [sql, hash, uuid, json, security, system, process, funcs]
   imports:
+    windows: bee.approvals.types:windows
     runtime_lease: bee.approvals.service:runtime_lease
     bounds: bee.values:bounds
     canonical: bee.values:canonical

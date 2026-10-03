@@ -2462,6 +2462,11 @@ local function define_supervision_tests(measured: {[string]: unknown})
             -- as uncertain or exited is not swept again.
             local previous_bound = service.SWEEP_BOUND
             service.SWEEP_BOUND = 2
+            local db = assert(store.open())
+            local rows = assert(db:query("SELECT COUNT(*) AS total FROM bee_placement_attempts"))
+            db:release()
+            local retained = assert(bounds.integer(rows[1].total))
+            local sweep_bound = math.ceil(retained / service.SWEEP_BOUND)
             local function touched_count(): integer
                 local total = 0
                 for _, id in ipairs(ids) do
@@ -2476,9 +2481,12 @@ local function define_supervision_tests(measured: {[string]: unknown})
                 return total
             end
             local sweeps = 0
-            while sweeps == 0 or (touched_count() < 3 and sweeps < 3) do
+            while sweeps == 0 or (touched_count() < 3 and sweeps < sweep_bound) do
                 local swept = value(service.sweep())
                 test.is_true((swept.reconciled) <= 2)
+                for _, outcome in ipairs(principals.objects(swept.outcomes)) do
+                    test.is_true(outcome.ok == true, "sweep " .. tostring(outcome.attempt_id) .. ": " .. tostring(outcome.code))
+                end
                 sweeps = sweeps + 1
             end
             service.SWEEP_BOUND = previous_bound

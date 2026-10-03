@@ -259,7 +259,15 @@ retain their cause. The remaining entries retain their balanced parallel shards.
 `make native-placement-unit-check` runs native launch, configuration, supervision
 and credential suites together with provider configuration and instruction-builder
 checks. Each native suite captures and restores shared fixture registry state
-independently within the existing test entry timeout.
+independently within the existing test entry timeout. The bounded sweep regression
+accounts for earlier cases' retained attempts in the same owner store and verifies
+every reconciliation outcome.
+
+`make harness-drain-unit-check` covers carrier post-exit draining. Its silent
+consumer fixture holds descendant pipes behind a FIFO until the test releases
+them, so host load cannot close those pipes before the declared drain expires.
+`make harness-fixture-unit-check` proves that fixture lifecycle; `make
+unit-runner-check` covers shard selection, failure reporting and Docker locking.
 
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's

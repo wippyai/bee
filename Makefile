@@ -193,6 +193,13 @@ sessions-unit-check: $(TOOLCHAIN_CURRENT)
 .PHONY: native-placement-unit-check
 native-placement-unit-check: $(TOOLCHAIN_CURRENT)
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_test native_configuration_test native_supervision_test native_credentials_test provider_configuration_test instruction_builder_test
+.PHONY: harness-drain-unit-check harness-fixture-unit-check unit-runner-check
+harness-drain-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.harness.catalog carrier_drain_test
+harness-fixture-unit-check:
+	python3 -m unittest discover -s tests -p test_harness_fixture.py
+unit-runner-check:
+	python3 -m unittest discover -s tests -p test_unit_runner.py
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py

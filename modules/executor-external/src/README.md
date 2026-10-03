@@ -19,6 +19,7 @@ closure intent before calling placement and still waits for process exit.
 If the CLI exits before that call, placement returns the observed exit with
 `closed: false`; the executor accepts only its attempt and attachment generation
 with an exit source, drains the remaining output, and keeps the driver's result.
+A successful closure remains recorded when the child exits during its reply.
 
 Each attempt records progress before prepare, gateway admission and CLI start.
 Normalized assistant text, tool events and usage are appended live through the

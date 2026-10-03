@@ -1476,8 +1476,9 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
             local intended, intent_error = M.commit(io, session, {input_record(session, "close_intended", {})})
             if not intended then return "none", intent_error end
         end
-        -- An observed exit needs no closure or signal. Other refusals
-        -- retain their reason before the stop path settles what remains.
+        -- A refused closure with an observed exit needs no signal.
+        -- A successful closure remains recorded even if the child exits
+        -- during the reply; other refusals retain the stop fallback.
         local close_target = session.plan.placement_binding.methods.close_stdin
         if not close_target then return "none", "selected placement cannot close stdin" end
         local raw, call_error = io.call(close_target, {attempt_id = session.plan.request.attempt_id})

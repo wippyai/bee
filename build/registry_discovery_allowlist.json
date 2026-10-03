@@ -408,18 +408,6 @@
     "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
   },
   {
-    "path": "modules/gov/src/security/super_edit.lua",
-    "expression": "left:sub(1, #right + 1)",
-    "count": 1,
-    "reason": "Check intersection of expressly declared namespace policy scopes; deny-only scope validation."
-  },
-  {
-    "path": "modules/gov/src/security/super_edit.lua",
-    "expression": "right:sub(1, #left + 1)",
-    "count": 1,
-    "reason": "Check intersection of expressly declared namespace policy scopes; deny-only scope validation."
-  },
-  {
     "path": "modules/gov/src/binding/activation_owner.lua",
     "expression": "prefix .. \":\" .. operation",
     "count": 1,
@@ -530,7 +518,7 @@
   {
     "path": "modules/gov/src/binding/overlay_resolver.lua",
     "expression": "id:match(\"^([^:]+):\")",
-    "count": 3,
+    "count": 5,
     "reason": "Declared artifact namespace ownership/collision and protected-host-scope validation; capability selection uses exact artifact IDs."
   },
   {
@@ -1042,5 +1030,17 @@
     "expression": "menu.query:sub(1, math.floor(math.max(0, #menu.query - 1)))",
     "count": 1,
     "reason": "Remove a character from the workspace search query; not registry discovery."
+  },
+  {
+    "path": "modules/gov/src/binding/preflight.lua",
+    "expression": "id:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Validate a measured dependency against the host-declared exact super-edit namespace and protected-kernel carve-out; explicitly protected entries remain denied and no registry entry is discovered."
+  },
+  {
+    "path": "modules/gov/src/security/super_edit.lua",
+    "expression": "protected:sub(1, #requested + 1)",
+    "count": 1,
+    "reason": "Reject a requested edit scope containing a host-declared protected namespace; deny-only ancestor validation, never registry discovery or permission grants."
   }
 ]

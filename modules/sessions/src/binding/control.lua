@@ -3,6 +3,7 @@ local registry = require("registry")
 local hash = require("hash")
 local canonical = require("canonical")
 local bounds = require("bounds")
+local operations = require("operations")
 local M = {}
 M.SERVICE = "bee.sessions.service:scheduler_service"
 M.PROCESS = "bee.sessions.service:scheduler_worker"
@@ -44,11 +45,13 @@ function M.intent(request: Request): boolean
 end
 function M.fenced(): (boolean, string?)
     local snapshot, problem = registry.snapshot()
-    local state = snapshot and snapshot:state()
-    if not state then return true, tostring(problem or "scheduler admission fence unavailable") end
-    for _, entry in ipairs(state.entries) do
-        if entry.id:sub(1, 19) == "bee.hub.operations:" then
-            local receipt = bounds.object(entry.data)
+    if not snapshot then return true, tostring(problem or "scheduler admission fence unavailable") end
+    local entries, find_error = snapshot:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.hub_operation"})
+    if find_error then return true, tostring(find_error) end
+    for _, entry in ipairs(entries) do
+        local receipt, receipt_error = operations.record(entry)
+        if receipt_error then return true, receipt_error end
+        if receipt then
             local work = receipt and bounds.object(receipt.lifecycle_work)
             local services = work and bounds.array(work.services, 128)
             if receipt and receipt.lifecycle_work ~= nil and (not work or not services) then

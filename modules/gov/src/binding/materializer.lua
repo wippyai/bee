@@ -149,10 +149,10 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
     for index, entry in ipairs(portable) do complete[index] = entry end
     if admission_raw ~= nil then
         local blob = bounds.object(admission_raw)
-        if not blob or bounds.fields(blob, {"bytes", "digest"}) then
+        if not blob or bounds.fields(blob, {"bytes", "digest", "identity_generation"}) then
             return nil, nil, nil, "application admission blob is invalid"
         end
-        local derived, derived_error = application_admission.entry(blob.bytes, blob.digest)
+        local derived, derived_error = application_admission.entry(blob.bytes, blob.digest, blob.identity_generation)
         if not derived then return nil, nil, nil, derived_error end
         complete[#complete + 1] = derived
     end

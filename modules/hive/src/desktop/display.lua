@@ -296,9 +296,9 @@ local function present(handle: Handle)
         if not resized then failure = resize_error or "resize desktop" end
     end
     while not failure do
-        local selected = channel.select({events:case_receive(), delivery_updates:case_receive()})
+        local selected = channel.select({events:case_receive(), delivery_updates.channel:case_receive()})
         if not selected.ok then break end
-        if selected.channel == delivery_updates then
+        if selected.channel == delivery_updates.channel then
             if delivery.poll({active.receipt.session_id}) then
                 local frame, frame_error = M.content(handle, width, height)
                 if frame then output:present(frame.rows, {cursor = frame.cursor})

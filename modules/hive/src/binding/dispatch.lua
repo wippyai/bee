@@ -15,10 +15,6 @@ local M = {}
 -- Open operations run only when the host exposes them through hive.expose.open.
 -- Registry metadata alone never makes an arbitrary func callable.
 
-local function operation_namespace(operation_ref: string): string?
-    return operation_ref:match("^([^:]+):[^:]+$")
-end
-
 -- Pure result validator: validates output against advertised schema and maximum bytes.
 function M.validate_output(output_schema: {[string]: unknown}, max_output_bytes: integer, output: unknown): (boolean, string?)
     if type(output) ~= "table" then
@@ -57,11 +53,6 @@ function M.dispatch(request: unknown): types.Reply
         return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "node telemetry only: resource_ref must be absent"))
     end
 
-    local expected_ns = operation_namespace(req.operation_ref)
-    if not expected_ns or req.owner_ref.service_id ~= expected_ns then
-        return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "owner service does not match operation namespace"))
-    end
-
     -- 4. Host exposure ceiling: the operation runs only when the host exposes
     -- it open, directly or through an install grant the exposure scope joins.
     -- The catalog resolves it again below under the same ceiling.
@@ -74,6 +65,11 @@ function M.dispatch(request: unknown): types.Reply
         return types.reply_error(request_id, types.fault("DENIED", "operation unavailable"))
     end
 
+    if req.owner_ref.service_id ~= op.service_id then
+        return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "owner service does not match declared operation service"))
+    end
+
+    -- 6. Require mode=open
     if op.mode ~= "open" then
         return types.reply_error(request_id, types.fault("DENIED", "operation mode is not open"))
     end

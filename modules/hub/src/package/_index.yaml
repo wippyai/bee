@@ -20,6 +20,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     requirements: bee.hub.package:requirements
+    operations: bee.hub.types:operations
 - name: semver
   kind: library.lua
   source: file://semver.lua

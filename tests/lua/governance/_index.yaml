@@ -266,6 +266,72 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
     migration_work: bee.gov.types:migration_work
+- name: activation_owner_admission_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: admission
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
+- name: activation_owner_recovery_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: recovery
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
+- name: activation_owner_migration_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: migration
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
 - name: artifact_test
   kind: function.lua
   source: file://artifact_test.lua
@@ -483,7 +549,7 @@ entries:
   kind: function.lua
   source: file://capability_gateway_test.lua
   method: run
-  modules: [registry, hash]
+  modules: [registry, hash, security, funcs]
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
@@ -577,15 +643,20 @@ entries:
   kind: function.lua
   source: file://driver_link_test.lua
   method: run
-  modules: [registry, security, funcs]
+  modules: [registry, security, funcs, hash, system]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.gov:driver_link_test_policy]}
+  security: {policies: [bee.gov:driver_link_test_policy, bee.gov:plan_test_policy]}
   imports:
     test: wippy.test:test
     materializer: bee.gov.binding:materializer
     activation: bee.gov.types:driver_admission
     resolver: bee.driver.binding:resolver
     bounds: bee.values:bounds
+    activation_store: bee.gov.persist:activation_store
+    artifact: bee.gov.types:artifact
+    canonical: bee.values:canonical
+    resources: bee.gov.binding:staging_resources
+    destination_service: bee.gov.binding:destination_service
 - name: driver_link_test_policy
   kind: security.policy
   policy:

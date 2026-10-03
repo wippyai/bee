@@ -17,6 +17,11 @@ local function executor(change: boolean?): approval.Executor
     function selected.call(self: approval.Executor, method: string, request: unknown): (unknown?, unknown?)
         local value = assert(bounds.object(request))
         if method == "bee.approvals.binding:request" then
+            local prompt = assert(bounds.object(value.prompt))
+            local wording = assert(bounds.text(prompt.text))
+            test.is_true(wording:find("Bee application", 1, true) ~= nil)
+            test.is_true(wording:find("workspace-a", 1, true) ~= nil)
+            test.is_true(wording:find("Duration:", 1, true) ~= nil)
             local proposal = assert(bounds.object(value.proposal))
             if change then proposal = {kind = "operation", ref = "other", revision = "other", payload = {}} end
             local bytes = assert(canonical.encode(proposal))

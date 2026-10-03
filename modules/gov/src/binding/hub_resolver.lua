@@ -506,7 +506,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             or policy.source_workspace ~= spec.source_workspace or not bounds.id(policy.overlay_owner) then
             return nil, nil, "application admission policy does not match the selected activation profile"
         end
-        local projection, projection_error = application_admission.project({workspace_id = policy.workspace_id,
+        local projection, projection_error = application_admission.project({identity_generation = "current", workspace_id = policy.workspace_id,
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
             source_workspace = policy.source_workspace, artifact_digest = spec.artifact_digest,
             bindings = policy.applications, artifact_entries = expected,

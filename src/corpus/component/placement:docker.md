@@ -26,8 +26,8 @@ gateway tools. Docker mounts
 the private home at `/home/bee` and only the resources admitted for the attempt.
 
 One unpatched runtime executor creates each container with `BEE_ATTEMPT_ID`.
-Reconciliation uses the vendored `userspace.docker:docker_client` inventory and
-inspection API to match that environment value, the projected provider-home
+Reconciliation uses the Docker daemon inventory and
+inspection API through `curl` on the host-selected Unix socket to match that environment value, the projected provider-home
 mount and the admitted image digest. Placement records the immutable container
 ID immediately after observing it; later inspection, stop and removal act on
 that exact ID. Missing post-dispatch containers are uncertain and never silently
@@ -56,7 +56,13 @@ attempt home. A close acceptance alone does not prove cleanup has completed.
 
 `capabilities` optionally accepts `placement_profile_ref` and `runtime_name`
 and returns `image_readiness`: image presence, runtime artifact presence and
-container platform. This is a read-only observation. The Sessions catalog
+container platform and whether the installed recipe is buildable. An uncached,
+buildable recipe remains selectable; Bee prepares it during launch. Until the
+image exists, version and option evidence comes from the installed CLI artifact
+that the measured recipe copies. Cached images supply that evidence through an
+isolated container probe. This is a read-only observation. Daemon requests and
+probes wait for completion; slow responses do not imply unavailability. HTTP
+failures and command exit errors retain the daemon's cause. The Sessions catalog
 passes a saved profile's placement selection through the host locator.
 
 The built-in `bee.placement.docker.profiles:coding` profile appears in the Agent placement
@@ -68,6 +74,9 @@ are refused. Docker build output and per-artifact steps appear on the Agent
 surface. A bounded receipt under placement's `images/receipts` records the recipe
 digest, observed image ID, platform and progress. Temporary build contexts are
 removed on completion or build refusal; image layers remain a host-owned cache.
+Sessions also shows image preparation as starting, including authenticated build
+progress through its existing Threads observations. It waits for preparation
+completion before attaching and starting the agent; errors retain their cause.
 
 The lifecycle-owned image process authenticates request senders against recorded
 requests and verifies the current host profile digest. It serializes builds and
@@ -76,8 +85,9 @@ publishes only the derived executor and interactive route in its protected
 permission. Cached tags must match the recipe, artifact labels and platform;
 placement freezes the actual immutable image ID into each attempt. Docker
 `prepare` accepts an optional bounded `progress_recipient` for display output,
-excluded from the stored launch identity. Image-owner loss or reply timeout
-returns an unknown outcome, with no automatic retry. Owner cancellation closes
+excluded from the stored launch identity. The caller monitors the image owner
+and waits for its acknowledgement. Image-owner exit or caller cancellation
+returns its cause and an unknown outcome, with no automatic retry. Owner cancellation closes
 the active build process and removes its context.
 
 The coding profile names `bee-coding`. The host's `environment_provisioning`

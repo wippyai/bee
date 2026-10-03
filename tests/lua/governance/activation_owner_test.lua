@@ -279,7 +279,7 @@ local function grant_lease(leases: lease_store.Store, max_applies: integer): {[s
         source_approval_owner_incarnation = 2, granted_by = "person-a", max_applies = max_applies}))
 end
 
-local function define_tests()
+local function authority_tests()
     test.describe("Governance activation owner", function()
         for _, phase in ipairs({"statement", "commit"}) do
             test.it("reports the SQLite " .. phase .. " cause through the owner", function()
@@ -560,6 +560,11 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+    end)
+end
+
+local function admission_tests()
+    test.describe("Destination activation admission", function()
         test.it("establishes only the approved desired version and ignores a newer selection", function()
             local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-owner")
             if not plans then error(tostring(plan_error)) end
@@ -803,6 +808,11 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+    end)
+end
+
+local function recovery_tests()
+    test.describe("Destination activation recovery", function()
         test.it("reconciles lost consume and apply replies without following a newer plan", function()
             local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-crash")
             if not plans then error(tostring(plan_error)) end
@@ -1045,6 +1055,11 @@ local function define_tests()
             assert(plan_store.close(again_plans))
         end)
 
+    end)
+end
+
+local function migration_tests()
+    test.describe("Destination activation migration", function()
         test.it("completes captured migrations before exposing the application overlay", function()
             local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-migration-owner"))
             local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-migration-owner"))
@@ -1106,4 +1121,5 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+return {run = test.run_cases(authority_tests), admission = test.run_cases(admission_tests),
+    recovery = test.run_cases(recovery_tests), migration = test.run_cases(migration_tests)}

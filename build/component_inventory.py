@@ -194,13 +194,9 @@ def load_external_proofs(index_documents):
                     dependencies.append(entry)
         if not dependencies:
             raise ValueError(f"{component}@{version} is not declared by {source_module} registry sources")
-        component_namespace = component.replace("/", ".")
         for entry_id in target_ids:
             if not REGISTRY_ID.fullmatch(entry_id):
                 raise ValueError(f"invalid external target id in proof: {entry_id}")
-            namespace = entry_id.split(":", 1)[0]
-            if namespace != component_namespace and not namespace.startswith(component_namespace + "."):
-                raise ValueError(f"{entry_id} is outside the {component} namespace")
             if entry_id in external_entries:
                 raise ValueError(f"duplicate external target proof: {entry_id}")
             external_entries[entry_id] = {

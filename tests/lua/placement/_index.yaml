@@ -322,6 +322,228 @@ entries:
     output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.binding:quote
     types: bee.placement:types
+- name: native_startup_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: startup
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, fs, hash, json, sql]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
+  imports:
+    placement_decode: bee.placement:decode
+    bounds: bee.values:bounds
+    principals: bee.test.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.profiles:preferences
+    test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native.env:resources
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
+    homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+- name: native_execution_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: execution
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, fs, hash, json, sql]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
+  imports:
+    placement_decode: bee.placement:decode
+    bounds: bee.values:bounds
+    principals: bee.test.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.profiles:preferences
+    test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native.env:resources
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
+    homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+- name: native_configuration_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: configuration
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, fs, hash, json, sql]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
+  imports:
+    placement_decode: bee.placement:decode
+    bounds: bee.values:bounds
+    principals: bee.test.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.profiles:preferences
+    test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native.env:resources
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
+    homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+- name: native_output_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: output
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, fs, hash, json, sql]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
+  imports:
+    placement_decode: bee.placement:decode
+    bounds: bee.values:bounds
+    principals: bee.test.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.profiles:preferences
+    test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native.env:resources
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
+    homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+- name: native_credentials_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: credentials
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, fs, hash, json, sql]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
+  imports:
+    placement_decode: bee.placement:decode
+    bounds: bee.values:bounds
+    principals: bee.test.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.profiles:preferences
+    test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native.env:resources
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
+    homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+- name: native_cleanup_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: cleanup
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, fs, hash, json, sql]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
+  imports:
+    placement_decode: bee.placement:decode
+    bounds: bee.values:bounds
+    principals: bee.test.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.profiles:preferences
+    test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native.env:resources
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
+    homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
 - name: provider_configuration_test
   kind: function.lua
   source: file://provider_configuration_test.lua
@@ -329,6 +551,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "30s"}
   modules: [funcs, security, registry, json, hash, time, exec]
   imports:
+    completion: bee.placement.native:completion
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
@@ -416,15 +639,27 @@ entries:
       func_id: bee.placement.native:fixture_builder_build
       args:
         tag: integration
+- name: completion
+  kind: library.lua
+  source: file://completion.lua
+  meta: {type: test_support}
+  modules: [process, channel]
+  imports:
+    protocol: bee.placement.native:protocol
+    decode: bee.placement:decode
+    bounds: bee.values:bounds
+    service: bee.placement.native.service:service
+    types: bee.placement:types
 - name: instruction_builder_test
   kind: function.lua
   source: file://instruction_builder_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [funcs, security, registry, json, hash, time, exec, ctx, env]
+  modules: [funcs, security, registry, json, hash, time, exec, ctx, env, process]
   security:
-    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy, bee.placement.native:builder_test_caller_policy]
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy, bee.placement.native:builder_test_caller_policy]
   imports:
+    completion: bee.placement.native:completion
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test

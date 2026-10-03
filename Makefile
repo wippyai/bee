@@ -54,6 +54,12 @@ hub-preview-check:
 .PHONY: hub-unit-check
 hub-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_unit.py
+.PHONY: registry-discovery-unit-check
+registry-discovery-unit-check: $(TOOLCHAIN_CURRENT) fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py tests.hub.lifecycle lifecycle_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.storage selection_policy_test node_workspaces_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov overlay_resolver_test destination_service_test workspace_applications_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.harness.catalog run_lease_test gateway_carrier_test
 .PHONY: hub-self-update-runtime-check
 hub-self-update-runtime-check:
 	python3 tests/runtime_self_update_check.py
@@ -169,6 +175,7 @@ idle-cpu-check:
 	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
 lint: layout-check lua-boundary-check component-inventory-check
 	$(WIPPY) lint $(LINT_FLAGS) --strict-any --set lua.type_system.enabled=true --set lua.type_system.strict=true
+	python3 build/registry_discovery_check.py
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
 	test -n "$(CODEX)"
@@ -195,10 +202,30 @@ application-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/application_module.py
 test: application-module
 .PHONY: sessions-unit-check
+.PHONY: placement-configuration-check
+placement-configuration-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native instruction_builder_test provider_configuration_test startup_test
 sessions-unit-check: $(TOOLCHAIN_CURRENT)
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.tests.sessions interactive_test executor_registry_test locate_test catalog_service_test scheduler_test protocol_test client_test wiring_test attention_test driver_route_test owner_boundary_test
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gateway sessions_test session_tools_test session_boundary_test
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py tests.hub.lifecycle lifecycle_test
+.PHONY: native-placement-unit-check governance-activation-unit-check
+native-placement-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_test native_execution_test native_configuration_test native_output_test native_credentials_test native_cleanup_test workdir_preparer_test native_startup_test provider_configuration_test instruction_builder_test
+governance-activation-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov activation_owner_test activation_owner_admission_test activation_owner_recovery_test activation_owner_migration_test
+.PHONY: placement-startup-unit-check docker-placement-unit-check
+placement-startup-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_startup_test startup_test startup_migration_test
+docker-placement-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.docker.tests profile_test spec_test lifecycle_test stdin_test readiness_test boundary_test projection_test image_test environment_test
+.PHONY: harness-drain-unit-check harness-fixture-unit-check unit-runner-check
+harness-drain-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.harness.catalog carrier_drain_test
+harness-fixture-unit-check:
+	python3 -m unittest discover -s tests -p test_harness_fixture.py
+unit-runner-check:
+	python3 -m unittest discover -s tests -p test_unit_runner.py
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py
@@ -587,6 +614,10 @@ hive-supervisor-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go -C native test -race -count=1 -v ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go -run '^TestHiveSupervisor'
 
+.PHONY: hive-viewer-unit-check
+hive-viewer-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.hive desktop_viewer_test
+
 .PHONY: attachments-check
 attachments-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import lifecycle; lifecycle.detached()'
@@ -732,7 +763,10 @@ app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
 
-.PHONY: persist-migration-check
+.PHONY: persist-migration-check migration-history-unit-check
+migration-history-unit-check: $(TOOLCHAIN_CURRENT)
+	python3 -m unittest discover -s tests -p test_migration_histories.py
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.persist ledger_test
 persist-migration-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
 check: persist-migration-check
@@ -746,6 +780,10 @@ check-shard-services-storage: workspace-component-check
 .PHONY: layout-check
 layout-check:
 	python3 build/layout_check.py
+
+.PHONY: registry-discovery-check
+registry-discovery-check:
+	python3 build/registry_discovery_check.py
 
 .PHONY: lua-boundary-check
 lua-boundary-check:
@@ -773,7 +811,10 @@ retained-startup-check:
 	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"
 
 .PHONY: owner-journey
+.PHONY: owner-journey-unit-check
+owner-journey-unit-check:
+	python3 -m unittest discover -s tests -p test_owner_journey.py
 owner-journey:
 	@test -n "$(BEE_BINARY)" || { echo 'BEE_BINARY must name an existing standalone Bee.' >&2; exit 1; }
 	@test -n "$(BEE_SOURCE_STATE)" || { echo 'BEE_SOURCE_STATE must name an existing state directory (an empty directory is a fresh-state proof).' >&2; exit 1; }
-	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)")
+	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)") $(if $(BEE_JOURNEY_STEPS),--steps "$(BEE_JOURNEY_STEPS)")

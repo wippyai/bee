@@ -567,9 +567,54 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             return {placement_request = planned.placement_request, normalize_target = planned.normalize_target}, nil
         end,
         prepare = function(placement_request: unknown)
-            local progress_error = progress("prepare", "Preparing agent")
+            local target = placement_target(request, "prepare")
+            local docker = target == "bee.placement.docker.binding:prepare"
+            local progress_error = progress("prepare", docker and "Preparing Docker runtime image" or "Preparing agent")
             if progress_error then return nil, progress_error end
-            return service_call(placement_target(request, "prepare"), placement_request)
+            if not docker then return service_call(target, placement_request) end
+            local launch = bounds.object(placement_request)
+            local profile = launch and bounds.id(launch.placement_profile_ref)
+            if not launch or not profile then return nil, "Docker preparation has no selected profile" end
+            local input: {[string]: unknown} = {}
+            for name, field in pairs(launch) do input[name] = field end
+            input.progress_recipient = tostring(process.pid())
+            local owner = process.registry.lookup("bee.placement.docker/image")
+            local events = process.listen("bee.placement.image_progress", {message = true})
+            if not events then return nil, "Docker preparation progress listener is unavailable" end
+            local completed = channel.new(1)
+            local result: unknown = nil
+            local failure: string? = nil
+            local finished = false
+            coroutine.spawn(function()
+                result, failure = service_call(target, input)
+                finished = true
+                completed:send(true)
+            end)
+            local serial: integer = 0
+            while not finished do
+                local selected = channel.select({events:case_receive(), completed:case_receive()})
+                if not selected.ok then
+                    process.unlisten(events)
+                    return nil, "Docker preparation reply channel closed before completion; preparation outcome is unknown"
+                end
+                if selected.channel == events and not progress_error then
+                    local message = selected.value
+                    if owner and tostring(message:from()) == tostring(owner) then
+                        local detail, decode_error = placement_decode.preparation_progress(message:payload():data())
+                        if not detail then progress_error = decode_error
+                        elseif detail.profile_ref == profile then
+                            serial = serial + 1
+                            progress_error = progress("image-" .. tostring(serial), "Preparing Docker runtime image\n" .. detail.detail:sub(-4000))
+                        end
+                    end
+                end
+            end
+            process.unlisten(events)
+            if failure then return nil, failure .. (progress_error and "; progress publication: " .. progress_error or "") end
+            if progress_error then return nil, "Docker preparation completed; progress publication failed: " .. progress_error end
+            local ready_error = progress("image-ready", "Docker runtime image ready")
+            if ready_error then return nil, ready_error end
+            return result, nil
         end,
         listen = function()
             return {outputs = assert(process.listen(placement_protocol.TOPIC_OUTPUT, {message = true})),

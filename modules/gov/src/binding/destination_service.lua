@@ -24,7 +24,6 @@ local delivery = require("delivery")
 local destination = require("destination")
 local preflight = require("preflight")
 local materializer = require("materializer")
-local drivers = require("drivers")
 local artifact = require("artifact")
 local driver_admission = require("driver_admission")
 local migration_effect = require("migration_effect")
@@ -209,7 +208,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
             if not decoded then return nil, catalog_error end
             vocabulary = decoded
             local record, record_error = capability_grants.decode(installed, owner,
-                workspace_id, workspace_identity.definition_id, decoded)
+                workspace_id, (bounds.object(installed) and bounds.object((bounds.object(installed)).data) or {}).application, decoded)
             if not record then return nil, record_error end
             local live, live_error = capability_grants.live(record,
                 function(entry_id: string): unknown return registry.get(entry_id) end)
@@ -268,8 +267,8 @@ local function approval_executor(): (owner.Executor?, string?)
     return executor, nil
 end
 
-local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
-    activation_store: activations.Store?, base_policy_digest: string?): unknown
+local function destination_resolver(config: Configuration, profile_value: Profile, node_id: string, workspace_id: string,
+    activation_store: activations.Store?): unknown
     local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id or spec.workspace_id ~= workspace_id
@@ -282,6 +281,17 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
     local function selected_policy(spec_raw: unknown, _captured: unknown, _preview: unknown): (ResolverPolicy?, string?)
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id then return nil, "activation policy belongs to another node" end
+        local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
+        local base_policy_digest: string? = nil
+        if identity and identity.component == profile_value.component
+            and (identity.overlay_owner == profile_value.overlay_owner
+                or workspace_applications.prior_owner(profile_value.workspace_id,
+                    profile_value.source_workspace) == profile_value.overlay_owner) then
+            local base, base_error = activation_profiles.select(config, profile_value.workspace_id,
+                profile_value.source_node, profile_value.source_workspace, nil, nil, profile_value.overlay_owner)
+            if not base then return nil, base_error end
+            base_policy_digest = base.policy_digest
+        end
         local applied: {[string]: preflight.Migration} = {}
         local applied_databases: {[string]: preflight.DatabaseEvidence} = {}
         if activation_store then
@@ -378,8 +388,12 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         if not resolved then return nil, folder_error end
         folder = resolved
     end
+    local artifact_entries, artifact_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+    if not artifact_entries then return nil, artifact_error end
+    local application_id, application_error = workspace_applications.application(artifact_entries)
+    if not application_id then return nil, application_error end
     local proposed, proposed_error = capability_grants.propose(vocabulary, profile_value.overlay_owner,
-        identity.definition_id, requested, uses_prior, folder)
+        application_id, requested, uses_prior, folder)
     if not proposed then return nil, proposed_error end
     local record_id = uses_prior and capability_grants.prior_record_id(profile_value.overlay_owner)
         or capability_grants.record_id(profile_value.overlay_owner)
@@ -387,7 +401,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     local prior: Object? = nil
     if prior_raw then
         local decoded, decoded_error = capability_grants.decode(prior_raw, profile_value.overlay_owner,
-            profile_value.workspace_id, identity.definition_id, vocabulary)
+            profile_value.workspace_id, application_id, vocabulary)
         if not decoded then return nil, decoded_error end
         local live, live_error = capability_grants.live(decoded,
             function(id: string): unknown return registry.get(id) end)
@@ -420,7 +434,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         if prior then revision = (prior.revision) + 1 end
     end
     local record, record_error = capability_grants.record(profile_value.overlay_owner,
-        profile_value.workspace_id, identity.definition_id, proposed, approval_id, revision,
+        profile_value.workspace_id, application_id, proposed, approval_id, revision,
         intent.artifact_digest, intent.version, uses_prior)
     if not record then return nil, record_error end
     return {policies = proposed.policies, bindings = proposed.bindings, record = record,
@@ -441,29 +455,28 @@ local function approved_driver_bindings(config: Configuration): ({string}?, stri
         local workspace = slot and bounds.id(slot.workspace_id) or nil
         local owner_id = slot and bounds.id(slot.overlay_owner) or nil
         if not workspace or not owner_id then return nil, "desired driver slot is malformed" end
-        if owner_id:sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then
-            local store, open_error = activations.open(resource, config.node_id, workspace)
-            if not store then return nil, open_error end
-            local desired = activations.desired(store, owner_id)
-            activations.close(store)
-            local intent = desired.ok and bounds.object(desired.value) or nil
-            local source = intent and bounds.id(intent.source_workspace) or nil
-            if source and drivers.name(source) then
-                local source_node = intent and bounds.id(intent.source_node) or nil
-                local profile = source_node and activation_profiles.select(config, workspace, source_node, source) or nil
-                if profile and profile.overlay_owner == owner_id and intent and intent.consumed_consumer_id == ACTOR then
-                    local decoded, decode_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
-                    if not decoded then return nil, decode_error end
-                    local present, present_error = materializer.matches(owner_id, decoded)
-                    if present == nil then return nil, present_error end
-                    if present then
-                        local selected, selection_error = driver_admission.bindings(decoded)
-                        if not selected then return nil, selection_error end
-                        for _, id in ipairs(selected) do
-                            if not seen[id] then
-                                if #bindings >= 64 then return nil, "approved driver bindings exceed their bound" end
-                                bindings[#bindings + 1], seen[id] = id, true
-                            end
+        local store, open_error = activations.open(resource, config.node_id, workspace)
+        if not store then return nil, open_error end
+        local desired = activations.desired(store, owner_id)
+        activations.close(store)
+        if not desired.ok then return nil, desired.message end
+        local intent = desired.ok and bounds.object(desired.value) or nil
+        local source = intent and bounds.id(intent.source_workspace) or nil
+        if source then
+            local source_node = intent and bounds.id(intent.source_node) or nil
+            local profile = source_node and activation_profiles.select(config, workspace, source_node, source) or nil
+            if profile and profile.overlay_owner == owner_id and intent and intent.consumed_consumer_id == ACTOR then
+                local decoded, decode_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+                if not decoded then return nil, decode_error end
+                local present, present_error = materializer.matches(owner_id, decoded)
+                if present == nil then return nil, present_error end
+                if present then
+                    local selected, selection_error = driver_admission.bindings(decoded)
+                    if not selected then return nil, selection_error end
+                    for _, id in ipairs(selected) do
+                        if not seen[id] then
+                            if #bindings >= 64 then return nil, "approved driver bindings exceed their bound" end
+                            bindings[#bindings + 1], seen[id] = id, true
                         end
                     end
                 end
@@ -484,20 +497,8 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     activation_store: activations.Store, lease_handle: leases.Store): OwnerConfigResult
     local executor, executor_error = approval_executor()
     if not executor then return {ok = false, error = tostring(executor_error or "approval executor is unavailable")} end
-    local workspace_identity = workspace_applications.identity(profile_value.workspace_id,
-        profile_value.source_workspace)
-    local base_digest: string? = nil
-    if workspace_identity and (workspace_identity.overlay_owner == profile_value.overlay_owner
-        or workspace_applications.prior_owner(profile_value.workspace_id,
-            profile_value.source_workspace) == profile_value.overlay_owner)
-        and workspace_identity.component == profile_value.component then
-        local base, base_error = activation_profiles.select(config, profile_value.workspace_id,
-            profile_value.source_node, profile_value.source_workspace, nil, nil, profile_value.overlay_owner)
-        if not base then return {ok = false, error = tostring(base_error or "read activation profile base")} end
-        base_digest = base.policy_digest
-    end
-    local resolved = destination_resolver(profile_value, activation_store.node,
-        profile_value.workspace_id, activation_store, base_digest)
+    local resolved = destination_resolver(config, profile_value, activation_store.node,
+        profile_value.workspace_id, activation_store)
     local migration_adapter = {
         matches = migration_effect.matches, prepare = migration_effect.prepare,
         clear = migration_effect.clear, cleared = migration_effect.cleared,
@@ -555,7 +556,7 @@ local function plan_changes(plan_store: plans.Store, activation_store: activatio
     if not chosen then return failure("BLOCKED", profile_error or "destination host has no activation profile for this source") end
     local owner_node = bounds.id(plan.owner_node)
     if not owner_node then return failure("INTERNAL", "plan store returned no owner") end
-    local resolved = destination_resolver(chosen, owner_node, workspace_id, activation_store)
+    local resolved = destination_resolver(config, chosen, owner_node, workspace_id, activation_store)
     local _, context, resolve_error = (resolved):resolve({owner_node = owner_node,
         workspace_id = workspace_id, source_node = source_node, source_workspace = source_workspace,
         version = version, artifact_bytes = plan.artifact_bytes, artifact_digest = plan.artifact_digest})
@@ -696,7 +697,7 @@ local function installed_envelope(profile_value: Profile): (capability_model.Voc
     local raw = record_id and registry.get(record_id) or nil
     if not raw then return nil, nil, "no installed grant record to lease over" end
     local decoded, decode_error = capability_grants.decode(raw, profile_value.overlay_owner,
-        profile_value.workspace_id, identity.definition_id, vocabulary)
+        profile_value.workspace_id, (bounds.object(raw) and bounds.object((bounds.object(raw)).data) or {}).application, vocabulary)
     if not decoded then return nil, nil, decode_error end
     local live, live_error = capability_grants.live(decoded, function(id: string): unknown return registry.get(id) end)
     if not live then return nil, nil, live_error end
@@ -847,7 +848,7 @@ function M.call(raw: unknown): Result
                             application.value.source_workspace, activation_store)
                         if not chosen then result = failure("BLOCKED", profile_error or "activation profile is unavailable")
                         else
-                            local resolved = destination_resolver(chosen, node_id, workspace_id, activation_store)
+                            local resolved = destination_resolver(config, chosen, node_id, workspace_id, activation_store)
                             result = destination.stage_replica(plan_store, replica_store, actor_id,
                                 {source_owner = admitted_source, feed = admitted_feed, version_key = admitted_key,
                                     descriptor_digest = admitted_digest, idempotency_key = admitted_receipt},

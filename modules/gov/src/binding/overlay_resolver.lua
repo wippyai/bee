@@ -6,6 +6,7 @@ local artifact = require("artifact")
 local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
+local workspace_applications = require("workspace_applications")
 local application_admission = require("application_admission")
 local capability_model = require("capability_model")
 local capability_grants = require("capability_grants")
@@ -156,7 +157,7 @@ local function path_value(entry: Entry, path: unknown): (unknown?, string?)
     return value, nil
 end
 
-local function requirement(entry: Entry, package: string, final: {[string]: Entry},
+local function requirement(entry: Entry, package: string, final: {[string]: Entry}, owned: {[string]: boolean},
     catalog: capability_model.Vocabulary?): (preflight.Requirement?, string?)
     local data = object(entry.data) or entry
     local targets, targets_error = bounds.dense_list(data.targets, 64, "requirement targets")
@@ -211,7 +212,6 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         local params = capability_request.parameters
         local mode = params.mode
         local operations = params.operations
-        local request_namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
         if type(mode) ~= "string" or type(operations) ~= "table" then
             return nil, "Hive exposure parameters are invalid"
         end
@@ -219,8 +219,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         for _, ref in ipairs(operations) do
             local candidate = type(ref) == "string" and object(final[ref]) or nil
             local candidate_meta = candidate and object(candidate.meta) or nil
-            local candidate_namespace = type(ref) == "string" and (ref):match("^([^:]+):") or nil
-            if not candidate or candidate.kind ~= "function.lua" or candidate_namespace ~= request_namespace
+            if not candidate or candidate.kind ~= "function.lua" or not owned[ref]
                 or not candidate_meta or candidate_meta.hive ~= mode then
                 return nil, "Hive exposure operation " .. tostring(ref) .. " is not this artifact's " .. tostring(mode) .. " operation"
             end
@@ -247,10 +246,8 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
                     return nil, "Hive exposure requirement must append policies to one of its own operations"
                 end
             else
-                local request_namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
-                local target_namespace = target_id:match("^([^:]+):")
                 local target_meta = object(destination.meta)
-                if target.path ~= ".security.policies +=" or target_namespace ~= request_namespace
+                if target.path ~= ".security.policies +=" or not owned[target_id]
                     or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.app" then
                     return nil, "capability requirement must append policies to its own application"
                 end
@@ -459,6 +456,8 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 ordinal = ordinal, checksum = measured.digest}
         end
     end
+    local artifact_ids: {[string]: boolean} = {}
+    for _, entry in ipairs(incoming) do artifact_ids[entry.id] = true end
     for _, entry in ipairs(incoming) do
         if entry.kind == "ns.requirement" then
             local meta = object(entry.meta)
@@ -470,7 +469,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 if not decoded then return nil, nil, catalog_error end
                 catalog = decoded
             end
-            local item, item_error = requirement(entry, component, final, catalog)
+            local item, item_error = requirement(entry, component, final, artifact_ids, catalog)
             if not item then return nil, nil, item_error end
             requirements[#requirements + 1] = item
             if drivers.source_of(component) and item.value and #item.targets == 1
@@ -490,7 +489,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
     if policy.workspace_application then
         local app_binding = policy.applications and object(policy.applications[1]) or nil
-        local app_id = app_binding and bounds.id(app_binding.definition_id) or nil
+        local app_id, application_error = workspace_applications.application(incoming)
+        if not app_id then return nil, nil, application_error end
+        if app_binding then app_binding.definition_id = app_id end
         local owner = bounds.id(policy.overlay_owner)
         local catalog_entry = current_raw["bee.security.capability:capability_catalog"]
         local vocabulary, catalog_error = capability_model.decode(catalog_entry)
@@ -632,7 +633,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             or policy.source_workspace ~= source_workspace or not bounds.id(policy.overlay_owner) then
             return nil, nil, "application admission policy does not match the selected activation profile"
         end
-        local projection, projection_error = application_admission.project({workspace_id = policy.workspace_id,
+        local projection, projection_error = application_admission.project({identity_generation = "current", workspace_id = policy.workspace_id,
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
             source_workspace = policy.source_workspace, artifact_digest = artifact_digest,
             bindings = policy.applications, artifact_entries = expected,

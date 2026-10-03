@@ -23,7 +23,7 @@ local function define_tests()
                 snapshot_digest = string.rep("f", 64)})
             test.is_nil(err)
             local result = assert(bounds.object(raw))
-            test.eq(result.code, "MISSING_ARTIFACT")
+            test.eq(result.code, "BLOCKED")
             local other = assert(bounds.object(caller:call("bee.gov.binding:publication_call", {operation = "prepare",
                 workspace_id = string.rep("d", 32), component = "app.publication_scope_test", version = "1.0.0",
                 snapshot_digest = string.rep("f", 64)})))

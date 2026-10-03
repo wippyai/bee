@@ -12,6 +12,8 @@ local store = require("store")
 local homes = require("homes")
 local hash = require("hash")
 local time = require("time")
+local completion = require("completion")
+local process = require("process")
 local exec = require("exec")
 local quote = require("quote")
 local configuration_protocol = require("configuration_protocol")
@@ -214,41 +216,12 @@ local function run_command(argv: {string}): string
     return shell(quote.line(argv))
 end
 
-local function wait_for_exit(attempt_id: string)
-    local deadline = time.now():unix_nano() + 5000 * 1000000
-    while time.now():unix_nano() < deadline do
-        local status = call(OWNER, "status", {attempt_id = attempt_id})
-        if status.ok and type(status.value) == "table" and (assert(bounds.object(status.value))).attempt ~= nil then
-            local attempt = assert(bounds.object((assert(bounds.object(status.value))).attempt))
-            if attempt.execution_state == "exited" then
-                local exit = attempt.exit
-                if type(exit) ~= "table" or (assert(bounds.object(exit))).code ~= 0 then error("child exited unsuccessfully") end
-                return
-            end
-        end
-        time.sleep("50ms")
-    end
-    error("child did not exit")
+local function placement_call(method: string, value: unknown): service.Reply
+    return call(OWNER, method, value)
 end
 
 local function cleanup_attempt(attempt_id: string)
-    local status = call(OWNER, "status", {attempt_id = attempt_id})
-    if status.ok and type(status.value) == "table" then
-        local attempt = (assert(bounds.object(status.value))).attempt
-        if type(attempt) == "table" and (assert(bounds.object(attempt))).execution_state ~= "exited" then
-            call(OWNER, "stop", {attempt_id = attempt_id, mode = "forced"})
-        end
-    end
-    local deadline = time.now():unix_nano() + 5000 * 1000000
-    while time.now():unix_nano() < deadline do
-        local current = call(OWNER, "status", {attempt_id = attempt_id})
-        if current.ok and type(current.value) == "table" then
-            local attempt = (assert(bounds.object(current.value))).attempt
-            if type(attempt) == "table" and (assert(bounds.object(attempt))).execution_state == "exited" then break end
-        end
-        time.sleep("50ms")
-    end
-    call(OWNER, "cleanup", {attempt_id = attempt_id})
+    completion.cleanup(placement_call, attempt_id)
 end
 
 local function define_tests()
@@ -258,6 +231,7 @@ local function define_tests()
 
         test.it("evaluates builder with inherited actor and ctx, verifies store/exec denial, and materializes append", function()
             local prepared_attempt_id: string? = nil
+            local watch = completion.listen()
             local body_ok, body_error = pcall(function()
                 set_activation(true)
                 local request = launch_request(fresh("attempt-1"))
@@ -269,13 +243,14 @@ local function define_tests()
                 prepared_attempt_id = prepared.attempt_id
                 test.eq(prepared.execution_state, "intended")
 
-                -- Start child attempt
+                assert(type(prepared_attempt_id) == "string")
+                completion.attach(watch, placement_call, prepared_attempt_id)
                 local started_reply = call(OWNER, "start", {attempt_id = prepared_attempt_id})
                 test.is_true(started_reply.ok)
                 local started = assert(bounds.object(started_reply.value))
                 test.eq(started.execution_state, "starting")
                 assert(type(prepared_attempt_id) == "string")
-                wait_for_exit(prepared_attempt_id)
+                completion.wait(watch, placement_call, prepared_attempt_id, true)
 
                 -- Inspect generated instructions file in child home
                 if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
@@ -291,13 +266,87 @@ local function define_tests()
                 test.is_true(content:find("tag=integration", 1, true) ~= nil)
 
                 if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
-                wait_for_exit(prepared_attempt_id)
+                completion.wait(watch, placement_call, prepared_attempt_id, true)
                 local cleaned = call(OWNER, "cleanup", {attempt_id = prepared_attempt_id})
                 test.is_true(cleaned.ok)
                 prepared_attempt_id = nil
             end)
+            completion.close(watch)
             if prepared_attempt_id then cleanup_attempt(prepared_attempt_id) end
             if not body_ok then error(tostring(body_error)) end
+        end)
+
+        test.it("rejects an observed nonzero child exit and still proves cleanup", function()
+            local prepared_attempt_id: string? = nil
+            local watch = completion.listen()
+            local body_ok, body_error = pcall(function()
+                set_activation(true)
+                local request = launch_request(fresh("attempt-nonzero"))
+                request.launch = {
+                    executable = "sh", argv = {"-c", "exit 23"}, environment = {},
+                    working_directory_ref = "project", readiness = "none",
+                }
+                local prepared = call(OWNER, "prepare", request)
+                test.is_true(prepared.ok)
+                prepared_attempt_id = assert(bounds.id(assert(bounds.object(prepared.value)).attempt_id))
+                completion.attach(watch, placement_call, prepared_attempt_id)
+                local started = call(OWNER, "start", {attempt_id = prepared_attempt_id})
+                test.is_true(started.ok)
+                local ok, cause = pcall(completion.wait, watch, placement_call, prepared_attempt_id, true)
+                test.is_false(ok)
+                test.is_true(tostring(cause):find("child exited unsuccessfully: 23", 1, true) ~= nil, tostring(cause))
+                local status = call(OWNER, "status", {attempt_id = prepared_attempt_id})
+                test.is_true(status.ok)
+                local attempt = assert(bounds.object(assert(bounds.object(status.value)).attempt))
+                test.eq(attempt.execution_state, "exited")
+                test.eq(assert(bounds.object(attempt.exit)).code, 23)
+            end)
+            completion.close(watch)
+            local cleanup_ok, cleanup_error = pcall(function()
+                if prepared_attempt_id then cleanup_attempt(prepared_attempt_id) end
+            end)
+            if not body_ok then error(tostring(body_error)) end
+            if not cleanup_ok then error(tostring(cleanup_error)) end
+        end)
+
+        test.it("reports a supervised startup refusal with its recorded cause", function()
+            set_activation(true)
+            local request = launch_request(fresh("attempt-refusal"))
+            request.launch = {
+                executable = "sh", argv = {"refuse"}, environment = {},
+                working_directory_ref = "project", readiness = "none",
+            }
+            local prepared = call(OWNER, "prepare", request)
+            test.is_true(prepared.ok)
+            local attempt = assert(bounds.object(prepared.value))
+            local attempt_id = assert(bounds.id(attempt.attempt_id))
+            local watch = completion.listen()
+            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+            local attached = call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1})
+            test.is_true(attached.ok)
+            local raw, start_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = attempt_id})
+            assert(not start_error, tostring(start_error))
+            local started = principals.reply(raw)
+            test.is_true(started.ok)
+            local starting = assert(bounds.object(started.value))
+            test.eq(starting.execution_state, "starting")
+            local runner = assert(bounds.id(starting.runner))
+            local message = pending:receive()
+            assert(message, "startup fixture notification channel closed")
+            test.eq(tostring(message:from()), runner)
+            test.eq(assert(bounds.object(message:payload():data())).attempt_id, attempt_id)
+            process.unlisten(pending)
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            local ok, cause = pcall(completion.wait, watch, placement_call, attempt_id, true)
+            completion.close(watch)
+            test.is_false(ok)
+            test.is_true(tostring(cause):find("fixture daemon refused containers/create", 1, true) ~= nil,
+                tostring(cause))
+            local status = call(OWNER, "status", {attempt_id = attempt_id})
+            test.is_true(status.ok)
+            local final = assert(bounds.object(assert(bounds.object(status.value)).attempt))
+            test.eq(final.execution_state, "start_failed")
+            test.eq(final.start_failure, "fixture daemon refused containers/create")
         end)
 
         test.it("replays committed placement intent with its frozen delivery", function()

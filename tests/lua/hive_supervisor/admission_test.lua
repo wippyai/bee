@@ -68,7 +68,7 @@ local function define_tests()
         end)
         test.it("derives the origin and shortens the deadline when forwarding", function()
             local original = request()
-            local operation: catalog.Operation = {operation_ref = original.operation_ref, revision = "1", mode = "open",
+            local operation: catalog.Operation = {operation_ref = original.operation_ref, service_id = original.owner_ref.service_id, revision = "1", mode = "open",
                 input_schema = {}, output_schema = {}, limits = {max_input_bytes = 100, max_output_bytes = 100},
                 measured = "measurement", title = "Statistics"}
             local resolved: catalog.ResolvedCall = {operation = operation, input = {}, input_digest = original.input_digest, generation = 1}

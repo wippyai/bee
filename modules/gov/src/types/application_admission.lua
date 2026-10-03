@@ -18,18 +18,17 @@ M.NAMESPACE = "bee.gov"
 M.RESERVED_PREFIX = M.NAMESPACE .. ":admission."
 local PRIOR_ADMISSION_PREFIX = "bee.governance:admission."
 local PRIOR_GRANTS_PREFIX = "bee.governance.grants:"
-local PRIOR_WORKSPACE_OWNER_PREFIX = "bee.governance.workspace_applications:"
 
 type Object = {[string]: unknown}
 type ThreadAccess = "none" | "observe_post"
 type Binding = {definition_id: string, policies: {string}, thread_access: ThreadAccess,
     appearance_write: boolean, application_stop: boolean, scope_management: boolean,
     close_grace_ms: integer}
-type Record = {schema_revision: string, workspace_id: string, overlay_owner: string,
+type Record = {identity_generation: string?, schema_revision: string, workspace_id: string, overlay_owner: string,
     source_node: string, source_workspace: string, artifact_digest: string,
     policy_digest: string, bindings: {Binding}}
 type Measurement = {id: string, record: Record, bytes: string, digest: string}
-type Entry = {id: string, kind: string, data: Record}
+type Entry = {id: string, kind: string, meta: {type: string, identity_generation: string}, data: Record}
 
 local function sha(value: unknown): string?
     if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
@@ -143,7 +142,7 @@ end
 function M.record(raw: unknown): (Record?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application admission record must be an object" end
-    local extra = bounds.fields(value, {"schema_revision", "workspace_id", "overlay_owner",
+    local extra = bounds.fields(value, {"identity_generation", "schema_revision", "workspace_id", "overlay_owner",
         "source_node", "source_workspace", "artifact_digest", "policy_digest", "bindings"})
     if extra then return nil, "application admission record: " .. extra end
     local workspace_id, overlay_owner = bounds.id(value.workspace_id), bounds.id(value.overlay_owner)
@@ -154,28 +153,22 @@ function M.record(raw: unknown): (Record?, string?)
         or not source_node or not source_workspace or not artifact_digest or not policy_digest or not bindings then
         return nil, bindings_error or "application admission record is invalid"
     end
-    return {schema_revision = M.SCHEMA, workspace_id = workspace_id, overlay_owner = overlay_owner,
+    local generation = value.identity_generation
+    if generation ~= nil and generation ~= "prior" and generation ~= "current" then return nil, "application admission generation is invalid" end
+    return {identity_generation = generation, schema_revision = M.SCHEMA, workspace_id = workspace_id, overlay_owner = overlay_owner,
         source_node = source_node, source_workspace = source_workspace,
         artifact_digest = artifact_digest, policy_digest = policy_digest, bindings = bindings}, nil
 end
 
-function M.id(owner_raw: unknown): (string?, string?)
+function M.id(owner_raw: unknown, generation: unknown?): (string?, string?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "application admission overlay owner is invalid" end
     local digest, digest_error = hash.sha256(owner)
     if not digest then return nil, tostring(digest_error or "measure application admission owner") end
-    -- An admission installed under the prior workspace owner is a measured
-    -- registry identity. Keep it when reconstructing an immutable activation.
-    local prefix = owner:sub(1, #PRIOR_WORKSPACE_OWNER_PREFIX) == PRIOR_WORKSPACE_OWNER_PREFIX
-        and PRIOR_ADMISSION_PREFIX or M.RESERVED_PREFIX
+    if generation ~= nil and generation ~= "current" and generation ~= "prior" then return nil, "application admission generation is invalid" end
+    local prefix = generation == "prior" and PRIOR_ADMISSION_PREFIX or M.RESERVED_PREFIX
     return prefix .. digest, nil
 end
-function M.prior_id(owner_raw: unknown): string?
-    local owner = bounds.id(owner_raw)
-    local digest = owner and hash.sha256(owner) or nil
-    return digest and PRIOR_ADMISSION_PREFIX .. digest or nil
-end
-
 -- Admission records live under an owner-derived private identity.  Treat the
 -- whole prefix as reserved, including malformed suffixes: a portable artifact
 -- must never get to claim a present or future admission identity.
@@ -188,7 +181,7 @@ end
 
 -- Decode the immutable byte handoff exactly as it was measured.  JSON only
 -- parses the input; remeasurement rejects a valid-looking noncanonical body.
-function M.decode(bytes_raw: unknown, digest_raw: unknown): (Measurement?, string?)
+function M.decode(bytes_raw: unknown, digest_raw: unknown, generation: unknown?): (Measurement?, string?)
     if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > M.MAX_BYTES then
         return nil, "application admission bytes exceed bound"
     end
@@ -199,7 +192,7 @@ function M.decode(bytes_raw: unknown, digest_raw: unknown): (Measurement?, strin
     if actual ~= digest then return nil, "application admission digest does not match bytes" end
     local raw, decode_error = json.decode(bytes_raw)
     if decode_error then return nil, "application admission bytes are malformed" end
-    local measured, measure_error = M.measure(raw)
+    local measured, measure_error = M.measure(raw, generation)
     if not measured or measured.bytes ~= bytes_raw or measured.digest ~= digest then
         return nil, tostring(measure_error or "application admission bytes are not canonical")
     end
@@ -208,20 +201,22 @@ end
 
 -- This record is deliberately outside the portable artifact envelope.  It is
 -- a registry entry only after the destination has measured and frozen it.
-function M.entry(bytes_raw: unknown, digest_raw: unknown): (Entry?, string?)
-    local measured, measure_error = M.decode(bytes_raw, digest_raw)
+function M.entry(bytes_raw: unknown, digest_raw: unknown, generation: unknown?): (Entry?, string?)
+    local measured, measure_error = M.decode(bytes_raw, digest_raw, generation)
     if not measured then return nil, measure_error end
-    return {id = measured.id, kind = "registry.entry", data = measured.record}, nil
+    return {id = measured.id, kind = "registry.entry", meta = {type = M.SCHEMA, identity_generation = measured.record.identity_generation or (generation == "prior" and "prior" or "current")}, data = measured.record}, nil
 end
 
-function M.measure(raw: unknown): (Measurement?, string?)
+function M.measure(raw: unknown, generation: unknown?): (Measurement?, string?)
     local record, record_error = M.record(raw)
     if not record then return nil, record_error end
+    if generation ~= nil and generation ~= "current" and generation ~= "prior" then return nil, "application admission generation is invalid" end
+    if record.identity_generation and generation and record.identity_generation ~= generation then return nil, "application admission generation conflicts with measured record" end
     local bytes, encode_error = canonical.encode(record, M.MAX_BYTES)
     if not bytes then return nil, tostring(encode_error or "encode application admission") end
     local digest, digest_error = hash.sha256(bytes)
     if not digest then return nil, tostring(digest_error or "measure application admission") end
-    local id, id_error = M.id(record.overlay_owner)
+    local id, id_error = M.id(record.overlay_owner, record.identity_generation or generation)
     if not id then return nil, id_error end
     return {id = id, record = record, bytes = bytes, digest = digest}, nil
 end
@@ -232,7 +227,7 @@ end
 function M.project(raw: unknown): (Measurement?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application admission projection must be an object" end
-    local extra = bounds.fields(value, {"workspace_id", "overlay_owner", "source_node", "source_workspace",
+    local extra = bounds.fields(value, {"identity_generation", "workspace_id", "overlay_owner", "source_node", "source_workspace",
         "artifact_digest", "bindings", "artifact_entries", "registry_entries", "overlay_ids",
         "generated_policies"})
     if extra then return nil, "application admission projection: " .. extra end
@@ -321,7 +316,7 @@ function M.project(raw: unknown): (Measurement?, string?)
     if not policy_bytes then return nil, tostring(policy_error or "encode application policies") end
     local policy_digest, policy_digest_error = hash.sha256(policy_bytes)
     if not policy_digest then return nil, tostring(policy_digest_error or "measure application policies") end
-    return M.measure({schema_revision = M.SCHEMA, workspace_id = value.workspace_id,
+    return M.measure({identity_generation = value.identity_generation, schema_revision = M.SCHEMA, workspace_id = value.workspace_id,
         overlay_owner = value.overlay_owner, source_node = value.source_node,
         source_workspace = value.source_workspace, artifact_digest = value.artifact_digest,
         policy_digest = policy_digest, bindings = bindings})

@@ -1,4 +1,4 @@
--- MIT. Locate probes must drain both child pipes and stop on a fixed deadline.
+-- MIT. Probe capture drains both pipes and honors an explicit caller wait bound.
 local test = require("test")
 local env = require("env")
 local json = require("json")
@@ -64,6 +64,16 @@ local function define_tests()
             test.is_true(released)
         end)
 
+        test.it("waits for completion when the caller declares no time bound", function()
+            local ready = channel.new(1)
+            local released = false
+            coroutine.spawn(function() ready:send(true) end)
+            local stdout: Stream = {read = function(_self, _size) ready:receive(); return nil, nil end, close = function(_self) end}
+            local stderr: Stream = {read = function(_self, _size) return nil, nil end, close = function(_self) end}
+            local process: Process = {wait = function(_self) return 0, nil end, close = function(_self, _force) error("must observe completion") end}
+            local output, code, failure = probe_capture.capture(process, stdout, stderr, function() released = true end, 0)
+            test.eq(output, ""); test.eq(code, 0); test.is_nil(failure); test.is_true(released)
+        end)
         test.it("closes the process, streams, and executor at its deadline", function()
             local waiting = channel.new(2)
             local streams_closed = 0

@@ -303,7 +303,6 @@ entries:
   - time
   imports:
     driver_admission: bee.gov.types:driver_admission
-    drivers: bee.gov.types:drivers
     artifact: bee.gov.types:artifact
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -376,7 +375,6 @@ entries:
   modules: [registry, security, system, funcs, hash, time]
   imports:
     driver_admission: bee.gov.types:driver_admission
-    drivers: bee.gov.types:drivers
     artifact: bee.gov.types:artifact
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -482,6 +480,7 @@ entries:
   imports:
     drivers: bee.gov.types:drivers
     driver_admission: bee.gov.types:driver_admission
+    workspace_applications: bee.gov.types:workspace_applications
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
     canonical: bee.values:canonical
@@ -507,6 +506,7 @@ entries:
   source: file://capability_access.lua
   modules: [registry, security, hash]
   imports:
+    bounds: bee.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model

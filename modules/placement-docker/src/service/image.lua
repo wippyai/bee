@@ -1,5 +1,4 @@
 -- SPDX-License-Identifier: MIT
-local exec = require("exec")
 local env = require("env")
 local fs = require("fs")
 local json = require("json")
@@ -11,64 +10,17 @@ local canonical = require("canonical")
 local profiles = require("profiles")
 local resources = require("resources")
 local homes = require("homes")
-local quote = require("quote")
-local docker_client = require("docker_client")
+local daemon = require("daemon")
 local channel = require("channel")
 local uuid = require("uuid")
 local security = require("security")
-local time = require("time")
 local M = {}
 M.TOPIC = "bee.placement.image_progress"
 type Channel = channel.Channel
-type Reader = {read: (Reader, integer) -> (unknown, unknown)}
 type Artifact = {name: string, executable_ref: string, candidates: {string}, sibling_prefix: string?}
 type Recipe = {base: string, artifacts: {Artifact}}
 type Input = {name: string, source: string, digest: string}
 type Discovery = {recipe: Recipe, inputs: {Input}, tag: string, digest: string, arch: string}
-local function command(argv: {string}, progress: ((string) -> ())?, cancel: Channel<boolean>?): (string?, string?)
-    local ref, ref_error = resources.executor()
-    local executor = ref and exec.get(ref) or nil
-    if not executor then return nil, ref_error or "host executor unavailable" end
-    local child, child_error = executor:exec(quote.line(argv), {process_group = true})
-    if not child then executor:release(); return nil, tostring(child_error) end
-    local stdout, stdout_error = child:stdout_stream()
-    local stderr, stderr_error = child:stderr_stream()
-    if not stdout or not stderr then child:close(true); executor:release(); return nil, tostring(stdout_error or stderr_error) end
-    local output: {string} = {}
-    local errors: {string} = {}
-    local total = 0
-    local function drain(stream: Reader, buffer: {string})
-        while true do
-            local chunk, read_error = stream:read(4096)
-            if chunk == nil or chunk == "" then break end
-            if type(chunk) ~= "string" then child:close(true); break end
-            total = total + #chunk
-            if total > 1048576 then child:close(true); break end
-            buffer[#buffer + 1] = chunk
-            if progress then progress(chunk) end
-        end
-    end
-    local stdout_reader: Reader = {read = function(_self: Reader, size: integer): (unknown, unknown) return stdout:read(size) end}
-    local stderr_reader: Reader = {read = function(_self: Reader, size: integer): (unknown, unknown) return stderr:read(size) end}
-    local started, start_error = child:start()
-    if not started then child:close(true); executor:release(); return nil, tostring(start_error) end
-    local finished = channel.new(2)
-    coroutine.spawn(function() drain(stderr_reader, errors); finished:send(true) end)
-    coroutine.spawn(function() drain(stdout_reader, output); finished:send(true) end)
-    for _ = 1, 2 do
-        local cases = {finished:case_receive()}
-        if cancel then cases[#cases + 1] = cancel:case_receive() end
-        local selected = channel.select(cases)
-        if not selected.ok or selected.channel == cancel then
-            child:close(true); executor:release()
-            return nil, "runtime image build cancelled; inspect its recorded result before another launch"
-        end
-    end
-    local code, wait_error = child:wait()
-    stdout:close(); stderr:close(); executor:release()
-    if code ~= 0 or wait_error then return nil, "image command failed: " .. argv[1] end
-    return table.concat(output), nil
-end
 function M.decode(value: unknown): (Recipe?, string?)
     local object = bounds.object(value)
     if not object or bounds.fields(object, {"schema_revision", "base", "artifacts"}) or object.schema_revision ~= "bee.runtime-recipe@1" then return nil, "invalid runtime recipe" end
@@ -98,9 +50,10 @@ function M.decode(value: unknown): (Recipe?, string?)
     end
     return {base = base, artifacts = artifacts}, nil
 end
-local function real_file(path: string, cancel: Channel<boolean>?): string?
+local function real_file(path: string, cancel: Channel<boolean>?): (string?, string?)
     if path:sub(1, 1) ~= "/" or path:find("[%z%c]") then return nil end
-    local resolved = command({"/usr/bin/readlink", "-f", "--", path}, nil, cancel)
+    local resolved, resolve_error = daemon.command({"/usr/bin/readlink", "-f", "--", path}, nil, cancel)
+    if resolve_error then return nil, resolve_error end
     local value = resolved and resolved:gsub("\n$", "") or nil
     if not value or value:sub(1, 1) ~= "/" or value:find("[%z%c]") then return nil end
     return value
@@ -134,8 +87,8 @@ function M.discover(ref: string, cancel: Channel<boolean>?): (Discovery?, string
     for _, artifact in ipairs(recipe.artifacts) do
         local executable = env.get(artifact.executable_ref)
         if type(executable) == "string" and executable ~= "" then
-            local resolved = real_file(executable, cancel)
-            if not resolved then return nil, "installed runtime path cannot be resolved: " .. artifact.name end
+            local resolved, resolve_error = real_file(executable, cancel)
+            if not resolved then return nil, resolve_error or "installed runtime path cannot be resolved: " .. artifact.name end
             local parent = resolved:match("^(.*)/[^/]+$")
             if not parent then return nil, "installed runtime has no parent directory" end
             local source: string? = elf(volume, resolved) and resolved or nil
@@ -160,7 +113,7 @@ function M.discover(ref: string, cancel: Channel<boolean>?): (Discovery?, string
             local arch = elf(volume, source)
             if not arch or (architecture and architecture ~= arch) then return nil, "installed CLI artifacts have incompatible architectures" end
             architecture = arch
-            local measured, measure_error = command({"/usr/bin/sha256sum", source}, nil, cancel)
+            local measured, measure_error = daemon.command({"/usr/bin/sha256sum", source}, nil, cancel)
             local digest = measured and measured:match("^([0-9a-f]+)") or nil
             if not digest or #digest ~= 64 then return nil, measure_error or "runtime artifact digest failed" end
             inputs[#inputs + 1] = {name = artifact.name, source = source, digest = digest}
@@ -190,9 +143,8 @@ end
 function M.readiness(ref: string, runtime: string): ({[string]: unknown}?, string?)
     local discovered, discover_error = M.discover(ref)
     if not discovered then return nil, discover_error end
-    local client = docker_client.new("/var/run/docker.sock")
-    if not client then return nil, "Docker connection unavailable" end
-    local installed = client:inspect_image(discovered.tag)
+    local installed, inspect_error = daemon.inspect("image", discovered.tag)
+    if inspect_error then return nil, inspect_error end
     local available = false
     for _, input in ipairs(discovered.inputs) do if input.name == runtime then available = true end end
     local verified = M.verified_image(installed, discovered.digest, discovered.inputs, discovered.arch)
@@ -201,7 +153,7 @@ function M.readiness(ref: string, runtime: string): ({[string]: unknown}?, strin
             reason = "cached runtime image differs from the installed artifact recipe"}, nil
     end
     return {image_ref = verified, image_digest = verified or discovered.digest, present = verified ~= nil, buildable = available, runtime_present = available,
-        os = "linux", arch = discovered.arch, reason = verified and "cached runtime image is ready" or (available and "runtime image is not cached; launch once to build it, then refresh runtime options" or "this CLI has no installed artifact")}, nil
+        os = "linux", arch = discovered.arch, reason = verified and "cached runtime image is ready" or (available and "runtime image will be prepared when the session starts" or "this CLI has no installed artifact")}, nil
 end
 function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel<boolean>?): (string?, string?, string?)
     local recipe_ref = profile.profile.image_recipe_ref
@@ -209,9 +161,8 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
     process.send(recipient or process.pid(), M.TOPIC, {version = 1, profile_ref = profile.ref, detail = "Discovering installed CLI artifacts"})
     local discovered, discover_error = M.discover(recipe_ref, cancel)
     if not discovered then return nil, nil, discover_error end
-    local client = docker_client.new("/var/run/docker.sock")
-    if not client then return nil, nil, "Docker connection unavailable" end
-    local installed = client:inspect_image(discovered.tag)
+    local installed, inspect_error = daemon.inspect("image", discovered.tag, cancel)
+    if inspect_error then return nil, nil, inspect_error end
     local image = M.verified_image(installed, discovered.digest, discovered.inputs, discovered.arch)
     if image_id(installed) and not image then return nil, nil, "cached runtime image differs from the installed artifact recipe" end
     local root_ref = resources.root()
@@ -219,7 +170,7 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
     if not volume then return nil, nil, "image build root unavailable" end
     local receipt_directory = homes.os_path("/images/receipts")
     if not receipt_directory then return nil, nil, "image receipt path unavailable" end
-    local made, mkdir_error = command({"/bin/mkdir", "-p", receipt_directory}, nil, cancel)
+    local made, mkdir_error = daemon.command({"/bin/mkdir", "-p", receipt_directory}, nil, cancel)
     if not made then return nil, nil, mkdir_error end
     local steps: {string} = {}
     local function progress(detail: string)
@@ -235,15 +186,15 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
         local directory = "/images/" .. discovered.digest
         local absolute = homes.os_path(directory)
         if not absolute then return nil, nil, "image build path unavailable" end
-        local made, mkdir_error = command({"/bin/mkdir", "-p", absolute .. "/bin"}, nil, cancel)
+        local made, mkdir_error = daemon.command({"/bin/mkdir", "-p", absolute .. "/bin"}, nil, cancel)
         if not made then return nil, nil, mkdir_error end
         progress("Discovering installed CLI artifacts")
         local labels: {string} = {'bee.actor_ref="bee.runtime-image"', 'bee.attempt_id="' .. discovered.digest .. '"'}
         for _, input in ipairs(discovered.inputs) do
             progress("Copying " .. input.name .. " runtime artifact")
-            local copied, copy_error = command({"/bin/cp", "--", input.source, absolute .. "/bin/" .. input.name}, nil, cancel)
+            local copied, copy_error = daemon.command({"/bin/cp", "--", input.source, absolute .. "/bin/" .. input.name}, nil, cancel)
             if not copied then homes.remove_tree(volume, directory); return nil, nil, copy_error end
-            local measured = command({"/usr/bin/sha256sum", absolute .. "/bin/" .. input.name}, nil, cancel)
+            local measured = daemon.command({"/usr/bin/sha256sum", absolute .. "/bin/" .. input.name}, nil, cancel)
             if not measured or measured:match("^([0-9a-f]+)") ~= input.digest then
                 homes.remove_tree(volume, directory); return nil, nil, "installed artifact changed during image preparation: " .. input.name
             end
@@ -254,10 +205,11 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
         local written = volume:writefile(directory .. "/Dockerfile", dockerfile)
         if not written then homes.remove_tree(volume, directory); return nil, nil, "runtime Dockerfile could not be written" end
         progress("Building the digest-pinned runtime image")
-        local built, build_error = command({"docker", "build", "--platform", "linux/" .. discovered.arch, "--rm", "--force-rm", "-t", discovered.tag, absolute}, progress, cancel)
+        local built, build_error = daemon.command({"docker", "--host", "unix:///var/run/docker.sock", "build", "--platform", "linux/" .. discovered.arch, "--rm", "--force-rm", "-t", discovered.tag, absolute}, progress, cancel)
         homes.remove_tree(volume, directory)
         if not built then progress(build_error or "runtime image build failed"); return nil, nil, build_error end
-        installed = client:inspect_image(discovered.tag)
+        installed, inspect_error = daemon.inspect("image", discovered.tag, cancel)
+        if inspect_error then return nil, nil, inspect_error end
         image = M.verified_image(installed, discovered.digest, discovered.inputs, discovered.arch)
         if not image then return nil, nil, "built runtime image has no immutable digest" end
     end
@@ -286,7 +238,23 @@ end
 M.OWNER = "bee.placement.docker/image"
 M.REQUEST = "bee.placement.image_request"
 M.REPLY = "bee.placement.image_reply"
-M.command = command
+function M.decode_result(value: unknown, operation: string?): (string?, string?, string?)
+    local result = bounds.object(value)
+    if not result then return nil, nil, "image owner returned no result object" end
+    if result.error ~= nil then
+        local failure = bounds.text(result.error, 1048576)
+        if not failure then return nil, nil, "image owner returned malformed failure detail" end
+        return nil, nil, failure
+    end
+    if operation then
+        local address = bounds.line(result.image, 128)
+        if not address then return nil, nil, "image owner returned no environment result" end
+        return address, nil, nil
+    end
+    if not image_id({Id = result.image}) then return nil, nil, "image owner returned no immutable image ID" end
+    if not bounds.id(result.route) then return nil, nil, "image owner returned no interactive route" end
+    return bounds.line(result.image, 512), bounds.id(result.route), nil
+end
 function M.resolve(profile: profiles.Resolved, progress_recipient: string?, operation: string?, workspace: string?): (string?, string?, string?)
     if not operation and not profile.profile.image_recipe_ref then return profile.profile.image_ref, profile.profile.interactive_route_ref, nil end
     if not security.can("bee.placement.image", profile.ref) then return nil, nil, "runtime image preparation is not authorized" end
@@ -298,7 +266,7 @@ function M.resolve(profile: profiles.Resolved, progress_recipient: string?, oper
     local parent = "/images/requests"
     local absolute = homes.os_path(parent)
     if not absolute then return nil, nil, "image request path unavailable" end
-    local made, mkdir_error = command({"/bin/mkdir", "-p", absolute})
+    local made, mkdir_error = daemon.command({"/bin/mkdir", "-p", absolute})
     if not made then return nil, nil, mkdir_error end
     local id = uuid.v7()
     local path = parent .. "/" .. id .. ".json"
@@ -314,14 +282,19 @@ function M.resolve(profile: profiles.Resolved, progress_recipient: string?, oper
     if not monitored then process.unlisten(replies); volume:remove(path); return nil, nil, "runtime image owner could not be monitored" end
     local sent = process.send(owner, M.REQUEST, {version = 1, request_id = id})
     if not sent then process.unmonitor(owner); process.unlisten(replies); volume:remove(path); return nil, nil, "image request was not queued" end
-    local deadline = time.after("10m")
     local result: {[string]: unknown}? = nil
+    local failure: string? = nil
     while not result do
-        local selected = channel.select({replies:case_receive(), events:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then break end
+        local selected = channel.select({replies:case_receive(), events:case_receive()})
+        if not selected.ok then failure = "image reply channel closed before acknowledgement"; break end
         if selected.channel == events then
             local event = selected.value
-            if event.kind == process.event.CANCEL or (event.kind == process.event.EXIT and tostring(event.from) == tostring(owner)) then break end
+            if event.kind == process.event.CANCEL then failure = "image preparation caller was cancelled before acknowledgement"; break end
+            if event.kind == process.event.EXIT and tostring(event.from) == tostring(owner) then
+                local exited = bounds.object(event.result)
+                failure = "runtime image owner exited before acknowledgement: " .. tostring(exited and exited.error or "normal exit")
+                break
+            end
         else
             local message = selected.value
             local value = bounds.object(message:payload():data())
@@ -332,11 +305,8 @@ function M.resolve(profile: profiles.Resolved, progress_recipient: string?, oper
     process.unmonitor(owner)
     process.unlisten(replies)
     volume:remove(path)
-    if not result then return nil, nil, "image preparation outcome is unknown; inspect image readiness and its receipt before another launch" end
-    if operation then return bounds.line(result.image,128), nil, bounds.line(result.error,4096) end
-    if result.error == nil and not image_id({Id = result.image}) then return nil, nil, "image owner returned no immutable image ID" end
-    if result.error == nil and not bounds.id(result.route) then return nil, nil, "image owner returned no interactive route" end
-    return bounds.line(result.image, 512), bounds.id(result.route), bounds.line(result.error, 4096)
+    if not result then return nil, nil, (failure or "image preparation has no acknowledgement") .. "; preparation outcome is unknown" end
+    return M.decode_result(result, operation)
 end
 function M.authorized_request(id: string, sender: string): (profiles.Resolved?, string?, string?, string?, string?)
     local root_ref = resources.root()

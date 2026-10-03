@@ -205,12 +205,11 @@ return {main = main}
 -- example delivers to the author's own workspace unchanged.
 M.OVERLAY_ID = "counter"
 M.NAMESPACE = workspace_applications.NAMESPACE_ROOT .. "." .. M.OVERLAY_ID
-M.DEFINITION_ID = M.NAMESPACE .. ":" .. workspace_applications.APPLICATION_NAME
 M.TITLE = "Counter App"
 M.VERSION = "1.0.0"
 
 function M.example(): {{[string]: unknown}}
-    return {{id = M.DEFINITION_ID, kind = "process.lua",
+    return {{id = "app.counter:app", kind = "process.lua",
         data = {source = M.SOURCE, method = "main",
             modules = {"tty", "process", "channel", "json"},
             imports = {client = "bee.app:client", appearance = "bee.ui:appearance",
@@ -414,7 +413,7 @@ function M.document(): string
     lines[#lines + 1] = M.platform_documentation()
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Minimal example: create overlay " .. M.OVERLAY_ID .. ", put the JSON below at path "
-        .. M.ENTRIES_PATH .. " and freeze it. Its entry id is " .. M.DEFINITION_ID .. " and its title " .. M.TITLE .. "."
+        .. M.ENTRIES_PATH .. " and freeze it. Its entry id is " .. assert(workspace_applications.application(M.example())) .. " and its title " .. M.TITLE .. "."
     return table.concat(lines, "\n")
 end
 
@@ -524,7 +523,7 @@ function M.value(request: {[string]: unknown}?): {[string]: unknown}
     if not encoded then return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
         example_error = tostring(encode_error)} end
     return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
-        example = {path = M.ENTRIES_PATH, entries_json = encoded, definition_id = M.DEFINITION_ID,
+        example = {path = M.ENTRIES_PATH, entries_json = encoded, definition_id = "app.counter:app",
             title = M.TITLE, version = M.VERSION, source = M.SOURCE}}
 end
 

@@ -1338,7 +1338,9 @@ local function define_tests()
                 test.is_false(liveness.observed)
             end
             local recorded = kinds(prepared.attempt_id)
-            for _, expected in ipairs({"intent.recorded", "attach", "runner.started", "home.created", "child.started", "child.exited"}) do
+            for _, expected in ipairs({"intent.recorded", "attach", "runner.start_accepted", "runner.started", "home.created", "runner.materialized",
+                "child.start_returned", "child.streams_ready", "child.identity_requested", "child.identity_returned",
+                "child.started", "runner.ack_sending", "runner.ack_sent", "runner.ack_received", "child.exited"}) do
                 test.is_true(has(recorded, expected))
             end
             test.eq(attempt.cleanup_state, "pending")
@@ -2920,7 +2922,11 @@ local function define_tests()
             test.eq(reply.error and reply.error.code, "UNCERTAIN")
             test.eq(reply.error and reply.error.message, "runner did not acknowledge startup within 100ms; startup outcome is unknown")
             test.eq(current.execution_state, "starting")
-            test.is_false(has(kinds(prepared.attempt_id), "child.started"))
+            local recorded = kinds(prepared.attempt_id)
+            test.is_true(has(recorded, "runner.start_accepted"))
+            test.is_true(has(recorded, "runner.start_deadline"))
+            test.is_false(has(recorded, "runner.ack_received"))
+            test.is_false(has(recorded, "child.started"))
         end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()

@@ -604,6 +604,8 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
     local reply_topic = "bee.placement.start." .. (uuid.v7() or attempt.attempt_id)
     local replies = assert(process.listen(reply_topic, {message = true}))
     local events = assert(process.events())
+    local accepted = transition(attempt.attempt_id, {evidence = {kind = "runner.start_accepted", detail = "starter " .. process.pid() .. " listening on " .. reply_topic}})
+    if not accepted.ok then process.unlisten(replies); return accepted end
     local runner, spawn_error = process.spawn(runner_ref or resources.RUNNER, host, attempt.attempt_id, process.pid(), reply_topic, gateway_binding, materialization_key, control_token)
     if not runner then
         process.unlisten(replies)
@@ -619,6 +621,8 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
         elseif selected.channel == replies then
             local message = selected.value
             if tostring(message:from()) == tostring(runner) then
+                local received = transition(attempt.attempt_id, {evidence = {kind = "runner.ack_received", detail = "from " .. tostring(runner) .. " to " .. process.pid() .. " topic " .. reply_topic}})
+                if not received.ok then outcome = received; break end
                 local data: unknown = message:payload():data()
                 if type(data) == "table" and data.started == true then
                     outcome = succeed(data.attempt)
@@ -638,7 +642,9 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
                 outcome = fail("UNAVAILABLE", "start cancelled")
             end
         else
-            outcome = fail("UNCERTAIN", "runner did not acknowledge startup within " .. tostring(request.timeouts.start_ms) .. "ms; startup outcome is unknown")
+            local expired = transition(attempt.attempt_id, {evidence = {kind = "runner.start_deadline", detail = "runner " .. tostring(runner) .. " acknowledgement deadline " .. tostring(request.timeouts.start_ms) .. "ms"}})
+            if not expired.ok then outcome = expired
+            else outcome = fail("UNCERTAIN", "runner did not acknowledge startup within " .. tostring(request.timeouts.start_ms) .. "ms; startup outcome is unknown") end
         end
     end
     process.unlisten(replies)

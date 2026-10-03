@@ -300,8 +300,10 @@ the reconcile timeout, the per-attempt stop grace and the sweep bound as
 separate figures, because the sweep interval alone is not a stop deadline.
 Evidence names what failed: `grant.revoked` or `credential.revoked`,
 `grant.refused` or `credential.refused`. An environment value already
-inside a running child cannot be scrubbed; enforcement is the stop. Native
-executor error text is never recorded; evidence carries fixed phrases.
+inside a running child cannot be scrubbed; enforcement is the stop. Startup
+refusals retain the exact operation cause in `child.start_failed`; grant and
+credential enforcement evidence names the refused authorization without
+recording credential values.
 
 ## Attachment fence
 

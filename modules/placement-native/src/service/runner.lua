@@ -2,8 +2,8 @@
 -- executor handle, materializes the home, starts the child, records its
 -- identity, pumps bounded output to the bound recipient, accepts
 -- acknowledged input, signals on request, and records the exit it
--- observed. Docker start refusal remains uncertain until daemon exit
--- evidence is available; runner cancellation alone does not prove absence.
+-- observed. Startup failures retain their cause; cleanup still requires
+-- proof that the admitted execution scope is gone.
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -136,7 +136,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         return
     end
     local starting = store.transition(db, attempt_id, {expected_execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
-    if not starting.ok then return refuse(starting.message or "attempt is not intended") end
+    if not starting.ok then return refuse(starting.message or "attempt is not starting") end
     claimed = true
     local initial_carrier_loss: string? = nil
     if recipient then

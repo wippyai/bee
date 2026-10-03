@@ -100,9 +100,8 @@ function M.write_back(home_path: string, writebacks: {WriteBack}, owner_id: stri
     end
     return results
 end
-local function evidence(db, attempt_id: string, kind: string, detail: string, update: {execution: types.ExecutionState?, fields: {[string]: unknown}?}?): (boolean, string?)
-    local result = store.transition(db, attempt_id, {execution = update and update.execution or nil,
-        fields = update and update.fields or nil, evidence = {kind = kind, detail = detail}})
+local function evidence(db: sql.DB, attempt_id: string, kind: string, detail: string, fields: {[string]: unknown}?): (boolean, string?)
+    local result = store.transition(db, attempt_id, {fields = fields, evidence = {kind = kind, detail = detail}})
     if not result.ok then return false, result.message end
     return true, nil
 end
@@ -339,25 +338,25 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local delivery = request.delivery
     if not delivery then return refused("attempt has no owner-recorded configuration delivery") end
     if configuration.overlaps(delivery.files, {".bee-retained-login-ready.json"}) then
-        evidence(db, attempt_id, "configuration.refused", "configuration overlaps retained login identity", {})
+        evidence(db, attempt_id, "configuration.refused", "configuration overlaps retained login identity")
         return refused("configuration overlaps retained login identity")
     end
     local conflict = M.environment_conflict(request)
     if conflict then
-        evidence(db, attempt_id, "environment.refused", conflict, {})
+        evidence(db, attempt_id, "environment.refused", conflict)
         return refused(conflict)
     end
     local home_key, key_error = homes.attempt_key(request.owner_id, attempt_id)
     if not home_key then
-        evidence(db, attempt_id, "home.failed", key_error or "key", {})
+        evidence(db, attempt_id, "home.failed", key_error or "key")
         return refused(key_error or "home key")
     end
     local home_path, home_error = homes.create_attempt(home_key)
     if not home_path then
-        evidence(db, attempt_id, "home.failed", home_error or "home", {})
+        evidence(db, attempt_id, "home.failed", home_error or "home")
         return refused(home_error or "attempt home")
     end
-    evidence(db, attempt_id, "home.created", "attempt home under derived key", {fields = {home_key = home_key}})
+    evidence(db, attempt_id, "home.created", "attempt home under derived key", {home_key = home_key})
     -- A retained session is an explicit writable session resource. Select its
     -- private /home before any provider, gateway, hook or trust file is
     -- materialized; the attempt directory remains separate for evidence and
@@ -369,7 +368,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
         if not session_path then
-            evidence(db, attempt_id, "session.failed", session_key_error or "session directory", {})
+            evidence(db, attempt_id, "session.failed", session_key_error or "session directory")
             return refused("session directory")
         end
         if request.launch.home_ref then
@@ -382,12 +381,12 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local created_parents: {[string]: boolean} = {}
     local home_os, home_os_error = homes.os_path(selected_home_path .. "/home")
     if not home_os then
-        evidence(db, attempt_id, "home.failed", home_os_error or "home path", {})
+        evidence(db, attempt_id, "home.failed", home_os_error or "home path")
         return refused(home_os_error or "home path")
     end
     local environment, environment_error = resolve_environment(request, guest_home or home_os)
     if not environment then
-        evidence(db, attempt_id, "environment.failed", environment_error or "environment", {})
+        evidence(db, attempt_id, "environment.failed", environment_error or "environment")
         return refused(environment_error or "environment")
     end
     local profile_environment: {[string]: string} = delivery.environment or {}
@@ -417,23 +416,23 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             if not check_error then checked_reply, checked_error = service_reply.decode(checked_raw) end
             if check_error or not checked_reply then
                 local code = "UNAVAILABLE"
-                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {})
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code)
                 return refused("projection " .. projection_id .. ": " .. code)
             end
             if checked_reply.ok == false then
                 local code = checked_reply.error.code
-                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {})
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code)
                 return refused("projection " .. projection_id .. ": " .. code)
             end
             local projection, projection_error = credential_protocol.checked_projection(checked_reply.value, projection_id)
             if not projection then
-                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": INVALID", {})
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": INVALID")
                 return refused("projection " .. projection_id .. ": " .. tostring(projection_error))
             end
             if projection.subject ~= request.owner_id or projection.audience ~= request.owner_id or projection.attempt_id ~= attempt_id
                 or projection.profile_id ~= request.profile_id or projection.profile_digest ~= request.profile_digest
                 or projection.binding_digest ~= request.binding_digest then
-                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": DENIED", {})
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": DENIED")
                 return refused("projection " .. projection_id .. ": DENIED")
             end
             checked_projection = projection
@@ -459,12 +458,12 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         if not call_error then reply, reply_error = service_reply.decode(raw) end
         if call_error or not reply then
             local code = "UNAVAILABLE"
-            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {})
+            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code)
             return refused("projection " .. projection_id .. ": " .. code)
         end
         if reply.ok == false then
             local code = reply.error.code
-            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {})
+            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code)
             return refused("projection " .. projection_id .. ": " .. code)
         end
         local expected: credential_protocol.Expected = {projection_id = projection_id, generation_key = generation_key}
@@ -474,13 +473,13 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         end
         local projected, projection_error = credential_protocol.materialization(reply.value, expected)
         if not projected then
-            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": INVALID", {})
+            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": INVALID")
             return refused("projection " .. projection_id .. ": " .. tostring(projection_error))
         end
         if projected.projection_kind == "file" then
             local provider_home = request.launch.provider_home
             if file_projection or (not retained_home and (not provider_home or not provider_home.private)) then
-                evidence(db, attempt_id, "credential.refused", "invalid file login projection", {})
+                evidence(db, attempt_id, "credential.refused", "invalid file login projection")
                 return refused("invalid file login projection")
             end
             local source = homes.decode_login_source({provider = projected.provider,
@@ -488,12 +487,12 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 optional = projected.optional, format = projected.format})
             local destination_name = source and source.path:match("[^/]+$") or nil
             if not source or not destination_name or projected.destination ~= destination_name then
-                evidence(db, attempt_id, "credential.refused", "invalid file login projection", {})
+                evidence(db, attempt_id, "credential.refused", "invalid file login projection")
                 return refused("invalid file login projection")
             end
             if provider_home and (provider_home.provider ~= source.source.provider
                 or not provider_home_matches(provider_home, projected.source_path, projected.format, projected.write_back)) then
-                evidence(db, attempt_id, "credential.refused", "provider login files do not match the driver declaration", {})
+                evidence(db, attempt_id, "credential.refused", "provider login files do not match the driver declaration")
                 return refused("provider login files do not match the driver declaration")
             end
             if guest_home then
@@ -505,7 +504,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 end
                 local format, format_error = provider_projection.container(provider_home, source.format, roots)
                 if not format then
-                    evidence(db, attempt_id, "configuration.refused", format_error or "container projection refused", {})
+                    evidence(db, attempt_id, "configuration.refused", format_error or "container projection refused")
                     return refused(format_error or "container projection refused")
                 end
                 source.format = format
@@ -514,7 +513,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 if type(machine_home) ~= "string" or machine_home_error then return refused("provider source home unavailable") end
                 local projected_format, format_error = provider_projection.native(provider_home, source.format, machine_home, home_os)
                 if not projected_format then
-                    evidence(db, attempt_id, "configuration.refused", format_error or "provider configuration projection refused", {})
+                    evidence(db, attempt_id, "configuration.refused", format_error or "provider configuration projection refused")
                     return refused(format_error or "provider configuration projection refused")
                 end
                 source.format = projected_format
@@ -528,7 +527,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 protected[#protected + 1] = item.path
             end
             if configuration.overlaps(delivery.files, protected) then
-                evidence(db, attempt_id, "configuration.refused", "configuration overlaps provider login state", {})
+                evidence(db, attempt_id, "configuration.refused", "configuration overlaps provider login state")
                 return refused("configuration overlaps provider login state")
             end
             local login_value = {provider = source.source.provider, definition_id = source.source.definition_id,
@@ -539,7 +538,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 if not session_ref then return refused("file login session unavailable") end
                 local replay_value, replay_error = homes.login_replayed(selected_home_path, login_value)
                 if replay_value == nil then
-                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {})
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused")
                     return refused(replay_error or "file login projection refused")
                 end
                 replayed = replay_value
@@ -554,14 +553,14 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                         if expected then binding_error = store.bind_session_file(db, request.owner_id, session_ref, item.path, expected) end
                     end
                     if not expected or binding_error then
-                        evidence(db, attempt_id, "configuration.refused", binding_error or "retained configuration binding", {})
+                        evidence(db, attempt_id, "configuration.refused", binding_error or "retained configuration binding")
                         return refused(binding_error or "retained configuration binding")
                     end
                     composition_bases[item.path] = expected
                 end
             local _, login_error, retained_replay = homes.retain_login(selected_home_path, login_value, projected.value, created_parents)
                 if login_error or retained_replay ~= replayed then
-                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {})
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused")
                     return refused("file login projection refused")
                 end
             else
@@ -572,7 +571,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 end
                 local _, login_error = homes.project_attempt_login(selected_home_path, login_value, projected.value, created_parents)
                 if login_error then
-                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {})
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused")
                     return refused("file login projection refused")
                 end
                 if projected.present and provider_home then
@@ -596,13 +595,13 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             else
                 local secret = projected.value
                 if #secret == 0 or secret:find("[%z\r\n]") then
-                    evidence(db, attempt_id, "credential.refused", "invalid environment projection", {})
+                    evidence(db, attempt_id, "credential.refused", "invalid environment projection")
                     return refused("invalid environment projection")
                 end
                 local gateway = request.gateway
                 if environment[projected.destination] ~= nil or (gateway and (projected.destination == gateway.destination or projected.destination == gateway.hook_destination)) then
                     local conflict = "environment destination " .. projected.destination .. " is already assigned"
-                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {})
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict)
                     return refused(conflict)
                 end
                 environment[projected.destination] = secret
@@ -619,7 +618,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     if request.gateway then
         local gateway = request.gateway
         if generation < 1 then
-            evidence(db, attempt_id, "gateway.refused", "the attempt is not attached to a carrier", {})
+            evidence(db, attempt_id, "gateway.refused", "the attempt is not attached to a carrier")
             return refused("gateway binding: the attempt is not attached to a carrier")
         end
         local raw, call_error = funcs.call(resources.GATEWAY_MATERIALIZE, {attempt_id = attempt_id, carrier_epoch = generation, binding_id = expected_binding, materialization_key = materialization_key})
@@ -633,7 +632,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         end
         if not materialized then
             local code = materialization_error or "gateway returned no materialization"
-            evidence(db, attempt_id, "gateway.refused", "materialize under carrier epoch " .. tostring(generation) .. ": " .. code, {})
+            evidence(db, attempt_id, "gateway.refused", "materialize under carrier epoch " .. tostring(generation) .. ": " .. code)
             return refused("gateway binding: " .. code)
         end
         environment[gateway.destination] = materialized.token
@@ -646,24 +645,24 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         if file.composition then
             local provider_home = request.launch.provider_home
             if not retained_home and (not provider_home or not provider_home.private) then
-                evidence(db, attempt_id, "configuration.refused", "configuration composition requires an admitted provider home", {})
+                evidence(db, attempt_id, "configuration.refused", "configuration composition requires an admitted provider home")
                 return refused("configuration composition requires an admitted provider home")
             end
             local admitted_digest = composition_bases[file.composition.base_path]
             if not admitted_digest then
-                evidence(db, attempt_id, "configuration.refused", "configuration base is not admitted by credential setup", {})
+                evidence(db, attempt_id, "configuration.refused", "configuration base is not admitted by credential setup")
                 return refused("configuration base is not admitted by credential setup")
             end
             local base_error: string? = nil
             base, base_error = homes.read_configuration(selected_home_path, file.composition.base_path, admitted_digest)
             if base == nil then
-                evidence(db, attempt_id, "configuration.refused", base_error or "configuration base", {})
+                evidence(db, attempt_id, "configuration.refused", base_error or "configuration base")
                 return refused(base_error or "configuration base")
             end
         end
         local content, content_error = configuration.render(file, environment, request.gateway, base)
         if not content then
-            evidence(db, attempt_id, "configuration.refused", content_error or "configuration", {})
+            evidence(db, attempt_id, "configuration.refused", content_error or "configuration")
             return refused(content_error or "configuration")
         end
         if file.secret_fields then
@@ -685,19 +684,19 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             written, write_error = homes.write_protected(selected_home_path, file.path, content, created_parents)
         end
         if not written then
-            evidence(db, attempt_id, published_uncertain and "configuration.uncertain" or "configuration.refused", tostring(write_error), {})
+            evidence(db, attempt_id, published_uncertain and "configuration.uncertain" or "configuration.refused", tostring(write_error))
             return refused(write_error or "configuration")
         end
         evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (retained_home and " published" or " created"))
     end
     local initial_work_dir, initial_work_dir_error = resolve_work_dir(request, home_os)
     if not initial_work_dir then
-        evidence(db, attempt_id, "workdir.failed", initial_work_dir_error or "working directory", {})
+        evidence(db, attempt_id, "workdir.failed", initial_work_dir_error or "working directory")
         return refused(initial_work_dir_error or "working directory")
     end
     local work_dir, sandbox_arguments, prepare_error = prepare_workdir_and_arguments(db, request, attempt_id, initial_work_dir)
     if not work_dir or not sandbox_arguments then
-        evidence(db, attempt_id, "workdir.failed", prepare_error or "workdir preparation failed", {})
+        evidence(db, attempt_id, "workdir.failed", prepare_error or "workdir preparation failed")
         return refused(prepare_error or "workdir preparation failed")
     end
     for _, argument in ipairs(sandbox_arguments) do arguments[#arguments + 1] = argument end

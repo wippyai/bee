@@ -9,7 +9,7 @@ local json = require("json")
 local bounds = require("bounds")
 local function run()
     test.describe("Placement supervised-startup migration", function()
-        test.it("upgrades a revision-ten store without changing its prior ledger or retry identity", function()
+        test.it("upgrades a revision-ten store without changing its prior ledger or admitted identity", function()
             local old: {ledger.Migration} = {}
             for _, migration in ipairs(migrations.all()) do if migration.id < 11 then old[#old + 1] = migration end end
             local resource = "bee.placement.native:startup_legacy_db"

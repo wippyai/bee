@@ -1,5 +1,7 @@
 -- MIT. Only the host links the staging store. Never take a DB/path from agents.
 local registry = require("registry")
+local funcs = require("funcs")
+local security = require("security")
 local bounds = require("bounds")
 local M = {}
 M.DATABASE_REF = "bee.gov.env:database_ref"
@@ -70,5 +72,31 @@ end
 
 function M.workspace_folder_policy(): (string?, string?)
     return linked(M.WORKSPACE_FOLDER_POLICY_REF, POLICY_KINDS, "workspace folder read policy")
+end
+
+function M.workspace_folder(workspace_id: string): (unknown?, string?)
+    local read_id, read_error = M.workspace_folder_read()
+    local policy_id, policy_error = M.workspace_folder_policy()
+    if not read_id or not policy_id then return nil, read_error or policy_error end
+    local policy, load_error = security.policy(policy_id)
+    if not policy then return nil, tostring(load_error or "load workspace folder policy") end
+    local executor = funcs.new():with_actor(security.new_actor("bee.gov.authoring")):with_scope(security.new_scope({policy}))
+    local reply_raw, call_error = executor:call(read_id, {workspace_id = workspace_id})
+    local reply = bounds.object(reply_raw)
+    local value = reply and reply.ok == true and bounds.object(reply.value) or nil
+    local row = value and bounds.object(value.workspace) or nil
+    local root_ref = row and bounds.id(row.root_ref) or nil
+    local subpath = row and row.subpath or nil
+    if not root_ref or type(subpath) ~= "string" then
+        local fault = reply and bounds.object(reply.error) or nil
+        return nil, "workspace folder is unavailable: " .. tostring(call_error or (fault and fault.message)
+            or "the workspace catalog returned no folder")
+    end
+    local root = registry.get(root_ref)
+    local data = root and bounds.object(root.data) or nil
+    if not root or root.kind ~= "fs.directory" or not data or type(data.directory) ~= "string" then
+        return nil, "workspace root " .. root_ref .. " is not an fs.directory"
+    end
+    return {root_ref = root_ref, directory = data.directory, base = data.base, subpath = subpath}, nil
 end
 return M

@@ -85,11 +85,12 @@ entries:
   meta:
     comment: A bound MCP subject may author only through the overlay facade; the store enforces actor ownership and this grants no publication or activation authority
   policy:
-    expression: '(action == "funcs.call" && resource == "bee.gov.binding:overlay_call") || ((action == "bee.gov.overlay.read" || action == "bee.gov.overlay.write") && resource != "")'
+    expression: '(action == "funcs.call" && resource == "bee.gov.binding:overlay_call") || ((action == "bee.gov.overlay.read" || action == "bee.gov.overlay.write" || action == "bee.gov.overlay.source") && resource != "")'
     actions:
     - funcs.call
     - bee.gov.overlay.read
     - bee.gov.overlay.write
+    - bee.gov.overlay.source
     resources:
     - bee.gov.binding:overlay_call
     - '*'

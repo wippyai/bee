@@ -547,3 +547,47 @@ entries:
     actions: [funcs.call, bee.gov.delivery.manage]
     resources: '*'
     effect: allow
+
+- name: source_test
+  kind: function.lua
+  source: file://source_test.lua
+  modules: [fs]
+  security: {policies: [bee.gov:source_test_policy]}
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    source: bee.gov.workspace:source
+    protocol: bee.gov.workspace:workspace_protocol
+    bounds: bee.values:bounds
+
+- name: source_test_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get]
+    resources: [bee.gov:source_test_dir]
+    effect: allow
+- name: source_test_dir
+  kind: fs.directory
+  directory: .wippy/source-fixture
+  base: project
+  auto_init: true
+- name: driver_link_test
+  kind: function.lua
+  source: file://driver_link_test.lua
+  method: run
+  modules: [registry]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:driver_link_test_policy]}
+  imports:
+    test: wippy.test:test
+    materializer: bee.gov.delivery:materializer
+    activation: bee.gov.activation:driver_admission
+    resolver: bee.driver.binding:resolver
+    bounds: bee.values:bounds
+- name: driver_link_test_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, registry.get, registry.snapshot, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+    resources: '*'
+    effect: allow

@@ -24,6 +24,9 @@ local delivery = require("delivery")
 local destination = require("destination")
 local preflight = require("preflight")
 local materializer = require("materializer")
+local drivers = require("drivers")
+local artifact = require("artifact")
+local driver_admission = require("driver_admission")
 local migration_effect = require("migration_effect")
 local migration_runner = require("migration_runner")
 local activation_profiles = require("activation_profiles")
@@ -269,31 +272,6 @@ end
 -- under the host-selected folder policy and resolved against its admitted
 -- root, for rooting file grants. It is configuration only; the host installs
 -- the volume after approval.
-local function workspace_folder(workspace_id: string): (unknown?, string?)
-    local read_id, read_error = resources.workspace_folder_read()
-    local policy_id, policy_error = resources.workspace_folder_policy()
-    if not read_id or not policy_id then return nil, read_error or policy_error end
-    local policy, load_error = security.policy(policy_id)
-    if not policy then return nil, tostring(load_error or "load workspace folder policy") end
-    local executor = funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({policy}))
-    local reply_raw, call_error = executor:call(read_id, {workspace_id = workspace_id})
-    local reply = bounds.object(reply_raw)
-    local value = reply and reply.ok == true and bounds.object(reply.value) or nil
-    local row = value and bounds.object(value.workspace) or nil
-    local root_ref = row and bounds.id(row.root_ref) or nil
-    local subpath = row and row.subpath or nil
-    if not root_ref or type(subpath) ~= "string" then
-        local fault = reply and bounds.object(reply.error) or nil
-        return nil, "workspace folder is unavailable: " .. tostring(call_error or (fault and fault.message)
-            or "the workspace catalog returned no folder")
-    end
-    local root = registry.get(root_ref)
-    local data = root and bounds.object(root.data) or nil
-    if not root or root.kind ~= "fs.directory" or not data or type(data.directory) ~= "string" then
-        return nil, "workspace root " .. root_ref .. " is not an fs.directory"
-    end
-    return {root_ref = root_ref, directory = data.directory, base = data.base, subpath = subpath}, nil
-end
 
 local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
     activation_store: activations.Store?, base_policy_digest: string?): unknown
@@ -370,7 +348,7 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
                 if not root then return nil, root_error end
                 return {component = root.component, version = root.version}, nil
             end, policy = selected_policy,
-            folder = function(): (unknown?, string?) return workspace_folder(workspace_id) end})
+            folder = function(): (unknown?, string?) return resources.workspace_folder(workspace_id) end})
     end
     return resolver.new({overlay_owner = profile_value.overlay_owner,
         root = selected_root, policy = selected_policy})
@@ -401,7 +379,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     end
     local folder: unknown = nil
     if capability_files.rooted(requested) then
-        local resolved, folder_error = workspace_folder(profile_value.workspace_id)
+        local resolved, folder_error = resources.workspace_folder(profile_value.workspace_id)
         if not resolved then return nil, folder_error end
         folder = resolved
     end
@@ -452,6 +430,52 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     if not record then return nil, record_error end
     return {policies = proposed.policies, bindings = proposed.bindings, record = record,
         volumes = proposed.volumes, databases = proposed.databases}, nil
+end
+
+local function approved_driver_entries(config: Configuration): ({Object}?, string?)
+    local resource, resource_error = resources.database()
+    if not resource then return nil, resource_error end
+    local listed = activations.desired_slots(resource, config.node_id)
+    local value = listed.ok and bounds.object(listed.value) or nil
+    local slots = value and bounds.dense_list(value.slots, 1024, "desired driver slots") or nil
+    if not slots then return nil, listed.message or "desired driver slots are unavailable" end
+    local entries: {Object} = {}
+    for _, raw_slot in ipairs(slots) do
+        local slot = bounds.object(raw_slot)
+        local workspace = slot and bounds.id(slot.workspace_id) or nil
+        local owner_id = slot and bounds.id(slot.overlay_owner) or nil
+        if not workspace or not owner_id then return nil, "desired driver slot is malformed" end
+        if owner_id:sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then
+            local store, open_error = activations.open(resource, config.node_id, workspace)
+            if not store then return nil, open_error end
+            local desired = activations.desired(store, owner_id)
+            activations.close(store)
+            local intent = desired.ok and bounds.object(desired.value) or nil
+            local source = intent and bounds.id(intent.source_workspace) or nil
+            if source and drivers.name(source) then
+                local source_node = intent and bounds.id(intent.source_node) or nil
+                local profile = source_node and activation_profiles.select(config, workspace, source_node, source) or nil
+                if profile and profile.overlay_owner == owner_id and intent and intent.consumed_consumer_id == ACTOR then
+                    local decoded, decode_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+                    if not decoded then return nil, decode_error end
+                    local present, present_error = materializer.matches(owner_id, decoded)
+                    if present == nil then return nil, present_error end
+                    if present then
+                        for _, entry in ipairs(decoded) do entries[#entries + 1] = entry end
+                    end
+                end
+            end
+        end
+    end
+    return entries, nil
+end
+
+function M.driver_bindings(): ({string}?, string?)
+    local config, config_error = load()
+    if not config then return nil, config_error end
+    local approved, approved_error = approved_driver_entries(config)
+    if not approved then return nil, approved_error end
+    return driver_admission.bindings(approved)
 end
 
 local function owner_config(config: Configuration, profile_value: Profile, plan_store: plans.Store,

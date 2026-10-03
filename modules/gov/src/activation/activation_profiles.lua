@@ -5,6 +5,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local application_admission = require("application_admission")
 local workspace_applications = require("workspace_applications")
+local drivers = require("drivers")
 local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
 
@@ -35,14 +36,14 @@ type PackageApplication = {component: string, definition_id: string, capabilitie
 type Template = {approval_policy: string, kinds: {string}, modules: {string}, policies: {string},
     thread_access: string, hive: boolean, applications: {PackageApplication}?}
 type DecodedConfiguration = {profiles: {DecodedProfile}, workspace_applications: Template?,
-    packages: Template?}
+    packages: Template?, workspace_drivers: Template?}
 type Profile = {workspace_id: string, source_node: string, source_workspace: string,
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
     auto_start: boolean, super_edit: boolean, expires_at: string, policy_digest: string}
 type Configuration = {node_id: string, profiles: {Profile}, workspace_applications: Template?,
-    packages: Template?}
+    packages: Template?, workspace_drivers: Template?}
 
 local function list(raw: unknown, label: string): ({unknown}?, string?)
     if type(raw) ~= "table" then return nil, label .. " must be a list" end
@@ -322,6 +323,22 @@ local function empty_list(): {unknown}
     return table.create(1, 0)
 end
 
+local function driver_profile(rule: Template?, workspace_id: string, source_node: string,
+    source_workspace: string, node_id: string): (DecodedProfile?, Object?, string?)
+    local identity = drivers.identity(workspace_id, source_workspace)
+    if not identity then return nil, nil, nil end
+    if not rule or source_node ~= node_id then
+        return nil, nil, "this host does not admit local workspace drivers: " .. drivers.RULE
+    end
+    return profile({workspace_id = workspace_id, source_node = source_node,
+        source_workspace = identity.name, component = identity.component,
+        overlay_owner = identity.overlay_owner, approval_policy = rule.approval_policy,
+        resolver = "overlay", parameters = empty_list(), allow = {
+            packages = {identity.component}, namespaces = identity.namespaces, kinds = rule.kinds,
+            databases = empty_list(), grants = {identity.component .. ".security:descriptor_read"},
+            modules = rule.modules, auto_start = false}})
+end
+
 local function missing(workspace_id: string, source_node: string, source_workspace: string): string
     return "this workspace has no activation profile for overlay " .. source_workspace .. " from node "
         .. source_node .. "; a host adds one to bee.env:gov_activation_profiles"
@@ -435,7 +452,7 @@ end
 
 local function decoded(raw: unknown): (DecodedConfiguration?, {Object}?, string?)
     local value = bounds.object(raw)
-    local extra = value and bounds.fields(value, {"profiles", "workspace_applications", "packages"}) or nil
+    local extra = value and bounds.fields(value, {"profiles", "workspace_applications", "packages", "workspace_drivers"}) or nil
     if extra then return nil, nil, "activation configuration: " .. extra end
     local rows, rows_error = list(value and value.profiles or nil, "activation profiles")
     if not rows then return nil, nil, rows_error or "activation configuration is invalid" end
@@ -444,6 +461,12 @@ local function decoded(raw: unknown): (DecodedConfiguration?, {Object}?, string?
     if rule_error then return nil, nil, rule_error end
     local packages, packages_error = template(value and value.packages or nil)
     if packages_error then return nil, nil, packages_error end
+    local workspace_drivers, driver_error = template(value and value.workspace_drivers or nil)
+    if driver_error then return nil, nil, driver_error end
+    if workspace_drivers and (workspace_drivers.hive or workspace_drivers.applications ~= nil
+        or #workspace_drivers.policies ~= 0 or workspace_drivers.thread_access ~= "none") then
+        return nil, nil, "workspace drivers are local, have no application grants and require explicit approval"
+    end
     local result: {DecodedProfile} = {}
     local policies: {Object} = {}
     local keys: Set = {}
@@ -456,7 +479,7 @@ local function decoded(raw: unknown): (DecodedConfiguration?, {Object}?, string?
         result[#result + 1] = item
         policies[#policies + 1] = policy
     end
-    return {profiles = result, workspace_applications = rule, packages = packages}, policies, nil
+    return {profiles = result, workspace_applications = rule, packages = packages, workspace_drivers = workspace_drivers}, policies, nil
 end
 
 local function measure(decoded_profile: DecodedProfile, policy: Object, node_id: string): (Profile?, string?)
@@ -500,7 +523,7 @@ function M.configuration(raw: unknown, node_raw: unknown): (Configuration?, stri
         result[index] = measured
     end
     return {node_id = node_id, profiles = result, workspace_applications = configuration.workspace_applications,
-        packages = configuration.packages}, nil
+        packages = configuration.packages, workspace_drivers = configuration.workspace_drivers}, nil
 end
 
 type Identity = {workspace_id: string, source_node: string, source_workspace: string}
@@ -547,6 +570,11 @@ function M.select_decoded(configuration: DecodedConfiguration, workspace_id: str
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
+    if drivers.name(source_workspace) then
+        local item, _, driver_error = driver_profile(configuration.workspace_drivers, workspace_id,
+            source_node, source_workspace, node_id)
+        return item, driver_error
+    end
     local packages_rule = configuration.packages
     if packages_rule and source_node == node_id then
         local entry = M.find_package(packages_rule, source_workspace)
@@ -570,6 +598,12 @@ function M.select(configuration: Configuration, workspace_id: string, source_nod
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
+    if drivers.name(source_workspace) then
+        local item, policy, driver_error = driver_profile(configuration.workspace_drivers, workspace_id,
+            source_node, source_workspace, configuration.node_id)
+        if not item or not policy then return nil, driver_error end
+        return measure(item, policy, configuration.node_id)
+    end
     local packages_rule = configuration.packages
     if packages_rule and source_node == configuration.node_id then
         local entry = M.find_package(packages_rule, source_workspace)

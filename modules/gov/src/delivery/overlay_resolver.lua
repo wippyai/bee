@@ -13,6 +13,7 @@ local capability_files = require("capability_files")
 local protected_kernel = require("protected_kernel")
 local lists = require("lists")
 local resolution = require("resolution")
+local drivers = require("drivers")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -232,7 +233,21 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         result_targets[#result_targets + 1] = target_id
         local destination = object(final[target_id])
         if not destination then return nil, "requirement target entry is absent: " .. target_id end
-        if capability_request then
+        local driver = drivers.source_of(package)
+        if driver and not target_id:match("^" .. package:gsub("%.", "%%.") .. "[.:]") then
+            local binding_id = bounds.id(data.default)
+            local binding = binding_id and object(final[binding_id]) or nil
+            local binding_meta = binding and object(binding.meta) or nil
+            if capability_request or target_id ~= "bee.harness.launch:harness_activation"
+                or target.path ~= ".bindings +=" or #targets ~= 1
+                or not meta or meta.value_kind ~= "contract.binding"
+                or not binding_id or binding_id:sub(1, #package + 9) ~= package .. ".binding:"
+                or not binding or binding.kind ~= "contract.binding" or not binding_meta
+                or binding_meta.type ~= "harness.driver" then
+                return nil, "workspace driver requirements may only append their own harness binding to host activation"
+            end
+            selected = binding_id
+        elseif capability_request then
             if exposure then
                 if target.path ~= ".security.policies +=" or not exposure[target_id] then
                     return nil, "Hive exposure requirement must append policies to one of its own operations"
@@ -419,6 +434,20 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         -- overlay instruction. Keep the exact public definition ID and body.
         local clean: Entry = {}
         for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
+        if drivers.source_of(component) and (clean.kind == "security.policy" or clean.kind == "security.policy.expr") then
+            local data = object(clean.data)
+            local policy_data = data and object(data.policy) or nil
+            local actions = policy_data and bounds.dense_list(policy_data.actions, 2, "driver descriptor actions") or nil
+            if clean.id ~= component .. ".security:descriptor_read" or not policy_data
+                or policy_data.effect ~= "allow" or not actions or #actions == 0 then
+                return nil, nil, "workspace driver policies must be descriptor read policies"
+            end
+            for _, action in ipairs(actions) do
+                if action ~= "registry.get" and action ~= "registry.snapshot" then
+                    return nil, nil, "workspace driver policies may only read registry descriptors"
+                end
+            end
+        end
         final[clean.id] = clean
         local measured, measured_error = measured_entry(clean, component)
         if not measured then return nil, nil, measured_error end

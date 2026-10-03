@@ -163,3 +163,20 @@ entries:
     actions: '*'
     resources: '*'
     effect: allow
+
+- name: source_policy
+  kind: security.policy
+  groups: [workspace_execution_scope]
+  meta: {comment: The private backend resolves the authenticated workspace before reading bounded source bytes}
+  policy:
+    actions: [registry.get, funcs.call, funcs.security, security.policy.get, security.actor.create, security.scope.create, fs.get]
+    resources: '*'
+    effect: allow
+- name: driver_bindings_policy
+  kind: security.policy.expr
+  meta: {comment: Read consumed driver admission from the existing owner store and exact installed overlays}
+  policy:
+    expression: '(action == "db.get" && resource == "bee.gov.env:db") || (action in ["registry.get", "registry.overlay.get", "registry.snapshot"] && resource != "") || (action == "system.read" && resource == "node") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress") || (action == "env.get" && resource == "bee.gov.env:node_identity_migration_source")'
+    actions: [db.get, registry.get, registry.overlay.get, registry.snapshot, system.read, env.get, env.set]
+    resources: '*'
+    effect: allow

@@ -341,3 +341,31 @@ Activation and selected-plan storage failures include the failing SQL operation
 and native SQLite message. The activation owner propagates
 these failures before applying an overlay; a failed commit never reports a
 prepared or authorized activation.
+
+## Workspace CLI drivers
+
+A host may select `workspace_drivers` in its existing activation and publication
+profile configuration. Local `driver.<name>` overlays own `bee.driver.<name>`
+child namespaces; they do not create application admission records. The same
+freeze, delivery, review, exact approval and activation ledger applies. A driver
+requirement may append its own `harness.driver` binding to
+`bee.harness.launch:harness_activation` at `.bindings +=`; other host targets
+are refused. Raw overlay requirements remain declarations. The host selects
+`bee.gov.binding:driver_bindings` as the activation declaration's admission
+reader. The shared driver resolver combines the original host selection with
+bindings derived from consumed desired artifacts in the existing activation
+store whose exact code overlays are present. It adds no stored record or second
+catalog; boot recovery restores approved code before it becomes selectable.
+Descriptor policies grant
+only registry reads. Launch definitions,
+policies and executable mappings are part of the reviewed artifact; metadata
+alone never activates a driver.
+
+The overlay `source` operation reads a bounded window of a non-private file in
+the authenticated session workdir. It names no overlay or workspace; the caller
+needs `bee.gov.overlay.source` on its actor-metadata workspace. The backend uses
+the host-selected workspace folder catalog operation and filesystem root. Paths
+are relative or absolute within that root; hidden/credential paths and shared-root
+workspace subfolders are refused. Each read returns canonical base64,
+`window_digest`, `next_offset` and `eof`, with a 16,384-byte limit. It neither
+executes nor writes source and does not open the staging store.

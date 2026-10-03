@@ -53,7 +53,9 @@ a configure target's name. Provider renderers retain their formats and permissio
 The person selects the exact binding in the host-owned
 `bee.harness.launch:harness_activation` declaration and admits the launch
 definition, policy, executable, placement, credentials, resources and gateway
-ceiling. Metadata discovery, installation and a matching name confer no launch
+ceiling. An optional host-selected admission reader contributes bindings from
+Gov’s consumed approvals and exact installed artifacts to this same resolver.
+Metadata discovery, installation and a matching name confer no launch
 authority. An unselected binding returns `binding <id> is not activated`.
 External turns re-admit through the host and use its planned normalize target.
 
@@ -193,3 +195,11 @@ Driver observation builders bound text by its encoded size through the nested
 session journal envelopes. Long text splits at Unicode character boundaries;
 tool previews and error messages remain bounded, and oversized extension
 payloads retain an omission-size object rather than invalid partial JSON.
+
+Workspace-authored drivers use the governed `driver.<name>` overlay rule.
+Read the overlay guide's `drivers` section for ownership, descriptor-based method
+factories, the exact host activation append and delivery approval. After the
+person approves the artifact, create a saved profile in Agents and select its
+new binding. Structured CLI turns use a headless profile. Driver activation
+persists through the existing Governance owner recovery; running sessions retain
+their pinned routes until their lifecycle replaces them.

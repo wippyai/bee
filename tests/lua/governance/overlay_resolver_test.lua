@@ -96,7 +96,53 @@ local function changes(spec: Object, entries: {Entry})
     spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
 end
 
+local function driver_fixture(target_path: string?, action: string?): (Deps, Object)
+    local binding_id = "bee.driver.stub.binding:binding"
+    local items: {Entry} = {
+        {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = {}},
+        {id = "bee.driver.stub.binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
+            data = {default = binding_id, targets = {{entry = "bee.harness.launch:harness_activation", path = target_path or ".bindings +="}}}},
+        {id = "bee.driver.stub.security:descriptor_read", kind = "security.policy", data = {policy = {effect = "allow", actions = {action or "registry.get"}, resources = {"*"}}}},
+    }
+    local made = assert(artifact.create(items))
+    local deps, spec, facts = fixture()
+    facts.captured.entries[#facts.captured.entries + 1] = {id = "bee.harness.launch:harness_activation", kind = "registry.entry",
+        data = {bindings = {"bee.driver.claude.binding:binding"}}, registry = {owner = "bee/host"}}
+    deps.root = function(_: unknown): (resolver.Root?, string?) return {component = "bee.driver.stub", version = "v1"}, nil end
+    deps.policy = function(_: unknown, _: resolver.Captured, _: resolver.Root): (Policy?, string?)
+        return {node_id = "node-destination", policy_digest = SHA, packages = {["bee.driver.stub"] = true},
+            namespaces = {["bee.driver.stub.binding"] = true, ["bee.driver.stub.security"] = true},
+            kinds = {["contract.binding"] = true, ["ns.requirement"] = true, ["security.policy"] = true},
+            databases = {}, grants = {["bee.driver.stub.security:descriptor_read"] = true}, modules = {}, applied = {}, migration_barrier = false}, nil
+    end
+    spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
+    return deps, spec
+end
+
 local function define_tests()
+    test.describe("Workspace driver admission", function()
+        test.it("measures an owned activation append through existing preflight", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            test.eq(facts.candidate.requirements[1].value, "bee.driver.stub.binding:binding")
+            test.eq(facts.candidate.requirements[1].targets[1], "bee.harness.launch:harness_activation")
+            local verdict = assert(preflight.check(facts.candidate, facts.context))
+            test.is_true(verdict.ready)
+        end)
+        test.it("refuses a replacement of the host activation catalog", function()
+            local deps, spec = driver_fixture(".bindings")
+            local candidate, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_true(tostring(problem):find("may only append", 1, true) ~= nil)
+        end)
+        test.it("refuses executable authority disguised as descriptor access", function()
+            local deps, spec = driver_fixture(nil, "exec.run")
+            local candidate, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_true(tostring(problem):find("only read registry", 1, true) ~= nil)
+        end)
+    end)
+
     test.describe("private overlay artifact resolver", function()
         test.it("blocks checkpoint metadata the application catalog cannot open", function()
             local deps, spec = fixture(nil)

@@ -4,22 +4,26 @@
 -- own agents authored under the workspace-application naming rule.
 local bounds = require("bounds")
 local workspace_applications = require("workspace_applications")
+local drivers = require("drivers")
 
 local M = {}
 local MAX_PROFILES = 64
 type Profile = {workspace_id: string, source_workspace: string, component: string, overlay_owner: string}
-type Configuration = {profiles: {Profile}, workspace_applications: boolean}
+type Configuration = {profiles: {Profile}, workspace_applications: boolean, workspace_drivers: boolean}
 type Refusal = {message: string, remedy: string}
 
 function M.decode(raw: unknown): (Configuration?, string?)
     local value = bounds.object(raw)
     local rows = value and value.profiles
-    if not value or bounds.fields(value, {"profiles", "workspace_applications"}) or type(rows) ~= "table" then
+    if not value or bounds.fields(value, {"profiles", "workspace_applications", "workspace_drivers"}) or type(rows) ~= "table" then
         return nil, "publication profiles must be an object with a profile list"
     end
     local enabled = value.workspace_applications
     if enabled ~= nil and type(enabled) ~= "boolean" then
         return nil, "publication workspace_applications must be a boolean"
+    end
+    if value.workspace_drivers ~= nil and type(value.workspace_drivers) ~= "boolean" then
+        return nil, "publication workspace_drivers must be a boolean"
     end
     local source = rows
     local count = 0
@@ -47,10 +51,15 @@ function M.decode(raw: unknown): (Configuration?, string?)
         profiles[#profiles + 1] = {workspace_id = workspace_id, source_workspace = source_workspace,
             component = component, overlay_owner = overlay_owner}
     end
-    return {profiles = profiles, workspace_applications = enabled == true}, nil
+    return {profiles = profiles, workspace_applications = enabled == true, workspace_drivers = value.workspace_drivers == true}, nil
 end
 
 local function derived(configuration: Configuration, workspace_id: string, source_workspace: string): (Profile?, string?)
+    if configuration.workspace_drivers then
+        local driver = drivers.identity(workspace_id, source_workspace)
+        if driver then return {workspace_id = workspace_id, source_workspace = driver.name,
+            component = driver.component, overlay_owner = driver.overlay_owner}, nil end
+    end
     if not configuration.workspace_applications then return nil, nil end
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
     if not identity then return nil, identity_error end
@@ -83,7 +92,7 @@ function M.for_component(configuration: Configuration, workspace_id: string,
     for _, item in ipairs(configuration.profiles) do
         if item.workspace_id == workspace_id and item.component == component then return item, nil end
     end
-    local source_workspace = workspace_applications.source_of(component)
+    local source_workspace = drivers.source_of(component) or workspace_applications.source_of(component)
     if source_workspace then
         local profile = derived(configuration, workspace_id, source_workspace)
         if profile then return profile, nil end

@@ -3,6 +3,7 @@
 -- only activation plus a driver's contract target; profile presentation and
 -- permission adapters remain owned by the harness catalog.
 local registry = require("registry")
+local funcs = require("funcs")
 local bounds = require("bounds")
 local profile_codec = require("profile")
 local descriptor = require("descriptor")
@@ -14,7 +15,7 @@ M.ACTIVATION_SCHEMA = "bee.harness-activation@1"
 M.MAX_BINDINGS = 64
 M.MAX_CONTRACTS = 16
 type Entry = {[string]: unknown}
-type Activation = {bindings: {[string]: boolean}}
+type Activation = {bindings: {[string]: boolean}, admission: string?}
 -- Decode the host declaration independently of any registry access.  The
 -- catalog and placement both use this exact boundary after they have pinned
 -- their own snapshot, so malformed activation can never silently select a
@@ -24,7 +25,7 @@ function M.decode_activation(ref: string, entry: Entry): (Activation?, string?)
     if meta.type ~= M.ACTIVATION_TYPE then return nil, ref .. " is not a harness activation declaration" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "bindings"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "bindings", "admission"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.ACTIVATION_SCHEMA then return nil, ref .. ": schema_revision must be " .. M.ACTIVATION_SCHEMA end
     local list, list_error = bounds.ids(data.bindings, true)
@@ -32,7 +33,12 @@ function M.decode_activation(ref: string, entry: Entry): (Activation?, string?)
     if #list > M.MAX_BINDINGS then return nil, ref .. ": bindings exceeds " .. tostring(M.MAX_BINDINGS) .. " items" end
     local bindings: {[string]: boolean} = {}
     for _, binding_ref in ipairs(list) do bindings[binding_ref] = true end
-    return {bindings = bindings}, nil
+    local admission: string? = nil
+    if data.admission ~= nil then
+        admission = bounds.id(data.admission)
+        if not admission then return nil, ref .. ": admission must name a function" end
+    end
+    return {bindings = bindings, admission = admission}, nil
 end
 function M.pin(): (registry.Snapshot?, string?)
     local pinned, err = registry.snapshot()
@@ -49,6 +55,16 @@ function M.active(pinned: registry.Snapshot): ({[string]: boolean}?, string?)
     if not activation then return {}, nil end
     local decoded, decode_error = M.decode_activation(M.ACTIVATION, activation)
     if not decoded then return nil, decode_error end
+    local admission = decoded.admission
+    if admission then
+        local reader = M.entry(pinned, admission)
+        if not reader or reader.kind ~= "function.lua" then return nil, "host driver admission reader is unavailable" end
+        local raw, call_error = funcs.call(admission)
+        if call_error then return nil, "read approved drivers: " .. tostring(call_error) end
+        local ids, ids_error = bounds.ids(raw, true)
+        if not ids or #ids > M.MAX_BINDINGS then return nil, "approved driver bindings are invalid: " .. tostring(ids_error) end
+        for _, id in ipairs(ids) do decoded.bindings[id] = true end
+    end
     return decoded.bindings, nil
 end
 local function array(value: unknown, maximum: integer, label: string): ({unknown}?, string?)

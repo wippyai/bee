@@ -74,6 +74,7 @@ entries:
     canonical: bee.values:canonical
     application_admission: bee.gov.activation:governed_application_admission
     workspace_applications: bee.gov.workspace:workspace_applications
+    drivers: bee.gov.workspace:drivers
     capability_grants: bee.gov.capability:capability_grants
     capability_model: bee.capability:model
 - name: application_admissions
@@ -89,3 +90,9 @@ entries:
     capability_model: bee.capability:model
     workspace_applications: bee.gov.workspace:workspace_applications
     governed_admission: bee.gov.activation:governed_application_admission
+- name: driver_admission
+  kind: library.lua
+  source: file://driver_admission.lua
+  imports:
+    bounds: bee.values:bounds
+    drivers: bee.gov.workspace:drivers

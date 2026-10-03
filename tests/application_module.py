@@ -83,9 +83,11 @@ return {main = main}
             "version": "1.0", "shutdown": {"timeout": "2s"}, "workspace": {
                 "replacements": {"bee/" + component: "./modules/" + component for component in components},
             }}, sort_keys=False))
-        run(folder, "lint", "--strict-any", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")
-        run(folder, "run", "-x", "bee.app.check:probe")
-    print("Application SDK and UI: isolated strict lint and caller/picker/client proof without Sessions, Threads or Harness")
+        environment = {"WIPPY_CACHE_DIR": str(folder / "cache")}
+        for _ in ("cold", "warm"):
+            run(folder, "lint", "--strict-any", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true", env=environment)
+        run(folder, "run", "-x", "bee.app.check:probe", env=environment)
+    print("Application SDK and UI: isolated cold/warm strict lint and caller/picker/client proof without Sessions, Threads or Harness")
 
 
 if __name__ == "__main__":

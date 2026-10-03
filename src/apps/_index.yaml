@@ -5,7 +5,7 @@ entries:
   kind: process.lua
   source: file://broker.lua
   method: main
-  modules: [security, process, channel, tty, uuid, registry, time, ctx, funcs]
+  modules: [security, process, channel, tty, uuid, registry, time, ctx, funcs, logger]
   imports:
     attachment: bee.apps:attachment
     bounds: bee.values:bounds
@@ -26,6 +26,7 @@ entries:
     thread_binding_reducer: bee.apps:thread_binding_reducer
     thread_protocol: bee.app.threads.types:protocol
     app_identity: bee.threads.records:app_identity
+    recovery: bee.workspace.types:recovery
   security:
     policies: [bee.security.desktop:broker_policy, bee.security.threads:application_thread_membership_policy,
       bee.security.threads:application_thread_facade_policy, bee.security.threads:application_thread_alias_policy,

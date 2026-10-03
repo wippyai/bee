@@ -84,6 +84,25 @@ class DiscoveryCheckTest(unittest.TestCase):
             source.write_text('local ref = namespace .. ":" .. state')
             self.assertTrue(any('registry discovery by name' in item for item in check.audit(tree)))
 
+    def test_restoration_menu_action_review_does_not_cover_registry_ids(self):
+        import json
+        import tempfile
+        root = Path(__file__).resolve().parents[1]
+        path = 'modules/terminal/src/service/main.lua'
+        reviewed = [item for item in json.loads((root / 'build/registry_discovery_allowlist.json').read_text())
+                    if item['path'] == path and item['expression'] == 'action:sub(1, 12)']
+        with tempfile.TemporaryDirectory(dir=root / '.wippy', prefix='discovery-restoration-action-') as folder:
+            tree = Path(folder)
+            source = tree / path
+            source.parent.mkdir(parents=True)
+            (tree / 'build').mkdir()
+            (tree / 'build/registry_discovery_allowlist.json').write_text(json.dumps(reviewed))
+            source.write_text('if action:sub(1, 12) == "restoration:" then failure_focus = action:sub(13) end')
+            self.assertEqual(check.audit(tree), [])
+            source.write_text(source.read_text() + '\nif entry.id:sub(1, 12) == "restoration:" then return true end')
+            self.assertTrue(any('registry discovery by name: entry.id:sub(1, 12)' in item
+                                for item in check.audit(tree)))
+
     def test_requirement_targets_are_checked_without_a_brand_prefix(self):
         import tempfile
         import layout_check

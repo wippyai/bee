@@ -1008,6 +1008,12 @@
     "reason": "Decode desktop menu action strings after selecting a concrete action target."
   },
   {
+    "path": "modules/terminal/src/service/main.lua",
+    "expression": "action:sub(1, 12)",
+    "count": 1,
+    "reason": "Decode the restoration menu action and focus its broker-published failure notice; no registry entry is discovered or authorized."
+  },
+  {
     "path": "modules/terminal/src/workspace_menu.lua",
     "expression": "menu.query:sub(1, math.floor(math.max(0, #menu.query - 1)))",
     "count": 1,

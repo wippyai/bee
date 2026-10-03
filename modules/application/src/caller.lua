@@ -18,7 +18,10 @@ local reply = require("reply")
 function M.envelope(raw: unknown): Envelope?
     local decoded = reply.decode(raw)
     if not decoded then return nil end
-    if decoded.ok and decoded.value == nil then return nil end
+    if decoded.ok == true then
+        if decoded.value == nil then return nil end
+        return {ok = true, error = nil, value = decoded.value, replayed = decoded.replayed}
+    end
     return decoded
 end
 

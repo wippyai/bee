@@ -183,6 +183,11 @@ test: fixture-gateway-client values-module ui-module component-inventory-check
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 
+.PHONY: owner-boot-check-regression
+owner-boot-check-regression:
+	@test -n "$(OWNER_BOOT_CHECK)" || { echo 'Set OWNER_BOOT_CHECK to the owner-copy boot harness.' >&2; exit 2; }
+	python3 tests/owner_boot_check_regression.py "$(OWNER_BOOT_CHECK)"
+
 .PHONY: values-module
 values-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py
@@ -777,6 +782,13 @@ login-links-check: $(TOOLCHAIN_CURRENT)
 .PHONY: ui-module
 ui-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/ui_module.py
+
+.PHONY: retained-startup-check
+RETAINED_STATE_COPY ?=
+RETAINED_EVIDENCE ?= .wippy/retained-proof
+retained-startup-check:
+	@test -n "$(RETAINED_STATE_COPY)" || { echo 'Set RETAINED_STATE_COPY to a non-credential database copy directory.' >&2; exit 1; }
+	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"
 
 .PHONY: owner-journey
 owner-journey:

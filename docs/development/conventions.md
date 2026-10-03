@@ -247,7 +247,14 @@ make standalone
 on a loaded host. The default runs all four in parallel.
 Tests declaring `meta.resources: [docker_daemon]` share one shard so a run
 does not issue container creates from separate test processes against the same
-host daemon. The remaining entries retain their balanced parallel shards.
+host daemon. That shard holds an exclusive `flock` across checkouts for its
+runtime process. The unit and focused Lua runners use the same lock, selected
+from the test entries' resource metadata. `BEE_DOCKER_DAEMON_LOCK` selects the
+lock file; otherwise it is `$XDG_RUNTIME_DIR/bee-docker-daemon.lock`, or
+`~/.cache/bee/bee-docker-daemon.lock` when `XDG_RUNTIME_DIR` is unset. The runner
+prints when it waits and when it acquires the lock, including the wait duration.
+The wait has no timeout and can be interrupted. Failures release the lock and
+retain their cause. The remaining entries retain their balanced parallel shards.
 
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's

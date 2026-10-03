@@ -445,8 +445,10 @@ local function has(list: {string}, wanted: string): boolean
     end
     return false
 end
-local function define_tests()
-    test.describe("Native placement", function()
+local function define_launch_tests(measured: {[string]: unknown})
+    local capability = tostring(measured.capability)
+    local observation = tostring(measured.exit_observation)
+    test.describe("Native placement launch", function()
         test.it("coalesces short reads within the bounded output chunk and preserves stream bytes", function()
             local buffers = output_buffer.new()
             local source = string.rep("x", output_buffer.MAX_BYTES * 2 + 17)
@@ -857,13 +859,6 @@ local function define_tests()
             executor:release()
             if not ok then error(tostring(failure)) end
         end)
-        resource_mode("host_configured")
-        admit_root("bee.placement.native.env:placement_admitted_roots")
-        admit_root("bee.resources.env:resource_roots")
-        activate_fixture_binding()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
         test.it("stops an unstarted retained attempt without holding its session or creating a child", function()
             for _, required in ipairs({"direct_process", "process_group"}) do
                 if types.satisfies(capability, required) then
@@ -1230,7 +1225,7 @@ local function define_tests()
             test.is_false(forged_stop_accepted, "unauthenticated stop ended the child")
         end)
         test.it("restores the prior attachment when the runner refuses a replacement recipient", function()
-            local request = launch({"sh", "-c", "sleep 3"}, "direct_process")
+            local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
             local prepared = attempt_of(call(OWNER, "prepare", request))
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
             local attached = attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
@@ -1242,6 +1237,8 @@ local function define_tests()
             local db = assert(store.open())
             local after_row = store.row(db, prepared.attempt_id)
             db:release()
+            local stopped = call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
+            test.is_true(stopped.ok, "refusal fixture child did not accept stop")
             local eof_count = 0
             local deadline = time.after("5s")
             while eof_count < 2 do
@@ -1498,6 +1495,11 @@ local function define_tests()
             end
             process.unlisten(outputs)
         end)
+    end)
+end
+
+local function define_configuration_tests(measured: {[string]: unknown})
+    test.describe("Native placement configuration", function()
         test.it("prepares the planner's default options without a configuration conflict", function()
             local policy = assert(registry.get(NO_PROVIDER_POLICY))
             local policy_data = assert(bounds.object(policy.data))
@@ -2144,6 +2146,12 @@ local function define_tests()
             test.is_nil(reserved)
             test.eq(reserved_error, "login format overlaps retained identity")
         end)
+    end)
+end
+
+local function define_supervision_tests(measured: {[string]: unknown})
+    local capability = tostring(measured.capability)
+    test.describe("Native placement supervision", function()
         test.it("keeps a retained home excluded when its placement is uncertain", function()
             local session_ref = fresh("uncertain-session")
             local first = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "uncertain")))
@@ -2417,6 +2425,176 @@ local function define_tests()
             end, 8000) then error("revoke_all did not stop the child: " .. table.concat(kinds(attempt_id), ",")) end
             resource_mode("host_configured")
         end)
+        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
+            assert(not call_error, tostring(call_error))
+            local started = attempt_of(principals.reply(raw))
+            test.eq(started.execution_state, "starting")
+            local selected = channel.select({pending:case_receive(), time.after("5s"):case_receive()})
+            process.unlisten(pending)
+            assert(selected.ok and selected.channel == pending, "fixture did not begin")
+            local runner = tostring(selected.value:from())
+            test.eq(started.runner, runner)
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt.execution_state == "running" end, 3000))
+            assert(process.terminate(runner))
+            local recorded = kinds(prepared.attempt_id)
+            test.is_true(has(recorded, "runner.start_accepted"))
+            test.is_false(has(recorded, "runner.start_deadline"))
+            test.is_true(has(recorded, "child.started"))
+        end)
+        test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
+            local ids: {string} = {}
+            for index = 1, 3 do
+                -- Keep the children live until this case stops them. Their
+                -- liveness must not depend on how fast a loaded host sweeps.
+                local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
+                ids[index] = request.attempt_id
+                attempt_of(call(OWNER, "prepare", request))
+                test.eq(attempt_of(call(OWNER, "start", {attempt_id = ids[index]})).execution_state, "running")
+            end
+            -- Each sweep takes at most the bound; every live attempt is reached
+            -- within a bounded number of sweeps, and an attempt a sweep settled
+            -- as uncertain or exited is not swept again.
+            local previous_bound = service.SWEEP_BOUND
+            service.SWEEP_BOUND = 2
+            local function touched_count(): integer
+                local total = 0
+                for _, id in ipairs(ids) do
+                    local page = value(call(OWNER, "evidence", {attempt_id = id, limit = 64}))
+                    for _, item in ipairs(principals.objects(page.evidence)) do
+                        if tostring(item.kind):find("^reconcile%.") then
+                            total = total + 1
+                            break
+                        end
+                    end
+                end
+                return total
+            end
+            local sweeps = 0
+            while sweeps == 0 or (touched_count() < 3 and sweeps < 3) do
+                local swept = value(service.sweep())
+                test.is_true((swept.reconciled) <= 2)
+                sweeps = sweeps + 1
+            end
+            service.SWEEP_BOUND = previous_bound
+            test.eq(touched_count(), 3)
+            -- The independently scheduled sweeper may have reconciled a row
+            -- before this process calls sweep, including all three rows.
+            local before = process.registry.lookup(service.SWEEPER_NAME)
+            if not before then error("sweeper is not registered") end
+            assert(process.terminate(tostring(before)))
+            local restarted = wait_for(function()
+                local now = process.registry.lookup(service.SWEEPER_NAME)
+                return now ~= nil and tostring(now) ~= tostring(before)
+            end, 10000)
+            test.is_true(restarted)
+            for _, id in ipairs(ids) do attempt_of(call(OWNER, "stop", {attempt_id = id, mode = "forced"})) end
+        end)
+        if capability == "process_group" then
+            test.it("records a refused cleanup with its reason", function()
+                local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "process_group")))
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                if not wait_for(function()
+                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
+                end, 8000) then error("grouped attempt did not exit") end
+                -- An identity read that found no process group leaves group
+                -- absence unprovable; a continuation waiting on this cleanup
+                -- must find the refusal and its reason in the ledger.
+                local db = store.open()
+                if not db then error("store") end
+                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET pgid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+                db:release()
+                if clear_error then error("clear process group: " .. tostring(clear_error)) end
+                local refused = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
+                test.eq(refused.error and refused.error.code, "CONFLICT")
+                local reason = "cleanup scope process_group is not proven gone: no process group recorded"
+                test.eq(refused.error and refused.error.message, reason)
+                local recorded = false
+                local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
+                for _, item in ipairs(principals.objects(page.evidence)) do
+                    if item.kind == "cleanup.refused" and item.detail == reason then recorded = true end
+                end
+                test.is_true(recorded, table.concat(kinds(prepared.attempt_id), ","))
+                local after = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                test.eq(after.cleanup_state, "pending")
+            end)
+            test.it("proves absence from identity after the runner is lost", function()
+                local request = launch({"sh", "-c", "sleep 8"}, "process_group")
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                local db = store.open()
+                if not db then error("store") end
+                local row = store.row(db, prepared.attempt_id)
+                local runner = tostring(row and row.runner_pid)
+                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET runner_pid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+                db:release()
+                if clear_error then error("clear runner: " .. tostring(clear_error)) end
+                local before = value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))
+                local live = before.liveness
+                if not live.observed or live.alive ~= true then error("running child not identified alive: " .. live.detail) end
+                test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "running")
+                process.terminate(runner)
+                if not wait_for(function() return attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state == "exited" end, 5000) then
+                    error("runner loss did not end the child: " .. table.concat(kinds(prepared.attempt_id), ","))
+                end
+                test.is_true(has(kinds(prepared.attempt_id), "reconcile.absent"))
+                local absent = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                test.eq(absent.exit_source, "reconcile")
+                local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+                test.eq(cleaned.cleanup_state, "complete")
+                test.is_true(has(kinds(prepared.attempt_id), "cleanup.complete"))
+            end)
+            test.it("removes the grandchild with the group on stop", function()
+                local request = launch({"sh", "-c", "tail -f /dev/null & echo child:$!; wait"}, "process_group")
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+                call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                local grandchild = ""
+                local deadline = time.after("10s")
+                while grandchild == "" do
+                    local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
+                    if not selected.ok or selected.channel == deadline then break end
+                    local data = assert(bounds.object(selected.value:payload():data()))
+                    grandchild = tostring(data.data or ""):match("child:(%d+)") or ""
+                end
+                test.neq(grandchild, "")
+                local stopped = call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
+                if not stopped.ok then
+                    local status = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                    local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
+                    local lines: {string} = {}
+                    for _, item in ipairs(principals.objects(page.evidence)) do lines[#lines + 1] = tostring(item.kind) .. ": " .. tostring(item.detail) end
+                    error("stop refused: " .. tostring(stopped.error and stopped.error.message) .. "; execution " .. status.execution_state .. " exit " .. tostring(status.exit and status.exit.code) .. " exit_source " .. tostring(status.exit_source) .. " grandchild alive " .. tostring(alive(grandchild)) .. "; evidence: " .. table.concat(lines, " | "))
+                end
+                if not wait_for(function()
+                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
+                end, 8000) then error("forced stop did not end the child") end
+                test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "exited")
+                test.is_true(wait_for(function() return not alive(grandchild) end, 5000))
+                -- The stop intent is on record before the runner's exit
+                -- observation, however fast the runner sees the kill land.
+                local order: {string} = {}
+                for _, item in ipairs(principals.objects(value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64})).evidence)) do
+                    if item.kind == "stop.requested" or item.kind == "child.exited" then order[#order + 1] = tostring(item.kind) end
+                end
+                test.eq(table.concat(order, ","), "stop.requested,child.exited")
+                local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+                test.eq(cleaned.cleanup_state, "complete")
+                process.unlisten(outputs)
+            end)
+        end
+    end)
+end
+
+local function define_credentials_tests(measured: {[string]: unknown})
+    local capability = tostring(measured.capability)
+    test.describe("Native placement credentials", function()
         test.it("refuses file credentials before intent without a selected retained home", function()
             local source = "bee.credentials:codex_login_fixture"
             admit_login_source(source)
@@ -2929,28 +3107,6 @@ local function define_tests()
             end, 8000) then error("successor retained launch did not exit") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
         end)
-        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
-            assert(not call_error, tostring(call_error))
-            local started = attempt_of(principals.reply(raw))
-            test.eq(started.execution_state, "starting")
-            local selected = channel.select({pending:case_receive(), time.after("5s"):case_receive()})
-            process.unlisten(pending)
-            assert(selected.ok and selected.channel == pending, "fixture did not begin")
-            local runner = tostring(selected.value:from())
-            test.eq(started.runner, runner)
-            assert(process.send(runner, "bee.test.startup.advance", {}))
-            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt.execution_state == "running" end, 3000))
-            assert(process.terminate(runner))
-            local recorded = kinds(prepared.attempt_id)
-            test.is_true(has(recorded, "runner.start_accepted"))
-            test.is_false(has(recorded, "runner.start_deadline"))
-            test.is_true(has(recorded, "child.started"))
-        end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()
             local workspace = fresh("ws")
@@ -3081,158 +3237,31 @@ local function define_tests()
                 test.is_nil((tostring(row and row.request_json):find(SENTINEL, 1, true)))
             end
         end)
-        test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
-            local ids: {string} = {}
-            for index = 1, 3 do
-                -- Keep the children live until this case stops them. Their
-                -- liveness must not depend on how fast a loaded host sweeps.
-                local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
-                ids[index] = request.attempt_id
-                attempt_of(call(OWNER, "prepare", request))
-                test.eq(attempt_of(call(OWNER, "start", {attempt_id = ids[index]})).execution_state, "running")
-            end
-            -- Each sweep takes at most the bound; every live attempt is reached
-            -- within a bounded number of sweeps, and an attempt a sweep settled
-            -- as uncertain or exited is not swept again.
-            local previous_bound = service.SWEEP_BOUND
-            service.SWEEP_BOUND = 2
-            local function touched_count(): integer
-                local total = 0
-                for _, id in ipairs(ids) do
-                    local page = value(call(OWNER, "evidence", {attempt_id = id, limit = 64}))
-                    for _, item in ipairs(principals.objects(page.evidence)) do
-                        if tostring(item.kind):find("^reconcile%.") then
-                            total = total + 1
-                            break
-                        end
-                    end
-                end
-                return total
-            end
-            local sweeps = 0
-            while sweeps == 0 or (touched_count() < 3 and sweeps < 3) do
-                local swept = value(service.sweep())
-                test.is_true((swept.reconciled) <= 2)
-                sweeps = sweeps + 1
-            end
-            service.SWEEP_BOUND = previous_bound
-            test.eq(touched_count(), 3)
-            -- The independently scheduled sweeper may have reconciled a row
-            -- before this process calls sweep, including all three rows.
-            local before = process.registry.lookup(service.SWEEPER_NAME)
-            if not before then error("sweeper is not registered") end
-            assert(process.terminate(tostring(before)))
-            local restarted = wait_for(function()
-                local now = process.registry.lookup(service.SWEEPER_NAME)
-                return now ~= nil and tostring(now) ~= tostring(before)
-            end, 10000)
-            test.is_true(restarted)
-            for _, id in ipairs(ids) do attempt_of(call(OWNER, "stop", {attempt_id = id, mode = "forced"})) end
-        end)
-        if capability == "process_group" then
-            test.it("records a refused cleanup with its reason", function()
-                local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "process_group")))
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                if not wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-                end, 8000) then error("grouped attempt did not exit") end
-                -- An identity read that found no process group leaves group
-                -- absence unprovable; a continuation waiting on this cleanup
-                -- must find the refusal and its reason in the ledger.
-                local db = store.open()
-                if not db then error("store") end
-                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET pgid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
-                db:release()
-                if clear_error then error("clear process group: " .. tostring(clear_error)) end
-                local refused = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-                test.eq(refused.error and refused.error.code, "CONFLICT")
-                local reason = "cleanup scope process_group is not proven gone: no process group recorded"
-                test.eq(refused.error and refused.error.message, reason)
-                local recorded = false
-                local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
-                for _, item in ipairs(principals.objects(page.evidence)) do
-                    if item.kind == "cleanup.refused" and item.detail == reason then recorded = true end
-                end
-                test.is_true(recorded, table.concat(kinds(prepared.attempt_id), ","))
-                local after = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                test.eq(after.cleanup_state, "pending")
-            end)
-            test.it("proves absence from identity after the runner is lost", function()
-                local request = launch({"sh", "-c", "sleep 8"}, "process_group")
-                local prepared = attempt_of(call(OWNER, "prepare", request))
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                local db = store.open()
-                if not db then error("store") end
-                local row = store.row(db, prepared.attempt_id)
-                local runner = tostring(row and row.runner_pid)
-                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET runner_pid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
-                db:release()
-                if clear_error then error("clear runner: " .. tostring(clear_error)) end
-                local before = value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))
-                local live = before.liveness
-                if not live.observed or live.alive ~= true then error("running child not identified alive: " .. live.detail) end
-                test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "running")
-                process.terminate(runner)
-                if not wait_for(function() return attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state == "exited" end, 5000) then
-                    error("runner loss did not end the child: " .. table.concat(kinds(prepared.attempt_id), ","))
-                end
-                test.is_true(has(kinds(prepared.attempt_id), "reconcile.absent"))
-                local absent = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                test.eq(absent.exit_source, "reconcile")
-                local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-                test.eq(cleaned.cleanup_state, "complete")
-                test.is_true(has(kinds(prepared.attempt_id), "cleanup.complete"))
-            end)
-            test.it("removes the grandchild with the group on stop", function()
-                local request = launch({"sh", "-c", "sleep 8 & echo child:$!; wait"}, "process_group")
-                local prepared = attempt_of(call(OWNER, "prepare", request))
-                local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-                call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                local grandchild = ""
-                local deadline = time.after("10s")
-                while grandchild == "" do
-                    local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                    if not selected.ok or selected.channel == deadline then break end
-                    local data = assert(bounds.object(selected.value:payload():data()))
-                    grandchild = tostring(data.data or ""):match("child:(%d+)") or ""
-                end
-                test.neq(grandchild, "")
-                local stopped = call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
-                if not stopped.ok then
-                    local status = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                    local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
-                    local lines: {string} = {}
-                    for _, item in ipairs(principals.objects(page.evidence)) do lines[#lines + 1] = tostring(item.kind) .. ": " .. tostring(item.detail) end
-                    error("stop refused: " .. tostring(stopped.error and stopped.error.message) .. "; execution " .. status.execution_state .. " exit " .. tostring(status.exit and status.exit.code) .. " exit_source " .. tostring(status.exit_source) .. " grandchild alive " .. tostring(alive(grandchild)) .. "; evidence: " .. table.concat(lines, " | "))
-                end
-                if not wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-                end, 8000) then error("forced stop did not end the child") end
-                test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "exited")
-                test.is_true(wait_for(function() return not alive(grandchild) end, 5000))
-                -- The stop intent is on record before the runner's exit
-                -- observation, however fast the runner sees the kill land.
-                local order: {string} = {}
-                for _, item in ipairs(principals.objects(value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64})).evidence)) do
-                    if item.kind == "stop.requested" or item.kind == "child.exited" then order[#order + 1] = tostring(item.kind) end
-                end
-                test.eq(table.concat(order, ","), "stop.requested,child.exited")
-                local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-                test.eq(cleaned.cleanup_state, "complete")
-                process.unlisten(outputs)
-            end)
-        end
     end)
 end
-local cases = test.run_cases(define_tests)
-return {run = function(options)
+
+local function run(define_cases: ({[string]: unknown}) -> (), options: unknown): unknown
     local originals: {{[string]: unknown}} = {}
     for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+    local cases = test.run_cases(function()
+        resource_mode("host_configured")
+        admit_root("bee.placement.native.env:placement_admitted_roots")
+        admit_root("bee.resources.env:resource_roots")
+        activate_fixture_binding()
+        local measured = value(service.capabilities())
+        define_cases(measured)
+    end)
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
     for _, original in ipairs(originals) do changes:update(registry_input(original)) end
     assert(changes:apply())
     if not ok then error(tostring(result)) end
     return result
-end}
+end
+
+return {
+    run = function(options) return run(define_launch_tests, options) end,
+    configuration = function(options) return run(define_configuration_tests, options) end,
+    supervision = function(options) return run(define_supervision_tests, options) end,
+    credentials = function(options) return run(define_credentials_tests, options) end,
+}

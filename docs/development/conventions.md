@@ -256,6 +256,11 @@ lock and an unreachable daemon fails with its exact error. The runner prints whe
 The wait has no timeout and can be interrupted. Failures release the lock and
 retain their cause. The remaining entries retain their balanced parallel shards.
 
+`make native-placement-unit-check` runs native launch, configuration, supervision
+and credential suites together with provider configuration and instruction-builder
+checks. Each native suite captures and restores shared fixture registry state
+independently within the existing test entry timeout.
+
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's
 `check-shard-*` targets; a new `check` member joins one shard, and

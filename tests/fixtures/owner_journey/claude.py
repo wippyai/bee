@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 import re
 import sys
-import time
 import urllib.request
 from urllib.parse import urlsplit
 

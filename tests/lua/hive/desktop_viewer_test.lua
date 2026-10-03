@@ -1,6 +1,5 @@
--- MIT. The remote view process answers its parent with exactly one failed
--- state when its arguments are invalid or no owner supervisor answers for the
--- node, and never attaches anything.
+-- MIT. Remote viewers deliver frames, detach on parent close and report invalid
+-- arguments or an unavailable owner without attaching.
 local test = require("test")
 local bounds = require("bounds")
 local process = require("process")

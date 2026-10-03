@@ -32,18 +32,23 @@ the replaceable `target_root` requirement.
    Repeating the same admitted idempotency key still returns its original
    attempt. This is an admission predicate in the existing placement
    transaction, not a home lock or a separate manager.
-2. `start` spawns the runner under the placement scope and waits for its
-   startup acknowledgment within the admitted start budget.
-   An elapsed budget returns `UNCERTAIN` without changing the recorded execution
-   state or stopping the runner. The caller checks `status` or `reconcile` before
-   deciding what to do next; an unacknowledged start does not authorize a retry.
+2. `start` returns the durable `starting` attempt once its runner is spawned
+   and monitored by an attempt supervisor. The caller does not wait for child
+   startup. The supervisor consumes authenticated acknowledgements and runner
+   exits for the runner's lifetime. The runner records `running` after startup
+   and identity resolution, or `start_failed` with the exact refusal cause.
+   Exit before acknowledgement records the runner's exit reason as a startup
+   failure. Recipient notifications use `bee.placement.started` as a hint to
+   read the authenticated owner status; state and cause come from the store.
+   Slow startup stays `starting` until acknowledgement, refusal, observed exit
+   or an explicit stop. Each executor operation keeps its own runtime bound.
    `stop` before the runner claims startup atomically records exit and complete
    cleanup, releasing the retained session without touching its existing files.
    A delayed start cannot claim that stopped attempt; repeated stops return its
    recorded state. If startup wins the claim, normal runner stop and cleanup
    proof still apply. Thread receipts and gateway revocation retain their own
    owners; placement completion does not settle either operation.
-3. Both structured and window runners atomically claim `intended` as `starting`
+3. The structured supervisor claims `intended` as `starting`; window runners claim it directly
    before creating files. A duplicate runner refuses without replacing the
    recorded runner identity or materializing the attempt home. A launch that
    names both a retained session and its writable session
@@ -295,8 +300,10 @@ the reconcile timeout, the per-attempt stop grace and the sweep bound as
 separate figures, because the sweep interval alone is not a stop deadline.
 Evidence names what failed: `grant.revoked` or `credential.revoked`,
 `grant.refused` or `credential.refused`. An environment value already
-inside a running child cannot be scrubbed; enforcement is the stop. Native
-executor error text is never recorded; evidence carries fixed phrases.
+inside a running child cannot be scrubbed; enforcement is the stop. Startup
+refusals retain the exact operation cause in `child.start_failed`; grant and
+credential enforcement evidence names the refused authorization without
+recording credential values.
 
 ## Attachment fence
 
@@ -308,6 +315,25 @@ from the new recipient only, and answers a refused write with the sender's
 own generation.
 
 ## Uncertainty
+
+Startup has no caller deadline. Timestamped evidence records admission,
+monitor installation, runner materialization, executor return, identity
+resolution and acknowledgement delivery. Acknowledgements queued before EXIT
+are drained before the supervisor concludes startup failed. A stopped attempt
+cannot transition back to `running`; late acknowledgements remain evidence.
+A stop before child creation projects `start_cancelled` from the existing stop
+and no-child evidence. Consumers settle cancellation directly, without an exit
+code or exit source. Reconciliation never guesses a startup result from runner
+absence while its monitor is recording the outcome.
+
+Placement migration 11 (`supervised_startup`, M5) adds `start_failed` to the
+owned attempt state schema, removes `timeouts.start_ms` from persisted request
+JSON and carries existing failed-start evidence into that state. Existing
+request digests, IDs, timestamps, evidence and migration checksums are retained.
+New request decoders reject `start_ms`. Registry launch-policy revision
+`bee.launch-policy@3` removes it; the explicit revision-two decoder validates
+and ignores the retired field for persisted policies while retaining the
+original entry digest. No registry history or frozen policy is rewritten.
 
 Signal evidence is not exit evidence; the runner records exit only from
 `wait`. Without a live runner, `stop` signals the group only after the

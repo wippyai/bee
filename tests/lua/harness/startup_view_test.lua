@@ -1,0 +1,22 @@
+-- SPDX-License-Identifier: MIT
+local test = require("test")
+local agents = require("agents")
+local function run()
+    test.describe("Session startup presentation", function()
+        test.it("shows starting until the acknowledged running event arrives", function()
+            local pending = assert(agents.placement_progress({execution_state = "starting"}))
+            test.eq(pending.state, "starting")
+            local running = assert(agents.placement_progress({execution_state = "running"}))
+            test.eq(running.state, "working")
+        end)
+        test.it("shows the exact startup failure and rejects a missing cause", function()
+            local failed = assert(agents.placement_progress({execution_state = "start_failed", start_failure = "containers/create: daemon refused"}))
+            test.eq(failed.state, "failed")
+            test.eq(failed.cause, "containers/create: daemon refused")
+            local invalid, reason = agents.placement_progress({execution_state = "start_failed"})
+            test.is_nil(invalid)
+            test.eq(reason, "failed startup observation omitted its cause")
+        end)
+    end)
+end
+return {run = test.run_cases(run)}

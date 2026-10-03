@@ -185,7 +185,7 @@ local function launch_request(attempt_id: string, configuration_digest: string?)
         environment = {},
         required_cleanup = "direct_process",
         required_exit_observation = "eof_gated",
-        timeouts = {start_ms = 10000, stop_grace_ms = 500},
+        timeouts = {stop_grace_ms = 500},
     }
 end
 
@@ -273,7 +273,9 @@ local function define_tests()
                 local started_reply = call(OWNER, "start", {attempt_id = prepared_attempt_id})
                 test.is_true(started_reply.ok)
                 local started = assert(bounds.object(started_reply.value))
-                test.eq(started.execution_state, "running")
+                test.eq(started.execution_state, "starting")
+                assert(type(prepared_attempt_id) == "string")
+                wait_for_exit(prepared_attempt_id)
 
                 -- Inspect generated instructions file in child home
                 if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end

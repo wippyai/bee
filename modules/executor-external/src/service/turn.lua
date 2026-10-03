@@ -171,6 +171,22 @@ local function pending(request: Request, reason: string, attempt: unknown?): {[s
         evidence = {code = "placement_active", message = reason, placement = attempt}}
 end
 
+local function failed_start(request: Request, attempt: {[string]: unknown}, observed: unknown?): ({[string]: unknown}?, string?)
+    local cause = bounds.text(attempt.start_failure, 4096)
+    if not cause then return nil, "placement start_failed omitted its exact cause" end
+    local observation = object(observed)
+    return {state = "settled", outcome = "failed", attempt_id = request.attempt_id,
+        error = {code = "START_FAILED", message = cause}, observations = observation and observation.observations or {},
+        checkpoint = {attempt_id = request.attempt_id, resume_ref = request.checkpoint and request.checkpoint.resume_ref},
+        evidence = attempt}, nil
+end
+local function cancelled_start(request: Request, attempt: {[string]: unknown}, observed: unknown?): {[string]: unknown}
+    local observation = object(observed)
+    return {state = "settled", outcome = "cancelled", error = {code = "CANCELLED", message = "explicit stop before child creation"},
+        attempt_id = request.attempt_id, checkpoint = {attempt_id = request.attempt_id, resume_ref = request.checkpoint and request.checkpoint.resume_ref},
+        observations = observation and observation.observations or {}, evidence = attempt}
+end
+
 local function call_previous(io: IO, attempt_id: string): (Recovery, string?, unknown?)
     local value, call_error = io.reconcile(attempt_id)
     if call_error then return "uncertain", "reconcile previous placement attempt: " .. call_error, nil end
@@ -179,7 +195,7 @@ local function call_previous(io: IO, attempt_id: string): (Recovery, string?, un
     if placement_pending(attempt) then
         return "pending", "previous placement attempt is still " .. tostring(attempt.execution_state), attempt
     end
-    if attempt.execution_state ~= "exited" or attempt.exit_source == nil then
+    if not attempt.start_cancelled and attempt.execution_state ~= "start_failed" and (attempt.execution_state ~= "exited" or attempt.exit_source == nil) then
         return "uncertain", "previous placement attempt has no proven exit", attempt
     end
     local cleaned, cleanup_error = io.cleanup(attempt_id)
@@ -211,6 +227,8 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         if not attempt or attempt.attempt_id ~= request.attempt_id then
             return uncertain(request, "current placement recovery returned invalid evidence: " .. tostring(attempt_error), recovered)
         end
+        if attempt.execution_state == "start_failed" or attempt.start_failure ~= nil then return failed_start(request, attempt) end
+        if attempt.start_cancelled then return cancelled_start(request, attempt), nil end
         if placement_pending(attempt) then return pending(request, "recovered placement is still active", attempt) end
         return uncertain(request, "recovered placement has no durable terminal report", attempt)
     end
@@ -248,6 +266,8 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         if attempt.attempt_id ~= request.attempt_id then
             return uncertain(request, "current placement reconciliation returned another attempt", attempt)
         end
+        if attempt.execution_state == "start_failed" or attempt.start_failure ~= nil then return failed_start(request, attempt) end
+        if attempt.start_cancelled then return cancelled_start(request, attempt), nil end
         if placement_pending(attempt) then
             return pending(request, "current placement attempt is still " .. tostring(attempt.execution_state), attempt)
         end
@@ -288,6 +308,8 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         if attempt and attempt.attempt_id == request.attempt_id and placement_pending(attempt) then
             return pending(request, "placement start did not settle; attempt is still " .. tostring(attempt.execution_state), attempt)
         end
+        if attempt and (attempt.execution_state == "start_failed" or attempt.start_failure ~= nil) then return failed_start(request, attempt) end
+        if attempt and attempt.start_cancelled then return cancelled_start(request, attempt), nil end
         return uncertain(request, "start returned without a proven result: " .. start_error, attempt)
     end
     local started_attempt, started_decode_error = placement_attempt(started)
@@ -302,6 +324,10 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     local reconciled, reconcile_error = io.reconcile(request.attempt_id)
     if reconcile_error then return uncertain(request, "placement exit cannot be proven: " .. reconcile_error, observed) end
     local final_attempt, final_decode_error = placement_attempt(reconciled)
+    if final_attempt and final_attempt.attempt_id == request.attempt_id and (final_attempt.execution_state == "start_failed" or final_attempt.start_failure ~= nil) then return failed_start(request, final_attempt, observed) end
+    if final_attempt and final_attempt.attempt_id == request.attempt_id and final_attempt.start_cancelled == true then
+        return cancelled_start(request, final_attempt, observed), nil
+    end
     if not final_attempt or final_attempt.attempt_id ~= request.attempt_id or final_attempt.execution_state ~= "exited" or final_attempt.exit_source == nil then
         return uncertain(request, "placement exit cannot be proven: " .. tostring(final_decode_error or "attempt is not proven exited"), final_attempt)
     end

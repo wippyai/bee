@@ -37,7 +37,10 @@ function M.inspect(call: Caller, status_target: string?, stop_target: string?, a
         return {outcome = "uncertain", reason = append(reason, "placement status is malformed: " .. tostring(status_error))}
     end
     local execution = status.attempt.execution_state
-    if execution == "intended" then
+    if status.attempt.start_failure then
+        outcome = "failed"
+        reason = append(reason, "failed start: " .. status.attempt.start_failure)
+    elseif execution == "intended" then
         reason = append(reason, "placement had not started a child")
     else
         outcome = "uncertain"

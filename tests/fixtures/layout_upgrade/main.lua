@@ -43,7 +43,7 @@ function M.seed()
         launch = {executable = "fixture", argv = {"fixture"}, environment = {}, readiness = "protocol:system.init"},
         resources = {}, environment = {}, environment_refs = {}, projections = {},
         required_cleanup = "direct_process", required_exit_observation = "eof_gated",
-        timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
+        timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
     }
     local intended = placement.intend(db, launch, assert(request.digest(launch)), assert(json.encode(launch)),
         {capability = "direct_process", exit_observation = "eof_gated"})

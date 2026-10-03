@@ -3,10 +3,11 @@
 local types = require("types")
 local M = {}
 local EXECUTION: {[string]: {string}} = {
-    intended = {"starting", "exited", "uncertain"},
-    starting = {"running", "stopping", "exited", "uncertain"},
+    intended = {"starting", "exited", "start_failed", "uncertain"},
+    starting = {"running", "stopping", "exited", "start_failed", "uncertain"},
     running = {"stopping", "exited", "uncertain"},
-    stopping = {"exited", "uncertain"},
+    stopping = {"exited", "start_failed", "uncertain"},
+    start_failed = {"exited"},
     exited = {},
     uncertain = {"exited"},
 }

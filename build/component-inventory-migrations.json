@@ -1651,6 +1651,13 @@
       "to": "tag:bee.governance-component-guide@11",
       "migration": "M0",
       "reason": "Authoring guide presentation revision adds custom-driver instructions; stored artifacts, approval schema and records remain unchanged."
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.launch-policy@2",
+      "to": "tag:bee.launch-policy@3",
+      "migration": "M5",
+      "reason": "Owner-approved supervised startup removes the caller deadline. The explicit revision-two decoder validates and retires start_ms while preserving its original entry digest; revision three rejects the retired field. Placement migration 11 removes stored request deadlines and introduces precise start_failed state without modifying prior ledgers."
     }
   ]
 }

@@ -55,7 +55,7 @@ def main():
     require_executable("BEE_CLAUDE_BIN", "Claude Code")
     require_executable("BEE_CODEX_BIN", "codex")
     entries = test_entries(SUITES)
-    groups = split(entries)
+    groups = split(entries, test_entries(SUITES, resource="docker_daemon"))
     started = time.time()
     with ExitStack() as fixtures:
         folders = [fixtures.enter_context(fixture_workspace(managed_gateway=True)) for _ in groups]

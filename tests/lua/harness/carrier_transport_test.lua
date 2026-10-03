@@ -38,13 +38,13 @@ end
 local function plan(mode: string, protocol: string): machine.Plan
     local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
     local policy_value: policy.Policy = {ref = "policy", digest = "policy-digest", permission_answers = "provider", placement_profiles = {"bee.placement.profiles:native"}, prepare_options = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated",
-            start_ms = 1000, stop_grace_ms = 100, drain_ms = 100, runner_drain_ms = 100, retain_ms = 100,
+            stop_grace_ms = 100, drain_ms = 100, runner_drain_ms = 100, retain_ms = 100,
             executables = {}, environment = {}, host_environment = {}, allow_host_home = false, gateway_tools = {}, agent_model_map = {}, agent_delegates = {}, gateway_ttl_ms = 1000, gateway_hooks = {}, fixture = true, allowed_overrides = {}}
     local placement_request_value: placement_types.LaunchRequest = {idempotency_key = "key", owner_id = "actor", owner_incarnation = 1, action_id = "action", attempt_id = "attempt",
             binding_ref = "binding", policy_ref = "policy", profile_id = "window", binding_digest = "binding-digest", profile_digest = "profile-digest",
             placement_binding_ref = "bee.placement.native.binding:binding", placement_binding_digest = string.rep("a", 64),
             launch = launch, resources = {}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = "direct_process",
-            required_exit_observation = "eof_gated", timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 100, retain_ms = 100}}
+            required_exit_observation = "eof_gated", timeouts = {stop_grace_ms = 100, drain_ms = 100, retain_ms = 100}}
     local profile_value: classify.Profile = {id = "window", mode = mode, protocol = protocol, protocol_revision = "1", supported = true, private_home = true,
             permission = {mode = "none", eligible = false}}
     local request_value: machine.Request = {thread_id = "thread", action_id = "action", attempt_id = "attempt", owner_id = "actor", owner_incarnation = 1,
@@ -70,6 +70,44 @@ local function plan(mode: string, protocol: string): machine.Plan
 end
 local function define_tests()
     test.describe("Carrier transport ownership", function()
+        test.it("keeps a session starting until the owner acknowledges running", function()
+            local selected = plan("session", "stream-json")
+            local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)
+            local session: machine.Session = {plan = selected, turn_id = "turn:attempt:1", turn_open = true, epoch = 1, revision = 0,
+                checkpoint = point, decoder = stream_json.new(machine.MAX_FRAME_BYTES), normalizer = nil, terminal = nil,
+                stream_ended = false, exit = nil, eof = {stdout = false, stderr = false}, runner = "runner",
+                settled = nil, recovered = false, output = "open", pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
+                last_sequence = {stdout = 0, stderr = 0}, held_from = nil, dropping_stdout = false, placement_state = "starting"}
+            local attempt = placement_attempt(nil)
+            attempt.execution_state = "starting"
+            attempt.attachment_generation = 1
+            local starts = 0
+            local revision = 0
+            local io: machine.IO = {call = function(target: string, value: unknown): (unknown, string?)
+                if target == "bee.placement.native.binding:status" then
+                    return {ok = true, value = {attempt = attempt, liveness = {observed = false, at = "2025-01-01T00:00:00.000Z", detail = "preparing"}}}, nil
+                elseif target == machine.THREADS .. ":start_attempt" then
+                    starts = starts + 1
+                    return {ok = true, value = {}}, nil
+                elseif target == machine.CARRIER_OPS .. ":commit" then
+                    revision = revision + 1
+                    return commit_reply(value, revision), nil
+                end
+                error("unexpected startup call " .. target)
+            end,
+                send = function(_: string, _: string, _: unknown) error("startup must not dispatch input") end,
+                self_pid = function(): string return "carrier" end,
+                now_ms = function(): integer return 1000000000 end,
+                key = function(): string return "key" end}
+            for _ = 1, 3 do assert(machine.on_startup(io, session)); test.eq(session.placement_state, "starting") end
+            test.eq(starts, 0)
+            attempt.execution_state = "running"
+            assert(machine.on_startup(io, session))
+            test.eq(session.placement_state, "running")
+            test.eq(starts, 1)
+            assert(machine.on_startup(io, session))
+            test.eq(starts, 1)
+        end)
         test.it("does not settle an exited child while its runner still owns unconsumed output", function()
             local selected = plan("session", "stream-json")
             local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)

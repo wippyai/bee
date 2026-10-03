@@ -1639,6 +1639,13 @@
       "to": "bee.launch.service:workspace_hosts"
     },
     {
+      "category": "ids",
+      "from": "bee.session:main",
+      "migration": "M2",
+      "reason": "Desktop projection actor relocation; exact persisted references convert through additive Placement 10, Sync 11, Gateway 19, Resources 5 and Credentials 8 desktop_projection_references migrations. Preserve workspace/desktop/view IDs, opaque state, topics, version-one handoff and qualified layout schemas; restart owner composition and reissue existing grants.",
+      "to": "bee.desktop.service:main"
+    },
+    {
       "category": "schemas",
       "from": "tag:bee.governance-component-guide@10",
       "to": "tag:bee.governance-component-guide@11",

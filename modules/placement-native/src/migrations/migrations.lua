@@ -628,6 +628,14 @@ UPDATE bee_placement_attempts SET grants_json = (
   SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
 ) WHERE json_valid(grants_json) AND instr(grants_json, 'bee') > 0;
 ]]
+local DESKTOP_REFERENCES_SQL = [[
+UPDATE bee_placement_attempts SET request_json = replace(request_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(request_json) AND instr(request_json, '"bee.session:main"') > 0;
+UPDATE bee_placement_attempts SET grants_json = replace(grants_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(grants_json) AND instr(grants_json, '"bee.session:main"') > 0;
+UPDATE bee_placement_preparer_states SET record_json = replace(record_json, '"bee.session:main"', '"bee.desktop.service:main"')
+WHERE json_valid(record_json) AND instr(record_json, '"bee.session:main"') > 0;
+]]
 local list: {Migration} = {
     {id = 1, name = "placement_attempts", sql = ATTEMPTS_SQL, rebuild = false},
     {id = 2, name = "terminal_exit_source", sql = TERMINAL_EXIT_SQL, rebuild = true},
@@ -696,6 +704,7 @@ WHERE kind = 'workdir_preparer.state'
 ]], rebuild = false},
     {id = 8, name = "layout_registry_references", sql = LAYOUT_REFERENCES_SQL, rebuild = false},
     {id = 9, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
+    {id = 10, name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

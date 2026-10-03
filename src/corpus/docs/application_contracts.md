@@ -300,7 +300,10 @@ implemented.
 Process control uses `bee.app.control` (`stop|force_stop`,
 `execution_pid`) and `bee.app.result`. The broker checks the caller's
 grant and target ownership; a successful stop is reported only after EXIT.
-`termination_pending` is not success. Desktop command messages are private to
+If escalation finds a producer that has already left the scheduler, the close
+waiter stays pending until the broker consumes its monitored EXIT. Denied
+termination authority still reports `termination_pending`, which is not success.
+Desktop command messages are private to
 the owning workspace and acknowledge committed scene, tabs, preferences and
 errors.
 

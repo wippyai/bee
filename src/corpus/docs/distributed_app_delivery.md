@@ -55,7 +55,7 @@ host-selected security scope lives in or is reached from (`bee.gov`,
 `bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`,
 `bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
 `bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
-`bee.sync`, `bee.host`, `bee.session`, `bee.client`, `bee.desktop`,
+`bee.sync`, `bee.host`, `bee.client`, `bee.desktop`,
 `bee.terminal`, `bee.node` and `bee.workspace`, which cover their child
 namespaces. The legacy `bee.governance` prefix remains protected for old
 application admission records. The kernel also names the exact host selectors

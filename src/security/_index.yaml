@@ -70,7 +70,7 @@ entries:
     - bee.client:application
     - bee.launch:supervisor
     - bee.launch:headless
-    - bee.session:main
+    - bee.desktop.service:main
     - bee.apps:broker
     - bee.terminal:main
     - bee.hive:supervisor

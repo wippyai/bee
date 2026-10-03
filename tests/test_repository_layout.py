@@ -123,6 +123,7 @@ class RepositoryLayout(unittest.TestCase):
                 database.execute('UPDATE ' + table + ' SET ' + column + ' = ?', (json.dumps(original),))
             database.executescript(sql(path))
             database.executescript(sql(path, "ROOT_REFERENCES_SQL"))
+            database.executescript(sql(path, "DESKTOP_REFERENCES_SQL"))
             for table, column in tables:
                 migrated = json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0])
                 self.assertEqual(migrated['references'], list(moves.values()))
@@ -200,6 +201,7 @@ class RepositoryLayout(unittest.TestCase):
         database.execute('INSERT INTO bee_placement_preparer_states VALUES (?, ?, ?)', ('attempt', record['binding_id'], json.dumps(record)))
         database.execute('INSERT INTO bee_placement_attempts VALUES (?, ?)', (json.dumps({'references': list(moves), 'binding_ref': 'bee.driver.codex:binding'}), json.dumps({'resource': 'bee.placement.native:db'})))
         database.executescript(script)
+        database.executescript(sql('modules/placement-native/src/migrations/migrations.lua', 'DESKTOP_REFERENCES_SQL'))
         rows = database.execute('SELECT * FROM bee_placement_preparer_states').fetchall()
         self.assertEqual(rows[0][1], 'bee.git.worktree.binding:binding')
         self.assertEqual(json.loads(rows[0][2])['state'], record['state'])
@@ -227,9 +229,51 @@ class RepositoryLayout(unittest.TestCase):
                 database.executemany('INSERT INTO ' + table + ' VALUES (?, ?, ?)', [(previous, 'admitted-digest', 'admitted-authority') for previous in moves])
             script = sql('modules/' + module + '/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL')
             database.executescript(script)
+            database.executescript(sql('modules/' + module + '/src/migrations/migrations.lua', 'DESKTOP_REFERENCES_SQL'))
             for table, column in tables:
                 self.assertEqual(database.execute('SELECT * FROM ' + table).fetchall(), [(current, 'admitted-digest', 'admitted-authority') for current in moves.values()])
             database.executescript(script)
+
+    def test_desktop_reference_migrations_replay_and_preserve_opaque_values(self):
+        for module, previous, tables, scalar_tables in [
+            ('placement-native', 9, [('bee_placement_attempts', 'request_json'), ('bee_placement_attempts', 'grants_json'), ('bee_placement_preparer_states', 'record_json')], []),
+            ('sync', 10, [('bee_sync_projections', 'value_json'), ('bee_sync_events', 'payload_json'), ('bee_sync_receipts', 'request_json')], []),
+            ('gateway', 18, [('bee_gateway_surfaces', 'surface_json'), ('bee_gateway_surfaces', 'active_json'), ('bee_gateway_access_grants', 'traits_json')], [('bee_gateway_bindings', 'policy_ref')]),
+            ('resources', 4, [], [('bee_resource_associations', 'root_ref'), ('bee_resource_grants', 'root_ref')]),
+            ('credentials', 7, [], [('bee_credential_definitions', 'source_ref'), ('bee_credential_projections', 'materializer')]),
+        ]:
+            with self.subTest(module=module):
+                path = 'modules/' + module + '/src/migrations/migrations.lua'
+                source = (ROOT / path).read_text()
+                self.assertIn('{id = ' + str(previous + 1) + ', name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false}', source)
+                database = sqlite3.connect(':memory:')
+                original = {'reference': 'bee.session:main', 'references': ['bee.session:main'],
+                            'actor': 'bee.session:main:instance', 'instructions': 'Call "bee.session:main" later',
+                            'opaque': json.dumps({'reference': 'bee.session:main'})}
+                expected = {**original, 'reference': 'bee.desktop.service:main', 'references': ['bee.desktop.service:main']}
+                for table in sorted({table for table, _ in tables + scalar_tables}):
+                    columns = ', '.join(column + ' TEXT' for owner, column in tables + scalar_tables if owner == table)
+                    database.execute('CREATE TABLE ' + table + ' (' + columns + ', digest TEXT, authority TEXT)')
+                    database.execute('INSERT INTO ' + table + ' (digest, authority) VALUES (?, ?)', ('admitted-digest', 'admitted-authority'))
+                for table, column in tables:
+                    database.execute('UPDATE ' + table + ' SET ' + column + ' = ?', (json.dumps(original),))
+                for table, column in scalar_tables:
+                    database.execute('UPDATE ' + table + ' SET ' + column + ' = ?', ('bee.session:main',))
+                script = sql(path, 'DESKTOP_REFERENCES_SQL')
+                for _ in range(2):
+                    database.executescript(script)
+                    for table, column in tables:
+                        value, digest, authority = database.execute('SELECT ' + column + ', digest, authority FROM ' + table).fetchone()
+                        self.assertEqual(json.loads(value), expected)
+                        self.assertEqual((digest, authority), ('admitted-digest', 'admitted-authority'))
+                    for table, column in scalar_tables:
+                        self.assertEqual(database.execute('SELECT ' + column + ', digest, authority FROM ' + table).fetchone(), ('bee.desktop.service:main', 'admitted-digest', 'admitted-authority'))
+                for table, column in tables:
+                    database.execute('UPDATE ' + table + ' SET ' + column + ' = ?', ('bee.session:main',))
+                database.executescript(script)
+                for table, column in tables:
+                    self.assertEqual(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0], 'bee.session:main')
+                database.close()
 
     def test_shipped_migration_bytes_are_preserved(self):
         for path in ['modules/placement-native/src/migrations/migrations.lua', 'modules/sync/src/migrations/migrations.lua', 'modules/gateway/src/migrations/migrations.lua']:

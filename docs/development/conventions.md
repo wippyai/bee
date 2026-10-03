@@ -54,9 +54,8 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
 | `src/client` | Desktop client, public commands, qualified layout and client store |
 | `src/interaction` | Bounded host/client questions and delivery state |
-| `src/session` | Committed desktop projection |
 | `src/apps` | Admission, application lifecycle, producer capabilities and routing as `bee.apps` |
-| `src/desktop` | Pure scene, reducer and layout values |
+| `modules/desktop/src` | Pure scene, reducer and layout values as `bee.desktop`; shared decoders in `.types`, committed projection and status observation in `.service` |
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
@@ -110,6 +109,7 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.app` | `arguments`, `caller`, `client`, `diagram`, `folder_picker`, `forms`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `thread_protocol`, `viz` |
 | `bee.capability` | `model` |
 | `bee.credentials` | `formats`, `protocol` |
+| `bee.desktop` | `model`, `state`, `layout` |
 | `bee.docs` | `protocol` |
 | `bee.driver` | `types` |
 | `bee.driver.wippy` | `protocol`, `types` |
@@ -168,7 +168,8 @@ Application entries, renderers, screen models and view helpers live in
 `modules/<module>/src/app` as `<module namespace>.app`. The SDK root
 `bee.app` belongs only to `modules/application`; app children such as
 `bee.files.app` import its helpers and own their separate application entries.
-The desktop shell remains in `src/desktop` and `src/terminal`.
+Desktop values and the projection actor live in `modules/desktop/src`; the
+terminal shell remains in `src/terminal`.
 
 Within a module, keep shared domain types and contracts at the root. Public contract
 bindings live in `binding`. Workspace catalog contracts retain their existing
@@ -259,7 +260,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 20,851 Lua line ceiling under `src/`, recorded in
+The root has a 19,277 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

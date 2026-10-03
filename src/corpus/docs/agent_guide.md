@@ -16,8 +16,9 @@ Keep desktop responsibilities in the `src/` component folders (`src/host`,
 `src/client`, `src/launch` and their siblings, one namespace per folder),
 public application helpers in `modules/application/src`, shared frame, appearance
 and text helpers in `modules/ui/src`, and application UI in
-`modules/<module>/src/app` child namespaces. The
-core desktop shell remains in `src/desktop` and `src/terminal`.
+`modules/<module>/src/app` child namespaces. Desktop values and the committed
+projection live in `modules/desktop/src`; the terminal shell remains in
+`src/terminal`.
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples

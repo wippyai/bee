@@ -12,6 +12,7 @@ local security = require("security")
 local funcs = require("funcs")
 local time = require("time")
 local appearance = require("appearance")
+local fixture = require("fixture")
 
 local WORKSPACE = string.rep("a", 32)
 local THREAD = "open-membership-thread"
@@ -52,19 +53,20 @@ end
 
 local function define_tests()
     test.describe("Application open thread membership", function()
-        test.it("admits the managed window principal into the thread the open names", function()
+        test.it("admits the managed window principal into the thread the open names", fixture.case(function(scope: fixture.State)
             call("bee.threads.binding:create", {thread_id = THREAD,
                 idempotency_key = THREAD .. "-create", title = "Open membership"})
 
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local catalogs = scope.catalogs
+            local replies = scope.replies
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
+            scope.brokers[broker] = true
             assert(catalogs:receive():from() == broker)
 
             local request_id = "open-membership-request"
@@ -90,18 +92,19 @@ local function define_tests()
             test.eq(member.member_id, "bee.application:" .. WORKSPACE .. ":" .. instance_id)
             test.eq(member.role, "participant")
             test.is_true(member.active == true)
-        end)
-        test.it("opens a window that names a thread created later", function()
+        end))
+        test.it("opens a window that names a thread created later", fixture.case(function(scope: fixture.State)
             local missing = "open-missing-launch-thread"
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local catalogs = scope.catalogs
+            local replies = scope.replies
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
+            scope.brokers[broker] = true
             assert(catalogs:receive():from() == broker)
 
             local request_id = "open-missing-request"
@@ -127,17 +130,18 @@ local function define_tests()
             if not tostring(fault):find("NOT_FOUND", 1, true) then
                 error("missing thread refusal changed: " .. tostring(fault))
             end
-        end)
-        test.it("stops thread instances on an owner fence", function()
+        end))
+        test.it("stops thread instances on an owner fence", fixture.case(function(scope: fixture.State)
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local catalogs = scope.catalogs
+            local replies = scope.replies
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
+            scope.brokers[broker] = true
             assert(catalogs:receive():from() == broker)
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "fence-thread-open", op = "open",
                 workspace_id = WORKSPACE, thread_id = THREAD, definition_id = DEFINITION, arguments = {}}))
@@ -177,9 +181,7 @@ local function define_tests()
             end
             test.is_true(stopped, "the fenced thread instance is still running")
             assert(process.cancel(broker))
-            process.unlisten(catalogs)
-            process.unlisten(replies)
-        end)
+        end))
     end)
 end
 return test.run_cases(define_tests)

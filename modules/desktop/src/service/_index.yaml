@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.desktop.service
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - ctx
+  - funcs
+  - time
+  - uuid
+  imports:
+    commands: bee.desktop.types:commands
+    state: bee.desktop:state
+    appearance: bee.ui:appearance
+    decode: bee.desktop.types:projection
+    status_bindings: bee.desktop.types:bindings
+    statuses: bee.desktop.service:statuses
+    status_driver: bee.desktop.service:status
+    status_reader: bee.app:status_reader
+    handoff: bee.desktop.types:handoff
+  security:
+    policies: []
+- name: status
+  kind: library.lua
+  source: file://status.lua
+  modules:
+  - funcs
+  - channel
+  imports:
+    reader: bee.app:status_reader
+    caller: bee.app:caller
+- name: statuses
+  kind: library.lua
+  source: file://statuses.lua
+  imports:
+    bindings: bee.desktop.types:bindings
+    driver: bee.desktop.service:status
+    reader: bee.app:status_reader
+    model: bee.desktop:model

@@ -13,6 +13,7 @@ local time = require("time")
 local registry = require("registry")
 local catalog = require("catalog")
 local appearance = require("appearance")
+local fixture = require("fixture")
 local ADMISSION_ID = "bee.security:application_admission"
 local DEFINITION = "bee.harness.app:app"
 local OTHER_DEFINITION = "bee.apps:welcome"
@@ -78,18 +79,25 @@ local function run_code(instance_id: string, thread_id: string?): string?
     return tostring((assert(bounds.object(reply.error))).code)
 end
 
-local baseline_bindings: {{[string]: unknown}}? = nil
+local baseline_bindings: {{[string]: unknown}} = {}
+local function preserve_admission(scope: fixture.State)
+    local record = assert(bounds.object(assert(registry.snapshot():get(ADMISSION_ID))))
+    local data = assert(bounds.object(record.data))
+    baseline_bindings = {}
+    for _, raw in ipairs(assert(principals.items(data.bindings))) do
+        baseline_bindings[#baseline_bindings + 1] = assert(bounds.object(raw))
+    end
+    scope.cleanup[#scope.cleanup + 1] = function()
+        local changes = registry.snapshot():changes()
+        changes:update(registry_input(record))
+        local restored, restore_error = changes:apply()
+        assert(restored, tostring(restore_error))
+    end
+end
 
 local function set_admission_for(definition_id: string, admitted: boolean)
     local snap = registry.snapshot()
     local record = assert(bounds.object(assert(snap:get(ADMISSION_ID))))
-    local data = (bounds.object(record.data)) or {}
-    if not baseline_bindings then
-        baseline_bindings = {}
-        for _, raw in ipairs((principals.items(data.bindings or {})) or {}) do
-            baseline_bindings[#baseline_bindings + 1] = assert(bounds.object(raw))
-        end
-    end
     local bindings = {}
     for _, binding in ipairs(baseline_bindings) do
         if admitted or binding.definition_id ~= definition_id then bindings[#bindings + 1] = binding end
@@ -104,7 +112,7 @@ local function set_duplicate_admission()
     local snap = registry.snapshot()
     local record = assert(bounds.object(assert(snap:get(ADMISSION_ID))))
     local bindings: {{[string]: unknown}} = {}
-    for _, binding in ipairs(baseline_bindings or {}) do bindings[#bindings + 1] = binding end
+    for _, binding in ipairs(baseline_bindings) do bindings[#bindings + 1] = binding end
     bindings[#bindings + 1] = bindings[1]
     local changes = snap:changes()
     changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = registry_input(record).meta, data = {bindings = bindings}})
@@ -118,28 +126,50 @@ end
 
 local function define_tests()
     test.describe("Application stable membership", function()
-        test.it("follows its runs across restarts and loses them on uninstall", function()
+        test.it("restores admission and drains brokers after an early case failure", function()
+            local original = assert(bounds.object(assert(registry.snapshot():get(ADMISSION_ID))))
+            local bindings = assert(principals.items(assert(bounds.object(original.data)).bindings))
+            local observed: fixture.State? = nil
+            local ok, fault = pcall(fixture.case(function(scope: fixture.State)
+                preserve_admission(scope)
+                observed = scope
+                local owner = tostring(process.pid())
+                local catalogs = scope.catalogs
+                local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner,
+                    ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({
+                        assert(security.policy("bee.security.desktop:broker_policy")),
+                        assert(security.policy("bee.security:core_spawn_boundary"))}))
+                    :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
+                scope.brokers[broker] = true
+                assert(tostring(catalogs:receive():from()) == broker)
+                set_duplicate_admission()
+                error("intentional fixture failure")
+            end))
+            test.is_false(ok)
+            test.is_true(tostring(fault):find("intentional fixture failure", 1, true) ~= nil)
+            test.is_true(next(assert(observed).brokers) == nil)
+            local restored = assert(bounds.object(assert(registry.snapshot():get(ADMISSION_ID))))
+            local actual = assert(principals.items(assert(bounds.object(restored.data)).bindings))
+            test.eq(#actual, #bindings)
+            for index, binding in ipairs(bindings) do
+                test.eq(assert(bounds.object(actual[index])).definition_id, assert(bounds.object(binding)).definition_id)
+            end
+        end)
+        test.it("follows its runs across restarts and loses them on uninstall", fixture.case(function(scope: fixture.State)
+            preserve_admission(scope)
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
-            local broker_ready = assert(process.listen("bee.app.ready", {message = true}))
-            local events = assert(process.events())
+            local catalogs = scope.catalogs
+            local replies = scope.replies
+            local broker_ready = scope.ready
+            local events = scope.events
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
+            scope.brokers[broker] = true
             assert(catalogs:receive():from() == broker)
-            local function wait_exit(target: string)
-                local deadline = time.after("30s")
-                while true do
-                    local received = channel.select({events:case_receive(), deadline:case_receive()})
-                    assert(received.ok and received.channel == events, target .. " did not exit")
-                    local event = received.value
-                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
-                end
-            end
             local function open(definition_id: string, tag: string): (string, string)
                 local request_id = tag .. "-open"
                 assert(process.send(broker, "bee.app.request", {version = 1, request_id = request_id, op = "open",
@@ -231,7 +261,7 @@ local function define_tests()
                 {thread_id = BACKFILL_THREAD, idempotency_key = BACKFILL_THREAD .. "-create", title = "Backfill run"})
             test.eq(backfill_created.thread_id, BACKFILL_THREAD)
             assert(process.cancel(broker, "restart retained alias probe"))
-            wait_exit(broker)
+            fixture.join(scope, broker)
 
             local restarted_broker: string? = nil
             local backfill_ok, backfill_error = pcall(function()
@@ -243,6 +273,7 @@ local function define_tests()
                         {{instance_id = other, definition_id = OTHER_DEFINITION}})
                 if not restart_pid then error("restart broker spawn failed: " .. tostring(restart_error)) end
                 restarted_broker = tostring(restart_pid)
+                scope.brokers[restarted_broker] = true
                 local ready_deadline = time.after("30s")
                 local backfill_ready = false
                 while not backfill_ready do
@@ -280,34 +311,24 @@ local function define_tests()
             set_admission_for(OTHER_DEFINITION, true)
             if restarted_broker then
                 pcall(process.cancel, restarted_broker, "finish retained alias probe")
-                wait_exit(restarted_broker)
+                fixture.join(scope, restarted_broker)
             end
             assert(backfill_ok, "startup backfill fenced a temporarily absent app family: " .. tostring(backfill_error))
-            process.unlisten(broker_ready)
-            process.unlisten(catalogs)
-            process.unlisten(replies)
-        end)
+        end))
 
-        test.it("fences a removed application family when an earlier refresh was refused", function()
+        test.it("fences a removed application family when an earlier refresh was refused", fixture.case(function(scope: fixture.State)
+            preserve_admission(scope)
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
-            local events = assert(process.events())
+            local catalogs = scope.catalogs
+            local replies = scope.replies
+            local events = scope.events
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
-            local function wait_exit(target: string)
-                local deadline = time.after("30s")
-                while true do
-                    local received = channel.select({events:case_receive(), deadline:case_receive()})
-                    assert(received.ok and received.channel == events, target .. " did not exit")
-                    local event = received.value
-                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
-                end
-            end
+            scope.brokers[broker] = true
             local function open(definition_id: string, request_id: string): {[string]: unknown}
                 assert(process.send(broker, "bee.app.request", {version = 1, request_id = request_id, op = "open",
                     workspace_id = WORKSPACE, thread_id = "refused-refresh-thread", definition_id = definition_id, arguments = {}}))
@@ -344,13 +365,12 @@ local function define_tests()
             end)
             set_admission(true)
             pcall(process.cancel, broker, "finish refused refresh probe")
-            wait_exit(broker)
-            process.unlisten(catalogs)
-            process.unlisten(replies)
+            fixture.join(scope, broker)
             assert(ok, tostring(scenario_error))
-        end)
+        end))
 
-        test.it("retries a refused admission refresh at the next revision check", function()
+        test.it("retries a refused admission refresh at the next revision check", fixture.case(function(scope: fixture.State)
+            preserve_admission(scope)
             local follower = catalog.follower("r1")
             local attempts = 0
             local function refused(): boolean attempts = attempts + 1; return false end
@@ -365,9 +385,10 @@ local function define_tests()
             test.eq(follower.observed, "r2")
             test.is_false(catalog.follow(follower, "r2", accepted))
             test.eq(attempts, 3)
-        end)
+        end))
 
-        test.it("retries a request-driven refresh failure at the same revision", function()
+        test.it("retries a request-driven refresh failure at the same revision", fixture.case(function(scope: fixture.State)
+            preserve_admission(scope)
             local follower = catalog.follower("r1")
             local attempts = 0
             local function request_refresh(): boolean
@@ -382,30 +403,23 @@ local function define_tests()
             test.is_true(catalog.follow(follower, "r1", recovered))
             test.eq(attempts, 2)
             test.eq(follower.observed, "r1")
-        end)
+        end))
 
         -- A malformed admission makes refresh_admission fail closed. Once the
         -- record is repaired, the periodic follower must run again and publish
         -- the catalog left by that repair.
-        test.it("retries the admission poll after a refused refresh", function()
+        test.it("retries the admission poll after a refused refresh", fixture.case(function(scope: fixture.State)
+            preserve_admission(scope)
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local events = assert(process.events())
+            local catalogs = scope.catalogs
+            local events = scope.events
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
-            local function wait_exit(target: string)
-                local deadline = time.after("30s")
-                while true do
-                    local received = channel.select({events:case_receive(), deadline:case_receive()})
-                    assert(received.ok and received.channel == events, target .. " did not exit")
-                    local event = received.value
-                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
-                end
-            end
+            scope.brokers[broker] = true
             local ok, scenario_error = pcall(function()
                 repeat until tostring(catalogs:receive():from()) == broker
                 set_duplicate_admission()
@@ -417,6 +431,7 @@ local function define_tests()
                     if received.channel == events then
                         local event = received.value
                         if event.kind == process.event.EXIT and tostring(event.from) == broker then
+                            scope.brokers[broker] = nil
                             local result: unknown = event.result
                             local failure = type(result) == "table" and tostring((assert(bounds.object(result))).error) or "unknown exit"
                             error("broker exited during refused refresh: " .. failure)
@@ -443,6 +458,7 @@ local function define_tests()
                     if received.channel == events then
                         local event = received.value
                         if event.kind == process.event.EXIT and tostring(event.from) == broker then
+                            scope.brokers[broker] = nil
                             local result: unknown = event.result
                             local failure = type(result) == "table" and tostring((assert(bounds.object(result))).error) or "unknown exit"
                             error("broker exited before catalog convergence: " .. failure)
@@ -472,31 +488,23 @@ local function define_tests()
             end)
             set_admission_for(OTHER_DEFINITION, true)
             pcall(process.cancel, broker, "finish admission convergence probe")
-            wait_exit(broker)
-            process.unlisten(catalogs)
+            fixture.join(scope, broker)
             assert(ok, tostring(scenario_error))
-        end)
+        end))
 
-        test.it("converges after an observed refusal without accepting stale catalog messages", function()
+        test.it("converges after an observed refusal without accepting stale catalog messages", fixture.case(function(scope: fixture.State)
+            preserve_admission(scope)
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
-            local events = assert(process.events())
+            local catalogs = scope.catalogs
+            local replies = scope.replies
+            local events = scope.events
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
-            local function wait_exit(target: string)
-                local deadline = time.after("30s")
-                while true do
-                    local received = channel.select({events:case_receive(), deadline:case_receive()})
-                    assert(received.ok and received.channel == events, target .. " did not exit")
-                    local event = received.value
-                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
-                end
-            end
+            scope.brokers[broker] = true
             local function has_definition(data: {[string]: unknown}, definition_id: string): boolean
                 for _, raw in ipairs((principals.items(data.items or {})) or {}) do
                     if type(raw) == "table" and (assert(bounds.object(raw))).definition_id == definition_id then return true end
@@ -578,11 +586,9 @@ local function define_tests()
             end)
             set_admission_for(OTHER_DEFINITION, true)
             pcall(process.cancel, broker, "finish admission convergence probe")
-            wait_exit(broker)
-            process.unlisten(catalogs)
-            process.unlisten(replies)
+            fixture.join(scope, broker)
             assert(ok, tostring(scenario_error))
-        end)
+        end))
     end)
 end
 

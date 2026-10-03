@@ -51,3 +51,4 @@ workspace:
     bee/sessions: ./modules/sessions
     bee/settings: ./modules/settings
     bee/console: ./modules/console
+    bee/desktop: ./modules/desktop

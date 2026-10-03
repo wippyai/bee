@@ -49,8 +49,6 @@ function M.advance(state: State, key: string, now: integer): Pending?
     if not intent then return nil end
     local future, err = state.start(intent)
     if err or not future then failed(state, now); return nil end
-    -- The runtime implementation always returns its response channel, while
-    -- the current funcs.Future manifest exposes this method as `any`.
     local response = future:response()
     if not response then future:cancel(); failed(state, now); return nil end
     local admitted: Pending = {future = future, response = response, generation = intent.generation,

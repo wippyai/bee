@@ -15,14 +15,16 @@ import (
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/logs"
+	"github.com/wippyai/runtime/cmd/app"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 const bootLogVariable = "BEE_BOOT_LOG_DIR"
 
-// BootLogger supplies phase logging to application runners that support the
-// early boot hook, before their event bus and native components are loaded.
+var _ app.BootLogger = (*Host)(nil)
+
+// BootLogger supplies early runner phases before native components are loaded.
 func (host *Host) BootLogger() *zap.Logger {
 	if host.bootLog == nil {
 		return nil

@@ -33,9 +33,9 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    artifact: bee.gov.delivery:artifact
+    artifact: bee.gov.types:artifact
     plan_store: bee.gov.persist:plan_store
-    staging: bee.gov.delivery:staging_resources
+    staging: bee.gov.binding:staging_resources
     approval: bee.gov.binding:approval
 - name: seed
   kind: process.lua

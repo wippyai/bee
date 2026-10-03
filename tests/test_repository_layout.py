@@ -33,7 +33,47 @@ def sql(path, constant="LAYOUT_REFERENCES_SQL"):
     return result.removesuffix(']]')
 
 
+def persisted_reference_moves():
+    migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
+    return {
+        entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} or any(
+            name in entry['reason'] for name in ('desktop_projection_references', 'hive_component_references')
+        ) else entry['from']
+        for entry in migrations if entry['category'] == 'ids'
+    }
+
+
 class RepositoryLayout(unittest.TestCase):
+    def test_host_selected_dependency_references_must_resolve(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-selection-') as temporary:
+            root = Path(temporary)
+            source = root / 'src'
+            source.mkdir()
+            (source / '_index.yaml').write_text("namespace: bee\nentries: []\n")
+            deps = source / 'deps'
+            deps.mkdir()
+            (deps / '_index.yaml').write_text("""namespace: bee.deps
+entries:
+- name: example
+  kind: ns.dependency
+  component: bee/example
+  parameters:
+  - name: target_input
+    value: bee.example:missing
+""")
+            module = root / 'modules/example/src'
+            module.mkdir(parents=True)
+            (module / '_index.yaml').write_text("""namespace: bee.example
+entries:
+- name: definition
+  kind: ns.definition
+  module: example
+- name: target_input
+  kind: ns.requirement
+  targets: []
+""")
+            self.assertIn('bee.deps:example: dangling linker/import target bee.example:missing', LAYOUT.audit(root)[0])
+
     def test_repository(self):
         errors, namespaces, entries, targets, dangling = LAYOUT.audit(ROOT)
         self.assertEqual(errors, [])
@@ -100,10 +140,7 @@ class RepositoryLayout(unittest.TestCase):
         self.assertEqual(database.execute('SELECT * FROM bee_placement_preparer_states ORDER BY binding_id').fetchall(), before)
 
     def test_reference_migrations_preserve_text_and_actor_identities(self):
-        # Applied step 1 SQL covers persisted identities; step 2 helper moves
-        # change coordinated imports without rewriting those immutable migrations.
-        migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] for entry in migrations if entry['category'] == 'ids'}
+        moves = persisted_reference_moves()
         for path, tables in [
             ('modules/sync/src/migrations/migrations.lua', [('bee_sync_projections', 'value_json'), ('bee_sync_events', 'payload_json'), ('bee_sync_receipts', 'request_json')]),
             ('modules/gateway/src/migrations/migrations.lua', [('bee_gateway_surfaces', 'surface_json'), ('bee_gateway_surfaces', 'active_json'), ('bee_gateway_access_grants', 'traits_json')]),
@@ -124,6 +161,7 @@ class RepositoryLayout(unittest.TestCase):
             database.executescript(sql(path))
             database.executescript(sql(path, "ROOT_REFERENCES_SQL"))
             database.executescript(sql(path, "DESKTOP_REFERENCES_SQL"))
+            database.executescript(sql(path, "HIVE_REFERENCES_SQL"))
             for table, column in tables:
                 migrated = json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0])
                 self.assertEqual(migrated['references'], list(moves.values()))
@@ -131,6 +169,42 @@ class RepositoryLayout(unittest.TestCase):
                 for key in ['instructions', 'actor', 'opaque', 'namespace', 'service_id']:
                     self.assertEqual(migrated[key], original[key])
             database.close()
+
+    def test_hive_operation_identity_requires_a_migration(self):
+        specification = importlib.util.spec_from_file_location('component_inventory', ROOT / 'build/component_inventory.py')
+        inventory = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(inventory)
+        _, current = inventory.build_inventory()
+        self.assertIn('bee.hive.binding:workspaces', current['ids'])
+        prior = {'ids': ['bee.hive.api:workspaces']}
+        with self.assertRaisesRegex(ValueError, 'without a migration map entry'):
+            inventory.check_identity_compatibility(prior, current, {'ids': {}, 'topics': {}, 'schemas': {}})
+        inventory.check_identity_compatibility(prior, current, inventory.migration_map())
+
+    def test_hive_owner_references_preserve_provenance_and_opaque_text(self):
+        database = sqlite3.connect(':memory:')
+        tables = [('bee_sync_projections', 'value_json'), ('bee_sync_events', 'payload_json'), ('bee_sync_receipts', 'request_json')]
+        original = {'request': {'owner_ref': {'node_id': 'peer', 'service_id': 'bee.hive.api'},
+                                'operation_ref': 'bee.hive.api:workspaces'},
+                    'viewer': 'bee.hive.desktop:viewer', 'definition': 'bee.hive.supervisor:main',
+                    'host': 'bee.hive.service:supervisor_host', 'actor': 'bee.hive.supervisor',
+                    'namespace': 'bee.hive.api', 'instructions': 'Call bee.hive.api:workspaces later',
+                    'opaque': json.dumps({'operation_ref': 'bee.hive.api:workspaces'}),
+                    'owner_ref': {'node_id': 'peer', 'service_id': 'bee.hive.telemetry.binding'}}
+        for table, column in tables:
+            database.execute('CREATE TABLE ' + table + ' (' + column + ' TEXT)')
+            database.execute('INSERT INTO ' + table + ' VALUES (?)', (json.dumps(original),))
+        script = sql('modules/sync/src/migrations/migrations.lua', 'HIVE_REFERENCES_SQL')
+        database.executescript(script)
+        expected = dict(original, request={'owner_ref': {'node_id': 'peer', 'service_id': 'bee.hive.binding'},
+                                          'operation_ref': 'bee.hive.binding:workspaces'},
+                        viewer='bee.hive.service:viewer', definition='bee.hive.service:supervisor')
+        for table, column in tables:
+            self.assertEqual(json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0]), expected)
+        database.executescript(script)
+        for table, column in tables:
+            self.assertEqual(json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0]), expected)
+        database.close()
 
     def test_new_root_entries_and_kind_changes_are_rejected(self):
         with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-roots-') as temporary:
@@ -190,14 +264,11 @@ class RepositoryLayout(unittest.TestCase):
                 self.assertEqual(entry['imports']['sources'], destination)
 
     def test_root_cleanup_migration_replays_and_refuses_collisions(self):
-        script = sql('modules/placement-native/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL')
+        script = sql('modules/placement-native/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL') + sql('modules/placement-native/src/migrations/migrations.lua', 'HIVE_REFERENCES_SQL')
         database = sqlite3.connect(':memory:')
         database.executescript('CREATE TABLE bee_placement_preparer_states (attempt_id TEXT, binding_id TEXT, record_json TEXT, PRIMARY KEY(attempt_id, binding_id)); CREATE TABLE bee_placement_evidence (kind TEXT, detail TEXT); CREATE TABLE bee_placement_attempts (request_json TEXT, grants_json TEXT);')
         record = {'binding_id': 'bee.git.worktree:binding', 'state': {'token': 'bee.git.worktree:binding'}}
-        # Applied step 1 SQL covers persisted identities; step 2 helper moves
-        # change coordinated imports without rewriting those immutable migrations.
-        migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] for entry in migrations if entry['category'] == 'ids'}
+        moves = persisted_reference_moves()
         database.execute('INSERT INTO bee_placement_preparer_states VALUES (?, ?, ?)', ('attempt', record['binding_id'], json.dumps(record)))
         database.execute('INSERT INTO bee_placement_attempts VALUES (?, ?)', (json.dumps({'references': list(moves), 'binding_ref': 'bee.driver.codex:binding'}), json.dumps({'resource': 'bee.placement.native:db'})))
         database.executescript(script)
@@ -218,16 +289,13 @@ class RepositoryLayout(unittest.TestCase):
         self.assertEqual(database.execute('SELECT * FROM bee_placement_preparer_states ORDER BY binding_id').fetchall(), before)
 
     def test_scalar_resource_and_credential_references_move_without_grants(self):
-        # Applied step 1 SQL covers persisted identities; step 2 helper moves
-        # change coordinated imports without rewriting those immutable migrations.
-        migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] for entry in migrations if entry['category'] == 'ids'}
+        moves = persisted_reference_moves()
         for module, tables in [('resources', [('bee_resource_associations', 'root_ref'), ('bee_resource_grants', 'root_ref')]), ('credentials', [('bee_credential_definitions', 'source_ref'), ('bee_credential_projections', 'materializer')])]:
             database = sqlite3.connect(':memory:')
             for table, column in tables:
                 database.execute('CREATE TABLE ' + table + ' (' + column + ' TEXT, digest TEXT, authority TEXT)')
                 database.executemany('INSERT INTO ' + table + ' VALUES (?, ?, ?)', [(previous, 'admitted-digest', 'admitted-authority') for previous in moves])
-            script = sql('modules/' + module + '/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL')
+            script = sql('modules/' + module + '/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL') + sql('modules/' + module + '/src/migrations/migrations.lua', 'HIVE_REFERENCES_SQL')
             database.executescript(script)
             database.executescript(sql('modules/' + module + '/src/migrations/migrations.lua', 'DESKTOP_REFERENCES_SQL'))
             for table, column in tables:

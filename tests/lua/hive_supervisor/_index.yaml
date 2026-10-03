@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
+    peers: bee.hive.types:peers
     types: bee.hive:types
 - name: peers_test
   kind: function.lua
@@ -17,7 +17,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
+    peers: bee.hive.types:peers
     types: bee.hive:types
     bounds: bee.values:bounds
 - name: registration_test
@@ -27,7 +27,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    registration: bee.hive.supervisor:registration
+    registration: bee.hive.types:registration
 - name: admission_test
   kind: function.lua
   source: file://admission_test.lua
@@ -37,8 +37,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    admission: bee.hive.supervisor:admission
-    peers: bee.hive.supervisor:peers
+    admission: bee.hive.binding:admission
+    peers: bee.hive.types:peers
     catalog: bee.hive.exposure:catalog
 - name: dispatch_probe
   kind: function.lua
@@ -47,7 +47,7 @@ entries:
   meta: {type: test_support}
   modules: [funcs, security, registry]
   imports:
-    dispatch: bee.hive.supervisor:dispatch
+    dispatch: bee.hive.binding:dispatch
     types: bee.hive:types
 - name: dispatch_test
   kind: function.lua
@@ -57,10 +57,10 @@ entries:
   modules: [funcs, security, registry]
   imports:
     test: wippy.test:test
-    dispatch: bee.hive.supervisor:dispatch
+    dispatch: bee.hive.binding:dispatch
     types: bee.hive:types
     bounds: bee.values:bounds
-    audiences: bee.hive.supervisor:audiences
+    audiences: bee.hive.types:audiences
 - name: audiences_probe
   kind: function.lua
   source: file://audiences_probe.lua
@@ -69,7 +69,7 @@ entries:
   modules: [registry]
   imports:
     bounds: bee.values:bounds
-    audiences: bee.hive.supervisor:audiences
+    audiences: bee.hive.types:audiences
 - name: audiences_test
   kind: function.lua
   source: file://audiences_test.lua
@@ -77,7 +77,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    audiences: bee.hive.supervisor:audiences
+    audiences: bee.hive.types:audiences
 - name: adapters_test
   kind: function.lua
   source: file://adapters_test.lua
@@ -85,13 +85,13 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    adapters: bee.hive.supervisor:adapters
+    adapters: bee.hive.types:adapters
 - name: execute_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute]
+    resources: [bee.hive.binding:execute]
     effect: allow
 - name: supervisor_test
   kind: function.lua
@@ -143,7 +143,7 @@ entries:
     types: bee.hive:types
     store: bee.workspace.persist:store
     binding: bee.workspace.types:selection
-    workspace_page: bee.hive.api:workspaces_page
+    workspace_page: bee.hive.types:workspaces_page
 - name: workspace_commands_test
   kind: function.lua
   source: file://workspace_commands_test.lua
@@ -155,7 +155,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
-    commands: bee.hive.supervisor:workspace_commands
+    commands: bee.hive.types:workspace_commands
 - name: owner_stop_test
   kind: function.lua
   source: file://owner_stop_test.lua
@@ -164,4 +164,4 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    owner_stop: bee.hive.supervisor:owner_stop
+    owner_stop: bee.hive.types:owner_stop

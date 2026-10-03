@@ -19,3 +19,61 @@ entries:
   kind: ns.dependency
   component: bee/values
   version: '*'
+
+- name: target_application
+  kind: ns.requirement
+  targets:
+  - entry: bee.hive.desktop:protocol
+    path: .imports.contract
+  - entry: bee.hive.desktop:catalog
+    path: .imports.contract
+  - entry: bee.hive.desktop:display
+    path: .imports.contract
+  - entry: bee.hive.desktop:remote
+    path: .imports.contract
+  - entry: bee.hive.service:viewer
+    path: .imports.contract
+  - entry: bee.hive.types:workspaces_page
+    path: .imports.contract
+
+- name: target_retained_protocol
+  kind: ns.requirement
+  targets:
+  - entry: bee.hive.desktop:owner
+    path: .imports.retained
+
+- name: target_delivery
+  kind: ns.requirement
+  targets:
+  - entry: bee.hive.desktop:display
+    path: .imports.delivery
+  - entry: bee.hive.service:viewer
+    path: .imports.delivery
+
+- name: target_input
+  kind: ns.requirement
+  targets:
+  - entry: bee.hive.desktop:display
+    path: .imports.input
+  - entry: bee.hive.service:viewer
+    path: .imports.input
+
+- name: target_version
+  kind: ns.requirement
+  targets:
+  - entry: bee.hive.binding:replica_sender
+    path: .imports.version
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: '*'
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: target_workspace_selection
+  kind: ns.requirement
+  default: bee.workspace.types:selection
+  targets:
+  - entry: bee.hive.desktop:owner
+    path: .imports.workspaces

@@ -216,7 +216,7 @@ local function main(initial_application: string?, secondary_application: string?
     local function spawn_presenter()
         local grant = assert(display.view:grant())
         presenter = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id}):with_scope(presenter_scope)
-            :spawn_monitored("bee.terminal:main", "bee:workers", owner, initial_application, secondary_application)))
+            :spawn_monitored("bee.terminal.service:main", "bee:workers", owner, initial_application, secondary_application)))
         active, presenter_ready = false, false
         paused = false
         binding = ""

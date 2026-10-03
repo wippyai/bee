@@ -183,7 +183,7 @@ def stamp_presenter(project):
     alone cannot prove that a new presenter produced the frame. The fixture-only
     PID suffix is the same probe used by the desktop lifecycle acceptance.
     """
-    presenter = project / "src/terminal/main.lua"
+    presenter = project / "modules/terminal/src/service/main.lua"
     source = presenter.read_text()
     label = '"Workspace " .. names.label(workspace_id)'
     assert source.count(label) == 1, "unexpected terminal presenter label anchor"
@@ -348,7 +348,7 @@ def stage(project, folder, round_label):
 
 def preflight_diagnostic(diagnostic):
     """One destination diagnostic as the agent reads it. The preflight wire
-    contract names the field remedy (modules/gov/src/activation/preflight.lua), so a
+    contract names the field remedy (modules/gov/src/binding/preflight.lua), so a
     reviewer that read another name would drop the destination's own repair
     instruction and hand back a weaker finding than the host observed."""
     return (str(diagnostic.get("code")) + " on " + str(diagnostic.get("target")) + ": "

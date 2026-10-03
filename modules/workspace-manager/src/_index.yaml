@@ -20,3 +20,7 @@ entries:
   kind: ns.dependency
   component: bee/ui
   version: '*'
+- name: dependency_workspace
+  kind: ns.dependency
+  component: bee/workspace
+  version: '*'

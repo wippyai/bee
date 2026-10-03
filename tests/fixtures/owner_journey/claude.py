@@ -48,7 +48,8 @@ def stage_review(arguments):
         result = rpc("tools/call", {"name": name, "arguments": values})
         value = json.loads(result["content"][0]["text"])
         if not value["ok"]:
-            raise ValueError(name + ": " + json.dumps(value["error"]))
+            failure = value["error"] if "error" in value else {"code": value["code"], "message": value["message"]}
+            raise ValueError(name + ": " + json.dumps(failure))
         return value["value"]
 
     rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},

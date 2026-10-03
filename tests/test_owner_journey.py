@@ -96,6 +96,18 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(journey.choose_agent(), admitted)
             self.assertEqual([call.args[0] for call in stores.call_args_list], [peer_state, peer_state])
 
+    def test_hive_decision_controls_the_peer_workspace_from_the_primary_display(self):
+        journey = Journey.__new__(Journey)
+        journey.ui = Mock()
+        journey.ui.text.return_value = 'Control this workspace here? Duration: until you leave'
+        journey.record_person_prompt = Mock()
+        journey.control_hive_workspace()
+        self.assertEqual([call.args[0] for call in journey.ui.key.call_args_list],
+                         [b"\x1bq", b"c", b"\t\r"])
+        self.assertEqual([call.args[0] for call in journey.ui.wait.call_args_list],
+                         ['HIVE MANAGER', 'Control this workspace here?', 'Alt+Q leave', 'Control'])
+        journey.record_person_prompt.assert_called_once_with('Control node 2 workspace', journey.ui.text())
+
     def test_selected_hive_journey_keeps_start_and_stop(self):
         journey = Journey.__new__(Journey)
         journey.run_step = Mock()
@@ -147,6 +159,8 @@ class ReportTests(unittest.TestCase):
     def test_native_fixture_preserves_gateway_refusal(self):
         with self.assertRaisesRegex(ValueError, 'DENIED.*fixture refusal'):
             self.fixture_gateway([{'ok': False, 'error': {'code': 'DENIED', 'message': 'fixture refusal'}}])
+        with self.assertRaisesRegex(ValueError, 'DENIED.*fixture refusal'):
+            self.fixture_gateway([{'ok': False, 'code': 'DENIED', 'message': 'fixture refusal'}])
 
     def test_cycling_loading_frames_do_not_hide_a_hang(self):
         (ROOT / '.wippy').mkdir(exist_ok=True)

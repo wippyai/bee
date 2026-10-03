@@ -896,6 +896,18 @@ class Journey:
         self.ui.key(b"\t\r")
         self.ui.wait_until(lambda: "approved" in self.ui.text().lower(), "owner approval decision")
 
+    def control_hive_workspace(self):
+        # Leave the read-only viewer before asking the owning host for control.
+        # Hive membership does not enroll remote approval feeds in the local inbox.
+        self.ui.key(b"\x1bq")
+        self.ui.wait("HIVE MANAGER")
+        self.ui.key(b"c")
+        self.ui.wait("Control this workspace here?")
+        self.record_person_prompt("Control node 2 workspace", self.ui.text())
+        self.ui.key(b"\t\r")
+        self.ui.wait("Alt+Q leave")
+        self.ui.wait("Control")
+
     def hive(self):
         folder, state = self.work / "node2-project", self.work / "node2-state"
         self.peer_state, self.peer_folder = state, folder
@@ -1006,6 +1018,7 @@ class Journey:
                     approval_id = pending[0]["approval_id"]
                 finally:
                     self.ui = primary
+                self.control_hive_workspace()
                 self.launch("Needs you", "NEEDS YOU")
                 self.ui.wait("pending")
                 self.ui.key(b"\r")

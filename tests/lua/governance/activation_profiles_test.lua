@@ -13,6 +13,20 @@ end
 
 local function define_tests()
     test.describe("package activation ceiling", function()
+        test.it("admits a local custom driver through the host-selected ceiling without an application grant", function()
+            local configured = assert(profiles.configuration({profiles = {}, workspace_drivers = {
+                approval_policy = "workspace-application-delivery", kinds = {"function.lua", "library.lua", "registry.entry", "contract.binding", "ns.requirement"},
+                modules = {"json"}, policies = {}, thread_access = "none", hive = false}}, "node-local"))
+            local selected = assert(profiles.select(configured, string.rep("a", 32), "node-local", "driver.stub"))
+            test.eq(selected.component, "bee.driver.stub")
+            test.is_true(selected.namespaces["bee.driver.stub.binding"])
+            test.is_true(selected.namespaces["bee.driver.stub.security"])
+            test.is_nil(selected.namespaces["bee.harness.launch"])
+            test.is_nil(selected.applications)
+            test.is_false(selected.auto_start)
+            test.is_nil(profiles.select(configured, string.rep("a", 32), "node-remote", "driver.stub"))
+            test.is_nil(profiles.select(configured, string.rep("a", 32), "node-local", "driver.stub_bad"))
+        end)
         test.it("decodes the shipped configuration with both rules", function()
             local entry = assert(registry.get("bee.env:gov_activation_profiles"))
             local configuration = assert(profiles.decode(entry.data))

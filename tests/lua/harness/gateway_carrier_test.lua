@@ -830,7 +830,7 @@ local function define_tests()
             test.is_true(type(seen.refusal_remedy) == "string" and (seen.refusal_remedy):find("entries.json", 1, true) ~= nil)
             -- Round 2 repaired exactly what the remedy named and delivery was ready.
             test.not_nil(seen.repaired_snapshot_digest)
-            test.eq(seen.delivery_ready, true)
+            test.eq(seen.delivery_ready, true, assert(json.encode(seen.delivery_diagnostic_reply)))
             local steps = principals.strings(seen.delivery_human_steps)
             test.eq(#steps, 6)
         end)

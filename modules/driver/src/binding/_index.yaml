@@ -18,6 +18,7 @@ entries:
   source: file://resolver.lua
   modules:
   - registry
+  - funcs
   imports:
     bounds: bee.values:bounds
     profile: bee.driver.profiles:profile

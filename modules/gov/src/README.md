@@ -272,6 +272,12 @@ overlay and approval policies are removed from the migration call scope.
 grant is still authority over the physical SQL resource and is not table-level
 confinement.
 
+New measured application admission records declare `identity_generation` as
+`current`. An explicitly measured `prior` generation retains the historical
+admission ID independently of owner spelling. Governance migration 17 adds the
+generation to existing activation rows and leaves their admission bytes and
+digests unchanged; restoration uses that recorded generation.
+
 The activation configuration may carry one `workspace_applications` rule
 beside its explicit rows, and the publication configuration a matching
 `workspace_applications: true`. `activation_profiles.select` returns an
@@ -279,10 +285,13 @@ explicit row for a source, or else instantiates the rule for an overlay whose
 name `workspace_applications` accepts, authored on this node or, while the
 rule's `hive` flag is set, received over Hive; a name stays with the source
 node whose desired activation holds its slot. The instance has component and
-namespace `app.<overlay_id>`, the application `app.<overlay_id>:app`, the
-rule's approval policy, kinds, modules, base admission policies and thread access,
-and a private overlay owner per destination workspace. The instance is
-measured into the policy digest exactly like an explicit row. A live host grant
+namespace `app.<overlay_id>`, the rule's approval policy, kinds, modules, base admission policies and thread access,
+and a private overlay owner per destination workspace. The captured artifact
+selects exactly one `process.lua` application by `meta.type: bee.app`; its entry
+name is unrestricted. The instance is
+measured into the policy digest exactly like an explicit row. Staging, plan
+comparison and activation select the same host base policy in the destination
+resolver before binding the captured application declaration. A live host grant
 record adds generated policy IDs to `allow.grants` and the application's
 admission binding; its recorded thread access also selects the application
 binding. Activation writes the generated policies, requirement defaults, grant
@@ -356,3 +365,41 @@ Activation and selected-plan storage failures include the failing SQL operation
 and native SQLite message. The activation owner propagates
 these failures before applying an overlay; a failed commit never reports a
 prepared or authorized activation.
+
+## Workspace CLI drivers
+
+A host may select `workspace_drivers` in its existing activation and publication
+profile configuration. Local `driver.<name>` overlays own `bee.driver.<name>`
+child namespaces; they do not create application admission records. Publication
+selects a component from the staging owner's authored overlay list and requires
+the host's driver publication rule or an explicit profile. The same
+freeze, delivery, review, exact approval and activation ledger applies. A driver
+requirement may append its own `harness.driver` binding to
+`bee.harness.launch:harness_activation` at `.bindings +=`; other host targets
+are refused. Raw overlay requirements remain declarations. The host selects
+`bee.gov.binding:driver_bindings` as the activation declaration's admission
+reader. The shared driver resolver combines the original host selection with
+bindings derived from consumed desired artifacts in the existing activation
+store whose exact code overlays are present. It adds no stored record or second
+catalog; boot recovery restores approved code before it becomes selectable.
+The reader checks the exact owner selected by the host profile against each
+consumed desired artifact. An explicit profile may choose a different owner ID;
+owner spelling supplies no admission authority. Store read failures retain their
+reported cause.
+Preflight and recovery decode the exact owned append declaration through
+`bee.gov.types:driver_admission`. Activation retains this measurement when normalizing the registry
+revision for durable approval evidence. That host evidence admits the
+declaration's protected target; replacement requirements and edits to the
+protected host entry remain refused. Descriptor policies grant only registry
+reads. Launch definitions,
+policies and executable mappings are part of the reviewed artifact; metadata
+alone never activates a driver.
+
+The overlay `source` operation uses `bee.gov.binding:source` to read a bounded window of a non-private file in
+the authenticated workspace folder. It names no overlay or workspace; the caller
+needs `bee.gov.overlay.source` on its actor-metadata workspace. The backend uses
+the host-selected workspace folder catalog operation and filesystem root. Paths
+are relative or absolute within that root; hidden/credential paths and shared-root
+workspace subfolders are refused. Each read returns canonical base64,
+`window_digest`, `next_offset` and `eof`, with a 16,384-byte limit. It neither
+executes nor writes source and does not open the staging store.

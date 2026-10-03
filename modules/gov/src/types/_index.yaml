@@ -34,6 +34,7 @@ entries:
   source: file://activation_profiles.lua
   modules: [hash, time]
   imports:
+    drivers: bee.gov.types:drivers
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     application_admission: bee.gov.types:governed_application_admission
@@ -85,6 +86,7 @@ entries:
   kind: library.lua
   source: file://publication_profiles.lua
   imports:
+    drivers: bee.gov.types:drivers
     bounds: bee.values:bounds
     workspace_applications: bee.gov.types:workspace_applications
 - name: resolver
@@ -108,6 +110,8 @@ entries:
 - name: workspace_applications
   kind: library.lua
   source: file://workspace_applications.lua
+  imports:
+    bounds: bee.values:bounds
 - name: capability_files
   kind: library.lua
   source: file://capability_files.lua
@@ -145,3 +149,14 @@ entries:
   source: file://plan_protocol.lua
   imports:
     bounds: bee.values:bounds
+
+- name: driver_admission
+  kind: library.lua
+  source: file://driver_admission.lua
+  imports:
+    bounds: bee.values:bounds
+    drivers: bee.gov.types:drivers
+
+- name: drivers
+  kind: library.lua
+  source: file://drivers.lua

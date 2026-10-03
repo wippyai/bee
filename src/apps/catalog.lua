@@ -203,6 +203,7 @@ function M.read(workspace_id: string, snapshot: registry.Snapshot?): Selection
                     end
                     if #bindings >= 64 then error("Application admission capacity is exceeded") end
                     seen[binding.definition_id] = true
+                    if not packaged then binding.overlay_owner = record.overlay_owner end
                     bindings[#bindings + 1] = binding
                     admitted = true
                 end

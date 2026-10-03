@@ -51,7 +51,7 @@ entries:
     comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application
       also resolves the public sessions contracts, whose owner authorizes each operation
   policy:
-    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.binding:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.workspace.binding:read") || (action == "bee.workspace.manager.read" && resource == actor.meta.workspace_id)
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource in ["bee.harness.binding:setup", "bee.gov.binding:driver_bindings"]) || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.workspace.binding:read") || (action == "bee.workspace.manager.read" && resource == actor.meta.workspace_id)
     actions:
     - bee.workspace.manager.read
     - bee.harness.setup
@@ -85,8 +85,8 @@ entries:
   meta:
     comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and alternative login metadata without reading credential contents
   policy:
-    expression: '(action == "env.get" && (resource matches "^bee[.]driver[.](claude|codex|opencode|agy|grok|muse):executable$" || resource == "bee.harness.launch:host_environment_names" || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || ((action == "exec.get" || action == "exec.run") && resource == "bee.placement.native.env:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")'
-    actions: [registry.get, registry.snapshot, env.get, exec.get, exec.run, fs.get]
+    expression: '(action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action == "env.get" && (resource in ["bee.driver.claude.env:executable", "bee.driver.codex.env:executable", "bee.driver.opencode.env:executable", "bee.driver.agy.env:executable", "bee.driver.grok.env:executable", "bee.driver.muse.env:executable"] || resource == "bee.harness.launch:host_environment_names" || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || ((action == "exec.get" || action == "exec.run") && resource == "bee.placement.native.env:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")'
+    actions: [funcs.call, registry.get, registry.snapshot, env.get, exec.get, exec.run, fs.get]
     resources: '*'
     effect: allow
 - name: launch_docker_readiness_policy
@@ -100,8 +100,9 @@ entries:
   meta:
     comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or write authority
   policy:
-    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    expression: '(action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action != "funcs.call" && ((resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")))'
     actions:
+    - funcs.call
     - env.get
     - env.set
     - db.get

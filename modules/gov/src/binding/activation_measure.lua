@@ -117,7 +117,8 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         installed_entries = context.installed_entries, applied = context.applied,
         applied_databases = context.applied_databases, generated_databases = context.generated_databases,
         exact_expansion = context.exact_expansion, migration_barrier = context.migration_barrier,
-        auto_start = context.auto_start, protected = context.protected, host_evidence = context.host_evidence}
+        auto_start = context.auto_start, protected = context.protected, host_evidence = context.host_evidence,
+        driver_requirements = context.driver_requirements}
     local durable_report, durable_error = preflight.check(durable_candidate, durable_context)
     if not durable_report then return nil, durable_error or "cannot normalize destination preflight" end
     if not durable_report.ready then return nil, durable_error or "cannot normalize destination preflight" end

@@ -12,6 +12,8 @@ host retains client lifetime, application admission, attachment grants, physical
 display ownership and the existing `bee.env:client_db` resource. Metadata and
 layout values grant no authority. The catalog checks the caller's read or
 allocation permission before opening its selected database.
+The client storage policy grants registry reads of that same database descriptor
+for SQL resource validation, alongside database access.
 
 The client uses the common `bee.persist.persist:ledger` runner with the existing
 legacy ledger shape. Migrations 1–3 and their checksums, `client_state`,

@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: MIT
 """Safety and failure reporting for the source-state journey harness."""
 import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import sqlite3
 import subprocess
 import tempfile
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -132,6 +134,130 @@ class CopyTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
+    def test_session_admission_reads_the_selected_desktops_owner_store(self):
+        journey = Journey.__new__(Journey)
+        journey.state = Path('node-one-state')
+        peer_state = Path('node-two-state')
+        journey.ui = Mock(state=peer_state)
+        journey.ui.text.return_value = 'SESSIONS Workspace: NEW SESSION Ready for work'
+        journey.ui.screen.display = [''] * 3 + ['Claude Code'] + [''] * 6
+        journey.launch = Mock()
+        journey.click = Mock()
+        journey.frame = Mock()
+        admitted = {'session_ref': 'node-two-session'}
+        with patch('owner_journey.sessions', side_effect=[[], [admitted]]) as stores:
+            self.assertEqual(journey.choose_agent(), admitted)
+            self.assertEqual([call.args[0] for call in stores.call_args_list], [peer_state, peer_state])
+
+    def test_hive_decision_controls_the_peer_workspace_from_the_primary_display(self):
+        journey = Journey.__new__(Journey)
+        journey.ui = Mock()
+        journey.ui.text.return_value = 'Control this workspace here? Duration: until you leave Alt+Q leave'
+        journey.record_person_prompt = Mock()
+        journey.control_hive_workspace()
+        self.assertEqual([call.args[0] for call in journey.ui.key.call_args_list],
+                         [b"\x1bq", b"c", b"\t\r"])
+        self.assertEqual([call.args[0] for call in journey.ui.wait.call_args_list],
+                         ['HIVE MANAGER', 'Control this workspace here?', 'Control'])
+        journey.record_person_prompt.assert_called_once_with('Control node 2 workspace', journey.ui.text())
+
+    def test_remote_inbox_click_uses_the_peer_bar_below_the_local_bar(self):
+        journey = Journey.__new__(Journey)
+        journey.ui = Mock()
+        journey.ui.screen.display = [' BEE Needs you 0', 'REMOTE Control', ' BEE Needs you 1']
+        journey.frame = Mock()
+        journey.open_remote_inbox()
+        self.assertEqual([call.args for call in journey.ui.mouse.call_args_list],
+                         [(0, 6, 3), (0, 6, 3, True)])
+        journey.ui.wait.assert_called_once_with('NEEDS YOU')
+
+    def test_remote_review_selects_a_request_and_uses_allow_once(self):
+        journey = Journey.__new__(Journey)
+        journey.ui = Mock()
+        journey.ui.text.return_value = 'Allow once · exact reviewed scope'
+        journey.record_person_prompt = Mock()
+        journey.frame = Mock()
+        journey.allow_remote_review()
+        self.assertEqual([call.args[0] for call in journey.ui.key.call_args_list], [b"k\r", b"a"])
+        journey.ui.wait.assert_called_once_with('Allow once')
+
+    def test_selected_hive_journey_keeps_start_and_stop(self):
+        journey = Journey.__new__(Journey)
+        journey.run_step = Mock()
+        journey.steps = []
+        journey.cleanup = Mock()
+        journey.report = Mock(return_value='')
+        for name in ('start', 'open_apps', 'native_stub', 'docker_session', 'restart', 'update_plan',
+                     'subscriptions', 'authored_change', 'self_edit', 'hive', 'stop'):
+            setattr(journey, name, Mock())
+        self.assertEqual(journey.run(selected_steps={11}), 0)
+        self.assertEqual([call.args[0] for call in journey.run_step.call_args_list], [1, 11, 7])
+
+    def fixture_gateway(self, values):
+        calls = []
+        responses = iter([{'result': {}}] + [{'result': {'content': [{'type': 'text', 'text': json.dumps(value)}]}}
+                                         for value in values])
+        class Gateway(BaseHTTPRequestHandler):
+            def do_POST(self):
+                calls.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+                self.server.authorizations.append(self.headers.get('Authorization'))
+                body = json.dumps(next(responses)).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        with tempfile.TemporaryDirectory(prefix='journey-gateway-', dir=ROOT / '.wippy') as temporary:
+            root = Path(temporary)
+            source = root / 'source'
+            source.mkdir()
+            journey = Journey(Path('/usr/bin/false'), source, root / 'evidence')
+            self.addCleanup(journey.cleanup)
+            with ThreadingHTTPServer(('127.0.0.1', 0), Gateway) as server:
+                server.authorizations = []
+                thread = threading.Thread(target=server.serve_forever)
+                thread.start()
+                try:
+                    config = {'mcpServers': {'bee': {'url': f'http://127.0.0.1:{server.server_port}/mcp',
+                        'headers': {'Authorization': 'Bearer ${BEE_GATEWAY_TOKEN}'}}}}
+                    result = subprocess.run([str(journey.stub_bin / 'claude'), '--mcp-config', json.dumps(config),
+                                             'JOURNEY_HIVE_APPROVAL'], capture_output=True, text=True,
+                                            env={**journey.environment, 'BEE_GATEWAY_TOKEN': 'fixture-only'}, timeout=10)
+                finally:
+                    server.shutdown()
+                    thread.join()
+            self.assertTrue(all(value == 'Bearer fixture-only' for value in server.authorizations))
+        return calls, result
+
+    def test_native_fixture_stages_the_frozen_review_through_its_gateway(self):
+        calls, result = self.fixture_gateway([
+            {'ok': True, 'value': {'example': {'path': 'entries.json', 'entries_json': 'reviewed-example'}}},
+            {'ok': True, 'value': {'revision': 1}},
+            {'ok': True, 'value': {'revision': 2}},
+            {'ok': True, 'value': {'digest': 'frozen-digest'}},
+            {'ok': True, 'value': {'ready': True, 'diagnostics': []}}])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(calls), 6)
+        self.assertEqual(calls[-1]['params']['name'], 'delivery')
+        self.assertEqual(calls[-1]['params']['arguments']['snapshot_digest'], 'frozen-digest')
+        self.assertEqual(calls[3]['params']['arguments']['content'], 'reviewed-example')
+        self.assertIn('OWNER JOURNEY REVIEW STAGED', result.stdout)
+        self.assertIn('OWNER JOURNEY STUB OUTPUT', result.stdout)
+        self.assertNotIn('fixture-only', result.stdout + result.stderr)
+
+    def test_native_fixture_preserves_gateway_refusal(self):
+        for failure in ({'ok': False, 'error': {'code': 'DENIED', 'message': 'fixture refusal'}},
+                        {'ok': False, 'code': 'DENIED', 'message': 'fixture refusal'}):
+            calls, result = self.fixture_gateway([failure])
+            self.assertNotEqual(result.returncode, 0)
+            self.assertRegex(result.stderr, 'DENIED.*fixture refusal')
+            self.assertNotIn('OWNER JOURNEY STUB OUTPUT', result.stdout)
+            self.assertNotIn('fixture-only', result.stdout + result.stderr)
+
     def test_cycling_loading_frames_do_not_hide_a_hang(self):
         (ROOT / '.wippy').mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='journey-hang-', dir=ROOT / '.wippy') as temporary:
@@ -270,5 +396,6 @@ class FixtureTests(unittest.TestCase):
             with executable.open('rb') as binary:
                 self.assertEqual(binary.read(4), b'\x7fELF')
             self.assertEqual(executable.stat().st_mode & 0o005, 0o005, 'the non-root container user must read and execute the artifact')
+            self.assertFalse((journey.fixture_home / 'go').exists(), 'the build toolchain must stay outside the provider home')
             result = subprocess.run([str(executable), '--version'], capture_output=True, text=True, check=True)
             self.assertEqual(result.stdout.strip(), '2.1.265')

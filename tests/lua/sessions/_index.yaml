@@ -45,7 +45,7 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [funcs.call, registry.get, registry.snapshot]
+    actions: [funcs.call, registry.get, registry.snapshot, registry.apply]
     resources: '*'
     effect: allow
 - name: catalog_service_test
@@ -61,6 +61,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.sessions.binding:catalog_service
+    admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     materialization: bee.placement.native.service:materialization
 - name: scheduler_test
@@ -218,7 +219,7 @@ entries:
   source: file://wiring_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [registry]
+  modules: [registry, security]
   imports:
     test: wippy.test:test
     journal: bee.sessions.binding:threads_journal

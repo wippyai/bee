@@ -2476,6 +2476,11 @@
       "source": "src/env/_index.yaml"
     },
     {
+      "id": "bee.env:approved_driver_admission",
+      "kind": "ns.requirement",
+      "source": "src/env/_index.yaml"
+    },
+    {
       "id": "bee.env:binary_identity",
       "kind": "registry.entry",
       "source": "src/env/_index.yaml"
@@ -3626,6 +3631,11 @@
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
+      "id": "bee.gov.binding:driver_bindings",
+      "kind": "function.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.gov.binding:granted_resources",
       "kind": "function.lua",
       "source": "modules/gov/src/binding/_index.yaml"
@@ -3702,6 +3712,11 @@
     },
     {
       "id": "bee.gov.binding:recovery_service",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.gov.binding:source",
       "kind": "library.lua",
       "source": "modules/gov/src/binding/_index.yaml"
     },
@@ -3891,6 +3906,11 @@
       "source": "modules/gov/src/security/_index.yaml"
     },
     {
+      "id": "bee.gov.security:driver_bindings_policy",
+      "kind": "security.policy.expr",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
       "id": "bee.gov.security:gateway_callee_policy",
       "kind": "security.policy.expr",
       "source": "modules/gov/src/security/_index.yaml"
@@ -3928,6 +3948,11 @@
     {
       "id": "bee.gov.security:recovery_command_policy",
       "kind": "security.policy.expr",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
+      "id": "bee.gov.security:source_policy",
+      "kind": "security.policy",
       "source": "modules/gov/src/security/_index.yaml"
     },
     {
@@ -4047,6 +4072,16 @@
     },
     {
       "id": "bee.gov.types:delivery_protocol",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:driver_admission",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:drivers",
       "kind": "library.lua",
       "source": "modules/gov/src/types/_index.yaml"
     },
@@ -5476,6 +5511,11 @@
       "source": "modules/hub/src/binding/_index.yaml"
     },
     {
+      "id": "bee.hub.binding:receipt_metadata",
+      "kind": "function.lua",
+      "source": "modules/hub/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.hub.binding:target_lifecycle_owners",
       "kind": "ns.requirement",
       "source": "modules/hub/src/binding/_index.yaml"
@@ -5742,6 +5782,11 @@
     },
     {
       "id": "bee.hub.types:lifecycle",
+      "kind": "library.lua",
+      "source": "modules/hub/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hub.types:operations",
       "kind": "library.lua",
       "source": "modules/hub/src/types/_index.yaml"
     },
@@ -7454,6 +7499,11 @@
       "id": "bee.security.hive:workspace_command_policy",
       "kind": "security.policy",
       "source": "src/security/hive/_index.yaml"
+    },
+    {
+      "id": "bee.security.hub:receipt_metadata_policy",
+      "kind": "security.policy",
+      "source": "src/security/hub/_index.yaml"
     },
     {
       "id": "bee.security.storage:client_storage_policy",
@@ -9459,6 +9509,7 @@
       "target_ids": [
         "userspace.docker.service:root.service",
         "userspace.docker:database",
+        "userspace.docker:docker_client",
         "userspace.docker:process_host"
       ],
       "version": "0.5.17"
@@ -9469,7 +9520,8 @@
       "source_module": "modules/placement-docker",
       "target_ids": [
         "wippy.bootloader:application_host",
-        "wippy.bootloader:bootloader.service"
+        "wippy.bootloader:bootloader.service",
+        "wippy.bootloader:env_storage"
       ],
       "version": "0.3.16"
     }
@@ -11148,6 +11200,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.security.hive",
       "source": "src/security/hive/_index.yaml"
+    },
+    {
+      "namespace": "bee.security.hub",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.security.hub",
+      "source": "src/security/hub/_index.yaml"
     },
     {
       "namespace": "bee.security.storage",
@@ -13892,6 +13951,11 @@
       "target": "bee.driver.opencode.profiles:default_window"
     },
     {
+      "requirement": "bee.env:approved_driver_admission",
+      "resolved_by": "registry source",
+      "target": "bee.harness.launch:harness_activation"
+    },
+    {
       "requirement": "bee.executor.external.binding:executor_policies",
       "resolved_by": "registry source",
       "target": "bee.executor.external.binding:answer_hook"
@@ -16400,6 +16464,19 @@
       ]
     },
     {
+      "default_reference_ids": [
+        "bee.gov.binding:driver_bindings"
+      ],
+      "id": "bee.env:approved_driver_admission",
+      "source": "src/env/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.harness.launch:harness_activation",
+          "path": ".admission"
+        }
+      ]
+    },
+    {
       "default_reference_ids": [],
       "id": "bee.executor.external.binding:executor_policies",
       "source": "modules/executor-external/src/binding/_index.yaml",
@@ -18656,7 +18733,8 @@
         "modules/driver-grok/src/descriptor/_index.yaml",
         "modules/driver-muse/src/descriptor/_index.yaml",
         "modules/driver-opencode/src/descriptor/_index.yaml",
-        "modules/driver/src/descriptor/descriptor.lua"
+        "modules/driver/src/descriptor/descriptor.lua",
+        "modules/gov/src/traits/guide.lua"
       ],
       "tag": "bee.driver.cli-descriptor@3"
     },
@@ -18747,7 +18825,7 @@
       "sources": [
         "modules/gov/src/traits/guide.lua"
       ],
-      "tag": "bee.governance-component-guide@10"
+      "tag": "bee.governance-component-guide@13"
     },
     {
       "sources": [
@@ -19007,16 +19085,16 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1890,
-    "namespace_count": 290,
+    "entry_count": 1900,
+    "namespace_count": 291,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 154,
-    "persisted_id_count": 894,
-    "requirement_count": 173,
-    "requirement_target_count": 448,
+    "persisted_id_count": 898,
+    "requirement_count": 174,
+    "requirement_target_count": 449,
     "root_src_lua_budget": 8991,
     "root_src_lua_lines": 8991,
     "schema_tag_count": 71,

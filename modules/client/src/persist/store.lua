@@ -210,8 +210,8 @@ function M.allocate(store: Desktops, desktop_id: string): (boolean, string?)
     return false, "Desktop capacity reached"
 end
 local function acquire(resource: string?): (sql.DB?, string?)
-    local database_id = binding.database("client", resource)
-    if not database_id then return nil, "Invalid client database binding" end
+    local database_id, selection_error = binding.database("client", resource)
+    if not database_id then return nil, selection_error end
     local db, err = sql.get(database_id)
     if not db then return nil, tostring(err) end
     local function fail(message: string): (sql.DB?, string?)

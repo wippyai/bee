@@ -15,6 +15,7 @@ entries:
     transaction: bee.persist.persist:transaction
   meta:
     hive: policy
+    hive_service: bee.sync.binding
     hive_operation:
       revision: '1'
       title: Receive immutable synchronized content

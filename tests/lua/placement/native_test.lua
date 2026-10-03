@@ -1,7 +1,4 @@
--- MIT. The native placement against the runtime it runs on: intent before
--- creation, fail-closed capability, a full runner flow with acknowledged
--- streams, stop escalation, uncertainty without identity, cleanup only
--- after a proven exit.
+-- MIT. Native placement home regressions.
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
@@ -41,441 +38,12 @@ local types = require("types")
 local placement_decode = require("placement_decode")
 local executable_stream = require("executable_stream")
 local exits = require("exits")
+local native_fixture = require("native_fixture")
 type PreparedConfiguration = {environment: {[string]: string}, working_directory: string, arguments: {string}}
-local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
-    path = ".codex/auth.json", content_format = "json", initialize = {}}}
-local CLAUDE_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
-    path = ".claude/.credentials.json", content_format = "json",
-    initialize = {{path = ".claude.json", content = '{"hasCompletedOnboarding":true}'}}}}
-local OWNER = "bee.test.owner"
-local DIGEST = string.rep("b", 64)
-local ROOT = "bee.placement.native:project_fixture"
-local POLICY = "bee.placement.native:test_launch_policy"
-local NO_PROVIDER_POLICY = "bee.placement.native:test_launch_policy_without_provider"
-local FIXTURE_BINDING = "bee.placement.native:fixture_agent_binding"
-local counter = 0
 
-type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
-local function registry_input(value: {[string]: unknown}): RegistryInput
-    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
-    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
-    local metadata: {[string]: unknown} = {}
-    if meta ~= nil then
-        assert(type(meta) == "table", "fixture registry metadata")
-        for key, item in pairs(meta) do metadata[key] = item end
-    end
-    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
-    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
-end
-
-local function fresh(prefix: string): string
-    counter = counter + 1
-    return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
-end
--- A caller is bound to the workspace it acts in, as host-issued principals are.
-local function caller(actor: string, workspace_id: unknown)
-    local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return funcs.new():with_actor(principals.actor(actor, workspace_id)):with_scope(security.new_scope(policies))
-end
-local SENTINEL = "placement-sentinel-4e5f6a"
-local function credential_call(method: string, value: unknown): {[string]: unknown}
-    local reply, err = caller(OWNER, principals.workspace(value)):call("bee.credentials.binding:" .. method, value)
-    if err then error(method .. ": " .. tostring(err)) end
-    local typed = principals.reply(reply)
-    if not typed.ok then error(method .. ": " .. tostring(typed.error and typed.error.code) .. ": " .. tostring(typed.error and typed.error.message)) end
-    return assert(bounds.object(typed.value))
-end
-local function admit_credential_source()
-    local entry = registry.get("bee.credentials.env:credential_sources")
-    if not entry then error("credential sources entry") end
-    local data = assert(bounds.object(entry.data))
-    local list = principals.objects(data.sources)
-    data.sources = list
-    for _, item in ipairs(list) do
-        if item.ref == "bee.placement.native:sentinel_key" then return end
-    end
-    list[#list + 1] = {ref = "bee.placement.native:sentinel_key", workspace_id = "*", audience = OWNER, provider = "claude", projection_kinds = {"environment"}}
-    local changes = registry.snapshot():changes()
-    changes:update(registry_input(entry))
-    local applied, err = changes:apply()
-    if not applied then error("admit credential source: " .. tostring(err)) end
-end
-local function admit_login_source(source: string, private_codex_home: boolean?)
-    local entry = registry.get("bee.credentials.env:credential_sources")
-    if not entry then error("credential sources entry") end
-    local data = assert(bounds.object(entry.data))
-    local list = principals.objects(data.sources)
-    data.sources = list
-    local matched = false
-    for _, item in ipairs(list) do
-        if item.ref == source and item.provider == "codex" and item.audience == OWNER then
-            item.path = private_codex_home and ".codex/auth.json" or nil
-            item.write_back = private_codex_home == true
-            item.setup_path = private_codex_home and ".codex/config.toml" or nil
-            item.setup_destination = private_codex_home and ".codex/config.toml" or nil
-            item.setup_content_format = private_codex_home and "opaque" or nil
-            item.setup_initialize_empty = private_codex_home and true or nil
-            item.auxiliary_files = private_codex_home and {{source_prefix = ".codex/", destination_prefix = ".codex/",
-                suffix = ".config.toml", content_format = "opaque"}} or nil
-            matched = true
-        end
-    end
-    if not matched then
-        local source_row: {[string]: unknown} = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
-        if private_codex_home then
-            source_row.path = ".codex/auth.json"
-            source_row.write_back = true
-            source_row.setup_path = ".codex/config.toml"
-            source_row.setup_destination = ".codex/config.toml"
-            source_row.setup_content_format = "opaque"
-            source_row.setup_initialize_empty = true
-            source_row.auxiliary_files = {{source_prefix = ".codex/", destination_prefix = ".codex/", suffix = ".config.toml", content_format = "opaque"}}
-        end
-        list[#list + 1] = source_row
-    end
-    local file_policy = registry.get("bee.credentials.security:credential_file_policy")
-    local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
-    if not file_policy or not write_policy then error("credential file policy entry") end
-    file_policy.data.policy.resources = {source}
-    write_policy.data.policy.resources = {source}
-    local changes = registry.snapshot():changes()
-    changes:update(registry_input(entry))
-    changes:update(file_policy)
-    changes:update(write_policy)
-    local applied, apply_error = changes:apply()
-    if not applied then error("admit login source: " .. tostring(apply_error)) end
-end
-local function admit_claude_login_source(source: string)
-    local entry = registry.get("bee.credentials.env:credential_sources")
-    if not entry then error("credential sources entry") end
-    local data = assert(bounds.object(entry.data))
-    local list = principals.objects(data.sources)
-    data.sources = list
-    local matched = false
-    for _, item in ipairs(list) do
-        if item.ref == source and item.provider == "claude" and item.audience == OWNER then
-            matched = true
-        end
-    end
-    if not matched then
-        list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "claude", projection_kinds = {"file"},
-            path = ".claude/.credentials.json", write_back = false, setup_path = ".claude/settings.json",
-            setup_destination = ".claude/settings.json", setup_content_format = "opaque"}
-    end
-    local file_policy = registry.get("bee.credentials.security:credential_file_policy")
-    local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
-    if not file_policy or not write_policy then error("credential file policy entry") end
-    file_policy.data.policy.resources = {source}
-    write_policy.data.policy.resources = {source}
-    local changes = registry.snapshot():changes()
-    changes:update(registry_input(entry))
-    changes:update(file_policy)
-    changes:update(write_policy)
-    local applied, apply_error = changes:apply()
-    if not applied then error("admit Claude login source: " .. tostring(apply_error)) end
-end
-local function admit_grok_login_source(source: string)
-    local entry = registry.get("bee.credentials.env:credential_sources")
-    if not entry then error("credential sources entry") end
-    local data = assert(bounds.object(entry.data))
-    local list = principals.objects(data.sources)
-    data.sources = list
-    for _, item in ipairs(list) do
-        if item.ref == source and item.provider == "grok" and item.audience == OWNER then return end
-    end
-    list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "grok", projection_kinds = {"file"},
-        path = ".grok/auth.json", setup_path = ".grok/config.toml",
-        setup_destination = ".grok/.bee-global-config.toml", setup_content_format = "opaque", setup_initialize_empty = true, write_back = true}
-    local file_policy = registry.get("bee.credentials.security:credential_file_policy")
-    local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
-    if not file_policy or not write_policy then error("credential file policy entry") end
-    file_policy.data.policy.resources = {source}
-    write_policy.data.policy.resources = {source}
-    local changes = registry.snapshot():changes()
-    changes:update(registry_input(entry))
-    changes:update(file_policy)
-    changes:update(write_policy)
-    local applied, apply_error = changes:apply()
-    if not applied then error("admit Grok login source: " .. tostring(apply_error)) end
-end
-local function resource_mode(mode: string)
-    local entry = registry.get("bee.placement.native.env:placement_resource_mode")
-    if not entry then error("resource mode entry") end
-    local data = assert(bounds.object(entry.data))
-    data.mode = mode
-    local changes = registry.snapshot():changes()
-    changes:update(registry_input(entry))
-    local applied, err = changes:apply()
-    if not applied then error("set resource mode: " .. tostring(err)) end
-end
-local function resource_call(method: string, value: unknown): {[string]: unknown}
-    local reply, err = caller(OWNER, principals.workspace(value)):call("bee.resources.binding:" .. method, value)
-    if err then error(method .. ": " .. tostring(err)) end
-    local typed = principals.reply(reply)
-    if not typed.ok then error(method .. ": " .. tostring(typed.error and typed.error.code) .. ": " .. tostring(typed.error and typed.error.message)) end
-    return assert(bounds.object(typed.value))
-end
-local function call(actor: string, method: string, value: unknown): service.Reply
-    local client = caller(actor, principals.workspace(value))
-    local raw, err = client:call("bee.placement.native.binding:" .. method, value)
-    if err then error(method .. ": " .. tostring(err)) end
-    local reply = principals.reply(raw)
-    if method ~= "start" or not reply.ok then return reply end
-    local attempt = assert(placement_decode.attempt(reply.value))
-    local deadline = time.after("30s")
-    while attempt.execution_state == "starting" do
-        local tick = time.after("10ms")
-        local selected = channel.select({tick:case_receive(), deadline:case_receive()})
-        assert(selected.ok and selected.channel ~= deadline, "test runner did not finish startup")
-        local status_value, status_error = client:call("bee.placement.native.binding:status", {attempt_id = attempt.attempt_id})
-        assert(not status_error, tostring(status_error))
-        local status = principals.reply(status_value)
-        assert(status.ok, status.error and status.error.message)
-        attempt = assert(placement_decode.status(status.value)).attempt
-    end
-    return {ok = true, value = attempt}
-end
-
-local function value(reply: service.Reply): {[string]: unknown}
-    if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return assert(bounds.object(reply.value))
-end
-local function attempt_of(reply: service.Reply): types.Attempt
-    return assert(placement_decode.attempt(value(reply)))
-end
-local function await(future: funcs.Future): unknown
-    local _, open = future:response():receive()
-    if not open then error("prepare race closed without a reply") end
-    local payload, result_error = future:result()
-    if result_error then error("prepare race: " .. tostring(result_error)) end
-    if not payload then error("prepare race returned no reply") end
-    local data = payload:data()
-    if type(data) ~= "table" then error("prepare race reply returned " .. type(data)) end
-    return data
-end
-local function launch(command: {string}, required: string): {[string]: unknown}
-    local argv: {string} = {}
-    for index = 2, #command do argv[index - 1] = command[index] end
-    return {idempotency_key = fresh("key"), owner_id = OWNER, owner_incarnation = 1, action_id = fresh("action"), attempt_id = fresh("attempt"),
-        binding_ref = FIXTURE_BINDING, policy_ref = NO_PROVIDER_POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
-        launch = {executable = command[1], argv = argv, environment = {"PROBE_VALUE"}, working_directory_ref = "project", readiness = "none"},
-        resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {stop_grace_ms = 500}}
-end
-local function await_retained_runner(prepared: types.Attempt)
-    local held = assert(process.listen("bee.test.native.held", {message = true}))
-    local events = assert(process.events())
-    local raw, start_error = caller(OWNER, nil):call("bee.placement.native.binding:start", {attempt_id = prepared.attempt_id})
-    assert(not start_error, tostring(start_error))
-    local started = attempt_of(principals.reply(raw))
-    local runner = assert(started.runner)
-    while true do
-        local message = assert((held:receive()))
-        if tostring(message:from()) == runner and message:payload():data().attempt_id == prepared.attempt_id then break end
-    end
-    assert(process.monitor(runner))
-    assert(process.send(runner, "bee.test.native.release", {}))
-    while true do
-        local selected = channel.select({events:case_receive()})
-        assert(selected.ok, "retention supervision channel closed")
-        local event = selected.value
-        if event.kind == process.event.EXIT and tostring(event.from) == runner then
-            assert(not (event.result and event.result.error), "retention runner: " .. tostring(event.result and event.result.error))
-            break
-        end
-        assert(event.kind ~= process.event.CANCEL, "retention observer cancelled")
-    end
-    process.unmonitor(runner)
-    process.unlisten(held)
-end
-local function provider_home_fixtures(): {{provider: string, launch: {[string]: unknown}}}
-    local result: {{provider: string, launch: {[string]: unknown}}} = {}
-    local claude = assert(claude_launch.decode({profile_id = "batch", brief = "fixture"}))
-    local codex = assert(codex_launch.decode({profile_id = "batch", brief = "fixture", config_profile = "ds-flash"}))
-    local agy = assert(agy_launch.decode({profile_id = "batch", brief = "fixture"}))
-    local grok = assert(grok_launch.decode({profile_id = "batch", brief = "fixture", permission_mode = "default"}))
-    local muse = assert(muse_launch.decode({profile_id = "batch", brief = "fixture", approval_mode = "never"}))
-    local opencode = assert(opencode_launch.decode({profile_id = "batch", brief = "fixture"}))
-    result[1] = {provider = "claude", launch = assert(bounds.object(claude_launch.specification(claude)))}
-    result[2] = {provider = "codex", launch = assert(bounds.object(codex_launch.specification(codex)))}
-    result[3] = {provider = "agy", launch = assert(bounds.object(agy_launch.specification(agy)))}
-    result[4] = {provider = "grok", launch = assert(bounds.object(grok_launch.specification(grok)))}
-    result[5] = {provider = "muse", launch = assert(bounds.object(muse_launch.specification(muse)))}
-    result[6] = {provider = "opencode", launch = assert(bounds.object(opencode_launch.specification(opencode)))}
-    return result
-end
-local function provider_configuration(): {[string]: unknown}
-    local provider = registry.get("bee.placement.native:codex_test_provider")
-    if not provider then error("provider entry") end
-    local decoded, decode_error = configuration.decode("bee.placement.native:codex_test_provider", provider)
-    if not decoded then error(tostring(decode_error)) end
-    local rendered, render_error = configuration.projection(decoded)
-    if not rendered then error(tostring(render_error)) end
-    -- The provider projection includes its own diagnostic fields; the native
-    -- launch boundary accepts only the materialized configuration contract.
-    return {revision = rendered.revision, path = rendered.path, content = rendered.content,
-        digest = rendered.digest, provider_ref = rendered.provider_ref}
-end
-local function update_codex_provider(base_url: string, model: string)
-    local provider = registry.get("bee.placement.native:codex_test_provider")
-    if not provider then error("provider entry") end
-    local data = assert(bounds.object(provider.data))
-    data.base_url = base_url
-    data.model = model
-    local changes = registry.snapshot():changes()
-    changes:update(provider)
-    local applied, err = changes:apply()
-    if not applied then error("update codex provider: " .. tostring(err)) end
-end
-local function provider_configuration_digest(): string
-    local provider = registry.get("bee.placement.native:codex_test_provider")
-    if not provider then error("provider entry") end
-    local digest, digest_error = configuration_protocol.digest("bee.driver.codex.binding:binding", {provider_ref = "bee.placement.native:codex_test_provider", provider = provider, fixture = true}, "bee.driver.codex.binding:configure")
-    if not digest then error(tostring(digest_error)) end
-    return digest
-end
-local function retained_launch(owner: string, session_ref: string, marker: string): {[string]: unknown}
-    local request = launch({"sh", "-c", "printf '" .. marker .. "\\n' >> \"$HOME/marker\""}, "direct_process")
-    request.owner_id = owner
-    request.session_ref = session_ref
-    request.policy_ref = POLICY
-    request.binding_ref = "bee.driver.codex.binding:binding"
-    local declared = assert(bounds.object(request.launch))
-    declared.home_ref = "session"
-    local resources = principals.objects(request.resources)
-    request.resources = resources
-    resources[#resources + 1] = {name = "session", grant_ref = "session-grant", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
-    request.configuration_digest = provider_configuration_digest()
-    return request
-end
-local function grok_composition_request(attempt_id: string, session_ref: string, projection_id: string,
-    base_path: string): types.LaunchRequest
-    local decoded_launch, launch_error = grok_launch.decode({profile_id = "window", brief = "", permission_mode = "default",
-        gateway_tools = {"thread_read"}, gateway_hooks = {}})
-    if not decoded_launch then error(tostring(launch_error)) end
-    local launch_spec = grok_launch.specification(decoded_launch)
-    launch_spec.home_ref = "session"
-    launch_spec.working_directory_ref = "project"
-    local gateway_file, gateway_error = grok_configuration.projection({endpoint = "127.0.0.1:4312",
-        action_id = "grok-placement", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"})
-    if not gateway_file then error(tostring(gateway_error)) end
-    gateway_file.composition.base_path = base_path
-    local value: types.LaunchRequest = {
-        idempotency_key = fresh("grok-key"), owner_id = OWNER, owner_incarnation = 1,
-        action_id = fresh("grok-action"), attempt_id = attempt_id,
-        binding_ref = "bee.driver.grok.binding:binding", policy_ref = POLICY, profile_id = "window",
-        binding_digest = DIGEST, profile_digest = DIGEST, launch = launch_spec,
-        session_ref = session_ref,
-        resources = {
-            {name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"},
-            {name = "session", grant_ref = "session-grant", root_ref = ROOT, subpath = "", access = "write", purpose = "session"},
-        },
-        environment = {}, environment_refs = {}, projections = {projection_id},
-        required_cleanup = "direct_process", required_exit_observation = "eof_gated",
-        timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
-        delivery = {arguments = {}, files = {gateway_file}},
-    }
-    return value
-end
-local function intend_materialization(db, request: types.LaunchRequest)
-    local digest, digest_error = request_codec.digest(request)
-    if not digest then error(tostring(digest_error)) end
-    local encoded, encode_error = json.encode(request)
-    if not encoded then error(tostring(encode_error)) end
-    local intended = store.intend(db, request, digest, encoded,
-        {capability = "direct_process", exit_observation = "eof_gated"})
-    if not intended.ok then error(tostring(intended.message)) end
-end
-local READONLY = "bee.placement.native:readonly_fixture"
-local function admit_root(ref: string)
-    local entry = registry.get(ref)
-    if not entry then error("admitted roots entry") end
-    local data = assert(bounds.object(entry.data))
-    local roots = principals.objects(data.roots)
-    data.roots = roots
-    for _, root in ipairs(roots) do
-        if root.root_ref == ROOT then return end
-    end
-    roots[#roots + 1] = {root_ref = ROOT, access = "write"}
-    roots[#roots + 1] = {root_ref = READONLY, access = "read"}
-    local changes = registry.snapshot():changes()
-    changes:update(registry_input(entry))
-    local applied, err = changes:apply()
-    if not applied then error("admit root: " .. tostring(err)) end
-end
-local function activate_fixture_binding()
-    local entry = registry.get("bee.harness.launch:harness_activation")
-    if not entry then error("harness activation") end
-    local data = assert(bounds.object(entry.data))
-    local bindings = principals.items(data.bindings)
-    data.bindings = bindings
-    for _, binding in ipairs(bindings) do if binding == FIXTURE_BINDING then return end end
-    bindings[#bindings + 1] = FIXTURE_BINDING
-    local changes = registry.snapshot():changes()
-    changes:update(registry_input(entry))
-    local applied, err = changes:apply()
-    if not applied then error("activate fixture binding: " .. tostring(err)) end
-end
-local function wait_for(predicate: () -> boolean, timeout_ms: integer): boolean
-    local deadline = time.now():unix_nano() + timeout_ms * 1000000
-    while time.now():unix_nano() < deadline do
-        if predicate() then return true end
-        time.sleep("50ms")
-    end
-    return predicate()
-end
-local function kinds(attempt_id: string): {string}
-    local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
-    local list: {string} = {}
-    for _, item in ipairs(principals.objects(page.evidence)) do list[#list + 1] = tostring(item.kind) end
-    return list
-end
-local function alive(pid: string): boolean
-    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
-    local proc = assert(executor:exec("sh -c 'kill -0 " .. pid .. " 2>/dev/null && echo alive || echo gone'"))
-    local stdout = proc:stdout_stream()
-    assert(proc:start())
-    local output = tostring(stdout:read(64) or "")
-    proc:wait()
-    stdout:close()
-    executor:release()
-    return output:find("alive", 1, true) ~= nil
-end
-local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
-    local proc = assert(executor:exec(quote.line({"sh", "-c", command})))
-    local stdout = proc:stdout_stream()
-    assert(proc:start())
-    local output = ""
-    while true do
-        local chunk: unknown = stdout:read(4096)
-        if type(chunk) ~= "string" or chunk == "" then break end
-        output = output .. (chunk)
-    end
-    local code, err = proc:wait()
-    stdout:close()
-    executor:release()
-    assert(code == 0, "fixture command exited " .. tostring(code) .. ": " .. tostring(err) .. ": " .. command)
-    return output
-end
-local function fixture_home_file(home_path: string, relative: string): string
-    local target = assert(homes.os_path(home_path .. "/home/" .. relative))
-    return shell("cat " .. quote.posix(target))
-end
-local function has(list: {string}, wanted: string): boolean
-    for _, item in ipairs(list) do
-        if item == wanted then return true end
-    end
-    return false
-end
 local function home_tests()
     test.describe("Native placement homes and admission", function()
-        local measured = value(service.capabilities())
+        local measured = native_fixture.value(service.capabilities())
         local capability = tostring(measured.capability)
         local observation = tostring(measured.exit_observation)
         test.it("coalesces short reads within the bounded output chunk and preserves stream bytes", function()
@@ -503,7 +71,7 @@ local function home_tests()
             test.eq(output_buffer.size(buffers), 0)
         end)
         test.it("projects only each driver's declared login and configuration files into fixture attempt homes", function()
-            for _, case in ipairs(provider_home_fixtures()) do
+            for _, case in ipairs(native_fixture.provider_home_fixtures()) do
                 local home_spec = (assert(bounds.object(case.launch.provider_home)))
                 test.eq(home_spec.provider, case.provider)
                 test.eq(home_spec.private, true)
@@ -528,19 +96,19 @@ local function home_tests()
                 local content_format = (case.provider == "agy" or case.provider == "muse") and "opaque" or "json"
                 local format = {schema_revision = "bee.credential-format@1", file = {path = login_path, content_format = content_format, initialize = initializers}}
                 local login = content_format == "json" and '{"fixture":"provider-login"}' or "fixture-provider-login"
-                local key, key_error = homes.attempt_key(OWNER, fresh("provider-home-fixture"))
+                local key, key_error = homes.attempt_key(native_fixture.OWNER, native_fixture.fresh("provider-home-fixture"))
                 if not key then error(tostring(key_error)) end
                 local attempt_home, home_error = homes.create_attempt(key)
                 if not attempt_home then error(tostring(home_error)) end
                 local projected, project_error = homes.project_attempt_login(attempt_home,
                     {provider = case.provider, definition_id = "bee.test." .. case.provider .. "_login", definition_revision = 1, format = format}, login, {})
                 if not projected then error(case.provider .. " fixture projection: " .. tostring(project_error)) end
-                test.eq(fixture_home_file(attempt_home, login_path), login)
+                test.eq(native_fixture.fixture_home_file(attempt_home, login_path), login)
                 for path, expected_bytes in pairs(expected) do
-                    test.eq(fixture_home_file(attempt_home, path), expected_bytes)
+                    test.eq(native_fixture.fixture_home_file(attempt_home, path), expected_bytes)
                 end
                 local unrelated = assert(homes.os_path(attempt_home .. "/home/machine-home-only.txt"))
-                test.eq(shell("test ! -e " .. quote.posix(unrelated) .. " && printf missing"), "missing")
+                test.eq(native_fixture.shell("test ! -e " .. quote.posix(unrelated) .. " && printf missing"), "missing")
                 local remove_error = homes.remove_attempt(key)
                 test.is_nil(remove_error)
             end
@@ -548,17 +116,17 @@ local function home_tests()
         test.it("launches Claude with its private config directory and exact login layout", function()
             local source = "bee.credentials:placement_claude_login_fixture"
             local source_root = ".wippy/placement-claude-login-fixture"
-            admit_claude_login_source(source)
+            native_fixture.admit_claude_login_source(source)
             local login = '{"fixture":"private-claude-login"}'
             local settings = '{"model":"fixture"}'
-            test.eq(shell("mkdir -p " .. source_root .. "/.claude && printf %s " .. quote.posix(login) .. " > " .. source_root .. "/.claude/.credentials.json"
+            test.eq(native_fixture.shell("mkdir -p " .. source_root .. "/.claude && printf %s " .. quote.posix(login) .. " > " .. source_root .. "/.claude/.credentials.json"
                 .. " && printf %s " .. quote.posix(settings) .. " > " .. source_root .. "/.claude/settings.json"), "")
-            local workspace = fresh("claude-private-home-workspace")
-            credential_call("define", {workspace_id = workspace, name = "claude_login", provider = "claude", source = {kind = "fs_directory", ref = source}})
-            local attempt_id = fresh("claude-private-home-attempt")
-            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "claude_login", audience = OWNER,
-                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
-                launch_policy_digest = DIGEST, idempotency_key = fresh("claude-private-home-key")})
+            local workspace = native_fixture.fresh("claude-private-home-workspace")
+            native_fixture.credential_call("define", {workspace_id = workspace, name = "claude_login", provider = "claude", source = {kind = "fs_directory", ref = source}})
+            local attempt_id = native_fixture.fresh("claude-private-home-attempt")
+            local projection = native_fixture.credential_call("issue_projection", {workspace_id = workspace, name = "claude_login", audience = native_fixture.OWNER,
+                attempt_id = attempt_id, profile_id = "batch", profile_digest = native_fixture.DIGEST, binding_digest = native_fixture.DIGEST,
+                launch_policy_digest = native_fixture.DIGEST, idempotency_key = native_fixture.fresh("claude-private-home-key")})
             local decoded = assert(claude_launch.decode({profile_id = "batch", brief = "fixture"}))
             local spec = claude_launch.specification(decoded)
             local provider_home = assert(bounds.object(spec.provider_home))
@@ -599,14 +167,14 @@ local function home_tests()
                 .. ' && ! env | cut -d= -f1 | grep -q "^ANTHROPIC_"'
                 .. ' && ! env | cut -d= -f1 | grep -q "^CLAUDE_CODE_"'
                 .. ' && printf claude-private-home-ok'
-            local request = launch({"sh", "-c", script}, "process_group")
+            local request = native_fixture.launch({"sh", "-c", script}, "process_group")
             request.attempt_id = attempt_id
             request.projections = {projection.projection_id}
             (assert(bounds.object(request.launch))).provider_home = provider_home
-            attempt_of(call(OWNER, "prepare", request))
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1}))
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = attempt_id}))
             local output = ""
             local ended: {[string]: boolean} = {}
             local deadline = time.after("10s")
@@ -623,13 +191,13 @@ local function home_tests()
             end
             process.unlisten(outputs)
             test.is_true(output:find("claude-private-home-ok", 1, true) ~= nil)
-            test.is_true(wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt).execution_state == "exited"
+            test.is_true(native_fixture.wait_for(function()
+                return (native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = attempt_id})).attempt).execution_state == "exited"
             end, 5000), "Claude private-home fixture exit was not recorded")
-            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = attempt_id}))
         end)
         test.it("refuses provider login write-back until runtime no-follow fs is available and leaves files unchanged", function()
-            local key = assert(homes.attempt_key(OWNER, fresh("provider-home-link")))
+            local key = assert(homes.attempt_key(native_fixture.OWNER, native_fixture.fresh("provider-home-link")))
             local attempt_home = assert(homes.create_attempt(key))
             local home = assert(homes.os_path(attempt_home .. "/home"))
             local format = {schema_revision = "bee.credential-format@1", file = {
@@ -643,35 +211,35 @@ local function home_tests()
             local content, read_error = homes.read_provider_file(attempt_home, target)
             test.is_nil(content)
             test.eq(read_error, "provider login write-back requires runtime no-follow fs")
-            test.eq(shell("test \"$(cat " .. quote.posix(file_path) .. ")\" = " .. quote.posix(login) .. " && printf unchanged"), "unchanged")
+            test.eq(native_fixture.shell("test \"$(cat " .. quote.posix(file_path) .. ")\" = " .. quote.posix(login) .. " && printf unchanged"), "unchanged")
 
-            test.eq(shell("mv " .. quote.posix(file_path) .. " " .. quote.posix(home .. "/.codex/original-login")
+            test.eq(native_fixture.shell("mv " .. quote.posix(file_path) .. " " .. quote.posix(home .. "/.codex/original-login")
                 .. " && ln -s original-login " .. quote.posix(file_path)), "")
             local linked, linked_error = homes.read_provider_file(attempt_home, target)
             test.is_nil(linked)
             test.eq(linked_error, "provider login write-back requires runtime no-follow fs")
-            test.eq(shell("test -L " .. quote.posix(file_path) .. " && test \"$(cat " .. quote.posix(home .. "/.codex/original-login")
+            test.eq(native_fixture.shell("test -L " .. quote.posix(file_path) .. " && test \"$(cat " .. quote.posix(home .. "/.codex/original-login")
                 .. ")\" = " .. quote.posix(login) .. " && printf unchanged"), "unchanged")
 
-            test.eq(shell("mv " .. quote.posix(home .. "/.codex") .. " " .. quote.posix(home .. "/.codex-target")
+            test.eq(native_fixture.shell("mv " .. quote.posix(home .. "/.codex") .. " " .. quote.posix(home .. "/.codex-target")
                 .. " && ln -s .codex-target " .. quote.posix(home .. "/.codex")), "")
             local linked_parent, parent_error = homes.read_provider_file(attempt_home, target)
             test.is_nil(linked_parent)
             test.eq(parent_error, "provider login write-back requires runtime no-follow fs")
-            test.eq(shell("test -L " .. quote.posix(home .. "/.codex") .. " && test \"$(cat "
+            test.eq(native_fixture.shell("test -L " .. quote.posix(home .. "/.codex") .. " && test \"$(cat "
                 .. quote.posix(home .. "/.codex-target/original-login") .. ")\" = " .. quote.posix(login) .. " && printf unchanged"), "unchanged")
             test.is_nil(homes.remove_attempt(key))
         end)
         test.it("write roots follow granted subpaths and stay inside their resource root", function()
-            local root = assert(resources.directory(ROOT))
+            local root = assert(resources.directory(native_fixture.ROOT))
             local executor = assert(resources.executor())
-            local base = fresh("subpath")
+            local base = native_fixture.fresh("subpath")
             local parent = assert(root:match("^(.*)/[^/]+$"))
-            test.eq(shell("mkdir -p " .. quote.posix(root .. "/" .. base .. "/granted")
+            test.eq(native_fixture.shell("mkdir -p " .. quote.posix(root .. "/" .. base .. "/granted")
                 .. " && ln -s " .. quote.posix(parent) .. " " .. quote.posix(root .. "/" .. base .. "/escape")), "")
             local function decoded(subpath: string, access: string): types.LaunchRequest
-                local raw = launch({"sh", "-c", "true"}, "direct_process")
-                raw.resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = subpath, access = access, purpose = "project"}}
+                local raw = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
+                raw.resources = {{name = "project", grant_ref = "grant-1", root_ref = native_fixture.ROOT, subpath = subpath, access = access, purpose = "project"}}
                 local request, err = request_codec.decode(raw)
                 if not request then error(tostring(err)) end
                 return request
@@ -693,10 +261,10 @@ local function home_tests()
             local missing, missing_error = materialization.write_roots(decoded(base .. "/absent", "write"), executor)
             test.is_nil(missing)
             test.not_nil(missing_error)
-            shell("rm -rf " .. quote.posix(root .. "/" .. base))
+            native_fixture.shell("rm -rf " .. quote.posix(root .. "/" .. base))
         end)
         test.it("checks login evidence in the selected provider home without opening files", function()
-            local raw = launch({"sh", "-c", "true"}, "direct_process")
+            local raw = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             raw.profile_id = "window"
             raw.environment_refs = {HOME = "bee:machine_home"}
             local declared = assert(bounds.object(raw.launch))
@@ -745,7 +313,7 @@ local function home_tests()
                 {provider = "muse", variable = "HOME", path = ".config/muse/auth.json", expected = "/owner/.config/muse/auth.json"},
             }
             for _, case in ipairs(cases) do
-                local raw = launch({"sh", "-c", "true"}, "direct_process")
+                local raw = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
                 raw.profile_id = "window"
                 local spec = assert(bounds.object(raw.launch))
                 spec.login = {provider = case.provider, command = case.provider, files = {
@@ -776,7 +344,7 @@ local function home_tests()
             local applied, apply_error = changes:apply()
             if not applied then error(tostring(apply_error)) end
             local ok, failure = pcall(function()
-                local raw = launch({"sh", "-c", "true"}, "direct_process")
+                local raw = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
                 raw.profile_id = "window"
                 raw.environment_refs = {HOME = "bee.env:machine_home"}
                 local spec = assert(bounds.object(raw.launch))
@@ -788,23 +356,23 @@ local function home_tests()
                 test.is_nil(materialization.prepare_login_notice(decoded, "/private-attempt-home", nil))
             end)
             local restore = registry.snapshot():changes()
-            restore:update(registry_input(original))
+            restore:update(native_fixture.registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             if not ok then error(tostring(failure)) end
         end)
         test.it("returns a typed login notice from prepare and its replay", function()
-            local raw = launch({"sh", "-c", "true"}, "direct_process")
+            local raw = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             raw.profile_id = "window"
             local spec = assert(bounds.object(raw.launch))
             spec.login = {provider = "codex", command = "codex login", files = {{variable = "HOME", path = ".codex/auth.json"}}}
-            local prepared = attempt_of(call(OWNER, "prepare", raw))
+            local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", raw))
             test.eq(prepared.notice and prepared.notice.code, "LOGIN_REQUIRED")
             test.eq(prepared.notice and prepared.notice.provider, "codex")
             test.eq(prepared.notice and prepared.notice.command, "codex login")
-            local replay = attempt_of(call(OWNER, "prepare", raw))
+            local replay = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", raw))
             test.eq(replay.notice and replay.notice.code, "LOGIN_REQUIRED")
-            value(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+            native_fixture.value(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = prepared.attempt_id}))
         end)
         test.it("treats a concurrently removed attempt tree as cleaned and retains real read errors", function()
             local gone = {readdir = function(_self: unknown, _path: string): (unknown, string) return nil, "removed" end,
@@ -891,20 +459,20 @@ local function home_tests()
         test.it("stops an unstarted retained attempt without holding its session or creating a child", function()
             for _, required in ipairs({"direct_process", "process_group"}) do
                 if types.satisfies(capability, required) then
-                    local session_ref = fresh("stopped-before-start")
-                    local request = retained_launch(OWNER, session_ref, "must-not-run")
+                    local session_ref = native_fixture.fresh("stopped-before-start")
+                    local request = native_fixture.retained_launch(native_fixture.OWNER, session_ref, "must-not-run")
                     request.required_cleanup = required
-                    local prepared = attempt_of(call(OWNER, "prepare", request))
-                    test.eq(value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, true)
-                    local foreign = call("bee.test.other", "stop", {attempt_id = prepared.attempt_id})
+                    local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
+                    test.eq(native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, true)
+                    local foreign = native_fixture.call("bee.test.other", "stop", {attempt_id = prepared.attempt_id})
                     test.is_false(foreign.ok)
-                    local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+                    local stopped = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = prepared.attempt_id}))
                     test.eq(stopped.execution_state, "exited")
                     test.eq(stopped.cleanup_state, "complete")
                     test.eq(stopped.runner, nil)
-                    local replay = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+                    local replay = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = prepared.attempt_id}))
                     test.eq(replay.evidence_count, stopped.evidence_count)
-                    local delayed = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                    local delayed = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
                     test.eq(delayed.execution_state, "exited")
                     test.eq(delayed.evidence_count, stopped.evidence_count)
                     local db = assert(store.open())
@@ -912,45 +480,45 @@ local function home_tests()
                     test.eq(row.home_key, nil)
                     test.eq(row.pid, nil)
                     db:release()
-                    local successor = retained_launch(OWNER, session_ref, "successor")
+                    local successor = native_fixture.retained_launch(native_fixture.OWNER, session_ref, "successor")
                     successor.required_cleanup = required
-                    local admitted = attempt_of(call(OWNER, "prepare", successor))
+                    local admitted = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", successor))
                     test.eq(admitted.execution_state, "intended")
-                    test.eq(attempt_of(call(OWNER, "stop", {attempt_id = admitted.attempt_id})).cleanup_state, "complete")
+                    test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = admitted.attempt_id})).cleanup_state, "complete")
                 end
             end
         end)
         test.it("fences concurrent start and stop without retaining an unstarted session", function()
             for index = 1, 4 do
-                local session_ref = fresh("start-stop-race")
-                local request = retained_launch(OWNER, session_ref, "race")
+                local session_ref = native_fixture.fresh("start-stop-race")
+                local request = native_fixture.retained_launch(native_fixture.OWNER, session_ref, "race")
                 request.required_cleanup = capability
-                local prepared = attempt_of(call(OWNER, "prepare", request))
+                local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 local first = index % 2 == 0 and "stop" or "start"
                 local second = first == "stop" and "start" or "stop"
-                local a, a_error = caller(OWNER):async("bee.placement.native.binding:" .. first, {attempt_id = prepared.attempt_id})
-                local b, b_error = caller(OWNER):async("bee.placement.native.binding:" .. second, {attempt_id = prepared.attempt_id})
+                local a, a_error = native_fixture.caller(native_fixture.OWNER):async("bee.placement.native.binding:" .. first, {attempt_id = prepared.attempt_id})
+                local b, b_error = native_fixture.caller(native_fixture.OWNER):async("bee.placement.native.binding:" .. second, {attempt_id = prepared.attempt_id})
                 if a_error or not a or b_error or not b then error("start/stop race: " .. tostring(a_error or b_error)) end
-                local first_reply, second_reply = principals.reply(await(a)), principals.reply(await(b))
+                local first_reply, second_reply = principals.reply(native_fixture.await(a)), principals.reply(native_fixture.await(b))
                 local stop_reply = first == "stop" and first_reply or second_reply
                 if not stop_reply.ok then error("stop after concurrent " .. first .. "/" .. second .. " failed: " .. tostring(json.encode(stop_reply))) end
-                local exited = wait_for(function()
-                    local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                local exited = native_fixture.wait_for(function()
+                    local current = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
                     return current.execution_state == "exited"
                 end, 8000)
                 if not exited then
-                    local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                    local current = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
                     error("concurrent " .. first .. "/" .. second .. " remained " .. current.execution_state .. ": " .. tostring(json.encode({start = first == "start" and first_reply or second_reply, stop = stop_reply})))
                 end
-                test.eq(attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
-                local successor = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "after-race")))
-                test.eq(attempt_of(call(OWNER, "stop", {attempt_id = successor.attempt_id})).cleanup_state, "complete")
+                test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
+                local successor = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", native_fixture.retained_launch(native_fixture.OWNER, session_ref, "after-race")))
+                test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = successor.attempt_id})).cleanup_state, "complete")
             end
         end)
         test.it("inherits only the host-selected user home while keeping placement files private", function()
-            local unapproved = launch({"sh", "-c", "true"}, "direct_process")
+            local unapproved = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             unapproved.environment_refs = {HOME = "bee.env:machine_home"}
-            local refused = call(OWNER, "prepare", unapproved)
+            local refused = native_fixture.call(native_fixture.OWNER, "prepare", unapproved)
             test.is_false(refused.ok)
             test.eq(refused.error and refused.error.code, "DENIED")
             test.eq(refused.error and refused.error.message, "launch policy does not authorize host HOME")
@@ -968,49 +536,49 @@ local function home_tests()
             local applied, apply_error = changes:apply()
             if not applied then error(tostring(apply_error)) end
             local ok, err = pcall(function()
-                local request = retained_launch(OWNER, fresh("inherited-session"), "unused")
+                local request = native_fixture.retained_launch(native_fixture.OWNER, native_fixture.fresh("inherited-session"), "unused")
                 request.launch.argv = {"-c", 'test "$HOME" = /tmp'}
                 request.environment_refs = {HOME = "bee.env:machine_home"}
-                local prepared = attempt_of(call(OWNER, "prepare", request))
-                test.eq(value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, false)
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                test.is_true(wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
+                local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
+                test.eq(native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, false)
+                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
+                test.is_true(native_fixture.wait_for(function()
+                    return (native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
                 end, 5000))
-                local finished = (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt)
+                local finished = (native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt)
                 test.eq(finished.exit and finished.exit.code, 0)
                 local db = assert(store.open())
                 local row = assert(store.row(db, prepared.attempt_id))
                 test.is_true(type(row.home_key) == "string" and row.home_key ~= "")
                 db:release()
-                test.eq(attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
+                test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
             end)
             local restore = registry.snapshot():changes()
-            restore:update(registry_input(original))
+            restore:update(native_fixture.registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             if not ok then error(tostring(err)) end
         end)
         test.it("rechecks host HOME authorization before materialization", function()
-            local policy_entry = assert(registry.get(POLICY))
+            local policy_entry = assert(registry.get(native_fixture.POLICY))
             local original_policy = policy_entry.data
             local revoked: {[string]: unknown} = {}
             for key, item in pairs(assert(bounds.object(original_policy))) do revoked[key] = item end
             revoked.allow_host_home = false
-            local request = retained_launch(OWNER, fresh("revoked-home-session"), "must-not-run")
+            local request = native_fixture.retained_launch(native_fixture.OWNER, native_fixture.fresh("revoked-home-session"), "must-not-run")
             request.environment_refs = {HOME = "bee.env:machine_home"}
-            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
             local ok, failure = pcall(function()
                 policy_entry.data = revoked
                 local changes = registry.snapshot():changes()
                 changes:update(policy_entry)
                 local applied, apply_error = changes:apply()
                 if not applied then error(tostring(apply_error)) end
-                local refused = call(OWNER, "start", {attempt_id = prepared.attempt_id})
+                local refused = native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id})
                 test.is_false(refused.ok)
                 test.eq(refused.error and refused.error.code, "DENIED")
                 test.eq(refused.error and refused.error.message, "launch policy does not authorize host HOME")
-                local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                local current = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
                 test.eq(current.execution_state, "intended")
             end)
             policy_entry.data = original_policy
@@ -1018,13 +586,13 @@ local function home_tests()
             restoration:update(policy_entry)
             local restored, restore_error = restoration:apply()
             if not restored then error(tostring(restore_error)) end
-            local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+            local stopped = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = prepared.attempt_id}))
             test.eq(stopped.cleanup_state, "complete")
             if not ok then error(tostring(failure)) end
         end)
         test.it("refuses native and gateway environment collisions before intent", function()
             for _, kind in ipairs({"home", "home_ref", "gateway", "hook", "shared_token", "gateway_home"}) do
-                local request = launch({"sh", "-c", "true"}, "direct_process")
+                local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
                 local environment = request.environment
                 if kind == "home" then
                     environment.HOME = "/unselected/home"
@@ -1042,2485 +610,97 @@ local function home_tests()
                     if kind == "gateway_home" then gateway.destination = "HOME" end
                     request.gateway = gateway
                 end
-                local refused = call(OWNER, "prepare", request)
+                local refused = native_fixture.call(native_fixture.OWNER, "prepare", request)
                 test.is_false(refused.ok)
                 test.eq(refused.error and refused.error.code, "INVALID")
                 local detail = refused.error and refused.error.message or ""
                 test.is_true(detail:find("owned", 1, true) ~= nil or detail:find("already assigned", 1, true) ~= nil)
-                local absent = call(OWNER, "status", {attempt_id = request.attempt_id})
+                local absent = native_fixture.call(native_fixture.OWNER, "status", {attempt_id = request.attempt_id})
                 test.eq(absent.error and absent.error.code, "NOT_FOUND")
             end
         end)
         test.it("refuses native admission when the host policy selects another placement", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
+            local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = "bee.placement.native:test_non_native_launch_policy"
             -- Omit any caller placement hint: the host policy still controls
             -- selection, even for a direct call to native prepare.
-            local refused = call(OWNER, "prepare", request)
+            local refused = native_fixture.call(native_fixture.OWNER, "prepare", request)
             test.eq(refused.error and refused.error.code, "DENIED")
-            local absent = call(OWNER, "status", {attempt_id = request.attempt_id})
+            local absent = native_fixture.call(native_fixture.OWNER, "status", {attempt_id = request.attempt_id})
             test.eq(absent.error and absent.error.code, "NOT_FOUND")
         end)
         test.it("records intent only for admitted, cleanable launches and replays by key", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            local first = attempt_of(call(OWNER, "prepare", request))
+            local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
+            local first = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
             test.eq(first.execution_state, "intended")
             test.eq(first.cleanup_state, "pending")
             test.eq(first.capability, capability)
             test.eq(first.evidence_count, 1)
-            local again = attempt_of(call(OWNER, "prepare", request))
+            local again = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
             test.eq(again.attempt_id, first.attempt_id)
-            local other = launch({"sh", "-c", "true"}, "direct_process")
+            local other = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             other.idempotency_key = request.idempotency_key
-            local conflict = call(OWNER, "prepare", other)
+            local conflict = native_fixture.call(native_fixture.OWNER, "prepare", other)
             test.is_false(conflict.ok)
             test.eq(conflict.error and conflict.error.code, "CONFLICT")
             -- The attempt id is the durable identity and its uniqueness is not
             -- scoped to the idempotency key, so a request that repeats a
             -- recorded attempt under a fresh key is refused by the identity
             -- rather than the key, and has to say so.
-            local repeated = launch({"sh", "-c", "true"}, "direct_process")
+            local repeated = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             repeated.attempt_id = request.attempt_id
-            local collided = call(OWNER, "prepare", repeated)
+            local collided = native_fixture.call(native_fixture.OWNER, "prepare", repeated)
             test.is_false(collided.ok)
             local collision = collided.error
             test.eq(collision and collision.code, "CONFLICT")
             local reported = collision and collision.message or ""
             test.eq(reported:find(request.attempt_id, 1, true) ~= nil, true)
             test.eq(reported:find("already recorded", 1, true) ~= nil, true)
-            local foreign = launch({"sh", "-c", "true"}, "direct_process")
-            local denied = call("bee.test.other", "prepare", foreign)
+            local foreign = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
+            local denied = native_fixture.call("bee.test.other", "prepare", foreign)
             test.eq(denied.error and denied.error.code, "FORBIDDEN")
-            local elsewhere = launch({"sh", "-c", "true"}, "direct_process")
+            local elsewhere = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             local grant = (principals.objects(elsewhere.resources))[1]
             grant.root_ref = "bee.placement.native.env:root"
-            local refused = call(OWNER, "prepare", elsewhere)
+            local refused = native_fixture.call(native_fixture.OWNER, "prepare", elsewhere)
             test.eq(refused.error and refused.error.code, "FORBIDDEN")
-            local narrow = launch({"sh", "-c", "true"}, "direct_process")
+            local narrow = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             local narrow_grant = (principals.objects(narrow.resources))[1]
-            narrow_grant.root_ref = READONLY
+            narrow_grant.root_ref = native_fixture.READONLY
             -- The launch line cannot allow a gateway tool the binding does not admit.
-            local allowing = launch({"claude", "-p", "hi", "--allowedTools", "Read,mcp__bee__thread_post"}, "direct_process")
-            local wider = call(OWNER, "prepare", allowing)
+            local allowing = native_fixture.launch({"claude", "-p", "hi", "--allowedTools", "Read,mcp__bee__thread_post"}, "direct_process")
+            local wider = native_fixture.call(native_fixture.OWNER, "prepare", allowing)
             test.eq(wider.error and wider.error.code, "DENIED")
-            local bare = call(OWNER, "prepare", launch({"claude", "-p", "hi", "--allowed-tools=mcp__bee"}, "direct_process"))
+            local bare = native_fixture.call(native_fixture.OWNER, "prepare", native_fixture.launch({"claude", "-p", "hi", "--allowed-tools=mcp__bee"}, "direct_process"))
             test.eq(bare.error and bare.error.code, "DENIED")
-            local widened = call(OWNER, "prepare", narrow)
+            local widened = native_fixture.call(native_fixture.OWNER, "prepare", narrow)
             test.eq(widened.error and widened.error.code, "FORBIDDEN")
             narrow_grant.access = "read"
-            local narrowed = attempt_of(call(OWNER, "prepare", narrow))
+            local narrowed = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", narrow))
             test.eq(narrowed.execution_state, "intended")
             test.eq(measured.resource_authority, "host_configured")
             test.is_false(measured.delegated_resource_grants == true)
             test.is_true(measured.credential_broker == true)
             if observation == "eof_gated" then
-                local managed = launch({"sh", "-c", "true"}, "direct_process")
+                local managed = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
                 managed.required_exit_observation = "independent"
-                local gated = call(OWNER, "prepare", managed)
+                local gated = native_fixture.call(native_fixture.OWNER, "prepare", managed)
                 test.eq(gated.error and gated.error.code, "UNSUPPORTED_CAPABILITY")
             end
-            local strongest = launch({"sh", "-c", "true"}, "contained_tree")
-            local closed = call(OWNER, "prepare", strongest)
+            local strongest = native_fixture.launch({"sh", "-c", "true"}, "contained_tree")
+            local closed = native_fixture.call(native_fixture.OWNER, "prepare", strongest)
             test.eq(closed.error and closed.error.code, "UNSUPPORTED_CAPABILITY")
             local db = store.open()
             if not db then error("store") end
-            test.is_nil(store.by_key(db, OWNER, strongest.idempotency_key))
+            test.is_nil(store.by_key(db, native_fixture.OWNER, strongest.idempotency_key))
             db:release()
             if capability == "direct_process" then
-                local grouped = call(OWNER, "prepare", launch({"sh", "-c", "true"}, "process_group"))
+                local grouped = native_fixture.call(native_fixture.OWNER, "prepare", native_fixture.launch({"sh", "-c", "true"}, "process_group"))
                 test.eq(grouped.error and grouped.error.code, "UNSUPPORTED_CAPABILITY")
             end
         end)
     end)
 end
 
-local function execution_tests()
-    test.describe("Native placement execution", function()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
-        test.it("refuses a duplicate runner before it can materialize the claimed attempt", function()
-            local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "direct_process")))
-            local db, open_error = store.open()
-            if not db then error(open_error or "store") end
-            local winner = process.pid()
-            local claimed = store.transition(db, prepared.attempt_id, {expected_execution = "intended", execution = "starting",
-                fields = {runner_pid = winner}, evidence = {kind = "test.claimed", detail = "first runner already owns materialization"}})
-            if not claimed.ok then db:release(); error(claimed.message or "claim") end
-            local topic = "bee.test.duplicate-runner." .. fresh("reply")
-            local replies = assert(process.listen(topic, {message = true}))
-            local duplicate, spawn_error = process.spawn("bee.placement.native.service:runner", "bee:workers", prepared.attempt_id, process.pid(), topic)
-            if not duplicate then process.unlisten(replies); db:release(); error(tostring(spawn_error)) end
-            local selected = channel.select({replies:case_receive(), time.after("5s"):case_receive()})
-            process.unlisten(replies)
-            if not selected.ok or selected.channel ~= replies then db:release(); error("duplicate runner did not answer") end
-            test.eq(tostring(selected.value:from()), tostring(duplicate))
-            local reply = selected.value:payload():data()
-            test.is_false(reply.started)
-            test.is_true((reply.reason or ""):find("attempt belongs to another runner", 1, true) ~= nil)
-            local row = store.row(db, prepared.attempt_id)
-            if not row then db:release(); error("attempt disappeared") end
-            test.eq(row.runner_pid, winner)
-            test.eq(row.execution_state, "starting")
-            test.eq(row.evidence_count, 2)
-            local home_key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
-            test.is_false(homes.attempt_exists(home_key))
-            db:release()
-        end)
-        test.it("rejects runner control messages from an unauthenticated sender", function()
-            local request = launch({"sh", "-c", "sleep 5"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local fences = assert(process.listen(protocol.TOPIC_FENCED, {message = true}))
-            local statuses = assert(process.listen(protocol.TOPIC_STATUS, {message = true}))
-            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            local db = assert(store.open())
-            local row = store.row(db, prepared.attempt_id)
-            db:release()
-            local runner = tostring(row and row.runner_pid)
 
-            process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", recipient = process.pid(), generation = 2})
-            local attach_deadline = time.after("200ms")
-            local forged_attach_accepted = false
-            while true do
-                local attach_reply = channel.select({fences:case_receive(), attach_deadline:case_receive()})
-                if not attach_reply.ok or attach_reply.channel == attach_deadline then break end
-                local data: unknown = attach_reply.value:payload():data()
-                if tostring(attach_reply.value:from()) == runner and type(data) == "table"
-                    and data.attempt_id == prepared.attempt_id and data.generation == 2 then
-                    forged_attach_accepted = data.fenced == true
-                    break
-                end
-            end
-
-            process.send(runner, protocol.TOPIC_CONTROL, {command = "status", attempt_id = prepared.attempt_id, probe = "forged-probe"})
-            local status_deadline = time.after("200ms")
-            local forged_status_accepted = false
-            while true do
-                local status_reply = channel.select({statuses:case_receive(), status_deadline:case_receive()})
-                if not status_reply.ok or status_reply.channel == status_deadline then break end
-                local data: unknown = status_reply.value:payload():data()
-                if tostring(status_reply.value:from()) == runner and type(data) == "table"
-                    and data.attempt_id == prepared.attempt_id and data.probe == "forged-probe" then
-                    forged_status_accepted = true
-                    break
-                end
-            end
-
-            process.send(runner, protocol.TOPIC_CONTROL, {command = "stop", mode = "forced", grace_ms = 1})
-            local stop_deadline = time.after("200ms")
-            local forged_stop_accepted = false
-            while true do
-                local stop_reply = channel.select({exits:case_receive(), stop_deadline:case_receive()})
-                if not stop_reply.ok or stop_reply.channel == stop_deadline then break end
-                local data: unknown = stop_reply.value:payload():data()
-                if tostring(stop_reply.value:from()) == runner and type(data) == "table"
-                    and data.attempt_id == prepared.attempt_id then
-                    forged_stop_accepted = true
-                    break
-                end
-            end
-
-            attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"}))
-            local exit_seen = forged_stop_accepted
-            if not exit_seen then
-                local exit_deadline = time.after("5s")
-                while true do
-                    local stopped = channel.select({exits:case_receive(), exit_deadline:case_receive()})
-                    if not stopped.ok or stopped.channel == exit_deadline then break end
-                    local data: unknown = stopped.value:payload():data()
-                    if type(data) == "table" and data.attempt_id == prepared.attempt_id then exit_seen = true; break end
-                end
-            end
-            test.is_true(exit_seen, "authorized stop did not deliver the fixture child exit")
-            test.is_true(wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 5000), "authorized stop did not finish the fixture child")
-            local eof_count = 0
-            local output_deadline = time.after("5s")
-            while eof_count < 2 do
-                local output = channel.select({outputs:case_receive(), output_deadline:case_receive()})
-                assert(output.ok and output.channel == outputs, "runner did not close both output streams")
-                local data: unknown = output.value:payload():data()
-                if type(data) == "table" and data.attempt_id == prepared.attempt_id then
-                    if type(data.sequence) == "number" then
-                        process.send(runner, protocol.TOPIC_ACK, {generation = data.generation, consumed_through = data.sequence})
-                    end
-                    if data.eof == true then eof_count = eof_count + 1 end
-                end
-            end
-            attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-            process.unlisten(fences)
-            process.unlisten(statuses)
-            process.unlisten(exits)
-            process.unlisten(outputs)
-
-            test.is_false(forged_attach_accepted, "unauthenticated attach received a fence reply")
-            test.is_false(forged_status_accepted, "unauthenticated status received runner state")
-            test.is_false(forged_stop_accepted, "unauthenticated stop ended the child")
-        end)
-        test.it("restores the prior attachment when the runner refuses a replacement recipient", function()
-            local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            local attached = attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            test.eq(attached.attachment_generation, 1)
-            local started = call(OWNER, "start", {attempt_id = prepared.attempt_id})
-            local refused = started.ok and call(OWNER, "attach", {attempt_id = prepared.attempt_id,
-                recipient = "00000000-0000-0000-0000-000000000001", generation = 2}) or started
-            local after_refusal = (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt)
-            local db = assert(store.open())
-            local after_row = store.row(db, prepared.attempt_id)
-            db:release()
-            local stopped = call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
-            test.is_true(stopped.ok, "refusal fixture child did not accept stop")
-            local eof_count = 0
-            local deadline = time.after("5s")
-            while eof_count < 2 do
-                local output = channel.select({outputs:case_receive(), deadline:case_receive()})
-                assert(output.ok and output.channel == outputs, "refusal fixture runner did not close its output streams")
-                local data: unknown = output.value:payload():data()
-                if type(data) == "table" and data.attempt_id == prepared.attempt_id then
-                    local db = assert(store.open())
-                    local row = store.row(db, prepared.attempt_id)
-                    db:release()
-                    if type(data.sequence) == "number" then
-                        process.send(tostring(row and row.runner_pid), protocol.TOPIC_ACK,
-                            {generation = data.generation, consumed_through = data.sequence})
-                    end
-                    if data.eof == true then eof_count = eof_count + 1 end
-                end
-            end
-            local finished = wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 3000)
-            local final = (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt)
-            local cleaned = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-            process.unlisten(outputs)
-
-            test.is_true(started.ok, "refusal fixture runner did not start")
-            test.eq(refused.error and refused.error.code, "CONFLICT", "runner did not report a definite recipient refusal")
-            test.eq(after_refusal.execution_state, "running", "definite attachment refusal made a live attempt uncertain")
-            test.eq(after_refusal.attachment_generation, 1, "refused recipient replaced the committed generation")
-            test.eq(after_row and after_row.recipient, process.pid(), "refused recipient replaced the committed carrier")
-            test.is_true(finished, "refusal fixture child did not exit")
-            test.eq(final.execution_state, "exited")
-            test.is_true(cleaned.ok, "refusal fixture cleanup did not complete")
-        end)
-        test.it("runs a child through the runner with acknowledged streams and a proven exit", function()
-            local request = launch({"sh", "-c", "echo start:$PROBE_VALUE; pwd; read line; echo got:$line; echo warn 1>&2"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            local acks = assert(process.listen(protocol.TOPIC_ACK, {message = true}))
-            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
-            local stale = call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 0})
-            test.eq(stale.error and stale.error.code, "INVALID")
-            local attached = attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            test.eq(attached.attachment_generation, 1)
-            local replaced = call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
-            test.eq(replaced.error and replaced.error.code, "CONFLICT")
-            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            test.eq(started.execution_state, "running")
-            test.not_nil(started.home_ref)
-            test.eq(attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id})).execution_state, "running")
-            local text = ""
-            local highest = 0
-            local function collect(until_text: string): boolean
-                local deadline = time.after("10s")
-                while not text:find(until_text, 1, true) do
-                    local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                    if not selected.ok or selected.channel == deadline then return false end
-                    local data = assert(bounds.object(selected.value:payload():data()))
-                    test.eq(data.attempt_id, prepared.attempt_id)
-                    test.eq(data.generation, 1)
-                    if data.data then text = text .. tostring(data.data) end
-                    if type(data.sequence) ~= "number" then error("invalid fixture data.sequence") end
-                    local sequence = math.floor(data.sequence)
-                    if sequence <= highest then error("sequence " .. tostring(sequence) .. " after " .. tostring(highest)) end
-                    highest = sequence
-                    process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = sequence})
-                end
-                return true
-            end
-            if not collect("start:probe-42") then error("no start output; received: " .. text) end
-            if not text:find("placement%-project") then error("pwd is not the project root; received: " .. text) end
-            local runner = ""
-            do
-                local db = store.open()
-                if not db then error("store") end
-                local row = store.row(db, prepared.attempt_id)
-                db:release()
-                runner = tostring(row and row.runner_pid)
-            end
-            process.send(runner, protocol.TOPIC_INPUT, {write_id = "w-1", generation = 1, data = "ping\n"})
-            local ack = acks:receive()
-            local accepted = assert(bounds.object(ack:payload():data()))
-            test.eq(accepted.write_id, "w-1")
-            if accepted.accepted ~= true then error("write refused: " .. tostring(accepted.reason)) end
-            process.send(runner, protocol.TOPIC_INPUT, {write_id = "w-1", generation = 1, data = "ping\n"})
-            local repeated = assert(bounds.object(acks:receive():payload():data()))
-            if repeated.accepted ~= true then error("repeated write refused: " .. tostring(repeated.reason)) end
-            if not collect("got:ping") then error("no echo of the input; received: " .. text) end
-            local exit_deadline = time.after("10s")
-            local exit: {[string]: unknown}? = nil
-            while not exit do
-                local selected = channel.select({exits:case_receive(), exit_deadline:case_receive()})
-                assert(selected.ok and selected.channel == exits, "runner did not report this attempt's exit")
-                local data: unknown = selected.value:payload():data()
-                if type(data) == "table" and data.attempt_id == prepared.attempt_id then exit = assert(bounds.object(data)) end
-            end
-            test.eq(exit.code, 0)
-            if exit.uncertain == true then error("exit reported uncertain") end
-            if not collect("warn") then error("no stderr; received: " .. text) end
-            if not wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 5000) then error("exit not recorded: " .. tostring((value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state)) end
-            local status = value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))
-            local attempt = status.attempt
-            test.eq(attempt.execution_state, "exited")
-            test.eq((attempt.exit).code, 0)
-            local liveness = status.liveness
-            if capability == "process_group" then
-                if not liveness.observed or liveness.alive == true then error("exited child still reads alive: " .. liveness.detail) end
-            else
-                test.is_false(liveness.observed)
-            end
-            local recorded = kinds(prepared.attempt_id)
-            for _, expected in ipairs({"intent.recorded", "attach", "runner.start_accepted", "runner.started", "home.created", "runner.materialized",
-                "child.start_returned", "child.streams_ready", "child.identity_requested", "child.identity_returned",
-                "child.started", "runner.ack_sending", "runner.ack_sent", "runner.ack_received", "child.exited"}) do
-                test.is_true(has(recorded, expected))
-            end
-            test.eq(attempt.cleanup_state, "pending")
-            test.eq(attempt.exit_source, "runner")
-            test.eq(attempt.exit_observation, observation)
-            local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-            test.eq(cleaned.cleanup_state, "complete")
-            test.eq(cleaned.execution_state, "exited")
-            local key = homes.attempt_key(OWNER, prepared.attempt_id)
-            if homes.attempt_exists(key) then error("attempt home remains after cleanup: " .. table.concat(kinds(prepared.attempt_id), ",")) end
-            process.unlisten(outputs)
-            process.unlisten(acks)
-            process.unlisten(exits)
-        end)
-        test.it("escalates a cooperative stop and refuses cleanup before the exit is proven", function()
-            local request = launch({"sh", "-c", "trap '' TERM; echo ready; sleep 8"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local early = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-            test.eq(early.error and early.error.code, "CONFLICT")
-            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            test.eq(started.execution_state, "running")
-            local blocked = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-            test.eq(blocked.error and blocked.error.code, "CONFLICT")
-            local stopping = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "cooperative"}))
-            test.eq(stopping.execution_state, "stopping")
-            if not wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 8000) then error("escalation did not end the child: " .. table.concat(kinds(prepared.attempt_id), ",")) end
-            test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "exited")
-            local recorded = kinds(prepared.attempt_id)
-            for _, wanted in ipairs({"stop.requested", "signal.term", "signal.kill", "child.exited"}) do
-                if not has(recorded, wanted) then error("evidence lacks " .. wanted .. ": " .. table.concat(recorded, ",")) end
-            end
-            local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-            test.eq(cleaned.cleanup_state, "complete")
-        end)
-        test.it("measures an executable read-only and refuses a start whose executable no longer measures as planned", function()
-            local cwd = shell("pwd"):gsub("%s+$", "")
-            local script = cwd .. "/.wippy/measured-" .. fresh("script") .. ".sh"
-            shell('printf "#!/bin/sh\\necho measured\\n" > ' .. script .. " && chmod +x " .. script)
-            local measured = value(call(OWNER, "measure_executable", {path = script}))
-            test.eq(measured.revision, "bee.executable-measurement@1")
-            test.eq(measured.kind, "script")
-            test.eq(measured.interpreter, "/bin/sh")
-            test.eq(tostring(measured.digest):len(), 64)
-            test.eq(measured.digest, (hash.sha256("#!/bin/sh\necho measured\n")))
-            local image = value(call(OWNER, "measure_executable", {path = "/bin/sh"}))
-            test.eq(image.kind, "elf")
-            test.eq(tostring(image.digest):len(), 64)
-            local reported = assert(bounds.object(value(service.capabilities()).executable_measurement))
-            test.eq(type(reported.streaming), "boolean")
-            test.eq(type(reported.read_only_volume), "boolean")
-            test.is_true(#tostring(reported.detail) > 0)
-            if reported.read_only_volume == true then test.is_true(tostring(reported.detail):find("refused as read-only", 1, true) ~= nil) end
-            test.eq(shell("ls " .. cwd .. "/.wippy/placement 2>/dev/null | grep -c measurement-probe || true"):match("%d+"), "0")
-            local missing = call(OWNER, "measure_executable", {path = cwd .. "/.wippy/absent-" .. fresh("x")})
-            test.eq(missing.error and missing.error.code, "UNAVAILABLE")
-            local relative = call(OWNER, "measure_executable", {path = "bin/sh"})
-            test.eq(relative.error and relative.error.code, "UNAVAILABLE")
-            local request = launch({script}, "direct_process")
-            request.executable = {revision = "bee.executable-measurement@1", kind = "script", digest = string.rep("0", 64)}
-            local stale = attempt_of(call(OWNER, "prepare", request))
-            local refused = call(OWNER, "start", {attempt_id = stale.attempt_id})
-            test.is_true(refused.ok)
-            test.eq(attempt_of(refused).execution_state, "start_failed")
-            test.is_true(has(kinds(stale.attempt_id), "executable.changed"))
-            local fresh_request = launch({script}, "direct_process")
-            fresh_request.executable = {revision = "bee.executable-measurement@1", kind = "script", digest = measured.digest}
-            local prepared = attempt_of(call(OWNER, "prepare", fresh_request))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            test.is_true(wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 8000))
-            test.is_true(has(kinds(prepared.attempt_id), "executable.measured"))
-            shell("rm -f " .. script)
-        end)
-        test.it("refuses executable read errors and streams shorter than the stat size", function()
-            local function reader(chunks: {string}, failure: string?): ((integer) -> (unknown, unknown), () -> (boolean?, unknown?), () -> boolean)
-                local reads = 0
-                local closed = false
-                local function read(_: integer): (unknown, unknown)
-                    reads = reads + 1
-                    if reads <= #chunks then return chunks[reads], nil end
-                    if reads == #chunks + 1 then return nil, failure or "EOF" end
-                    return nil, "EOF"
-                end
-                local function close(): (boolean?, unknown?)
-                    closed = true
-                    return true, nil
-                end
-                return read, close, function(): boolean return closed end
-            end
-            local failed_read, failed_close, failed_closed = reader({"prefix"}, "device read failed")
-            local failed, read_error = executable_stream.digest(failed_read, failed_close, 16)
-            test.is_nil(failed)
-            test.is_true(tostring(read_error):find("device read failed", 1, true) ~= nil)
-            test.is_true(failed_closed())
-            local short_read, short_close, short_closed = reader({"abc"}, nil)
-            local short, short_error = executable_stream.digest(short_read, short_close, 4)
-            test.is_nil(short)
-            test.is_true(tostring(short_error):find("measured 3 of 4 bytes", 1, true) ~= nil)
-            test.is_true(short_closed())
-        end)
-        test.it("closes a live child's stdin at the owner's request and records it, or answers why it cannot", function()
-            -- The shell reads stdin itself, so no descendant outlives a kill
-            -- holding the pipes on a runtime without process groups.
-            local request = launch({"sh", "-c", "while IFS= read -r line; do :; done; echo closed"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            local unknown = call(OWNER, "close_stdin", {attempt_id = fresh("attempt")})
-            test.is_false(unknown.ok)
-            local closed = value(call(OWNER, "close_stdin", {attempt_id = prepared.attempt_id}))
-            local supported = value(service.capabilities()).stdin_close == true
-            local recorded = kinds(prepared.attempt_id)
-            if supported then
-                test.eq(closed.closed, true)
-                test.is_true(has(recorded, "stdin.closed"))
-                local text = ""
-                local deadline = time.after("10s")
-                while not text:find("closed", 1, true) do
-                    local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                    if not selected.ok or selected.channel == deadline then error("the child did not see end of input; output: " .. text) end
-                    local data = assert(bounds.object(selected.value:payload():data()))
-                    if data.data then text = text .. tostring(data.data) end
-                    process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = math.floor(data.sequence)})
-                end
-                if not wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-                end, 8000) then error("the child did not exit after end of input") end
-                local again = call(OWNER, "close_stdin", {attempt_id = prepared.attempt_id})
-                local ended = value(again)
-                test.eq(ended.closed, false)
-                test.eq(ended.reason, "the child has exited")
-                test.eq((assert(bounds.object(ended.attempt))).execution_state, "exited")
-            else
-                test.eq(closed.closed, false)
-                test.eq(closed.reason, "executor cannot close stdin")
-                test.is_true(has(recorded, "stdin.uncertain"))
-                attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"}))
-            end
-            process.unlisten(outputs)
-        end)
-        test.it("reports an already observed exit when stdin closure races a short-lived CLI", function()
-            local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "exit 0"}, "direct_process")))
-            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
-            call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            local observed = false
-            while not observed do
-                local data = assert(bounds.object(exits:receive():payload():data()))
-                observed = data.attempt_id == prepared.attempt_id
-            end
-            process.unlisten(exits)
-            local closed = value(call(OWNER, "close_stdin", {attempt_id = prepared.attempt_id}))
-            local decoded = assert(placement_decode.stdin_closure(closed, prepared.attempt_id))
-            test.is_false(decoded.closed)
-            test.eq(decoded.reason, "the child has exited")
-            local attempt = assert(bounds.object(closed.attempt))
-            test.eq(attempt.execution_state, "exited")
-            test.is_true(type(attempt.exit_source) == "string")
-            test.is_false(has(kinds(prepared.attempt_id), "stdin.closed"))
-        end)
-    end)
-end
-
-local function configuration_tests()
-    test.describe("Native placement configuration", function()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
-        test.it("prepares the planner's default options without a configuration conflict", function()
-            local policy = assert(registry.get(NO_PROVIDER_POLICY))
-            local policy_data = assert(bounds.object(policy.data))
-            local options = assert(preferences.decode_prepare_options(policy_data.prepare_options))
-            local digest = assert(configuration_protocol.digest("bee.driver.claude.binding:binding", {option_values = options, context = "window", fixture = true}, "bee.driver.claude.binding:configure"))
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            request.policy_ref = NO_PROVIDER_POLICY
-            request.binding_ref = "bee.driver.claude.binding:binding"
-            request.configuration_context = "window"
-            request.configuration_digest = digest
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            test.eq(prepared.execution_state, "intended")
-        end)
-        test.it("refuses a stale host configuration digest and retries only the matching plan", function()
-            local provider = registry.get("bee.placement.native:codex_test_provider")
-            if not provider then error("provider entry") end
-            local rendered = assert(configuration.projection(assert(configuration.decode("bee.placement.native:codex_test_provider", provider))))
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
-            request.configuration_digest = string.rep("0", 64)
-            local refused = call(OWNER, "prepare", request)
-            test.eq(refused.error and refused.error.code, "CONFLICT")
-            test.is_true(tostring(refused.error and refused.error.message):find("inputs changed", 1, true) ~= nil)
-            test.eq(call(OWNER, "status", {attempt_id = request.attempt_id}).error and call(OWNER, "status", {attempt_id = request.attempt_id}).error.code, "NOT_FOUND")
-            request.configuration_digest = provider_configuration_digest()
-            -- A digest from another host selection is a plan conflict, even
-            -- where the replacement policy has no provider of its own.
-            request.policy_ref = NO_PROVIDER_POLICY
-            request.binding_ref = "bee.driver.claude.binding:binding"
-            local unselected = call(OWNER, "prepare", request)
-            test.eq(unselected.error and unselected.error.code, "CONFLICT")
-            test.is_true(tostring(unselected.error and unselected.error.message):find("inputs changed", 1, true) ~= nil)
-            request.policy_ref = "bee.placement.native:codex_test_provider"
-            local foreign = call(OWNER, "prepare", request)
-            test.eq(foreign.error and foreign.error.code, "DENIED")
-            test.is_true(tostring(foreign.error and foreign.error.message):find("not a host launch policy", 1, true) ~= nil)
-            request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            test.eq(prepared.execution_state, "intended")
-            local db, open_error = store.open()
-            if not db then error(open_error or "store") end
-            local row, row_error = store.row(db, prepared.attempt_id)
-            if not row then db:release(); error(row_error or "stored request") end
-            local frozen, frozen_error = store.request(row)
-            db:release()
-            if not frozen then error(frozen_error or "frozen request") end
-            test.eq(#(frozen.delivery and frozen.delivery.files or {}), 1)
-            test.eq((frozen.delivery and frozen.delivery.files[1].digest), rendered.digest)
-            -- A matching idempotency retry returns the existing intent and
-            -- does not replace the owner-recorded driver delivery.
-            test.eq(attempt_of(call(OWNER, "prepare", request)).attempt_id, prepared.attempt_id)
-            local replay_db, replay_open_error = store.open()
-            if not replay_db then error(replay_open_error or "store") end
-            local replay_row, replay_row_error = store.row(replay_db, prepared.attempt_id)
-            if not replay_row then replay_db:release(); error(replay_row_error or "replayed stored request") end
-            local replayed, replay_error = store.request(replay_row)
-            replay_db:release()
-            if not replayed then error(replay_error or "replayed frozen request") end
-            test.eq(replayed.delivery and replayed.delivery.files[1].digest, rendered.digest)
-            test.eq(replayed.delivery and replayed.delivery.files[1].content, rendered.content)
-            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            test.is_true(started.execution_state == "running" or started.execution_state == "exited")
-            test.is_nil(started.start_failure)
-            time.sleep("500ms")
-            local recorded = kinds(prepared.attempt_id)
-            test.is_true(has(recorded, "configuration.materialized"))
-            local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                if item.kind == "configuration.materialized" then
-                    test.is_true(tostring(item.detail):find("digest " .. rendered.digest, 1, true) ~= nil)
-                    test.is_nil((tostring(item.detail):find("/home", 1, true)))
-                end
-            end
-        end)
-        test.it("rejects malformed persisted delivery before creating a home or starting a child", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
-            request.configuration_digest = provider_configuration_digest()
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local db, open_error = store.open()
-            if not db then error(open_error or "store") end
-            local row, row_error = store.row(db, prepared.attempt_id)
-            if not row then db:release(); error(row_error or "stored request") end
-            local original = row.request_json
-            local decoded = assert(bounds.object(assert(json.decode(original))))
-            local delivery = assert(bounds.object(decoded.delivery))
-            local file = (principals.objects(delivery.files))[1]
-            local corruptions: {{[string]: unknown}} = {
-                {arguments = {"bad\0argument"}, files = {}},
-                {arguments = {}, files = {file, file}},
-                {arguments = {}, files = {{revision = file.revision, path = "../escape", content = file.content, digest = file.digest, provider_ref = file.provider_ref}}},
-                {arguments = {}, files = {{revision = file.revision, path = file.path, content = "changed", digest = file.digest, provider_ref = file.provider_ref}}},
-                {arguments = {}, files = {}, unsupported = true},
-            }
-            local home_key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
-            for index, damaged in ipairs(corruptions) do
-                decoded.delivery = damaged
-                local encoded = assert(json.encode(decoded))
-                local _, write_error = db:execute("UPDATE bee_placement_attempts SET request_json = ? WHERE attempt_id = ?", {encoded, prepared.attempt_id})
-                if write_error then db:release(); error("corrupt fixture row: " .. tostring(write_error)) end
-                local damaged_row = assert(store.row(db, prepared.attempt_id))
-                local persisted, persisted_error = store.request(damaged_row)
-                test.is_nil(persisted, "persisted delivery corruption " .. tostring(index) .. " was accepted")
-                test.not_nil(persisted_error)
-                local refused = call(OWNER, "start", {attempt_id = prepared.attempt_id})
-                test.eq(refused.error and refused.error.code, "STORAGE")
-                test.is_false(homes.attempt_exists(home_key))
-                test.eq(#kinds(prepared.attempt_id), 1)
-            end
-            local _, restore_error = db:execute("UPDATE bee_placement_attempts SET request_json = ? WHERE attempt_id = ?", {original, prepared.attempt_id})
-            if restore_error then db:release(); error("restore fixture request: " .. tostring(restore_error)) end
-            local restored_row = assert(store.row(db, prepared.attempt_id))
-            local restored, restored_error = store.request(restored_row)
-            db:release()
-            if not restored then error(restored_error or "restored request") end
-            test.eq(restored.delivery and restored.delivery.files[1].digest, file.digest)
-        end)
-        test.it("rejects a persisted delivery that overlaps retained login identity", function()
-            local request = retained_launch(OWNER, fresh("persisted-login-overlap"), "overlap")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local db, open_error = store.open()
-            if not db then error(open_error or "store") end
-            local row, row_error = store.row(db, prepared.attempt_id)
-            if not row then db:release(); error(row_error or "stored request") end
-            local decoded = assert(bounds.object(assert(json.decode(row.request_json))))
-            local delivery = assert(bounds.object(decoded.delivery))
-            local file = (principals.objects(delivery.files))[1]
-            file.path = ".bee-retained-login-ready.json"
-            local encoded = assert(json.encode(decoded))
-            local _, write_error = db:execute("UPDATE bee_placement_attempts SET request_json = ? WHERE attempt_id = ?", {encoded, prepared.attempt_id})
-            db:release()
-            if write_error then error("corrupt overlap fixture: " .. tostring(write_error)) end
-
-            local started = call(OWNER, "start", {attempt_id = prepared.attempt_id})
-            test.is_true(started.ok)
-            test.eq(attempt_of(started).execution_state, "start_failed")
-            test.eq(attempt_of(started).start_failure, "configuration overlaps retained login identity")
-            test.is_true(has(kinds(prepared.attempt_id), "configuration.refused"))
-            local home_key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
-            test.is_false(homes.attempt_exists(home_key))
-        end)
-        test.it("refuses a missing configuration when the host policy selects a provider before recording intent", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            request.policy_ref = POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
-            local refused = call(OWNER, "prepare", request)
-
-            local db, open_error = store.open()
-            if not db then error(open_error or "store") end
-            if type(request.attempt_id) ~= "string" then error("invalid fixture request.attempt_id") end
-            local attempt, read_error = store.attempt(db, request.attempt_id)
-            db:release()
-            if read_error then error(read_error) end
-            test.is_nil(attempt)
-            test.is_false(refused.ok)
-            test.eq(refused.error and refused.error.code, "DENIED")
-            test.is_true(tostring(refused.error and refused.error.message):find("selected configuration digest", 1, true) ~= nil)
-        end)
-        test.it("refuses caller forged delivery before recording intent", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            request.delivery = {arguments = {}, files = {}}
-            local refused = call(OWNER, "prepare", request)
-            test.is_false(refused.ok)
-            test.eq(refused.error and refused.error.code, "INVALID")
-            test.is_true(tostring(refused.error and refused.error.message):find("delivery", 1, true) ~= nil)
-            local absent = call(OWNER, "status", {attempt_id = request.attempt_id})
-            test.eq(absent.error and absent.error.code, "NOT_FOUND")
-        end)
-        test.it("atomically admits one competing retained-session intent", function()
-            local session_ref = fresh("contended-session")
-            local first = retained_launch(OWNER, session_ref, "contender-one")
-            local second = retained_launch(OWNER, session_ref, "contender-two")
-            local a, a_error = caller(OWNER, principals.workspace(first)):async("bee.placement.native.binding:prepare", first)
-            local b, b_error = caller(OWNER, principals.workspace(second)):async("bee.placement.native.binding:prepare", second)
-            if a_error or not a or b_error or not b then error("start prepare race: " .. tostring(a_error or b_error)) end
-            local first_reply, second_reply = principals.reply(await(a)), principals.reply(await(b))
-            local replies = {first_reply, second_reply}
-            local admitted = 0
-            local refused = 0
-            for _, reply in ipairs(replies) do
-                if reply.ok then
-                    admitted = admitted + 1
-                else
-                    test.eq(reply.error and reply.error.code, "CONFLICT")
-                    refused = refused + 1
-                end
-            end
-            test.eq(admitted, 1)
-            test.eq(refused, 1)
-            local rejected = first_reply.ok and second or first
-            local db, open_error = store.open()
-            if not db then error(open_error or "open store") end
-            if type(rejected.attempt_id) ~= "string" then error("invalid fixture rejected.attempt_id") end
-            local absent, read_error = store.attempt(db, rejected.attempt_id)
-            db:release()
-            if read_error then error(read_error) end
-            test.is_nil(absent)
-
-            -- An overlapping retry is not a second holder: both replies name
-            -- the one recorded intent, with no additional receipt.
-            local replay = retained_launch(OWNER, fresh("replay-session"), "same-request")
-            local first_retry, first_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native.binding:prepare", replay)
-            local second_retry, second_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native.binding:prepare", replay)
-            if first_retry_error or not first_retry or second_retry_error or not second_retry then error("start replay race: " .. tostring(first_retry_error or second_retry_error)) end
-            local replay_a, replay_b = attempt_of(principals.reply(await(first_retry))), attempt_of(principals.reply(await(second_retry)))
-            test.eq(replay_a.attempt_id, replay.attempt_id)
-            test.eq(replay_b.attempt_id, replay.attempt_id)
-            if type(replay.attempt_id) ~= "string" then error("invalid fixture replay.attempt_id") end
-            local receipt = kinds(replay.attempt_id)
-            test.eq(#receipt, 1)
-            test.eq(receipt[1], "intent.recorded")
-        end)
-        test.it("retains structured private provider state across cleaned turn attempts", function()
-            local session_ref = fresh("private-turn-session")
-            for _, marker in ipairs({"first", "second"}) do
-                local request = retained_launch(OWNER, session_ref, marker)
-                local declared = assert(bounds.object(request.launch))
-                declared.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {{path = ".codex/history", kind = "state", optional = true, write_back = false}}}
-                local prepared = attempt_of(call(OWNER, "prepare", request))
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                test.is_true(wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-                end, 8000))
-                attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-            end
-            local key = assert(homes.session_key(OWNER, session_ref))
-            local session_path = assert(homes.ensure_session(key))
-            local home_path = assert(homes.os_path(session_path .. "/home"))
-            test.eq(shell("cat " .. quote.posix(home_path .. "/marker")), "first\nsecond\n")
-        end)
-        test.it("retains a selected session home and publishes changed configuration", function()
-            local session_ref = fresh("session")
-            local first = retained_launch(OWNER, session_ref, "first")
-            local first_configuration = provider_configuration().content
-            local first_prepared = attempt_of(call(OWNER, "prepare", first))
-            -- The same admitted request is a replay, including while it is
-            -- the retained home's only holder.
-            test.eq(attempt_of(call(OWNER, "prepare", first)).attempt_id, first_prepared.attempt_id)
-            local competing = retained_launch(OWNER, session_ref, "competing")
-            local blocked = call(OWNER, "prepare", competing)
-            test.eq(blocked.error and blocked.error.code, "CONFLICT")
-            test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
-            test.is_nil(attempt_of(call(OWNER, "start", {attempt_id = first_prepared.attempt_id})).start_failure)
-            test.is_true(wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = first_prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 8000))
-            -- Exit alone is not release: cleanup has to prove its scope.
-            local exited_holder = call(OWNER, "prepare", retained_launch(OWNER, session_ref, "exited-holder"))
-            test.eq(exited_holder.error and exited_holder.error.code, "CONFLICT")
-            attempt_of(call(OWNER, "cleanup", {attempt_id = first_prepared.attempt_id}))
-            update_codex_provider("https://gateway.example.net/v2", "gpt-5-refresh")
-            local second_configuration = provider_configuration().content
-            local second = retained_launch(OWNER, session_ref, "second")
-            local second_prepared = attempt_of(call(OWNER, "prepare", second))
-            test.is_nil(attempt_of(call(OWNER, "start", {attempt_id = second_prepared.attempt_id})).start_failure)
-            test.is_true(wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = second_prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 8000))
-            -- Restore the fixture provider after the changed retained launch
-            -- has started; later tests must see the original host selection.
-            update_codex_provider("https://gateway.example.net/v1", "gpt-5")
-            local key, key_error = homes.session_key(OWNER, session_ref)
-            if not key then error(tostring(key_error)) end
-            local session_path, session_error = homes.ensure_session(key)
-            if not session_path then error(tostring(session_error)) end
-            local home_path, home_error = homes.os_path(session_path .. "/home")
-            if not home_path then error(tostring(home_error)) end
-            test.eq(shell("cat " .. home_path .. "/marker"), "first\nsecond\n")
-            local sum = shell("sha256sum " .. home_path .. "/.codex/config.toml"):match("^([0-9a-f]+)")
-            test.eq(sum, assert(hash.sha256(second_configuration)))
-            local second_evidence = kinds(second_prepared.attempt_id)
-            test.is_true(has(second_evidence, "configuration.materialized"))
-            local first_home, first_home_error = homes.attempt_key(OWNER, first_prepared.attempt_id)
-            if not first_home then error(tostring(first_home_error)) end
-            local second_home, second_home_error = homes.attempt_key(OWNER, second_prepared.attempt_id)
-            if not second_home then error(tostring(second_home_error)) end
-            attempt_of(call(OWNER, "cleanup", {attempt_id = second_prepared.attempt_id}))
-            test.is_false(homes.attempt_exists(first_home))
-            test.is_false(homes.attempt_exists(second_home))
-            test.eq(shell("cat " .. home_path .. "/marker"), "first\nsecond\n")
-
-            local other_owner = "bee.test.session_other"
-            local other = retained_launch(other_owner, session_ref, "other")
-            local other_prepared = attempt_of(call(other_owner, "prepare", other))
-            local other_started = attempt_of(call(other_owner, "start", {attempt_id = other_prepared.attempt_id}))
-            test.is_true(other_started.execution_state == "running" or other_started.execution_state == "exited")
-            test.is_nil(other_started.start_failure)
-            test.is_true(wait_for(function()
-                return (value(call(other_owner, "status", {attempt_id = other_prepared.attempt_id})).attempt).execution_state == "exited"
-            end, 8000))
-            local other_key, other_key_error = homes.session_key(other_owner, session_ref)
-            if not other_key then error(tostring(other_key_error)) end
-            test.neq(other_key, key)
-            local other_path, other_path_error = homes.ensure_session(other_key)
-            if not other_path then error(tostring(other_path_error)) end
-            local other_home, other_home_error = homes.os_path(other_path .. "/home")
-            if not other_home then error(tostring(other_home_error)) end
-            test.eq(shell("cat " .. other_home .. "/marker"), "other\n")
-
-            test.neq(second_configuration, first_configuration)
-            test.eq(shell("cat " .. home_path .. "/.codex/config.toml"), second_configuration)
-
-            local direct_key, direct_key_error = homes.session_key(OWNER, fresh("session"))
-            if not direct_key then error(tostring(direct_key_error)) end
-            local direct_path, direct_path_error = homes.ensure_session(direct_key)
-            if not direct_path then error(tostring(direct_path_error)) end
-            local created: {[string]: boolean} = {}
-            local written, write_error = homes.write_protected(direct_path, ".codex/config.toml", "approved", created, true)
-            if not written then error(tostring(write_error)) end
-            local replayed, replay_error, replay = homes.write_protected(direct_path, ".codex/config.toml", "approved", {}, true)
-            if not replayed then error(tostring(replay_error)) end
-            test.eq(replay, true)
-            local changed, changed_error = homes.write_protected(direct_path, ".codex/config.toml", "changed", {}, true)
-            test.is_nil(changed)
-            test.eq(changed_error, "retained configuration differs from host-approved content")
-            local unowned_key, unowned_key_error = homes.session_key(OWNER, fresh("session"))
-            if not unowned_key then error(tostring(unowned_key_error)) end
-            local unowned_path, unowned_path_error = homes.ensure_session(unowned_key)
-            if not unowned_path then error(tostring(unowned_path_error)) end
-            local made_parent, made_parent_error = homes.write_protected(unowned_path, ".codex/other.toml", "approved", {}, true)
-            if not made_parent then error(tostring(made_parent_error)) end
-            local adopted, adopted_error = homes.write_protected(unowned_path, ".codex/config.toml", "approved", {}, true)
-            test.is_nil(adopted)
-            test.eq(adopted_error, "configuration parent already exists")
-            local missing = launch({"sh", "-c", "true"}, "direct_process")
-            missing.session_ref = fresh("session")
-            local missing_launch = assert(bounds.object(missing.launch))
-            missing_launch.home_ref = "session"
-            local denied = call(OWNER, "prepare", missing)
-            test.eq(denied.error and denied.error.code, "INVALID")
-            test.eq(denied.error and denied.error.message, "launch.home_ref names no resource")
-        end)
-        test.it("creates nested configuration parents without adopting existing ancestors", function()
-            local key, key_error = homes.session_key(OWNER, fresh("nested-config"))
-            if not key then error(tostring(key_error)) end
-            local path, path_error = homes.ensure_session(key)
-            if not path then error(tostring(path_error)) end
-            local created: {[string]: boolean} = {}
-            local written, write_error = homes.write_protected(path, ".gemini/config/mcp_config.json", "approved", created, true)
-            test.not_nil(written)
-            test.is_nil(write_error)
-            local sibling, sibling_error = homes.write_protected(path, ".gemini/GEMINI.md", "instructions", created, true)
-            test.not_nil(sibling)
-            test.is_nil(sibling_error)
-            local replayed, replay_error, replay = homes.write_protected(path, ".gemini/config/mcp_config.json", "approved", {}, true)
-            test.not_nil(replayed)
-            test.is_nil(replay_error)
-            test.is_true(replay == true)
-            local refused, refused_error = homes.write_protected(path, ".gemini/new/config.json", "unapproved", {}, true)
-            test.is_nil(refused)
-            test.eq(refused_error, "configuration parent already exists")
-        end)
-        test.it("publishes bounded host configuration while preserving retained provider files", function()
-            local key = assert(homes.session_key(OWNER, fresh("published-config")))
-            local session = assert(homes.ensure_session(key))
-            local home = assert(homes.os_path(session .. "/home"))
-            local login = '{"access_token":"provider-refresh"}'
-            local conversation = "conversation-state\nuser-owned\n"
-            test.eq(shell("mkdir -p " .. quote.posix(home .. "/.codex/conversations")), "")
-            test.eq(shell("printf %s " .. quote.posix(login) .. " > " .. quote.posix(home .. "/.codex/auth.json")), "")
-            test.eq(shell("printf %s " .. quote.posix(conversation) .. " > " .. quote.posix(home .. "/.codex/conversations/thread.json")), "")
-
-            local first = "[gateway]\nendpoint = \"https://gateway.example/v1\"\n"
-            local published, publish_error, uncertain = homes.publish_configuration(session, ".codex/config.toml", first, {})
-            if not published then error(tostring(publish_error)) end
-            test.is_nil(publish_error)
-            test.is_false(uncertain == true)
-            test.eq(shell("cat " .. quote.posix(home .. "/.codex/config.toml")), first)
-            test.eq(shell("sha256sum " .. quote.posix(home .. "/.codex/config.toml")):match("^([0-9a-f]+)"), assert(hash.sha256(first)))
-
-            -- A host refresh replaces a regular file atomically, while the
-            -- provider login and conversation remain harness-owned bytes.
-            local replacement = "[gateway]\nendpoint = \"https://gateway.example/v2\"\nheader = \"x-bee: refreshed\"\n"
-            local replaced, replace_error, replace_uncertain = homes.publish_configuration(session, ".codex/config.toml", replacement, {})
-            if not replaced then error(tostring(replace_error)) end
-            test.is_nil(replace_error)
-            test.is_false(replace_uncertain == true)
-            test.eq(shell("cat " .. quote.posix(home .. "/.codex/config.toml")), replacement)
-            test.eq(shell("sha256sum " .. quote.posix(home .. "/.codex/config.toml")):match("^([0-9a-f]+)"), assert(hash.sha256(replacement)))
-            test.eq(shell("cat " .. quote.posix(home .. "/.codex/auth.json")), login)
-            test.eq(shell("cat " .. quote.posix(home .. "/.codex/conversations/thread.json")), conversation)
-
-            -- A missing target is publishable when its already-existing
-            -- parent is a regular directory under the selected home.
-            local missing = "[limits]\nmax_retries = 3\n"
-            local missing_path, missing_error, missing_uncertain = homes.publish_configuration(session, ".codex/missing.toml", missing, {})
-            if not missing_path then error(tostring(missing_error)) end
-            test.is_nil(missing_error)
-            test.is_false(missing_uncertain == true)
-            test.eq(shell("cat " .. quote.posix(home .. "/.codex/missing.toml")), missing)
-
-            local created: {[string]: boolean} = {}
-            local deep = "[agent]\nmode = \"retained\"\n"
-            local deep_path, deep_error, deep_uncertain = homes.publish_configuration(session, ".bee/config/nested.toml", deep, created)
-            if not deep_path then error(tostring(deep_error)) end
-            test.is_nil(deep_error)
-            test.is_false(deep_uncertain == true)
-            test.is_true(created[session .. "/home/.bee"] == true)
-            test.is_true(created[session .. "/home/.bee/config"] == true)
-            test.eq(shell("cat " .. quote.posix(home .. "/.bee/config/nested.toml")), deep)
-
-            -- Existing nested parents may be reused safely; the target is
-            -- still a newly published regular file.
-            test.eq(shell("mkdir -p " .. quote.posix(home .. "/.gemini/config")), "")
-            local nested = "{\"mcp\":{\"enabled\":true}}\n"
-            local nested_path, nested_error, nested_uncertain = homes.publish_configuration(session, ".gemini/config/settings.json", nested, {})
-            if not nested_path then error(tostring(nested_error)) end
-            test.is_nil(nested_error)
-            test.is_false(nested_uncertain == true)
-            test.eq(shell("cat " .. quote.posix(home .. "/.gemini/config/settings.json")), nested)
-            test.eq(shell("cat " .. quote.posix(home .. "/.codex/auth.json")), login)
-            test.eq(shell("cat " .. quote.posix(home .. "/.codex/conversations/thread.json")), conversation)
-        end)
-        test.it("publishes bounded composed configuration without widening ordinary generated files", function()
-            local session = assert(homes.ensure_session(assert(homes.session_key(OWNER, fresh("large-composition")))))
-            local content = 'model = "fixture"\n# ' .. string.rep("x", 32768) .. "\n"
-            test.is_nil(homes.publish_configuration(session, ".codex/config.toml", content, {}))
-            local published, err = homes.publish_configuration(session, ".codex/config.toml", content, {}, true)
-            test.not_nil(published)
-            test.is_nil(err)
-            local home = assert(homes.os_path(session .. "/home"))
-            test.eq(shell("sha256sum " .. quote.posix(home .. "/.codex/config.toml")):match("^([0-9a-f]+)"), assert(hash.sha256(content)))
-            test.is_nil(homes.publish_configuration(session, ".codex/config.toml", string.rep("x", 131073), {}, true))
-            test.eq(shell("sha256sum " .. quote.posix(home .. "/.codex/config.toml")):match("^([0-9a-f]+)"), assert(hash.sha256(content)))
-        end)
-        test.it("refuses unsafe retained configuration targets and preserves existing bytes", function()
-            local function new_session(label: string): (string, string)
-                local key = assert(homes.session_key(OWNER, fresh(label)))
-                local session = assert(homes.ensure_session(key))
-                local home = assert(homes.os_path(session .. "/home"))
-                return session, home
-            end
-            local function refused(session: string, relative: string, content: string): string
-                local published, publish_error, uncertain = homes.publish_configuration(session, relative, content, {})
-                test.is_nil(published)
-                test.not_nil(publish_error)
-                test.is_false(uncertain == true)
-                return tostring(publish_error)
-            end
-
-            local escaped, escaped_home = new_session("published-escape")
-            test.eq(refused(escaped, "../escape.toml", "escape"), "configuration path escapes the home")
-            test.eq(shell("test ! -e " .. quote.posix(escaped_home .. "/../escape.toml") .. " && printf absent"), "absent")
-
-            local linked_parent, linked_parent_home = new_session("published-link-parent")
-            test.eq(shell("mkdir -p " .. quote.posix(linked_parent_home .. "/.real-parent") .. " && ln -s .real-parent " .. quote.posix(linked_parent_home .. "/.linked-parent")), "")
-            refused(linked_parent, ".linked-parent/config.toml", "must-not-follow")
-            test.eq(shell("test ! -e " .. quote.posix(linked_parent_home .. "/.real-parent/config.toml") .. " && printf absent"), "absent")
-
-            local linked_target, linked_target_home = new_session("published-link-target")
-            test.eq(shell("mkdir -p " .. quote.posix(linked_target_home .. "/.codex") .. " && printf protected > " .. quote.posix(linked_target_home .. "/.codex/actual.toml") .. " && ln -s actual.toml " .. quote.posix(linked_target_home .. "/.codex/config.toml")), "")
-            refused(linked_target, ".codex/config.toml", "must-not-replace-link")
-            test.eq(shell("cat " .. quote.posix(linked_target_home .. "/.codex/actual.toml")), "protected")
-
-            local nonregular, nonregular_home = new_session("published-nonregular")
-            test.eq(shell("mkdir -p " .. quote.posix(nonregular_home .. "/.codex/config.toml")), "")
-            refused(nonregular, ".codex/config.toml", "must-not-replace-directory")
-            test.eq(shell("test -d " .. quote.posix(nonregular_home .. "/.codex/config.toml") .. " && printf directory"), "directory")
-
-            local oversized, oversized_home = new_session("published-oversized")
-            test.eq(shell("mkdir -p " .. quote.posix(oversized_home .. "/.codex") .. " && printf keep > " .. quote.posix(oversized_home .. "/.codex/config.toml")), "")
-            refused(oversized, ".codex/config.toml", string.rep("x", 16 * 1024 + 1))
-            test.eq(shell("cat " .. quote.posix(oversized_home .. "/.codex/config.toml")), "keep")
-
-            -- Exercise the operation's boundary check against the actual
-            -- placement root mode, restoring the fixture before assertions.
-            local private, private_home = new_session("published-private-root")
-            local root = assert(homes.os_path("/"))
-            local original_mode = shell("stat -c %a " .. quote.posix(root)):match("^([0-7]+)")
-            if not original_mode then error("read placement root mode") end
-            test.eq(shell("chmod 0755 " .. quote.posix(root)), "")
-            local ok, published, publish_error, uncertain = pcall(homes.publish_configuration, private, ".codex/config.toml", "private-check", {})
-            test.eq(shell("chmod " .. original_mode .. " " .. quote.posix(root)), "")
-            test.is_true(ok)
-            test.is_nil(published)
-            test.not_nil(publish_error)
-            test.is_false(uncertain == true)
-            test.eq(shell("test ! -e " .. quote.posix(private_home .. "/.codex/config.toml") .. " && printf absent"), "absent")
-        end)
-        test.it("seeds fixed private login destinations and preserves harness-refreshed bytes", function()
-            local session_key = assert(homes.session_key(OWNER, fresh("login-session")))
-            local session_path = assert(homes.ensure_session(session_key))
-            local source = {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.codex_login", definition_revision = 1}
-            local seeded, seed_error, resumed = homes.retain_login(session_path, source, "initial-login-bytes")
-            test.not_nil(seeded)
-            test.is_nil(seed_error)
-            test.is_false(resumed == true)
-            local home = assert(homes.os_path(session_path .. "/home"))
-            -- A provider owns the opaque bytes once seeded. This stands in for
-            -- a harness refresh between retained launches.
-            test.eq(shell("printf refreshed-login-bytes > " .. home .. "/.codex/auth.json"), "")
-            local replayed, replay_error, replay = homes.retain_login(session_path, source, "stale-broker-bytes")
-            test.not_nil(replayed)
-            test.is_nil(replay_error)
-            test.is_true(replay == true)
-            test.eq(shell("cat " .. home .. "/.codex/auth.json"), "refreshed-login-bytes")
-            local claude_key = assert(homes.session_key(OWNER, fresh("claude-login-session")))
-            local claude_session = assert(homes.ensure_session(claude_key))
-            local claude = assert(homes.retain_login(claude_session,
-                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.claude_login", definition_revision = 1}, "claude-login-bytes"))
-            test.is_true(claude:find("/.claude/.credentials.json", 1, true) ~= nil)
-            local claude_home, home_error = homes.os_path(claude_session .. "/home")
-            if not claude_home then error(tostring(home_error)) end
-            test.eq(shell("cat " .. quote.posix(claude_home .. "/.claude.json")), '{"hasCompletedOnboarding":true}')
-            test.eq(shell("printf private-settings > " .. quote.posix(claude_home .. "/.claude.json")), "")
-            local _, replay_error = homes.retain_login(claude_session,
-                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.claude_login", definition_revision = 1}, "stale-login")
-            test.is_nil(replay_error)
-            test.eq(shell("cat " .. quote.posix(claude_home .. "/.claude.json")), "private-settings")
-        end)
-        test.it("leaves Claude onboarding to the harness when no machine login is available", function()
-            local key, key_error = homes.session_key(OWNER, fresh("claude-no-login"))
-            if not key then error(tostring(key_error)) end
-            local session_path, session_error = homes.ensure_session(key)
-            if not session_path then error(tostring(session_error)) end
-            local target, seed_error = homes.retain_login(session_path,
-                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.claude_login", definition_revision = 1, optional = true}, nil)
-            test.not_nil(target)
-            test.is_nil(seed_error)
-            local home, home_error = homes.os_path(session_path .. "/home")
-            if not home then error(tostring(home_error)) end
-            test.eq(shell("test ! -e " .. quote.posix(home .. "/.claude.json") .. " && printf absent"), "absent")
-        end)
-        test.it("retains optional login absence and preserves later private sign-in and sign-out", function()
-            local session_key = assert(homes.session_key(OWNER, fresh("optional-login")))
-            local session_path = assert(homes.ensure_session(session_key))
-            local source = {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.optional_login", definition_revision = 1, optional = true}
-            local created: {[string]: boolean} = {}
-            local target, seed_error = homes.retain_login(session_path, source, nil, created)
-            test.not_nil(target)
-            test.is_nil(seed_error)
-            local home = assert(homes.os_path(session_path .. "/home"))
-            test.eq(shell("test ! -e " .. home .. "/.codex/auth.json && printf absent"), "absent")
-            -- The immutable driver config can follow the intentionally empty login.
-            test.not_nil(homes.write_protected(session_path, ".codex/config.toml", "approved", created, true))
-            test.eq(shell("printf private-sign-in > " .. home .. "/.codex/auth.json"), "")
-            local _, replay_error, replayed = homes.retain_login(session_path, source, "machine-login")
-            test.is_nil(replay_error)
-            test.is_true(replayed == true)
-            test.eq(shell("cat " .. home .. "/.codex/auth.json"), "private-sign-in")
-            test.eq(shell("rm " .. home .. "/.codex/auth.json"), "")
-            local _, logout_error = homes.retain_login(session_path, source, "machine-login")
-            test.is_nil(logout_error)
-            test.eq(shell("test ! -e " .. home .. "/.codex/auth.json && printf absent"), "absent")
-            local _, changed_error = homes.retain_login(session_path,
-                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.optional_login", definition_revision = 1}, "machine-login")
-            test.eq(changed_error, "retained login source changed")
-            local _, empty_error = homes.retain_login(session_path, source, "")
-            test.eq(empty_error, "login bytes exceed bound")
-            local _, required_error = homes.retain_login(session_path,
-                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.required_login", definition_revision = 1}, nil)
-            test.eq(required_error, "required login bytes missing")
-        end)
-        test.it("publishes admitted setup when an optional login is absent", function()
-            local session_key = assert(homes.session_key(OWNER, fresh("optional-login-setup")))
-            local session_path = assert(homes.ensure_session(session_key))
-            local format = {schema_revision = "bee.credential-format@1", file = {
-                path = ".grok/auth.json", content_format = "json",
-                initialize = {{path = ".grok/.bee-global-config.toml", content = "[ui]\ntheme = \"system\"\n", on_missing_login = true}}}}
-            local source = {provider = "grok", format = format, definition_id = "bee.test.grok_login", definition_revision = 1, optional = true}
-            local created: {[string]: boolean} = {}
-            local target, seed_error, replayed = homes.retain_login(session_path, source, nil, created)
-            test.not_nil(target)
-            test.is_nil(seed_error)
-            test.is_false(replayed == true)
-            local home = assert(homes.os_path(session_path .. "/home"))
-            test.eq(shell("test ! -e " .. home .. "/.grok/auth.json && printf absent"), "absent")
-            test.eq(shell("cat " .. home .. "/.grok/.bee-global-config.toml"), "[ui]\ntheme = \"system\"\n")
-            local setup_digest = assert(hash.sha256("[ui]\ntheme = \"system\"\n"))
-            local base, base_error = homes.read_configuration(session_path, ".grok/.bee-global-config.toml", setup_digest)
-            test.eq(base, "[ui]\ntheme = \"system\"\n")
-            test.is_nil(base_error)
-            local absent, absent_error = homes.read_configuration(session_path, ".grok/missing.toml", setup_digest)
-            test.is_nil(absent)
-            test.eq(absent_error, "configuration base is missing")
-            test.is_nil(homes.read_configuration(session_path, "../escape.toml", setup_digest))
-            local changed, changed_error = homes.read_configuration(session_path, ".grok/.bee-global-config.toml", string.rep("a", 64))
-            test.is_nil(changed)
-            test.eq(changed_error, "configuration base differs from admitted content")
-            local _, replay_error, replay = homes.retain_login(session_path, source, nil, {})
-            test.is_nil(replay_error)
-            test.is_true(replay == true)
-        end)
-        test.it("refuses changed or incomplete retained login state without exposing bytes", function()
-            local session_key = assert(homes.session_key(OWNER, fresh("login-reject-session")))
-            local session_path = assert(homes.ensure_session(session_key))
-            local source = {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.login_source", definition_revision = 1}
-            assert(homes.retain_login(session_path, source, "opaque-login-not-in-errors"))
-            for _, changed in ipairs({
-                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.login_source", definition_revision = 1},
-                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.other_login_source", definition_revision = 1},
-                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.login_source", definition_revision = 2},
-            }) do
-                local _, changed_error = homes.retain_login(session_path, changed, "different-opaque-login-bytes")
-                test.eq(changed_error, "retained login source changed")
-                test.is_nil((changed_error:find("opaque-login-not-in-errors", 1, true)))
-                test.is_nil((changed_error:find("different-opaque-login-bytes", 1, true)))
-            end
-            local partial_key = assert(homes.session_key(OWNER, fresh("login-partial-session")))
-            local partial_session = assert(homes.ensure_session(partial_key))
-            local made, made_error = homes.write_protected(partial_session, ".codex/auth.json", "partial", {[(partial_session .. "/home/.codex")] = true}, true)
-            test.not_nil(made)
-            test.is_nil(made_error)
-            local _, partial_error = homes.retain_login(partial_session, source, "opaque-login-not-in-errors")
-            test.eq(partial_error, "retained login is incomplete")
-            -- This inspects the live root; the assertion is not inferred from
-            -- the fs.directory manifest's requested mode.
-            local root = assert(homes.os_path("/"))
-            test.eq(shell("stat -c %a " .. root):match("%d+"), "700")
-        end)
-        test.it("seeds a nested component login without adopting unrelated existing directories", function()
-            local key, key_error = homes.session_key(OWNER, fresh("nested-login"))
-            if not key then error(tostring(key_error)) end
-            local session, session_error = homes.ensure_session(key)
-            if not session then error(tostring(session_error)) end
-            local format = {schema_revision = "bee.credential-format@1", file = {
-                path = ".gemini/antigravity-cli/antigravity-oauth-token", content_format = "opaque",
-                initialize = {{path = ".gemini/antigravity-cli/initialized", content = "ready"}}}}
-            local source = {provider = "agy", definition_id = "bee.test.nested_login", definition_revision = 1, format = format}
-            local created: {[string]: boolean} = {}
-            local target, seed_error = homes.retain_login(session, source, "opaque\0login", created)
-            if not target then error(tostring(seed_error)) end
-            test.is_true(created[session .. "/home/.gemini"] == true)
-            test.is_true(created[session .. "/home/.gemini/antigravity-cli"] == true)
-            local written, write_error = homes.write_protected(session, ".gemini/config/mcp_config.json", "approved", created, true)
-            if not written then error(tostring(write_error)) end
-            local _, replay_error, replayed = homes.retain_login(session, source, "stale")
-            test.is_nil(replay_error)
-            test.is_true(replayed == true)
-            local bad_key, bad_key_error = homes.session_key(OWNER, fresh("existing-login-parent"))
-            if not bad_key then error(tostring(bad_key_error)) end
-            local bad_session, bad_error = homes.ensure_session(bad_key)
-            if not bad_session then error(tostring(bad_error)) end
-            local made, make_error = homes.write_protected(bad_session, ".gemini/unrelated", "existing", {}, true)
-            if not made then error(tostring(make_error)) end
-            local refused, refusal = homes.retain_login(bad_session, source, "secret")
-            test.is_nil(refused)
-            test.eq(refusal, "retained login parent already exists")
-            local reserved, reserved_error = homes.decode_login_source({provider = "fixture", definition_id = "fixture", definition_revision = 1,
-                format = {schema_revision = "bee.credential-format@1", file = {path = ".bee-retained-login-ready.json", content_format = "opaque"}}})
-            test.is_nil(reserved)
-            test.eq(reserved_error, "login format overlaps retained identity")
-        end)
-        test.it("keeps a retained home excluded when its placement is uncertain", function()
-            local session_ref = fresh("uncertain-session")
-            local first = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "uncertain")))
-            local db, open_error = store.open()
-            if not db then error(open_error or "open store") end
-            local uncertain = store.transition(db, first.attempt_id, {execution = "uncertain",
-                evidence = {kind = "test.uncertain", detail = "placement outcome is not proven"}})
-            db:release()
-            test.eq(uncertain.ok, true)
-            local blocked = call(OWNER, "prepare", retained_launch(OWNER, session_ref, "must-not-run"))
-            test.eq(blocked.error and blocked.error.code, "CONFLICT")
-            test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
-        end)
-    end)
-end
-
-local function output_tests()
-    test.describe("Native placement output", function()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
-        test.it("drains for a bounded time after an independently observed exit while descendants hold the pipes", function()
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
-            local release = shell("pwd"):gsub("\n$", "") .. "/.wippy/" .. fresh("descendant-drain")
-            shell("mkfifo " .. quote.posix(release))
-            local script = "read release < " .. quote.posix(release) .. " & echo hi"
-            local request = launch({"sh", "-c", script}, "direct_process")
-            request.timeouts = {stop_grace_ms = 500, drain_ms = 300, retain_ms = 300}
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            if started.exit_observation ~= "independent" then shell("exec 3<> " .. quote.posix(release) .. "; printf 'release\n' >&3") end
-            while true do
-                local message = assert((exits:receive()))
-                if message:payload():data().attempt_id == prepared.attempt_id then break end
-            end
-            local eof, marked = 0, false
-            while eof < 2 do
-                local message = assert((outputs:receive()))
-                local data = assert(bounds.object(message:payload():data()))
-                if data.attempt_id == prepared.attempt_id then
-                    if data.eof == true then eof = eof + 1 end
-                    if data.truncated == true then marked = true end
-                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
-                end
-            end
-            if started.exit_observation == "independent" then shell("exec 3<> " .. quote.posix(release) .. "; printf 'release\n' >&3") end
-            shell("rm " .. quote.posix(release))
-            test.eq(marked, started.exit_observation == "independent", table.concat(kinds(prepared.attempt_id), ","))
-            process.unlisten(outputs)
-            process.unlisten(exits)
-        end)
-        test.it("retains pipe data across post-exit consumer backpressure without false truncation", function()
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
-            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
-            request.timeouts = {stop_grace_ms = 500, drain_ms = 100, retain_ms = 1500}
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            local end_deadline = time.after("10s")
-            while true do
-                local exited = channel.select({exits:case_receive(), end_deadline:case_receive()})
-                assert(exited.ok and exited.channel == exits, "producer did not exit with buffered output")
-                if exited.value:payload():data().attempt_id == prepared.attempt_id then break end
-            end
-            local hold = time.after("300ms")
-            channel.select({hold:case_receive()})
-            local received, eof, marked = 0, 0, false
-            local deadline = time.after("10s")
-            while eof < 2 do
-                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                assert(selected.ok and selected.channel == outputs, "buffered streams did not finish")
-                local data = assert(bounds.object(selected.value:payload():data()))
-                if data.attempt_id == prepared.attempt_id then
-                received = received + #(type(data.data) == "string" and data.data or "")
-                if data.eof == true then eof = eof + 1 end
-                if data.truncated == true then marked = true end
-                assert(process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
-                end
-            end
-            test.eq(received, 300000)
-            test.is_false(marked)
-            test.is_false(has(kinds(prepared.attempt_id), "output.drain_elapsed"))
-            process.unlisten(outputs)
-            process.unlisten(exits)
-        end)
-        test.it("consumes queued pipe data before an expired drain is selected", function()
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
-            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
-            request.environment = {PROBE_VALUE = "expire-pipe"}
-            request.timeouts = {stop_grace_ms = 500, drain_ms = 100, retain_ms = 1500}
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            while true do
-                local message = assert((exits:receive()))
-                if message:payload():data().attempt_id == prepared.attempt_id then break end
-            end
-            local received, eof, marked = 0, 0, false
-            while eof < 2 do
-                local message = assert((outputs:receive()))
-                local data = assert(bounds.object(message:payload():data()))
-                if data.attempt_id == prepared.attempt_id then
-                    if type(data.data) == "string" then received = received + #data.data end
-                    if data.eof == true then eof = eof + 1 end
-                    if data.truncated == true then marked = true end
-                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
-                end
-            end
-            local order = table.concat(kinds(prepared.attempt_id), ",")
-            test.eq(received, 300000, order)
-            test.is_false(marked, order)
-            test.is_false(has(kinds(prepared.attempt_id), "output.drain_elapsed"), order)
-            process.unlisten(outputs)
-            process.unlisten(exits)
-        end)
-        test.it("replays an acknowledged stream end to a takeover while the other pipe remains open", function()
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
-            local release = shell("pwd"):gsub("\n$", "") .. "/.wippy/" .. fresh("eof-replay")
-            shell("mkfifo " .. quote.posix(release))
-            local request = launch({"sh", "-c", "exec 2>&-; echo before; read release < " .. quote.posix(release) .. "; echo after"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            local ended = false
-            while not ended do
-                local message = assert((outputs:receive()))
-                local data = assert(protocol.decode_output(message:payload():data()))
-                if data.attempt_id == prepared.attempt_id then
-                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
-                    ended = data.stream == "stderr" and data.eof
-                end
-            end
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 2}))
-            local replayed = false
-            while not replayed do
-                local message = assert((outputs:receive()))
-                local data = assert(protocol.decode_output(message:payload():data()))
-                if data.attempt_id == prepared.attempt_id and data.generation == 2 then
-                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 2, consumed_through = data.sequence}))
-                    replayed = data.stream == "stderr" and data.eof
-                end
-            end
-            shell("exec 3<> " .. quote.posix(release) .. "; printf 'release\n' >&3")
-            while true do
-                local message = assert((exits:receive()))
-                local data = assert(protocol.decode_exit(message:payload():data()))
-                if data.attempt_id == prepared.attempt_id and data.generation == 2 then break end
-            end
-            while true do
-                local message = assert((outputs:receive()))
-                local data = assert(protocol.decode_output(message:payload():data()))
-                if data.attempt_id == prepared.attempt_id and data.generation == 2 then
-                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 2, consumed_through = data.sequence}))
-                    if data.stream == "stdout" and data.eof then break end
-                end
-            end
-            shell("rm " .. quote.posix(release))
-            process.unlisten(outputs)
-            process.unlisten(exits)
-        end)
-        test.it("records unacknowledged output as lost once the retention deadline passes after exit", function()
-            local request = launch({"sh", "-c", "echo one; echo two"}, "direct_process")
-            request.timeouts = {stop_grace_ms = 500, retain_ms = 300}
-            request.environment = {PROBE_VALUE = "hold-retention"}
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            await_retained_runner(prepared)
-            local recorded = kinds(prepared.attempt_id)
-            test.is_true(has(recorded, "child.exited"))
-            test.is_true(has(recorded, "output.lost"))
-            test.is_true(has(recorded, "runner.finished"))
-            local after_finish = assert(store.open())
-            local final_row = store.row(after_finish, prepared.attempt_id)
-            after_finish:release()
-            test.is_nil(final_row and final_row.runner_pid, "runner.finished clears its process identity")
-            local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                if item.kind == "output.lost" then test.is_true(tostring(item.detail):find("unacknowledged chunks", 1, true) ~= nil) end
-            end
-        end)
-        test.it("bounds post-exit retention when an unacknowledged burst fills the spool", function()
-            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
-            request.timeouts = {stop_grace_ms = 500, drain_ms = 100, retain_ms = 300}
-            request.environment = {PROBE_VALUE = "hold-retention"}
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            await_retained_runner(prepared)
-            local recorded = kinds(prepared.attempt_id)
-            test.is_true(has(recorded, "child.exited"))
-            test.is_true(has(recorded, "output.lost"))
-            test.is_true(has(recorded, "runner.finished"))
-            test.is_false(has(recorded, "output.drain_elapsed"))
-        end)
-        test.it("keeps supervising a live attempt without an execution identity while its runner answers", function()
-            local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            test.eq(started.execution_state, "running")
-            local db = store.open()
-            if not db then error("store") end
-            local _, clear_error = db:execute("UPDATE bee_placement_attempts SET pid = NULL, pgid = NULL, start_ticks = NULL, boot_id = NULL WHERE attempt_id = ?", {prepared.attempt_id})
-            db:release()
-            if clear_error then error("clear identity: " .. tostring(clear_error)) end
-            local reconciled = attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
-            test.eq(reconciled.execution_state, "running")
-            test.is_true(has(kinds(prepared.attempt_id), "reconcile.supervised"))
-            local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
-            local reported = false
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                if item.kind == "reconcile.supervised" and tostring(item.detail):find("runner reports running", 1, true) then reported = true end
-            end
-            test.is_true(reported)
-            test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "running")
-            call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
-        end)
-        test.it("keeps uncertainty when the runner is lost without an execution identity", function()
-            local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local db = store.open()
-            if not db then error("store") end
-            -- Inject the persisted state left by an unobserved execution.
-            -- Starting and killing a real child first allowed the background
-            -- sweep to prove its exit before the fixture removed its identity.
-            local _, clear_error = db:execute("UPDATE bee_placement_attempts SET execution_state = 'running', runner_pid = NULL, pid = NULL, pgid = NULL, start_ticks = NULL, boot_id = NULL WHERE attempt_id = ?", {prepared.attempt_id})
-            db:release()
-            if clear_error then error("clear identity: " .. tostring(clear_error)) end
-            local reconciled = attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
-            test.eq(reconciled.execution_state, "uncertain")
-            local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"}))
-            test.eq(stopped.execution_state, "uncertain")
-            local blocked = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-            test.eq(blocked.error and blocked.error.code, "CONFLICT")
-        end)
-        test.it("keeps a starting attempt whose runner is present while it prepares the child", function()
-            local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local db = store.open()
-            if not db then error("store") end
-            -- A runner materializing configuration is a live host process
-            -- that does not answer status probes until its child exists.
-            local runner = tostring(assert(process.spawn("bee.host:idle_process", "bee:workers")))
-            local _, claim_error = db:execute("UPDATE bee_placement_attempts SET execution_state = 'starting', runner_pid = ?, pid = NULL, pgid = NULL, start_ticks = NULL, boot_id = NULL WHERE attempt_id = ?", {runner, prepared.attempt_id})
-            db:release()
-            if claim_error then error("claim attempt: " .. tostring(claim_error)) end
-            local reconciled = attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
-            test.eq(reconciled.execution_state, "starting")
-            test.is_true(has(kinds(prepared.attempt_id), "reconcile.supervised"))
-            assert(process.cancel(runner, "runner stand-in released"))
-            local released = store.open()
-            if not released then error("store") end
-            local _, release_error = released:execute("UPDATE bee_placement_attempts SET runner_pid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
-            released:release()
-            if release_error then error("release attempt: " .. tostring(release_error)) end
-            test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "uncertain")
-        end)
-        test.it("resolves grants through the resource authority when the host selects granted mode", function()
-            local workspace = fresh("ws")
-            resource_call("associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
-            resource_mode("granted")
-            local attempt_id = fresh("attempt")
-            local granted = resource_call("grant", {workspace_id = workspace, name = "project", access = "write", purpose = "project", audience = OWNER, attempt_id = attempt_id})
-            local request = launch({"sh", "-c", "pwd"}, "direct_process")
-            request.attempt_id = attempt_id
-            local grant = (principals.objects(request.resources))[1]
-            grant.grant_ref = granted.grant_id
-            grant.root_ref = "bee.placement.native.env:root"
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            test.eq(prepared.execution_state, "intended")
-            local reported = value(service.capabilities())
-            test.eq(reported.resource_authority, "granted")
-            test.is_true(reported.delegated_resource_grants == true)
-            local downgraded = launch({"sh", "-c", "true"}, "direct_process")
-            local plain = (principals.objects(downgraded.resources))[1]
-            plain.grant_ref = "host"
-            local refused = call(OWNER, "prepare", downgraded)
-            test.eq(refused.error and refused.error.code, "NOT_FOUND")
-            local foreign = launch({"sh", "-c", "true"}, "direct_process")
-            local borrowed = (principals.objects(foreign.resources))[1]
-            borrowed.grant_ref = granted.grant_id
-            local scoped = call(OWNER, "prepare", foreign)
-            test.eq(scoped.error and scoped.error.code, "DENIED")
-            local short_attempt = fresh("attempt")
-            local short = resource_call("grant", {workspace_id = workspace, name = "project", access = "read", purpose = "project", audience = OWNER, attempt_id = short_attempt, ttl_ms = 300})
-            local expiring = launch({"sh", "-c", "true"}, "direct_process")
-            expiring.attempt_id = short_attempt
-            local expiring_grant = (principals.objects(expiring.resources))[1]
-            expiring_grant.grant_ref = short.grant_id
-            expiring_grant.access = "read"
-            attempt_of(call(OWNER, "prepare", expiring))
-            time.sleep("400ms")
-            local late = call(OWNER, "start", {attempt_id = short_attempt})
-            test.eq(late.error and late.error.code, "EXPIRED")
-            test.is_true(has(kinds(short_attempt), "grant.refused"))
-            local started = attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
-            test.is_true(started.execution_state == "running" or started.execution_state == "exited")
-            resource_mode("host_configured")
-        end)
-        test.it("stops a running attempt whose grant is revoked, with enforcement pending until the exit is proven", function()
-            local workspace = fresh("ws")
-            resource_call("associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
-            resource_mode("granted")
-            local attempt_id = fresh("attempt")
-            local granted = resource_call("grant", {workspace_id = workspace, name = "project", access = "write", purpose = "project", audience = OWNER, attempt_id = attempt_id})
-            local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
-            request.attempt_id = attempt_id
-            local grant = (principals.objects(request.resources))[1]
-            grant.grant_ref = granted.grant_id
-            attempt_of(call(OWNER, "prepare", request))
-            test.eq(attempt_of(call(OWNER, "start", {attempt_id = attempt_id})).execution_state, "running")
-            local before = attempt_of(call(OWNER, "reconcile", {attempt_id = attempt_id}))
-            test.is_true(before.execution_state == "running" or before.execution_state == "uncertain")
-            local db = store.open()
-            if not db then error("store") end
-            local _, identify_error = db:execute("UPDATE bee_placement_attempts SET pid = COALESCE(pid, 0) WHERE attempt_id = ?", {attempt_id})
-            db:release()
-            if identify_error then error("identify: " .. tostring(identify_error)) end
-            local revoked = resource_call("revoke", {grant_id = granted.grant_id})
-            local fenced = (principals.strings((revoked.revocation).fenced_attempts))
-            local stop_results = principals.objects(revoked.stop_results)
-            test.eq(#fenced, 1)
-            test.eq(fenced[1], attempt_id)
-            test.eq(#stop_results, 1)
-            test.eq(stop_results[1].attempt_id, attempt_id)
-            test.is_true(stop_results[1].stopped == true, tostring(stop_results[1].error))
-            local enforced = call(OWNER, "reconcile", {attempt_id = attempt_id})
-            local recorded = kinds(attempt_id)
-            if capability == "process_group" then
-                test.is_true(enforced.ok)
-                test.is_true(has(recorded, "grant.revoked"))
-                test.is_true(has(recorded, "stop.requested"))
-                if not wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt).execution_state == "exited"
-                end, 8000) then error("revocation did not end the child: " .. table.concat(kinds(attempt_id), ",")) end
-            else
-                attempt_of(call(OWNER, "stop", {attempt_id = attempt_id, mode = "forced"}))
-            end
-            resource_mode("host_configured")
-        end)
-        test.it("stops a running attempt reported by revoke_all", function()
-            local workspace = fresh("epoch-stop")
-            resource_call("associate", {workspace_id = workspace, name = "project", root_ref = ROOT,
-                subpath = "", allowed_access = "write"})
-            resource_mode("granted")
-            local attempt_id = fresh("attempt")
-            local granted = resource_call("grant", {workspace_id = workspace, name = "project", access = "write",
-                purpose = "project", audience = OWNER, attempt_id = attempt_id})
-            local request = launch({"sh", "-c", "trap '' TERM; sleep 8"}, "direct_process")
-            request.attempt_id = attempt_id
-            local grant = (principals.objects(request.resources))[1]
-            grant.grant_ref = granted.grant_id
-            grant.root_ref = "bee.placement.native.env:root"
-            attempt_of(call(OWNER, "prepare", request))
-            test.eq(attempt_of(call(OWNER, "start", {attempt_id = attempt_id})).execution_state, "running")
-            local revoked = resource_call("revoke_all", {workspace_id = workspace})
-            local fenced = principals.items(revoked.fenced_attempts)
-            local results = principals.objects(revoked.stop_results)
-            test.eq(#fenced, 1)
-            test.eq(fenced[1], attempt_id)
-            test.eq(#results, 1)
-            test.eq(results[1].attempt_id, attempt_id)
-            test.is_true(results[1].stopped == true, tostring(results[1].error))
-            if not wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt).execution_state == "exited"
-            end, 8000) then error("revoke_all did not stop the child: " .. table.concat(kinds(attempt_id), ",")) end
-            resource_mode("host_configured")
-        end)
-    end)
-end
-
-local function credentials_tests()
-    test.describe("Native placement credentials", function()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
-        test.it("refuses file credentials before intent without a selected retained home", function()
-            local source = "bee.credentials:codex_login_fixture"
-            admit_login_source(source)
-            local workspace = fresh("ws")
-            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
-            local attempt_id = fresh("attempt")
-            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER, attempt_id = attempt_id, profile_id = "batch",
-                profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")})
-            local request = launch({"sh", "-c", "exit 0"}, "direct_process")
-            request.attempt_id = attempt_id
-            request.projections = {projection.projection_id}
-            local refused = call(OWNER, "prepare", request)
-            test.is_false(refused.ok)
-            test.eq(refused.error.code, "DENIED")
-            local absent = call(OWNER, "status", {attempt_id = attempt_id})
-            test.is_false(absent.ok)
-            test.eq(absent.error.code, "NOT_FOUND")
-        end)
-        test.it("runs a confined fixture worker with only its projected Codex home and writes its refreshed token back", function()
-            local source = "bee.credentials:codex_login_fixture"
-            local source_root = ".wippy/codex-login-fixture"
-            admit_login_source(source, true)
-            local original_login = '{"fixture":"ambient-login"}'
-            local refreshed_login = '{"fixture":"ambient-refresh"}'
-            test.eq(shell("mkdir -p " .. source_root .. "/.codex && printf %s " .. quote.posix(original_login) .. " > " .. source_root .. "/.codex/auth.json"
-                .. " && printf %s " .. quote.posix("profile = \"fixture\"\n") .. " > " .. source_root .. "/.codex/config.toml"
-                .. " && printf %s " .. quote.posix("model = \"gpt-5-codex\"\n") .. " > " .. source_root .. "/.codex/ds-flash.config.toml"
-                .. " && printf %s " .. quote.posix("must-not-be-projected") .. " > " .. source_root .. "/machine-home-only.txt"), "")
-            local workspace = fresh("private-provider-home-workspace")
-            credential_call("define", {workspace_id = workspace, name = "codex_ambient", provider = "codex", source = {kind = "fs_directory", ref = source}})
-            local attempt_id = fresh("private-provider-home-attempt")
-            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "codex_ambient", audience = OWNER,
-                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
-                launch_policy_digest = DIGEST, idempotency_key = fresh("private-provider-home-key")})
-            local script = 'case "$HOME" in */attempts/*/home) ;; *) exit 41;; esac'
-                .. ' && test -s "$CODEX_HOME/auth.json" && test -s "$CODEX_HOME/config.toml"'
-                .. ' && test -s "$CODEX_HOME/ds-flash.config.toml" && test ! -e "$HOME/.codex/other-profile.config.toml"'
-                .. ' && test ! -e "$HOME/machine-home-only.txt"'
-                .. ' && printf projected-fixture-ok && printf %s ' .. quote.posix(refreshed_login) .. ' > "$CODEX_HOME/auth.json"'
-            local request = launch({"sh", "-c", script}, "process_group")
-            request.attempt_id = attempt_id
-            request.projections = {projection.projection_id}
-            local declared_launch = assert(bounds.object(request.launch))
-            declared_launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
-                files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
-                    {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
-                    {source_path = ".codex/ds-flash.config.toml", path = ".codex/ds-flash.config.toml", kind = "config", optional = false, write_back = false}}}
-            local request_resources = principals.objects(request.resources)
-            request.resources = request_resources
-            request_resources[#request_resources + 1] = {name = "session", grant_ref = "provider-session-grant", root_ref = ROOT,
-                subpath = "", access = "write", purpose = "session"}
-            attempt_of(call(OWNER, "prepare", request))
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
-            local output = ""
-            local ended: {[string]: boolean} = {}
-            local deadline = time.after("10s")
-            while not ended.stdout or not ended.stderr do
-                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                if not selected.ok or selected.channel == deadline then error("fixture provider-home worker did not report success") end
-                local data = selected.value:payload():data()
-                if data.attempt_id == attempt_id and data.generation == 1 then
-                    if type(data.data) == "string" then output = output .. (data.data) end
-                    if data.eof then ended[data.stream] = true end
-                    process.send(tostring(selected.value:from()), protocol.TOPIC_ACK,
-                        {generation = 1, consumed_through = data.sequence})
-                end
-            end
-            process.unlisten(outputs)
-            if not output:find("projected-fixture-ok", 1, true) then error("fixture provider-home worker output: " .. output) end
-            if not wait_for(function()
-                local observed = kinds(attempt_id)
-                return has(observed, "credential.write_back") or has(observed, "credential.write_back_failed")
-            end, 8000) then error("refreshed fixture login write-back did not settle") end
-            test.eq(shell("test \"$(cat " .. quote.posix(source_root .. "/.codex/auth.json") .. ")\" = "
-                .. quote.posix(original_login) .. " && printf unchanged"), "unchanged")
-            local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
-            local write_back_refused = false
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                test.is_nil((tostring(item.detail):find("ambient-refresh", 1, true)))
-                if item.kind == "credential.write_back" then error("fixture login unexpectedly wrote back") end
-                if item.kind == "credential.write_back_failed" then
-                    test.is_true(tostring(item.detail):find("provider login write-back requires runtime no-follow fs", 1, true) ~= nil)
-                    write_back_refused = true
-                end
-            end
-            if not write_back_refused then error("fixture token write-back refusal evidence was missing") end
-            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
-
-            test.eq(shell("printf %s " .. quote.posix(original_login) .. " > " .. source_root .. "/.codex/auth.json"), "")
-            local unsafe_attempt = fresh("private-provider-descendant")
-            local unsafe_projection = credential_call("issue_projection", {workspace_id = workspace, name = "codex_ambient", audience = OWNER,
-                attempt_id = unsafe_attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
-                launch_policy_digest = DIGEST, idempotency_key = fresh("private-provider-descendant-key")})
-            local unsafe_request = launch({"sh", "-c", "printf %s " .. quote.posix(refreshed_login)
-                .. " > \"$CODEX_HOME/auth.json\"; (sleep 2) >/dev/null 2>&1 &"}, "direct_process")
-            unsafe_request.attempt_id = unsafe_attempt
-            unsafe_request.projections = {unsafe_projection.projection_id}
-            (assert(bounds.object(unsafe_request.timeouts))).retain_ms = 100
-            (assert(bounds.object(unsafe_request.launch))).provider_home = declared_launch.provider_home
-            attempt_of(call(OWNER, "prepare", unsafe_request))
-            attempt_of(call(OWNER, "start", {attempt_id = unsafe_attempt}))
-            if not wait_for(function()
-                local observed = kinds(unsafe_attempt)
-                return has(observed, "credential.write_back") or has(observed, "credential.write_back_failed")
-            end, 8000) then error("descendant write-back refusal did not settle: " .. table.concat(kinds(unsafe_attempt), ",")) end
-            test.is_true(has(kinds(unsafe_attempt), "credential.write_back_failed"))
-            test.eq(shell("test \"$(cat " .. quote.posix(source_root .. "/.codex/auth.json") .. ")\" = "
-                .. quote.posix(original_login) .. " && printf unchanged"), "unchanged")
-            time.sleep("2200ms")
-            attempt_of(call(OWNER, "cleanup", {attempt_id = unsafe_attempt}))
-        end)
-        test.it("starts with an absent optional machine login and permits private CLI sign-in", function()
-            local source = "bee.credentials:codex_login_fixture"
-            admit_login_source(source)
-            test.eq(shell("mkdir -p .wippy/codex-login-fixture && rm -f .wippy/codex-login-fixture/auth.json"), "")
-            local workspace = fresh("optional-login-workspace")
-            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex",
-                source = {kind = "fs_directory", ref = source}, optional = true})
-            local session_ref = fresh("optional-login-session")
-            local request = retained_launch(OWNER, session_ref, "optional-login")
-            local attempt_id = request.attempt_id
-            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER,
-                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
-                launch_policy_digest = DIGEST, idempotency_key = fresh("optional-login-key")})
-            request.projections = {projection.projection_id}
-            local launch_value = assert(bounds.object(request.launch))
-            launch_value.argv = {"-c", 'test ! -e "$HOME/.codex/auth.json" && printf private-login > "$HOME/.codex/auth.json"'}
-            attempt_of(call(OWNER, "prepare", request))
-            attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
-            if not wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt).execution_state == "exited"
-            end, 8000) then error("optional login probe did not exit") end
-            local exited = (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt).exit
-            if not exited then error("optional login probe has no exit receipt") end
-            test.eq(exited.code, 0)
-            local session_key = assert(homes.session_key(OWNER, session_ref))
-            local session_path = assert(homes.ensure_session(session_key))
-            local home = assert(homes.os_path(session_path .. "/home"))
-            test.eq(shell("cat " .. home .. "/.codex/auth.json"), "private-login")
-            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
-        end)
-        test.it("delivers one retained Codex login before provider configuration and preserves a refreshed login", function()
-            local source = "bee.credentials:codex_login_fixture"
-            admit_login_source(source)
-            test.eq(shell("mkdir -p .wippy/codex-login-fixture && printf '{\"fixture\":\"login\"}' > .wippy/codex-login-fixture/auth.json"), "")
-            local workspace = fresh("login-workspace")
-            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
-            local session_ref = fresh("login-session")
-            local function issue(attempt_id: string): {[string]: unknown}
-                return credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER, attempt_id = attempt_id, profile_id = "batch",
-                    profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("login-key")})
-            end
-            local first_request = retained_launch(OWNER, session_ref, "first-login")
-            local first_id = first_request.attempt_id
-            local first_launch = assert(bounds.object(first_request.launch))
-            -- Execute env directly. A shell can remove invalid names such as
-            -- auth.json before its env builtin observes them.
-            first_launch.executable = "/usr/bin/env"
-            first_launch.argv = {}
-            first_request.projections = {issue(first_id).projection_id}
-            attempt_of(call(OWNER, "prepare", first_request))
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = first_id, recipient = process.pid(), generation = 1}))
-            local started = attempt_of(call(OWNER, "start", {attempt_id = first_id}))
-            local child_environment = ""
-            local ended: {[string]: boolean} = {}
-            local deadline = time.after("10s")
-            while not ended.stdout or not ended.stderr do
-                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                if not selected.ok or selected.channel == deadline then
-                    process.unlisten(outputs)
-                    error("did not receive the complete raw child environment")
-                end
-                local data = selected.value:payload():data()
-                if tostring(selected.value:from()) == started.runner and data.attempt_id == first_id and data.generation == 1 then
-                    test.is_false(data.truncated == true)
-                    if data.data then child_environment = child_environment .. tostring(data.data) end
-                    if data.eof then ended[data.stream] = true end
-                    process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence})
-                end
-            end
-            process.unlisten(outputs)
-            if not wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = first_id})).attempt).execution_state == "exited"
-            end, 8000) then error("first retained login launch did not exit") end
-            local first_exit = (value(call(OWNER, "status", {attempt_id = first_id})).attempt).exit
-            if not first_exit then error("environment probe has no exit receipt") end
-            test.eq(first_exit.code, 0)
-            test.not_nil((child_environment:find("PROBE_VALUE=probe-42\n", 1, true)))
-            test.is_nil((child_environment:find('{"fixture":"login"}', 1, true)))
-            attempt_of(call(OWNER, "cleanup", {attempt_id = first_id}))
-            local session_key = assert(homes.session_key(OWNER, session_ref))
-            local session_path = assert(homes.ensure_session(session_key))
-            local home = assert(homes.os_path(session_path .. "/home"))
-            test.eq(shell("test -f " .. home .. "/.codex/auth.json && test -f " .. home .. "/.codex/config.toml"), "")
-            test.eq(shell("printf '{\"fixture\":\"refreshed\"}' > " .. home .. "/.codex/auth.json"), "")
-            local second_request = retained_launch(OWNER, session_ref, "second-login")
-            local second_id = second_request.attempt_id
-            second_request.projections = {issue(second_id).projection_id}
-            attempt_of(call(OWNER, "prepare", second_request))
-            attempt_of(call(OWNER, "start", {attempt_id = second_id}))
-            if not wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = second_id})).attempt).execution_state == "exited"
-            end, 8000) then error("second retained login launch did not exit") end
-            test.eq(shell("cat " .. home .. "/.codex/auth.json"), '{"fixture":"refreshed"}')
-            local page = value(call(OWNER, "evidence", {attempt_id = second_id, limit = 64}))
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                test.is_nil((tostring(item.detail):find("refreshed", 1, true)))
-            end
-            attempt_of(call(OWNER, "cleanup", {attempt_id = second_id}))
-            local changed_request = retained_launch(OWNER, session_ref, "changed-login")
-            local changed_id = changed_request.attempt_id
-            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
-            changed_request.projections = {issue(changed_id).projection_id}
-            attempt_of(call(OWNER, "prepare", changed_request))
-            local refused = call(OWNER, "start", {attempt_id = changed_id})
-            test.is_true(refused.ok)
-            test.eq(attempt_of(refused).execution_state, "start_failed")
-            test.is_true(has(kinds(changed_id), "credential.refused"))
-            test.is_nil((shell("cat " .. home .. "/marker"):find("changed-login", 1, true)))
-        end)
-        test.it("composes Grok configuration only from the current admitted initializer", function()
-            local source = "bee.credentials:codex_login_fixture"
-            local source_root = ".wippy/codex-login-fixture"
-            admit_grok_login_source(source)
-
-            local function projection(attempt_id: string): ({[string]: unknown}, {[string]: unknown}, string)
-                local workspace = fresh("grok-composition-workspace")
-                local definition = credential_call("define", {workspace_id = workspace, name = "login", provider = "grok",
-                    source = {kind = "fs_directory", ref = source}, optional = true})
-                local issued = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER,
-                    attempt_id = attempt_id, profile_id = "window", profile_digest = DIGEST, binding_digest = DIGEST,
-                    launch_policy_digest = DIGEST, idempotency_key = fresh("grok-composition-projection")})
-                return definition, issued, workspace
-            end
-            local function session_path(session_ref: string): (string, string)
-                local key, key_error = homes.session_key(OWNER, session_ref)
-                if not key then error(tostring(key_error or "Grok composition session key")) end
-                local path, path_error = homes.ensure_session(key)
-                if not path then error(tostring(path_error or "Grok composition session path")) end
-                local os_home, os_error = homes.os_path(path .. "/home")
-                if not os_home then error(tostring(os_error or "Grok composition OS home")) end
-                return path, os_home
-            end
-            local function preseed(session_ref: string, definition: {[string]: unknown}, initialize: {unknown})
-                local path = session_path(session_ref)
-                if type(definition.definition_id) ~= "string" or type(definition.revision) ~= "number" then
-                    error("Grok credential definition has invalid identity")
-                end
-                local target, seed_error = homes.retain_login(path, {provider = "grok",
-                    definition_id = definition.definition_id, definition_revision = math.floor(definition.revision),
-                    optional = true, format = {schema_revision = "bee.credential-format@1", file = {
-                        path = ".grok/auth.json", content_format = "json", initialize = initialize}}}, nil, {})
-                if not target then error(tostring(seed_error or "preseed Grok retained identity")) end
-                local db, db_error = store.open()
-                if not db then error(tostring(db_error or "open placement store for retained base binding")) end
-                for _, raw in ipairs(initialize) do
-                    local item = assert(bounds.object(raw))
-                    local item_path, content = item.path, item.content
-                    if type(item_path) ~= "string" or type(content) ~= "string" then error("invalid preseed initializer") end
-                    local digest, digest_error = hash.sha256(content)
-                    if not digest then error(tostring(digest_error or "digest preseed initializer")) end
-                    local bind_error = store.bind_session_file(db, OWNER, session_ref, item_path, digest)
-                    if bind_error then error(bind_error) end
-                end
-                db:release()
-            end
-            local function evidence_has_no_start_or_publication(db, attempt_id: string)
-                local page, page_error = store.evidence(db, attempt_id, 0, 64)
-                if not page then error(tostring(page_error or "read Grok composition evidence")) end
-                for _, item in ipairs(page.evidence) do
-                    test.is_true(item.kind ~= "child.started")
-                    test.is_true(item.kind ~= "configuration.materialized")
-                end
-            end
-            local function retire(db, attempt_id: string)
-                local retired = store.transition(db, attempt_id, {execution = "exited",
-                    fields = {runner_pid = sql.NULL, exit_source = "runner"},
-                    evidence = {kind = "child.not_started", detail = "composition acceptance did not create a child"}})
-                if not retired.ok then error(tostring(retired.message or "retire Grok composition attempt")) end
-            end
-            -- A hosted runner claims and prepares; a sweep inside its window
-            -- finds it present and leaves the attempt starting.
-            local function prepare(request: types.LaunchRequest, binding_failure: string?): (PreparedConfiguration?, string?, sql.DB)
-                local db, db_error = store.open()
-                if not db then error(tostring(db_error or "open placement store")) end
-                intend_materialization(db, request)
-                local runner = runner_fixture.claim("bee.placement.native:materialization_runner_process", request, 0, nil, binding_failure)
-                test.is_true(service.sweep().ok)
-                test.eq(assert(store.attempt(db, request.attempt_id)).execution_state, "starting")
-                local outcome = runner_fixture.prepare(runner)
-                runner_fixture.release(runner)
-                return outcome.prepared, outcome.error, db
-            end
-
-            -- The external digest binding commits before any setup file or
-            -- ready marker. A failed binding therefore leaves a retryable empty
-            -- retained home instead of a permanently unbound ready session.
-            test.eq(shell("mkdir -p " .. source_root .. "/.grok && printf 'crash_safe = true\\n' > " .. source_root .. "/.grok/config.toml"), "")
-            local binding_attempt, binding_session = fresh("grok-binding-attempt"), fresh("grok-binding-session")
-            local _, binding_projection = projection(binding_attempt)
-            if type(binding_projection.projection_id) ~= "string" then error("invalid fixture binding_projection.projection_id") end
-            local binding_request = grok_composition_request(binding_attempt, binding_session,
-                binding_projection.projection_id, grok_configuration.BASE_PATH)
-            local binding_prepared, binding_error, binding_db = prepare(binding_request, "injected retained configuration binding failure")
-            if binding_prepared then error("Grok configuration survived a failed external binding") end
-            test.eq(binding_error, "injected retained configuration binding failure")
-            local _, binding_home = session_path(binding_session)
-            test.eq(shell("test ! -e " .. quote.posix(binding_home .. "/.bee-retained-login-ready.json")
-                .. " && test ! -e " .. quote.posix(binding_home .. "/.grok/.bee-global-config.toml") .. " && printf absent"), "absent")
-            evidence_has_no_start_or_publication(binding_db, binding_attempt)
-            retire(binding_db, binding_attempt)
-            binding_db:release()
-            attempt_of(call(OWNER, "cleanup", {attempt_id = binding_attempt}))
-
-            -- A retained file that exists beside the admitted base is not an
-            -- authority source. Only the initializer path can be composed.
-            test.eq(shell("mkdir -p " .. source_root .. "/.grok && rm -f " .. source_root .. "/auth.json " .. source_root .. "/.grok/config.toml"), "")
-            local arbitrary_attempt, arbitrary_session = fresh("grok-arbitrary-attempt"), fresh("grok-arbitrary-session")
-            local arbitrary_definition, arbitrary_projection = projection(arbitrary_attempt)
-            preseed(arbitrary_session, arbitrary_definition, {{path = ".grok/.bee-global-config.toml", content = "", on_missing_login = true}})
-            local _, arbitrary_home = session_path(arbitrary_session)
-            test.eq(shell("printf 'untrusted = true\\n' > " .. quote.posix(arbitrary_home .. "/.grok/arbitrary.toml")), "")
-            if type(arbitrary_projection.projection_id) ~= "string" then error("invalid fixture arbitrary_projection.projection_id") end
-            local arbitrary_request = grok_composition_request(arbitrary_attempt, arbitrary_session,
-                arbitrary_projection.projection_id, ".grok/arbitrary.toml")
-            local arbitrary_prepared, arbitrary_error, arbitrary_db = prepare(arbitrary_request)
-            if arbitrary_prepared then error("arbitrary retained Grok base was accepted") end
-            test.eq(arbitrary_error, "configuration base is not admitted by credential setup")
-            evidence_has_no_start_or_publication(arbitrary_db, arbitrary_attempt)
-            test.eq(shell("test ! -e " .. quote.posix(arbitrary_home .. "/.grok/config.toml") .. " && printf absent"), "absent")
-            retire(arbitrary_db, arbitrary_attempt)
-            arbitrary_db:release()
-            attempt_of(call(OWNER, "cleanup", {attempt_id = arbitrary_attempt}))
-
-            -- A retained identity cannot turn a missing admitted base into an
-            -- implicit empty document. Replay skips seeding and must refuse.
-            local missing_attempt, missing_session = fresh("grok-missing-attempt"), fresh("grok-missing-session")
-            local missing_definition, missing_projection = projection(missing_attempt)
-            preseed(missing_session, missing_definition, {})
-            local _, missing_home = session_path(missing_session)
-            if type(missing_projection.projection_id) ~= "string" then error("invalid fixture missing_projection.projection_id") end
-            local missing_request = grok_composition_request(missing_attempt, missing_session,
-                missing_projection.projection_id, grok_configuration.BASE_PATH)
-            local missing_prepared, missing_error, missing_db = prepare(missing_request)
-            if missing_prepared then error("missing admitted Grok base was accepted") end
-            test.eq(missing_error, "retained configuration binding is missing")
-            evidence_has_no_start_or_publication(missing_db, missing_attempt)
-            test.eq(shell("test ! -e " .. quote.posix(missing_home .. "/.grok/config.toml") .. " && printf absent"), "absent")
-            retire(missing_db, missing_attempt)
-            missing_db:release()
-            attempt_of(call(OWNER, "cleanup", {attempt_id = missing_attempt}))
-
-            -- Structural insertion refuses a semantic Bee subtree already in
-            -- the user's source, before publishing the final configuration.
-            for _, collision in ipairs({
-                "[mcp_servers.bee]\nurl = \"http://existing.invalid\"\n",
-                "[mcp_servers]\nbee = { url = \"http://existing.invalid\" }\n",
-                "mcp_servers.bee = { url = \"http://existing.invalid\" }\n",
-                "[\"mcp_servers\".\"bee\"]\nurl = \"http://existing.invalid\"\n",
-                "[mcp_servers.'bee']\nurl = \"http://existing.invalid\"\n",
-            }) do
-                test.eq(shell("printf %s " .. quote.posix(collision) .. " > " .. source_root .. "/.grok/config.toml"), "")
-                local collision_attempt, collision_session = fresh("grok-collision-attempt"), fresh("grok-collision-session")
-                local _, collision_projection = projection(collision_attempt)
-                if type(collision_projection.projection_id) ~= "string" then error("invalid fixture collision_projection.projection_id") end
-                local collision_request = grok_composition_request(collision_attempt, collision_session,
-                    collision_projection.projection_id, grok_configuration.BASE_PATH)
-                local collision_prepared, collision_error, collision_db = prepare(collision_request)
-                if collision_prepared then error("colliding Grok MCP subtree was accepted") end
-                test.is_true(tostring(collision_error):find("compose TOML configuration", 1, true) ~= nil)
-                evidence_has_no_start_or_publication(collision_db, collision_attempt)
-                local _, collision_home = session_path(collision_session)
-                test.eq(shell("test ! -e " .. quote.posix(collision_home .. "/.grok/config.toml") .. " && printf absent"), "absent")
-                retire(collision_db, collision_attempt)
-                collision_db:release()
-                attempt_of(call(OWNER, "cleanup", {attempt_id = collision_attempt}))
-            end
-
-            -- An absent admitted source is an explicit empty base. It composes
-            -- once, publishes once and preserves exactly one MCP allow pair.
-            test.eq(shell("rm -f " .. source_root .. "/.grok/config.toml"), "")
-            local empty_attempt, empty_session = fresh("grok-empty-attempt"), fresh("grok-empty-session")
-            local _, empty_projection, empty_workspace = projection(empty_attempt)
-            if type(empty_projection.projection_id) ~= "string" then error("invalid fixture empty_projection.projection_id") end
-            local empty_request = grok_composition_request(empty_attempt, empty_session,
-                empty_projection.projection_id, grok_configuration.BASE_PATH)
-            local empty_prepared, empty_error, empty_db = prepare(empty_request)
-            if not empty_prepared then error(tostring(empty_error or "compose admitted empty Grok base")) end
-            test.eq(#empty_prepared.arguments, 2)
-            test.eq(empty_prepared.arguments[1], "--allow")
-            test.eq(empty_prepared.arguments[2], "MCPTool(bee__*)")
-            local _, empty_home = session_path(empty_session)
-            local final = shell("cat " .. quote.posix(empty_home .. "/.grok/config.toml"))
-            local sections = 0
-            for _ in final:gmatch("%[mcp_servers%.bee%]") do sections = sections + 1 end
-            test.eq(sections, 1)
-            test.is_true(final:find("http://127.0.0.1:4312/mcp/grok-placement", 1, true) ~= nil)
-            retire(empty_db, empty_attempt)
-            empty_db:release()
-            attempt_of(call(OWNER, "cleanup", {attempt_id = empty_attempt}))
-
-            -- A later attempt may reuse only the exact bytes first admitted for
-            -- this session. Provider-writable retained state is never authority
-            -- to replace a composition base.
-            test.eq(shell("printf 'changed = true\\n' > " .. quote.posix(empty_home .. "/.grok/.bee-global-config.toml")), "")
-            local changed_attempt = fresh("grok-changed-base-attempt")
-            local changed_projection = credential_call("issue_projection", {workspace_id = empty_workspace, name = "login", audience = OWNER,
-                attempt_id = changed_attempt, profile_id = "window", profile_digest = DIGEST, binding_digest = DIGEST,
-                launch_policy_digest = DIGEST, idempotency_key = fresh("grok-composition-projection")})
-            if type(changed_projection.projection_id) ~= "string" then error("invalid fixture changed_projection.projection_id") end
-            local changed_request = grok_composition_request(changed_attempt, empty_session,
-                changed_projection.projection_id, grok_configuration.BASE_PATH)
-            local changed_prepared, changed_error, changed_db = prepare(changed_request)
-            if changed_prepared then error("changed retained Grok base was accepted") end
-            test.eq(changed_error, "configuration base differs from admitted content")
-            evidence_has_no_start_or_publication(changed_db, changed_attempt)
-            retire(changed_db, changed_attempt)
-            changed_db:release()
-            attempt_of(call(OWNER, "cleanup", {attempt_id = changed_attempt}))
-        end)
-        test.it("fences a retained login reply after the attempt is stopped during credential materialization", function()
-            local source = "bee.credentials:codex_login_fixture"
-            admit_login_source(source)
-            local source_root = ".wippy/codex-login-fixture"
-            test.eq(shell("mkdir -p " .. source_root .. " && rm -f " .. source_root .. "/auth.json && mkfifo " .. source_root .. "/auth.json"), "")
-            local workspace = fresh("materialization-fence-workspace")
-            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
-            local session_ref = fresh("materialization-fence-session")
-            local request = retained_launch(OWNER, session_ref, "must-not-run")
-            request.required_cleanup = "process_group"
-            request.required_exit_observation = "independent"
-            local attempt_id = request.attempt_id
-            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER,
-                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
-                launch_policy_digest = DIGEST, idempotency_key = fresh("materialization-fence-key")})
-            request.projections = {projection.projection_id}
-            attempt_of(call(OWNER, "prepare", request))
-
-            -- The fixture writer's FIFO open returns only after the real
-            -- broker has opened its reader; it then stops the runner before
-            -- releasing a valid file projection reply.
-            local fixture, fixture_error = caller(OWNER):async("bee.placement.native:fixture_stop_materialization", {
-                source_ref = source, attempt_id = attempt_id, content = '{"fixture":"fenced"}'})
-            if not fixture then error(tostring(fixture_error or "start materialization fence fixture")) end
-            local start, start_error = caller(OWNER):async("bee.placement.native.binding:start", {attempt_id = attempt_id})
-            if not start then error(tostring(start_error or "start fenced attempt")) end
-            local fixture_reply = assert(bounds.object(await(fixture)))
-            if fixture_reply.ok ~= true then error("materialization fence fixture failed: " .. tostring(fixture_reply.error)) end
-            if fixture_reply.written ~= true then error("materialization fence fixture did not write") end
-            test.eq(fixture_reply.stop_state, "stopping")
-            local started = principals.reply(await(start))
-            -- Both asynchronous calls have returned, so remove the source
-            -- FIFO before any assertion can abort the test and strand it.
-            test.eq(shell("rm -f " .. source_root .. "/auth.json"), "")
-            test.is_true(started.ok)
-            test.eq(attempt_of(started).execution_state, "starting")
-            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = attempt_id})).attempt.execution_state == "exited" end, 3000))
-
-            local stopped = value(call(OWNER, "status", {attempt_id = attempt_id})).attempt
-            test.eq(stopped.execution_state, "exited")
-            test.is_nil(stopped.exit_source)
-            test.is_true(stopped.start_cancelled)
-            local session_key = assert(homes.session_key(OWNER, session_ref))
-            local session_path = assert(homes.ensure_session(session_key))
-            local home = assert(homes.os_path(session_path .. "/home"))
-            test.eq(shell("test ! -e " .. quote.posix(home .. "/.codex/auth.json") .. " && test ! -e " .. quote.posix(home .. "/.codex/config.toml") .. " && printf absent"), "absent")
-            local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
-            local evidence_count = 0
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                evidence_count = evidence_count + 1
-                test.is_false(item.kind == "credential.materialized")
-                test.is_false(item.kind == "configuration.materialized")
-                test.is_false(item.kind == "credential.refused")
-            end
-            local receipt_db = assert(store.open())
-            local counts = assert(receipt_db:query([[SELECT evidence_count,
-                (SELECT COUNT(*) FROM bee_placement_evidence e WHERE e.attempt_id = a.attempt_id) AS actual_count
-                FROM bee_placement_attempts a WHERE attempt_id = ?]], {attempt_id}))
-            receipt_db:release()
-            test.eq(counts[1].evidence_count, counts[1].actual_count)
-            test.is_true(evidence_count > 0)
-
-            -- A partial native identity must not be mistaken for an empty
-            -- execution scope, even with a genuine pre-creation receipt.
-            local db = store.open()
-            if not db then error("store") end
-            local _, corrupt_error = db:execute("UPDATE bee_placement_attempts SET pgid = 99999999 WHERE attempt_id = ?", {attempt_id})
-            db:release()
-            if corrupt_error then error(tostring(corrupt_error)) end
-            local contradictory = call(OWNER, "cleanup", {attempt_id = attempt_id})
-            test.is_false(contradictory.ok)
-            test.eq(contradictory.error and contradictory.error.code, "CONFLICT")
-            db = store.open()
-            if not db then error("store") end
-            local _, restore_error = db:execute("UPDATE bee_placement_attempts SET pgid = NULL WHERE attempt_id = ?", {attempt_id})
-            db:release()
-            if restore_error then error(tostring(restore_error)) end
-            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
-            local successor = retained_launch(OWNER, session_ref, "successor-admitted")
-            successor.required_cleanup = "process_group"
-            successor.required_exit_observation = "independent"
-            local successor_attempt = attempt_of(call(OWNER, "prepare", successor))
-            test.eq(successor_attempt.execution_state, "intended")
-            attempt_of(call(OWNER, "start", {attempt_id = successor_attempt.attempt_id}))
-            if not wait_for(function()
-                return (value(call(OWNER, "status", {attempt_id = successor_attempt.attempt_id})).attempt).execution_state == "exited"
-            end, 8000) then error("successor retained launch did not exit") end
-            attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
-        end)
-        test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
-            admit_credential_source()
-            local workspace = fresh("ws")
-            credential_call("define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = "bee.placement.native:sentinel_key"}})
-            local attempt_id = fresh("attempt")
-            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "anthropic", audience = OWNER, attempt_id = attempt_id, profile_id = "batch",
-                profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")})
-            local request = launch({"sh", "-c", "echo credential:${#ANTHROPIC_API_KEY}"}, "direct_process")
-            request.attempt_id = attempt_id
-            request.projections = {projection.projection_id}
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            test.eq(prepared.execution_state, "intended")
-            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
-            local text = ""
-            local deadline = time.after("10s")
-            while not text:find("credential:", 1, true) do
-                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                if not selected.ok or selected.channel == deadline then error("no output; received: " .. text) end
-                local data = assert(bounds.object(selected.value:payload():data()))
-                if data.data then text = text .. tostring(data.data) end
-                process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = math.floor(data.sequence)})
-            end
-            process.unlisten(outputs)
-            test.is_true(text:find("credential:" .. tostring(#SENTINEL), 1, true) ~= nil)
-            local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
-            local kinds_seen: {string} = {}
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                if tostring(item.detail):find(SENTINEL, 1, true) then error("sentinel leaked into evidence") end
-                kinds_seen[#kinds_seen + 1] = tostring(item.kind)
-            end
-            test.is_true(has(kinds_seen, "credential.materialized"))
-            local db = store.open()
-            if not db then error("store") end
-            local row = store.row(db, assert(bounds.id(attempt_id)))
-            db:release()
-            if tostring(row and row.request_json):find(SENTINEL, 1, true) then error("sentinel leaked into the stored request") end
-            local other_attempt = fresh("attempt")
-            local foreign = launch({"sh", "-c", "true"}, "direct_process")
-            foreign.attempt_id = other_attempt
-            foreign.projections = {projection.projection_id}
-            local scoped = call(OWNER, "prepare", foreign)
-            test.eq(scoped.error and scoped.error.code, "DENIED")
-            local revoked_attempt = fresh("attempt")
-            local revocable = credential_call("issue_projection", {workspace_id = workspace, name = "anthropic", audience = OWNER, attempt_id = revoked_attempt, profile_id = "batch",
-                profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")})
-            local sleeping = launch({"sh", "-c", "sleep 8"}, "direct_process")
-            sleeping.attempt_id = revoked_attempt
-            sleeping.projections = {revocable.projection_id}
-            attempt_of(call(OWNER, "prepare", sleeping))
-            test.eq(attempt_of(call(OWNER, "start", {attempt_id = revoked_attempt})).execution_state, "running")
-            credential_call("revoke", {projection_id = revocable.projection_id})
-            local swept = value(service.sweep())
-            test.is_true((swept.reconciled) >= 1)
-            local recorded = kinds(revoked_attempt)
-            if capability == "process_group" then
-                test.is_true(has(recorded, "credential.revoked"))
-                test.is_false(has(recorded, "grant.revoked"), "credential revocation was also recorded as a resource grant revocation")
-                test.is_true(has(recorded, "stop.requested"))
-            else
-                attempt_of(call(OWNER, "stop", {attempt_id = revoked_attempt, mode = "forced"}))
-            end
-            local reported = value(service.capabilities())
-            local enforcement = assert(bounds.object(reported.revocation_enforcement))
-            test.eq(enforcement.mode, "stop_on_reconcile")
-            test.eq(enforcement.scheduling_delay_ms, 30000)
-            test.eq(enforcement.reconcile_timeout_ms, 5000)
-            test.eq(enforcement.sweep_bound, 64)
-            local missing_attempt = fresh("attempt")
-            local missing = credential_call("issue_projection", {workspace_id = workspace, name = "anthropic", audience = OWNER, attempt_id = missing_attempt, profile_id = "batch",
-                profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")})
-            local unrunnable = launch({"/nonexistent/binary/for/bee", "--flag"}, "direct_process")
-            unrunnable.attempt_id = missing_attempt
-            unrunnable.projections = {missing.projection_id}
-            attempt_of(call(OWNER, "prepare", unrunnable))
-            local failed = call(OWNER, "start", {attempt_id = missing_attempt})
-            test.is_true(failed.ok)
-            test.eq(attempt_of(failed).execution_state, "start_failed")
-            if tostring(attempt_of(failed).start_failure):find(SENTINEL, 1, true) then error("sentinel leaked into the start reply") end
-            local failed_page = value(call(OWNER, "evidence", {attempt_id = missing_attempt, limit = 64}))
-            for _, item in ipairs(principals.objects(failed_page.evidence)) do
-                if tostring(item.detail):find(SENTINEL, 1, true) then error("sentinel leaked into failure evidence") end
-            end
-            local sweeper = process.registry.lookup(service.SWEEPER_NAME)
-            test.not_nil(sweeper)
-        end)
-        test.it("refuses colliding credential destinations without starting a child or leaking bytes", function()
-            admit_credential_source()
-            local workspace = fresh("credential-collision")
-            for _, name in ipairs({"first", "second"}) do
-                credential_call("define", {workspace_id = workspace, name = name, provider = "claude",
-                    source = {kind = "env_variable", ref = "bee.placement.native:sentinel_key"}})
-            end
-            for _, duplicate_projection in ipairs({false, true}) do
-                local request = launch({"sh", "-c", "echo child-must-not-run"}, "direct_process")
-                local attempt_id = request.attempt_id
-                local projections: {string} = {}
-                for _, name in ipairs(duplicate_projection and {"first", "second"} or {"first"}) do
-                    local projection = credential_call("issue_projection", {workspace_id = workspace, name = name, audience = OWNER,
-                        attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
-                        launch_policy_digest = DIGEST, idempotency_key = fresh("projection")})
-                    projections[#projections + 1] = projection.projection_id
-                end
-                request.projections = projections
-                if not duplicate_projection then
-                    (request.environment).ANTHROPIC_API_KEY = "policy-value"
-                end
-                attempt_of(call(OWNER, "prepare", request))
-                local failed = call(OWNER, "start", {attempt_id = attempt_id})
-                test.is_true(failed.ok)
-                test.eq(attempt_of(failed).execution_state, "start_failed")
-                local message = tostring(attempt_of(failed).start_failure)
-                test.is_true(message:find("ANTHROPIC_API_KEY is already assigned", 1, true) ~= nil)
-                test.is_nil((message:find(SENTINEL, 1, true)))
-                local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
-                local refused = false
-                for _, item in ipairs(principals.objects(page.evidence)) do
-                    test.is_true(item.kind ~= "child.started")
-                    test.is_nil((tostring(item.detail):find(SENTINEL, 1, true)))
-                    if item.kind == "credential.refused" then refused = true end
-                end
-                test.is_true(refused)
-                local db = store.open()
-                if not db then error("placement store") end
-                local row = store.row(db, assert(bounds.id(attempt_id)))
-                db:release()
-                test.is_nil((tostring(row and row.request_json):find(SENTINEL, 1, true)))
-            end
-        end)
-    end)
-end
-
-local function startup_tests()
-    test.describe("Supervised placement startup", function()
-        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
-            assert(not call_error, tostring(call_error))
-            local started = attempt_of(principals.reply(raw))
-            test.eq(started.execution_state, "starting")
-            local runner = assert(started.runner)
-            assert(process.monitor(runner))
-            local events = assert(process.events())
-            exits.paused(runner, "startup.pending", {}, function(poll: boolean): unknown
-                local selected
-                if poll then
-                    selected = channel.select({pending:case_receive(), default = true})
-                    if selected.default then return nil end
-                else selected = channel.select({pending:case_receive(), events:case_receive()}) end
-                assert(selected.ok, "startup barrier observation channel closed")
-                if selected.channel == events then return selected.value end
-                local message = selected.value
-                local data = assert(bounds.object(message:payload():data()), "invalid startup barrier")
-                return {kind = "pause", from = tostring(message:from()), step = data.attempt_id == prepared.attempt_id and "startup.pending" or "other"}
-            end)
-            process.unlisten(pending)
-            local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
-            assert(process.send(runner, "bee.test.startup.advance", {}))
-            while true do
-                local status = assert(placement_decode.status(value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))))
-                if status.attempt.execution_state == "running" then break end
-                assert(not status.attempt.start_failure, tostring(status.attempt.start_failure))
-                assert((states:receive()), "startup publication channel closed")
-            end
-            process.unlisten(states)
-            assert(process.terminate(runner))
-            local recorded = kinds(prepared.attempt_id)
-            test.is_true(has(recorded, "runner.start_accepted"))
-            test.is_false(has(recorded, "runner.start_deadline"))
-            test.is_true(has(recorded, "child.started"))
-        end)
-        for _, command in ipairs({"acknowledge", "refuse", "crash"}) do
-            test.it("retains monitored startup until runner " .. command, function()
-                local mode = command == "crash" and "exit" or command
-                local request = launch({"sh", mode}, "direct_process")
-                local prepared = attempt_of(call(OWNER, "prepare", request))
-                local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
-                attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-                local future = assert(caller(OWNER):async("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id}))
-                local accepted = attempt_of(principals.reply(await(future)))
-                test.eq(accepted.execution_state, "starting")
-                local message = assert((pending:receive()), "startup barrier observation channel closed")
-                process.unlisten(pending)
-                local runner = tostring(message:from())
-                local events = assert(process.events())
-                assert(process.monitor(runner))
-                local data = assert(bounds.object(message:payload():data()))
-                local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
-                local runner_ended = false
-                local ok, failure = pcall(function()
-                    test.eq(data.attempt_id, prepared.attempt_id)
-                    test.eq(accepted.runner, runner)
-                    assert(type(data.supervisor) == "string" and type(data.reply_topic) == "string")
-                    local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                    test.eq(current.execution_state, "starting")
-                    test.eq(current.runner, runner)
-                    test.is_false(has(kinds(prepared.attempt_id), "child.started"))
-                    assert(process.send(data.supervisor, data.reply_topic, {started = true}))
-                    assert(process.send(runner, "bee.test.startup.advance", {}))
-                    local expected = command == "acknowledge" and "running" or "start_failed"
-                    while true do
-                        local observed = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                        local acknowledged = command == "crash" or has(kinds(prepared.attempt_id), "runner.ack_received")
-                        if observed.execution_state == expected and acknowledged then break end
-                        local selected = channel.select({states:case_receive(), events:case_receive()})
-                        assert(selected.ok, "startup state observation channel closed")
-                        if selected.channel == events then
-                            local event = selected.value
-                            assert(event.kind ~= process.event.CANCEL, "startup observation cancelled")
-                            if event.kind == process.event.EXIT and tostring(event.from) == runner then runner_ended = true end
-                        end
-                    end
-                    local acknowledgements = 0
-                    for _, kind in ipairs(kinds(prepared.attempt_id)) do
-                        if kind == "runner.ack_received" then acknowledgements = acknowledgements + 1 end
-                    end
-                    test.eq(acknowledgements, command == "crash" and 0 or 1)
-                    local observed = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                    if command == "acknowledge" then
-                        test.eq(observed.attempt_id, prepared.attempt_id)
-                        test.is_nil(observed.start_failure)
-                    elseif command == "refuse" then
-                        test.eq(observed.start_failure, "fixture daemon refused containers/create")
-                    else
-                        local detail = tostring(observed.start_failure)
-                        test.is_true(detail:find("runner exited before acknowledging startup", 1, true) ~= nil)
-                        test.is_true(detail:find("fixture runner crashed before acknowledgement", 1, true) ~= nil)
-                    end
-                end)
-                if command == "acknowledge" or not ok then process.terminate(runner) end
-                while not runner_ended do
-                    local ended = assert((events:receive()), "startup supervision channel closed")
-                    assert(ended.kind ~= process.event.CANCEL, "startup observation cancelled")
-                    if ended.kind == process.event.EXIT and tostring(ended.from) == runner then runner_ended = true end
-                end
-                process.unlisten(states)
-                process.unmonitor(runner)
-                if not ok then error(tostring(failure)) end
-            end)
-        end
-    end)
-end
-
-local function cleanup_tests()
-    test.describe("Native placement cleanup", function()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
-        test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
-            local ids: {string} = {}
-            for index = 1, 3 do
-                -- Keep the children live until this case stops them. Their
-                -- liveness must not depend on how fast a loaded host sweeps.
-                local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
-                ids[index] = request.attempt_id
-                attempt_of(call(OWNER, "prepare", request))
-                test.eq(attempt_of(call(OWNER, "start", {attempt_id = ids[index]})).execution_state, "running")
-            end
-            -- Each sweep takes at most the bound; every live attempt is reached
-            -- within a bounded number of sweeps, and an attempt a sweep settled
-            -- as uncertain or exited is not swept again.
-            local previous_bound = service.SWEEP_BOUND
-            service.SWEEP_BOUND = 2
-            local db = assert(store.open())
-            local rows = assert(db:query("SELECT COUNT(*) AS total FROM bee_placement_attempts"))
-            db:release()
-            local retained = assert(bounds.integer(rows[1].total))
-            local sweep_bound = math.ceil(retained / service.SWEEP_BOUND)
-            local function touched_count(): integer
-                local total = 0
-                for _, id in ipairs(ids) do
-                    local page = value(call(OWNER, "evidence", {attempt_id = id, limit = 64}))
-                    for _, item in ipairs(principals.objects(page.evidence)) do
-                        if tostring(item.kind):find("^reconcile%.") then
-                            total = total + 1
-                            break
-                        end
-                    end
-                end
-                return total
-            end
-            local sweeps = 0
-            while sweeps == 0 or (touched_count() < 3 and sweeps < sweep_bound) do
-                local swept = value(service.sweep())
-                test.is_true((swept.reconciled) <= 2)
-                for _, outcome in ipairs(principals.objects(swept.outcomes)) do
-                    test.is_true(outcome.ok == true, "sweep " .. tostring(outcome.attempt_id) .. ": " .. tostring(outcome.code))
-                end
-                sweeps = sweeps + 1
-            end
-            service.SWEEP_BOUND = previous_bound
-            test.eq(touched_count(), 3)
-            -- The independently scheduled sweeper may have reconciled a row
-            -- before this process calls sweep, including all three rows.
-            local before = process.registry.lookup(service.SWEEPER_NAME)
-            if not before then error("sweeper is not registered") end
-            assert(process.terminate(tostring(before)))
-            local restarted = wait_for(function()
-                local now = process.registry.lookup(service.SWEEPER_NAME)
-                return now ~= nil and tostring(now) ~= tostring(before)
-            end, 10000)
-            test.is_true(restarted)
-            for _, id in ipairs(ids) do attempt_of(call(OWNER, "stop", {attempt_id = id, mode = "forced"})) end
-        end)
-        if capability == "process_group" then
-            test.it("records a refused cleanup with its reason", function()
-                local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "process_group")))
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                if not wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-                end, 8000) then error("grouped attempt did not exit") end
-                -- An identity read that found no process group leaves group
-                -- absence unprovable; a continuation waiting on this cleanup
-                -- must find the refusal and its reason in the ledger.
-                local db = store.open()
-                if not db then error("store") end
-                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET pgid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
-                db:release()
-                if clear_error then error("clear process group: " .. tostring(clear_error)) end
-                local refused = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-                test.eq(refused.error and refused.error.code, "CONFLICT")
-                local reason = "cleanup scope process_group is not proven gone: no process group recorded"
-                test.eq(refused.error and refused.error.message, reason)
-                local recorded = false
-                local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
-                for _, item in ipairs(principals.objects(page.evidence)) do
-                    if item.kind == "cleanup.refused" and item.detail == reason then recorded = true end
-                end
-                test.is_true(recorded, table.concat(kinds(prepared.attempt_id), ","))
-                local after = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                test.eq(after.cleanup_state, "pending")
-            end)
-            test.it("proves absence from identity after the runner is lost", function()
-                local request = launch({"sh", "-c", "sleep 8"}, "process_group")
-                local prepared = attempt_of(call(OWNER, "prepare", request))
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                local db = store.open()
-                if not db then error("store") end
-                local row = store.row(db, prepared.attempt_id)
-                local runner = tostring(row and row.runner_pid)
-                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET runner_pid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
-                db:release()
-                if clear_error then error("clear runner: " .. tostring(clear_error)) end
-                local before = value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))
-                local live = before.liveness
-                if not live.observed or live.alive ~= true then error("running child not identified alive: " .. live.detail) end
-                test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "running")
-                process.terminate(runner)
-                if not wait_for(function() return attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state == "exited" end, 5000) then
-                    error("runner loss did not end the child: " .. table.concat(kinds(prepared.attempt_id), ","))
-                end
-                test.is_true(has(kinds(prepared.attempt_id), "reconcile.absent"))
-                local absent = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                test.eq(absent.exit_source, "reconcile")
-                local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-                test.eq(cleaned.cleanup_state, "complete")
-                test.is_true(has(kinds(prepared.attempt_id), "cleanup.complete"))
-            end)
-            test.it("removes the grandchild with the group on stop", function()
-                local request = launch({"sh", "-c", "sleep 8 & echo child:$!; wait"}, "process_group")
-                local prepared = attempt_of(call(OWNER, "prepare", request))
-                local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-                call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
-                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                local grandchild = ""
-                local deadline = time.after("10s")
-                while grandchild == "" do
-                    local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
-                    if not selected.ok or selected.channel == deadline then break end
-                    local data = assert(bounds.object(selected.value:payload():data()))
-                    grandchild = tostring(data.data or ""):match("child:(%d+)") or ""
-                end
-                test.neq(grandchild, "")
-                local stopped = call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
-                if not stopped.ok then
-                    local status = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                    local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
-                    local lines: {string} = {}
-                    for _, item in ipairs(principals.objects(page.evidence)) do lines[#lines + 1] = tostring(item.kind) .. ": " .. tostring(item.detail) end
-                    error("stop refused: " .. tostring(stopped.error and stopped.error.message) .. "; execution " .. status.execution_state .. " exit " .. tostring(status.exit and status.exit.code) .. " exit_source " .. tostring(status.exit_source) .. " grandchild alive " .. tostring(alive(grandchild)) .. "; evidence: " .. table.concat(lines, " | "))
-                end
-                if not wait_for(function()
-                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
-                end, 8000) then error("forced stop did not end the child") end
-                test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "exited")
-                test.is_true(wait_for(function() return not alive(grandchild) end, 5000))
-                -- The stop intent is on record before the runner's exit
-                -- observation, however fast the runner sees the kill land.
-                local order: {string} = {}
-                for _, item in ipairs(principals.objects(value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64})).evidence)) do
-                    if item.kind == "stop.requested" or item.kind == "child.exited" then order[#order + 1] = tostring(item.kind) end
-                end
-                test.eq(table.concat(order, ","), "stop.requested,child.exited")
-                local cleaned = attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-                test.eq(cleaned.cleanup_state, "complete")
-                process.unlisten(outputs)
-            end)
-        end
-    end)
-end
-local function suite(define_tests: () -> ())
-    return function(options)
-        local originals: {{[string]: unknown}} = {}
-        for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
-        resource_mode("host_configured")
-        admit_root("bee.placement.native.env:placement_admitted_roots")
-        admit_root("bee.resources.env:resource_roots")
-        activate_fixture_binding()
-        local cases = test.run_cases(define_tests)
-        local ok, result = pcall(cases, options)
-        local changes = assert(registry.snapshot()):changes()
-        for _, original in ipairs(originals) do changes:update(registry_input(original)) end
-        assert(changes:apply())
-        if not ok then error(tostring(result)) end
-        return result
-    end
-end
-
-return {run = suite(home_tests), execution = suite(execution_tests), configuration = suite(configuration_tests),
-    output = suite(output_tests), credentials = suite(credentials_tests), startup = suite(startup_tests), cleanup = suite(cleanup_tests)}
+return {run = native_fixture.suite(home_tests)}

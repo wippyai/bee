@@ -391,6 +391,53 @@ entries:
     fixture: true
     executables: {}
     environment: {}
+- name: native_fixture
+  kind: library.lua
+  source: file://native_fixture.lua
+  meta:
+    type: test_support
+  modules:
+  - funcs
+  - security
+  - process
+  - channel
+  - time
+  - registry
+  - exec
+  - fs
+  - hash
+  - json
+  - sql
+  imports:
+    exits: bee.harness.catalog:exits
+    placement_decode: bee.placement:decode
+    bounds: bee.values:bounds
+    principals: bee.test.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    grok_configuration: bee.driver.grok.binding:configuration
+    grok_launch: bee.driver.grok.binding:launch
+    claude_launch: bee.driver.claude.binding:launch
+    codex_launch: bee.driver.codex.binding:launch
+    agy_launch: bee.driver.agy.binding:launch
+    muse_launch: bee.driver.muse.binding:launch
+    opencode_launch: bee.driver.opencode.binding:launch
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.profiles:preferences
+    test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native.env:resources
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
+    homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
 - name: native_test
   kind: function.lua
   source: file://native_test.lua
@@ -451,9 +498,10 @@ entries:
     output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.binding:quote
     types: bee.placement:types
+    native_fixture: bee.placement.native:native_fixture
 - name: native_startup_test
   kind: function.lua
-  source: file://native_test.lua
+  source: file://native_startup_test.lua
   method: startup
   meta:
     type: test
@@ -511,9 +559,10 @@ entries:
     quote: bee.driver.binding:quote
     types: bee.placement:types
     exits: bee.harness.catalog:exits
+    native_fixture: bee.placement.native:native_fixture
 - name: native_execution_test
   kind: function.lua
-  source: file://native_test.lua
+  source: file://native_execution_test.lua
   method: execution
   meta:
     type: test
@@ -571,9 +620,10 @@ entries:
     quote: bee.driver.binding:quote
     types: bee.placement:types
     exits: bee.harness.catalog:exits
+    native_fixture: bee.placement.native:native_fixture
 - name: native_configuration_test
   kind: function.lua
-  source: file://native_test.lua
+  source: file://native_configuration_test.lua
   method: configuration
   meta:
     type: test
@@ -631,9 +681,10 @@ entries:
     quote: bee.driver.binding:quote
     types: bee.placement:types
     exits: bee.harness.catalog:exits
+    native_fixture: bee.placement.native:native_fixture
 - name: native_output_test
   kind: function.lua
-  source: file://native_test.lua
+  source: file://native_output_test.lua
   method: output
   meta:
     type: test
@@ -691,9 +742,10 @@ entries:
     quote: bee.driver.binding:quote
     types: bee.placement:types
     exits: bee.harness.catalog:exits
+    native_fixture: bee.placement.native:native_fixture
 - name: native_credentials_test
   kind: function.lua
-  source: file://native_test.lua
+  source: file://native_credentials_test.lua
   method: credentials
   meta:
     type: test
@@ -751,9 +803,10 @@ entries:
     quote: bee.driver.binding:quote
     types: bee.placement:types
     exits: bee.harness.catalog:exits
+    native_fixture: bee.placement.native:native_fixture
 - name: native_cleanup_test
   kind: function.lua
-  source: file://native_test.lua
+  source: file://native_cleanup_test.lua
   method: cleanup
   meta:
     type: test
@@ -811,6 +864,7 @@ entries:
     quote: bee.driver.binding:quote
     types: bee.placement:types
     exits: bee.harness.catalog:exits
+    native_fixture: bee.placement.native:native_fixture
 - name: provider_configuration_test
   kind: function.lua
   source: file://provider_configuration_test.lua

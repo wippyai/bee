@@ -120,12 +120,13 @@ local function boundary()
         for index, cause in ipairs({
             'failed to create container: Post "http://docker/v1.45/containers/create": context deadline exceeded',
             'containers/create: HTTP 500: daemon create refused',
+            'failed to start container: unable to find user 99999999999999999999: no matching entries in passwd file',
         }) do
-            test.it("preserves failed create cause " .. tostring(index) .. " in status and session failure", function()
+            test.it("preserves failed launch cause " .. tostring(index) .. " in status and session failure", function()
                 local id = "docker-failed-" .. tostring(index)
                 value(call("prepare", request(id)))
                 local db = assert(store.open())
-                assert(store.transition(db, id, {execution = "starting", evidence = {kind = "child.creating", detail = "containers/create dispatched"}}).ok)
+                assert(store.transition(db, id, {execution = "starting", evidence = {kind = "child.creating", detail = "executor startup dispatched"}}).ok)
                 local recorded = materialization.fail_start(db, id, cause, true)
                 test.is_true(recorded.ok)
                 local attempt = assert(store.attempt(db, id))
@@ -183,8 +184,10 @@ local function run()
             local attempt = status.attempt
             test.eq(attempt.execution_state, "start_failed")
             local reason = assert(attempt.start_failure)
-            test.is_true(reason:find("failed to start container", 1, true) ~= nil)
-            test.is_true(reason:find("user", 1, true) ~= nil)
+            test.is_true(reason:find("failed to start container", 1, true) ~= nil,
+                "expected a daemon start refusal; retained failure: " .. reason)
+            test.is_true(reason:find("user", 1, true) ~= nil,
+                "expected the invalid user refusal; retained failure: " .. reason)
             test.eq(value(reply).start_failure, reason)
             test.is_nil(attempt.exit)
             test.is_nil(attempt.exit_source)

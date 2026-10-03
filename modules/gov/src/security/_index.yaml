@@ -15,8 +15,8 @@ entries:
   meta:
     comment: Settings may enter the private host profile writer; the facade checks its broker-minted application identity
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "*") || (action == "security.scope.create" && resource == "*") || (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")'
-    actions: [funcs.security, security.actor.get, security.actor.create, security.scope.create, security.policy_group.get, funcs.call]
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "bee.gov.super_edit") || (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")'
+    actions: [funcs.security, security.actor.get, security.actor.create, security.policy_group.get, funcs.call]
     resources: [security, '*', bee.gov.security:super_edit_execution_scope, bee.gov.binding:super_edit_backend_call]
     effect: allow
 - name: super_edit_execution_policy

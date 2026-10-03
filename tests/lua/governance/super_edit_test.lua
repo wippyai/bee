@@ -9,8 +9,37 @@ local registry = require("registry")
 
 local KERNEL = {revision = 1, namespaces = {"bee.gov", "bee.security"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}}
 local WORKSPACE = "0123456789abcdef0123456789abcdef"
+local function settings_scope(): security.Scope
+    local policies: {security.Policy} = {}
+    for _, id in ipairs({"bee.security:base_app_policy", "bee.security:app_boundary_policy",
+        "bee.security:core_spawn_boundary", "bee.security.storage:workspace_storage_boundary"}) do
+        policies[#policies + 1] = assert(security.policy(id))
+    end
+    local admission = assert(registry.get("bee.security:application_admission"))
+    local data = assert(bounds.object(admission.data))
+    local found = false
+    for _, binding in ipairs(principals.objects(data.bindings)) do
+        if binding.definition_id == "bee.settings.app:app" then
+            found = true
+            for _, id in ipairs(principals.strings(binding.policies)) do
+                policies[#policies + 1] = assert(security.policy(id))
+            end
+        end
+    end
+    assert(found, "Settings admission missing")
+    return assert(security.new_scope(policies))
+end
 local function define_tests()
     test.describe("super-edit host profiles", function()
+        test.it("runs the Settings facade under its admitted application boundary", function()
+            local identity = assert(principal.value(WORKSPACE, "settings-instance", "bee.settings.app:app", "1", 1))
+            local executor = assert(funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+                :with_scope(settings_scope()))
+            local raw, err = executor:call("bee.gov.binding:super_edit_call", {
+                operation = "enable", workspace_id = WORKSPACE, input = "invalid"})
+            test.is_nil(err, tostring(err))
+            test.eq(assert(bounds.object(raw)).code, "INVALID")
+        end)
         test.it("accepts the broker-minted Settings origin and preserves backend refusals", function()
             local identity = assert(principal.value(WORKSPACE, "settings-instance", "bee.settings.app:app", "1", 1))
             local actor = assert(security.new_actor(identity.id, identity.metadata))
@@ -25,7 +54,8 @@ local function define_tests()
         test.it("admits the host-selected Settings edit grant", function()
             local original = assert(registry.get("bee.env:gov_activation_profiles"))
             local identity = assert(principal.value(WORKSPACE, "settings-instance", "bee.settings.app:app", "1", 1))
-            local executor = assert(funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata))))
+            local executor = assert(funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+                :with_scope(settings_scope()))
             local raw, err = executor:call("bee.gov.binding:super_edit_call", {
                 operation = "enable", workspace_id = WORKSPACE, input = "bee.settings.app --for 5m"})
             local policy = assert(security.policy("bee.security.gateway:gateway_tool_delivery_policy"))

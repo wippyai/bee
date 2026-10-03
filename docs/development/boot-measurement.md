@@ -22,6 +22,14 @@ the current executable against a stopped state created by the previous
 executable. States, executable digests, PTY output, original log timestamps and
 results remain available for inspection. The harness stops every owner it starts.
 The previous executable must have a different digest.
+Boot checks classify startup from output captured before cleanup. Stopping a
+retained owner closes its viewport and revokes the attached physical client's
+mount; that client can then report `terminal mount expired or revoked`.
+An error caused by the check's own shutdown does not establish a startup failure.
+Keep startup and cleanup captures separately, and preserve any startup refusal
+even when a desktop frame also appears. The external owner-copy harness accepts
+an optional source-state argument for disposable fixtures; exercise it with
+`python3 tests/owner_boot_check_regression.py /path/to/owner_boot_check.sh`.
 The existing runtime cache-statistics diagnostic records compile/typecheck hits
 and misses on owner shutdown; a fresh owner's counters also include the attach
 sample performed during that same owner lifetime.

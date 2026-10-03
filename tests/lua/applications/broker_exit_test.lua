@@ -8,23 +8,25 @@ local channel = require("channel")
 local security = require("security")
 local time = require("time")
 local appearance = require("appearance")
+local fixture = require("fixture")
 
 local WORKSPACE = string.rep("c", 32)
 local DEFINITION = "bee.console.app:app"
 
 local function define_tests()
     test.describe("Workspace broker application exit", function()
-        test.it("reports a clean return of a ready application as closed", function()
+        test.it("reports a clean return of a ready application as closed", fixture.case(function(scope: fixture.State)
             local owner = tostring(process.pid())
-            local events = assert(process.events())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local events = scope.events
+            local catalogs = scope.catalogs
+            local replies = scope.replies
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
+            scope.brokers[broker] = true
             assert(catalogs:receive():from() == broker)
 
             local request_id = "broker-exit-open"
@@ -58,10 +60,9 @@ local function define_tests()
                 assert(received.ok and received.channel == events, "broker did not exit")
                 local event = received.value
                 exited = event.kind == process.event.EXIT and tostring(event.from) == broker
+                if exited then scope.brokers[broker] = nil end
             end
-            process.unlisten(catalogs)
-            process.unlisten(replies)
-        end)
+        end))
     end)
 end
 return test.run_cases(define_tests)

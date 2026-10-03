@@ -105,11 +105,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local checkpoint_waiters: {[string]: Checkpoint} = {}
     local events = assert(process.events())
     assert(process.monitor(owner))
-    -- Effective application admission can change through process-local
-    -- registry overlays, which do not advance registry history and expose no
-    -- change subscription. Requests refresh synchronously; this one-shot check
-    -- compares lightweight registry and activation revisions before projecting
-    -- the full catalog.
+    -- Overlay changes have no history subscription; requests and the admission
+    -- poll compare registry/activation revisions before projecting the catalog.
     local next_admission_check = now() + 1
     local admission_follower = catalog.follower(nil)
     local admission: {current: Admission?, error: string} = {error = ""}
@@ -371,7 +368,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             transition(item, "force_stop")
         end
     end
-    -- Reconcile admitted definitions through the existing execution replacement.
     -- The last admission this broker applied. A failed refresh withdraws
     -- admission.current, but the families it admitted stay fenceable until a
     -- later refresh reads a consistent catalog.
@@ -810,9 +806,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         return false
     end
-    -- A definition change replaces only the execution behind the existing
-    -- viewport. Controller and observer mounts, geometry, page, logical IDs
-    -- and the last acknowledged checkpoint therefore remain continuous.
+    -- Replacement retains the viewport, attachments, logical IDs and checkpoint.
     local function start_replacement(item: Instance)
         local pending = item.replacement
         if cleanup_request ~= "" or not pending or not pending.exited or has_checkpoint(item.execution_pid) then return end
@@ -941,6 +935,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             item.close_request_id = nil
             item.attempts = item.attempts + 1
             local _, err = process.terminate(item.execution_pid)
+            -- A local producer can leave the scheduler before its monitored EXIT.
+            -- As in execution.stop, only denied authority settles a stop error.
+            if err and err:kind() ~= errors.PERMISSION_DENIED then
+                item.state.deadline = 0; return
+            end
             if err or item.attempts >= 3 then
                 -- Do not claim EXIT or lose ownership when termination fails.
                 for _, waiter in ipairs(item.waiters) do

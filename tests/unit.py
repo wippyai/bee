@@ -20,7 +20,12 @@ SLOW = {
     "bee.harness.catalog:carrier_test": 80.0,
     "bee.harness.catalog:carrier_stream_test": 90.0,
     "bee.harness.catalog:carrier_drain_test": 65.0,
-    "bee.placement.native:native_test": 25.0,
+    "bee.placement.native:native_test": 5.0,
+    "bee.placement.native:native_execution_test": 5.0,
+    "bee.placement.native:native_configuration_test": 5.0,
+    "bee.placement.native:native_output_test": 5.0,
+    "bee.placement.native:native_credentials_test": 5.0,
+    "bee.placement.native:native_cleanup_test": 5.0,
 }
 DEFAULT_WEIGHT = 1.0
 SHARDS = 4

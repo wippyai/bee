@@ -429,8 +429,11 @@ local function has(list: {string}, wanted: string): boolean
     end
     return false
 end
-local function define_tests()
-    test.describe("Native placement", function()
+local function home_tests()
+    test.describe("Native placement homes and admission", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("coalesces short reads within the bounded output chunk and preserves stream bytes", function()
             local buffers = output_buffer.new()
             local source = string.rep("x", output_buffer.MAX_BYTES * 2 + 17)
@@ -841,13 +844,6 @@ local function define_tests()
             executor:release()
             if not ok then error(tostring(failure)) end
         end)
-        resource_mode("host_configured")
-        admit_root("bee.placement.native.env:placement_admitted_roots")
-        admit_root("bee.resources.env:resource_roots")
-        activate_fixture_binding()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
         test.it("stops an unstarted retained attempt without holding its session or creating a child", function()
             for _, required in ipairs({"direct_process", "process_group"}) do
                 if types.satisfies(capability, required) then
@@ -1091,6 +1087,14 @@ local function define_tests()
                 test.eq(grouped.error and grouped.error.code, "UNSUPPORTED_CAPABILITY")
             end
         end)
+    end)
+end
+
+local function execution_tests()
+    test.describe("Native placement execution", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("refuses a duplicate runner before it can materialize the claimed attempt", function()
             local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "direct_process")))
             local db, open_error = store.open()
@@ -1479,6 +1483,14 @@ local function define_tests()
             end
             process.unlisten(outputs)
         end)
+    end)
+end
+
+local function configuration_tests()
+    test.describe("Native placement configuration", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("prepares the planner's default options without a configuration conflict", function()
             local policy = assert(registry.get(NO_PROVIDER_POLICY))
             local policy_data = assert(bounds.object(policy.data))
@@ -2135,6 +2147,14 @@ local function define_tests()
             test.eq(blocked.error and blocked.error.code, "CONFLICT")
             test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
         end)
+    end)
+end
+
+local function output_tests()
+    test.describe("Native placement output", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("drains for a bounded time after an independently observed exit while descendants hold the pipes", function()
             local request = launch({"sh", "-c", "sleep 2 & echo hi"}, "direct_process")
             request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 300, retain_ms = 300}
@@ -2187,12 +2207,21 @@ local function define_tests()
             process.unlisten(exits)
         end)
         test.it("records unacknowledged output as lost once the retention deadline passes after exit", function()
-            local request = launch({"sh", "-c", "echo one; echo two"}, "direct_process")
+            local request = launch({"sh", "-c", "sleep 2; echo one; echo two"}, "direct_process")
             request.timeouts = {start_ms = 10000, stop_grace_ms = 500, retain_ms = 300}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            time.sleep("1500ms")
+            local events = assert(process.events())
+            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            local runner = assert(started.runner, "retained runner identity")
+            assert(process.monitor(runner))
+            local deadline = time.after("10s")
+            while true do
+                local selected = channel.select({events:case_receive(), deadline:case_receive()})
+                assert(selected.ok and selected.channel == events, "retention did not finish the runner")
+                local event = selected.value
+                if event.kind == process.event.EXIT and tostring(event.from) == runner then break end
+            end
             local recorded = kinds(prepared.attempt_id)
             test.is_true(has(recorded, "child.exited"))
             test.is_true(has(recorded, "output.lost"))
@@ -2211,8 +2240,17 @@ local function define_tests()
             request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 100, retain_ms = 300}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            time.sleep("1500ms")
+            local events = assert(process.events())
+            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            local runner = assert(started.runner, "retained runner identity")
+            assert(process.monitor(runner))
+            local deadline = time.after("10s")
+            while true do
+                local selected = channel.select({events:case_receive(), deadline:case_receive()})
+                assert(selected.ok and selected.channel == events, "retention did not finish the runner")
+                local event = selected.value
+                if event.kind == process.event.EXIT and tostring(event.from) == runner then break end
+            end
             local recorded = kinds(prepared.attempt_id)
             test.is_true(has(recorded, "child.exited"))
             test.is_true(has(recorded, "output.lost"))
@@ -2392,6 +2430,14 @@ local function define_tests()
             end, 8000) then error("revoke_all did not stop the child: " .. table.concat(kinds(attempt_id), ",")) end
             resource_mode("host_configured")
         end)
+    end)
+end
+
+local function credentials_tests()
+    test.describe("Native placement credentials", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("refuses file credentials before intent without a selected retained home", function()
             local source = "bee.credentials:codex_login_fixture"
             admit_login_source(source)
@@ -3050,6 +3096,14 @@ local function define_tests()
                 test.is_nil((tostring(row and row.request_json):find(SENTINEL, 1, true)))
             end
         end)
+    end)
+end
+
+local function cleanup_tests()
+    test.describe("Native placement cleanup", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
             local ids: {string} = {}
             for index = 1, 3 do
@@ -3194,14 +3248,23 @@ local function define_tests()
         end
     end)
 end
-local cases = test.run_cases(define_tests)
-return {run = function(options)
-    local originals: {{[string]: unknown}} = {}
-    for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
-    local ok, result = pcall(cases, options)
-    local changes = assert(registry.snapshot()):changes()
-    for _, original in ipairs(originals) do changes:update(registry_input(original)) end
-    assert(changes:apply())
-    if not ok then error(tostring(result)) end
-    return result
-end}
+local function suite(define_tests: () -> ())
+    local cases = test.run_cases(define_tests)
+    return function(options)
+        local originals: {{[string]: unknown}} = {}
+        for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+        resource_mode("host_configured")
+        admit_root("bee.placement.native.env:placement_admitted_roots")
+        admit_root("bee.resources.env:resource_roots")
+        activate_fixture_binding()
+        local ok, result = pcall(cases, options)
+        local changes = assert(registry.snapshot()):changes()
+        for _, original in ipairs(originals) do changes:update(registry_input(original)) end
+        assert(changes:apply())
+        if not ok then error(tostring(result)) end
+        return result
+    end
+end
+
+return {run = suite(home_tests), execution = suite(execution_tests), configuration = suite(configuration_tests),
+    output = suite(output_tests), credentials = suite(credentials_tests), cleanup = suite(cleanup_tests)}

@@ -1,4 +1,4 @@
--- MIT. An elapsed deadline does not erase already delivered process exits.
+-- MIT. Observation closure preserves already delivered process exits.
 local test = require("test")
 local process = require("process")
 local exits = require("exits")
@@ -7,7 +7,7 @@ local function exit(pid: string): process.Event
 end
 local function define_tests()
     test.describe("Carrier exit collection", function()
-        test.it("collects both queued exits when the scheduler selects an elapsed deadline", function()
+        test.it("collects both queued exits when observation ends", function()
             local queued: {process.Event} = {exit("old"), exit("replacement")}
             local outcomes = exits.collect({"old", "replacement"}, {}, function(poll: boolean): process.Event?
                 if poll then return table.remove(queued, 1) end
@@ -16,7 +16,7 @@ local function define_tests()
             test.eq(assert(outcomes.old.value).pid, "old")
             test.eq(assert(outcomes.replacement.value).pid, "replacement")
         end)
-        test.it("drains an exit delivered as the deadline is selected and keeps other results", function()
+        test.it("drains an exit delivered as observation ends and keeps other results", function()
             local arrived = false
             local queued: {process.Event} = {}
             local saved: {[string]: exits.Outcome} = {}

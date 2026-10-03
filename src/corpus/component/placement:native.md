@@ -136,7 +136,9 @@ or changing the user's global configuration directories.
 
 Private attempt homes are created empty. A private `provider_home` declaration
 selects the provider's machine-home source paths, private destinations, runtime
-home variables and whether its login can be returned after exit. The credential
+home variables and whether its login can be returned after exit. The declaration's
+file list may be empty for an account-free CLI; its private home receives no
+ambient file projections. The credential
 broker supplies bounded bytes only for source paths admitted by the host;
 placement compares every returned login and setup path with the driver
 declaration before creating files. It never scans the source home or copies

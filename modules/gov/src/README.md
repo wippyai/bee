@@ -370,7 +370,9 @@ prepared or authorized activation.
 
 A host may select `workspace_drivers` in its existing activation and publication
 profile configuration. Local `driver.<name>` overlays own `bee.driver.<name>`
-child namespaces; they do not create application admission records. The same
+child namespaces; they do not create application admission records. Publication
+selects a component from the staging owner's authored overlay list and requires
+the host's driver publication rule or an explicit profile. The same
 freeze, delivery, review, exact approval and activation ledger applies. A driver
 requirement may append its own `harness.driver` binding to
 `bee.harness.launch:harness_activation` at `.bindings +=`; other host targets
@@ -380,6 +382,10 @@ reader. The shared driver resolver combines the original host selection with
 bindings derived from consumed desired artifacts in the existing activation
 store whose exact code overlays are present. It adds no stored record or second
 catalog; boot recovery restores approved code before it becomes selectable.
+The reader checks the exact owner selected by the host profile against each
+consumed desired artifact. An explicit profile may choose a different owner ID;
+owner spelling supplies no admission authority. Store read failures retain their
+reported cause.
 Preflight and recovery decode the exact owned append declaration through
 `bee.gov.types:driver_admission`. Activation retains this measurement when normalizing the registry
 revision for durable approval evidence. That host evidence admits the

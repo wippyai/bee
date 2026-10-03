@@ -114,7 +114,7 @@ local function publish_intent(raw: unknown, profile: Profile, node_id: string,
     if type(bytes) ~= "string" or type(digest) ~= "string" then
         return nil, nil, nil, "immutable application admission blob is incomplete"
     end
-    local measured, admission_error = application_admission.decode(bytes, digest)
+    local measured, admission_error = application_admission.decode(bytes, digest, intent.application_admission_generation)
     if not measured then return nil, nil, nil, tostring(admission_error) end
     local record = measured.record
     if record.workspace_id ~= workspace_id or record.overlay_owner ~= profile.overlay_owner
@@ -122,7 +122,7 @@ local function publish_intent(raw: unknown, profile: Profile, node_id: string,
         or record.artifact_digest ~= intent.artifact_digest then
         return nil, nil, nil, "immutable application admission does not match publication identity"
     end
-    return intent, entries, {bytes = measured.bytes, digest = measured.digest}, nil
+    return intent, entries, {bytes = measured.bytes, digest = measured.digest, identity_generation = intent.application_admission_generation}, nil
 end
 
 local function same_intent(before: Object, after: Object): boolean
@@ -217,7 +217,7 @@ function M.call(raw: unknown): Result
             local raw_catalog = registry.get("bee.security.capability:capability_catalog")
             local vocabulary, catalog_error = capability_model.decode(raw_catalog)
             local record, record_error = vocabulary and capability_grants.decode(installed, active.overlay_owner,
-                workspace_id, identity.definition_id, vocabulary) or nil
+                workspace_id, (bounds.object(installed) and bounds.object((bounds.object(installed)).data) or {}).application, vocabulary) or nil
             local live, live_error = false, nil
             if record then
                 live, live_error = capability_grants.live(record, function(id: string): unknown return registry.get(id) end)

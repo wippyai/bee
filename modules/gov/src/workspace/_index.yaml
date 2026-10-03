@@ -18,3 +18,5 @@ entries:
 - name: workspace_applications
   kind: library.lua
   source: file://workspace_applications.lua
+  imports:
+    bounds: bee.values:bounds

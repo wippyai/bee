@@ -301,6 +301,7 @@ entries:
   - hash
   - time
   imports:
+    artifact: bee.gov.delivery:artifact
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     transaction: bee.persist.persist:transaction

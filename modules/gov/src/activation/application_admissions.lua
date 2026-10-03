@@ -45,23 +45,16 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
     node_id: string): {Measurement}
     local records: {Measurement} = {}
     local by_owner: {[string]: Measurement} = {}
-    local entries, find_error = pinned:find({[".kind"] = "registry.entry"})
+    local entries, find_error = pinned:find({[".kind"] = "registry.entry", ["meta.type"] = governed_admission.SCHEMA})
     if find_error then error("Read governed application admissions: " .. tostring(find_error)) end
     for _, entry in ipairs(entries) do
-        local data = bounds.object(entry.data)
-        if data and data.schema_revision == governed_admission.SCHEMA then
-            local measured, measured_error = governed_admission.measure(data)
-            if not measured or (measured.id ~= entry.id
-                and governed_admission.prior_id(measured.record.overlay_owner) ~= entry.id) then
-                error("Invalid governed application admission: " .. tostring(measured_error))
-            end
-            if measured.record.workspace_id == workspace_id then
-                local prior = by_owner[measured.record.overlay_owner]
-                if prior and prior.digest ~= measured.digest then error("Conflicting governed application admissions") end
-                local current = measured.id == entry.id
-                measured.id = entry.id
-                if not prior or current then by_owner[measured.record.overlay_owner] = measured end
-            end
+        local measured, measured_error = governed_admission.measure(entry.data, entry.meta and entry.meta.identity_generation)
+        if not measured then error("Invalid governed application admission: " .. tostring(measured_error)) end
+        if measured.id ~= entry.id then error("Governed admission identity does not match its declared generation: " .. entry.id) end
+        if measured.record.workspace_id == workspace_id then
+            local prior = by_owner[measured.record.overlay_owner]
+            if prior and prior.digest ~= measured.digest then error("Conflicting governed application admissions") end
+            if not prior then by_owner[measured.record.overlay_owner] = measured end
         end
     end
     for _, item in pairs(by_owner) do records[#records + 1] = item end
@@ -78,7 +71,7 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
             local old_grant = capability_grants.prior_record_id(record.overlay_owner)
             installed = old_grant and lookup(old_grant) or nil
         end
-        local application_id = identity and identity.definition_id or nil
+        local application_id = identity and record.bindings[1] and record.bindings[1].definition_id or nil
         if not installed and not identity then
             local package_entry = configuration.packages
                 and activation_profiles.find_package(configuration.packages, record.source_workspace) or nil
@@ -101,6 +94,9 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
         local profile, profile_error = activation_profiles.select_decoded(configuration,
             workspace_id, record.source_node, record.source_workspace, node_id,
             installed, vocabulary, record.overlay_owner)
+        if profile and identity and profile.applications and profile.applications[1] then
+            profile.applications[1].definition_id = application_id
+        end
         local omission: string? = nil
         if not profile then
             omission = tostring(profile_error or "no activation profile selected")
@@ -127,7 +123,7 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
                     policies[#policies + 1] = policy
                 end
             end
-            local projected = complete and governed_admission.project({workspace_id = profile.workspace_id,
+            local projected = complete and governed_admission.project({identity_generation = record.identity_generation, workspace_id = profile.workspace_id,
                 overlay_owner = profile.overlay_owner, source_node = profile.source_node,
                 source_workspace = profile.source_workspace, artifact_digest = record.artifact_digest,
                 bindings = profile.applications, artifact_entries = artifacts,
@@ -196,7 +192,7 @@ function M.revision(workspace_id: string, node_id: string): string
         local entry, entry_error = overlay:get(admission_id)
         if entry_error and entry_error:kind() ~= errors.NOT_FOUND then return "unavailable" end
         if not entry then
-            local prior_id = governed_admission.prior_id(owner)
+            local prior_id = governed_admission.id(owner, "prior")
             if prior_id then entry, entry_error = overlay:get(prior_id) end
             if entry_error and entry_error:kind() ~= errors.NOT_FOUND then return "unavailable" end
         end

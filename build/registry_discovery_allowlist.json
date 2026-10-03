@@ -1,19 +1,295 @@
 [
   {
+    "path": "modules/application/src/host_leases.lua",
+    "expression": "name:sub(1, #M.PREFIX)",
+    "count": 1,
+    "reason": "Validate the process-registry workspace-host fence wire format; no registry entry discovery or admission."
+  },
+  {
+    "path": "modules/approvals-inbox/src/app/model.lua",
+    "expression": "requesting_session:match(\"^bs:[^:]+:[^:]+:[^:]+$\")",
+    "count": 1,
+    "reason": "Validate the persisted Sessions requester reference format; not a registry entry."
+  },
+  {
+    "path": "modules/approvals/src/binding/deliveries_method.lua",
+    "expression": "approval_id .. \":\"",
+    "count": 1,
+    "reason": "Verify an outbox event belongs to the exact approval ID supplied by the approval owner."
+  },
+  {
+    "path": "modules/approvals/src/binding/deliveries_method.lua",
+    "expression": "event_id:sub(1, #approval_id + 1)",
+    "count": 1,
+    "reason": "Verify an outbox event belongs to the exact approval ID supplied by the approval owner."
+  },
+  {
+    "path": "modules/approvals/src/service/service.lua",
+    "expression": "approval_id .. \":\" .. tostring",
+    "count": 2,
+    "reason": "Encode approval event and notification IDs, or decode the existing Sessions requester wire type; owner records supply identities."
+  },
+  {
+    "path": "modules/approvals/src/service/service.lua",
+    "expression": "row.requester_id:match(\"^bs:\")",
+    "count": 1,
+    "reason": "Encode approval event and notification IDs, or decode the existing Sessions requester wire type; owner records supply identities."
+  },
+  {
+    "path": "modules/capability/src/model.lua",
+    "expression": "child:sub(1, #parent + 1)",
+    "count": 1,
+    "reason": "Validate HTTPS origin syntax or filesystem scope containment in a host-selected capability definition."
+  },
+  {
+    "path": "modules/capability/src/model.lua",
+    "expression": "value:match(\"^https://(.+)$\")",
+    "count": 1,
+    "reason": "Validate HTTPS origin syntax or filesystem scope containment in a host-selected capability definition."
+  },
+  {
+    "path": "modules/credentials/src/binding/sources.lua",
+    "expression": "leaf:sub(1, #leaf - #rule.suffix)",
+    "count": 1,
+    "reason": "Validate an admitted credential source filename against its declared filesystem prefix and suffix; no credential content or registry discovery."
+  },
+  {
+    "path": "modules/credentials/src/binding/sources.lua",
+    "expression": "source_path:sub(1, #rule.source_prefix)",
+    "count": 1,
+    "reason": "Validate an admitted credential source filename against its declared filesystem prefix and suffix; no credential content or registry discovery."
+  },
+  {
+    "path": "modules/credentials/src/formats.lua",
+    "expression": "existing:sub(1, #target + 1)",
+    "count": 1,
+    "reason": "Reject overlapping credential output file paths; filesystem containment only."
+  },
+  {
+    "path": "modules/credentials/src/formats.lua",
+    "expression": "target:sub(1, #existing + 1)",
+    "count": 1,
+    "reason": "Reject overlapping credential output file paths; filesystem containment only."
+  },
+  {
+    "path": "modules/docs/src/binding/corpus.lua",
+    "expression": "(checked:match(\"^docs/[%w_./%-]+$\")",
+    "count": 1,
+    "reason": "Validate documentation manifest provenance paths, generated attribution and URLs; no entry classification."
+  },
+  {
+    "path": "modules/docs/src/binding/corpus.lua",
+    "expression": "base:match(\"^https://[^/]+/.+$\")",
+    "count": 1,
+    "reason": "Validate documentation manifest provenance paths, generated attribution and URLs; no entry classification."
+  },
+  {
+    "path": "modules/docs/src/binding/corpus.lua",
+    "expression": "checked:match(\"^generated: [%w_ ,:./%-]+$\")",
+    "count": 1,
+    "reason": "Validate documentation manifest provenance paths, generated attribution and URLs; no entry classification."
+  },
+  {
+    "path": "modules/docs/src/binding/corpus.lua",
+    "expression": "checked:match(\"^https://[^/]+/.+$\")",
+    "count": 1,
+    "reason": "Validate documentation manifest provenance paths, generated attribution and URLs; no entry classification."
+  },
+  {
+    "path": "modules/docs/src/binding/corpus.lua",
+    "expression": "checked:match(\"^modules/[%w_./%-]+$\")",
+    "count": 1,
+    "reason": "Validate documentation manifest provenance paths, generated attribution and URLs; no entry classification."
+  },
+  {
+    "path": "modules/driver-wippy/src/service/runner.lua",
+    "expression": "THREADS .. \":\" .. operation",
+    "count": 1,
+    "reason": "Encode journal event occurrence keys or directly reference the declared Threads operation API; no provider discovery."
+  },
+  {
+    "path": "modules/driver-wippy/src/service/runner.lua",
+    "expression": "attempt_id .. \":\" .. tostring",
+    "count": 4,
+    "reason": "Encode journal event occurrence keys or directly reference the declared Threads operation API; no provider discovery."
+  },
+  {
+    "path": "modules/driver-wippy/src/service/runner.lua",
+    "expression": "mem_ref .. \":\" .. attempt_id",
+    "count": 1,
+    "reason": "Encode journal event occurrence keys or directly reference the declared Threads operation API; no provider discovery."
+  },
+  {
+    "path": "modules/driver/src/binding/configuration.lua",
+    "expression": "token.field:match(\"^provider%.env%.([A-Z][A-Z0-9_]*)$\")",
+    "count": 1,
+    "reason": "Resolve a descriptor-declared provider environment field in the typed provider value map."
+  },
+  {
+    "path": "modules/driver/src/binding/option_render.lua",
+    "expression": "token.field:match(\"^provider%.env%.([A-Z][A-Z0-9_]*)$\")",
+    "count": 1,
+    "reason": "Resolve a descriptor-declared provider environment field in the typed provider value map."
+  },
+  {
+    "path": "modules/driver/src/binding/universal.lua",
+    "expression": "field:match(\"^provider%.(.+)$\")",
+    "count": 1,
+    "reason": "Resolve descriptor-declared provider option paths in the request value map; binding selection already uses declarations."
+  },
+  {
+    "path": "modules/driver/src/binding/universal.lua",
+    "expression": "field:match(\"^provider%.options%.(.+)$\")",
+    "count": 1,
+    "reason": "Resolve descriptor-declared provider option paths in the request value map; binding selection already uses declarations."
+  },
+  {
+    "path": "modules/driver/src/descriptor/descriptor.lua",
+    "expression": "name:match(\"^provider%.(.+)$\")",
+    "count": 1,
+    "reason": "Validate provider option field paths against the descriptor-declared fields."
+  },
+  {
+    "path": "modules/driver/src/descriptor/descriptor.lua",
+    "expression": "name:match(\"^provider%.options%.(.+)$\")",
+    "count": 1,
+    "reason": "Validate provider option field paths against the descriptor-declared fields."
+  },
+  {
+    "path": "modules/driver/src/locate/login_evidence.lua",
+    "expression": "path:sub(1, #directory + 1)",
+    "count": 1,
+    "reason": "Validate declared login evidence path containment; only existence is inspected."
+  },
+  {
+    "path": "modules/driver/src/profiles/preferences.lua",
+    "expression": "name:match(\"^provider%.([a-z][a-z0-9_]*)$\")",
+    "count": 1,
+    "reason": "Decode the descriptor option path schema and check canonical field spelling."
+  },
+  {
+    "path": "modules/driver/src/profiles/preferences.lua",
+    "expression": "name:match(\"^provider%.options%.([a-z][a-z0-9_]*)$\")",
+    "count": 1,
+    "reason": "Decode the descriptor option path schema and check canonical field spelling."
+  },
+  {
+    "path": "modules/executor-external/src/binding/run_turn.lua",
+    "expression": "write_id .. \":\" .. phase",
+    "count": 1,
+    "reason": "Encode a journal write event occurrence key; not a registry identity."
+  },
+  {
+    "path": "modules/files/src/app/gitignore.lua",
+    "expression": "clean:sub(1, #rule.prefix)",
+    "count": 1,
+    "reason": "Match a parsed Git ignore path prefix; not a registry identity."
+  },
+  {
+    "path": "modules/files/src/protocol.lua",
+    "expression": "target.path .. \":\" .. tostring",
+    "count": 2,
+    "reason": "Format a file path with its line location for display."
+  },
+  {
+    "path": "modules/gateway/src/api/address_value.lua",
+    "expression": "value == \"localhost:\" .. port",
+    "count": 1,
+    "reason": "Compare loopback network addresses with the same declared port."
+  },
+  {
+    "path": "modules/gateway/src/api/mcp.lua",
+    "expression": "method:find(\"^notifications/\")",
+    "count": 1,
+    "reason": "Validate MCP notification method syntax; no registry identity or provider selection."
+  },
+  {
+    "path": "modules/gateway/src/api/session_boundary.lua",
+    "expression": "binding.subject:sub(1, 3)",
+    "count": 1,
+    "reason": "Decode the existing Sessions subject wire format before invoking its owner."
+  },
+  {
+    "path": "modules/gateway/src/binding/address_method.lua",
+    "expression": "address:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Validate the listener network interface and encode its observed native execution identity."
+  },
+  {
+    "path": "modules/gateway/src/binding/address_method.lua",
+    "expression": "configured:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Validate the listener network interface and encode its observed native execution identity."
+  },
+  {
+    "path": "modules/gateway/src/binding/address_method.lua",
+    "expression": "reference .. \":\" .. tostring",
+    "count": 1,
+    "reason": "Validate the listener network interface and encode its observed native execution identity."
+  },
+  {
+    "path": "modules/gateway/src/binding/gateway.lua",
+    "expression": "(item.session):sub(1, #wanted)",
+    "count": 1,
+    "reason": "Filter owner-returned session rows for an explicit caller search query; no registry discovery."
+  },
+  {
+    "path": "modules/gateway/src/catalog/profile_scope.lua",
+    "expression": "child:sub(1, #parent + 1)",
+    "count": 1,
+    "reason": "Check filesystem scope containment in the host-selected profile."
+  },
+  {
+    "path": "modules/gateway/src/hooks/hooks.lua",
+    "expression": "session .. \":\" .. source",
+    "count": 1,
+    "reason": "Encode hook event keys from owner-supplied session and source identities."
+  },
+  {
+    "path": "modules/gateway/src/security/access.lua",
+    "expression": "binding.binding_id .. \":\" .. key",
+    "count": 1,
+    "reason": "Measure an idempotency key from the exact authenticated binding and request key."
+  },
+  {
+    "path": "modules/git-worktree/src/binding/git_roots.lua",
+    "expression": "line:match(\"^gitdir: (.+)$\")",
+    "count": 1,
+    "reason": "Decode Git gitdir file syntax or check a filesystem path against admitted roots."
+  },
+  {
+    "path": "modules/git-worktree/src/binding/git_roots.lua",
+    "expression": "path:sub(1, #root + 1)",
+    "count": 1,
+    "reason": "Decode Git gitdir file syntax or check a filesystem path against admitted roots."
+  },
+  {
+    "path": "modules/git-worktree/src/binding/worktree.lua",
+    "expression": "base:match(\"^refs/heads/[^%c]+$\")",
+    "count": 1,
+    "reason": "Validate the Git refs/heads wire format for recorded worktree ownership."
+  },
+  {
+    "path": "modules/gov/src/activation/activation_measure.lua",
+    "expression": "diagnostic.code .. \":\" .. diagnostic.target",
+    "count": 1,
+    "reason": "Format an owner-produced diagnostic code and target; not entry selection."
+  },
+  {
+    "path": "modules/gov/src/activation/activation_profiles.lua",
+    "expression": "grant:sub(1, #prefix + 1)",
+    "count": 1,
+    "reason": "Deny forbidden security action families within the host policy ceiling; not registry identities or capability grants."
+  },
+  {
     "path": "modules/gov/src/activation/application_admission.lua",
-    "expression": "owner:sub(1, #PRIOR_WORKSPACE_OWNER_PREFIX)",
+    "expression": "(raw):sub(1, #\"bee.gov.grants:\")",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
     "path": "modules/gov/src/activation/application_admission.lua",
     "expression": "(raw):sub(1, #M.RESERVED_PREFIX)",
-    "count": 1,
-    "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
-  },
-  {
-    "path": "modules/gov/src/activation/application_admission.lua",
-    "expression": "(raw):sub(1, #\"bee.gov.grants:\")",
     "count": 1,
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
@@ -42,6 +318,30 @@
     "reason": "M0 current/prior measured admission and grant identity validation/reservation; no discovery or access grant."
   },
   {
+    "path": "modules/gov/src/activation/application_admissions.lua",
+    "expression": "value.revision .. \":\" .. table.concat",
+    "count": 1,
+    "reason": "Encode an admission cache revision from observed registry and owner revisions."
+  },
+  {
+    "path": "modules/gov/src/activation/migration_work.lua",
+    "expression": "diagnostic.code .. \":\" .. diagnostic.target",
+    "count": 1,
+    "reason": "Format migration diagnostics or validate the declared SQL resource kind; no ID-spelling discovery."
+  },
+  {
+    "path": "modules/gov/src/activation/migration_work.lua",
+    "expression": "summary.kind:match(\"^db%.sql%.\")",
+    "count": 1,
+    "reason": "Format migration diagnostics or validate the declared SQL resource kind; no ID-spelling discovery."
+  },
+  {
+    "path": "modules/gov/src/activation/preflight.lua",
+    "expression": "database.kind:match(\"^db%.sql%.\")",
+    "count": 1,
+    "reason": "Validate a captured target entry declared SQL kind; its exact target and host database admission remain required."
+  },
+  {
     "path": "modules/gov/src/activation/preflight.lua",
     "expression": "id:match(\"^([^:]+):[^:]+$\")",
     "count": 1,
@@ -52,6 +352,12 @@
     "expression": "item.id:match(\"^([^:]+):[^:]+$\")",
     "count": 1,
     "reason": "Declared host policy and artifact namespace ownership validation; collision/out-of-scope denial only, exact measured entries and policy grants still required."
+  },
+  {
+    "path": "modules/gov/src/activation/protected_kernel.lua",
+    "expression": "id:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
   },
   {
     "path": "modules/gov/src/activation/protected_kernel.lua",
@@ -66,10 +372,52 @@
     "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
   },
   {
-    "path": "modules/gov/src/activation/protected_kernel.lua",
-    "expression": "id:match(\"^([^:]+):\")",
+    "path": "modules/gov/src/activation/super_edit.lua",
+    "expression": "left:sub(1, #right + 1)",
     "count": 1,
-    "reason": "Declared protected_kernel host policy scope and exact protected entry references; negative edit protection only, never entry discovery or permission grants."
+    "reason": "Check intersection of expressly declared namespace policy scopes; deny-only scope validation."
+  },
+  {
+    "path": "modules/gov/src/activation/super_edit.lua",
+    "expression": "right:sub(1, #left + 1)",
+    "count": 1,
+    "reason": "Check intersection of expressly declared namespace policy scopes; deny-only scope validation."
+  },
+  {
+    "path": "modules/gov/src/binding/activation_owner.lua",
+    "expression": "prefix .. \":\" .. operation",
+    "count": 1,
+    "reason": "Encode activation operation idempotency keys; not registry identities."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_files.lua",
+    "expression": "capability:sub(1, 16)",
+    "count": 1,
+    "reason": "Check private filesystem containment or decode the declared workspace.files capability family; no registry identities."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_files.lua",
+    "expression": "path:sub(1, #PRIVATE_PREFIX)",
+    "count": 1,
+    "reason": "Check private filesystem containment or decode the declared workspace.files capability family; no registry identities."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_gateway.lua",
+    "expression": "(actor_raw):match(\"^bee%.application:([0-9a-f]+):[^:]+$\")",
+    "count": 1,
+    "reason": "Decode the authenticated application actor wire schema or validate HTTPS origin/path scope; exact actor metadata and host grants still required."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_gateway.lua",
+    "expression": "path:sub(1, #prefix + 1)",
+    "count": 1,
+    "reason": "Decode the authenticated application actor wire schema or validate HTTPS origin/path scope; exact actor metadata and host grants still required."
+  },
+  {
+    "path": "modules/gov/src/capability/capability_gateway.lua",
+    "expression": "url:match(\"^https://([^/?#]+)(.*)$\")",
+    "count": 1,
+    "reason": "Decode the authenticated application actor wire schema or validate HTTPS origin/path scope; exact actor metadata and host grants still required."
   },
   {
     "path": "modules/gov/src/capability/capability_grants.lua",
@@ -79,7 +427,7 @@
   },
   {
     "path": "modules/gov/src/capability/capability_grants.lua",
-    "expression": "raw:sub(1, #PRIOR_PREFIX)",
+    "expression": "id:sub(1, #files.DATABASE_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
   },
@@ -91,7 +439,7 @@
   },
   {
     "path": "modules/gov/src/capability/capability_grants.lua",
-    "expression": "id:sub(1, #files.DATABASE_PREFIX)",
+    "expression": "raw:sub(1, #PRIOR_PREFIX)",
     "count": 1,
     "reason": "M0 current/prior immutable measured grant resource identity validation/reservation; live grants verify the exact record and policies."
   },
@@ -102,8 +450,20 @@
     "reason": "Declared artifact namespace ownership/collision validation; measured registry ownership supplies package identity."
   },
   {
+    "path": "modules/gov/src/delivery/hub_resolver.lua",
+    "expression": "value:sub(1, 7)",
+    "count": 1,
+    "reason": "Decode the immutable sha256 digest format returned by package resolution."
+  },
+  {
     "path": "modules/gov/src/delivery/materializer.lua",
-    "expression": "id:match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
+    "expression": "(resource):match(\"^bee%.gov%.grants:database%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "(resource):match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
@@ -121,19 +481,13 @@
   },
   {
     "path": "modules/gov/src/delivery/materializer.lua",
+    "expression": "id:match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
+  },
+  {
+    "path": "modules/gov/src/delivery/materializer.lua",
     "expression": "id:match(\"^bee%.governance%.grants:policy%.[0-9a-f]+$\")",
-    "count": 1,
-    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
-  },
-  {
-    "path": "modules/gov/src/delivery/materializer.lua",
-    "expression": "(resource):match(\"^bee%.gov%.grants:volume%.[0-9a-f]+$\")",
-    "count": 1,
-    "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
-  },
-  {
-    "path": "modules/gov/src/delivery/materializer.lua",
-    "expression": "(resource):match(\"^bee%.gov%.grants:database%.[0-9a-f]+$\")",
     "count": 1,
     "reason": "M0 decode the persisted host-generated grant/resource schema; validates supplied measured records and denies missing resources, never discovers or authorizes entries."
   },
@@ -144,22 +498,160 @@
     "reason": "Declared artifact namespace ownership/collision and protected-host-scope validation; capability selection uses exact artifact IDs."
   },
   {
-    "path": "modules/gov/src/traits/guide.lua",
-    "expression": "NAMESPACE .. \":\" .. workspace_applications.APPLICATION_NAME",
+    "path": "modules/harness/src/app/agents.lua",
+    "expression": "feature:match(\"^driver:(.+)$\")",
     "count": 1,
-    "reason": "Authoring example constructs the explicitly declared workspace-application target; no enumeration or authorization."
+    "reason": "Decode declared driver feature labels, login diagnostic text or persisted Sessions references; never classify registry entries."
   },
   {
-    "path": "modules/gov/src/workspace/workspace_applications.lua",
-    "expression": "namespace .. \":\" .. M.APPLICATION_NAME",
+    "path": "modules/harness/src/app/agents.lua",
+    "expression": "reason:find(\"bee.\", 1, true)",
+    "count": 2,
+    "reason": "Decode declared driver feature labels, login diagnostic text or persisted Sessions references; never classify registry entries."
+  },
+  {
+    "path": "modules/harness/src/app/agents.lua",
+    "expression": "reason:find(\"owner_safe:\", 1, true)",
     "count": 1,
-    "reason": "M0 persisted workspace-application definition identity construction from the explicitly selected authored overlay."
+    "reason": "Decode declared driver feature labels, login diagnostic text or persisted Sessions references; never classify registry entries."
+  },
+  {
+    "path": "modules/harness/src/app/agents.lua",
+    "expression": "ref:match(\"^bs:[^:]+:([^:]+):\")",
+    "count": 1,
+    "reason": "Decode declared driver feature labels, login diagnostic text or persisted Sessions references; never classify registry entries."
+  },
+  {
+    "path": "modules/harness/src/app/picker.lua",
+    "expression": "entry.kind .. \":\" .. entry.ref",
+    "count": 1,
+    "reason": "Encode a picker operation key from a selected catalog row and revision."
+  },
+  {
+    "path": "modules/harness/src/app/profile_form.lua",
+    "expression": "save_error:match(\"^CONFLICT:\")",
+    "count": 1,
+    "reason": "Decode a profile-owner CONFLICT error label; no registry identity."
+  },
+  {
+    "path": "modules/harness/src/carrier/hook_records.lua",
+    "expression": "binding_id .. \":\" .. tostring",
+    "count": 1,
+    "reason": "Encode a hook occurrence key from an exact admitted binding and occurrence."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "M.THREADS .. \":\" .. operation",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "attempt.attempt_id .. \":\" .. tostring",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "request.attempt_id .. \":\" .. tostring",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "request.session_ref:match(\"^bs:\")",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "session.plan.request.attempt_id .. \":\" .. message.stream",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "session.plan.request.attempt_id .. \":\" .. tostring",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "session_request.attempt_id .. \":\" .. step_key",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/carrier/machine.lua",
+    "expression": "write_id .. \":\" .. phase",
+    "count": 1,
+    "reason": "Encode journal occurrence keys, decode the persisted Sessions requester schema, or directly reference the declared Threads operation API."
+  },
+  {
+    "path": "modules/harness/src/launch/admission.lua",
+    "expression": "path:match(\"^provider.options%.\")",
+    "count": 1,
+    "reason": "Decode typed provider option paths; no provider binding discovery."
+  },
+  {
+    "path": "modules/harness/src/permission/exchange.lua",
+    "expression": "key .. \":\" .. tostring",
+    "count": 1,
+    "reason": "Encode journal permission occurrence keys from acknowledged exchange state."
+  },
+  {
+    "path": "modules/harness/src/permission/exchange.lua",
+    "expression": "state.permission_request_id .. \":\" .. phase",
+    "count": 1,
+    "reason": "Encode journal permission occurrence keys from acknowledged exchange state."
+  },
+  {
+    "path": "modules/harness/src/service/presentation.lua",
+    "expression": "token:sub(1, #CALLER)",
+    "count": 2,
+    "reason": "Validate the presentation caller-token wire schema; exact process-registry sender authentication is independently required."
+  },
+  {
+    "path": "modules/hive-manager/src/app/model.lua",
+    "expression": "state.search:sub(1, #state.search - 1)",
+    "count": 1,
+    "reason": "Remove one character from the search query; not registry discovery."
+  },
+  {
+    "path": "modules/hub/src/binding/publish.lua",
+    "expression": "hub:match(\"^sha256:[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "Decode or compare the immutable sha256 pack digest format."
+  },
+  {
+    "path": "modules/hub/src/binding/publish.lua",
+    "expression": "hub_digest ~= \"sha256:\" .. digest",
+    "count": 1,
+    "reason": "Decode or compare the immutable sha256 pack digest format."
+  },
+  {
+    "path": "modules/hub/src/binding/receipt_metadata.lua",
+    "expression": "entry.id:match(\"^bee%.hub%.operations:([0-9a-f]+)$\")",
+    "count": 1,
+    "reason": "M6 additive registry receipt metadata migration 1 decodes the historical persisted identity once; runtime discovery uses meta.type after migration."
   },
   {
     "path": "modules/hub/src/package/graph.lua",
     "expression": "hole.id:match(\":([^:]+)$\")",
     "count": 1,
     "reason": "Declared dependency parameter resolves the local name of a declared ns.requirement in that dependency closure."
+  },
+  {
+    "path": "modules/hub/src/package/inventory.lua",
+    "expression": "value:sub(1, 15)",
+    "count": 1,
+    "reason": "Decode the immutable sha256-tree-v1 package digest format."
+  },
+  {
+    "path": "modules/hub/src/package/native_compat.lua",
+    "expression": "package_name:sub(1, #module + 1)",
+    "count": 1,
+    "reason": "Resolve a Go package against the executable-declared native module paths; not registry namespace discovery."
   },
   {
     "path": "modules/hub/src/package/plan.lua",
@@ -180,15 +672,339 @@
     "reason": "Declared dependency parameter resolves the local name of a declared ns.requirement."
   },
   {
-    "path": "modules/threads/src/records/app_identity.lua",
-    "expression": "namespace:sub(1, #M.APP_NAMESPACE)",
+    "path": "modules/hub/src/package/semver.lua",
+    "expression": "token:sub(1, #candidate)",
     "count": 1,
-    "reason": "M3 immutable application thread membership digest input algorithm; changing this would rename persisted actors, not discover registry entries."
+    "reason": "Parse a version constraint operator; not a registry identity."
+  },
+  {
+    "path": "modules/hub/src/publication/publishing.lua",
+    "expression": "inspected == \"sha256:\" .. approved",
+    "count": 1,
+    "reason": "Decode or compare immutable sha256 package publication digest evidence."
+  },
+  {
+    "path": "modules/hub/src/publication/publishing.lua",
+    "expression": "output:match(\"Digest:%s+(sha256:[0-9a-f]+)\")",
+    "count": 1,
+    "reason": "Decode or compare immutable sha256 package publication digest evidence."
+  },
+  {
+    "path": "modules/hub/src/publication/publishing.lua",
+    "expression": "uploaded == \"sha256:\" .. approved",
+    "count": 1,
+    "reason": "Decode or compare immutable sha256 package publication digest evidence."
+  },
+  {
+    "path": "modules/placement-docker/src/service/environment.lua",
+    "expression": "chosen.address:match(\"^([^:]+):\")",
+    "count": 1,
+    "reason": "Decode network listener host addresses; exact listener declaration supplies its identity."
+  },
+  {
+    "path": "modules/placement-docker/src/service/environment.lua",
+    "expression": "recorded.address:match(\"^([^:]+):\")",
+    "count": 2,
+    "reason": "Decode network listener host addresses; exact listener declaration supplies its identity."
+  },
+  {
+    "path": "modules/placement-docker/src/service/execution.lua",
+    "expression": "path:sub(1, #root + 1)",
+    "count": 1,
+    "reason": "Resolve the filesystem-relative path inside the admitted workdir."
+  },
+  {
+    "path": "modules/placement-docker/src/service/image.lua",
+    "expression": "id:match(\"^sha256:[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "Match declared filesystem artifact sibling names or validate an immutable Docker image digest."
+  },
+  {
+    "path": "modules/placement-docker/src/service/image.lua",
+    "expression": "item.name:sub(1, #artifact.sibling_prefix)",
+    "count": 1,
+    "reason": "Match declared filesystem artifact sibling names or validate an immutable Docker image digest."
+  },
+  {
+    "path": "modules/placement-docker/src/service/runtime_probe.lua",
+    "expression": "image:match(\"^sha256:[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "Validate an immutable Docker image digest; not a registry entry."
+  },
+  {
+    "path": "modules/placement-docker/src/service/service.lua",
+    "expression": "image_id:match(\"^sha256:[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."
+  },
+  {
+    "path": "modules/placement-docker/src/service/service.lua",
+    "expression": "inspect_error:sub(1, 9)",
+    "count": 2,
+    "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."
+  },
+  {
+    "path": "modules/placement-docker/src/service/service.lua",
+    "expression": "known_image:match(\"^sha256:[0-9a-f]+$\")",
+    "count": 1,
+    "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."
+  },
+  {
+    "path": "modules/placement-docker/src/service/service.lua",
+    "expression": "request.gateway.endpoint:match(\"^localhost:\")",
+    "count": 1,
+    "reason": "Decode Docker HTTP status, pinned image digest or loopback network endpoint syntax; no registry entry classification."
+  },
+  {
+    "path": "modules/placement-native/src/env/configuration.lua",
+    "expression": "file.path:sub(1, #path + 1)",
+    "count": 1,
+    "reason": "Reject provider login paths overlapping protected filesystem paths."
+  },
+  {
+    "path": "modules/placement-native/src/env/configuration.lua",
+    "expression": "path:sub(1, #file.path + 1)",
+    "count": 1,
+    "reason": "Reject provider login paths overlapping protected filesystem paths."
+  },
+  {
+    "path": "modules/placement-native/src/service/homes.lua",
+    "expression": "path:sub(1, #marker + 1)",
+    "count": 1,
+    "reason": "Reject declared login paths overlapping the retained home identity marker."
+  },
+  {
+    "path": "modules/placement-native/src/service/materialization.lua",
+    "expression": "attempt_id .. \":\" .. tostring",
+    "count": 1,
+    "reason": "Encode credential projection generation keys from an admitted attempt and projection index."
+  },
+  {
+    "path": "modules/placement-native/src/service/provider_projection.lua",
+    "expression": "value:sub(1, #root + 1)",
+    "count": 1,
+    "reason": "Validate a physical path against host-admitted roots."
+  },
+  {
+    "path": "modules/placement/src/profiles/paths.lua",
+    "expression": "path:sub(1, #root + 1)",
+    "count": 1,
+    "reason": "Check a physical filesystem path against the host-admitted root."
+  },
+  {
+    "path": "modules/placement/src/profiles/profiles.lua",
+    "expression": "(image:match(\"^sha256:([0-9a-f]+)$\")",
+    "count": 1,
+    "reason": "Validate a pinned Docker image digest or reject overlapping mount paths."
+  },
+  {
+    "path": "modules/placement/src/profiles/profiles.lua",
+    "expression": "(target:sub(1, #existing + 1)",
+    "count": 1,
+    "reason": "Validate a pinned Docker image digest or reject overlapping mount paths."
+  },
+  {
+    "path": "modules/placement/src/profiles/profiles.lua",
+    "expression": "existing:sub(1, #target + 1)",
+    "count": 1,
+    "reason": "Validate a pinned Docker image digest or reject overlapping mount paths."
+  },
+  {
+    "path": "modules/resources/src/persist/authority.lua",
+    "expression": "grant_subpath:sub(1, #base_path + 1)",
+    "count": 1,
+    "reason": "Validate resource filesystem subpath containment or compute the lexical SQL search range endpoint."
+  },
+  {
+    "path": "modules/resources/src/persist/authority.lua",
+    "expression": "prefix:sub(1, #prefix - 1)",
+    "count": 1,
+    "reason": "Validate resource filesystem subpath containment or compute the lexical SQL search range endpoint."
+  },
+  {
+    "path": "modules/sessions/src/binding/catalog.lua",
+    "expression": "feature:match(\"^driver:(.+)$\")",
+    "count": 1,
+    "reason": "Decode a catalog cursor or an explicitly declared driver feature label; providers are found by kind and metadata."
+  },
+  {
+    "path": "modules/sessions/src/binding/catalog.lua",
+    "expression": "value:match(\"^catalog:([0-9]+)$\")",
+    "count": 1,
+    "reason": "Decode a catalog cursor or an explicitly declared driver feature label; providers are found by kind and metadata."
+  },
+  {
+    "path": "modules/sessions/src/binding/owner.lua",
+    "expression": "prefix .. \":\" .. digest",
+    "count": 1,
+    "reason": "Decode persisted Sessions work/operation wire refs or encode owner operation/join refs; not registry entry discovery."
+  },
+  {
+    "path": "modules/sessions/src/binding/owner.lua",
+    "expression": "subject:sub(1, 3)",
+    "count": 2,
+    "reason": "Decode persisted Sessions work/operation wire refs or encode owner operation/join refs; not registry entry discovery."
+  },
+  {
+    "path": "modules/sessions/src/binding/owner.lua",
+    "expression": "work:match(\"^bw:([^:]+):([^:]+):\")",
+    "count": 1,
+    "reason": "Decode persisted Sessions work/operation wire refs or encode owner operation/join refs; not registry entry discovery."
+  },
+  {
+    "path": "modules/sessions/src/binding/owner.lua",
+    "expression": "work:sub(1, 3)",
+    "count": 2,
+    "reason": "Decode persisted Sessions work/operation wire refs or encode owner operation/join refs; not registry entry discovery."
+  },
+  {
+    "path": "modules/sessions/src/binding/owner.lua",
+    "expression": "workspace .. \":\" .. digest",
+    "count": 1,
+    "reason": "Decode persisted Sessions work/operation wire refs or encode owner operation/join refs; not registry entry discovery."
+  },
+  {
+    "path": "modules/sessions/src/service/scheduler.lua",
+    "expression": "prefix .. \":\" .. suffix",
+    "count": 1,
+    "reason": "Encode Sessions journal operation keys; not registry entries."
+  },
+  {
+    "path": "modules/sessions/src/service/scheduler_worker.lua",
+    "expression": "topic:sub(1, #lifecycle.TOPIC + 1)",
+    "count": 1,
+    "reason": "Validate the declared lifecycle reply-topic protocol bound; receipt admission independently checks the exact service and intent."
+  },
+  {
+    "path": "modules/threads/src/records/app_identity.lua",
+    "expression": "workspace .. \":\" .. readable",
+    "count": 1,
+    "reason": "M3 encode the persisted stable application actor wire identity from explicit admitted owner metadata; no namespace inference."
+  },
+  {
+    "path": "modules/threads/src/service/access.lua",
+    "expression": "(actor):sub(1, #M.FORWARDED_PREFIX)",
+    "count": 1,
+    "reason": "Decode the forwarded actor wire schema; sender and exact host grants independently authorize the operation."
   },
   {
     "path": "modules/threads/src/service/app_alias.lua",
     "expression": "checked:sub(1, 16)",
     "count": 1,
     "reason": "M3 persisted broker-attested actor wire decoder; broker alias permission and exact stored membership authorize access, not the actor prefix."
+  },
+  {
+    "path": "modules/threads/src/service/work_store.lua",
+    "expression": "caller:match(\"^bs:\")",
+    "count": 2,
+    "reason": "Encode Sessions journal refs or decode a caller Sessions actor wire type; no registry discovery."
+  },
+  {
+    "path": "modules/threads/src/service/work_store.lua",
+    "expression": "prefix .. \":\" .. node",
+    "count": 1,
+    "reason": "Encode Sessions journal refs or decode a caller Sessions actor wire type; no registry discovery."
+  },
+  {
+    "path": "modules/threads/src/service/work_store.lua",
+    "expression": "workspace .. \":\" .. id",
+    "count": 1,
+    "reason": "Encode Sessions journal refs or decode a caller Sessions actor wire type; no registry discovery."
+  },
+  {
+    "path": "modules/workspace/src/persist/catalog.lua",
+    "expression": "encoded .. \":\" .. hex",
+    "count": 1,
+    "reason": "Encode workspace pagination cursors or compute a lexical SQL search range endpoint."
+  },
+  {
+    "path": "modules/workspace/src/persist/catalog.lua",
+    "expression": "position.workspace_id .. \":\" .. hex",
+    "count": 1,
+    "reason": "Encode workspace pagination cursors or compute a lexical SQL search range endpoint."
+  },
+  {
+    "path": "modules/workspace/src/persist/catalog.lua",
+    "expression": "prefix:sub(1, #prefix - 1)",
+    "count": 1,
+    "reason": "Encode workspace pagination cursors or compute a lexical SQL search range endpoint."
+  },
+  {
+    "path": "modules/workspace/src/types/selection.lua",
+    "expression": "entry.kind:match(\"^db%.sql%.\")",
+    "count": 1,
+    "reason": "Validate an exact selected registry resource by its declared SQL kind; OS paths and non-SQL entries are refused."
+  },
+  {
+    "path": "src/apps/catalog.lua",
+    "expression": "definition_id .. \":\" .. code",
+    "count": 1,
+    "reason": "Measure application code/cached admission fingerprints from exact admitted references; no name-based discovery."
+  },
+  {
+    "path": "src/apps/catalog.lua",
+    "expression": "fingerprint .. \":\" .. code_fingerprint",
+    "count": 1,
+    "reason": "Measure application code/cached admission fingerprints from exact admitted references; no name-based discovery."
+  },
+  {
+    "path": "src/apps/catalog.lua",
+    "expression": "target .. \":\" .. entry.kind",
+    "count": 1,
+    "reason": "Measure application code/cached admission fingerprints from exact admitted references; no name-based discovery."
+  },
+  {
+    "path": "src/apps/open_method.lua",
+    "expression": "presentation_session:match(\"^bs:[^:]+:\" .. workspace .. \":[^:]+$\")",
+    "count": 1,
+    "reason": "Decode the persisted Sessions actor wire schema in an exact host-granted workspace."
+  },
+  {
+    "path": "src/apps/open_protocol.lua",
+    "expression": "caller_token:match(\"^bee%.app%.open/[0-9a-f-]+$\")",
+    "count": 1,
+    "reason": "Validate the broker-issued caller-token wire schema; sender authentication remains separate."
+  },
+  {
+    "path": "src/apps/open_protocol.lua",
+    "expression": "caller_token:match(\"^bee%.app%.presentation/[0-9a-f-]+$\")",
+    "count": 1,
+    "reason": "Validate the broker-issued caller-token wire schema; sender authentication remains separate."
+  },
+  {
+    "path": "src/apps/principal.lua",
+    "expression": "workspace .. \":\" .. instance",
+    "count": 1,
+    "reason": "Encode the broker application actor wire identity; not registry discovery."
+  },
+  {
+    "path": "src/hive/service/replica_sender.lua",
+    "expression": "descriptor_digest .. \":\" .. action",
+    "count": 1,
+    "reason": "Measure a replication operation key from exact owner descriptor evidence."
+  },
+  {
+    "path": "src/terminal/main.lua",
+    "expression": "action:sub(1, 5)",
+    "count": 1,
+    "reason": "Decode desktop menu action strings after selecting a concrete action target."
+  },
+  {
+    "path": "src/terminal/main.lua",
+    "expression": "action:sub(1, 7)",
+    "count": 1,
+    "reason": "Decode desktop menu action strings after selecting a concrete action target."
+  },
+  {
+    "path": "src/terminal/main.lua",
+    "expression": "action:sub(1, 9)",
+    "count": 1,
+    "reason": "Decode desktop menu action strings after selecting a concrete action target."
+  },
+  {
+    "path": "src/terminal/workspace_menu.lua",
+    "expression": "menu.query:sub(1, math.floor(math.max(0, #menu.query - 1)))",
+    "count": 1,
+    "reason": "Remove a character from the workspace search query; not registry discovery."
   }
 ]

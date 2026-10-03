@@ -1,4 +1,5 @@
 -- MIT. Host-owned stores accept registry resources, never caller-supplied file paths.
+local registry = require("registry")
 local hash = require("hash")
 local contract = require("contract")
 local bounds = require("bounds")
@@ -7,12 +8,13 @@ local M = {}
 -- Classic mode: the node folder is the workspace rooted at the node's own
 -- workspace root resource.
 M.CLASSIC_ROOT = "bee.env:workspace_root"
-function M.database(kind: "client" | "workspace", value: unknown): string?
-    local default = "bee.env:" .. kind .. "_db"
-    if value == nil or value == default then return default end
-    local selected = bounds.id(value)
-    if not selected or not selected:match("^[A-Za-z0-9][A-Za-z0-9_.-]*:[A-Za-z0-9][A-Za-z0-9_.-]*$") then return nil end
-    return selected
+function M.database(kind: "client" | "workspace", value: unknown): (string?, string?)
+    local selected = bounds.id(value == nil and ("bee.env:" .. kind .. "_db") or value)
+    if not selected then return nil, "Invalid database resource reference" end
+    local entry, lookup_error = registry.get(selected)
+    if lookup_error or not entry then return nil, "Read database selection " .. selected .. ": " .. tostring(lookup_error) end
+    if not entry.kind:match("^db%.sql%.") then return nil, "Database selection is not a SQL resource: " .. selected end
+    return selected, nil
 end
 -- A workspace selection names exactly one catalog row: by identity, or by the
 -- root that classic folder mode and root-bound workspaces are opened from.

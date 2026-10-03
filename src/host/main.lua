@@ -1,4 +1,5 @@
 -- MIT. Stable workspace owner; no physical terminal, session or presenter.
+local funcs = require("funcs")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -32,6 +33,13 @@ local BROKER_STOP_GRACE = "10s"
 -- infers it from the database it opens.
 local function main(owner: string, workspace: unknown, database_resource: string?, checkpoint: unknown?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
+    local migration_policy = assert(security.policy("bee.security.hub:receipt_metadata_policy"))
+    local migration_executor = assert(funcs.new():with_scope(security.new_scope({migration_policy})))
+    local migration, migration_error = migration_executor:call("bee.hub.binding:receipt_metadata")
+    if migration_error then error("Migrate Hub receipt metadata: " .. tostring(migration_error)) end
+    if type(migration) ~= "table" or migration.ok ~= true then
+        error("Migrate Hub receipt metadata: " .. tostring(type(migration) == "table" and migration.message or "invalid migration reply"))
+    end
     assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))

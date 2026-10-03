@@ -257,6 +257,12 @@ overlay and approval policies are removed from the migration call scope.
 grant is still authority over the physical SQL resource and is not table-level
 confinement.
 
+New measured application admission records declare `identity_generation` as
+`current`. An explicitly measured `prior` generation retains the historical
+admission ID independently of owner spelling. Governance migration 17 adds the
+generation to existing activation rows and leaves their admission bytes and
+digests unchanged; restoration uses that recorded generation.
+
 The activation configuration may carry one `workspace_applications` rule
 beside its explicit rows, and the publication configuration a matching
 `workspace_applications: true`. `activation_profiles.select` returns an
@@ -264,9 +270,10 @@ explicit row for a source, or else instantiates the rule for an overlay whose
 name `workspace_applications` accepts, authored on this node or, while the
 rule's `hive` flag is set, received over Hive; a name stays with the source
 node whose desired activation holds its slot. The instance has component and
-namespace `app.<overlay_id>`, the application `app.<overlay_id>:app`, the
-rule's approval policy, kinds, modules, base admission policies and thread access,
-and a private overlay owner per destination workspace. The instance is
+namespace `app.<overlay_id>`, the rule's approval policy, kinds, modules, base admission policies and thread access,
+and a private overlay owner per destination workspace. The captured artifact
+selects exactly one `process.lua` application by `meta.type: bee.app`; its entry
+name is unrestricted. The instance is
 measured into the policy digest exactly like an explicit row. A live host grant
 record adds generated policy IDs to `allow.grants` and the application's
 admission binding; its recorded thread access also selects the application

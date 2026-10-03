@@ -46,10 +46,11 @@ end
 function M.fenced(): (boolean, string?)
     local snapshot, problem = registry.snapshot()
     if not snapshot then return true, tostring(problem or "scheduler admission fence unavailable") end
-    local entries, find_error = snapshot:find({[".kind"] = "registry.entry"})
+    local entries, find_error = snapshot:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.hub_operation"})
     if find_error then return true, tostring(find_error) end
     for _, entry in ipairs(entries) do
-        local receipt = operations.record(entry)
+        local receipt, receipt_error = operations.record(entry)
+        if receipt_error then return true, receipt_error end
         if receipt then
             local work = receipt and bounds.object(receipt.lifecycle_work)
             local services = work and bounds.array(work.services, 128)

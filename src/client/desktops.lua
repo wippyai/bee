@@ -37,7 +37,8 @@ end
 -- PID means spawned; the caller must authenticate readiness and arrange host
 -- admission before describing the desktop as ready.
 function M.start(state: State, selected: Selection, scope: security.Scope): (Desktop?, string?)
-    local database = binding.database("client", selected.database)
+    local database, selection_error = binding.database("client", selected.database)
+    if not database then return nil, selection_error end
     local bootstrap = lifecycle.bootstrap(selected.options)
     local host = contract.text(selected.host, 160)
     if not database or not bootstrap or not host or host == ""

@@ -6,6 +6,7 @@ entries:
   source: file://selection.lua
   modules:
   - hash
+  - registry
   imports:
     bounds: bee.values:bounds
 - name: recovery

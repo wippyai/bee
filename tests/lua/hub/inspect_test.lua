@@ -30,7 +30,7 @@ local function define_tests()
             local decoded = assert(inventory.decode({entries = {
                 {id = "installed.selection:old", kind = "ns.dependency", registry = {owner = "", root = true},
                     data = {component = "vendor/old", version = "1.0.0"}},
-                {id = "bee.hub.operations:" .. digest, kind = "registry.entry", registry = {owner = "", root = true},
+                {id = "bee.hub.operations:" .. digest, kind = "registry.entry", meta = {type = "bee.hub_operation"}, registry = {owner = "", root = true},
                     data = {digest = digest, actor_id = "fixture:installer", component = "vendor/old", root_id = "installed.selection:old",
                         action = "install", state = "complete", baseline_revision = 1, message = "complete"}},
             }}, 7))

@@ -29,7 +29,7 @@ local DEFAULT_CAP = 64
 local DEFAULT_IDLE_MS = 900000
 local DRAINED = {"bee.app.catalog", "bee.host.checkpoint", "bee.host.restore_result", "bee.interaction.state"}
 
-local function config(value: unknown): Config?
+local function config(value: unknown): (Config?, string?)
     if value == nil then return {cap = DEFAULT_CAP, idle = DEFAULT_IDLE_MS / 1000, database = nil} end
     if type(value) ~= "table" then return nil end
     for key in pairs(value) do
@@ -40,8 +40,9 @@ local function config(value: unknown): Config?
     if type(idle_ms) ~= "number" or idle_ms ~= math.floor(idle_ms) or idle_ms < 1 or idle_ms > 86400000 then return nil end
     local database: string? = nil
     if value.database ~= nil then
-        database = workspaces.database("workspace", value.database)
-        if not database then return nil end
+        local selection_error: string? = nil
+        database, selection_error = workspaces.database("workspace", value.database)
+        if not database then return nil, selection_error end
     end
     return {cap = math.floor(cap), idle = idle_ms / 1000, database = database}
 end
@@ -49,8 +50,8 @@ end
 local function now(): number return clock.epoch_seconds(time.now()) end
 
 local function main(value: unknown)
-    local settings = config(value)
-    if not settings then error("Invalid host manager configuration") end
+    local settings, selection_error = config(value)
+    if not settings then error(selection_error or "Invalid host manager configuration") end
     local self = tostring(process.pid())
     local registered, register_error = process.registry.register(leases.MANAGER)
     if not registered then error("Register host manager: " .. tostring(register_error)) end

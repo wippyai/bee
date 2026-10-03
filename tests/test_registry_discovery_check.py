@@ -19,6 +19,12 @@ class DiscoveryCheckTest(unittest.TestCase):
             'local ref = binding_ref:match("^(.*)%.binding:binding$")',
             'local rows = pinned:find({[".ns"] = namespace})',
             'local rows = registry.find({[".name"] = "binding"})',
+            'if candidate:match("^app%.") then return true end',
+            'if actor:sub(1, #prefix) == prefix then return true end',
+            'if choice:match("^provider:") then return true end',
+            'if choice:sub(1, #sibling_prefix) == sibling_prefix then return true end',
+            'if entry.id == "bee.hub.operations:" .. digest then return true end',
+            'local selected = scope .. ":" .. APPLICATION_NAME',
         ]
         for source in sources:
             with self.subTest(source=source):
@@ -33,10 +39,11 @@ class DiscoveryCheckTest(unittest.TestCase):
             'local entry = pinned:get(requirement.target)',
             'local entry = registry.get("bee.env:workspace_db")',
             'if id:match("^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$") then return id end',
-            'if path:sub(1, #root + 1) == root .. "/" then return path end',
             '-- if id:match("^bee%.") then return true end',
             'local example = [[ id:match("^bee%.") ]]',
             '''local example = 'id:match("^bee%.")' ''',
+            '''local example = 'entry.id == "vendor:receipt" .. digest' ''',
+            '''local example = 'namespace .. ":" .. target' ''',
         ]:
             with self.subTest(source=source):
                 self.assertFalse(check.findings(source))
@@ -112,3 +119,26 @@ class DiscoveryCheckTest(unittest.TestCase):
                          ['vendor.resources:database'])
         self.assertEqual(layout_check.REGISTRY_REFERENCE.findall('"vendor.binding:root.service"'),
                          ['vendor.binding:root.service'])
+
+    def test_native_targets_need_a_registration_declaration(self):
+        import tempfile
+        import layout_check
+        import yaml
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(dir=root / '.wippy', prefix='discovery-native-') as folder:
+            tree = Path(folder)
+            index = tree / 'src/wiring/_index.yaml'
+            index.parent.mkdir(parents=True)
+            index.write_text(yaml.safe_dump({'namespace': 'bee.wiring', 'entries': [
+                {'name': 'selection', 'kind': 'ns.requirement', 'targets': [
+                    {'entry': 'vendor.native:environment', 'path': '.storage'}]}]}))
+            native = tree / 'native'
+            native.mkdir()
+            declaration = native / 'component.go'
+            declaration.write_text('package native\nconst StorageID = "vendor.native:environment"\n'
+                'func registryID() registry.ID { return registry.ParseID(StorageID) }\n'
+                'func register() { environment.RegisterStorage(registryID(), storage) }\n')
+            self.assertEqual(layout_check.audit(tree)[4], 0)
+            declaration.write_text('package native\nconst StorageID = "vendor.native:environment"\n'
+                '// environment.RegisterStorage(registryID(), storage)\n')
+            self.assertEqual(layout_check.audit(tree)[4], 1)

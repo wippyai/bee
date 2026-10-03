@@ -201,8 +201,8 @@ local function acquire(resource: string?): (sql.DB?, string?)
         selected = type(data) == "table" and data.database or nil
         if selected == nil then return nil, "Workspace database is not linked" end
     end
-    local database_id = binding.database("workspace", selected)
-    if not database_id then return nil, "Invalid workspace database binding" end
+    local database_id, selection_error = binding.database("workspace", selected)
+    if not database_id then return nil, selection_error end
     local db, acquire_err = sql.get(database_id)
     if not db then return nil, error_text("open workspace database", acquire_err) end
 

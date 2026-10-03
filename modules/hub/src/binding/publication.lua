@@ -196,11 +196,12 @@ function M.status(raw: unknown, options: unknown?): Result
             end
             page = decoded_page
         end
-        local entries, find_error = snapshot:find({[".kind"] = "registry.entry"})
+        local entries, find_error = snapshot:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.hub_operation"})
         if find_error then return transaction.failure("UNAVAILABLE", tostring(find_error)) end
         local owned: {Receipt} = {}
         for _, item in ipairs(entries) do
-            local candidate = operations.record(item)
+            local candidate, receipt_error = operations.record(item)
+            if receipt_error then return transaction.failure("INTERNAL", receipt_error) end
             if candidate then
                 local data = bounds.object(item.data)
                 if data and data.actor_id == actor:id() then
@@ -666,10 +667,12 @@ function M.apply(raw: unknown, expected: unknown): Result
     if previous.code ~= "NOT_FOUND" then return previous end
     local current = registry.snapshot()
     if not current then return transaction.failure("UNAVAILABLE", "cannot inspect pending component lifecycles") end
-    local entries, find_error = current:find({[".kind"] = "registry.entry"})
+    local entries, find_error = current:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.hub_operation"})
     if find_error then return transaction.failure("UNAVAILABLE", tostring(find_error)) end
     for _, entry in ipairs(entries) do
-        if operations.record(entry) then
+        local recorded, receipt_error = operations.record(entry)
+        if receipt_error then return transaction.failure("INTERNAL", receipt_error) end
+        if recorded then
             local pending = decode_receipt(entry.data)
             if pending and pending.lifecycle_work and pending.state ~= "complete" and pending.state ~= "failed" then
                 return transaction.failure("BUSY", "component lifecycle needs recovery: " .. pending.digest)

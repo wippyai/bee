@@ -1645,5 +1645,21 @@
       "reason": "Desktop projection actor relocation; exact persisted references convert through additive Placement 10, Sync 11, Gateway 19, Resources 5 and Credentials 8 desktop_projection_references migrations. Preserve workspace/desktop/view IDs, opaque state, topics, version-one handoff and qualified layout schemas; restart owner composition and reissue existing grants.",
       "to": "bee.desktop.service:main"
     }
+  ],
+  "owner_state_migrations": [
+    {
+      "migration": "M6",
+      "owner": "bee.hub",
+      "implementation": "bee.hub.binding:receipt_metadata",
+      "id": 1,
+      "reason": "Append registry revisions tagging historical Hub operation metadata; preserve receipt IDs, data, digests and prior history. Host admission selects the exact callable entry."
+    },
+    {
+      "migration": "M5",
+      "owner": "bee.gov",
+      "store": "bee_governance_activation_intents",
+      "id": 17,
+      "reason": "Append admission identity generation column and classify existing historical rows once; preserve frozen admission bytes and digests."
+    }
   ]
 }

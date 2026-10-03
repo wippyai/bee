@@ -234,13 +234,10 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local left = funcs.new():with_scope(membership_scope):call("bee.threads.binding:leave", request)
         return type(left) == "table" and (left).ok == true
     end
-    -- Every opened instance receives a live authorization for its app's
-    -- stable identity, so a reopened instance inherits family threads only
-    -- while the broker still manages that instance.
     -- Attestation is fail-closed: the open is refused when it cannot land.
-    local function attest_instance(instance_id: string, definition_id: string): (boolean, string?, string?)
+    local function attest_instance(instance_id: string, definition_id: string, binding: contract.Binding): (boolean, string?, string?)
         local done, ok, code, message = pcall(function(): (boolean, string?, string?)
-            local stable = app_identity.stable(workspace_id, definition_id)
+            local stable = app_identity.stable(workspace_id, definition_id, binding.overlay_owner)
             if not stable or type(stable.id) ~= "string" then
                 return false, "permission_denied", "Application identity is invalid"
             end
@@ -267,7 +264,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         return ok, code, message
     end
     local function retire_instance(item: Instance): (boolean, string?)
-        local stable = app_identity.stable(workspace_id, item.descriptor.definition_id)
+        local stable = app_identity.stable(workspace_id, item.descriptor.definition_id, item.binding.overlay_owner)
         local instance_actor = thread_binding.actor(workspace_id, item.instance_id)
         if not stable or type(stable.id) ~= "string" or not instance_actor then
             return false, "Application identity is invalid"
@@ -286,8 +283,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     -- A removed admission binding fences its stable family out of every
     -- thread: a revoked or uninstalled app keeps no runs to follow. The
     -- fence converges, so a tick that finds active rows fences again.
-    local function fence_stable(definition_id: string): boolean
-        local stable = app_identity.stable(workspace_id, definition_id)
+    local function fence_stable(binding: contract.Binding): boolean
+        local stable = app_identity.stable(workspace_id, binding.definition_id, binding.overlay_owner)
         if not stable or type(stable.id) ~= "string" then return false end
         local stable_id: string = stable.id
         local scoped = funcs.new():with_scope(alias_scope)
@@ -299,14 +296,14 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local current = admission.current
         if not current then error("Application admission is unavailable for alias recovery") end
         for _, record in ipairs(records) do
-            -- The first catalog can precede governance/package recovery. A
-            -- missing definition here is not evidence of an admission loss:
-            -- the host keeps its checkpoint pending and may restore it when
-            -- the definition returns. Restore-open attests that exact
-            -- instance before starting it. Runtime admission removal is
-            -- fenced by refresh_admission's previous-to-current transition.
+            -- Keep missing definitions pending while governed/package admission recovers.
+            -- Restore-open attests each instance before execution starts.
             if current.descriptors[record.definition_id] then
-                local attested, _, message = attest_instance(record.instance_id, record.definition_id)
+                local recovered_binding: contract.Binding? = nil
+                for _, candidate in ipairs(current.bindings) do
+                    if candidate.definition_id == record.definition_id then recovered_binding = candidate; break end
+                end
+                local attested, _, message = attest_instance(record.instance_id, record.definition_id, assert(recovered_binding))
                 if not attested then
                     error("Backfill retained application alias: " .. tostring(message or "thread owner refused the alias"))
                 end
@@ -417,9 +414,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 for _, old in ipairs(applied.bindings) do
                     local kept = false
                     for _, new in ipairs(selected.bindings) do
-                        if new.definition_id == old.definition_id then kept = true; break end
+                        if new.definition_id == old.definition_id and new.overlay_owner == old.overlay_owner then kept = true; break end
                     end
-                    if not kept and not fence_stable(old.definition_id) then
+                    if not kept and not fence_stable(old) then
                         error("Fence removed application thread family")
                     end
                 end
@@ -521,7 +518,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         local actor_id = thread_binding.actor(workspace_id, instance_id)
         if not actor_id then emit(contract.reply(req.request_id, "open", "permission_denied", "Application identity is invalid"), true); return end
-        local attested, alias_code, alias_message = attest_instance(instance_id, descriptor.definition_id)
+        local attested, alias_code, alias_message = attest_instance(instance_id, descriptor.definition_id, binding)
         if not attested then
             emit(contract.reply(req.request_id, "open", alias_code or "permission_denied",
                 alias_message or "Application alias attestation was not admitted"), true)
@@ -1743,7 +1740,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                                 emit(contract.reply(req.request_id, "open", member_code or "permission_denied",
                                     member_message or "Application thread membership was not admitted"), true)
                             else
-                                local attested, alias_code, alias_message = attest_instance(instance_id, req.definition_id)
+                                local attested, alias_code, alias_message = attest_instance(instance_id, req.definition_id, selected_binding)
                                 if not attested then
                                     emit(contract.reply(req.request_id, "open", alias_code or "permission_denied",
                                         alias_message or "Application alias attestation was not admitted"), true)

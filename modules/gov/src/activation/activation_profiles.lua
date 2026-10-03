@@ -346,8 +346,10 @@ local function instantiate(rule: Template, workspace_id: string, source_node: st
     local access = rule.thread_access
     if installed_raw ~= nil then
         if not vocabulary then return nil, nil, "host capability catalog is unavailable" end
+        local declared = bounds.object(installed_raw)
+        local data = declared and bounds.object(declared.data)
         local installed, installed_error = capability_grants.decode(installed_raw,
-            identity.overlay_owner, workspace_id, identity.definition_id, vocabulary)
+            identity.overlay_owner, workspace_id, data and data.application, vocabulary)
         if not installed then return nil, nil, installed_error end
         for _, raw_policy in ipairs(installed.policies) do
             local entry = bounds.object(raw_policy)
@@ -358,13 +360,18 @@ local function instantiate(rule: Template, workspace_id: string, source_node: st
         end
         access = installed.thread_access
     end
-    return profile({workspace_id = workspace_id, source_node = source_node, source_workspace = identity.name,
+    local selected, policy, profile_error = profile({workspace_id = workspace_id, source_node = source_node, source_workspace = identity.name,
         component = identity.component, overlay_owner = identity.overlay_owner,
         approval_policy = rule.approval_policy, resolver = "overlay", parameters = empty_list(),
         allow = {packages = {identity.component}, namespaces = {identity.namespace}, kinds = rule.kinds,
             databases = empty_list(), grants = allowed, modules = rule.modules, auto_start = false},
-        applications = {{definition_id = identity.definition_id, policies = policies,
-            thread_access = access}}})
+        applications = nil})
+    if not selected or not policy then return nil, nil, profile_error end
+    local granted, grant_error = application_admission.grant(policies, access)
+    if not granted then return nil, nil, grant_error end
+    selected.applications = {{policies = granted.policies, thread_access = granted.thread_access}}
+    policy.applications = selected.applications
+    return selected, policy, nil
 end
 
 M.PACKAGE_OWNER_PREFIX = "bee.packages:"
@@ -652,7 +659,7 @@ function M.package_admissions(configuration: DecodedConfiguration, workspace_id:
                 policy_entries[#policy_entries + 1] = policy_entry
             end
         end
-        local projected, project_error = application_admission.project({workspace_id = workspace_id,
+        local projected, project_error = application_admission.project({identity_generation = "current", workspace_id = workspace_id,
             overlay_owner = owner, source_node = node_id, source_workspace = entry.component,
             artifact_digest = artifact_digest, bindings = item.applications,
             artifact_entries = {definition}, registry_entries = policy_entries,

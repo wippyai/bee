@@ -43,7 +43,8 @@ and metadata never authorizes an entry: the host admits the exact entry and
 its policies. Relative requirement targets resolve in their declared namespace;
 namespace collision and protected host-scope checks are publication constraints.
 Existing measured history is decoded and verified against its exact persisted
-record identity; it is never rewritten to add discovery tags.
+record identity. Hub receipt migration 1 appends metadata tags in a new registry
+revision; it preserves earlier revisions and the receipt data and digests.
 
 The generated [component inventory](component-inventory.json) records current
 namespace and entry IDs, requirement targets, topics, owner resources and

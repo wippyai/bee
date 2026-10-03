@@ -121,6 +121,7 @@ entries:
     - process.context
     - process.security
     - security.policy.get
+    - funcs.security
     - security.scope.create
     resources: '*'
     effect: allow

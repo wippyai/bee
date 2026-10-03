@@ -30,6 +30,7 @@ local activation_profiles = require("activation_profiles")
 local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
 local capability_files = require("capability_files")
+local artifact = require("artifact")
 local workspace_applications = require("workspace_applications")
 
 local M = {}
@@ -206,7 +207,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
             if not decoded then return nil, catalog_error end
             vocabulary = decoded
             local record, record_error = capability_grants.decode(installed, owner,
-                workspace_id, workspace_identity.definition_id, decoded)
+                workspace_id, (bounds.object(installed) and bounds.object((bounds.object(installed)).data) or {}).application, decoded)
             if not record then return nil, record_error end
             local live, live_error = capability_grants.live(record,
                 function(entry_id: string): unknown return registry.get(entry_id) end)
@@ -405,8 +406,12 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         if not resolved then return nil, folder_error end
         folder = resolved
     end
+    local artifact_entries, artifact_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+    if not artifact_entries then return nil, artifact_error end
+    local application_id, application_error = workspace_applications.application(artifact_entries)
+    if not application_id then return nil, application_error end
     local proposed, proposed_error = capability_grants.propose(vocabulary, profile_value.overlay_owner,
-        identity.definition_id, requested, uses_prior, folder)
+        application_id, requested, uses_prior, folder)
     if not proposed then return nil, proposed_error end
     local record_id = uses_prior and capability_grants.prior_record_id(profile_value.overlay_owner)
         or capability_grants.record_id(profile_value.overlay_owner)
@@ -414,7 +419,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     local prior: Object? = nil
     if prior_raw then
         local decoded, decoded_error = capability_grants.decode(prior_raw, profile_value.overlay_owner,
-            profile_value.workspace_id, identity.definition_id, vocabulary)
+            profile_value.workspace_id, application_id, vocabulary)
         if not decoded then return nil, decoded_error end
         local live, live_error = capability_grants.live(decoded,
             function(id: string): unknown return registry.get(id) end)
@@ -447,7 +452,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         if prior then revision = (prior.revision) + 1 end
     end
     local record, record_error = capability_grants.record(profile_value.overlay_owner,
-        profile_value.workspace_id, identity.definition_id, proposed, approval_id, revision,
+        profile_value.workspace_id, application_id, proposed, approval_id, revision,
         intent.artifact_digest, intent.version, uses_prior)
     if not record then return nil, record_error end
     return {policies = proposed.policies, bindings = proposed.bindings, record = record,
@@ -670,7 +675,7 @@ local function installed_envelope(profile_value: Profile): (capability_model.Voc
     local raw = record_id and registry.get(record_id) or nil
     if not raw then return nil, nil, "no installed grant record to lease over" end
     local decoded, decode_error = capability_grants.decode(raw, profile_value.overlay_owner,
-        profile_value.workspace_id, identity.definition_id, vocabulary)
+        profile_value.workspace_id, (bounds.object(raw) and bounds.object((bounds.object(raw)).data) or {}).application, vocabulary)
     if not decoded then return nil, nil, decode_error end
     local live, live_error = capability_grants.live(decoded, function(id: string): unknown return registry.get(id) end)
     if not live then return nil, nil, live_error end

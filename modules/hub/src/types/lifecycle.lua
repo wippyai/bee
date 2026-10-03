@@ -73,7 +73,8 @@ function M.withdrawn(raw: unknown): {[string]: boolean}
     local removed: {[string]: boolean} = {}
     for _, raw_entry in ipairs(entries) do
         local entry = bounds.object(raw_entry)
-        local receipt = operations.record(entry)
+        local receipt, receipt_error = operations.record(entry)
+        if receipt_error then error(receipt_error) end
         local modules = receipt and bounds.array(receipt.expected_modules, 512)
         if receipt and modules and receipt.action == "uninstall" and receipt.state ~= "complete" and receipt.state ~= "failed" then
             for _, raw_module in ipairs(modules) do

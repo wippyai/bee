@@ -81,6 +81,7 @@ entries:
   source: file://overlay_resolver.lua
   modules: [registry, hash]
   imports:
+    workspace_applications: bee.gov.workspace:workspace_applications
     resolution: bee.gov.delivery:resolver
     artifact: bee.gov.delivery:artifact
     canonical: bee.values:canonical

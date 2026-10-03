@@ -30,7 +30,7 @@ def sql(path, constant="LAYOUT_REFERENCES_SQL"):
         if not literal:
             raise ValueError("migration literal is missing: " + parts[index])
         result += literal[1] + parts[index + 1]
-    return result.removesuffix(']]')
+    return result.strip().removesuffix(']]')
 
 
 class RepositoryLayout(unittest.TestCase):
@@ -41,6 +41,23 @@ class RepositoryLayout(unittest.TestCase):
         self.assertGreater(entries, 1600)
         self.assertGreater(targets, 150)
         self.assertEqual(dangling, 0)
+
+    def test_admission_generation_migration_preserves_measured_history(self):
+        database = sqlite3.connect(':memory:')
+        database.execute('CREATE TABLE bee_governance_activation_intents (overlay_owner TEXT, application_admission_bytes TEXT, application_admission_digest TEXT)')
+        rows = [
+            ('bee.governance.workspace_applications:workspace.todo', '{"immutable":"prior"}', 'a' * 64),
+            ('bee.gov.apps:workspace.todo', '{"immutable":"current"}', 'b' * 64),
+            ('vendor:owner', None, None),
+        ]
+        database.executemany('INSERT INTO bee_governance_activation_intents VALUES (?, ?, ?)', rows)
+        database.executescript(sql('modules/gov/src/migrations/schema.lua', 'APPLICATION_ADMISSION_GENERATION_SQL'))
+        self.assertEqual(database.execute('SELECT overlay_owner, application_admission_bytes, application_admission_digest FROM bee_governance_activation_intents').fetchall(), rows)
+        self.assertEqual(database.execute('SELECT application_admission_generation FROM bee_governance_activation_intents').fetchall(), [('prior',), ('current',), ('current',)])
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE bee_governance_activation_intents SET application_admission_generation = 'unknown'")
+        with self.assertRaises(sqlite3.OperationalError):
+            database.executescript(sql('modules/gov/src/migrations/schema.lua', 'APPLICATION_ADMISSION_GENERATION_SQL'))
 
     def test_wrong_folder_or_source_is_rejected(self):
         with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-rule-') as temporary:

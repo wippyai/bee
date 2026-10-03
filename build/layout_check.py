@@ -11,10 +11,25 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK = {"application": "bee.app"}
-NATIVE_ENTRIES = {"bee.harness.host:environment"}
 ROOT_ENTRIES = json.loads((ROOT / "build/layout_roots.json").read_text())
 REGISTRY_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_][A-Za-z0-9_.-]*(?![A-Za-z0-9_.:-])")
 ROOT_DECLARATIONS = {"ns.definition", "ns.dependency", "ns.requirement", "contract.definition"}
+
+
+def native_entries(root):
+    entries = set()
+    for path in sorted((root / "native").rglob("*.go")):
+        if path.name.endswith("_test.go"):
+            continue
+        source = re.sub(r"//[^\n]*|/\*.*?\*/", "", path.read_text(), flags=re.S)
+        constants = dict(re.findall(r'\b(\w+)\s*=\s*"([^"\n]+:[^"\n]+)"', source))
+        helpers = dict(re.findall(r'func\s+(\w+)\(\)\s+registry.ID\s*{\s*return registry.ParseID\((\w+)\)\s*}', source))
+        for argument in re.findall(r'\.RegisterStorage\(\s*(\w+\(\)|registry.ParseID\(\w+\))\s*,', source):
+            match = re.fullmatch(r'registry.ParseID\((\w+)\)', argument)
+            constant = match[1] if match else helpers.get(argument[:-2])
+            if constant in constants:
+                entries.add(constants[constant])
+    return entries
 
 
 def audit(root):
@@ -93,6 +108,7 @@ def audit(root):
         document = yaml.safe_load(index.read_text())
         if "_" in document["namespace"]:
             errors.append(f"{index.relative_to(root)}: test overlay namespace cannot contain underscores")
+    native_targets = native_entries(root)
     external_targets = set()
     if (root / "build/component-inventory-external.json").is_file():
         from component_inventory import load_external_proofs
@@ -114,7 +130,7 @@ def audit(root):
                 ref = target["entry"]
                 if ":" not in ref:
                     ref = identity.split(":", 1)[0] + ":" + ref
-                if ref not in entries and ref not in NATIVE_ENTRIES and ref not in external_targets:
+                if ref not in entries and ref not in native_targets and ref not in external_targets:
                     errors.append(f"{identity}: dangling requirement target {ref}")
                     dangling += 1
             targets += len(entry.get("targets", []))
@@ -123,7 +139,7 @@ def audit(root):
             ):
                 errors.append(f"{identity}: append requirement cannot default to an array element")
         for ref in refs:
-            if ":" in ref and ref not in entries and ref not in NATIVE_ENTRIES and ref not in external_targets:
+            if ":" in ref and ref not in entries and ref not in native_targets and ref not in external_targets:
                 errors.append(f"{identity}: dangling linker/import target {ref}")
                 dangling += 1
         if index.relative_to(root).parts[0] == "modules" and entry["kind"] == "ns.requirement":

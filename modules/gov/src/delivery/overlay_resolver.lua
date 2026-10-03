@@ -6,6 +6,7 @@ local artifact = require("artifact")
 local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
+local workspace_applications = require("workspace_applications")
 local application_admission = require("application_admission")
 local capability_model = require("capability_model")
 local capability_grants = require("capability_grants")
@@ -455,7 +456,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
     if policy.workspace_application then
         local app_binding = policy.applications and object(policy.applications[1]) or nil
-        local app_id = app_binding and bounds.id(app_binding.definition_id) or nil
+        local app_id, application_error = workspace_applications.application(incoming)
+        if not app_id then return nil, nil, application_error end
+        if app_binding then app_binding.definition_id = app_id end
         local owner = bounds.id(policy.overlay_owner)
         local catalog_entry = current_raw["bee.security.capability:capability_catalog"]
         local vocabulary, catalog_error = capability_model.decode(catalog_entry)
@@ -597,7 +600,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             or policy.source_workspace ~= source_workspace or not bounds.id(policy.overlay_owner) then
             return nil, nil, "application admission policy does not match the selected activation profile"
         end
-        local projection, projection_error = application_admission.project({workspace_id = policy.workspace_id,
+        local projection, projection_error = application_admission.project({identity_generation = "current", workspace_id = policy.workspace_id,
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
             source_workspace = policy.source_workspace, artifact_digest = artifact_digest,
             bindings = policy.applications, artifact_entries = expected,

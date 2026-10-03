@@ -695,6 +695,7 @@
     "bee.security.hive:policy_admission_policy",
     "bee.security.hive:workspace_command_catalog_policy",
     "bee.security.hive:workspace_command_policy",
+    "bee.security.hub:receipt_metadata_policy",
     "bee.security.storage:client_storage_policy",
     "bee.security.storage:workspace_catalog_extension_policy",
     "bee.security.storage:workspace_catalog_facade_policy",

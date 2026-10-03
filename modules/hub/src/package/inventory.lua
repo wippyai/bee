@@ -135,7 +135,8 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     end
     local published_roots: {[string]: string} = {}
     for _, raw_entry in ipairs(entries) do
-        local receipt = operations.record(raw_entry)
+        local receipt, receipt_error = operations.record(raw_entry)
+        if receipt_error then return nil, receipt_error end
         local root = receipt and bounds.id(receipt.root_id)
         local name = receipt and component(receipt.component)
         if root and name and receipt and (receipt.state == "published" or receipt.state == "complete") then

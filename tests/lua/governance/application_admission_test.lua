@@ -59,10 +59,34 @@ local function define_tests()
             local old_owner = "bee.governance.workspace_applications:workspace-a.todo"
             local value = record()
             value.overlay_owner = old_owner
+            value.identity_generation = "prior"
             local measured = assert(admission.measure(value))
-            test.eq(measured.id, admission.prior_id(old_owner))
+            test.eq(measured.id, admission.id(old_owner, "prior"))
             local restored = assert(admission.entry(measured.bytes, measured.digest))
             test.eq(restored.id, measured.id)
+        end)
+
+        test.it("selects the admission generation from the measured record, independently of owner spelling", function()
+            local value = record()
+            value.identity_generation = "prior"
+            test.eq(assert(admission.measure(value)).id, admission.id(value.overlay_owner, "prior"))
+            value.identity_generation = "current"
+            value.overlay_owner = "bee.governance.workspace_applications:workspace-a.todo"
+            test.eq(assert(admission.measure(value)).id, admission.id(value.overlay_owner))
+            value.identity_generation = "future"
+            test.is_nil(admission.measure(value))
+        end)
+
+        test.it("restores historical admission bytes with the migrated generation without remeasuring their contents", function()
+            local value = record()
+            value.overlay_owner = "bee.governance.workspace_applications:workspace-a.todo"
+            local historical = assert(admission.measure(value))
+            local restored = assert(admission.decode(historical.bytes, historical.digest, "prior"))
+            test.eq(restored.bytes, historical.bytes)
+            test.eq(restored.digest, historical.digest)
+            test.eq(restored.id, admission.id(value.overlay_owner, "prior"))
+            test.is_nil(restored.record.identity_generation)
+            test.is_nil(admission.decode(historical.bytes, historical.digest, "unknown"))
         end)
 
         test.it("canonically decodes immutable bytes and builds the derived registry entry", function()

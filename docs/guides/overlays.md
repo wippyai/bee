@@ -182,8 +182,8 @@ installed grant record under the same containment rule as a local upgrade. An
 application name belongs to the source node whose activation holds it; an
 overlay with the same name from another node is refused instead of replacing
 it. With `hive: false` the rule covers only overlays this node authored. Overlay `todo` gets
-component and namespace `app.todo`, the application entry `app.todo:app` under
-the ordinary application boundary, and the private overlay owner
+component and namespace `app.todo`, exactly one `process.lua` entry declaring
+`meta.type: bee.app` under the ordinary application boundary, and the private overlay owner
 `bee.gov.apps:<workspace_id>.todo`. Nothing under the
 rule starts itself: an entry that declares `lifecycle.auto_start` is refused at
 preflight with `AUTO_START_DENIED`, so the application runs only while the

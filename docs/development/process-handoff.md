@@ -34,7 +34,9 @@ remain attached. `make session-fallback-check` exercises a session exit.
 The session Lua tests check schema rejection, queued-command acknowledgements,
 and same-PID readiness.
 
-The desktop client checkpoints a version-one layout and requests an acknowledged
+The `bee/client` component owns the desktop client at
+`bee.client.service:main`, with handoff and qualified layout values in
+`bee.client.types`. The client checkpoints a version-one layout and requests an acknowledged
 supervised replacement on `OUTDATED`. Its supervisor keeps the viewport and
 physical attachments, starts a new client, admits the same display identity,
 and announces readiness after the presenter renders. The replacement replays
@@ -49,7 +51,15 @@ The application broker drains checkpoint persistence and exits after its owner
 acknowledges replacement. The workspace host starts a new broker and restores
 automatic application records. Viewport grants belong to the old broker and
 are reissued through the owner's existing admission path; manual executions
-are not restarted automatically. `make broker-upgrade-check` checks automatic
+are not restarted automatically. An individual retained alias or restore-open
+failure keeps its saved record and reports its exact reason in the startup log
+and Apps/Needs you without terminating the broker or host.
+`make retained-startup-check RETAINED_STATE_COPY=PATH` checks fresh startup,
+copied non-credential state, a second restart and isolated restoration failures
+against the standalone executable. The copy fixture snapshots committed WAL
+data, creates fresh credentials, and reconstructs the omitted client catalog's
+default identity from the saved display assignments in a fresh client store.
+`make broker-upgrade-check` checks automatic
 Settings recovery and the retained desktop after a live definition change.
 If a replacement broker cannot start, the retained supervisor restarts the
 workspace host from its durable checkpoint and reattaches its desktops;
@@ -104,7 +114,9 @@ second registry or restart path for core updates.
 
 The desktop session and workspace host already use same-PID handoff; desktop
 clients, application brokers and the owner controller already use acknowledged
-supervised replacement. The terminal presenter changes through explicit F12.
+supervised replacement. The `bee/terminal` presenter at
+`bee.terminal.service:main` changes through explicit F12; `bee.launch:display` retains the physical surface and viewport
+lifetime. Presenter delivery attachments use their existing retirement path.
 Direct Registry changes to a `process.service` registration follow the runtime
 supervisor's own stop/start lifecycle; direct code-only changes with equal
 service configuration do not replace that controller. Hub transitions below

@@ -628,6 +628,83 @@ UPDATE bee_placement_attempts SET grants_json = (
   SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
 ) WHERE json_valid(grants_json) AND instr(grants_json, 'bee') > 0;
 ]]
+local HIVE_IDENTITY_VALUES = [[
+    (1, '"bee.hive.service:inbox_sender"', '"bee.hive.binding:inbox_sender"'),
+    (2, '"bee.hive.service:replica_sender"', '"bee.hive.binding:replica_sender"'),
+    (3, '"bee.hive.supervisor:peers"', '"bee.hive.types:peers"'),
+    (4, '"bee.hive.supervisor:registration"', '"bee.hive.types:registration"'),
+    (5, '"bee.hive.supervisor:enrollment"', '"bee.hive.types:enrollment"'),
+    (6, '"bee.hive.supervisor:invites"', '"bee.hive.types:invites"'),
+    (7, '"bee.hive.supervisor:admission"', '"bee.hive.binding:admission"'),
+    (8, '"bee.hive.supervisor:main"', '"bee.hive.service:supervisor"'),
+    (9, '"bee.hive.supervisor:owner_stop"', '"bee.hive.types:owner_stop"'),
+    (10, '"bee.hive.supervisor:workspace_commands"', '"bee.hive.types:workspace_commands"'),
+    (11, '"bee.hive.supervisor:workspace_command"', '"bee.hive.binding:workspace_command"'),
+    (12, '"bee.hive.supervisor:advertise"', '"bee.hive.binding:advertise"'),
+    (13, '"bee.hive.supervisor:audiences"', '"bee.hive.types:audiences"'),
+    (14, '"bee.hive.supervisor:policy_admission"', '"bee.hive.binding:policy_admission"'),
+    (15, '"bee.hive.supervisor:admit_policy"', '"bee.hive.binding:admit_policy"'),
+    (16, '"bee.hive.supervisor:adapters"', '"bee.hive.types:adapters"'),
+    (17, '"bee.hive.supervisor:dispatch"', '"bee.hive.binding:dispatch"'),
+    (18, '"bee.hive.supervisor:execute"', '"bee.hive.binding:execute"'),
+    (19, '"bee.hive.api:workspaces"', '"bee.hive.binding:workspaces"'),
+    (20, '"bee.hive.api:workspaces_page"', '"bee.hive.types:workspaces_page"'),
+    (21, '"bee.hive.workspace:workspace_query"', '"bee.hive.types:workspace_query"'),
+    (22, '"bee.hive.desktop:command"', '"bee.hive.service:display_command"'),
+    (23, '"bee.hive.desktop:viewer"', '"bee.hive.service:viewer"')]]
+local HIVE_REFERENCES_SQL = [[
+UPDATE bee_placement_attempts SET request_json = (
+  WITH RECURSIVE identity_moves(position, prior, current) AS (VALUES
+]] .. HIVE_IDENTITY_VALUES .. [[),
+  rewritten(position, value) AS (
+    SELECT 0, request_json
+    UNION ALL
+    SELECT identity_moves.position, replace(rewritten.value, identity_moves.prior, identity_moves.current)
+    FROM rewritten JOIN identity_moves ON identity_moves.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(request_json) AND instr(request_json, 'bee.hive') > 0;
+UPDATE bee_placement_attempts SET grants_json = (
+  WITH RECURSIVE identity_moves(position, prior, current) AS (VALUES
+]] .. HIVE_IDENTITY_VALUES .. [[),
+  rewritten(position, value) AS (
+    SELECT 0, grants_json
+    UNION ALL
+    SELECT identity_moves.position, replace(rewritten.value, identity_moves.prior, identity_moves.current)
+    FROM rewritten JOIN identity_moves ON identity_moves.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(grants_json) AND instr(grants_json, 'bee.hive') > 0;
+UPDATE bee_placement_attempts SET request_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(request_json) leaf JOIN json_tree(request_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.api'
+  ), rewritten(position, value) AS (
+    SELECT 0, request_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(request_json) AND instr(request_json, 'bee.hive.api') > 0;
+UPDATE bee_placement_attempts SET grants_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(grants_json) leaf JOIN json_tree(grants_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.api'
+  ), rewritten(position, value) AS (
+    SELECT 0, grants_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(grants_json) AND instr(grants_json, 'bee.hive.api') > 0;
+
+]]
 local DESKTOP_REFERENCES_SQL = [[
 UPDATE bee_placement_attempts SET request_json = replace(request_json, '"bee.session:main"', '"bee.desktop.service:main"')
 WHERE json_valid(request_json) AND instr(request_json, '"bee.session:main"') > 0;
@@ -753,6 +830,7 @@ DROP TABLE bee_placement_attempts;
 ALTER TABLE bee_placement_attempts_next RENAME TO bee_placement_attempts;
 CREATE INDEX bee_placement_attempts_action ON bee_placement_attempts (owner_id, action_id);
 ]], rebuild = true},
+    {id = 12, name = "hive_component_references", sql = HIVE_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

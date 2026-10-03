@@ -1,0 +1,9 @@
+organization: bee
+module: terminal
+type: library
+version: 0.1.0-dev
+description: Replaceable terminal presenter and asynchronous viewport delivery
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

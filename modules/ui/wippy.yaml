@@ -2,7 +2,7 @@ organization: bee
 module: ui
 type: library
 version: 0.1.0-dev
-description: Shared frame, semantic appearance, and bounded text helpers for Bee
+description: Shared frame, appearance, text, forms, visualization, diagrams, and folder picker for Bee
 license: MIT
 directories:
   modules: .wippy

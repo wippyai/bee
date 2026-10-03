@@ -163,3 +163,7 @@ entries:
     actions: '*'
     resources: '*'
     effect: allow
+- name: super_edit
+  kind: library.lua
+  source: file://super_edit.lua
+  modules: [hash]

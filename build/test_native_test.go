@@ -2,44 +2,31 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestNativePatchInputsAreFrozenAndVerified(t *testing.T) {
-	root := t.TempDir()
-	manifest := filepath.Join(root, "build.json")
-	patch := filepath.Join(root, "runtime.patch")
-	const original = "verified bytes"
-	if err := os.WriteFile(patch, []byte(original), 0600); err != nil {
-		t.Fatal(err)
-	}
-	data, err := json.Marshal(map[string]any{"runtime": map[string]any{
-		"repository": "https://example.invalid/runtime.git", "commit": "0123456789012345678901234567890123456789", "go": "1.27.0",
-		"patches": []map[string]string{{"path": "runtime.patch", "sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(original)))}},
-	}})
+func TestNativeRuntimeRequiresExactUpstreamPinWithoutReplacement(t *testing.T) {
+	manifest, err := nativeTestInputs(filepath.Join("..", "wippy.build.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifest, data, 0600); err != nil {
+	version := "v0.1.14-0.20261002182300-" + manifest.Runtime.Commit[:12]
+	if err := verifyRuntimeModule(manifest, runtimeModule{Version: version}); err != nil {
 		t.Fatal(err)
 	}
-	_, patches, err := nativeTestInputs(manifest, t.TempDir())
-	if err != nil {
+	for _, dependency := range []runtimeModule{{Version: "v0.1.14"}, {Version: version, Replace: &runtimeModule{Version: version}}} {
+		if verifyRuntimeModule(manifest, dependency) == nil {
+			t.Fatal("accepted mismatched or replaced runtime")
+		}
+	}
+	path := filepath.Join(t.TempDir(), "build.json")
+	data := `{"runtime":{"repository":"https://github.com/wippyai/runtime.git","commit":"5eb9901870e3a7ca72b608fc0f5e70b531d914b6","go":"1.27.0","patches":[{}]}}`
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(patch, []byte("changed"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	frozen, err := os.ReadFile(patches[0])
-	if err != nil || string(frozen) != original {
-		t.Fatalf("input changed after verification: %q %v", frozen, err)
-	}
-	if _, _, err := nativeTestInputs(manifest, t.TempDir()); err == nil {
-		t.Fatal("accepted changed patch")
+	if _, err := nativeTestInputs(path); err == nil {
+		t.Fatal("accepted a runtime patch")
 	}
 }

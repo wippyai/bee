@@ -139,5 +139,5 @@ entries:
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
-    forms: bee.app:forms
+    forms: bee.ui.forms:forms
     view: bee.approvals.inbox.app:view

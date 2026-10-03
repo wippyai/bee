@@ -12,17 +12,18 @@ standalone application processes, typed boundary decoders and host-selected
 permissions intact. Registry metadata describes capabilities; it never grants
 them. Native Terminal runs with the operating system user's authority.
 
-Keep desktop responsibilities in the `src/` component folders (`src/host`,
-`src/client`, `src/launch` and their siblings, one namespace per folder),
-public application helpers in `modules/application/src`, shared frame, appearance
-and text helpers in `modules/ui/src`, and application UI in
-`modules/<module>/src/app` child namespaces. Desktop values and the committed
-projection live in `modules/desktop/src`; the terminal shell remains in
-`src/terminal`.
+Keep host lifetime and admission in the `src/` component folders (`src/host`,
+`src/launch` and their siblings, one namespace per folder),
+public application helpers in `modules/application/src`, shared frame, appearance,
+text and presentation kits in `modules/ui/src`, and application UI in
+`modules/<module>/src/app` child namespaces. Desktop values and projection live
+in `modules/desktop/src`; client actors, attachment/catalog bindings and
+qualified layout storage live in `modules/client/src`. The terminal shell and
+delivery live in `modules/terminal/src`; `bee.launch:display` owns the physical display.
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples
-for `bee.ui:frame` and `bee.app:viz`. Apps use
+for `bee.ui:frame` and `bee.ui.viz:viz`. Apps use
 public contracts such as `bee.app:client` and
 `bee.threads.binding:authority_local`;
 they do not import private broker or store modules.
@@ -178,9 +179,7 @@ external links resolve to regular files owned by the process UID or root;
 the target and every canonical parent through filesystem root must also have
 `mode & 022 == 0`, including sticky directories. Resolution is bounded to 40
 symlinks and detects loops. Refusals retain the runtime's path and reason in the
-broker and Agent catalog. This requires the runtime release containing
-[runtime#890](https://github.com/wippyai/runtime/pull/890); the current pin safely
-ignores the field and retains containment. Windows retains containment because
+broker and Agent catalog. The pinned runtime implements this policy. Windows retains containment because
 ownership/ACL evidence is unavailable. See the
 [credential contract](../../modules/credentials/src/README.md#machine-login-links).
 

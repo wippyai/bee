@@ -22,6 +22,18 @@ the current executable against a stopped state created by the previous
 executable. States, executable digests, PTY output, original log timestamps and
 results remain available for inspection. The harness stops every owner it starts.
 The previous executable must have a different digest.
+Boot checks classify startup from output captured before cleanup. Stopping a
+retained owner closes its viewport and revokes the attached physical client's
+mount; that client can then report `terminal mount expired or revoked`.
+An error caused by the check's own shutdown does not establish a startup failure.
+Keep startup and cleanup captures separately, and preserve any startup refusal
+even when a desktop frame also appears. The external owner-copy harness accepts
+an optional source-state argument for disposable fixtures; exercise it with
+`make owner-boot-check-regression OWNER_BOOT_CHECK=/path/to/owner_boot_check.sh`.
+Copy failures stop before launch with the original database error. A client
+that exits before readiness reports its observed exit status.
+The report labels cleanup errors separately and a failed owner stop still fails
+the check.
 The existing runtime cache-statistics diagnostic records compile/typecheck hits
 and misses on owner shutdown; a fresh owner's counters also include the attach
 sample performed during that same owner lifetime.
@@ -58,12 +70,9 @@ publication retains its bounded retry timer; successful idle enrollment does
 not poll.
 Work pending at the first frame remains explicitly listed in the result.
 
-The current runtime exposes no application-runner phase logs for deployment
-verification, embedded cache seeding or artifact-cache loading. These operations
-remain inside the interval from owner preparation to native runtime load;
-the report must not assign that interval to any one of them. Mesh transport
-and native client presentation are inside the client-join interval. Separate
-timestamps for those operations require upstream runtime instrumentation.
-The native host supplies an optional `BootLogger` hook for an application runner
-that supports early structured logging; support in the production runtime pin
-remains an upstream proposal.
+The native host implements `app.BootLogger`, so the pinned runtime writes its
+own deployment selection, deployment verification, embedded Lua cache seeding,
+artifact-cache seeding and runtime boot phases directly to the diagnostic sink.
+Bee retains only host-owned preparation and lifecycle phases plus existing
+runtime/Lua event observations. Mesh transport and native client presentation
+remain inside the client-join interval.

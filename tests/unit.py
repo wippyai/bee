@@ -63,10 +63,20 @@ def split(entries, shared=()):
     return groups
 
 
+def daemon_lock_path():
+    """One lock per Docker daemon, in the user's XDG cache directory."""
+    identity = subprocess.run(["docker", "info", "--format", "{{.ID}}"], capture_output=True, text=True, check=False)
+    daemon = identity.stdout.strip()
+    if identity.returncode != 0 or not daemon:
+        raise RuntimeError(f"Docker daemon identity unavailable: {identity.stderr.strip() or 'empty ID'}")
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return cache / "bee" / f"docker-daemon-{daemon.replace(':', '-')}.lock"
+
+
 @contextmanager
 def docker_daemon_lock():
     override = os.environ.get("BEE_DOCKER_DAEMON_LOCK")
-    path = Path(override) if override else Path.home() / ".cache/bee/bee-docker-daemon.lock"
+    path = Path(override) if override else daemon_lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as handle:
         print(f"Docker daemon shard: waiting for lock {path}", flush=True)

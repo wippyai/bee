@@ -63,7 +63,7 @@ local function decode(value: unknown, request: Request): Reply?
     return {code = code, message = value.message, desktop_id = request.desktop_id or "", desktops = identities}
 end
 function M.start(request: Request): (Pending?, string?)
-    local target = request.op == "list" and "bee.client:list_desktops" or "bee.client:allocate_desktop"
+    local target = request.op == "list" and "bee.client.binding:list_desktops" or "bee.client.binding:allocate_desktop"
     local future, err = funcs.async(target, {version = 1, database_resource = "bee.env:client_db", desktop_id = request.desktop_id})
     if not future then return nil, tostring(err) end
     -- The pinned manifest exposes this native response channel as any. Its

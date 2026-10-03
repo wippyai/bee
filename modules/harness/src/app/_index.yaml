@@ -74,8 +74,8 @@ entries:
   modules: [json, funcs]
   imports:
     names: bee.app:names
-    sessions: bee.app:sessions
-    sessions_protocol: bee.app:sessions_protocol
+    sessions: bee.sessions.client:sessions
+    sessions_protocol: bee.sessions.types:protocol
     thread_record: bee.threads.records:record
     bounds: bee.values:bounds
     caller: bee.app:caller
@@ -96,7 +96,7 @@ entries:
     appearance: bee.ui:appearance
     text: bee.ui:text
     agents: bee.harness.app:agents
-    protocol: bee.app:sessions_protocol
+    protocol: bee.sessions.types:protocol
 - name: picker
   kind: library.lua
   source: file://picker.lua
@@ -108,11 +108,11 @@ entries:
     caller: bee.app:caller
     appearance: bee.ui:appearance
     input_event: bee.harness.app:input
-    sessions: bee.app:sessions
+    sessions: bee.sessions.client:sessions
     agents: bee.harness.app:agents
     session_view: bee.harness.app:session_view
     directory_view: bee.harness.app:directory_view
-    sessions_protocol: bee.app:sessions_protocol
+    sessions_protocol: bee.sessions.types:protocol
     admission: bee.harness.launch:admission
     view: bee.harness.app:picker_view
     forms: bee.harness.app:profile_form
@@ -156,7 +156,7 @@ entries:
     appearance: bee.ui:appearance
     text: bee.ui:text
     caller: bee.app:caller
-    folder_picker: bee.app:folder_picker
+    folder_picker: bee.ui.picker:folder
     editor: bee.harness.app:profile_editor
     forms: bee.harness.app:profile_form
 
@@ -167,7 +167,7 @@ entries:
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     text: bee.ui:text
-    protocol: bee.app:sessions_protocol
+    protocol: bee.sessions.types:protocol
     agents: bee.harness.app:agents
 
 - name: terminal_view

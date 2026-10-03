@@ -17,6 +17,18 @@ local function answer(connection: string, sequence: integer, id: string, instanc
 end
 local function define_tests()
     test.describe("Client question ownership", function()
+        test.it("delivers and acknowledges restoration failures without a live view selection", function()
+            local state = questions.new(workspace)
+            assert(questions.select(state, "client", {version = 1, workspace_id = workspace, connection_id = "client", revision = 1, targets = {}}))
+            local notice = question("retained", "retained", "restoration")
+            notice.restoration = true
+            assert(questions.update(state, {version = 1, items = {notice}}))
+            local snapshot = assert(questions.snapshot(state, "client"))
+            test.eq(#snapshot.items, 1)
+            test.is_true(snapshot.items[1].restoration == true)
+            test.not_nil(questions.answer(state, "client", answer("client", 1, "retained", "retained", "restoration")))
+            test.is_nil(questions.answer(state, "client", answer("client", 1, "retained", "foreign", "restoration")))
+        end)
         test.it("publishes only selected exact targets and replays pending questions on rejoin", function()
             local state = questions.new(workspace)
             test.is_true(questions.update(state, {version = 1, items = {question("left", "a", "q1"), question("right", "b", "q2")}}))

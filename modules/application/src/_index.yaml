@@ -7,12 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee application SDK
-    comment: Public application-side values, presentation helpers, and bounded thread
-      facade messages; helpers grant no application, workspace, or thread authority
-- name: dependency_threads
-  kind: ns.dependency
-  component: bee/threads
-  version: '*'
+    comment: Public application-side values and owner reply decoding; helpers grant
+      no application, workspace, or thread authority
 - name: client
   kind: library.lua
   source: file://client.lua
@@ -22,27 +18,7 @@ entries:
   imports:
     arguments: bee.app:arguments
     interaction: bee.app:interaction
-    thread_bounds: bee.threads.records:bounds
-    thread_protocol: bee.app:thread_protocol
     bounds: bee.values:bounds
-- name: sessions_protocol
-  kind: library.lua
-  source: file://sessions_protocol.lua
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    record_values: bee.threads.records:values
-    record_types: bee.threads:record_types
-    budget_values: bee.threads.records:budgets
-    profile_values: bee.harness.profiles:protocol
-- name: sessions
-  kind: library.lua
-  source: file://sessions.lua
-  modules:
-  - contract
-  imports:
-    bounds: bee.values:bounds
-    protocol: bee.app:sessions_protocol
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
@@ -50,39 +26,7 @@ entries:
   kind: library.lua
   source: file://caller.lua
   imports:
-    bounds: bee.values:bounds
-    record_bounds: bee.threads.records:bounds
-- name: folder_picker
-  kind: library.lua
-  source: file://folder_picker.lua
-  imports:
-    text: bee.ui:text
-    caller: bee.app:caller
-    frame: bee.ui:frame
-    bounds: bee.values:bounds
-- name: host_leases
-  kind: library.lua
-  source: file://host_leases.lua
-  modules:
-  - process
-  - channel
-  - time
-  - uuid
-  imports:
-    bounds: bee.values:bounds
-- name: status_reader
-  kind: library.lua
-  source: file://status_reader.lua
-  imports:
-    bounds: bee.values:bounds
-    caller: bee.app:caller
-    text: bee.ui:text
-    record_bounds: bee.threads.records:bounds
-- name: status_surface
-  kind: library.lua
-  source: file://status_surface.lua
-  imports:
-    bounds: bee.values:bounds
+    reply: bee.values:reply
 - name: interaction
   kind: library.lua
   source: file://interaction.lua
@@ -91,39 +35,6 @@ entries:
 - name: names
   kind: library.lua
   source: file://names.lua
-- name: thread_protocol
-  kind: library.lua
-  source: file://thread_protocol.lua
-  imports:
-    bounds: bee.values:bounds
-    record: bee.threads.records:record
-    record_types: bee.threads:record_types
-    record_bounds: bee.threads.records:bounds
-- name: viz
-  kind: library.lua
-  source: file://viz.lua
-  modules:
-  - tty
-  imports:
-    appearance: bee.ui:appearance
-    frame: bee.ui:frame
-- name: forms
-  kind: library.lua
-  source: file://forms.lua
-  modules:
-  - tty
-  imports:
-    appearance: bee.ui:appearance
-    frame: bee.ui:frame
-- name: diagram
-  kind: library.lua
-  source: file://diagram.lua
-  modules:
-  - tty
-  imports:
-    appearance: bee.ui:appearance
-    frame: bee.ui:frame
-    viz: bee.app:viz
 - name: dependency_values
   kind: ns.dependency
   component: bee/values

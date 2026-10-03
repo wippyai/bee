@@ -11,39 +11,17 @@ type Envelope = {ok: true, error: nil, value: unknown, replayed: boolean?}
     | {ok: false, error: Fault, value: unknown?, replayed: boolean?}
 type Call = (string, unknown) -> (unknown, string?)
 type Client = {invoke: (Client, string, unknown) -> Reply?}
-local bounds = require("bounds")
-local record_bounds = require("record_bounds")
-
-local function decode_fault(raw: unknown): Fault?
-    local declared = bounds.object(raw)
-    if not declared or bounds.fields(declared, {"code", "message", "retryable"}) then return nil end
-    local code = bounds.id(declared.code)
-    local message = bounds.text(declared.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
-    if not code or not message or (declared.retryable ~= nil and type(declared.retryable) ~= "boolean") then return nil end
-    local retryable: boolean? = nil
-    if declared.retryable ~= nil then retryable = declared.retryable end
-    return {code = code, message = message, retryable = retryable}
-end
+local reply = require("reply")
 
 -- The common owner envelope permits a failure value only for callers that
 -- decode an operation-specific error projection themselves.
 function M.envelope(raw: unknown): Envelope?
-    local reply = bounds.object(raw)
-    if not reply or bounds.fields(reply, {"ok", "error", "value", "replayed"}) then return nil end
-    if type(reply.ok) ~= "boolean" then return nil end
-    local replayed: boolean? = nil
-    if reply.replayed ~= nil then
-        if type(reply.replayed) ~= "boolean" then return nil end
-        replayed = reply.replayed
+    local decoded = reply.decode(raw)
+    if not decoded then return nil end
+    if decoded.ok == true then
+        if decoded.value == nil then return nil end
+        return {ok = true, error = nil, value = decoded.value, replayed = decoded.replayed}
     end
-    if reply.ok then
-        if reply.error ~= nil or reply.value == nil then return nil end
-        local decoded: Envelope = {ok = true, error = nil, value = reply.value, replayed = replayed}
-        return decoded
-    end
-    local fault = decode_fault(reply.error)
-    if not fault then return nil end
-    local decoded: Envelope = {ok = false, error = fault, value = reply.value, replayed = replayed}
     return decoded
 end
 

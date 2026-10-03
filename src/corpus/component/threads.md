@@ -19,6 +19,7 @@ delivery contract and does not schedule work.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
+| `bee.threads.hive.binding` | Optional Hive thread-operation admission through the public protocol and host-selected destination grants |
 | `bee.threads.persist` | The owned store: checked migration ledger (29 migrations), owner incarnation, connection settings, typed readers, write transactions, Sessions journal SQL and stored-row decoders, and forwarding outbox repository |
 
 The journal bindings call `bee.threads.service:work_store` for request validation,
@@ -106,7 +107,7 @@ the same owner-or-discover gate a lookup does. The forwarding outbox
 `bee.threads.service:pump_worker`: it leases due rows across every sender,
 delivers each through the destination's admission and settles only on the
 destination's own reply. Its transport is host-selected through the `sender`
-requirement — the bundled host links `bee.hive.service:inbox_sender` — and a
+requirement — the bundled host links `bee.hive.binding:inbox_sender` — and a
 composition that links no sender leaves due rows queued and reports each
 delivery unknown.
 `inbox_offer` gives the target's current carrier only the oldest outstanding
@@ -151,7 +152,13 @@ sequence-bearing indexes without changing retained records), and 21
 `profile_budget_names_and_session_accounting` (budget field conversion and
 session consumption counters), 28 `app_child_definition_data` (the definition
 migration marker), and 29 `cancel_intent_admission_repair` (rebuild retained
-cancellation intents under the current admission constraints).
+cancellation intents under the current admission constraints), and 30
+`retained_app_definition_data` (preserve marker 1 and admit subsequent owner
+identity migrations). Definition migration 2 repairs historic Inbox, Workspace
+Manager, Hive Manager, Modules, Timeline and core application identities using
+the existing actor, membership, alias, sender-rule and mutable-receipt fanout.
+Instance identities, attestation creation times and active flags survive the
+conversion. Applied schema migrations and immutable thread records stay intact.
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and
@@ -176,3 +183,25 @@ work and returns `interactive_active` when a nonclosed hook Session remains,
 even with no current Work. The ordinary pull scan retains its existing shape
 and filtering. This reads the existing session/work store in one transaction;
 no schema or persisted identity changes.
+
+## Hive adapter
+
+`bee.threads.hive.binding:admit` admits authenticated cross-node thread
+operations selected by the host's existing Hive adapter table. The adapter
+uses Hive's public `bee.hive:types` protocol, including principal mapping
+values and the mapped caller's invocation check. It keeps the exact operation,
+owner service, revision, payload, digest, deadline, caller-node and issuer
+checks before calling the thread owner under the mapped actor's policies.
+
+Threads adds no Hive dependency to its base composition. A host that composes
+Hive selects `bee.threads.hive:target_admit_policies` as the destination
+admission grants. The adapter imports the public protocol directly.
+Bee supplies these selections through its existing `bee.deps:threads` entry.
+The host retains `bee.threads.hive:admission_policy`,
+`bee.threads.hive:identity_policy` and the principal mapping table, with their
+existing IDs. The adapter's policy underlay is empty without host selection.
+
+The implementation move is M0/M4: stored thread identities, policy selections,
+member actor encoding, topics, schema tags and applied migrations are unchanged.
+Use a full node restart to load the adapter closure; Hive supervisor handoff
+remains a proposal.

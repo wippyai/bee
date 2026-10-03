@@ -36,11 +36,68 @@ func TestWaitEnrolledReturnsCorruptRendezvousImmediately(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = waitEnrolled(ctx, state, "bee-client-test", public)
+	err = waitEnrolled(ctx, state, "bee-client-test", public, nil)
 	if err == nil || errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("corrupt rendezvous result = %v", err)
 	}
 	if time.Since(started) > time.Second {
 		t.Fatalf("corrupt rendezvous took %s to return", time.Since(started))
+	}
+}
+
+func TestWaitEnrolledDoesNotMaskFailureWithReadyEnrollment(t *testing.T) {
+	ctx := context.Background()
+	state := t.TempDir()
+	descriptor := fakeDescriptor(t)
+	descriptor.Launch = "0123456789abcdef0123456789abcdef"
+	store, err := rendezvous.New(filepath.Join(state, rendezvous.DirectoryName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Publish(ctx, descriptor); err != nil {
+		t.Fatal(err)
+	}
+	enrollment, err := rendezvous.NewEnrollment(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := enrollment.Initialize(ctx, descriptor.Execution, make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := enrollment.Register(ctx, descriptor.Execution, "bee-client-test", public); err != nil {
+		t.Fatal(err)
+	}
+	monitor, err := beginStartup(ctx, state, descriptor.Launch, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	monitor.cancel()
+	<-monitor.done
+	monitor.mutex.Lock()
+	monitor.snapshot.Ready = true
+	monitor.snapshot.Error = "exact published startup failure"
+	monitor.dirty = true
+	monitor.mutex.Unlock()
+	if err := monitor.flush(); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitEnrolled(ctx, state, "bee-client-test", public, nil); err == nil || err.Error() != "exact published startup failure" {
+		t.Fatalf("masked failure as readiness: %v", err)
+	}
+	monitor.mutex.Lock()
+	monitor.snapshot.Error = ""
+	monitor.dirty = true
+	monitor.mutex.Unlock()
+	if err := monitor.flush(); err != nil {
+		t.Fatal(err)
+	}
+	cause := errors.New("observed owner exit before enrollment")
+	if err := waitEnrolled(ctx, state, "bee-client-test", public, func() error { return cause }); !errors.Is(err, cause) {
+		t.Fatalf("masked supervision with readiness: %v", err)
 	}
 }

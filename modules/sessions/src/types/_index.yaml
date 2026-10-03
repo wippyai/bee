@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.sessions.types
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    record_values: bee.threads.records:values
+    record_types: bee.threads:record_types
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol

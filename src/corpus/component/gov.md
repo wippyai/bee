@@ -1,17 +1,32 @@
 # Overlay authoring and preflight
 
-Internal typed checks over a destination-host-resolved package closure. The
-`hub_resolver` module supplies the internal destination resolution adapter; this
-library has no publication, SQL, network, approval or process permissions. It
-is not a public install/update API.
+Governance owns caller-scoped overlay authoring, measured admission and
+approval-bound destination activation. Its root registers the component,
+dependencies, host requirements and public contracts. Registry metadata
+describes capabilities; only host-selected permissions authorize operations.
 
-`bee.gov.delivery:resolver` owns the shared `Resolver` interface for staging and
+`bee.gov.types` owns the artifact, application admission, capability, profile,
+lease, authoring and delivery schemas, value decoders and measurement formats.
+`bee.gov.binding` owns resolution, preflight, materialization, live admission
+selection and activation operations. `bee.gov.persist` owns SQL repositories,
+`bee.gov.migrations` the immutable ledger, `bee.gov.service` recovery processes,
+`bee.gov.security` policy templates and scopes, and `bee.gov.traits` agent tools.
+The host injects selected resources through the existing requirements.
+
+This M0 role correction changes library IDs and direct imports together. Public
+contracts and bindings, process IDs, stores, topics, schema tags and digest
+algorithms retain their identities; no row migration is needed. Before deploying
+these moved definitions, quiesce pending effects that reference removed helper
+IDs and restart consuming owners. Frozen artifacts and Registry/Hub/Governance
+receipts remain immutable; publication alone does not replace active closures.
+
+`bee.gov.types:resolver` owns the shared `Resolver` interface for staging and
 activation: `resolve` returns the measured candidate and destination context,
 and optional `revision` observes the current registry revision. Hub and overlay
 resolvers implement this interface with the same method receiver type.
 
-The primary planned consumer activates internal packs/changes in service-owned
-ephemeral overlays, without durable registry publication. Agents call a scoped
+The destination owner activates reviewed changes in owner-local ephemeral
+overlays without durable registry publication. Agents call a scoped
 headless governance trait; they do not receive the owner's writer permissions.
 The internal overlay materializer now replaces one complete owner-local overlay
 from exact decoded artifact entries. `activation_owner` binds the selected plan,
@@ -23,7 +38,7 @@ captures exact work and runs it behind a prerequisite overlay before the full
 application overlay becomes visible. The agent execution environment is separate.
 Persistent target ledgers remain authoritative even for ephemeral definitions.
 
-`bee.gov.workspace:workspace` now freezes trusted in-memory file records into a
+`bee.gov.types:workspace` now freezes trusted in-memory file records into a
 deterministic binary-safe snapshot. It copies records, measures each file's bytes
 and SHA-256, hashes a sorted length-framed manifest, and binds workspace identity
 and revision. It rejects path traversal, drive/stream paths, duplicate paths,
@@ -68,7 +83,7 @@ its internal `workspace_id`.
 For an application candidate, the author writes `entries.json` as a plain JSON
 list of complete registry entries and freezes it with the other source files.
 The publication preparation service parses that exact frozen file and uses
-`bee.gov.delivery:artifact` to create the canonical measured envelope. It executes
+`bee.gov.types:artifact` to create the canonical measured envelope. It executes
 no code and does not mutate the overlay or frozen snapshot.
 `bee.gov.binding:publication_call` checks `bee.gov.delivery.manage` for prepare
 or `bee.gov.delivery.publish` for publish against the caller's exact workspace
@@ -101,7 +116,7 @@ conflicts, entry ownership and scoped permissions, explicit deletion and unchang
 durable history on the candidate executable. Logical overlay ownership is not
 automatic process-exit cleanup. Expanded packages, service readiness and migration
 ordering remain unproved by this registry-entry-only fixture.
-`bee.gov.delivery:materializer` keeps the overlay owner outside transferred data,
+`bee.gov.binding:materializer` keeps the overlay owner outside transferred data,
 copies and remeasures the desired artifact, and deletes definitions no longer in
 that owner's complete desired set. Cleanup can reconcile and observe the exact
 empty owner overlay without making an empty application artifact publishable. It
@@ -203,7 +218,7 @@ failure falls back to this last good generation, and a committed migration
 whose compensation cannot complete stops in recovery rather than booting
 incompatible code against newer data.
 
-`bee.gov.delivery:hub_resolver` now provides the destination resolution adapter.
+`bee.gov.binding:hub_resolver` now provides the destination resolution adapter.
 It captures one atomic registry state, asks the runtime to plan a
 host-selected Hub dependency root, reconstructs the complete selected closure
 from the planned final state, and retains definitions absent from the plan

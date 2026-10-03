@@ -22,7 +22,7 @@ local function request(attempt_id: string, required_cleanup: string?): {[string]
         policy_ref = policy, profile_id = "window", binding_digest = string.rep("a", 64), profile_digest = string.rep("b", 64),
         launch = {executable = "sh", argv = {"-c", "IFS= read -r line; printf 'WINDOW:%s\\n' \"$line\"; stty size; sleep 30"}, environment = {}, working_directory_ref = nil, readiness = "none"},
         resources = {}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = cleanup,
-        required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
+        required_exit_observation = "eof_gated", timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
 end
 local function caller()
     local policy = assert(security.policy("bee.window.native:caller_policy"))

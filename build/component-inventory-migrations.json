@@ -1712,29 +1712,36 @@
       "category": "ids",
       "from": "bee.hive.supervisor:main",
       "migration": "M4",
-      "reason": "Hive implementation placement; additive Placement 11, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
       "to": "bee.hive.service:supervisor"
     },
     {
       "category": "ids",
       "from": "bee.hive.desktop:command",
       "migration": "M4",
-      "reason": "Hive implementation placement; additive Placement 11, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
       "to": "bee.hive.service:display_command"
     },
     {
       "category": "ids",
       "from": "bee.hive.desktop:viewer",
       "migration": "M4",
-      "reason": "Hive implementation placement; additive Placement 11, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
       "to": "bee.hive.service:viewer"
     },
     {
       "category": "ids",
       "from": "bee.hive.api:workspaces",
       "migration": "M4",
-      "reason": "Hive implementation placement; additive Placement 11, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart. Structured workspace owner_ref.service_id changes from bee.hive.api to bee.hive.binding in the same owner conversions.",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart. Structured workspace owner_ref.service_id changes from bee.hive.api to bee.hive.binding in the same owner conversions.",
       "to": "bee.hive.binding:workspaces"
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.launch-policy@2",
+      "to": "tag:bee.launch-policy@3",
+      "migration": "M5",
+      "reason": "Owner-approved supervised startup removes the caller deadline. The explicit revision-two decoder validates and retires start_ms while preserving its original entry digest; revision three rejects the retired field. Placement migration 11 removes stored request deadlines and introduces precise start_failed state without modifying prior ledgers."
     }
   ]
 }

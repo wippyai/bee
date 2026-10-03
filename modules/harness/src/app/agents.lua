@@ -23,7 +23,7 @@ type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, t
     status: string, ready: boolean, reason: string, driver: string?}
 type EntrySortKey = {ref: string, title: string, ready: boolean, driver: string?}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
-type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
+type TurnState = "queued" | "starting" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
 type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
@@ -159,6 +159,18 @@ local function settle(turn: Turn, observed: unknown)
     end
 end
 
+function M.placement_progress(raw: unknown): ({state: TurnState, cause: string?}?, string?)
+    local value = bounds.object(raw)
+    if not value then return nil, "placement observation must be an object" end
+    if value.execution_state == "starting" then return {state = "starting"}, nil end
+    if value.execution_state == "running" then return {state = "working"}, nil end
+    if value.execution_state == "start_failed" then
+        local cause = bounds.text(value.start_failure, 4096)
+        if not cause then return nil, "failed startup observation omitted its cause" end
+        return {state = "failed", cause = cause}, nil
+    end
+    return nil, "placement observation has no startup transition"
+end
 local function observe_thread(conv: Conversation)
     local thread = conv.session.snapshot.thread_ref
     if not thread then return end
@@ -184,7 +196,18 @@ local function observe_thread(conv: Conversation)
                         if detail and event.subject == turn.work:ref() then
                             if observation.type == "text" and data.segment_id == "executor-stderr" and type(data.text) == "string" then
                                 turn.diagnostics = ((turn.diagnostics or "") .. data.text):sub(-4096)
-                            elseif observation.type == "text" and (turn.state == "queued" or turn.state == "working")
+                            elseif observation.type == "extension" and data.event_name == "bee.placement.attempt" and data.event_revision == "1" and type(data.payload_json) == "string" then
+                                local payload, parse_error = json.decode(data.payload_json)
+                                if parse_error then conv.notice = "placement observation: " .. tostring(parse_error)
+                                else
+                                    local progress, progress_error = M.placement_progress(payload)
+                                    if not progress then conv.notice = assert(progress_error)
+                                    elseif turn.state == "queued" or turn.state == "starting" or turn.state == "working" then
+                                        turn.state = progress.state
+                                        if progress.cause then turn.text = progress.cause end
+                                    end
+                                end
+                            elseif observation.type == "text" and (turn.state == "queued" or turn.state == "starting" or turn.state == "working")
                                 and data.channel ~= "progress" and type(data.text) == "string" and #data.text <= 65536 then
                                 local segment = bounds.id(data.segment_id) or "answer"
                                 turn.segments = turn.segments or {}
@@ -226,13 +249,13 @@ function M.refresh(conv: Conversation): boolean
     conv.activity_evidence = snapshot.activity_evidence
     conv.notice = ""
     for _, turn in ipairs(conv.turns) do
-        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then
+        if turn.state == "queued" or turn.state == "starting" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then
             local observed, await_fault = turn.work:await({timeout_ms = 0})
             if not observed then
                 conv.notice = describe(await_fault)
             elseif observed.tag == "pending" then
                 local state = turn.work:state()
-                turn.state = state and state.phase == "queued" and "queued" or "working"
+                if turn.state ~= "starting" then turn.state = state and state.phase == "queued" and "queued" or "working" end
             else
                 settle(turn, observed)
             end
@@ -324,7 +347,7 @@ end
 
 function M.pending(conv: Conversation): boolean
     for _, turn in ipairs(conv.turns) do
-        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" then return true end
+        if turn.state == "queued" or turn.state == "starting" or turn.state == "working" or turn.state == "blocked" then return true end
     end
     return false
 end

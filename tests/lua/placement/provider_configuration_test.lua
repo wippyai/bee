@@ -154,7 +154,7 @@ local function launch(attempt_id: string): {[string]: unknown}
         binding_ref = BINDING, policy_ref = POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
         launch = {executable = "sh", argv = {"-c", "test -s \"$HOME/.fixture-agent/provider.json\""}, environment = {}, working_directory_ref = "project", readiness = "none"},
         configuration_digest = provider_configuration_digest(), resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500}}
+        environment = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated", timeouts = {stop_grace_ms = 500}}
 end
 
 local function denied_without_intent(request: {[string]: unknown}, expected: string)
@@ -309,7 +309,9 @@ local function define_tests()
                 local started_reply = call(OWNER, "start", {attempt_id = prepared.attempt_id})
                 test.is_true(started_reply.ok)
                 local started = assert(bounds.object(started_reply.value))
-                test.eq(started.execution_state, "running")
+                test.eq(started.execution_state, "starting")
+                assert(type(prepared.attempt_id) == "string")
+                wait_for_exit(prepared.attempt_id)
 
                 local key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
                 local path = assert(homes.os_path("/attempts/" .. key .. "/home/.fixture-agent/provider.json"))

@@ -22,4 +22,5 @@ entries:
   imports:
     test: wippy.test:test
     ledger: bee.persist.persist:ledger
+    governance_migrations: bee.gov.migrations:schema
   security: {policies: [bee.persist:ledger_test_policy]}

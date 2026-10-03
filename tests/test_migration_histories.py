@@ -14,6 +14,13 @@ SOURCES = {
     'gateway': 'modules/gateway/src/migrations/migrations.lua',
     'sync': 'modules/sync/src/migrations/migrations.lua',
 }
+IDEMPOTENT_REPAIRS = {
+    'workspace': {'inbox_application_child_name_v1', 'workspace_root_names_v1'},
+    'threads': {'cancel_intent_admission_repair'},
+    'governance': {'governance_lease_use_admission_repair'},
+    'gateway': {'telemetry_owner_reference_repair', 'desktop_projection_references'},
+    'sync': {'telemetry_owner_reference_repair', 'desktop_projection_references'},
+}
 
 
 def migrations(source):
@@ -115,9 +122,10 @@ class MigrationHistories(unittest.TestCase):
                             db.execute("UPDATE workspaces SET created_at = 'saved', last_used_at = 'saved'")
                     self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
                     before = snapshot(db)
-                    repair_start = {'workspace': 13, 'threads': 29, 'governance': 16, 'gateway': 18, 'sync': 10}[owner]
-                    for identity, _, sql in current:
-                        if identity >= repair_start:
+                    repairs = IDEMPOTENT_REPAIRS[owner]
+                    self.assertEqual({name for _, name, _ in current} & repairs, repairs)
+                    for _, name, sql in current:
+                        if name in repairs:
                             db.executescript(sql)
                     self.assertEqual(snapshot(db), before)
                     snapshots.append(before)

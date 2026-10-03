@@ -727,7 +727,10 @@ app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
 
-.PHONY: persist-migration-check
+.PHONY: persist-migration-check migration-history-unit-check
+migration-history-unit-check: $(TOOLCHAIN_CURRENT)
+	python3 -m unittest discover -s tests -p test_migration_histories.py
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.persist ledger_test
 persist-migration-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
 check: persist-migration-check

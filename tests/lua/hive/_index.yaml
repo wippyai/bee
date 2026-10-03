@@ -303,7 +303,7 @@ entries:
   imports:
     display: bee.hive.desktop:display
     remote: bee.hive.desktop:remote
-    delivery: bee.terminal:delivery
+    delivery: bee.terminal.service:delivery
 
 - name: viewer_display_fixture
   kind: library.lua
@@ -311,7 +311,7 @@ entries:
   meta: {type: test_support}
   imports:
     display: bee.hive.desktop:display
-    delivery: bee.terminal:delivery
+    delivery: bee.terminal.service:delivery
 
 - name: inbox_discover_test_policy
   kind: security.policy

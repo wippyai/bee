@@ -597,6 +597,10 @@ hive-supervisor-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go -C native test -race -count=1 -v ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go -run '^TestHiveSupervisor'
 
+.PHONY: hive-viewer-unit-check
+hive-viewer-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.hive desktop_viewer_test
+
 .PHONY: attachments-check
 attachments-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import lifecycle; lifecycle.detached()'

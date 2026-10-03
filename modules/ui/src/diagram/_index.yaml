@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.ui.diagram
+entries:
+- name: diagram
+  kind: library.lua
+  source: file://diagram.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    viz: bee.ui.viz:viz

@@ -180,3 +180,7 @@ entries:
     actions: [db.get, registry.get, registry.overlay.get, registry.snapshot, system.read, env.get, env.set]
     resources: '*'
     effect: allow
+- name: super_edit
+  kind: library.lua
+  source: file://super_edit.lua
+  modules: [hash]

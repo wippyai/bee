@@ -469,7 +469,7 @@ function M.visual_style(): string
         .. " and wide from 160x48, and frame.layout returns the header, tabs, work, action bar and footer rows."
         .. " Pick the archetype that matches the request and compose it from its calls, so even a complex"
         .. " dashboard is a one-shot composition: " .. table.concat(routes, "; ") .. "."
-        .. " Chart with the visualization kit bee.app:viz, imported as viz = \"bee.app:viz\":"
+        .. " Chart with the visualization kit bee.ui.viz:viz, imported as viz = \"bee.ui.viz:viz\":"
         .. " viz.sparkline, viz.line (area too), viz.bars, viz.columns, viz.stacked, viz.histogram, viz.heatmap,"
         .. " viz.waffle, viz.gauge, viz.progress, viz.tiles, viz.bar_cell, viz.timeline and viz.graph, with viz.series"
         .. " rings and a viz.cadence for live data. Compose a dashboard from those calls; the toolkit document"

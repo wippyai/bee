@@ -5,15 +5,16 @@ entries:
   kind: process.lua
   source: file://app.lua
   method: main
-  modules: [tty, process, channel, time, uuid, json, funcs, registry]
+  modules: [tty, process, channel, time, uuid, funcs, registry]
   imports:
     frame: bee.ui:frame
     client: bee.app:client
     appearance: bee.ui:appearance
+    windows: bee.approvals.types:windows
+    clock: bee.values:clock
     model: bee.approvals.inbox.app:model
     view: bee.approvals.inbox.app:view
     inbox: bee.approvals.inbox.app:client
-    caller: bee.app:caller
     feeds: bee.approvals.inbox.app:feeds
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
@@ -38,6 +39,7 @@ entries:
   source: file://model.lua
   modules: [json]
   imports:
+    windows: bee.approvals.types:windows
     text: bee.ui:text
     bounds: bee.values:bounds
     caller: bee.app:caller
@@ -55,7 +57,7 @@ entries:
   imports:
     appearance: bee.ui:appearance
     frame: bee.ui:frame
-    forms: bee.app:forms
+    forms: bee.ui.forms:forms
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
 - name: feeds
@@ -76,12 +78,11 @@ entries:
     appearance: bee.ui:appearance
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
+    windows: bee.approvals.types:windows
     names: bee.app:names
 - name: client
   kind: library.lua
   source: file://client.lua
-  imports:
-    caller: bee.app:caller
 - name: source_config
   kind: library.lua
   source: file://sources.lua

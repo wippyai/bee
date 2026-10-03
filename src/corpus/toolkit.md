@@ -145,9 +145,9 @@ type Palette = {query: string, choices: {Choice}, selected: integer, offset: int
 
 ## Visualization kit
 
-`bee.app:viz` draws charts inside a `frame.Rect` of a frame painter,
+`bee.ui.viz:viz` draws charts inside a `frame.Rect` of a frame painter,
 from semantic roles, and keeps live series bounded. Import it as
-`viz = "bee.app:viz"` next to `frame` and `appearance`. Every function is
+`viz = "bee.ui.viz:viz"` next to `frame` and `appearance`. Every function is
 pure: the process owns `viz.series` rings, pushes one sample per tick and
 repaints when `viz.due` says a frame is due; the view reads `viz.values`. Choose
 the function by the question in `docs/app_style` section 12.

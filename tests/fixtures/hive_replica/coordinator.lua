@@ -467,7 +467,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
     end
     local function start(): string
         local pid = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-            :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})))
+            :spawn_monitored("bee.hive.service:supervisor", types.SUPERVISOR_HOST, {configured_nodes = {remote}})))
         local deadline = time.now():add("60s")
         while time.now():before(deadline) do
             if client.supervisor() == pid then return pid end

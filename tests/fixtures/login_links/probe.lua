@@ -33,7 +33,6 @@ local function define_tests()
     local target = assert(env.get("bee.test.loginlinks:target"))
     assert(type(expected) == "string" and type(target) == "string")
     local accepted = expected == "accepted"
-    local contained = expected == "contained"
     local function refusal(message: string?)
         test.not_nil(message)
         if not message then error("missing refusal reason") end
@@ -47,13 +46,13 @@ local function define_tests()
             local volume = assert(fs.get("bee.env:machine_login_source"))
             local present, err = volume:exists(".codex/auth.json")
             test.eq(present, accepted)
-            if accepted or contained then test.is_nil(err) else refusal(tostring(err)) end
+            if accepted then test.is_nil(err) else refusal(tostring(err)) end
         end)
         test.it("reports metadata availability and projection check with refusal reasons", function()
             value(call("define", {workspace_id = WS, name = "login", provider = "codex",
                 source = {kind = "fs_directory", ref = "bee.env:machine_login_source"}}))
             local availability = call("availability", {workspace_id = WS, name = "login"})
-            if accepted or contained then test.eq(value(availability).present, accepted)
+            if accepted then test.eq(value(availability).present, accepted)
             else test.eq(availability.error and availability.error.code, "UNAVAILABLE"); refusal(availability.error and availability.error.message) end
             local digest = string.rep("a", 64)
             local projection = value(call("issue_projection", {workspace_id = WS, name = "login", audience = SUBJECT,
@@ -62,7 +61,7 @@ local function define_tests()
             local projection_id = assert(bounds.id(projection.projection_id))
             local use: Object = {projection_id = projection_id, subject = SUBJECT, audience = SUBJECT, attempt_id = ATTEMPT}
             local checked = call("check", use)
-            if accepted or contained then test.eq(value(checked).source_present, accepted)
+            if accepted then test.eq(value(checked).source_present, accepted)
             else test.eq(checked.error and checked.error.code, "UNAVAILABLE"); refusal(checked.error and checked.error.message) end
             use.generation_key = "loginlinks-materialize"
             local materialized = call("materialize", use)
@@ -71,16 +70,16 @@ local function define_tests()
                 test.eq(result.source_present, true)
                 -- Compare only the synthetic fixture; never print the returned file.
                 test.is_true(result.value == '{"fixture":true}')
-            elseif not contained then
+            else
                 test.eq(materialized.error and materialized.error.code, "UNAVAILABLE")
                 refusal(materialized.error and materialized.error.message)
-            else test.is_false(materialized.ok) end
+            end
         end)
         test.it("carries locate refusal into the person-facing login-needed state", function()
             local result = assert(locator.locate(assert(registry.snapshot()), "bee.driver.codex.binding:binding", "window", locator.new_cache()))
             test.eq(result.status, accepted and "ready" or "unconfigured")
             test.eq(result.login.exists, accepted)
-            if not accepted and not contained then refusal(result.reason) end
+            if not accepted then refusal(result.reason) end
             local client = sessions_fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?)
                 return {items = {{ref = "bee.driver.codex.profiles:default_window", kind = "definition", title = "Codex",
                     status = result.status, checked_at = "2026-10-01T12:00:00.000Z", reasons = {result.reason or ""},
@@ -89,7 +88,7 @@ local function define_tests()
             end})
             local listing = assert(agents.list(client, true))
             test.eq(listing.items[1].ready, accepted)
-            if not accepted and not contained then refusal(listing.items[1].reason); test.is_true(listing.items[1].reason:find("Login needed", 1, true) ~= nil) end
+            if not accepted then refusal(listing.items[1].reason); test.is_true(listing.items[1].reason:find("Login needed", 1, true) ~= nil) end
         end)
     end)
 end

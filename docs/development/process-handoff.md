@@ -34,7 +34,9 @@ remain attached. `make session-fallback-check` exercises a session exit.
 The session Lua tests check schema rejection, queued-command acknowledgements,
 and same-PID readiness.
 
-The desktop client checkpoints a version-one layout and requests an acknowledged
+The `bee/client` component owns the desktop client at
+`bee.client.service:main`, with handoff and qualified layout values in
+`bee.client.types`. The client checkpoints a version-one layout and requests an acknowledged
 supervised replacement on `OUTDATED`. Its supervisor keeps the viewport and
 physical attachments, starts a new client, admits the same display identity,
 and announces readiness after the presenter renders. The replacement replays
@@ -104,7 +106,9 @@ second registry or restart path for core updates.
 
 The desktop session and workspace host already use same-PID handoff; desktop
 clients, application brokers and the owner controller already use acknowledged
-supervised replacement. The terminal presenter changes through explicit F12.
+supervised replacement. The `bee/terminal` presenter at
+`bee.terminal.service:main` changes through explicit F12; `bee.launch:display` retains the physical surface and viewport
+lifetime. Presenter delivery attachments use their existing retirement path.
 Direct Registry changes to a `process.service` registration follow the runtime
 supervisor's own stop/start lifecycle; direct code-only changes with equal
 service configuration do not replace that controller. Hub transitions below

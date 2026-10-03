@@ -8,18 +8,11 @@
     "arguments": "library.lua",
     "caller": "library.lua",
     "client": "library.lua",
-    "diagram": "library.lua",
-    "folder_picker": "library.lua",
-    "forms": "library.lua",
-    "host_leases": "library.lua",
     "interaction": "library.lua",
-    "names": "library.lua",
-    "sessions": "library.lua",
-    "sessions_protocol": "library.lua",
-    "status_reader": "library.lua",
-    "status_surface": "library.lua",
-    "thread_protocol": "library.lua",
-    "viz": "library.lua"
+    "names": "library.lua"
+  },
+  "bee.app.threads": {
+    "client": "library.lua"
   },
   "bee.capability": {
     "model": "library.lua"
@@ -71,6 +64,19 @@
     "protocol": "library.lua",
     "replica_protocol": "library.lua",
     "types": "library.lua"
+  },
+  "bee.terminal": {
+    "bar": "library.lua",
+    "chrome": "library.lua",
+    "connection": "library.lua",
+    "dialog": "library.lua",
+    "help": "library.lua",
+    "menu": "library.lua",
+    "render": "library.lua",
+    "selection": "library.lua",
+    "title_editor": "library.lua",
+    "window_chrome": "library.lua",
+    "workspace_menu": "library.lua"
   },
   "bee.threads": {
     "record_types": "library.lua",

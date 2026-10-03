@@ -67,7 +67,7 @@ entries:
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
-    inbox: bee.approvals.inbox.app:client
+    caller: bee.app:caller
     view: bee.approvals.inbox.app:view
     appearance: bee.ui:appearance
 - name: admission_probe
@@ -110,7 +110,6 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
-    inbox: bee.approvals.inbox.app:client
     caller: bee.app:caller
     thread_harness: bee.threads:harness
 - name: changed_proposal_test
@@ -126,7 +125,6 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
-    inbox: bee.approvals.inbox.app:client
     caller: bee.app:caller
 - name: leases_test
   kind: function.lua
@@ -141,5 +139,5 @@ entries:
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
-    forms: bee.app:forms
+    forms: bee.ui.forms:forms
     view: bee.approvals.inbox.app:view

@@ -1489,6 +1489,12 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
         if reply.ok then
             local answer, answer_error = placement_decode.stdin_closure(reply.value, session.plan.request.attempt_id)
             if not answer then return "none", "placement returned malformed close_stdin data: " .. tostring(answer_error) end
+            if answer.attempt.attachment_generation ~= session.epoch then return "none", "stdin closure belongs to another generation" end
+            if answer.attempt.execution_state == "exited" and answer.attempt.exit_source then
+                local exit = answer.attempt.exit
+                session.exit = {code = exit and exit.code or nil, signal = exit and exit.signal or nil, uncertain = false}
+                return "none", nil
+            end
             closed = answer.closed
             if answer.reason then reason = answer.reason end
         else

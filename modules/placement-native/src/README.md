@@ -134,6 +134,12 @@ or changing the user's global configuration directories.
 
 ## Provider login homes
 
+`close_stdin` authenticates the attempt owner before checking its state. A child
+that has already exited returns its recorded attempt, `closed: false` and the
+exit reason; it creates no `stdin.closed` evidence. Callers can finish draining
+the output under that attempt's observed exit instead of reporting a closure
+failure solely because the short-lived child won the race.
+
 Private attempt homes are created empty. A private `provider_home` declaration
 selects the provider's machine-home source paths, private destinations, runtime
 home variables and whether its login can be returned after exit. The declaration's

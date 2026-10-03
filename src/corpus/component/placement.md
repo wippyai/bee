@@ -70,6 +70,8 @@ Failures are recorded as placement evidence.
   window between that measurement and the exec is the runtime's.
 - A launch may declare `session_end: stdin_close`: the harness ends when
   stdin closes, and the owner asks `close_stdin` once the turn is decided.
+  An already exited child returns its attempt with `closed: false` and a reason;
+  callers retain the exit evidence without treating it as stdin closure.
   The runner closes it and answers, recording `stdin.closed` or
   `stdin.uncertain` apart from input acceptance and exit; stop and cleanup
   keep signal and cleanup authority.

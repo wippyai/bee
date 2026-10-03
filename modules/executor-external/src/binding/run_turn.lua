@@ -416,6 +416,12 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             completion_event("input_close_uncertain")
             return call_error or decode_error
         end
+        if answer.attempt.attachment_generation ~= generation then return "stdin closure belongs to another generation" end
+        if answer.attempt.execution_state == "exited" and answer.attempt.exit_source then
+            exited = true
+            exit_uncertain = false
+            return completion_event("process_exited")
+        end
         local err = completion_event(answer.closed and "input_closed" or "input_close_uncertain")
         return err or (not answer.closed and answer.reason or nil)
     end

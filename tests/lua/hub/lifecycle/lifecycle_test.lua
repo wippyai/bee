@@ -2,6 +2,7 @@
 local test = require("test")
 local funcs = require("funcs")
 local registry = require("registry")
+local security = require("security")
 local lifecycle = require("lifecycle")
 local function state(): unknown
     return {entries = {
@@ -19,6 +20,26 @@ local function candidates(): {lifecycle.Entry}
 end
 local function run()
     test.describe("Hub service lifecycle intent", function()
+        test.it("admits the receipt migration from the restricted workspace host scope", function()
+            local host = assert(security.policy("bee.security.desktop:host_policy"))
+            local probe = assert(security.policy("tests.hub.lifecycle:receipt_metadata_probe_policy"))
+            local caller = assert(funcs.new():with_scope(security.new_scope({host, probe})))
+            local result, call_error = caller:call("tests.hub.lifecycle:receipt_metadata_probe")
+            test.is_nil(call_error)
+            if type(result) ~= "table" then error("invalid host migration reply") end
+            test.is_true(result.ok == true, tostring(result.message))
+        end)
+        test.it("refuses receipt migration without the host-selected migration grant", function()
+            local caller = assert(funcs.new():with_scope(security.new_scope({})))
+            local before = assert(registry.snapshot()):version():string()
+            local result, call_error = caller:call("bee.hub.binding:receipt_metadata")
+            test.is_nil(call_error)
+            if type(result) ~= "table" then error("invalid denied migration reply") end
+            test.eq(result.ok, false)
+            test.eq(result.code, "DENIED")
+            test.eq(result.message, "Hub receipt metadata migration is not admitted")
+            test.eq(assert(registry.snapshot()):version():string(), before)
+        end)
         test.it("tags historical receipt metadata once without changing its measured data", function()
             local id = "bee.hub.operations:" .. string.rep("e", 64)
             local data = {digest = string.rep("e", 64), actor_id = "fixture:actor", component = "fixture/component",

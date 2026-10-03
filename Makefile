@@ -54,6 +54,12 @@ hub-preview-check:
 .PHONY: hub-unit-check
 hub-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_unit.py
+.PHONY: registry-discovery-unit-check
+registry-discovery-unit-check: $(TOOLCHAIN_CURRENT) fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py tests.hub.lifecycle lifecycle_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.storage selection_policy_test node_workspaces_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov overlay_resolver_test destination_service_test workspace_applications_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.harness.catalog run_lease_test gateway_carrier_test
 .PHONY: hub-self-update-runtime-check
 hub-self-update-runtime-check:
 	python3 tests/runtime_self_update_check.py

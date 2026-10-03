@@ -108,8 +108,9 @@ entries:
 - name: host_policy
   kind: security.policy.expr
   policy:
-    expression: action != "process.host" || resource == "bee:workers"
+    expression: '(action == "funcs.call" && resource == "bee.hub.binding:receipt_metadata") || (action != "funcs.call" && (action != "process.host" || resource == "bee:workers"))'
     actions:
+    - funcs.call
     - process.send
     - process.monitor
     - process.unmonitor

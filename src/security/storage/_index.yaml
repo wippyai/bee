@@ -5,7 +5,7 @@ entries:
   kind: security.policy.expr
   policy:
     expression: (action == "db.get" && resource == "bee.env:workspace_db") || (action
-      == "registry.get" && resource == "bee.workspace.persist:store") || (action in
+      == "registry.get" && resource in ["bee.workspace.persist:store", "bee.env:workspace_db"]) || (action in
       ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
     - env.get
@@ -40,6 +40,7 @@ entries:
     - env.get
     - env.set
     - db.get
+    - registry.get
     resources:
     - bee.persist.env:startup_progress
     - bee.env:client_db

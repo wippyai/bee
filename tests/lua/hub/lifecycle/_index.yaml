@@ -5,8 +5,21 @@ entries:
   kind: function.lua
   source: file://lifecycle_test.lua
   method: run
-  modules: [registry, funcs]
+  modules: [registry, funcs, security]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     lifecycle: bee.hub.types:lifecycle
+- name: receipt_metadata_probe
+  kind: function.lua
+  source: file://receipt_metadata_probe.lua
+  method: handle
+  modules: [funcs, security]
+  meta: {type: test_support}
+- name: receipt_metadata_probe_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [tests.hub.lifecycle:receipt_metadata_probe]
+    effect: allow
+  meta: {type: test_support}

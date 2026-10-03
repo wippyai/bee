@@ -153,12 +153,34 @@ CREATE TABLE bee_approval_runtime_lease_uses (
     PRIMARY KEY (lease_ref, effect_key)
 );
 ]]
+local WINDOW_SQL = [[
+CREATE TABLE bee_approval_window_grants (
+    grant_id TEXT PRIMARY KEY,
+    owner_node TEXT NOT NULL,
+    workspace_id TEXT NOT NULL,
+    requester_id TEXT NOT NULL,
+    policy TEXT NOT NULL,
+    scope_digest TEXT NOT NULL,
+    granted_by TEXT NOT NULL,
+    granted_definition TEXT,
+    granted_ms INTEGER NOT NULL,
+    granted_at TEXT NOT NULL,
+    until_ms INTEGER NOT NULL CHECK (until_ms > granted_ms),
+    until_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+CREATE INDEX bee_approval_window_match ON bee_approval_window_grants
+    (owner_node, workspace_id, requester_id, policy, scope_digest, until_ms);
+ALTER TABLE bee_approval_requests ADD COLUMN window_grant_id TEXT;
+ALTER TABLE bee_approval_requests ADD COLUMN allowed_by_grant TEXT;
+]]
 local list: {Migration} = {
     {id = 1, name = "approvals", sql = APPROVALS_SQL, rebuild = false},
     {id = 2, name = "decision_notice", sql = NOTICE_SQL, rebuild = true},
     {id = 3, name = "effect_completion", sql = INSTALLATION_EFFECT_SQL, rebuild = false},
     {id = 4, name = "approvals_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
     {id = 5, name = "approval_runtime_leases", sql = RUNTIME_LEASE_SQL, rebuild = false},
+    {id = 6, name = "approval_windows", sql = WINDOW_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

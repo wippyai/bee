@@ -12,7 +12,7 @@ local enrollment = require("enrollment")
 local WORKSPACE = string.rep("d", 32)
 local BINDING = "bee.gov:gateway_probe_binding"
 
-local function admitted(binding_id: string, methods: {string}, name: string): (funcs.Executor, string, string)
+local function admitted(binding_id: string, methods: {string}, name: string): (funcs.Executor, string, string, {string})
     local vocabulary = assert(model.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
     local application = "app." .. name .. ":app"
     local owner = "bee.gov.apps:" .. WORKSPACE .. "." .. name
@@ -25,13 +25,16 @@ local function admitted(binding_id: string, methods: {string}, name: string): (f
     local record = assert(grants.record(owner, WORKSPACE, application, proposal, "approval-gateway-test", 1))
     local snapshot = assert(registry.snapshot())
     local changes = snapshot:changes()
+    local created = {assert(bounds.id(record.id))}
     changes:create({id = assert(bounds.id(record.id)), kind = assert(bounds.text(record.kind, 160)),
         meta = assert(bounds.object(record.meta)), data = record.data})
     for _, policy in ipairs(proposal.policies) do
+        created[#created + 1] = assert(bounds.id(policy.id))
         changes:create({id = assert(bounds.id(policy.id)), kind = assert(bounds.text(policy.kind, 160)),
             meta = assert(bounds.object(policy.meta)), data = policy.data})
     end
     for _, binding in ipairs(proposal.bindings) do
+        created[#created + 1] = assert(bounds.id(binding.requirement_id))
         changes:create({id = assert(bounds.id(binding.requirement_id)), kind = "ns.requirement",
             data = {default = binding.policy_id}})
     end
@@ -42,7 +45,7 @@ local function admitted(binding_id: string, methods: {string}, name: string): (f
     local scope = security.new_scope({assert(security.policy("bee.security:app_boundary_policy")),
         assert(security.policy(proposal.policies[1].id))})
     test.eq(scope:evaluate(actor, "security.scope.create", "custom"), "deny")
-    return funcs.new():with_actor(actor):with_scope(scope), actor_id, assert(bounds.id(proposal.policies[1].id))
+    return funcs.new():with_actor(actor):with_scope(scope), actor_id, assert(bounds.id(proposal.policies[1].id)), created
 end
 
 local function call(target: string, request: unknown, actor: unknown?): {[string]: unknown}
@@ -60,6 +63,17 @@ end
 
 local function define_tests()
     test.describe("capability gateway", function()
+        test.it("makes each newly committed policy available to the first gateway request", function()
+            for index = 1, 32 do
+                local caller, _, _, created = admitted(BINDING, {"inspect"}, "firstrequest" .. tostring(index))
+                local reply, err = caller:call("bee.gov.binding:contract_call", {binding = BINDING, method = "inspect"})
+                test.eq(err, nil)
+                test.is_true(assert(bounds.object(reply)).ok == true)
+                local changes = assert(registry.snapshot()):changes()
+                for _, id in ipairs(created) do changes:delete(id) end
+                assert(changes:apply())
+            end
+        end)
         test.it("refuses a caller that is not an application principal", function()
             local contract = call("bee.gov.binding:contract_call", {binding = "app.peer:api", method = "get"})
             test.is_false(contract.ok == true)

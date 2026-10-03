@@ -63,10 +63,20 @@ def split(entries, shared=()):
     return groups
 
 
+def daemon_lock_path():
+    """One lock per Docker daemon, in the user's XDG cache directory."""
+    identity = subprocess.run(["docker", "info", "--format", "{{.ID}}"], capture_output=True, text=True, check=False)
+    daemon = identity.stdout.strip()
+    if identity.returncode != 0 or not daemon:
+        raise RuntimeError(f"Docker daemon identity unavailable: {identity.stderr.strip() or 'empty ID'}")
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return cache / "bee" / f"docker-daemon-{daemon.replace(':', '-')}.lock"
+
+
 @contextmanager
 def docker_daemon_lock():
     override = os.environ.get("BEE_DOCKER_DAEMON_LOCK")
-    path = Path(override) if override else Path.home() / ".cache/bee/bee-docker-daemon.lock"
+    path = Path(override) if override else daemon_lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as handle:
         print(f"Docker daemon shard: waiting for lock {path}", flush=True)
@@ -100,8 +110,12 @@ def run_shard(index, folder, entries, timeout=None):
     cases = re.findall(r"(\d+) tests\s+[\d.]+m?s", plain)
     passed = re.findall(r"(\d+) passed\s+[\d.]+(?:ms|s)", plain)
     completed = re.findall(r"(\d+) passed\s+(\d+) failed\s+[\d.]+s", plain)
+    summaries = [line for line in plain.replace("\r", "\n").splitlines()
+                 if re.match(r"^\s*\d+ (?:tests|passed|failed|skipped)\b", line)]
+    incomplete = any(int(value) > 0 for line in summaries
+                     for value in re.findall(r"(\d+) (?:failed|skipped)\b", line))
     count = int(cases[-1]) if cases else sum(map(int, completed[-1])) if completed else int(passed[-1]) if passed else 0
-    valid = result.returncode == 0 and selected is not None and int(selected.group(1)) == len(entries) and count > 0
+    valid = result.returncode == 0 and selected is not None and int(selected.group(1)) == len(entries) and count > 0 and not incomplete
     return index, entries, count, time.monotonic() - started, valid, result.returncode, output
 
 

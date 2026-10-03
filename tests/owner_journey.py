@@ -284,13 +284,20 @@ class Journey:
         self.subscription_home = self.environment.get("HOME", str(Path.home()))
         self.fixture_home = self.work / "home"
         self.fixture_home.mkdir()
+        fixture_login = self.fixture_home / ".claude"
+        fixture_login.mkdir(mode=0o700)
+        (fixture_login / ".credentials.json").write_text('{"fixture":true}\n')
+        (fixture_login / ".credentials.json").chmod(0o600)
         self.environment.update(HOME=str(self.fixture_home), XDG_CONFIG_HOME=str(self.fixture_home / ".config"), TERM="xterm-256color", TMPDIR=str(self.work / "tmp"))
         self.original_path = self.environment.get("PATH", "/usr/bin:/bin")
         self.stub_bin = self.folder / "bin"
         self.stub_bin.mkdir()
         stub = self.stub_bin / "claude"
-        shutil.copy2(ROOT / "tests/fixtures/owner_journey/claude.sh", stub)
-        stub.chmod(0o700)
+        compiled = subprocess.run(["cc", "-std=c99", "-Wall", "-Wextra", "-Werror", "-O2", "-o", str(stub),
+                                   str(ROOT / "tests/fixtures/owner_journey/claude.c")],
+                                  env=self.environment, capture_output=True, text=True)
+        require(compiled.returncode == 0, f"journey fixture compiler EXIT {compiled.returncode}: " + compiled.stderr)
+        stub.chmod(0o755)
         self.environment["PATH"] = str(self.stub_bin) + ":" + self.original_path
         self.ready = False
         self.desktop_failure = "desktop has not started"
@@ -557,7 +564,7 @@ class Journey:
         require(len(new) == 1, f"session admission did not persist exactly one session: {len(new)}")
         return new[0]
 
-    def turn(self, prompt, expected, docker=False, provider="Claude Code", fixture=False):
+    def turn(self, prompt, expected, docker=False, provider="Claude Code", fixture=False, require_image_preparation=False):
         if self.environment["PATH"] == self.original_path:
             self.verify_subscription(provider)
         session = self.choose_agent(provider, docker)
@@ -598,6 +605,8 @@ class Journey:
         require(any("working" in frame or "starting" in frame or "running" in frame for frame in seen), "no rendered starting/running/working state was observed")
         if docker:
             require(any("starting" in frame.lower() for frame in seen), "Docker placement never rendered starting")
+        if require_image_preparation:
+            require(any("Preparing Docker runtime image" in frame for frame in seen), "Docker placement never rendered runtime image preparation progress")
         self.close_session(session)
         return session
 
@@ -619,7 +628,7 @@ class Journey:
     def docker_session(self):
         before = {item["session_ref"] for item in sessions(self.state)}
         try:
-            self.turn("Reply with the deterministic journey marker", STUB_MARKER, docker=True)
+            self.turn("Reply with the deterministic journey marker", STUB_MARKER, docker=True, require_image_preparation=True)
         except JourneyFailure as error:
             # Step 4 permits only a truthful start_failed with the daemon cause.
             cause = str(error)
@@ -815,7 +824,6 @@ class Journey:
         require("blocked" not in self.ui.text().lower(), "Governance preflight refused: " + self.ui.text())
         self.ui.key(b"\r")
         self.launch("Needs you", "NEEDS YOU")
-        self.ui.key(b"\r")
         self.approve()
         self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
         self.ui.key(b"t")
@@ -875,22 +883,26 @@ class Journey:
             return
         self.launch("Needs you", "NEEDS YOU")
         for item in pending:
-            self.ui.wait("pending")
-            self.ui.key(b"\r")
-            self.approve()
+            self.approve(item["approval_id"])
         self.ui.key(b"\x17")
         self.ui.wait("SESSION")
 
-    def approve(self):
+    def approve(self, approval_id=None):
+        self.ui.wait("pending   ")
+        self.click("pending   ")
+        self.ui.key(b"\r")
+        self.ui.wait("Allow once")
         self.frame("approval-detail")
         text = self.ui.text()
         self.record_person_prompt("governed candidate", text)
-        require("approve" in text.lower(), "Inbox does not expose an approval decision")
+        require("Allow once" in text, "Inbox does not expose the requested decision")
         self.ui.key(b"a")
-        self.ui.wait("Approve this request?")
-        self.frame("approval-confirmation")
-        self.ui.key(b"\t\r")
+        if approval_id:
+            self.ui.wait_until(lambda: bool(rows(self.ui.state, "approvals.db",
+                "SELECT approval_id FROM bee_approval_requests WHERE approval_id=? AND decision='approved'", (approval_id,))),
+                "exact owner approval decision")
         self.ui.wait_until(lambda: "approved" in self.ui.text().lower(), "owner approval decision")
+        self.frame("approval-decided")
 
     def hive(self):
         folder, state = self.work / "node2-project", self.work / "node2-state"
@@ -976,8 +988,6 @@ class Journey:
             finally:
                 self.ui = primary
             self.launch("Needs you", "NEEDS YOU")
-            self.ui.wait("pending")
-            self.ui.key(b"\r")
             self.approve()
             self.ui.wait_until(lambda: bool(rows(state, "approvals.db",
                 "SELECT approval_id FROM bee_approval_requests WHERE decision='approved'")), "node 2 observes node 1 decision")

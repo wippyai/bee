@@ -6096,6 +6096,11 @@
       "source": "modules/placement-docker/src/binding/_index.yaml"
     },
     {
+      "id": "bee.placement.docker.binding:methods",
+      "kind": "library.lua",
+      "source": "modules/placement-docker/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.placement.docker.binding:prepare",
       "kind": "function.lua",
       "source": "modules/placement-docker/src/binding/_index.yaml"
@@ -6191,6 +6196,11 @@
       "source": "modules/placement-docker/src/security/_index.yaml"
     },
     {
+      "id": "bee.placement.docker.service:daemon",
+      "kind": "library.lua",
+      "source": "modules/placement-docker/src/service/_index.yaml"
+    },
+    {
       "id": "bee.placement.docker.service:environment",
       "kind": "library.lua",
       "source": "modules/placement-docker/src/service/_index.yaml"
@@ -6222,11 +6232,6 @@
     },
     {
       "id": "bee.placement.docker.service:runtime_probe",
-      "kind": "library.lua",
-      "source": "modules/placement-docker/src/service/_index.yaml"
-    },
-    {
-      "id": "bee.placement.docker.service:service",
       "kind": "library.lua",
       "source": "modules/placement-docker/src/service/_index.yaml"
     },
@@ -19002,7 +19007,7 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1889,
+    "entry_count": 1890,
     "namespace_count": 290,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
@@ -19712,6 +19717,7 @@
     },
     {
       "sources": [
+        "modules/executor-external/src/binding/run_turn.lua",
         "modules/harness/src/app/runtime.lua",
         "modules/placement-docker/src/service/image.lua"
       ],

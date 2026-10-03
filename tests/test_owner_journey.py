@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -221,3 +222,53 @@ class ApprovalTests(unittest.TestCase):
         causes = [item['cause'] for item in self.journey.annoyances]
         self.assertTrue(any('routine' in cause for cause in causes))
         self.assertTrue(any('duration' in cause for cause in causes))
+
+    def test_approval_driver_opens_the_request_before_allowing_once(self):
+        self.request(self.journey.state, 'first')
+        state = {'selected': False, 'detail': False, 'approved': False}
+        desktop = Mock(state=self.journey.state)
+        desktop.text.side_effect = lambda: 'State: approved' if state['approved'] else ('Subject: Bee\nScope: fixture network\nDuration: once\nA Allow once' if state['detail'] else '1 pending · A approve')
+        self.journey.ui = desktop
+        self.journey.frame = Mock()
+        self.journey.record_person_prompt = Mock()
+        def click(label):
+            self.assertEqual(label, 'pending   ')
+            state['selected'] = True
+        self.journey.click = click
+        def wait(label):
+            self.assertNotEqual(label, 'Approve this request?', 'Allow once already commits the decision')
+            if label == 'Allow once':
+                self.assertTrue(state['selected'])
+                state['detail'] = True
+        desktop.wait.side_effect = wait
+        def key(value):
+            self.assertTrue(state['selected'], 'select the request before opening or deciding it')
+            if value == b'a':
+                self.assertTrue(state['detail'], 'wait for the rendered decision before sending Allow once')
+                with sqlite3.connect(self.journey.state / 'approvals.db') as database:
+                    database.execute("UPDATE bee_approval_requests SET state='decided',decision='approved' WHERE approval_id='first'")
+                state['approved'] = True
+            else:
+                self.assertEqual(value, b'\r')
+        desktop.key.side_effect = key
+        desktop.wait_until.side_effect = lambda condition, description: self.assertTrue(condition(), description)
+        self.journey.approve('first')
+        self.assertTrue(state['detail'])
+        self.journey.record_person_prompt.assert_called_once()
+        self.assertIn('Scope: fixture network', self.journey.record_person_prompt.call_args.args[1])
+
+
+class FixtureTests(unittest.TestCase):
+    def test_deterministic_provider_is_a_linux_runtime_artifact(self):
+        with tempfile.TemporaryDirectory(prefix='journey-fixture-', dir=ROOT / '.wippy') as temporary:
+            root = Path(temporary)
+            source = root / 'source'
+            source.mkdir()
+            journey = Journey(Path('/usr/bin/false'), source, root / 'evidence')
+            self.addCleanup(journey.cleanup)
+            executable = journey.stub_bin / 'claude'
+            with executable.open('rb') as binary:
+                self.assertEqual(binary.read(4), b'\x7fELF')
+            self.assertEqual(executable.stat().st_mode & 0o005, 0o005, 'the non-root container user must read and execute the artifact')
+            result = subprocess.run([str(executable), '--version'], capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout.strip(), '2.1.265')

@@ -1,0 +1,407 @@
+diff --git a/api/security/security.go b/api/security/security.go
+index 27a73e9..2b53edd 100644
+--- a/api/security/security.go
++++ b/api/security/security.go
+@@ -89,6 +89,8 @@ type (
+ 	PolicyEntry struct {
+ 		Policy Policy
+ 		Groups []registry.ID
++		// Applied receives the owning registry result after the mutation is visible.
++		Applied chan<- error `json:"-" yaml:"-"`
+ 	}
+ 
+ 	// Registry defines the core interface for accessing security policies.
+diff --git a/service/security/policy/manager.go b/service/security/policy/manager.go
+index 7790c89..bed7b61 100644
+--- a/service/security/policy/manager.go
++++ b/service/security/policy/manager.go
+@@ -4,6 +4,7 @@ package policy
+ 
+ import (
+ 	"context"
++	"errors"
+ 
+ 	policyapi "github.com/wippyai/runtime/api/service/security/policy"
+ 
+@@ -52,11 +53,9 @@ func (m *Manager) Delete(ctx context.Context, entry registry.Entry) error {
+ 		return NewUnsupportedEntryKindError(entry.Kind)
+ 	}
+ 
+-	m.bus.Send(ctx, event.Event{
+-		System: security.System,
+-		Kind:   security.PolicyDelete,
+-		Path:   entry.ID.String(),
+-	})
++	if err := m.applyPolicy(ctx, entry.ID, security.PolicyDelete, &security.PolicyEntry{}); err != nil {
++		return err
++	}
+ 
+ 	m.log.Info("security policy removed", zap.String("id", entry.ID.String()))
+ 
+@@ -74,12 +73,9 @@ func (m *Manager) processPolicy(ctx context.Context, entry registry.Entry, event
+ 		return NewCreatePolicyEntryError(err)
+ 	}
+ 
+-	m.bus.Send(ctx, event.Event{
+-		System: security.System,
+-		Kind:   eventKind,
+-		Path:   entry.ID.String(),
+-		Data:   policyEntry,
+-	})
++	if err := m.applyPolicy(ctx, entry.ID, eventKind, policyEntry); err != nil {
++		return err
++	}
+ 
+ 	m.log.Info("security policy "+action,
+ 		zap.String("id", entry.ID.String()),
+@@ -92,3 +88,23 @@ func (m *Manager) processPolicy(ctx context.Context, entry registry.Entry, event
+ func (m *Manager) isSupportedKind(kind registry.Kind) bool {
+ 	return kind == policyapi.Policy || kind == policyapi.ExprKind
+ }
++
++// applyPolicy waits for the policy owner, not merely event publication. The
++// registry entry acknowledgement therefore includes downstream visibility.
++func (m *Manager) applyPolicy(ctx context.Context, id registry.ID, kind event.Kind, entry *security.PolicyEntry) error {
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	if !m.bus.HasSubscribers(security.System, kind) {
++		return errors.New("security policy registry is not subscribed")
++	}
++	applied := make(chan error, 1)
++	entry.Applied = applied
++	m.bus.Send(ctx, event.Event{System: security.System, Kind: kind, Path: id.String(), Data: entry})
++	select {
++	case err := <-applied:
++		return err
++	case <-ctx.Done():
++		return ctx.Err()
++	}
++}
+diff --git a/service/security/policy/manager_readiness_test.go b/service/security/policy/manager_readiness_test.go
+new file mode 100644
+index 0000000..cd44340
+--- /dev/null
++++ b/service/security/policy/manager_readiness_test.go
+@@ -0,0 +1,102 @@
++// SPDX-License-Identifier: MPL-2.0
++package policy
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/wippyai/runtime/api/event"
++	"github.com/wippyai/runtime/api/registry"
++	"github.com/wippyai/runtime/api/security"
++	policyapi "github.com/wippyai/runtime/api/service/security/policy"
++	"github.com/wippyai/runtime/system/eventbus"
++	policyregistry "github.com/wippyai/runtime/system/security"
++	"go.uber.org/zap"
++)
++
++type canceledDeliveryBus struct {
++	event.Bus
++	cancel context.CancelFunc
++}
++
++func (b *canceledDeliveryBus) Send(ctx context.Context, e event.Event) {
++	if e.System == security.System {
++		b.cancel()
++		return
++	}
++	b.Bus.Send(ctx, e)
++}
++
++func TestManagerNeverAcknowledgesUndeliveredPolicy(t *testing.T) {
++	for _, operation := range []string{"add", "update", "delete"} {
++		t.Run(operation, func(t *testing.T) {
++			ctx, cancel := context.WithCancel(context.Background())
++			defer cancel()
++			bus := &canceledDeliveryBus{Bus: eventbus.NewBus(), cancel: cancel}
++			pending := make(chan event.Event, 1)
++			id, err := bus.Subscribe(ctx, security.System, pending)
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer bus.Unsubscribe(context.Background(), id)
++			manager := NewManager(bus, &mockFactory{}, zap.NewNop())
++			entry := registry.Entry{ID: registry.NewID("test", "first_request"), Kind: policyapi.Policy}
++			switch operation {
++			case "add":
++				err = manager.Add(ctx, entry)
++			case "update":
++				err = manager.Update(ctx, entry)
++			case "delete":
++				err = manager.Delete(ctx, entry)
++			}
++			if !errors.Is(err, context.Canceled) {
++				t.Fatalf("%s acknowledged an undelivered policy: %v", operation, err)
++			}
++		})
++	}
++}
++
++func TestManagerCompletionIncludesPolicyVisibility(t *testing.T) {
++	ctx := context.Background()
++	bus := eventbus.NewBus()
++	owner := policyregistry.NewPolicyRegistry(bus, zap.NewNop())
++	if err := owner.Start(ctx); err != nil {
++		t.Fatal(err)
++	}
++	defer owner.Stop()
++	manager := NewManager(bus, &mockFactory{}, zap.NewNop())
++	entry := registry.Entry{ID: registry.NewID("test", "first_request"), Kind: policyapi.Policy}
++	if err := manager.Add(ctx, entry); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := owner.GetPolicy(entry.ID); err != nil {
++		t.Fatalf("first lookup after add: %v", err)
++	}
++	if err := manager.Update(ctx, entry); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := owner.GetPolicy(entry.ID); err != nil {
++		t.Fatalf("first lookup after update: %v", err)
++	}
++	if err := manager.Delete(ctx, entry); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := owner.GetPolicy(entry.ID); !errors.Is(err, security.ErrPolicyNotFound) {
++		t.Fatalf("first lookup after delete: %v", err)
++	}
++	if err := manager.Update(ctx, entry); err == nil || err.Error() != "policy not found for update: test:first_request" {
++		t.Fatalf("update owner failure was lost: %v", err)
++	}
++	if err := manager.Delete(ctx, entry); err == nil || err.Error() != "policy not found for deletion: test:first_request" {
++		t.Fatalf("delete owner failure was lost: %v", err)
++	}
++}
++
++func TestManagerRefusesAbsentPolicyOwner(t *testing.T) {
++	manager := NewManager(eventbus.NewBus(), &mockFactory{}, zap.NewNop())
++	entry := registry.Entry{ID: registry.NewID("test", "first_request"), Kind: policyapi.Policy}
++	if err := manager.Add(context.Background(), entry); err == nil || err.Error() != "security policy registry is not subscribed" {
++		t.Fatalf("missing owner failure was lost: %v", err)
++	}
++}
+diff --git a/service/security/policy/manager_test.go b/service/security/policy/manager_test.go
+index eb00e9a..f038b90 100644
+--- a/service/security/policy/manager_test.go
++++ b/service/security/policy/manager_test.go
+@@ -15,6 +15,7 @@ import (
+ 	"github.com/wippyai/runtime/api/security"
+ 	policyapi "github.com/wippyai/runtime/api/service/security/policy"
+ 	"github.com/wippyai/runtime/system/eventbus"
++	policyregistry "github.com/wippyai/runtime/system/security"
+ 	"go.uber.org/zap"
+ )
+ 
+@@ -46,17 +47,20 @@ func (m *mockPolicy) Evaluate(_ security.Actor, _, _ string, _ attrs.Bag) securi
+ 	return security.Allow
+ }
+ 
+-func setupManagerTest() (*Manager, *eventbus.Bus) {
++func setupManagerTest(t *testing.T) (*Manager, *eventbus.Bus) {
+ 	bus := eventbus.NewBus()
+ 	factory := &mockFactory{}
+ 	logger := zap.NewNop()
++	owner := policyregistry.NewPolicyRegistry(bus, logger)
++	require.NoError(t, owner.Start(context.Background()))
++	t.Cleanup(func() { require.NoError(t, owner.Stop()) })
+ 	manager := NewManager(bus, factory, logger)
+ 	return manager, bus
+ }
+ 
+ func TestManager_Add_ConditionPolicy(t *testing.T) {
+ 	ctx := context.Background()
+-	manager, bus := setupManagerTest()
++	manager, bus := setupManagerTest(t)
+ 
+ 	eventCh := make(chan event.Event, 10)
+ 	subID, err := bus.Subscribe(ctx, security.System, eventCh)
+@@ -84,7 +88,7 @@ func TestManager_Add_ConditionPolicy(t *testing.T) {
+ 
+ func TestManager_Add_ExprPolicy(t *testing.T) {
+ 	ctx := context.Background()
+-	manager, bus := setupManagerTest()
++	manager, bus := setupManagerTest(t)
+ 
+ 	eventCh := make(chan event.Event, 10)
+ 	subID, err := bus.Subscribe(ctx, security.System, eventCh)
+@@ -110,7 +114,7 @@ func TestManager_Add_ExprPolicy(t *testing.T) {
+ 
+ func TestManager_Add_UnsupportedKind(t *testing.T) {
+ 	ctx := context.Background()
+-	manager, bus := setupManagerTest()
++	manager, bus := setupManagerTest(t)
+ 
+ 	eventCh := make(chan event.Event, 10)
+ 	subID, err := bus.Subscribe(ctx, security.System, eventCh)
+@@ -135,7 +139,8 @@ func TestManager_Add_UnsupportedKind(t *testing.T) {
+ 
+ func TestManager_Update_ConditionPolicy(t *testing.T) {
+ 	ctx := context.Background()
+-	manager, bus := setupManagerTest()
++	manager, bus := setupManagerTest(t)
++	require.NoError(t, manager.Add(ctx, registry.Entry{ID: registry.NewID("test", "policy1"), Kind: policyapi.Policy}))
+ 
+ 	eventCh := make(chan event.Event, 10)
+ 	subID, err := bus.Subscribe(ctx, security.System, eventCh)
+@@ -161,7 +166,8 @@ func TestManager_Update_ConditionPolicy(t *testing.T) {
+ 
+ func TestManager_Update_ExprPolicy(t *testing.T) {
+ 	ctx := context.Background()
+-	manager, bus := setupManagerTest()
++	manager, bus := setupManagerTest(t)
++	require.NoError(t, manager.Add(ctx, registry.Entry{ID: registry.NewID("test", "expr1"), Kind: policyapi.ExprKind}))
+ 
+ 	eventCh := make(chan event.Event, 10)
+ 	subID, err := bus.Subscribe(ctx, security.System, eventCh)
+@@ -187,7 +193,8 @@ func TestManager_Update_ExprPolicy(t *testing.T) {
+ 
+ func TestManager_Delete_ConditionPolicy(t *testing.T) {
+ 	ctx := context.Background()
+-	manager, bus := setupManagerTest()
++	manager, bus := setupManagerTest(t)
++	require.NoError(t, manager.Add(ctx, registry.Entry{ID: registry.NewID("test", "policy1"), Kind: policyapi.Policy}))
+ 
+ 	eventCh := make(chan event.Event, 10)
+ 	subID, err := bus.Subscribe(ctx, security.System, eventCh)
+@@ -206,7 +213,7 @@ func TestManager_Delete_ConditionPolicy(t *testing.T) {
+ 	case evt := <-eventCh:
+ 		assert.Equal(t, security.PolicyDelete, evt.Kind)
+ 		assert.Equal(t, "test:policy1", evt.Path)
+-		assert.Nil(t, evt.Data)
++		assert.NotNil(t, evt.Data)
+ 	case <-ctx.Done():
+ 		t.Fatal("timeout waiting for event")
+ 	}
+@@ -214,7 +221,8 @@ func TestManager_Delete_ConditionPolicy(t *testing.T) {
+ 
+ func TestManager_Delete_ExprPolicy(t *testing.T) {
+ 	ctx := context.Background()
+-	manager, bus := setupManagerTest()
++	manager, bus := setupManagerTest(t)
++	require.NoError(t, manager.Add(ctx, registry.Entry{ID: registry.NewID("test", "expr1"), Kind: policyapi.ExprKind}))
+ 
+ 	eventCh := make(chan event.Event, 10)
+ 	subID, err := bus.Subscribe(ctx, security.System, eventCh)
+diff --git a/system/security/registry.go b/system/security/registry.go
+index abe9368..61fe1c1 100644
+--- a/system/security/registry.go
++++ b/system/security/registry.go
+@@ -66,27 +66,32 @@ func (r *PolicyRegistry) Stop() error {
+ }
+ 
+ func (r *PolicyRegistry) handleEvent(e event.Event) {
++	var err error
+ 	switch e.Kind {
+ 	case security.PolicyRegister:
+-		r.registerPolicy(e)
++		err = r.registerPolicy(e)
+ 	case security.PolicyUpdate:
+-		r.updatePolicy(e)
++		err = r.updatePolicy(e)
+ 	case security.PolicyDelete:
+-		r.deletePolicy(e)
++		err = r.deletePolicy(e)
+ 	default:
+-		r.logger.Warn("unknown policy event kind",
+-			zap.String("kind", e.Kind),
+-			zap.String("path", e.Path))
++		err = fmt.Errorf("unknown policy event kind: %s", e.Kind)
++	}
++	if entry, ok := e.Data.(*security.PolicyEntry); ok && entry.Applied != nil {
++		entry.Applied <- err
++	}
++	if err != nil {
++		r.logger.Error("policy mutation failed", zap.String("policy", e.Path), zap.Error(err))
+ 	}
+ }
+ 
+-func (r *PolicyRegistry) registerPolicy(e event.Event) {
++func (r *PolicyRegistry) registerPolicy(e event.Event) error {
+ 	entry, ok := e.Data.(*security.PolicyEntry)
+ 	if !ok {
+ 		r.logger.Error("invalid policy payload",
+ 			zap.String("policy", e.Path),
+ 			zap.String("type", fmt.Sprintf("%T", e.Data)))
+-		return
++		return fmt.Errorf("invalid policy payload: %s", e.Path)
+ 	}
+ 
+ 	policyID := entry.Policy.ID()
+@@ -100,15 +105,16 @@ func (r *PolicyRegistry) registerPolicy(e event.Event) {
+ 	r.logger.Debug("policy registered",
+ 		zap.String("policy", policyID.String()),
+ 		zap.Int("groups", len(entry.Groups)))
++	return nil
+ }
+ 
+-func (r *PolicyRegistry) updatePolicy(e event.Event) {
++func (r *PolicyRegistry) updatePolicy(e event.Event) error {
+ 	entry, ok := e.Data.(*security.PolicyEntry)
+ 	if !ok {
+ 		r.logger.Error("invalid policy update payload",
+ 			zap.String("policy", e.Path),
+ 			zap.String("type", fmt.Sprintf("%T", e.Data)))
+-		return
++		return fmt.Errorf("invalid policy update payload: %s", e.Path)
+ 	}
+ 
+ 	policyID := entry.Policy.ID()
+@@ -117,14 +123,14 @@ func (r *PolicyRegistry) updatePolicy(e event.Event) {
+ 	if !exists {
+ 		r.logger.Error("policy not found for update",
+ 			zap.String("policy", policyID.String()))
+-		return
++		return fmt.Errorf("policy not found for update: %s", e.Path)
+ 	}
+ 
+ 	existing, ok := existingVal.(*security.PolicyEntry)
+ 	if !ok {
+ 		r.logger.Error("invalid policy type in registry",
+ 			zap.String("policy", policyID.String()))
+-		return
++		return fmt.Errorf("invalid policy type in registry: %s", e.Path)
+ 	}
+ 
+ 	for _, oldGroup := range existing.Groups {
+@@ -158,23 +164,24 @@ func (r *PolicyRegistry) updatePolicy(e event.Event) {
+ 	r.logger.Debug("policy updated",
+ 		zap.String("policy", policyID.String()),
+ 		zap.Int("groups", len(entry.Groups)))
++	return nil
+ }
+ 
+-func (r *PolicyRegistry) deletePolicy(e event.Event) {
++func (r *PolicyRegistry) deletePolicy(e event.Event) error {
+ 	policyID := registry.ParseID(e.Path)
+ 
+ 	existingVal, exists := r.policies.Load(policyID)
+ 	if !exists {
+ 		r.logger.Warn("policy not found for deletion",
+ 			zap.String("policy", policyID.String()))
+-		return
++		return fmt.Errorf("policy not found for deletion: %s", e.Path)
+ 	}
+ 
+ 	existing, ok := existingVal.(*security.PolicyEntry)
+ 	if !ok {
+ 		r.logger.Error("invalid policy type in registry",
+ 			zap.String("policy", policyID.String()))
+-		return
++		return fmt.Errorf("invalid policy type in registry: %s", e.Path)
+ 	}
+ 
+ 	for _, groupID := range existing.Groups {
+@@ -185,6 +192,7 @@ func (r *PolicyRegistry) deletePolicy(e event.Event) {
+ 
+ 	r.logger.Debug("policy deleted",
+ 		zap.String("policy", policyID.String()))
++	return nil
+ }
+ 
+ func (r *PolicyRegistry) addPolicyToGroup(groupID, policyID registry.ID) {

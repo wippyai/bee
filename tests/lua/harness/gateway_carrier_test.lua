@@ -109,15 +109,6 @@ local function endpoint(): string
     if not entry then error("gateway endpoint entry") end
     return tostring((assert(bounds.object(entry.data))).address)
 end
--- The listener can accept TCP before the registry transaction commits its routes.
-local function await_readiness_route_commit()
-    local entry, entry_error = registry.get("bee.managed:ready")
-    if entry_error or not entry then error("managed readiness endpoint: " .. tostring(entry_error)) end
-    local changes = registry.snapshot():changes()
-    changes:update(entry)
-    local committed, commit_error = changes:apply()
-    if not committed then error("commit managed readiness route: " .. tostring(commit_error)) end
-end
 local function open_gateway(): integer
     local opened = call("bee.gateway.binding:open", {address = endpoint()})
     return math.floor(tonumber(opened.epoch) or 0)
@@ -168,31 +159,22 @@ end
 local function continue_carrier(pid: string)
     process.send(pid, "bee.carrier.continue", {})
 end
--- Waits for the carrier's report that it holds at the named step. The
--- caller listens for bee.carrier.paused before spawning the carrier.
-local function await_paused(paused: Channel<process.Message>, pid: string, wanted: string)
-    local deadline = time.after("30s")
-    while true do
-        local selected = channel.select({paused:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error(pid .. " never held at " .. wanted) end
-        local message = selected.value
-        if tostring(message:from()) == pid and message:payload():data() == wanted then return end
-    end
-end
--- Waits until the carrier either holds at the named step or ends; its exit
--- is recorded for await_carrier.
-local function await_paused_or_exit(paused: Channel<process.Message>, pid: string, wanted: string)
+local function await_paused(paused: Channel<process.Message>, pid: string, wanted: string, allow_exit: boolean)
     local events = assert(process.events())
-    local deadline = time.after("30s")
     while not exited[pid] do
-        local selected = channel.select({paused:case_receive(), events:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error(pid .. " neither held at " .. wanted .. " nor ended") end
+        local selected = channel.select({paused:case_receive(), events:case_receive()})
+        if not selected.ok then error("carrier pause wait interrupted: " .. pid) end
         if selected.channel == events then
-            record_exit(selected.value)
+            local event = selected.value
+            if event.kind == process.event.CANCEL then error("carrier pause wait cancelled: " .. pid) end
+            record_exit(event)
         else
             local message = selected.value
             if tostring(message:from()) == pid and message:payload():data() == wanted then return end
         end
+    end
+    if not allow_exit then
+        error(pid .. " exited before holding at " .. wanted .. ": " .. tostring(exited[pid].error or "completed"))
     end
 end
 -- The fixture child's report is an asynchronously committed stream notice.
@@ -342,10 +324,17 @@ local function define_tests()
         install_policy(POLICY)
         install_policy("bee.harness.catalog:gateway_surface_policy")
         admit_root()
-        await_readiness_route_commit()
         open_gateway()
         local readiness = call("bee.gateway.binding:ready", {})
         if readiness.listening ~= true then error("managed gateway readiness route did not become ready") end
+        test.it("reports the monitored startup exit cause while waiting for a pause", function()
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+            local pid = spawn_carrier(request(thread(), fresh("pause-exit"), {}), "open", "prepared", "attempt_started")
+            local ok, failure = pcall(function() await_paused(paused, pid, "attempt_started", false) end)
+            process.unlisten(paused)
+            test.is_false(ok)
+            test.is_true(tostring(failure):find("crash after prepared", 1, true) ~= nil, tostring(failure))
+        end)
         test.it("admits after preparation, projects the token at delivery, serves the child as an MCP client and revokes on exit", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
@@ -446,7 +435,7 @@ local function define_tests()
             local attempt_id = fresh("attempt")
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier(request(thread_id, attempt_id, {}), "open", nil, "gateway_ready")
-            await_paused(paused, pid, "gateway_ready")
+            await_paused(paused, pid, "gateway_ready", false)
             process.unlisten(paused)
             open_gateway()
             continue_carrier(pid)
@@ -502,7 +491,7 @@ local function define_tests()
             local launch = request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "stop"})
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local old = spawn_carrier(launch, "open", nil, "attempt_started")
-            await_paused(paused, old, "attempt_started")
+            await_paused(paused, old, "attempt_started", false)
             process.unlisten(paused)
             await_presented(attempt_id, 1, 3)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
@@ -543,7 +532,7 @@ local function define_tests()
             local launch = request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "4"})
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local old = spawn_carrier(launch, "open", nil, "attempt_started")
-            await_paused(paused, old, "attempt_started")
+            await_paused(paused, old, "attempt_started", false)
             process.unlisten(paused)
             await_presented(attempt_id, 1, 3)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
@@ -747,7 +736,7 @@ local function define_tests()
             local pauses = pause_at
             if pause_at == "hooks_committed" then pauses = "hooks_committed,hooks_acknowledged" end
             local old = spawn_carrier(launch, "open", nil, pauses)
-            await_paused(paused, old, pause_at)
+            await_paused(paused, old, pause_at, false)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
             local outcome = await_carrier(replacement, "replacement carrier")
             if not outcome.value then error("replacement carrier failed: " .. tostring(outcome.error)) end
@@ -759,7 +748,7 @@ local function define_tests()
             -- own.
             local fenced: Outcome
             if pause_at == "hooks_committed" then
-                await_paused_or_exit(paused, old, "hooks_acknowledged")
+                await_paused(paused, old, "hooks_acknowledged", true)
                 -- Cleanup may race the fenced carrier's own exit. The monitored
                 -- EXIT below is the proof it stopped, not terminate's return.
                 process.terminate(old)

@@ -3,7 +3,8 @@
 Bee builds Wippy from the repository and commit recorded in
 [`wippy.build.json`](../../wippy.build.json). The same manifest records Bee's Go
 version and build tags. Bee builds unpatched upstream runtime sources and does
-not vendor a runtime source directory.
+not vendor a runtime source directory. The pinned builder rejects runtime patch
+entries.
 
 `make setup` and standalone builds use the same builder and manifest. Wippy owns application deployment, Hub resolution, command
 dispatch, state opening and shutdown; Bee registers its native components
@@ -26,7 +27,9 @@ is with no rebuild.
 1. Select an upstream commit that contains the required runtime APIs.
 2. Update the runtime commit in `wippy.build.json` and any necessary native
    module dependency.
-3. Keep native dependency and binary identity facts aligned with the manifest.
+3. Land runtime changes upstream before selecting their commit. Keep proposed
+   patches outside the build manifest and retain upstream license notices. Keep
+   native dependency and binary identity facts aligned with the manifest.
 4. Run the native pinned-runtime check and the affected upstream Go tests.
 5. Run Bee's typed, pack and native acceptance checks before publishing a
    standalone build.

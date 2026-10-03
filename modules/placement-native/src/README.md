@@ -32,11 +32,15 @@ the replaceable `target_root` requirement.
    Repeating the same admitted idempotency key still returns its original
    attempt. This is an admission predicate in the existing placement
    transaction, not a home lock or a separate manager.
-2. `start` spawns the runner under the placement scope and waits for its
-   startup acknowledgment within the admitted start budget.
-   An elapsed budget returns `UNCERTAIN` without changing the recorded execution
-   state or stopping the runner. The caller checks `status` or `reconcile` before
-   deciding what to do next; an unacknowledged start does not authorize a retry.
+2. `start` spawns and monitors the runner under the placement scope and waits
+   for its authenticated startup acknowledgment or supervised exit. Elapsed
+   wall time does not decide the startup outcome: a live runner can still be
+   materializing the home or creating a Docker container. A refusal retains the
+   runner's reason; exit before acknowledgment returns `UNCERTAIN` with the
+   supervision error. Cancellation interrupts the wait without stopping the
+   runner. The caller checks `status` or `reconcile` before deciding what to do
+   next; an unacknowledged start does not authorize a retry. The recorded
+   `timeouts.start_ms` remains a launch value and does not limit this wait.
    `stop` before the runner claims startup atomically records exit and complete
    cleanup, releasing the retained session without touching its existing files.
    A delayed start cannot claim that stopped attempt; repeated stops return its

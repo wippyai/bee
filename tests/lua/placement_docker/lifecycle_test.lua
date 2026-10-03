@@ -57,7 +57,12 @@ local function configure()
     local activation = assert(registry.get("bee.harness.launch:harness_activation"))
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
-    bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding"; changes:update(activation)
+    local admitted = false
+    for _, binding in ipairs(bindings) do
+        if binding == "bee.placement.native:fixture_agent_binding" then admitted = true end
+    end
+    if not admitted then bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding" end
+    changes:update(activation)
     assert(changes:apply())
 end
 local function request(id: string): types.LaunchRequest
@@ -128,6 +133,11 @@ local function run()
             call("cleanup", {attempt_id = id})
             if not ok then error(tostring(failure)) end
         end)
+    end)
+end
+local function input_tests()
+    test.describe("Docker placement stdin", function()
+        configure()
         test.it("delivers quoted initial input and EOF to a real Docker child", function()
             local id = "docker-stdin-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
             local selected = request(id)
@@ -190,6 +200,11 @@ local function run()
             process.unlisten(output)
             if not ok then error(tostring(failure)) end
         end)
+    end)
+end
+local function readiness_tests()
+    test.describe("Docker placement readiness", function()
+        configure()
         test.it("refuses changed profile admission before preparing an image", function()
             local selected = request("docker-stale-profile")
             selected.placement_profile_digest = string.rep("0", 64)
@@ -206,4 +221,4 @@ local function run()
         end)
     end)
 end
-return {run = test.run_cases(run), creator = creator}
+return {run = test.run_cases(run), input = test.run_cases(input_tests), readiness = test.run_cases(readiness_tests), creator = creator}

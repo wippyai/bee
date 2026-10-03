@@ -108,6 +108,68 @@ entries:
     policies:
     - bee.placement.native:apply_test_policy
     - bee.placement.docker.tests:creator_policy
+- name: stdin_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: input
+  meta:
+    type: test
+    suite: bee_docker
+    timeout: 60s
+  modules:
+  - funcs
+  - registry
+  - security
+  - process
+  - channel
+  - time
+  imports:
+    placement_decode: bee.placement:decode
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    profiles: bee.placement.profiles:profiles
+    request_codec: bee.placement:request
+    store: bee.placement.native.persist:store
+    spec: bee.placement.docker.binding:spec
+    types: bee.placement:types
+    service: bee.placement.docker.service:service
+    placement_resolver: bee.placement.binding:resolver
+    protocol: bee.placement.native:protocol
+  security:
+    policies:
+    - bee.placement.native:apply_test_policy
+    - bee.placement.docker.tests:creator_policy
+- name: readiness_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: readiness
+  meta:
+    type: test
+    suite: bee_docker
+    timeout: 60s
+  modules:
+  - funcs
+  - registry
+  - security
+  - process
+  - channel
+  - time
+  imports:
+    placement_decode: bee.placement:decode
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    profiles: bee.placement.profiles:profiles
+    request_codec: bee.placement:request
+    store: bee.placement.native.persist:store
+    spec: bee.placement.docker.binding:spec
+    types: bee.placement:types
+    service: bee.placement.docker.service:service
+    placement_resolver: bee.placement.binding:resolver
+    protocol: bee.placement.native:protocol
+  security:
+    policies:
+    - bee.placement.native:apply_test_policy
+    - bee.placement.docker.tests:creator_policy
 - name: projection_test
   kind: function.lua
   source: file://projection_test.lua

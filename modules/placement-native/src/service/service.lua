@@ -572,8 +572,8 @@ end
 function M.prepare(value: unknown): Reply
     return M.prepare_local(value, nil)
 end
--- start: spawn the runner and wait for its startup acknowledgment within
--- the admitted start budget. Idempotent: a live attempt returns its status.
+-- start: spawn the runner and observe its acknowledgment or supervised exit.
+-- Idempotent: a live attempt returns its status.
 function M.start_local(value: unknown, runner_ref: string?): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "start request must be an object") end
@@ -609,11 +609,14 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
         process.unlisten(replies)
         return fail("UNAVAILABLE", "spawn runner: " .. tostring(spawn_error))
     end
-    process.monitor(runner)
-    local timer = time.after(tostring(request.timeouts.start_ms) .. "ms")
+    local monitored, monitor_error = process.monitor(runner)
+    if not monitored then
+        process.unlisten(replies)
+        return fail("UNCERTAIN", "monitor runner: " .. tostring(monitor_error) .. "; startup outcome is unknown")
+    end
     local outcome: Reply? = nil
     while not outcome do
-        local selected = channel.select({replies:case_receive(), events:case_receive(), timer:case_receive()})
+        local selected = channel.select({replies:case_receive(), events:case_receive()})
         if not selected.ok then
             outcome = fail("UNAVAILABLE", "start interrupted")
         elseif selected.channel == replies then
@@ -637,8 +640,6 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
             elseif event.kind == process.event.CANCEL then
                 outcome = fail("UNAVAILABLE", "start cancelled")
             end
-        else
-            outcome = fail("UNCERTAIN", "runner did not acknowledge startup within " .. tostring(request.timeouts.start_ms) .. "ms; startup outcome is unknown")
         end
     end
     process.unlisten(replies)

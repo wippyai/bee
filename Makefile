@@ -193,9 +193,14 @@ sessions-unit-check: $(TOOLCHAIN_CURRENT)
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py tests.hub.lifecycle lifecycle_test
 .PHONY: native-placement-unit-check governance-activation-unit-check
 native-placement-unit-check: $(TOOLCHAIN_CURRENT)
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_test native_execution_test native_configuration_test native_output_test native_credentials_test native_cleanup_test workdir_preparer_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_test native_execution_test native_configuration_test native_output_test native_credentials_test native_cleanup_test workdir_preparer_test native_startup_test
 governance-activation-unit-check: $(TOOLCHAIN_CURRENT)
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov activation_owner_test activation_owner_admission_test activation_owner_recovery_test activation_owner_migration_test
+.PHONY: placement-startup-unit-check docker-placement-unit-check
+placement-startup-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_startup_test
+docker-placement-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.docker.tests profile_test spec_test lifecycle_test stdin_test readiness_test projection_test image_test environment_test
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py

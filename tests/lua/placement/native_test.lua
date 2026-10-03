@@ -2942,32 +2942,6 @@ local function credentials_tests()
             end, 8000) then error("successor retained launch did not exit") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
         end)
-        test.it("reports an unacknowledged startup deadline as uncertain and leaves the runner supervised", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            local timeouts = assert(bounds.object(request.timeouts))
-            timeouts.start_ms = 100
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
-            local deadline = time.after("10s")
-            local selected = channel.select({pending:case_receive(), deadline:case_receive()})
-            process.unlisten(pending)
-            if not selected.ok or selected.channel == deadline then error("startup fixture did not claim the attempt") end
-            local message = selected.value
-            local data = assert(bounds.object(message:payload():data()))
-            local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-            local stopped = process.terminate(tostring(message:from()))
-            test.is_true(stopped)
-            test.eq(data.attempt_id, prepared.attempt_id)
-            if call_error then error(tostring(call_error)) end
-            local reply = principals.reply(raw)
-            test.is_false(reply.ok)
-            test.eq(reply.error and reply.error.code, "UNCERTAIN")
-            test.eq(reply.error and reply.error.message, "runner did not acknowledge startup within 100ms; startup outcome is unknown")
-            test.eq(current.execution_state, "starting")
-            test.is_false(has(kinds(prepared.attempt_id), "child.started"))
-        end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()
             local workspace = fresh("ws")
@@ -3096,6 +3070,72 @@ local function credentials_tests()
                 test.is_nil((tostring(row and row.request_json):find(SENTINEL, 1, true)))
             end
         end)
+    end)
+end
+
+local function startup_tests()
+    test.describe("Supervised placement startup", function()
+        for _, command in ipairs({"acknowledge", "refuse", "crash"}) do
+            test.it("waits past the former startup deadline for runner " .. command, function()
+                local request = launch({"sh", "-c", "true"}, "direct_process")
+                assert(bounds.object(request.timeouts)).start_ms = 1
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+                attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+                local future = assert(caller(OWNER):async("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id}))
+                local selected = channel.select({pending:case_receive(), time.after("10s"):case_receive()})
+                process.unlisten(pending)
+                assert(selected.ok and selected.channel == pending, "startup fixture did not claim the attempt")
+                local message = selected.value
+                local runner = tostring(message:from())
+                local events = assert(process.events())
+                assert(process.monitor(runner))
+                local data = assert(bounds.object(message:payload():data()))
+                local released = false
+                local ok, failure = pcall(function()
+                    test.eq(data.attempt_id, prepared.attempt_id)
+                    assert(type(data.starter) == "string" and type(data.reply_topic) == "string")
+                    local observation = time.after("200ms")
+                    local premature = channel.select({future:response():case_receive(), observation:case_receive()})
+                    assert(premature.ok and premature.channel == observation, "startup completed without an authenticated acknowledgement or runner EXIT")
+                    local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                    test.eq(current.execution_state, "starting")
+                    test.eq(current.runner, runner)
+                    test.is_false(has(kinds(prepared.attempt_id), "child.started"))
+                    assert(process.send(data.starter, data.reply_topic, {started = true, attempt = prepared}))
+                    local forged = channel.select({future:response():case_receive(), time.after("200ms"):case_receive()})
+                    assert(forged.ok and forged.channel ~= future:response(), "startup accepted a foreign acknowledgement")
+                    assert(process.send(runner, "bee.test.startup.release", {command = command}))
+                    released = true
+                    local reply = principals.reply(await(future))
+                    if command == "acknowledge" then
+                        test.is_true(reply.ok)
+                        test.eq(attempt_of(reply).execution_state, "running")
+                        test.eq(attempt_of(reply).attempt_id, prepared.attempt_id)
+                    elseif command == "refuse" then
+                        test.is_false(reply.ok)
+                        test.eq(reply.error and reply.error.code, "UNAVAILABLE")
+                        test.eq(reply.error and reply.error.message, "startup fixture refused")
+                    else
+                        test.is_false(reply.ok)
+                        test.eq(reply.error and reply.error.code, "UNCERTAIN")
+                        local detail = reply.error and reply.error.message or ""
+                        test.is_true(detail:find("runner exited before acknowledging startup", 1, true) ~= nil)
+                        test.is_true(detail:find("startup fixture crashed", 1, true) ~= nil)
+                        test.eq(value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt.execution_state, "uncertain")
+                    end
+                end)
+                if command ~= "crash" or not released then assert(process.terminate(runner)) end
+                local exit_deadline = time.after("10s")
+                while true do
+                    local ended = channel.select({events:case_receive(), exit_deadline:case_receive()})
+                    assert(ended.ok and ended.channel == events, "startup fixture did not exit after release")
+                    if ended.value.kind == process.event.EXIT and tostring(ended.value.from) == runner then break end
+                end
+                process.unmonitor(runner)
+                if not ok then error(tostring(failure)) end
+            end)
+        end
     end)
 end
 
@@ -3267,4 +3307,4 @@ local function suite(define_tests: () -> ())
 end
 
 return {run = suite(home_tests), execution = suite(execution_tests), configuration = suite(configuration_tests),
-    output = suite(output_tests), credentials = suite(credentials_tests), cleanup = suite(cleanup_tests)}
+    output = suite(output_tests), credentials = suite(credentials_tests), startup = suite(startup_tests), cleanup = suite(cleanup_tests)}

@@ -266,8 +266,7 @@ class Journey:
                 "source must not contain the evidence or scratch roots")
         self.output.mkdir(parents=True, exist_ok=True)
         work_root.mkdir(parents=True, exist_ok=True)
-        self.work = Path(tempfile.mkdtemp(dir=work_root,
-            prefix="run-" + time.strftime("%Y%m%d-%H%M%S") + "-" + str(os.getpid()) + "-"))
+        self.work = Path(tempfile.mkdtemp(dir=work_root, prefix="run-"))
         self.scratch = self.output / self.work.name
         self.scratch.mkdir(mode=0o700)
         self.state, self.folder = self.work / "state", self.work / "project"

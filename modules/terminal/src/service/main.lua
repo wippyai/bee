@@ -358,7 +358,6 @@ local function main(owner: string, initial_application: string?, secondary_appli
         start = nil
         if action:sub(1, 12) == "restoration:" then
             failure_focus = action:sub(13)
-            start = nil
             dirty = true
         elseif action == "select_text" then begin_selection(target)
         elseif action == "rename" then
@@ -444,9 +443,10 @@ local function main(owner: string, initial_application: string?, secondary_appli
             end
         end
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
+        local failures = restoration_items()
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. (workspace_label or names.label(workspace_id)),
             preferences, start, initial_application ~= nil, catalog, editor, dialogs[dialog_target()], badges, active_selection, connection_info, connection_open, hydrated,
-            transfers, display_id, workspaces, attention_count and attention_count + #restoration_items() or nil, restoration_items())
+            transfers, display_id, workspaces, attention_count and attention_count + #failures or nil, failures)
         tab_hits = frame.tabs
         if help_open then
             local guide = help_view.draw(scene.width, scene.height, preferences, help_menu)

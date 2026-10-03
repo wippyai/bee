@@ -1,5 +1,5 @@
--- MIT. Version-1 history survives migrations 2 and 3 untouched, the new
--- authority works beside it, and altered or newer ledgers fail closed.
+-- MIT. Legacy history survives appended owner migrations;
+-- altered or newer ledgers fail closed.
 local test = require("test")
 local harness = require("harness")
 local database = require("database")

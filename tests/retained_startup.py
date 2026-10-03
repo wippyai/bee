@@ -1,10 +1,8 @@
 """Prove retained app identity repair and record isolation with non-credential copies."""
 import argparse
-import hashlib
 import io
 import json
 from pathlib import Path
-import shutil
 import sqlite3
 import subprocess
 import sys

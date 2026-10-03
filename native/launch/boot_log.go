@@ -104,8 +104,8 @@ func bootPhase(ctx context.Context, phase, stage string) {
 }
 
 // The runtime's event log carries its original emission timestamp even when
-// stdout logging is silent. The diagnostic sink retains only boot messages
-// and phase fields, without retaining arbitrary log payloads.
+// stdout logging is silent. The owner output retains restoration identifiers
+// and exact errors; the optional diagnostic file retains boot phase fields.
 func (b *bootLog) capture(value event.Event) error {
 	var record struct {
 		Entry struct {

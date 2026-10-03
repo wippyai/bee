@@ -21,7 +21,7 @@ local function copy_spec(spec: Spec): Spec
         accept = spec.accept, initial = spec.initial, restoration = spec.restoration}
 end
 
--- The interaction decoder already rejects controls and oversized initial values.
+-- The interaction decoder rejects oversized or control-bearing initial values.
 -- Keep the renderer defensive because it is also useful with directly-created
 -- values in pure tests and callers that have not crossed that decoder.
 local function utf8_size(first: integer): integer

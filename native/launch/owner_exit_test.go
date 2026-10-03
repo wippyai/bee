@@ -7,12 +7,13 @@ package launch
 import (
 	"context"
 	"errors"
-	"github.com/wippyai/bee/native/hive/rendezvous"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/wippyai/bee/native/hive/rendezvous"
 )
 
 func TestOwnerExitObserverChild(t *testing.T) {

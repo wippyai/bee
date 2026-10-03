@@ -108,6 +108,42 @@ local function define_tests()
             assert(machine.on_startup(io, session))
             test.eq(starts, 1)
         end)
+        test.it("restores an acknowledged EOF replayed by a surviving runner", function()
+            for _, truncated in ipairs({false, true}) do
+            local selected = plan("session", "stream-json")
+            local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)
+            local session: machine.Session = {plan = selected, turn_id = "turn", turn_open = true, epoch = 1, revision = 0,
+                checkpoint = point, decoder = stream_json.new(machine.MAX_FRAME_BYTES), normalizer = nil, terminal = nil,
+                stream_ended = false, exit = nil, eof = {stdout = false, stderr = false}, runner = "runner",
+                settled = nil, recovered = false, output = "open", pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
+                last_sequence = {stdout = 0, stderr = 0}, held_from = nil, dropping_stdout = false}
+            local acknowledged = -1
+            local revision = 0
+            local io: machine.IO = {call = function(target: string, value: unknown): (unknown, string?)
+                if target == "normalize" then return {ok = true, state = {}, observations = {}}, nil end
+                assert(target == machine.CARRIER_OPS .. ":commit", target)
+                revision = revision + 1
+                return commit_reply(value, revision), nil
+            end,
+                send = function(_: string, _: string, value: unknown)
+                    acknowledged = assert(bounds.integer(assert(bounds.object(value)).consumed_through))
+                end,
+                self_pid = function(): string return "carrier" end,
+                now_ms = function(): integer return 1000000 end,
+                key = function(): string return "key" end}
+            assert(machine.on_output(io, session, "runner", {attempt_id = "attempt", generation = 1, stream = "stderr", sequence = 1, eof = true, truncated = truncated}))
+            test.eq(point.consumed.stderr, 1)
+            test.eq(acknowledged, 1)
+            session.eof.stderr = false
+            assert(machine.on_output(io, session, "runner", {attempt_id = "attempt", generation = 1, stream = "stderr", sequence = 1, eof = true, truncated = truncated}))
+            test.is_true(session.eof.stderr)
+            assert(machine.on_output(io, session, "runner", {attempt_id = "attempt", generation = 1, stream = "stdout", sequence = 2, eof = true, truncated = truncated}))
+            test.eq(point.consumed.stderr, 1)
+            test.eq(point.consumed.stdout, 2)
+            test.eq(point.output, truncated and "truncated" or "complete")
+            test.eq(acknowledged, 2)
+            end
+        end)
         test.it("does not settle an exited child while its runner still owns unconsumed output", function()
             local selected = plan("session", "stream-json")
             local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)

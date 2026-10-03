@@ -3,6 +3,7 @@ local process = require("process")
 local channel = require("channel")
 local service = require("service")
 local store = require("store")
+local protocol = require("protocol")
 local M = {}
 function M.start(request: unknown): service.Reply
     return service.start_local(request, "bee.placement.native:startup_runner")
@@ -59,6 +60,15 @@ function M.main(attempt_id: string, supervisor: string, reply_topic: string, _bi
         local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", evidence = {kind = "child.started", detail = "fixture acknowledged"}})
         assert(running.ok, running.message)
         assert(process.send(supervisor, reply_topic, {started = true}))
+    end
+    if request.launch.argv[1] == "closure" then
+        local message = assert((controls:receive()))
+        local data: unknown = message:payload():data()
+        assert(type(data) == "table" and data.control_token == control_token and data.command == "close_stdin")
+        assert(process.send(row.recipient, "bee.test.closure.held", {}))
+        assert((advances:receive()))
+        assert(process.send(tostring(message:from()), protocol.TOPIC_STDIN, {attempt_id = attempt_id,
+            generation = 1, probe = data.probe, closed = true}))
     end
     events:receive()
     db:release()

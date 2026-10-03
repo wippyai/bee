@@ -385,6 +385,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     -- does not consume this drain budget; retention still bounds that wait.
     local drain_timer = time.after("1ms")
     local drain_armed = false
+    local drain_expired = false
     local drain_remaining = request.timeouts.drain_ms
     local drain_started = time.now()
     -- A lost carrier's binding outlives it only for the takeover grace: a
@@ -421,13 +422,22 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             end
         end
     end
+    local function unacknowledged(): integer
+        local count = 0
+        for _, item in ipairs(pending) do
+            if item.sequence > consumed_through then count = count + 1 end
+        end
+        return count
+    end
     local function acknowledge(through: integer)
         if through <= consumed_through or through > sent_through then return end
         consumed_through = through
         local kept: {Pending} = {}
         spooled = 0
         for _, item in ipairs(pending) do
-            if item.sequence > through then
+            -- A takeover replays acknowledged EOF markers because the carrier
+            -- checkpoint records complete output, not individual stream ends.
+            if item.sequence > through or item.eof then
                 kept[#kept + 1] = item
                 spooled = spooled + item.bytes
             end
@@ -463,16 +473,26 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             drain_started = time.now()
             drain_timer = time.after(tostring(math.max(1, drain_remaining)) .. "ms")
             drain_armed = true
+            drain_expired = false
         end
         local cases = {controls:case_receive(), inputs:case_receive(), acks:case_receive(), events:case_receive(), exits:case_receive()}
         if spooled < protocol.MAX_SPOOL_BYTES and eof_seen < 2 then cases[#cases + 1] = chunks:case_receive() end
         if coalesce_armed then cases[#cases + 1] = coalesce_timer:case_receive() end
         if kill_armed then cases[#cases + 1] = kill_timer:case_receive() end
         if retain_armed then cases[#cases + 1] = retain_timer:case_receive() end
-        if drain_armed then cases[#cases + 1] = drain_timer:case_receive() end
+        if drain_armed and not drain_expired then cases[#cases + 1] = drain_timer:case_receive() end
+        if drain_armed and drain_expired then cases.default = true end
         if takeover_armed then cases[#cases + 1] = takeover_timer:case_receive() end
         local selected = channel.select(cases)
+        if drain_armed and selected.default then selected = {ok = true, channel = drain_timer} end
         if not selected.ok then break end
+        if drain_armed and selected.channel == drain_timer then
+            drain_expired = true
+            if not reads_paused and eof_seen < 2 then
+                local queued = channel.select({chunks:case_receive(), default = true})
+                if not queued.default and queued.ok then selected = queued end
+            end
+        end
         if drain_armed and selected.channel == drain_timer then
             drain_armed = false
             if eof_seen < 2 then
@@ -483,7 +503,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         elseif retain_armed and selected.channel == retain_timer then
             flush_buffers()
             local bytes = spooled
-            evidence(db, attempt_id, "output.lost", "retention of " .. tostring(request.timeouts.retain_ms) .. " ms elapsed with " .. tostring(#pending) .. " unacknowledged chunks (" .. tostring(bytes) .. " bytes); consumed through " .. tostring(consumed_through) .. ", sent through " .. tostring(sent_through) .. (eof_seen < 2 and "; unread pipe output is also lost" or ""), {})
+            evidence(db, attempt_id, "output.lost", "retention of " .. tostring(request.timeouts.retain_ms) .. " ms elapsed with " .. tostring(unacknowledged()) .. " unacknowledged chunks (" .. tostring(bytes) .. " bytes); consumed through " .. tostring(consumed_through) .. ", sent through " .. tostring(sent_through) .. (eof_seen < 2 and "; unread pipe output is also lost" or ""), {})
             pending = {}
             break
         end
@@ -554,6 +574,12 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                             recipient = data.recipient
                             installed = true
                             process.send(recipient, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
+                            for _, item in ipairs(pending) do
+                                if item.eof and item.sequence <= consumed_through then
+                                    process.send(recipient, protocol.TOPIC_OUTPUT, {attempt_id = attempt_id, generation = generation,
+                                        stream = item.stream, sequence = item.sequence, eof = true, truncated = item.truncated})
+                                end
+                            end
                             sent_through = consumed_through
                             flush()
                             if exited then process.send(recipient, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
@@ -575,7 +601,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     local execution = "running"
                     if exited then execution = "exited" elseif kill_armed then execution = "stopping" end
                     process.send(tostring(message:from()), protocol.TOPIC_STATUS, {attempt_id = attempt_id, generation = generation, probe = data.probe, execution = execution, exit_code = exit_code,
-                        eof_seen = eof_seen, pending_outputs = #pending, remembered_writes = #remembered, truncated = truncated})
+                        eof_seen = eof_seen, pending_outputs = unacknowledged(), remembered_writes = #remembered, truncated = truncated})
                 elseif data.command == "close_stdin" and data.attempt_id == attempt_id and type(data.probe) == "string" then
                     -- The owner ends a settled session by closing stdin; the
                     -- fact is recorded apart from input acceptance and exit.
@@ -682,7 +708,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             takeover_armed = false
             retire_gateway("carrier lost under generation " .. tostring(lost_generation) .. "; no takeover within " .. tostring(protocol.TAKEOVER_GRACE_MS) .. " ms")
         end
-        if exited and eof_seen >= 2 and #pending == 0 then break end
+        if exited and eof_seen >= 2 and unacknowledged() == 0 then break end
         if exited and (eof_seen >= 2 or spooled >= protocol.MAX_SPOOL_BYTES) and not retain_armed then
             retain_timer = time.after(tostring(request.timeouts.retain_ms) .. "ms")
             retain_armed = true
@@ -716,7 +742,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     process.unlisten(controls)
     process.unlisten(inputs)
     process.unlisten(acks)
-    evidence(db, attempt_id, "runner.finished", "pending chunks " .. tostring(#pending) .. ", consumed through " .. tostring(consumed_through), {fields = {runner_pid = sql.NULL}})
+    evidence(db, attempt_id, "runner.finished", "pending chunks " .. tostring(unacknowledged()) .. ", consumed through " .. tostring(consumed_through), {fields = {runner_pid = sql.NULL}})
     local ended = store.attempt(db, attempt_id)
     if ended and ended.execution_state == "exited" then cleanup(ended) end
     db:release()

@@ -749,3 +749,9 @@ login-links-check:
 .PHONY: ui-module
 ui-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/ui_module.py
+
+.PHONY: carrier-races-check
+CARRIER_RUNS ?= 1
+CARRIER_LOGS ?= .wippy/carrier-races/layout
+carrier-races-check: fixture-gateway-client component-inventory-check
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/carrier_races.py --runs "$(CARRIER_RUNS)" --logs "$(CARRIER_LOGS)"

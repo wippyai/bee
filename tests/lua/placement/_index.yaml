@@ -119,8 +119,9 @@ entries:
   source: file://startup_runner.lua
   method: main
   meta: {type: test_support}
-  modules: [process, channel]
+  modules: [process, channel, time]
   imports:
+    protocol: bee.placement.native:protocol
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
 - name: fixture_start_unacknowledged
@@ -128,10 +129,11 @@ entries:
   source: file://startup_runner.lua
   method: start
   meta: {type: test_support}
-  modules: [process, channel]
+  modules: [process, channel, time]
   security:
     policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy]
   imports:
+    protocol: bee.placement.native:protocol
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
 - name: preparer_temp_root
@@ -151,6 +153,7 @@ entries:
   imports:
     test: wippy.test:test
     workdir_preparers: bee.placement.native.service:workdir_preparers
+    protocol: bee.placement.native:protocol
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     migrations: bee.placement.native.migrations:migrations
@@ -332,6 +335,7 @@ entries:
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
+    protocol: bee.placement.native:protocol
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     homes: bee.placement.native.service:homes
@@ -428,6 +432,7 @@ entries:
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
+    protocol: bee.placement.native:protocol
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     homes: bee.placement.native.service:homes

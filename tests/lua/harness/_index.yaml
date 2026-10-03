@@ -778,6 +778,7 @@ entries:
     suite: bee
     timeout: 180s
   modules:
+  - exec
   - funcs
   - security
   - process
@@ -788,9 +789,11 @@ entries:
   - json
   security:
     policies:
+    - bee.placement.native.security:placement_exec_policy
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
   imports:
+    quote: bee.driver.binding:quote
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -805,6 +808,7 @@ entries:
     suite: bee
     timeout: 180s
   modules:
+  - exec
   - funcs
   - security
   - process
@@ -815,9 +819,11 @@ entries:
   - json
   security:
     policies:
+    - bee.placement.native.security:placement_exec_policy
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
   imports:
+    quote: bee.driver.binding:quote
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -832,6 +838,7 @@ entries:
     suite: bee
     timeout: 180s
   modules:
+  - exec
   - funcs
   - security
   - process
@@ -842,9 +849,11 @@ entries:
   - json
   security:
     policies:
+    - bee.placement.native.security:placement_exec_policy
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
   imports:
+    quote: bee.driver.binding:quote
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -1792,6 +1801,7 @@ entries:
     - bee.security.approvals:approval_store_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
+    exits: bee.harness.catalog:exits
     placement_protocol: bee.placement.native:protocol
     placement_decode: bee.placement:decode
     principals: bee.test.principals:bound
@@ -2458,7 +2468,7 @@ entries:
   kind: library.lua
   source: file://exits.lua
   meta: {type: test_support}
-  modules: [process]
+  modules: [process, json]
   imports: {bounds: 'bee.values:bounds'}
 - name: exits_test
   kind: function.lua

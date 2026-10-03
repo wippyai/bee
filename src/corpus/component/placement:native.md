@@ -214,7 +214,13 @@ to the bound recipient under the current attachment generation. The runner
 keeps unacknowledged chunks up to a spool bound; beyond it the pump blocks
 and the child blocks on its pipe. Input arrives with a write id and the
 generation; a repeated write id is acknowledged without a second write.
+`close_stdin` waits for the exact runner acknowledgement or monitored runner
+EXIT, draining queued acknowledgements before reporting their absence. Send,
+monitor, cancellation and runner failures retain their causes.
 EOF stops are separate messages from chunks, and exit is separate from EOF.
+The runner retains the two EOF markers even after acknowledgement, replays
+acknowledged markers to a newer attachment generation, and excludes them from
+unacknowledged output counts and retention obligations.
 
 ## Exit observation
 
@@ -414,7 +420,9 @@ budget. Time spent with reads paused at the output spool limit does not consume
 that budget. After child exit, the retention deadline bounds each continuous wait at the
 spool limit; acknowledged progress that resumes reads ends that wait. Once both
 streams end, one retention deadline bounds the remaining unacknowledged output. Drain expiration records forced
-truncation; retention expiration records output loss rather than consumption.
+truncation only after queued pipe chunks and EOFs have been consumed; retention
+expiration records output loss rather than consumption. Selecting an expired
+drain bound cannot discard pipe events already available to the runner.
 
 Native preparation decodes host prepare options through the same driver preferences
 decoder as the carrier planner before comparing the configuration digest. Empty

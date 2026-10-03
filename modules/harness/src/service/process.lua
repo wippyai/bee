@@ -114,13 +114,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         if hooks_error then error("hooks: " .. tostring(hooks_error)) end
     end
     drain_hooks()
-    local drain_timer = time.after("1ms")
-    local draining = false
-    local drain_elapsed = false
-    if session.exit and not session.runner then
-        draining = true
-        drain_timer = time.after(tostring(plan.policy.runner_drain_ms + plan.policy.drain_ms) .. "ms")
-    end
+    local drain_elapsed = session.runner == nil
     local settlement: unknown = nil
     local queued: {{write_id: string, data: string}} = {}
     local function flush_queued()
@@ -137,46 +131,40 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     -- declared it, the cooperative stop as the fallback, the runner's kill
     -- after its grace. Any other live child is stopped after settlement.
     local ended = false
-    local function await_exit()
-        local grace = time.after(tostring(plan.policy.stop_grace_ms + plan.policy.runner_drain_ms + plan.policy.drain_ms) .. "ms")
-        while not session.exit do
-            local selected = channel.select({exits:case_receive(), grace:case_receive()})
-            if not selected.ok or selected.channel == grace then break end
-            local message = selected.value
-            local data = placement_protocol.decode_exit(message:payload():data())
-            if data then machine.on_exit(io, session, tostring(message:from()), data) end
-        end
-    end
+    local close_grace: Channel<time.Time>? = nil
     local function end_session(record: boolean)
         if ended then return end
         ended = true
         local ending, end_error = machine.end_session(io, session, record)
         if end_error then error("end session: " .. tostring(end_error)) end
-        if ending ~= "none" then await_exit() end
         if ending == "closed" and not session.exit then
-            local stopping, stop_error = machine.stop_session(io, session)
-            if stop_error then error("stop after close: " .. tostring(stop_error)) end
-            if stopping ~= "none" then await_exit() end
+            close_grace = time.after(tostring(plan.policy.stop_grace_ms) .. "ms")
         end
     end
     while true do
         local cases = {states:case_receive(), outputs:case_receive(), exits:case_receive(), acks:case_receive(), inputs:case_receive(), attached:case_receive(), statuses:case_receive(), events:case_receive()}
-        if draining and not drain_elapsed then cases[#cases + 1] = drain_timer:case_receive() end
+        if close_grace then cases[#cases + 1] = close_grace:case_receive() end
         if poll_ms > 0 then
             cases[#cases + 1] = poll_timer:channel():case_receive()
             cases[#cases + 1] = hints:case_receive()
         end
         if hooking then cases[#cases + 1] = hooks_ticker:channel():case_receive() end
-        -- Accepted delivery precedes the fallback deadline after runner loss.
+        -- A supervised EXIT seals delivery; consume its queued messages before settlement.
         local selected
-        if session.runner_ended then
-            selected = channel.select({outputs:case_receive(), exits:case_receive(), acks:case_receive(),
-                statuses:case_receive(), default = true})
-            if selected.default then selected = channel.select(cases) end
+        if session.runner_ended or session.settled or (session.exit and not session.runner) then
+            selected = channel.select({states:case_receive(), outputs:case_receive(), exits:case_receive(), acks:case_receive(),
+                attached:case_receive(), statuses:case_receive(), default = true})
+            if selected.default then
+                if session.placement_state == "starting" then
+                    -- The startup owner publishes the refusal after it observes
+                    -- runner EXIT. Await that state event before classifying it.
+                    selected = channel.select(cases)
+                else drain_elapsed = true end
+            end
         else
             selected = channel.select(cases)
         end
-        if not selected.ok then break end
+        if not selected.ok and not selected.default then break end
         if hooking and selected.channel == hooks_ticker:channel() then drain_hooks() end
         if selected.channel == states then
             local message = selected.value
@@ -233,20 +221,32 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
                 queued[#queued + 1] = {write_id = data.write_id, data = data.data}
                 flush_queued()
             end
-        elseif draining and selected.channel == drain_timer then
-            drain_elapsed = true
+        elseif close_grace and selected.channel == close_grace then
+            close_grace = nil
+            local queued_exit = channel.select({exits:case_receive(), default = true})
+            if not queued_exit.default and queued_exit.ok then
+                local message = queued_exit.value
+                local data = placement_protocol.decode_exit(message:payload():data())
+                if data then machine.on_exit(io, session, tostring(message:from()), data) end
+            end
+            if not session.exit then
+                local _, stop_error = machine.stop_session(io, session)
+                if stop_error then error("stdin-close grace elapsed before exit: " .. tostring(stop_error)) end
+            end
         elseif poll_ms > 0 and selected.channel == poll_timer:channel() then
             refresh(true)
         elseif poll_ms > 0 and selected.channel == hints then
             refresh(false)
         elseif selected.channel == events then
             if selected.value.kind == process.event.CANCEL then break end
-            if selected.value.kind == process.event.EXIT and machine.on_runner_exit(session, tostring(selected.value.from)) and session.placement_state ~= "starting" and not draining then
-                draining = true
-                drain_timer = time.after(tostring(plan.policy.drain_ms) .. "ms")
-            end
+            if selected.value.kind == process.event.EXIT then machine.on_runner_exit(session, tostring(selected.value.from)) end
         end
         if selected.channel ~= poll_timer:channel() and selected.channel ~= hints then advance(false) end
+        if not ended and not session.terminal then
+            for _, permission in ipairs(session.checkpoint.permissions) do
+                if permission.phase == "closed" then end_session(false); break end
+            end
+        end
         if plan.launch.session_end == "stdin_close" and not session.exit and session.runner and not ended and machine.ready_to_settle(session, drain_elapsed) then
             -- Every exchange is closed on record before input closes.
             local closed_all, close_error = machine.close_exchanges(io, session, drain_elapsed)
@@ -255,9 +255,9 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         end
         local decision: unknown = nil
         local settle_error: string? = nil
-        local hook_output_pending = session.runner ~= nil and session.plan.gateway ~= nil
-            and #session.plan.gateway.hooks > 0 and session.terminal ~= nil and not machine.drained(session)
-        if hook_output_pending then
+        local output_pending = session.runner ~= nil and not drain_elapsed
+            and (not machine.drained(session) or not session.exit)
+        if output_pending then
             if not ended and machine.ready_to_settle(session, drain_elapsed) then end_session(false) end
         else
             decision, settle_error = machine.settle(io, session, drain_elapsed)

@@ -266,6 +266,32 @@ local function launch(command: {string}, required: string): {[string]: unknown}
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {stop_grace_ms = 500}}
 end
+local function await_retained_runner(prepared: types.Attempt)
+    local held = assert(process.listen("bee.test.native.held", {message = true}))
+    local events = assert(process.events())
+    local raw, start_error = caller(OWNER, nil):call("bee.placement.native.binding:start", {attempt_id = prepared.attempt_id})
+    assert(not start_error, tostring(start_error))
+    local started = attempt_of(principals.reply(raw))
+    local runner = assert(started.runner)
+    while true do
+        local message = assert((held:receive()))
+        if tostring(message:from()) == runner and message:payload():data().attempt_id == prepared.attempt_id then break end
+    end
+    assert(process.monitor(runner))
+    assert(process.send(runner, "bee.test.native.release", {}))
+    while true do
+        local selected = channel.select({events:case_receive()})
+        assert(selected.ok, "retention supervision channel closed")
+        local event = selected.value
+        if event.kind == process.event.EXIT and tostring(event.from) == runner then
+            assert(not (event.result and event.result.error), "retention runner: " .. tostring(event.result and event.result.error))
+            break
+        end
+        assert(event.kind ~= process.event.CANCEL, "retention observer cancelled")
+    end
+    process.unmonitor(runner)
+    process.unlisten(held)
+end
 local function provider_home_fixtures(): {{provider: string, launch: {[string]: unknown}}}
     local result: {{provider: string, launch: {[string]: unknown}}} = {}
     local claude = assert(claude_launch.decode({profile_id = "batch", brief = "fixture"}))
@@ -430,9 +456,10 @@ local function shell(command: string): string
         if type(chunk) ~= "string" or chunk == "" then break end
         output = output .. (chunk)
     end
-    proc:wait()
+    local code, err = proc:wait()
     stdout:close()
     executor:release()
+    assert(code == 0, "fixture command exited " .. tostring(code) .. ": " .. tostring(err) .. ": " .. command)
     return output
 end
 local function fixture_home_file(home_path: string, relative: string): string
@@ -2158,23 +2185,36 @@ local function define_tests()
             test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
         end)
         test.it("drains for a bounded time after an independently observed exit while descendants hold the pipes", function()
-            local release = ".wippy/" .. fresh("descendant-drain")
-            local script = "while [ ! -e " .. quote.posix(release) .. " ]; do sleep 0.01; done & echo hi"
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
+            local release = shell("pwd"):gsub("\n$", "") .. "/.wippy/" .. fresh("descendant-drain")
+            shell("mkfifo " .. quote.posix(release))
+            local script = "read release < " .. quote.posix(release) .. " & echo hi"
             local request = launch({"sh", "-c", script}, "direct_process")
             request.timeouts = {stop_grace_ms = 500, drain_ms = 300, retain_ms = 300}
             local prepared = attempt_of(call(OWNER, "prepare", request))
-            local ok, problem = pcall(function()
-                local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-                if started.exit_observation == "independent" then
-                    test.is_true(wait_for(function() return has(kinds(prepared.attempt_id), "child.exited") end, 5000))
-                    test.is_true(wait_for(function() return has(kinds(prepared.attempt_id), "output.drain_elapsed") end, 5000))
-                else
-                    test.is_false(has(kinds(prepared.attempt_id), "output.drain_elapsed"))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            if started.exit_observation ~= "independent" then shell("exec 3<> " .. quote.posix(release) .. "; printf 'release\n' >&3") end
+            while true do
+                local message = assert((exits:receive()))
+                if message:payload():data().attempt_id == prepared.attempt_id then break end
+            end
+            local eof, marked = 0, false
+            while eof < 2 do
+                local message = assert((outputs:receive()))
+                local data = assert(bounds.object(message:payload():data()))
+                if data.attempt_id == prepared.attempt_id then
+                    if data.eof == true then eof = eof + 1 end
+                    if data.truncated == true then marked = true end
+                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
                 end
-            end)
-            shell("touch " .. quote.posix(release))
-            if not ok then error(tostring(problem)) end
-            test.is_true(wait_for(function() return has(kinds(prepared.attempt_id), "child.exited") end, 5000))
+            end
+            if started.exit_observation == "independent" then shell("exec 3<> " .. quote.posix(release) .. "; printf 'release\n' >&3") end
+            shell("rm " .. quote.posix(release))
+            test.eq(marked, started.exit_observation == "independent", table.concat(kinds(prepared.attempt_id), ","))
+            process.unlisten(outputs)
+            process.unlisten(exits)
         end)
         test.it("retains pipe data across post-exit consumer backpressure without false truncation", function()
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
@@ -2211,13 +2251,90 @@ local function define_tests()
             process.unlisten(outputs)
             process.unlisten(exits)
         end)
-        test.it("records unacknowledged output as lost once the retention deadline passes after exit", function()
-            local request = launch({"sh", "-c", "echo one; echo two"}, "direct_process")
-            request.timeouts = {stop_grace_ms = 500, retain_ms = 300}
+        test.it("consumes queued pipe data before an expired drain is selected", function()
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
+            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
+            request.environment = {PROBE_VALUE = "expire-pipe"}
+            request.timeouts = {stop_grace_ms = 500, drain_ms = 100, retain_ms = 1500}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
             attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            time.sleep("1500ms")
+            while true do
+                local message = assert((exits:receive()))
+                if message:payload():data().attempt_id == prepared.attempt_id then break end
+            end
+            local received, eof, marked = 0, 0, false
+            while eof < 2 do
+                local message = assert((outputs:receive()))
+                local data = assert(bounds.object(message:payload():data()))
+                if data.attempt_id == prepared.attempt_id then
+                    if type(data.data) == "string" then received = received + #data.data end
+                    if data.eof == true then eof = eof + 1 end
+                    if data.truncated == true then marked = true end
+                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
+                end
+            end
+            local order = table.concat(kinds(prepared.attempt_id), ",")
+            test.eq(received, 300000, order)
+            test.is_false(marked, order)
+            test.is_false(has(kinds(prepared.attempt_id), "output.drain_elapsed"), order)
+            process.unlisten(outputs)
+            process.unlisten(exits)
+        end)
+        test.it("replays an acknowledged stream end to a takeover while the other pipe remains open", function()
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
+            local release = shell("pwd"):gsub("\n$", "") .. "/.wippy/" .. fresh("eof-replay")
+            shell("mkfifo " .. quote.posix(release))
+            local request = launch({"sh", "-c", "exec 2>&-; echo before; read release < " .. quote.posix(release) .. "; echo after"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            local ended = false
+            while not ended do
+                local message = assert((outputs:receive()))
+                local data = assert(protocol.decode_output(message:payload():data()))
+                if data.attempt_id == prepared.attempt_id then
+                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
+                    ended = data.stream == "stderr" and data.eof
+                end
+            end
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 2}))
+            local replayed = false
+            while not replayed do
+                local message = assert((outputs:receive()))
+                local data = assert(protocol.decode_output(message:payload():data()))
+                if data.attempt_id == prepared.attempt_id and data.generation == 2 then
+                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 2, consumed_through = data.sequence}))
+                    replayed = data.stream == "stderr" and data.eof
+                end
+            end
+            shell("exec 3<> " .. quote.posix(release) .. "; printf 'release\n' >&3")
+            while true do
+                local message = assert((exits:receive()))
+                local data = assert(protocol.decode_exit(message:payload():data()))
+                if data.attempt_id == prepared.attempt_id and data.generation == 2 then break end
+            end
+            while true do
+                local message = assert((outputs:receive()))
+                local data = assert(protocol.decode_output(message:payload():data()))
+                if data.attempt_id == prepared.attempt_id and data.generation == 2 then
+                    assert(process.send(tostring(message:from()), protocol.TOPIC_ACK, {generation = 2, consumed_through = data.sequence}))
+                    if data.stream == "stdout" and data.eof then break end
+                end
+            end
+            shell("rm " .. quote.posix(release))
+            process.unlisten(outputs)
+            process.unlisten(exits)
+        end)
+        test.it("records unacknowledged output as lost once the retention deadline passes after exit", function()
+            local request = launch({"sh", "-c", "echo one; echo two"}, "direct_process")
+            request.timeouts = {stop_grace_ms = 500, retain_ms = 300}
+            request.environment = {PROBE_VALUE = "hold-retention"}
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            await_retained_runner(prepared)
             local recorded = kinds(prepared.attempt_id)
             test.is_true(has(recorded, "child.exited"))
             test.is_true(has(recorded, "output.lost"))
@@ -2234,10 +2351,10 @@ local function define_tests()
         test.it("bounds post-exit retention when an unacknowledged burst fills the spool", function()
             local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
             request.timeouts = {stop_grace_ms = 500, drain_ms = 100, retain_ms = 300}
+            request.environment = {PROBE_VALUE = "hold-retention"}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            time.sleep("1500ms")
+            await_retained_runner(prepared)
             local recorded = kinds(prepared.attempt_id)
             test.is_true(has(recorded, "child.exited"))
             test.is_true(has(recorded, "output.lost"))
@@ -2717,7 +2834,7 @@ local function define_tests()
             -- The external digest binding commits before any setup file or
             -- ready marker. A failed binding therefore leaves a retryable empty
             -- retained home instead of a permanently unbound ready session.
-            test.eq(shell("printf 'crash_safe = true\\n' > " .. source_root .. "/.grok/config.toml"), "")
+            test.eq(shell("mkdir -p " .. source_root .. "/.grok && printf 'crash_safe = true\\n' > " .. source_root .. "/.grok/config.toml"), "")
             local binding_attempt, binding_session = fresh("grok-binding-attempt"), fresh("grok-binding-session")
             local _, binding_projection = projection(binding_attempt)
             if type(binding_projection.projection_id) ~= "string" then error("invalid fixture binding_projection.projection_id") end

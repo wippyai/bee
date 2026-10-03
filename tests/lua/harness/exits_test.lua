@@ -31,6 +31,29 @@ local function define_tests()
             test.eq(assert(outcome.wanted.value).pid, "wanted")
             test.eq(assert(saved.other.value).pid, "other")
         end)
+        test.it("reports the exact supervised cause when a carrier exits before an approval barrier", function()
+            local saved: {[string]: exits.Outcome} = {}
+            local event: process.Event = {kind = process.event.EXIT, from = "carrier", result = {error = "fixture response window elapsed"}, payload = function(): unknown return nil end}
+            local ok, cause = pcall(function()
+                exits.paused("carrier", "approval_created", saved, function(poll: boolean): unknown if poll then return nil end; return event end)
+            end)
+            test.is_false(ok)
+            test.is_true(tostring(cause):find("fixture response window elapsed", 1, true) ~= nil)
+            test.eq(saved.carrier.error, "fixture response window elapsed")
+        end)
+        test.it("observes a queued approval barrier when EXIT was selected first", function()
+            local saved: {[string]: exits.Outcome} = {}
+            local ended = false
+            exits.paused("carrier", "approval_created", saved, function(poll: boolean): unknown
+                if poll then
+                    if ended then return {kind = "pause", from = "carrier", step = "approval_created"} end
+                    return nil
+                end
+                ended = true
+                return {kind = process.event.EXIT, from = "carrier", result = {error = "crash after approval_created"}}
+            end)
+            test.eq(saved.carrier.error, "crash after approval_created")
+        end)
         test.it("reports the unchanged deadline when an awaited exit is absent", function()
             local ok, cause = pcall(function()
                 exits.collect({"missing"}, {}, function(_poll: boolean): process.Event? return nil end, "carrier")

@@ -195,9 +195,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 14184,
+      "bytes": 14797,
       "id": "docs/carrier",
-      "sha256": "3e95cde8a8056948e2ae1dc9d0f826e3da42bb0e36a9325a46615445b0abbf49",
+      "sha256": "e6b080490e2eb58849520c1d1de03cf0f2aff1ed718105fc399b8e621308f553",
       "source": "docs/reference/agents/carrier.md",
       "title": "Carrier contract",
       "topic": "application"
@@ -435,9 +435,9 @@
       "topic": "component"
     },
     {
-      "bytes": 13327,
+      "bytes": 13361,
       "id": "component/harness",
-      "sha256": "7bec6da49e1064f8123b62b04ca9384865f397185aef11eef41e2530ebd3dbc8",
+      "sha256": "9cf473002afb6d5facc143672bda40cc9b6ffc1fbcb8cb3d2c7d3bab8baddb30",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -499,9 +499,9 @@
       "topic": "component"
     },
     {
-      "bytes": 26828,
+      "bytes": 27405,
       "id": "component/placement:native",
-      "sha256": "514b1f802b255b3c824a9ce0b0127a676b65c6e71621c68edfca9ba439c5c4bf",
+      "sha256": "0d5c15e528424e513cb89c8708d591dbc20e598ee285149d8c8787cffdf870ed",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -654,7 +654,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 783985,
+    "bytes": 785209,
     "documents": 81
   }
 }

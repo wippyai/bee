@@ -769,20 +769,44 @@ function M.close_stdin(value: unknown): Reply
     if probe_error or not probe then return fail("INTERNAL", "probe") end
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STDIN, {message = true}))
-    process.send(runner, protocol.TOPIC_CONTROL, {command = "close_stdin", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
-    local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
-    local answer: protocol.StdinReply? = nil
-    while not answer do
-        local selected = channel.select({replies:case_receive(), timer:case_receive()})
-        if not selected.ok or selected.channel == timer then break end
-        local message = selected.value
-        local accepted = protocol.stdin_reply_accepted(tostring(message:from()), message:payload():data(), expected)
-        if accepted then answer = accepted end
+    local events = assert(process.events())
+    local monitored, monitor_error = process.monitor(runner)
+    if not monitored then
+        process.unlisten(replies)
+        return fail("CONFLICT", "stdin closure cannot monitor runner: " .. tostring(monitor_error))
     end
+    local sent, send_error = process.send(runner, protocol.TOPIC_CONTROL, {command = "close_stdin", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
+    local answer: protocol.StdinReply? = nil
+    local failure: string? = nil
+    if not sent then failure = "stdin closure send failed: " .. tostring(send_error) end
+    local runner_ended = false
+    local exit_failure: string? = nil
+    while not answer and not failure do
+        local selected
+        if runner_ended then
+            selected = channel.select({replies:case_receive(), default = true})
+            if selected.default then break end
+        else
+            selected = channel.select({replies:case_receive(), events:case_receive()})
+        end
+        if not selected.ok then failure = "stdin closure observation channel closed"; break end
+        if selected.channel == replies then
+            local message = selected.value
+            answer = protocol.stdin_reply_accepted(tostring(message:from()), message:payload():data(), expected)
+        elseif selected.value.kind == process.event.EXIT and tostring(selected.value.from) == runner then
+            runner_ended = true
+            local result = selected.value.result
+            if result and result.error then exit_failure = "runner exited before stdin closure acknowledgement: " .. tostring(result.error) end
+        elseif selected.value.kind == process.event.CANCEL then
+            failure = "stdin closure observer cancelled before acknowledgement"
+        end
+    end
+    process.unmonitor(runner)
     process.unlisten(replies)
-    if not answer then return fail("CONFLICT", "the runner did not answer the stdin closure") end
-    local current = load(attempt.attempt_id)
-    return succeed({attempt = current or attempt, closed = answer.closed, reason = answer.reason})
+    if not answer then return fail("CONFLICT", failure or exit_failure or "runner exited without a stdin closure acknowledgement") end
+    local current, current_error = load(attempt.attempt_id)
+    if not current then return assert(current_error) end
+    return succeed({attempt = current, closed = answer.closed, reason = answer.reason})
 end
 -- reconcile: prove alive or gone from identity; keep uncertainty otherwise.
 -- reconcile_attempt is the owner-independent core the supervision sweep

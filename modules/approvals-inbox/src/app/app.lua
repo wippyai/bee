@@ -9,7 +9,6 @@ local channel = require("channel")
 local process = require("process")
 local time = require("time")
 local uuid = require("uuid")
-local json = require("json")
 local funcs = require("funcs")
 local registry = require("registry")
 local appearance = require("appearance")
@@ -312,9 +311,9 @@ local function main(value: unknown)
             status = "Scroll to the end of the lease terms before approving"; dirty = true; return
         end
         if kind == "approve" or kind == "deny" then perform(function() act(kind); state.longer = false end); return end
-        local title = kind == "approve" and "Approve this request?" or (kind == "deny" and "Deny this request?" or "Withdraw this request?")
+        local title = "Withdraw this request?"
         local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
-        local accept = kind == "approve" and "Approve" or (kind == "deny" and "Deny" or "Withdraw")
+        local accept = "Withdraw"
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = accept})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, kind = kind, confirmation = confirmation}

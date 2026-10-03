@@ -128,3 +128,6 @@ authority, and list/revoke are restricted to the issuing actor or the same
 admitted application definition. Grant administration has no Hive exposure;
 remote feed readers see settlements on the authoritative node without acquiring
 its decision authority.
+
+Expired windows are pruned after the owner's retention horizon once no retained
+settlement references them; an active window keeps its source request retained.

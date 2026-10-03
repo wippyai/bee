@@ -34,9 +34,6 @@ local function state_label(row: model.Row): string
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "A", verb = "approve"},
     {key = "D", verb = "deny"}, {key = "W", verb = "withdraw"}, {key = "R", verb = "refresh"}})
-local WIDE_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "A", verb = "approve"},
-    {key = "D", verb = "deny"}, {key = "W", verb = "withdraw"}, {key = "R", verb = "refresh"}, {key = "M", verb = "mark"},
-    {key = "B/N", verb = "batch"}, {key = "L", verb = "lease"}, {key = "G", verb = "grant"}, {key = "V", verb = "leases"}})
 local LEASE_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "X", verb = "revoke"}, {key = "R", verb = "refresh"}, {key = "V", verb = "requests"}})
 local function lease_label(row: leases.Row): string
     local used = tostring(row.applies_used) .. "/" .. (row.max_applies and tostring(row.max_applies) or "-")
@@ -286,7 +283,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             buttons[#buttons + 1] = {kind = "batch_approve", key = "B", label = "Approve " .. tostring(marked), enabled = idle, more = true}
             buttons[#buttons + 1] = {kind = "batch_deny", key = "N", label = "Deny " .. tostring(marked), enabled = idle, more = true}
         end
-        if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "L", label = "Lease", enabled = idle, more = true} end
+        if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
         if can_grant then buttons[#buttons + 1] = {kind = "grant", key = "G", label = "Grant", enabled = idle, more = true} end
         buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your grants", enabled = true, more = true}
         buttons[#buttons + 1] = {kind = "leases", key = "V", label = "Leases", enabled = true, more = true}

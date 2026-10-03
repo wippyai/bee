@@ -585,7 +585,8 @@ function M.window_cap(state: State): integer
     local group = M.decision_group(state)
     if #group == 0 then return 0 end
     for _, view in ipairs(group) do
-        local limit = view.window_max_ttl_ms or 0
+        local limit = bounds.integer(view.window_max_ttl_ms or 0)
+        if limit == nil then error("approval policy cap is not an integer") end
         if limit < cap then cap = limit end
     end
     return cap

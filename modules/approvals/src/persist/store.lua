@@ -168,6 +168,12 @@ function M.forget(tx: sql.Transaction, approval_id: string): string?
     return nil
 end
 
+function M.forget_windows(tx: sql.Transaction, horizon: integer): string?
+    return execute(tx, [[DELETE FROM bee_approval_window_grants WHERE grant_id IN
+        (SELECT g.grant_id FROM bee_approval_window_grants g WHERE g.until_ms < ?
+        AND NOT EXISTS (SELECT 1 FROM bee_approval_requests r WHERE r.window_grant_id = g.grant_id) LIMIT 64)]],
+        {horizon}, "forget expired approval windows")
+end
 function M.attention_count(tx: sql.Transaction, workspace: string, now: integer): (integer?, string?)
     local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ?", {workspace, now})
     if err or not rows or #rows ~= 1 then return nil, err or "count attention" end

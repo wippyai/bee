@@ -16,7 +16,7 @@ local json = require("json")
 local bounds = require("bounds")
 local model = require("model")
 local leases = require("leases")
-local inbox = require("inbox")
+local app_caller = require("caller")
 local view = require("view")
 local appearance = require("appearance")
 local REQUESTER, ALICE, BOB, OUTSIDER = "bee.test.inbox_requester", "bee.test.inbox_alice", "bee.test.inbox_bob", "bee.test.inbox_outsider"
@@ -200,7 +200,7 @@ local function define_tests()
             local owner = through(alice)
             local decided = 0
             -- The owner commits; the answer never arrives.
-            local lossy = inbox.new(function(target: string, request: unknown): (unknown, string?)
+            local lossy = app_caller.new(function(target: string, request: unknown): (unknown, string?)
                 local raw, err = alice:call(target, request)
                 if target == "bee.approvals.binding:decide" then
                     decided = decided + 1

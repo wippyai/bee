@@ -1295,6 +1295,8 @@ local function op_reconcile(tx: sql.Transaction, actor: string, object: Object, 
         if delete_error then return storage("forget retained request") end
         forgotten = forgotten + 1
     end
+    local window_error = store.forget_windows(tx, horizon)
+    if window_error then return storage(window_error) end
     return success({expired = expired, forgotten = forgotten, more = #due == M.EXPIRE_BOUND}, expired == 0 and forgotten == 0)
 end
 -- establish: the authority process advances the incarnation once per start,

@@ -13,14 +13,13 @@ local local_attempts = require("local_attempts")
 local homes = require("homes")
 local types = require("types")
 local workdir_preparers = require("workdir_preparers")
-local docker_client = require("docker_client")
+local daemon = require("daemon")
 local paths = require("paths")
 local resources = require("resources")
 local image_service = require("image")
 local environment = require("environment")
 local runtime_probe = require("runtime_probe")
 local M = {}
-local DOCKER_SOCKET_PATH = "/var/run/docker.sock"
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
 type Loaded = {row: store.Row, request: types.LaunchRequest, spec: spec_codec.Spec, attempt: types.Attempt}
@@ -61,17 +60,15 @@ function M.change(id: string, update: store.Update): Reply
     return succeed(result.attempt)
 end
 function M.ensure_image(spec: spec_codec.Spec): (boolean, string?)
-    local client = docker_client.new(DOCKER_SOCKET_PATH)
-    if not client then return false, "Docker connection unavailable" end
-    local inspected, inspect_error = client:inspect_image(spec.image)
+    local inspected, inspect_error = daemon.inspect("image", spec.image)
     if inspected and not inspect_error then return true, nil end
-    if type(inspect_error) ~= "string" or inspect_error:sub(1, 9) ~= "HTTP 404:" then return false, "images/inspect: " .. tostring(inspect_error or "no image observation") end
+    if inspect_error then return false, inspect_error end
     if not spec.image:find("@sha256:", 1, true) then return false, "local runtime image is missing; build it with make docker-runtime-image" end
     local fetching = M.change(spec.attempt_id, {evidence = {kind = "docker.image_fetching", detail = "fetching the admitted digest-pinned runtime image"}})
     if not fetching.ok then return false, "image fetch intent could not be recorded" end
-    local _, pull_error = client:pull_image(spec.image)
+    local _, pull_error = daemon.command({"docker", "--host", "unix:///var/run/docker.sock", "pull", spec.image})
     if pull_error then return false, "images/create: " .. tostring(pull_error) end
-    local pulled, verify_error = client:inspect_image(spec.image)
+    local pulled, verify_error = daemon.inspect("image", spec.image)
     if not pulled or verify_error then return false, "images/inspect: " .. tostring(verify_error or "fetch did not produce the admitted digest") end
     local fetched = M.change(spec.attempt_id, {evidence = {kind = "docker.image_ready", detail = "admitted runtime image is available"}})
     return fetched.ok, fetched.error and fetched.error.message or nil
@@ -92,8 +89,6 @@ local function provider_home(loaded: Loaded): (string?, string?)
     return paths.resolve(path, executor)
 end
 function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
-    local client, client_error = docker_client.new(DOCKER_SOCKET_PATH)
-    if not client then return nil, "Docker connection unavailable" end
     local known: string? = nil
     local known_image: string? = nil
     local recorded_identity = loaded.row.placement_identity_json
@@ -108,21 +103,21 @@ function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
     local home, home_error = provider_home(loaded)
     if not home then return nil, home_error end
     if known and known_image then
-        local inspected, inspect_error = client:inspect_container(known)
-        if type(inspect_error) == "string" and (inspect_error == "HTTP 404" or inspect_error:sub(1, 9) == "HTTP 404:") then return nil, nil, true end
-        if inspect_error or not inspected then return nil, "Docker container inspection did not answer" end
+        local inspected, inspect_error = daemon.inspect("container", known)
+        if not inspected and not inspect_error then return nil, nil, true end
+        if inspect_error or not inspected then return nil, inspect_error or "Docker container inspection returned no object" end
         local verified, verify_error = spec_codec.inspect(inspected, loaded.spec, home, known_image)
         return verified, verify_error, false
     end
-    local image, image_error = client:inspect_image(loaded.spec.image)
+    local image, image_error = daemon.inspect("image", loaded.spec.image)
     local image_object = bounds.object(image)
     local image_id = image_object and bounds.line(image_object.Id, 71) or nil
-    if not image_id then return nil, "Docker image digest inspection did not answer" end
+    if not image_id then return nil, image_error or "Docker image digest inspection returned no immutable ID" end
     if image_error or not image_id:match("^sha256:[0-9a-f]+$") or #image_id ~= 71 then
-        return nil, "Docker image digest inspection did not answer"
+        return nil, image_error or "Docker image digest inspection returned no immutable ID"
     end
-    local raw, list_error = client:list_containers({ancestor = {image_id}})
-    if list_error then return nil, "Docker container inventory did not answer" end
+    local raw, list_error = daemon.containers(image_id)
+    if list_error then return nil, list_error end
     local values = bounds.array(raw, 1024)
     if not values then return nil, "Docker container inventory is malformed or exceeds its bound" end
     local found: spec_codec.Observation? = nil
@@ -131,8 +126,8 @@ function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
         local ref = item and spec_codec.container_id(item.Id) or nil
         if not ref then return nil, "Docker inventory has an invalid container ID" end
         if not known or ref == known then
-            local inspected, inspect_error = client:inspect_container(ref)
-            if inspect_error or not inspected then return nil, "Docker container inspection did not answer" end
+            local inspected, inspect_error = daemon.inspect("container", ref)
+            if inspect_error or not inspected then return nil, inspect_error or "Docker container inspection returned no object" end
             local attempt, attempt_error = spec_codec.attempt(inspected)
             if known or attempt == loaded.spec.attempt_id then
                 if attempt_error then return nil, attempt_error end
@@ -179,9 +174,8 @@ function M.prepare(value: unknown): Reply
     local admission_error = spec_codec.admit(profile, request)
     if admission_error then return fail("DENIED", admission_error) end
     if profile.profile.network ~= "none" then
-        local client = docker_client.new(DOCKER_SOCKET_PATH)
-        local network = client and client:inspect_network(profile.profile.network or "") or nil
-        if not network then return fail("UNAVAILABLE", "host-selected Docker network is missing: " .. (profile.profile.network or "")) end
+        local network, network_error = daemon.inspect("network", profile.profile.network or "")
+        if not network then return fail("UNAVAILABLE", network_error or "host-selected Docker network is missing: " .. (profile.profile.network or "")) end
     end
     if request.gateway and (request.gateway.endpoint:match("^127%.") or request.gateway.endpoint:match("^localhost:")
         or request.gateway.endpoint:match("^%[::1%]:")) then
@@ -208,8 +202,8 @@ function M.prepare_environment(value: unknown): Reply
     if not profile or profile.profile.placement_binding ~= spec_codec.BINDING then return fail("DENIED", "profile does not select Docker") end
     if input.revoke ~= true then
         if profile.profile.network == "none" then return succeed({}) end
-        local client = docker_client.new(DOCKER_SOCKET_PATH)
-        local existing = client and client:inspect_network(profile.profile.network or "")
+        local existing, network_error = daemon.inspect("network", profile.profile.network or "")
+        if network_error then return fail("UNAVAILABLE", network_error) end
         local raw = funcs.call("bee.gateway.binding:address", {})
         local endpoint = bounds.object(raw)
         if existing and endpoint and type(endpoint.address) == "string" and not endpoint.address:match("^127%.") then
@@ -301,10 +295,8 @@ function M.stop_loaded(loaded: Loaded, value: unknown): Reply
     if found.state == "exited" then return M.reconcile_loaded(loaded) end
     local object = bounds.object(value) or {}
     local grace = object.mode == "forced" and 0 or math.floor(loaded.request.timeouts.stop_grace_ms / 1000)
-    local client = docker_client.new(DOCKER_SOCKET_PATH)
-    if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
-    local stopped_ok, stop_error = client:stop_container(found.backend_ref, grace)
-    if stop_error or stopped_ok ~= true then return fail("UNAVAILABLE", "Docker stop did not answer") end
+    local stopped_ok, stop_error = daemon.command({"docker", "--host", "unix:///var/run/docker.sock", "stop", "--time", tostring(grace), found.backend_ref})
+    if not stopped_ok then return fail("UNAVAILABLE", stop_error or "Docker stop returned no result") end
     local stopped, verify_error = M.find(loaded)
     if not stopped or stopped.state ~= "exited" then return fail("UNAVAILABLE", verify_error or "Docker stop is unproven") end
     local_attempts.retire_gateway(loaded.attempt, "container stopped")
@@ -340,10 +332,8 @@ function M.cleanup_loaded(loaded: Loaded): Reply
         local verified = M.change(loaded.attempt.attempt_id, {fields = {exit_source = "reconcile", exit_code = found.exit_code},
             evidence = {kind = "docker.exit_verified", detail = "exact container " .. found.backend_ref .. " is stopped before removal"}})
         if not verified.ok then return verified end
-        local client = docker_client.new(DOCKER_SOCKET_PATH)
-        if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
-        local removed, remove_error = client:remove_container(found.backend_ref, false)
-        if remove_error or removed ~= true then return fail("UNAVAILABLE", "Docker removal did not answer") end
+        local removed, remove_error = daemon.command({"docker", "--host", "unix:///var/run/docker.sock", "rm", found.backend_ref})
+        if not removed then return fail("UNAVAILABLE", remove_error or "Docker removal returned no result") end
         local remaining, verify_error, missing = M.find(loaded)
         if verify_error or not missing then return fail("UNAVAILABLE", verify_error or "container removal is unproven") end
         local recorded = M.change(loaded.attempt.attempt_id, {evidence = {kind = "docker.removed", detail = "removed container " .. found.backend_ref .. " after exit evidence"}})
@@ -413,10 +403,13 @@ function M.capabilities(value: unknown): Reply
         local pinned = registry.snapshot()
         local selected = pinned and profiles.resolve(pinned, ref) or nil
         if not selected or selected.profile.placement_binding ~= spec_codec.BINDING then return fail("INVALID", "profile does not select Docker") end
-        local client = docker_client.new(DOCKER_SOCKET_PATH)
-        if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
         local network = selected.profile.network
-        local present = network == "none" or (network ~= nil and client:inspect_network(network) ~= nil)
+        local present = network == "none"
+        if network and network ~= "none" then
+            local observed, network_error = daemon.inspect("network", network)
+            if network_error then return fail("UNAVAILABLE", network_error) end
+            present = observed ~= nil
+        end
         local config_entry = registry.get("bee.placement.docker.env:environment_configuration")
         local config_record = config_entry and bounds.object(config_entry.data)
         local config = config_record and bounds.object(config_record.value)
@@ -431,22 +424,23 @@ function M.capabilities(value: unknown): Reply
             local image_ref = bounds.line(readiness.image_ref, 128)
             if request.probe_argv ~= nil then
                 if not image_ref then return fail("UNAVAILABLE", "Docker image is not cached; launch once to build it before option help is available") end
-                local output, err = runtime_probe.run(DOCKER_SOCKET_PATH, image_ref, runtime_name, request.probe_argv)
+                local output, err = runtime_probe.run(image_ref, runtime_name, request.probe_argv)
                 if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
                 report.probe_output = output
             end
             return succeed(report)
         end
         if not image_ref then return fail("INVALID", "Docker profile has no image") end
-        local image, inspect_error = client:inspect_image(image_ref)
-        local object = not inspect_error and bounds.object(image) or nil
+        local image, inspect_error = daemon.inspect("image", image_ref)
+        if inspect_error then return fail("UNAVAILABLE", inspect_error) end
+        local object = bounds.object(image)
         local config = object and bounds.object(object.Config) or nil
         local labels = config and bounds.object(config.Labels) or nil
         local digest = labels and bounds.line(labels["bee.runtime." .. runtime_name], 64) or nil
         local immutable = object and bounds.line(object.Id, 128)
         if request.probe_argv ~= nil then
             if not immutable or not digest then return fail("UNAVAILABLE", "Docker image is missing or has no runtime evidence") end
-            local output, err = runtime_probe.run(DOCKER_SOCKET_PATH, immutable, runtime_name, request.probe_argv)
+            local output, err = runtime_probe.run(immutable, runtime_name, request.probe_argv)
             if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
             report.probe_output = output
         end

@@ -20,7 +20,7 @@ entries:
     homes: bee.placement.native.service:homes
     types: bee.placement:types
     workdir_preparers: bee.placement.native.service:workdir_preparers
-    docker_client: userspace.docker:docker_client
+    daemon: bee.placement.docker.service:daemon
     paths: bee.placement.profiles:paths
     resources: bee.placement.native.env:resources
     image: bee.placement.docker.service:image
@@ -100,7 +100,7 @@ entries:
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
     quote: bee.driver.binding:quote
-    docker_client: userspace.docker:docker_client
+    daemon: bee.placement.docker.service:daemon
 - name: image_owner
   kind: process.lua
   source: file://image_owner.lua
@@ -141,15 +141,22 @@ entries:
     environment: bee.placement.docker.env:environment
     resources: bee.placement.native.env:resources
     image: bee.placement.docker.service:image
-    docker_client: userspace.docker:docker_client
+    daemon: bee.placement.docker.service:daemon
 
 - name: runtime_probe
   kind: library.lua
   source: file://runtime_probe.lua
-  modules: [exec, uuid]
+  modules: [uuid]
   imports:
     bounds: bee.values:bounds
     quote: bee.driver.binding:quote
     resources: bee.placement.native.env:resources
-    capture: bee.driver.locate:probe_capture
-    docker_client: userspace.docker:docker_client
+    daemon: bee.placement.docker.service:daemon
+- name: daemon
+  kind: library.lua
+  source: file://daemon.lua
+  modules: [exec, channel, json]
+  imports:
+    bounds: bee.values:bounds
+    resources: bee.placement.native.env:resources
+    quote: bee.driver.binding:quote

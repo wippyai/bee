@@ -134,6 +134,8 @@ entries:
   imports:
     test: wippy.test:test
     image: bee.placement.docker.service:image
+    daemon: bee.placement.docker.service:daemon
+  security: {policies: [bee.placement.native.security:placement_exec_policy]}
 - name: environment_test
   kind: function.lua
   source: file://environment_test.lua

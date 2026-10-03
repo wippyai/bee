@@ -32,6 +32,7 @@ entries:
     text: bee.ui:text
     bounds: bee.values:bounds
     window_request: bee.harness.app:request
+    placement_decode: bee.placement:decode
     input_event: bee.harness.app:input
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine

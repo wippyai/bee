@@ -71,12 +71,14 @@ function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Relea
     local outputs: {[string]: string} = {}
     local streams_received = 0
     local exit: ExitResult? = nil
-    local deadline = time.after(tostring(timeout) .. "ms")
+    local deadline = timeout > 0 and time.after(tostring(timeout) .. "ms") or nil
     while streams_received < 2 or not exit_received do
-        local selected = channel.select({results:case_receive(), deadline:case_receive()})
+        local cases = {results:case_receive()}
+        if deadline then cases[#cases + 1] = deadline:case_receive() end
+        local selected = channel.select(cases)
         if not selected.ok or selected.channel == deadline then
             cleanup(true)
-            return nil, nil, "host probe timed out"
+            return nil, nil, "host probe exceeded the caller-declared wait bound of " .. tostring(timeout) .. "ms (timed out)"
         end
         local serial = selected.value
         if type(serial) ~= "number" then error("invalid completion identity") end

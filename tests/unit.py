@@ -66,13 +66,7 @@ def split(entries, shared=()):
 @contextmanager
 def docker_daemon_lock():
     override = os.environ.get("BEE_DOCKER_DAEMON_LOCK")
-    runtime = os.environ.get("XDG_RUNTIME_DIR")
-    if override:
-        path = Path(override)
-    elif runtime:
-        path = Path(runtime) / "bee-docker-daemon.lock"
-    else:
-        path = Path.home() / ".cache/bee/bee-docker-daemon.lock"
+    path = Path(override) if override else Path.home() / ".cache/bee/bee-docker-daemon.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as handle:
         print(f"Docker daemon shard: waiting for lock {path}", flush=True)

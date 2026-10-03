@@ -250,9 +250,8 @@ does not issue container creates from separate test processes against the same
 host daemon. That shard holds an exclusive `flock` across checkouts for its
 runtime process. The unit and focused Lua runners use the same lock, selected
 from the test entries' resource metadata. `BEE_DOCKER_DAEMON_LOCK` selects the
-lock file; otherwise it is `$XDG_RUNTIME_DIR/bee-docker-daemon.lock`, or
-`~/.cache/bee/bee-docker-daemon.lock` when `XDG_RUNTIME_DIR` is unset. The runner
-prints when it waits and when it acquires the lock, including the wait duration.
+lock file; otherwise it is `~/.cache/bee/bee-docker-daemon.lock`, one path
+shared by every checkout of the same user. The runner prints when it waits and when it acquires the lock, including the wait duration.
 The wait has no timeout and can be interrupted. Failures release the lock and
 retain their cause. The remaining entries retain their balanced parallel shards.
 

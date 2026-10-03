@@ -146,7 +146,7 @@ with unit.docker_daemon_lock():
 
     def test_default_paths_and_override(self):
         for values, expected in [
-            ({"XDG_RUNTIME_DIR": str(self.folder / "runtime")}, self.folder / "runtime/bee-docker-daemon.lock"),
+            ({"XDG_RUNTIME_DIR": str(self.folder / "runtime")}, self.folder / ".cache/bee/bee-docker-daemon.lock"),
             ({}, self.folder / ".cache/bee/bee-docker-daemon.lock"),
             ({"BEE_DOCKER_DAEMON_LOCK": str(self.lock), "XDG_RUNTIME_DIR": str(self.folder / "runtime")}, self.lock),
         ]:

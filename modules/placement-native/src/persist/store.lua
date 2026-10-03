@@ -113,26 +113,32 @@ function M.runner_authority(db: sql.DB, attempt_id: string, issued: string?): (s
     return token, nil
 end
 function M.attempt(db: sql.DB, attempt_id: string): (types.Attempt?, string?)
-    local row, err = M.row(db, attempt_id)
-    if err then return nil, err end
-    if not row then return nil, nil end
+    local rows, err = db:query([[SELECT attempt.*,
+        (SELECT detail FROM bee_placement_evidence failed
+            WHERE failed.attempt_id = attempt.attempt_id AND failed.kind = 'child.start_failed'
+            ORDER BY sequence DESC LIMIT 1) AS observed_start_failure,
+        EXISTS (SELECT 1 FROM bee_placement_evidence cancelled
+            WHERE cancelled.attempt_id = attempt.attempt_id
+            AND (cancelled.kind = 'stop.before_start' OR (cancelled.kind = 'child.not_started' AND EXISTS
+                (SELECT 1 FROM bee_placement_evidence stopped
+                    WHERE stopped.attempt_id = attempt.attempt_id AND stopped.kind = 'stop.requested')))
+            AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence started
+                WHERE started.attempt_id = attempt.attempt_id AND started.kind = 'child.started')) AS observed_start_cancelled
+        FROM bee_placement_attempts attempt WHERE attempt.attempt_id = ?]], {attempt_id})
+    if err or not rows then return nil, "read attempt: " .. tostring(err or "query returned no rows") end
+    if #rows == 0 then return nil, nil end
+    local row = rows[1]
     local attempt, project_error = project(row)
     if not attempt then return nil, project_error end
-    local failures, failure_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'child.start_failed' ORDER BY sequence DESC LIMIT 1", {attempt_id})
-    if not failures or failure_error then return nil, "read start failure: " .. tostring(failure_error or "query returned no rows") end
-    if #failures > 0 then
-        local reason = bounds.text(failures[1].detail, 4096)
+    if row.observed_start_failure ~= nil then
+        local reason = bounds.text(row.observed_start_failure, 4096)
         if not reason then return nil, "start failure evidence is corrupt" end
         attempt.start_failure = reason
     end
+    local cancelled = bounds.integer(row.observed_start_cancelled)
+    if cancelled ~= 0 and cancelled ~= 1 then return nil, "startup cancellation evidence is corrupt" end
     if attempt.execution_state == "exited" and not attempt.start_failure then
-        local cancelled, cancel_error = db:query([[SELECT 1 FROM bee_placement_evidence WHERE attempt_id = ? AND
-            (kind = 'stop.before_start' OR (kind = 'child.not_started' AND EXISTS
-                (SELECT 1 FROM bee_placement_evidence stopped WHERE stopped.attempt_id = ? AND stopped.kind = 'stop.requested')))
-            AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence started WHERE started.attempt_id = ? AND started.kind = 'child.started') LIMIT 1]],
-            {attempt_id, attempt_id, attempt_id})
-        if not cancelled or cancel_error then return nil, "read startup cancellation: " .. tostring(cancel_error) end
-        if #cancelled > 0 then attempt.start_cancelled = true end
+        if cancelled == 1 then attempt.start_cancelled = true end
     end
     return attempt, nil
 end

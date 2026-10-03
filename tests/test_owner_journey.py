@@ -24,6 +24,23 @@ class CopyTests(unittest.TestCase):
         self.source = self.root / 'source'
         self.source.mkdir()
 
+    def test_same_tick_journeys_have_distinct_work_and_evidence(self):
+        def fixture_compiler(command, **options):
+            Path(command[command.index('-o') + 1]).write_text('#!/bin/sh\nexit 0\n')
+            return subprocess.CompletedProcess(command, 0, stdout='', stderr='')
+
+        with patch('owner_journey.ROOT', self.root), \
+                patch('owner_journey.time.strftime', return_value='same-tick'), \
+                patch('owner_journey.subprocess.run', side_effect=fixture_compiler):
+            journeys = [Journey(Path('/usr/bin/false'), self.source, self.root / output)
+                        for output in ('evidence-one', 'evidence-two', 'evidence-one')]
+        self.assertEqual(len({journey.work for journey in journeys}), 3)
+        self.assertEqual(len({journey.scratch for journey in journeys}), 3)
+        for journey in journeys:
+            self.assertEqual(journey.work.name, journey.scratch.name)
+            self.assertEqual(journey.work.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(journey.scratch.stat().st_mode & 0o777, 0o700)
+
     def test_backup_includes_committed_wal_without_modifying_source(self):
         database = self.source / 'workspace.db'
         with sqlite3.connect(database) as owner:

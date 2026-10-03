@@ -23,6 +23,7 @@ local catalog = require("catalog")
 local adapter = require("adapter")
 local approvals = require("approvals")
 local placement_fixture = require("placement_fixture")
+local exits = require("exits")
 local ACTOR = "bee.test.carrier"
 local APPROVER = "bee.test.approver"
 local POLICY = "bee.harness.catalog:permission_fixture_policy"
@@ -234,15 +235,17 @@ local function thread(): string
     if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
     return created.thread_id
 end
-local function request(thread_id: string, attempt_id: string, workspace: string, stream: string, timeout: string): Object
+local function request(thread_id: string, attempt_id: string, workspace: string, stream: string, timeout: string?): Object
     local placement = placement_fixture.resolve()
+    local environment: {[string]: string} = {BEE_FIXTURE_STREAM = stream, BEE_FIXTURE_PERMISSION = REQUEST_ID}
+    if timeout then environment.BEE_FIXTURE_PERMISSION_TIMEOUT = timeout end
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "read the notes", policy_ref = POLICY, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {BEE_FIXTURE_STREAM = stream, BEE_FIXTURE_PERMISSION = REQUEST_ID, BEE_FIXTURE_PERMISSION_TIMEOUT = timeout}, working_directory = "project", workspace_id = workspace,
+        environment = environment, working_directory = "project", workspace_id = workspace,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
 local function spawn_carrier(entry: string, request_value: Object, mode: string, crash_after: string?, pause_after: string?): string
-    local spawner = process.with_context({}):with_actor(actor):with_scope(scope(carrier_scope))
+    local spawner = process.with_context({["bee.test.carrier.progress"] = true}):with_actor(actor):with_scope(scope(carrier_scope))
     local pid, err = spawner:spawn_monitored(entry, "bee:workers", request_value, mode, process.pid(), crash_after, nil, pause_after)
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
@@ -250,19 +253,25 @@ end
 -- Waits for the carrier's report that it holds at the named step, instead
 -- of a fixed sleep guessing how long the carrier takes to reach it under a
 -- busy host. The caller listens for bee.carrier.paused before spawning.
-local function await_paused(paused: Channel<process.Message>, pid: string, wanted: string)
-    local deadline = time.after("60s")
-    while true do
-        local selected = channel.select({paused:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error(pid .. " never held at " .. wanted) end
-        local message = selected.value
-        if tostring(message:from()) == pid and message:payload():data() == wanted then return end
-    end
-end
 local exited: {[string]: Outcome} = {}
+local function await_paused(paused: Channel<process.Message>, pid: string, wanted: string)
+    local events = assert(process.events())
+    exits.paused(pid, wanted, exited, function(poll: boolean): unknown
+        local selected
+        if poll then
+            selected = channel.select({paused:case_receive(), default = true})
+            if selected.default then return nil end
+        else
+            selected = channel.select({paused:case_receive(), events:case_receive()})
+        end
+        assert(selected.ok, "barrier observation channel closed")
+        if selected.channel == events then return selected.value end
+        local message = selected.value
+        return {kind = "pause", from = tostring(message:from()), step = message:payload():data()}
+    end)
+end
 local function await_carriers(pids: {string}, label: string?): {[string]: Outcome}
     local events = assert(process.events())
-    local deadline = time.after("60s")
     local function all_done(): boolean
         for _, pid in ipairs(pids) do
             if not exited[pid] then return false end
@@ -270,8 +279,8 @@ local function await_carriers(pids: {string}, label: string?): {[string]: Outcom
         return true
     end
     while not all_done() do
-        local selected = channel.select({events:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error((label or "carrier") .. " did not finish") end
+        local selected = channel.select({events:case_receive()})
+        assert(selected.ok, (label or "carrier") .. " supervision channel closed")
         local event = selected.value
         if event.kind == process.event.EXIT then
             local result = event.result or {}
@@ -289,16 +298,15 @@ local function await_carrier(pid: string, label: string?): Outcome
 end
 -- The approver's side: catch up on the workspace inbox until the request
 -- is pending, then decide it for the recorded proposal digest.
-local function await_request(workspace: string): Object
-    for _ = 1, 200 do
-        local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
-        for _, change in ipairs(principals.objects(page.changes)) do
-            local view = assert(bounds.object(change.request))
-            if view.state == "pending" then return view end
-        end
-        time.sleep("50ms")
+local progress: Channel<process.Message>? = nil
+local function await_request(workspace: string, pid: string): Object
+    await_paused(assert(progress), pid, "approval_created")
+    local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
+    for _, change in ipairs(principals.objects(page.changes)) do
+        local view = assert(bounds.object(change.request))
+        if view.state == "pending" then return view end
     end
-    error("no pending approval request in workspace " .. workspace)
+    error("approval_created acknowledged without a pending request in workspace " .. workspace)
 end
 local function pending_request(workspace: string): Object
     local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
@@ -391,18 +399,17 @@ local function approvals_in(workspace: string): integer
 end
 local function define_tests()
     test.describe("Carrier permission exchange", function()
+        progress = assert(process.listen("bee.test.carrier.progress", {message = true}))
         local stream = prepare_host()
         test.it("asks, waits, consumes and answers an allowed request through one deterministic write, woken by a hint rather than the poll", function()
-            -- Keep the poll beyond the fixture's permission window. A
-            -- successful answer must then come from the approval hint, even
-            -- when the machine is too busy to meet a wall-clock speed target.
+            -- The approval hint wakes this exchange before its next periodic poll.
             local policy = assert(registry.get(POLICY))
             local exchange = (assert(bounds.object((assert(bounds.object(policy.data))).permission_exchange)))
             exchange.poll_ms = 120000
             apply(policy)
             local thread_id, workspace, attempt_id = thread(), fresh("ws"), fresh("attempt")
-            local pid = spawn_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, workspace, stream, "45"), "open", nil)
-            local view = await_request(workspace)
+            local pid = spawn_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, workspace, stream, nil), "open", nil)
+            local view = await_request(workspace, pid)
             test.eq(view.request_kind, "permission")
             test.eq((assert(bounds.object(view.proposal))).kind, "attempt")
             for _ = 1, 3 do hint(pid, thread_id) end
@@ -444,13 +451,13 @@ local function define_tests()
         end)
         test.it("refuses a production exchange on this host with the requirement it lacks, before any launch", function()
             local thread_id, workspace = thread(), fresh("ws")
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "8")
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             launch.policy_ref = UNPINNED_POLICY
             local unpinned = await_carrier(spawn_carrier("bee.harness.service:carrier", launch, "open", nil), "unpinned policy")
             test.is_nil(unpinned.value)
             if not tostring(unpinned.error):find("does not pin permission adapter", 1, true) then error("unpinned policy ended with: " .. tostring(unpinned.error)) end
             local pinned_thread, pinned_workspace = thread(), fresh("ws")
-            local pinned_launch = request(pinned_thread, fresh("attempt"), pinned_workspace, stream, "8")
+            local pinned_launch = request(pinned_thread, fresh("attempt"), pinned_workspace, stream, nil)
             pinned_launch.policy_ref = PRODUCTION_POLICY
             local outcome = await_carrier(spawn_carrier("bee.harness.service:carrier", pinned_launch, "open", nil), "production policy")
             test.is_nil(outcome.value)
@@ -460,8 +467,8 @@ local function define_tests()
         end)
         test.it("answers a denied request and records the terminal denial as its acknowledgment", function()
             local thread_id, workspace = thread(), fresh("ws")
-            local pid = spawn_carrier("bee.harness.service:carrier", request(thread_id, fresh("attempt"), workspace, stream, "8"), "open", nil)
-            decide(await_request(workspace), "denied")
+            local pid = spawn_carrier("bee.harness.service:carrier", request(thread_id, fresh("attempt"), workspace, stream, nil), "open", nil)
+            decide(await_request(workspace, pid), "denied")
             local settlement = settlement_of(await_carrier(pid), "deny run")
             test.eq(settlement.outcome, "failed")
             local records = records_of(thread_id)
@@ -475,7 +482,7 @@ local function define_tests()
         test.it("recovers every boundary before the response with one approval and one response", function()
             for _, crash in ipairs({"permission_intended", "approval_created", "permission_requested", "permission_consumed", "write_intended", "write_dispatched"}) do
                 local thread_id, workspace = thread(), fresh("ws")
-                local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+                local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
                 local paused = assert(process.listen("bee.carrier.paused", {message = true}))
                 local decided_before = crash == "permission_consumed" or crash == "write_intended" or crash == "write_dispatched"
                 local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash, decided_before and "approval_created" or nil)
@@ -520,10 +527,10 @@ local function define_tests()
         end)
         test.it("revalidates again when the authority restarts between revalidation and consumption", function()
             local thread_id, workspace = thread(), fresh("ws")
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "permission_revalidated")
-            local view = await_request(workspace)
+            local view = await_request(workspace, pid)
             local db = assert(approvals.open())
             assert(approvals.establish(db))
             decide(view, "approved")
@@ -542,7 +549,7 @@ local function define_tests()
         end)
         test.it("keeps deciding through polling when the hint subscription is lost", function()
             local thread_id, workspace = thread(), fresh("ws")
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "hints_opened")
             await_paused(paused, pid, "hints_opened")
@@ -553,7 +560,7 @@ local function define_tests()
             test.is_true(#subscription_id > 0)
             call("bee.threads.binding:unsubscribe", {thread_id = thread_id, idempotency_key = fresh("key"), subscription_id = subscription_id})
             process.send(pid, "bee.carrier.continue", {go = true})
-            local view = await_request(workspace)
+            local view = await_request(workspace, pid)
             decide(view, "approved")
             local settlement = settlement_of(await_carrier(pid, "lost subscription"), "lost subscription")
             test.eq(settlement.outcome, "succeeded")
@@ -563,9 +570,9 @@ local function define_tests()
         end)
         test.it("refuses to dispatch after recovery when the launch policy no longer measures as planned", function()
             local thread_id, workspace = thread(), fresh("ws")
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "permission_consumed")
-            decide(await_request(workspace), "approved")
+            decide(await_request(workspace, first), "approved")
             local crashed = await_carrier(first, "permission_consumed")
             test.is_true(tostring(crashed.error):find("crash after permission_consumed", 1, true) ~= nil)
             local policy = registry.get(POLICY)
@@ -612,9 +619,9 @@ local function define_tests()
         test.it("refuses to dispatch after recovery when the executable no longer measures as accepted, keeping the decision", function()
             local copy, original = bind_copy()
             local thread_id, workspace = thread(), fresh("ws")
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "permission_consumed")
-            local view = await_request(workspace)
+            local view = await_request(workspace, first)
             decide(view, "approved")
             local crashed = await_carrier(first, "permission_consumed")
             test.is_true(tostring(crashed.error):find("crash after permission_consumed", 1, true) ~= nil)
@@ -637,10 +644,10 @@ local function define_tests()
         test.it("refuses to dispatch when the plan changed between revalidation and consumption under a restarted authority", function()
             local copy, original = bind_copy()
             local thread_id, workspace = thread(), fresh("ws")
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "permission_revalidated")
-            local view = await_request(workspace)
+            local view = await_request(workspace, pid)
             local db = assert(approvals.open())
             assert(approvals.establish(db))
             decide(view, "approved")
@@ -666,13 +673,9 @@ local function define_tests()
         end)
         test.it("leaves a write uncertain when the runner is lost during recovery and sends nothing after settlement", function()
             local thread_id, workspace = thread(), fresh("ws")
-            -- The child's own permission wait races decide()'s approval
-            -- delivery; give it the suite's standard window so a busy host
-            -- cannot make it time out before the carrier reaches the crash
-            -- checkpoint below.
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "write_intended")
-            decide(await_request(workspace), "approved")
+            decide(await_request(workspace, first), "approved")
             local crashed = await_carrier(first, "write_intended")
             test.is_true(tostring(crashed.error):find("crash after write_intended", 1, true) ~= nil)
             local status = assert(placement_decode.status(call("bee.placement.native.binding:status", {attempt_id = launch.attempt_id})))
@@ -682,8 +685,7 @@ local function define_tests()
             local generation = status.attempt.attachment_generation + 1
             call("bee.placement.native.binding:attach", {attempt_id = launch.attempt_id, recipient = process.pid(), generation = generation})
             call("bee.placement.native.binding:stop", {attempt_id = launch.attempt_id, mode = "forced"})
-            local deadline = time.after("60s")
-            local selected = channel.select({exits:case_receive(), deadline:case_receive()})
+            local selected = channel.select({exits:case_receive()})
             assert(selected.ok and selected.channel == exits, "placement child did not exit")
             local message = selected.value
             test.eq(tostring(message:from()), runner)
@@ -702,15 +704,23 @@ local function define_tests()
             test.eq(table.concat(writes(records), ","), "intended,uncertain")
             test.eq(tool_results(records), 0)
             local late_thread, late_workspace = thread(), fresh("ws")
-            -- This carrier crashes at "permission_requested", immediately
-            -- on submission, before any decision round-trip: the short
-            -- window is what lets the 2500ms sleep below outlast the
-            -- underlying child's own abandoned permission wait.
+            -- Observe the abandoned child's actual exit before approving;
+            -- the fixture declares a one-second permission protocol bound.
             local late_launch = request(late_thread, fresh("attempt"), late_workspace, stream, "1")
             local paused = spawn_carrier("bee.harness.catalog:carrier_faulted", late_launch, "open", "permission_requested")
-            local late_view = await_request(late_workspace)
+            local late_view = await_request(late_workspace, paused)
             await_carrier(paused, "permission_requested")
-            time.sleep("2500ms")
+            local late_exits = assert(process.listen(placement_protocol.TOPIC_EXIT, {message = true}))
+            local late_status = assert(placement_decode.status(call("bee.placement.native.binding:status", {attempt_id = late_launch.attempt_id})))
+            local late_runner = assert(late_status.attempt.runner)
+            local late_generation = late_status.attempt.attachment_generation + 1
+            call("bee.placement.native.binding:attach", {attempt_id = late_launch.attempt_id, recipient = process.pid(), generation = late_generation})
+            while true do
+                local message = assert((late_exits:receive()))
+                local observed = assert(placement_protocol.decode_exit(message:payload():data()))
+                if tostring(message:from()) == late_runner and observed.attempt_id == late_launch.attempt_id and observed.generation == late_generation then break end
+            end
+            process.unlisten(late_exits)
             decide(late_view, "approved")
             local late = settlement_of(await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", late_launch, "resume", nil), "late decision"), "late decision")
             test.neq(late.outcome, "succeeded")
@@ -719,13 +729,16 @@ local function define_tests()
             test.eq(count(phases(late_records), "closed"), 1)
             test.eq(tool_results(late_records), 0)
             local projected = 0
-            for _ = 1, 60 do
-                projected = 0
+            while projected == 0 do
+                local after = 0
                 for _, item in ipairs(records_of(late_thread)) do
+                    after = assert(bounds.integer(item.sequence))
                     if item.kind == "approval.transition" then projected = projected + 1 end
                 end
-                if projected > 0 then break end
-                time.sleep("100ms")
+                if projected == 0 then
+                    local changed = call("bee.threads.binding:watch", {thread_id = late_thread, after_sequence = after, wait_ms = 60000})
+                    assert(changed.status == "ready", "approval projection exceeded the requested 60000 ms thread watch")
+                end
             end
             test.eq(projected, 1)
         end)

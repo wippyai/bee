@@ -59,6 +59,13 @@ split across chunks resumes from carry bytes. A chunk with multiple
 events commits in consumed-prefix order. A crash before acknowledgement
 replays already committed output and event keys absorb the replay.
 
+The runner retains at most two acknowledged EOF markers alongside pending
+output until its lifetime ends. On takeover it replays them to reconstruct
+individual stream ends without re-normalizing acknowledged output. A complete
+checkpoint already reconstructs both ends. EOF acknowledgement therefore leaves
+the bounded output window available when the other stream continues producing.
+The persisted checkpoint schema stays `bee.carrier.checkpoint@1`.
+
 Output state and process cleanup are separate facts. The runner can retain
 unacknowledged output after child exit for the placement retention interval.
 If the drain deadline closes a stream, the stream is `truncated`; if a runner
@@ -85,8 +92,10 @@ The owner uses this order:
 
 Starting an attempt that is not `prepared` is `INVALID_STATE`. If placement
 starts and a thread commit fails, recovery reconciles that same attempt; it
-does not launch another child. Settlement observes process exit, drains
-remaining output within the selected bounds, and then decides a missing
+does not launch another child. Settlement observes child exit and both stream
+ends while the runner lives. After supervised runner EXIT it consumes queued
+delivery; startup refusal also waits for the startup owner's state publication.
+Placement owns drain and retention bounds. It then decides a missing
 terminal envelope as `uncertain`. Stdout ending without a result envelope is
 such a missing envelope: the driver's end-of-stream terminal waits for the exit
 and the drain, so stderr the child wrote before exiting is still recorded. A

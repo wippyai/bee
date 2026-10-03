@@ -357,10 +357,11 @@ bindings derived from consumed desired artifacts in the existing activation
 store whose exact code overlays are present. It adds no stored record or second
 catalog; boot recovery restores approved code before it becomes selectable.
 Preflight measures the exact owned append declaration with the same decoder used
-by recovery. That host evidence admits the declaration's protected target;
-replacement requirements and edits to the protected host entry remain refused.
-Descriptor policies grant
-only registry reads. Launch definitions,
+by recovery. Activation retains this measurement when normalizing the registry
+revision for durable approval evidence. That host evidence admits the
+declaration's protected target; replacement requirements and edits to the
+protected host entry remain refused. Descriptor policies grant only registry
+reads. Launch definitions,
 policies and executable mappings are part of the reviewed artifact; metadata
 alone never activates a driver.
 

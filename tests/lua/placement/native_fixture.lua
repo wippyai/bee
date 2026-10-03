@@ -6,17 +6,13 @@ local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
-local sql = require("sql")
 local security = require("security")
 local process = require("process")
-local runner_fixture = require("runner_fixture")
 local channel = require("channel")
 local time = require("time")
 local registry = require("registry")
 local exec = require("exec")
-local fs = require("fs")
 local service = require("service")
-local identity = require("identity")
 local configuration = require("configuration")
 local grok_configuration = require("grok_configuration")
 local grok_launch = require("grok_launch")
@@ -26,22 +22,14 @@ local agy_launch = require("agy_launch")
 local muse_launch = require("muse_launch")
 local opencode_launch = require("opencode_launch")
 local configuration_protocol = require("configuration_protocol")
-local preferences = require("preferences")
-local hash = require("hash")
 local json = require("json")
 local store = require("store")
-local materialization = require("materialization")
 local resources = require("resources")
 local request_codec = require("request_codec")
-local protocol = require("protocol")
-local output_buffer = require("output_buffer")
 local homes = require("homes")
 local quote = require("quote")
 local types = require("types")
 local placement_decode = require("placement_decode")
-local executable_stream = require("executable_stream")
-local exits = require("exits")
-type PreparedConfiguration = {environment: {[string]: string}, working_directory: string, arguments: {string}}
 local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
     path = ".codex/auth.json", content_format = "json", initialize = {}}}
 local CLAUDE_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
@@ -515,8 +503,6 @@ return {
     retained_launch = retained_launch,
     grok_composition_request = grok_composition_request,
     intend_materialization = intend_materialization,
-    admit_root = admit_root,
-    activate_fixture_binding = activate_fixture_binding,
     wait_for = wait_for,
     kinds = kinds,
     alive = alive,
@@ -530,7 +516,6 @@ return {
     ROOT = ROOT,
     POLICY = POLICY,
     NO_PROVIDER_POLICY = NO_PROVIDER_POLICY,
-    FIXTURE_BINDING = FIXTURE_BINDING,
     SENTINEL = SENTINEL,
     READONLY = READONLY,
     suite = suite,

@@ -826,7 +826,6 @@ entries:
   - json
   security:
     policies:
-    - bee.placement.native.security:placement_exec_policy
     - bee.harness.catalog:apply_test_policy
     - bee.harness.catalog:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy

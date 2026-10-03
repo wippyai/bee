@@ -404,12 +404,8 @@ entries:
   - time
   - registry
   - exec
-  - fs
-  - hash
   - json
-  - sql
   imports:
-    exits: bee.harness.catalog:exits
     placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
@@ -422,20 +418,12 @@ entries:
     muse_launch: bee.driver.muse.binding:launch
     opencode_launch: bee.driver.opencode.binding:launch
     configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
-    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
     resources: bee.placement.native.env:resources
     request_codec: bee.placement:request
-    protocol: bee.placement.native:protocol
-    executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
-    output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.binding:quote
     types: bee.placement:types
 - name: native_test
@@ -447,17 +435,12 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - funcs
-  - security
   - process
   - channel
   - time
   - registry
   - exec
-  - fs
-  - hash
   - json
-  - sql
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -469,22 +452,10 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
-    exits: bee.harness.catalog:exits
-    placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
-    configuration: bee.driver.codex.binding:configuration
-    grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
     claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
-    configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
-    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
     identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
@@ -492,8 +463,6 @@ entries:
     resources: bee.placement.native.env:resources
     request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
-    executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
     output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.binding:quote
@@ -508,17 +477,8 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - funcs
-  - security
   - process
   - channel
-  - time
-  - registry
-  - exec
-  - fs
-  - hash
-  - json
-  - sql
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -533,31 +493,8 @@ entries:
     placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
-    configuration: bee.driver.codex.binding:configuration
-    grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
-    configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
-    runner_fixture: bee.placement.native:materialization_runner
-    service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
-    store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
-    resources: bee.placement.native.env:resources
-    request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
-    executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
-    homes: bee.placement.native.service:homes
-    output_buffer: bee.placement.native.service:output_buffer
-    quote: bee.driver.binding:quote
-    types: bee.placement:types
     exits: bee.harness.catalog:exits
     native_fixture: bee.placement.native:native_fixture
 - name: native_execution_test
@@ -569,17 +506,10 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - funcs
-  - security
   - process
   - channel
   - time
-  - registry
-  - exec
-  - fs
   - hash
-  - json
-  - sql
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -593,32 +523,12 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
-    configuration: bee.driver.codex.binding:configuration
-    grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
-    configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
-    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
-    resources: bee.placement.native.env:resources
-    request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
     executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
-    output_buffer: bee.placement.native.service:output_buffer
-    quote: bee.driver.binding:quote
-    types: bee.placement:types
     exits: bee.harness.catalog:exits
     native_fixture: bee.placement.native:native_fixture
 - name: native_configuration_test
@@ -630,17 +540,10 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - funcs
-  - security
-  - process
-  - channel
   - time
   - registry
-  - exec
-  - fs
   - hash
   - json
-  - sql
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -652,35 +555,16 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
-    placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
     configuration: bee.driver.codex.binding:configuration
-    grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
     configuration_protocol: bee.driver.binding:configuration
     preferences: bee.driver.profiles:preferences
     test: wippy.test:test
-    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
-    resources: bee.placement.native.env:resources
-    request_codec: bee.placement:request
-    protocol: bee.placement.native:protocol
-    executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
-    output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.binding:quote
-    types: bee.placement:types
-    exits: bee.harness.catalog:exits
     native_fixture: bee.placement.native:native_fixture
 - name: native_output_test
   kind: function.lua
@@ -691,17 +575,9 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - funcs
-  - security
   - process
   - channel
   - time
-  - registry
-  - exec
-  - fs
-  - hash
-  - json
-  - sql
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -713,34 +589,14 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
-    placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
-    configuration: bee.driver.codex.binding:configuration
-    grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
-    configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
-    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
     resources: bee.placement.native.env:resources
-    request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
-    executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
-    homes: bee.placement.native.service:homes
-    output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.binding:quote
-    types: bee.placement:types
     exits: bee.harness.catalog:exits
     native_fixture: bee.placement.native:native_fixture
 - name: native_credentials_test
@@ -752,16 +608,11 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - funcs
-  - security
   - process
   - channel
   - time
   - registry
-  - exec
-  - fs
   - hash
-  - json
   - sql
   security:
     policies:
@@ -774,35 +625,18 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
-    placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
-    configuration: bee.driver.codex.binding:configuration
     grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
-    configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
     runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
     resources: bee.placement.native.env:resources
-    request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
-    executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
-    output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.binding:quote
     types: bee.placement:types
-    exits: bee.harness.catalog:exits
     native_fixture: bee.placement.native:native_fixture
 - name: native_cleanup_test
   kind: function.lua
@@ -813,17 +647,10 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - funcs
-  - security
   - process
   - channel
   - time
   - registry
-  - exec
-  - fs
-  - hash
-  - json
-  - sql
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -835,35 +662,12 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
-    placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
-    configuration: bee.driver.codex.binding:configuration
-    grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
-    configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
     test: wippy.test:test
-    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
-    resources: bee.placement.native.env:resources
-    request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
-    executable_stream: bee.placement.native.service:executable_stream
-    resource_resolution: bee.placement.native.service:resource_resolution
-    homes: bee.placement.native.service:homes
-    output_buffer: bee.placement.native.service:output_buffer
-    quote: bee.driver.binding:quote
-    types: bee.placement:types
-    exits: bee.harness.catalog:exits
     native_fixture: bee.placement.native:native_fixture
 - name: provider_configuration_test
   kind: function.lua

@@ -1,0 +1,8 @@
+version: '1.0'
+namespace: bee.approvals.types
+entries:
+- name: windows
+  kind: library.lua
+  source: file://windows.lua
+  modules: [hash]
+  imports: {bounds: bee.values:bounds, canonical: bee.values:canonical}

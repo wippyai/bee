@@ -40,8 +40,10 @@ local function view_for(self: Client, source: Source, raw: unknown, addresses: A
 end
 local function invoke_owner(self: Client, source: Source, target: string, request: unknown): model.Reply?
     local raw, err = self.call(source, target, request)
-    if err then return nil end
-    return model.decode_reply(raw)
+    if err then return failure("UNKNOWN_OUTCOME", err) end
+    local reply = model.decode_reply(raw)
+    if not reply then return failure("INVALID_REPLY", "approval owner returned a malformed reply") end
+    return reply
 end
 local function purge_source(self: Client, source: Source)
     self.states[source.id], self.refreshes[source.id] = nil, nil
@@ -227,7 +229,7 @@ local function decide_batch(self: Client, request: Object): model.Reply?
         outbound[#outbound + 1] = copied
     end
     if not owner then return failure("INVALID_ARGUMENT", "decisions must list 1 to 16 requests") end
-    local answer = invoke_owner(self, owner, "bee.approvals.binding:decide_batch", {decisions = outbound})
+    local answer = invoke_owner(self, owner, "bee.approvals.binding:decide_batch", {decisions = outbound, window_ttl_ms = request.window_ttl_ms})
     if not answer then return nil end
     if answer.kind ~= "success" then return answer end
     local body = bounds.object(answer.value)
@@ -249,6 +251,15 @@ local function invoke(self: Client, target: string, value: unknown): model.Reply
         local source = workspace and self.sources[workspace] or nil
         if not source then return failure("DENIED", "inbox source is not admitted") end
         return refresh(self, source)
+    end
+    if target == "bee.approvals.binding:grant_window" then
+        local workspace = bounds.id(request.workspace_id)
+        local source = workspace and self.sources[workspace]
+        if not source or not source.local_owner then return failure("DENIED", "approval windows belong to the local authoritative node") end
+        local outbound: Object = {}
+        for key, item in pairs(request) do outbound[key] = item end
+        outbound.workspace_id = source.workspace_id
+        return invoke_owner(self, source, target, outbound)
     end
     if target == "bee.approvals.binding:decide_batch" then return decide_batch(self, request) end
     if target ~= "bee.approvals.binding:read" and target ~= "bee.approvals.binding:decide" and target ~= "bee.approvals.binding:withdraw" then

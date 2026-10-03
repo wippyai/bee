@@ -11,7 +11,6 @@ local security = require("security")
 local registry = require("registry")
 local uuid = require("uuid")
 local model = require("model")
-local inbox = require("inbox")
 local app_caller = require("caller")
 local REQUESTER, ALICE = "bee.test.inbox_requester", "bee.test.inbox_alice"
 local POLICY = "inbox-test"
@@ -70,7 +69,7 @@ local function file(workspace: string, proposal: Object): Object
     return value(call(requester, "bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY, proposal = proposal, prompt = {text = "run it"}}))
 end
 local function through(executor: funcs.Executor): app_caller.Client
-    return inbox.new(function(target: string, request: unknown): (unknown, string?)
+    return app_caller.new(function(target: string, request: unknown): (unknown, string?)
         local raw, err = executor:call(target, request)
         if err then return nil, tostring(err) end
         return raw, nil

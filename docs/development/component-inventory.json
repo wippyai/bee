@@ -236,6 +236,11 @@
       "source": "modules/approvals/src/binding/_index.yaml"
     },
     {
+      "id": "bee.approvals.binding:grant_window",
+      "kind": "function.lua",
+      "source": "modules/approvals/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.approvals.binding:inbox",
       "kind": "function.lua",
       "source": "modules/approvals/src/binding/_index.yaml"
@@ -489,6 +494,11 @@
       "id": "bee.approvals.service:worker_service",
       "kind": "process.service",
       "source": "modules/approvals/src/service/_index.yaml"
+    },
+    {
+      "id": "bee.approvals.types:windows",
+      "kind": "library.lua",
+      "source": "modules/approvals/src/types/_index.yaml"
     },
     {
       "id": "bee.approvals:contract",
@@ -9337,6 +9347,13 @@
       "source": "modules/approvals/src/service/_index.yaml"
     },
     {
+      "namespace": "bee.approvals.types",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.approvals.types",
+      "source": "modules/approvals/src/types/_index.yaml"
+    },
+    {
       "namespace": "bee.apps",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -11867,10 +11884,16 @@
       "table": "bee_approval_runtime_leases"
     },
     {
-      "line": 28,
+      "line": 29,
       "owner_namespace": "bee.approvals.service",
       "source": "modules/approvals/src/service/service.lua",
       "table": "bee_approval_schema_migrations"
+    },
+    {
+      "line": 157,
+      "owner_namespace": "bee.approvals",
+      "source": "modules/approvals/src/migrations/migrations.lua",
+      "table": "bee_approval_window_grants"
     },
     {
       "line": 6,
@@ -12810,6 +12833,11 @@
       "requirement": "bee.approvals:target_request_policies",
       "resolved_by": "registry source",
       "target": "bee.approvals.binding:feed_snapshot"
+    },
+    {
+      "requirement": "bee.approvals:target_request_policies",
+      "resolved_by": "registry source",
+      "target": "bee.approvals.binding:grant_window"
     },
     {
       "requirement": "bee.approvals:target_request_policies",
@@ -14565,6 +14593,10 @@
         },
         {
           "entry": "bee.approvals.binding:attention_count",
+          "path": ".security.policies"
+        },
+        {
+          "entry": "bee.approvals.binding:grant_window",
           "path": ".security.policies"
         },
         {
@@ -17348,16 +17380,16 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1832,
-    "namespace_count": 273,
+    "entry_count": 1834,
+    "namespace_count": 274,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
-    "owned_table_declaration_count": 152,
+    "owned_table_declaration_count": 153,
     "persisted_id_count": 841,
     "requirement_count": 141,
-    "requirement_target_count": 336,
+    "requirement_target_count": 337,
     "root_src_lua_budget": 19277,
     "root_src_lua_lines": 19276,
     "schema_tag_count": 71,

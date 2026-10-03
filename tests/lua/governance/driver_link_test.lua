@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
 local registry = require("registry")
+local security = require("security")
+local funcs = require("funcs")
 local materializer = require("materializer")
 local activation = require("activation")
 local bounds = require("bounds")
@@ -33,6 +35,22 @@ local function define_tests()
             for index, value in ipairs(baseline) do test.eq(unlinked[index], value) end
             assert(materializer.reconcile(OWNER, {}))
             test.eq(#assert(activation.bindings({})), 0)
+        end)
+        test.it("lets each owning launch scope read admitted drivers", function()
+            local probe_policy = assert(security.policy("bee.gov:admission_probe_call"))
+            for _, id in ipairs({"bee.sessions.security:owner_admission_policy", "bee.executor.external.security:driver_placement_calls",
+                "bee.placement.native.security:placement_store_policy", "bee.harness.security:launch_locate_probe_policy",
+                "bee.harness.security:harness_setup_policy", "bee.harness.security:profile_store_policy"}) do
+                local policy = assert(security.policy(id))
+                local scope = security.new_scope({policy, probe_policy})
+                local caller = funcs.new():with_scope(scope)
+                local allowed, problem = caller:call("bee.gov:admission_scope_probe")
+                test.is_nil(problem)
+                if allowed ~= true then error("driver admission reader is denied by " .. id) end
+                local bindings, read_error = caller:call("bee.gov.binding:driver_bindings")
+                test.is_nil(read_error)
+                test.is_true(bounds.ids(bindings, true) ~= nil)
+            end
         end)
         test.it("refuses a host-list replacement and a foreign binding before projection", function()
             for _, path in ipairs({".bindings", ".bindings +="}) do

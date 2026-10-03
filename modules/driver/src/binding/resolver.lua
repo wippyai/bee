@@ -64,6 +64,9 @@ function M.active(pinned: registry.Snapshot): ({[string]: boolean}?, string?)
         local ids, ids_error = bounds.ids(raw, true)
         if not ids or #ids > M.MAX_BINDINGS then return nil, "approved driver bindings are invalid: " .. tostring(ids_error) end
         for _, id in ipairs(ids) do decoded.bindings[id] = true end
+        local count = 0
+        for _ in pairs(decoded.bindings) do count = count + 1 end
+        if count > M.MAX_BINDINGS then return nil, "host and approved driver bindings exceed their combined bound" end
     end
     return decoded.bindings, nil
 end

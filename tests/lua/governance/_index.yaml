@@ -576,7 +576,7 @@ entries:
   kind: function.lua
   source: file://driver_link_test.lua
   method: run
-  modules: [registry]
+  modules: [registry, security, funcs]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:driver_link_test_policy]}
   imports:
@@ -588,6 +588,17 @@ entries:
 - name: driver_link_test_policy
   kind: security.policy
   policy:
-    actions: [funcs.call, registry.get, registry.snapshot, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+    actions: [security.policy.get, security.scope.create, funcs.security, funcs.call, registry.get, registry.snapshot, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
     resources: '*'
+    effect: allow
+- name: admission_scope_probe
+  kind: function.lua
+  source: file://admission_scope_probe.lua
+  method: check
+  modules: [security]
+- name: admission_probe_call
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gov:admission_scope_probe]
     effect: allow

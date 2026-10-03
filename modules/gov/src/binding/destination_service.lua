@@ -432,14 +432,15 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         volumes = proposed.volumes, databases = proposed.databases}, nil
 end
 
-local function approved_driver_entries(config: Configuration): ({Object}?, string?)
+local function approved_driver_bindings(config: Configuration): ({string}?, string?)
     local resource, resource_error = resources.database()
     if not resource then return nil, resource_error end
     local listed = activations.desired_slots(resource, config.node_id)
     local value = listed.ok and bounds.object(listed.value) or nil
     local slots = value and bounds.dense_list(value.slots, 1024, "desired driver slots") or nil
     if not slots then return nil, listed.message or "desired driver slots are unavailable" end
-    local entries: {Object} = {}
+    local bindings: {string} = {}
+    local seen: Set = {}
     for _, raw_slot in ipairs(slots) do
         local slot = bounds.object(raw_slot)
         local workspace = slot and bounds.id(slot.workspace_id) or nil
@@ -461,21 +462,27 @@ local function approved_driver_entries(config: Configuration): ({Object}?, strin
                     local present, present_error = materializer.matches(owner_id, decoded)
                     if present == nil then return nil, present_error end
                     if present then
-                        for _, entry in ipairs(decoded) do entries[#entries + 1] = entry end
+                        local selected, selection_error = driver_admission.bindings(decoded)
+                        if not selected then return nil, selection_error end
+                        for _, id in ipairs(selected) do
+                            if not seen[id] then
+                                if #bindings >= 64 then return nil, "approved driver bindings exceed their bound" end
+                                bindings[#bindings + 1], seen[id] = id, true
+                            end
+                        end
                     end
                 end
             end
         end
     end
-    return entries, nil
+    table.sort(bindings)
+    return bindings, nil
 end
 
 function M.driver_bindings(): ({string}?, string?)
     local config, config_error = load()
     if not config then return nil, config_error end
-    local approved, approved_error = approved_driver_entries(config)
-    if not approved then return nil, approved_error end
-    return driver_admission.bindings(approved)
+    return approved_driver_bindings(config)
 end
 
 local function owner_config(config: Configuration, profile_value: Profile, plan_store: plans.Store,

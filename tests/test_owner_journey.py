@@ -5,8 +5,9 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
-from owner_journey import Journey, JourneyFailure, SENSITIVE, applications, safe_copy
+from owner_journey import Journey, JourneyDesktop, JourneyFailure, SENSITIVE, applications, safe_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,6 +54,11 @@ class CopyTests(unittest.TestCase):
             safe_copy(self.source, self.source / 'nested')
         self.assertFalse((self.source / 'nested').exists())
 
+    def test_evidence_inside_source_is_refused_before_creation(self):
+        with self.assertRaisesRegex(JourneyFailure, 'source must not contain'):
+            Journey(Path('/usr/bin/false'), self.source, self.source / 'evidence')
+        self.assertEqual(list(self.source.iterdir()), [])
+
     def test_corrupt_sqlite_is_not_copied_as_success(self):
         (self.source / 'workspace.db').write_text('not SQLite')
         with self.assertRaises(sqlite3.DatabaseError):
@@ -71,6 +77,21 @@ class CopyTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
+    def test_cycling_loading_frames_do_not_hide_a_hang(self):
+        (ROOT / '.wippy').mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='journey-hang-', dir=ROOT / '.wippy') as temporary:
+            desktop = JourneyDesktop.__new__(JourneyDesktop)
+            desktop.journey = Mock(current=None, hang_seconds=2)
+            desktop.state = Path(temporary)
+            desktop.process = Mock()
+            desktop.process.poll.return_value = None
+            frames = iter(['loading A', 'loading B'] * 50)
+            desktop.pump = lambda: setattr(desktop, 'rendered', next(frames))
+            desktop.text = lambda: desktop.rendered
+            with patch('owner_journey.time.monotonic', side_effect=[index / 2 for index in range(100)]):
+                with self.assertRaisesRegex(JourneyFailure, 'no-progress hang bound'):
+                    desktop.wait_until(lambda: False, 'owner readiness')
+
     def test_every_dependent_step_is_failed_with_original_startup_cause(self):
         (ROOT / '.wippy').mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='journey-report-', dir=ROOT / '.wippy') as temporary:
@@ -83,11 +104,13 @@ class ReportTests(unittest.TestCase):
                 raise JourneyFailure('Backfill retained application alias: exact migration refusal')
             journey.run_step(1, 'startup', fail, desktop=False)
             journey.run_step(2, 'apps', lambda: self.fail('dependent action ran'))
+            journey.run_step(3, 'agent', lambda: self.fail('dependent action ran'))
             report = (root / 'evidence/report.txt').read_text()
             self.assertIn('01 | FAIL', report)
             self.assertIn('02 | FAIL', report)
             self.assertEqual(journey.steps[0].cause, 'Backfill retained application alias: exact migration refusal')
             self.assertIn(journey.steps[0].cause, journey.steps[1].cause)
+            self.assertEqual(journey.steps[1].cause, journey.steps[2].cause)
             self.assertTrue(all(step.frames for step in journey.steps))
 
 class ApprovalTests(unittest.TestCase):

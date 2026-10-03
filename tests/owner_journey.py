@@ -2,7 +2,6 @@
 """Public, source-free Bee journey. Failures retain their cause and evidence."""
 import argparse
 from contextlib import closing
-from collections import Counter
 from dataclasses import dataclass, field
 import json
 import os
@@ -197,7 +196,7 @@ class Step:
 class JourneyDesktop(NativeDesktop):
     """Use the existing complete-frame decoder; wait on state with a hang bound."""
     def __init__(self, journey, folder, state, environment):
-        self.journey, self.state = journey, state
+        self.journey, self.state, self.folder = journey, state, folder
         self.observed_frames = []
         super().__init__(journey.binary, folder, state, environment=environment)
 
@@ -212,8 +211,10 @@ class JourneyDesktop(NativeDesktop):
 
     def wait_until(self, condition, description, timeout=None):
         bound = timeout or self.journey.hang_seconds
+        if self.journey.current:
+            (self.journey.scratch / f"{self.journey.current.number:02d}-wait.txt").write_text(description + "\n")
         last_progress = time.monotonic()
-        prior = None
+        seen = set()
         while True:
             self.pump()
             if condition():
@@ -221,11 +222,14 @@ class JourneyDesktop(NativeDesktop):
             if self.process.poll() is not None:
                 raise JourneyFailure(f"Bee presenter EXIT {self.process.returncode} while waiting for {description}: {self.text().strip()}")
             frame = re.sub(r"\b\d\d:\d\d(?::\d\d)?\b|[▏▎▍▌▋▊▉]", "", self.text())
+            frame = re.sub(r"\d{4}-\d{2}-\d{2}T[\d:.]+Z", "sample time", frame)
+            frame = re.sub(r"heap [\d.]+ MiB|goroutines \d+", "telemetry", frame)
             observed = (frame, progress(self.state))
-            if observed != prior:
-                prior, last_progress = observed, time.monotonic()
+            if observed not in seen:
+                seen.add(observed)
+                last_progress = time.monotonic()
             if time.monotonic() - last_progress >= bound:
-                raise JourneyFailure(f"no-progress hang bound ({bound:g}s) waiting for {description}; last rendered frame and owner revisions stopped changing")
+                raise JourneyFailure(f"no-progress hang bound ({bound:g}s) waiting for {description}; no new rendered state or owner revision was observed")
 
     def quit(self, confirm=False):
         started = time.monotonic()
@@ -250,6 +254,10 @@ class Journey:
     def __init__(self, binary, source, output, hang_seconds=600):
         self.binary, self.source, self.output = binary.resolve(), source.resolve(), output.resolve()
         self.hang_seconds = hang_seconds
+        work_root = (ROOT / ".wippy/owner-journey-work").resolve()
+        require(self.source != self.output and self.source not in self.output.parents
+                and self.source != work_root and self.source not in work_root.parents,
+                "source must not contain the evidence or scratch roots")
         self.output.mkdir(parents=True, exist_ok=True)
         self.scratch = self.output / ("run-" + time.strftime("%Y%m%d-%H%M%S") + "-" + str(os.getpid()))
         self.scratch.mkdir(mode=0o700)
@@ -260,10 +268,11 @@ class Journey:
         (self.work / "tmp").mkdir()
         self.steps, self.current, self.ui = [], None, None
         self.owners, self.secondary = [], None
+        self.peer_state, self.peer_folder = None, None
         self.current_action = ""
         self.approvals, self.annoyances, self.granted = {}, [], set()
         self.start_logs = set()
-        self.baseline_apps, self.baseline_sessions = [], []
+        self.baseline_apps = []
         self.environment = {name: value for name, value in os.environ.items()
                             if name not in STATE_ENVIRONMENT | {"BEE_RUNTIME", "WIPPY_REGISTRY", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"}
                             and not re.search(r"API_KEY|ACCESS_TOKEN|AUTH_TOKEN", name)}
@@ -365,7 +374,7 @@ class Journey:
                 self.current.cause = "asserted rendered frames and owner state"
         except (AssertionError, OSError, ValueError, sqlite3.Error, subprocess.SubprocessError, StopIteration) as error:
             self.current.cause = str(error) or type(error).__name__
-            if number == 1 or self.ui is None or self.ui.process.poll() is not None:
+            if number == 1 or self.ready and (self.ui is None or self.ui.process.poll() is not None):
                 self.desktop_failure = self.current.cause
         finally:
             try:
@@ -455,7 +464,7 @@ class Journey:
             if copied_cache.is_dir():
                 archived.mkdir(exist_ok=True)
                 copied_cache.rename(archived / name)
-        self.baseline_apps, self.baseline_sessions = applications(self.state), sessions(self.state)
+        self.baseline_apps = applications(self.state)
         self.baseline_approvals = set()
         if table_exists(self.state, "approvals.db", "bee_approval_requests"):
             for row in rows(self.state, "approvals.db", "SELECT approval_id,proposal_json,decision FROM bee_approval_requests"):
@@ -541,7 +550,9 @@ class Journey:
                 self.ui.wait_until(lambda: "Loading agents…" not in self.ui.text(), "saved profile readiness result")
             require(profile_title in self.ui.text(), "saved Docker profile is absent from the Sessions catalog")
             self.click(profile_title)
-            require("Unavailable" not in self.ui.text(), "saved Docker profile unavailable: " + self.ui.text())
+            if "Unavailable" in self.ui.text():
+                reason = next((line.strip() for line in self.ui.screen.display if "Unavailable ·" in line), "no readiness cause was rendered")
+                raise JourneyFailure("saved Docker profile unavailable: " + reason)
         prior = {item["session_ref"] for item in sessions(self.state)}
         self.ui.key(b"\r")
         self.ui.wait_until(lambda: "Ready for work" in self.ui.text() or "Unavailable" in self.ui.text() or "Setup:" in self.ui.text() or "INVALID:" in self.ui.text() or "START_FAILED:" in self.ui.text(), "session admission")
@@ -576,7 +587,7 @@ class Journey:
                     if settled():
                         raise JourneyFailure("stub work settled before placement running: " + str(work[-1]["result_json"]))
                     return "working" in self.ui.text() and table_exists(self.state, "placement.db", "bee_placement_attempts") and bool(rows(self.state, "placement.db",
-                        "SELECT attempt_id FROM bee_placement_attempts WHERE execution_state='running'"))
+                        "SELECT attempt_id FROM bee_placement_attempts WHERE session_ref=? AND execution_state='running'", (session["session_ref"],)))
                 self.ui.wait_until(running, "rendered working and placement running acknowledgement")
                 self.frame("native-running")
                 os.write(gate_fd, b"release\n")
@@ -591,6 +602,10 @@ class Journey:
         require(any("working" in frame or "starting" in frame or "running" in frame for frame in seen), "no rendered starting/running/working state was observed")
         if docker:
             require(any("starting" in frame.lower() for frame in seen), "Docker placement never rendered starting")
+        self.close_session(session)
+        return session
+
+    def close_session(self, session):
         self.ui.key(b"\x18")
         self.ui.wait("Close session?")
         self.frame("stop-confirmation")
@@ -601,12 +616,12 @@ class Journey:
                 "SELECT attempt_id FROM bee_placement_attempts WHERE session_ref=? AND (execution_state!='exited' OR exit_source IS NULL)", (session["session_ref"],)),
                 "independently observed placement EXIT")
         require(any(item["session_ref"] == session["session_ref"] and item["state"] == "closed" for item in sessions(self.state)), "stop did not close the owner session")
-        return session
 
     def native_stub(self):
         self.turn("Return the deterministic journey marker.", STUB_MARKER, fixture=True)
 
     def docker_session(self):
+        before = {item["session_ref"] for item in sessions(self.state)}
         try:
             self.turn("Reply with the deterministic journey marker", STUB_MARKER, docker=True)
         except JourneyFailure as error:
@@ -615,6 +630,12 @@ class Journey:
             if "start_failed" in cause and re.search(r"daemon|docker.sock|Cannot connect|connection refused", cause, re.I):
                 self.current.cause = "precise Docker start_failed: " + cause
                 self.frame("docker-start-failed")
+                admitted = [item for item in sessions(self.state) if item["session_ref"] not in before]
+                require(len(admitted) == 1, "Docker start_failed did not identify one owner session: " + cause)
+                try:
+                    self.close_session(admitted[0])
+                except JourneyFailure as stopped:
+                    raise JourneyFailure(cause + "; stopping the failed Docker session: " + str(stopped)) from stopped
                 return
             raise
 
@@ -719,11 +740,16 @@ class Journey:
         self.ui.key(namespace.encode() + b" --for 30m\r")
         self.ui.wait("Confirm edit mode")
         self.record_person_prompt("Edit namespaces " + namespace, self.ui.text())
-        self.ui.key(b"\r")
-        self.ui.wait_until(lambda: "Edit mode refused:" in self.ui.text() or "enabled" in self.ui.text().lower(),
+        self.ui.key(b"\t\r")
+        self.ui.wait_until(lambda: any(message in self.ui.text() for message in ("Edit mode refused:", "Edit mode failed:", "Edit mode cancelled")) or "enabled" in self.ui.text().lower(),
                            "host edit-mode grant or exact refusal")
         self.frame("edit-mode-outcome")
-        require("Edit mode refused:" not in self.ui.text(), "host self-edit grant refused: " + self.ui.text())
+        for label in ("Edit mode refused:", "Edit mode failed:"):
+            if label in self.ui.text():
+                notice = next(line.strip().split("  ", 1)[0] for line in self.ui.screen.display if label in line)
+                raise JourneyFailure("host edit-mode grant: " + notice)
+        require("Edit mode cancelled" not in self.ui.text(), "host edit-mode confirmation was cancelled")
+        self.granted.add("Edit namespaces " + namespace)
 
     def self_edit(self):
         def component():
@@ -743,7 +769,9 @@ class Journey:
             self.ui.wait("MODULES  CONFIRM")
             self.record_person_prompt("Publish Bee desktop component", self.ui.text())
             self.ui.key(b"\r")
-            self.ui.wait("Receipt state: complete")
+            self.ui.wait("MODULES  RESULT")
+            self.frame("component-publication-result")
+            require("Receipt state: complete" in self.ui.text(), "component publication failed: " + self.ui.text())
             self.ui.wait("OWNER JOURNEY CORE")
             require(live_owners(self.binary, self.state) == pid, "component self-edit replaced owner PID")
             self.restart()
@@ -756,7 +784,8 @@ class Journey:
             self.record_person_prompt("Update Bee from isolated Hub", self.ui.text())
             self.ui.key(b"\r")
             self.ui.wait("MODULES  RESULT")
-            self.ui.wait("Receipt state: complete")
+            self.frame("hub-apply-result")
+            require("Receipt state: complete" in self.ui.text(), "local Hub apply failed: " + self.ui.text())
             require(live_owners(self.binary, self.state) == pid, "Hub apply replaced owner PID")
             self.ui.key(b"\x17")
             self.ui.wait(self.hub.marker)
@@ -768,15 +797,14 @@ class Journey:
 
     def authored_change(self):
         self.edit_mode("bee.settings.app")
-        component = False
         self.launch("Settings", "BEE SETTINGS", ("Settings/Help",))
         self.click("About", "Themes")
         self.ui.wait("BEE SETTINGS · ABOUT")
-        marker = "OWNER JOURNEY CORE" if component else "OWNER JOURNEY OVERLAY"
+        marker = "OWNER JOURNEY OVERLAY"
         self.frame("original-about")
         pid = live_owners(self.binary, self.state)
         brief = ("Use Bee's scoped overlay/governance authoring tool and approved publication path. "
-                 "Read its guide. " + ("Change Bee component bee/settings itself, not an app overlay. " if component else "Author an overlay that changes the visible Website label in built-in Settings/About. ") +
+                 "Read its guide. Author an overlay that changes the visible Website label in built-in Settings/About. " +
                  f"Set the label to {marker}. Freeze, publish and stage the exact candidate for this workspace. "
                  "Do not apply, do not write registry or credentials; the person will approve in Bee. "
                  "Return the candidate identity, or the precise refusal from Bee if this path is unavailable.")
@@ -804,30 +832,21 @@ class Journey:
         self.restart()
         self.click("About", "Themes")
         self.ui.wait(marker)
-        if component:
-            self.update_plan()
-            self.ui.key(b"\r")
-            self.ui.wait("MODULES  CONFIRM")
-            self.record_person_prompt("Update Bee", self.ui.text())
-            self.ui.key(b"\r")
-            self.ui.wait("Receipt state: complete")
-            require(live_owners(self.binary, self.state) == [self.owners[-1].pid], "Hub update replaced owner PID")
-        else:
-            self.click("Edit mode", "Themes")
-            self.ui.wait("Edit mode")
-            self.ui.key(b"d")
-            self.ui.wait("Disable")
-            self.record_person_prompt("Remove overlay", self.ui.text())
-            self.ui.key(b"\r")
-            self.click("About", "Themes")
-            self.ui.wait("Website")
-            require(marker not in self.ui.text(), "removing overlay did not restore original About label")
+        self.click("Edit mode", "Themes")
+        self.ui.wait("Edit mode")
+        self.ui.key(b"d")
+        self.ui.wait("Disable")
+        self.record_person_prompt("Remove overlay", self.ui.text())
+        self.ui.key(b"\t\r")
+        self.click("About", "Themes")
+        self.ui.wait("Website")
+        require(marker not in self.ui.text(), "removing overlay did not restore original About label")
 
     def record_person_prompt(self, subject, text):
         # An Inbox detail is the rendered presentation of its existing request,
         # not another prompt. Person-only confirmations have no approval row.
         for record in self.approvals.values():
-            if record["step"] == self.current.number and record.get("approval_id", "") in text:
+            if record["step"] == self.current.number and record.get("approval_id") and record["approval_id"] in text:
                 record["frame"] = str(self.frame("approval-short-screen"))
                 return
         pending = [record for record in self.approvals.values()
@@ -837,11 +856,21 @@ class Journey:
             return
         self.current.approvals += 1
         identity = ("person-ui", str(len(self.approvals)))
+        scope = subject if subject.startswith("Edit namespaces ") else text
+        duration_match = re.search(r"--for\s+\S+|until revoked|once|one operation|duration[^\n│]*|expires[^\n│]*", text, re.I)
+        duration = duration_match.group(0).strip() if duration_match else "not stated"
         self.approvals[identity] = {"step": self.current.number, "subject": subject, "what": text,
-                                    "scope": text, "duration": "not stated", "already_granted": text in self.granted, "action": subject}
-        if not all(re.search(word, text, re.I) for word in ("subject|application|component|namespace", "allow|capability|action|update", "scope|namespace|workspace|component", "duration|expires|minutes|hours|once")):
-            self.annoyance("prompt lacks subject, capability, scope or duration on one short screen", self.approvals[identity])
-        self.granted.add(text)
+                                    "scope": scope, "duration": duration, "already_granted": scope in self.granted, "action": subject,
+                                    "frame": str(self.frame("person-approval-" + str(len(self.approvals))))}
+        if scope in self.granted:
+            self.annoyance("scope already granted is requested again", self.approvals[identity])
+        for field_name, pattern in (
+                ("subject", "subject|application|component|namespace|workspace|node"),
+                ("capability", "allow|capability|action|update|edit|enable|disable|remove|observe|control"),
+                ("scope", "scope|namespace|workspace|component"),
+                ("duration", "duration|expires|minutes|hours|once")):
+            if not re.search(pattern, text, re.I):
+                self.annoyance("person confirmation does not state " + field_name, self.approvals[identity])
 
     def decide_pending(self):
         pending = rows(self.ui.state, "approvals.db", "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")
@@ -864,11 +893,12 @@ class Journey:
         self.ui.key(b"a")
         self.ui.wait("Approve this request?")
         self.frame("approval-confirmation")
-        self.ui.key(b"\r")
+        self.ui.key(b"\t\r")
         self.ui.wait_until(lambda: "approved" in self.ui.text().lower(), "owner approval decision")
 
     def hive(self):
         folder, state = self.work / "node2-project", self.work / "node2-state"
+        self.peer_state, self.peer_folder = state, folder
         folder.mkdir()
         invite = self.work / "hive-invite"  # deliberately never printed or read
         self.command(["hive", "invite", "--out", str(invite)])
@@ -899,9 +929,23 @@ class Journey:
             self.click(node_id)
             self.ui.key(b"\r")
             self.ui.wait("served")
-            self.ui.key(b"\t")
-            self.ui.key(b"\r")
-            self.ui.wait("No applications open")
+            self.ui.key(b"o")
+            self.ui.wait("Observe this workspace here?")
+            self.record_person_prompt("Observe node 2 workspace", self.ui.text())
+            self.ui.key(b"\t\r")
+            self.ui.wait_until(lambda: any(message in self.ui.text() for message in
+                ("No applications open", "Remote desktop ended:", "Remote desktop closed")),
+                "remote empty desktop or observed viewer EXIT")
+            if "No applications open" not in self.ui.text():
+                # Widen the footer to retain the owner's full EXIT cause.
+                self.ui.resize(640, 48)
+                self.ui.wait_until(lambda: any(message in self.ui.text() for message in
+                    ("Remote desktop ended:", "Remote desktop closed")), "rendered viewer EXIT cause")
+                self.frame("remote-viewer-exit")
+                cause = next(line.split("↑↓", 1)[0].strip() for line in self.ui.screen.display
+                             if "Remote desktop ended:" in line or "Remote desktop closed" in line)
+                self.ui.resize(160, 48)
+                raise JourneyFailure("Hive viewer EXIT: " + cause)
             self.frame("remote-count-zero-before")
             peer.open_start()
             peer.choose("Apps")
@@ -916,7 +960,7 @@ class Journey:
                     "node 1 remote desktop does not render exactly one live app; expected count 0->1")
             peer.key(b"\x17")
             peer.wait("Close")
-            peer.key(b"\r")
+            peer.key(b"\t\r")
             peer.wait("No applications open")
             self.ui.wait("No applications open")
             self.frame("remote-count-zero-after")
@@ -958,24 +1002,40 @@ class Journey:
         for owner in self.owners:
             require(owner.exited(timeout=self.hang_seconds), "bee stop acknowledged but owner EXIT was not observed")
         require(not live_owners(self.binary, self.state), "an owner process remains for scratch state")
+        if self.peer_state:
+            peer_result = self.command(["stop"], self.peer_state, self.peer_folder)
+            require("Bee stopped" in peer_result or "not running" in peer_result,
+                    "node 2 bee stop gave no stopped acknowledgement: " + peer_result)
+            require(not live_owners(self.binary, self.peer_state), "node 2 owner remains after bee stop")
+            if self.secondary:
+                self.secondary.close()
+                self.secondary = None
+            result += "Node 2: " + peer_result
         self.current.cause = result.strip()
 
     def cleanup(self):
+        errors = []
+        def attempt(action):
+            try:
+                action()
+            except (AssertionError, OSError, ValueError, subprocess.SubprocessError) as error:
+                errors.append(str(error) or type(error).__name__)
         if self.secondary:
-            state = self.secondary.state
-            self.secondary.close()
-            for pid in live_owners(self.binary, state):
-                stop_owner(hold_owner(pid, self.binary, state))
+            attempt(self.secondary.close)
+        if self.peer_state:
+            for pid in live_owners(self.binary, self.peer_state):
+                attempt(lambda: stop_owner(hold_owner(pid, self.binary, self.peer_state)))
         if self.ui:
-            self.ui.close()
+            attempt(self.ui.close)
         for owner in self.owners:
-            stop_owner(owner)
+            attempt(lambda: stop_owner(owner))
         for pid in live_owners(self.binary, self.state):
-            stop_owner(hold_owner(pid, self.binary, self.state))
+            attempt(lambda: stop_owner(hold_owner(pid, self.binary, self.state)))
         if self.hub:
-            self.hub.close()
+            attempt(self.hub.close)
         require(self.work.parent == (ROOT / ".wippy/owner-journey-work").resolve(), "scratch cleanup escaped its root")
-        shutil.rmtree(self.work)
+        attempt(lambda: shutil.rmtree(self.work))
+        require(not errors, "cleanup failed: " + "; ".join(errors))
 
     def run(self):
         try:
@@ -991,7 +1051,12 @@ class Journey:
             self.run_step(11, "two-node Hive live counts and remote approval decision", self.hive)
             self.run_step(7, "bee stop observes clean owner EXIT", self.stop, desktop=False)
         finally:
-            self.cleanup()
+            try:
+                self.cleanup()
+            except (AssertionError, OSError, ValueError, subprocess.SubprocessError) as error:
+                failure = Step(7, "journey process/state cleanup", cause=str(error))
+                self.steps.append(failure)
+                self.report()
         print(self.report(), end="")
         return 1 if any(step.status == "FAIL" for step in self.steps) else 0
 

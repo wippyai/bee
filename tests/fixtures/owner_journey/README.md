@@ -27,7 +27,9 @@ Codex is exercised when its OS-user subscription login evidence exists. The
 native fixture emits protocol initialization and waits on a named pipe until
 the test observes both a rendered working state and placement's running state.
 Real agents use Bee's credential projection and the OS user's subscription;
-API-key environment variables are removed. The test never reads login files.
+API-key environment variables are removed, and provider login-status metadata
+must confirm subscription authentication before inference. The test never reads
+login files.
 
 Update Bee is reached through Settings/About and Modules/Installed, its current
 UI location. The test starts the repository's loopback Hub fixture from the
@@ -46,6 +48,7 @@ Waits observe complete rendered frames and owner revisions/phases. The default
 600-second bound diagnoses **no progress**, not startup or provider speed.
 CLI waits have an explicit acknowledgement hang bound; fixture teardown has a
 10-second stop grace before escalation. Timing is evidence, never a pass rule.
+Set `BEE_JOURNEY_HANG_SECONDS` to configure the diagnostic bound for a run.
 
 `.wippy/owner-journey/report.txt` is printed and contains PASS/FAIL, elapsed
 seconds, frame paths, approval counts and exact causes. Each run retains frame

@@ -79,6 +79,11 @@ function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
         for _, key in ipairs(keys) do lines[#lines + 1] = {text = "  " .. text.bound(tools[key], room - 2), role = "muted"} end
         local role = STATE_ROLE[turn.state]
         local label = STATE_LABEL[turn.state]
+        if turn.progress and turn.state == "starting" then
+            for _, row in ipairs(wrap(turn.progress, room - 2)) do
+                lines[#lines + 1] = {text = "  " .. row, role = "muted"}
+            end
+        end
         if turn.text == "" then
             lines[#lines + 1] = {text = "  " .. (label ~= "" and label or turn.state), role = role}
         else

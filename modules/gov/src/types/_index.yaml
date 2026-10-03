@@ -85,7 +85,9 @@ entries:
 - name: publication_profile_decoder
   kind: library.lua
   source: file://publication_profiles.lua
+  modules: [time]
   imports:
+    activation_profiles: bee.gov.types:activation_profile_decoder
     drivers: bee.gov.types:drivers
     bounds: bee.values:bounds
     workspace_applications: bee.gov.types:workspace_applications

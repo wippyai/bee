@@ -4,6 +4,8 @@ local principals = require("principals")
 local bounds = require("bounds")
 local service = require("destination_service")
 local registry = require("registry")
+local funcs = require("funcs")
+local security = require("security")
 
 local function valid(): {[string]: unknown}
     return {profiles = {{workspace_id = "workspace-a", source_node = "node-source",
@@ -15,6 +17,33 @@ end
 
 local function define_tests()
     test.describe("destination activation host configuration", function()
+        test.it("materializes a durable shadow through destination and recovery owner scopes", function()
+            local original = assert(registry.get("bee.settings.app:build_info"))
+            local data = assert(bounds.object(original.data))
+            local source = data.source
+            assert(type(source) == "string", "build info source missing")
+            local replacement: {[string]: unknown} = {}
+            for field, value in pairs(data) do replacement[field] = value end
+            replacement.source = source .. "\n-- native scoped shadow regression\n"
+            for _, scope_name in ipairs({"destination", "recovery"}) do
+                local scope: security.Scope
+                if scope_name == "destination" then
+                    scope = assert(security.named_scope("bee.gov.security:destination_execution_scope"))
+                else
+                    scope = assert(security.new_scope({assert(security.policy("bee.gov.security:recovery_command_policy"))}))
+                end
+                local executor = assert(funcs.new():with_scope(scope))
+                local raw, err = executor:call("bee.gov:shadow_materializer_probe", {
+                    owner = "bee.gov:shadow-regression." .. scope_name,
+                    entries = {{id = original.id, kind = original.kind, meta = original.meta, data = replacement}}})
+                test.is_nil(err, tostring(err))
+                local result = assert(bounds.object(raw))
+                test.is_true(result.applied == true, tostring(result.message))
+                test.is_true(result.restored == true, tostring(result.restore_error))
+                local restored = assert(bounds.object(assert(registry.get(original.id)).data))
+                test.eq(restored.source, source)
+            end
+        end)
         test.it("measures explicit local policy and preserves its ceilings", function()
             local config, err = service.configuration(valid(), "node-destination")
             if not config then error(tostring(err)) end

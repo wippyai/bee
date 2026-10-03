@@ -144,6 +144,29 @@ local function run()
             test.not_nil(work)
             if work then test.eq(#work.services, 0) end
         end)
+        test.it("retains an unchanged service across a component version update", function()
+            local raw = state()
+            if type(raw) ~= "table" or type(raw.entries) ~= "table" then error("invalid test") end
+            raw.entries[2].meta = {}
+            local identical = assert(lifecycle.entries(raw))
+            local work, problem = lifecycle.capture(raw, {{component = "demo/component", change = "update"}}, identical)
+            test.is_nil(problem)
+            test.not_nil(work)
+            if work then test.eq(#work.services, 0) end
+        end)
+        test.it("requires owner lifecycle when an imported service library changes", function()
+            local raw = state()
+            if type(raw) ~= "table" or type(raw.entries) ~= "table" then error("invalid test") end
+            raw.entries[1].data.imports = {logic = "demo:logic"}
+            raw.entries[2].meta = {}
+            raw.entries[#raw.entries + 1] = {id = "demo:logic", kind = "library.lua",
+                data = {source = "old library"}, registry = {owner = "demo/component"}}
+            local updated = assert(lifecycle.entries(raw))
+            updated[#updated].data = {source = "new library"}
+            local work, problem = lifecycle.capture(raw, {{component = "demo/component", change = "update"}}, updated)
+            test.is_nil(work)
+            test.eq(problem, "service needs an explicit lifecycle function from its owner: host:worker")
+        end)
     end)
 end
 local cases = test.run_cases(run)

@@ -56,7 +56,7 @@ type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, applied: {[string]: preflight.Migration},
     applied_databases: {[string]: preflight.DatabaseEvidence},
-    migration_barrier: boolean, auto_start: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
+    migration_barrier: boolean, auto_start: boolean, super_edit: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
     source_node: string?, source_workspace: string?, workspace_application: boolean?,
     base_policy_digest: string?}
 type OwnerConfigResult = {ok: true, config: owner.Config} | {ok: false, error: string}
@@ -279,6 +279,8 @@ local function destination_resolver(config: Configuration, profile_value: Profil
         return {component = profile_value.component, version = version, parameters = profile_value.parameters}, nil
     end
     local function selected_policy(spec_raw: unknown, _captured: unknown, _preview: unknown): (ResolverPolicy?, string?)
+        local admitted, admission_error = M.super_edit_admission(profile_value)
+        if not admitted then return nil, admission_error end
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id then return nil, "activation policy belongs to another node" end
         local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
@@ -344,7 +346,7 @@ local function destination_resolver(config: Configuration, profile_value: Profil
             workspace_application = base_policy_digest ~= nil,
             base_policy_digest = base_policy_digest,
             applied = applied, applied_databases = applied_databases, migration_barrier = true,
-            auto_start = profile_value.auto_start}, nil
+            auto_start = profile_value.auto_start, super_edit = profile_value.super_edit}, nil
     end
     if profile_value.resolver == "overlay" then
         return overlay_resolver.new({overlay_owner = profile_value.overlay_owner,

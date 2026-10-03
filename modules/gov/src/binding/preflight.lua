@@ -33,7 +33,7 @@ type Context = {node_id: string, registry_revision: integer, registry_digest: st
     grants: {[string]: boolean}, modules: {[string]: boolean},
     database_bindings: {[string]: DatabaseBinding}?,
     entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
-    migration_barrier: boolean, auto_start: boolean, protected: protected_kernel.Manifest?, host_evidence: HostEvidence,
+    migration_barrier: boolean, auto_start: boolean, super_edit: boolean?, protected: protected_kernel.Manifest?, host_evidence: HostEvidence,
     driver_requirements: {[string]: DriverRequirement}?}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
@@ -422,6 +422,10 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     end
     local function protect(id: string)
         if kernel[id] or not state(id) then return end
+        local namespace = id:match("^([^:]+):")
+        if context.super_edit == true and namespace and context.namespaces[namespace] == true
+            and protected_kernel.opened(manifest, namespace)
+            and not protected_kernel.names(manifest, id) then return end
         kernel[id] = true
         pending_kernel[#pending_kernel + 1] = id
     end
@@ -479,7 +483,8 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     for id, item in pairs(context.entries) do
         local namespace = id:match("^([^:]+):[^:]+$")
         local owner = namespace and namespace_owners[namespace] or nil
-        if owner and owner ~= item.package then issue("NAMESPACE_COLLISION", id, "existing namespace belongs to another package", "choose a namespace not owned by another package") end
+        if owner and owner ~= item.package
+            and not (context.super_edit == true and namespace and context.namespaces[namespace] == true) then issue("NAMESPACE_COLLISION", id, "existing namespace belongs to another package", "choose a namespace not owned by another package") end
     end
     for _, item in ipairs(candidate.artifacts) do
         for _, dependency in ipairs(item.dependencies) do
@@ -557,7 +562,8 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             end
         end
         local existing = context.entries[item.id]
-        if existing and (existing.package ~= item.package or existing.kind ~= item.kind) then
+        local shadow = context.super_edit == true and namespace and context.namespaces[namespace] == true
+        if existing and (existing.kind ~= item.kind or (existing.package ~= item.package and not shadow)) then
             issue("ENTRY_COLLISION", item.id, "entry ownership or kind would change", "choose a nonconflicting destination")
         end
         if item.auto_start and not context.auto_start then

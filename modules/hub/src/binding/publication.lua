@@ -492,20 +492,110 @@ local function effect(displayed: plan.Plan): string?
         capabilities = displayed.capabilities, policy_changes = displayed.policy_changes}, 1048576)
     return encoded and hash.sha256(encoded) or nil
 end
+-- Native linking supplies the candidate definitions, including host requirement
+-- parameters. Publication stages these exact dependency operations again after
+-- the admitted owners drain and the registry base has been revalidated.
+local function dependency_changes(prepared: plan.Prepared, baseline: registry.Snapshot): (registry.Changes?, string?)
+    local request = prepared.plan.request
+    local displayed = prepared.plan
+    local changes, changes_error = baseline:changes()
+    if not changes then return nil, tostring(changes_error) end
+    if displayed.conversion then
+        local selected_roots: {[string]: boolean} = {}
+        for _, root in ipairs(displayed.conversion.roots) do selected_roots[root.id] = true end
+        for _, root in ipairs(prepared.installed.roots) do
+            if selected_roots[root.id] and root.id ~= displayed.root_id then
+                local selected: string? = nil
+                for _, item in ipairs(displayed.modules) do
+                    if item.component == root.component then selected = item.version; break end
+                end
+                if not selected or selected == "" then return nil, "selected root has no installed version: " .. root.id end
+                local root_data: {[string]: unknown} = {component = root.component, version = selected}
+                if #root.parameters > 0 then root_data.parameters = root.parameters end
+                local deleted, delete_error = changes:delete(root.id)
+                if not deleted then return nil, tostring(delete_error) end
+                local created_root, root_error = changes:create({id = root.id, kind = "ns.dependency", dependency_root = true, meta = root.meta, data = root_data})
+                if not created_root then return nil, tostring(root_error) end
+            end
+        end
+    end
+    if request.component == "bee/bee" then
+        local converted: {[string]: boolean} = {}
+        for _, root in ipairs(displayed.conversion and displayed.conversion.roots or {}) do converted[root.id] = true end
+        for _, root in ipairs(prepared.installed.roots) do
+            if inventory.host_component(root) and not converted[root.id] then
+                for _, item in ipairs(displayed.modules) do
+                    if item.component == root.component and item.change == "update" then
+                        local root_data: {[string]: unknown} = {component = root.component, version = item.version}
+                        if #root.parameters > 0 then root_data.parameters = root.parameters end
+                        local updated, update_error = changes:update({id = root.id, kind = "ns.dependency",
+                            dependency_root = true, meta = root.meta, data = root_data})
+                        if not updated then return nil, tostring(update_error) end
+                        break
+                    end
+                end
+            end
+        end
+    end
+    local data: {[string]: unknown} = {component = request.component, version = request.version}
+    -- Empty Lua tables encode as objects; omit the optional native slice when
+    -- no bindings are supplied.
+    if #request.parameters > 0 then data.parameters = request.parameters end
+    local meta: {[string]: unknown} = {}
+    for _, root in ipairs(prepared.installed.roots) do if root.id == displayed.root_id then meta = root.meta; break end end
+    local entry = {id = displayed.root_id, kind = "ns.dependency", dependency_root = true, meta = meta, data = data}
+    local staged, stage_error
+    if displayed.conversion and displayed.root_operation == "update" and request.component ~= "bee/bee" then
+        local deleted, delete_error = changes:delete(displayed.root_id)
+        if not deleted then return nil, tostring(delete_error) end
+        staged, stage_error = changes:create(entry)
+    elseif displayed.root_operation == "create" then staged, stage_error = changes:create(entry)
+    elseif displayed.root_operation == "update" then staged, stage_error = changes:update(entry)
+    else staged, stage_error = changes:delete(displayed.root_id) end
+    if not staged then return nil, tostring(stage_error) end
+    return changes, nil
+end
+
 local function service_work(prepared: plan.Prepared): (lifecycle.Work?, string?)
     local changes: {lifecycle.Change} = {}
     for _, item in ipairs(prepared.plan.modules) do
         if item.component ~= "bee/bee" then changes[#changes + 1] = {component = item.component, change = item.change} end
     end
     local snapshot, problem = registry.snapshot()
-    local state = snapshot and snapshot:state()
-    if not state then return nil, tostring(problem) end
-    local entries: {lifecycle.Entry} = {}
-    for _, package in ipairs(prepared.resolved.packages) do
-        for _, entry in ipairs(package.entries) do
-            entries[#entries + 1] = {id = entry.id, kind = entry.kind, meta = entry.meta, data = entry.data, owner = package.component}
-        end
+    if not snapshot then return nil, tostring(problem or "capture service lifecycle registry") end
+    local state, state_error = snapshot:state()
+    if not state then return nil, tostring(state_error or "read service lifecycle registry state") end
+    if snapshot:version():id() ~= prepared.plan.base_revision then return nil, "registry changed before service lifecycle planning" end
+    local staged, stage_error = dependency_changes(prepared, snapshot)
+    if not staged then return nil, stage_error end
+    local preview, preview_error = staged:plan()
+    if not preview then return nil, tostring(preview_error or "plan service lifecycle definitions") end
+    local value = bounds.object(preview)
+    local operations, operations_error = bounds.dense_list(value and value.changes, 32768, "service lifecycle registry plan changes")
+    if not operations then return nil, operations_error end
+    local before, entries_error = lifecycle.entries(state)
+    if not before then return nil, entries_error end
+    local final: {[string]: lifecycle.Entry} = {}
+    for _, entry in ipairs(before) do final[entry.id] = entry end
+    for _, raw in ipairs(operations) do
+        local operation = bounds.object(raw)
+        if not operation then return nil, "service lifecycle registry plan operation is malformed" end
+        if operation.op == "entry.delete" or operation.op == "delete" then
+            local raw_entry = bounds.object(operation.entry)
+            local id = raw_entry and bounds.id(raw_entry.id)
+            if not id then return nil, "service lifecycle registry delete identity is malformed" end
+            final[id] = nil
+        elseif operation.op == "entry.create" or operation.op == "entry.update"
+            or operation.op == "create" or operation.op == "update" then
+            local decoded, decode_error = lifecycle.entries({entries = {operation.entry}})
+            if not decoded then return nil, "decode service lifecycle registry plan entry: " .. tostring(decode_error) end
+            local entry = decoded[1]
+            if not entry then return nil, "service lifecycle registry plan entry is absent" end
+            final[entry.id] = entry
+        else return nil, "service lifecycle registry plan operation is unknown" end
     end
+    local entries: {lifecycle.Entry} = {}
+    for _, entry in pairs(final) do entries[#entries + 1] = entry end
     return lifecycle.capture(state, changes, entries)
 end
 local function publish_intent(receipt: Receipt): Result
@@ -539,61 +629,8 @@ local function publish_intent(receipt: Receipt): Result
     if not baseline then return transaction.failure("UNAVAILABLE", tostring(baseline_error)) end
     if baseline:version():id() ~= prepared.plan.base_revision then return incomplete_removal(receipt, "registry changed after drain revalidation") end
     local displayed = prepared.plan
-    local changes, changes_error = baseline:changes()
-    if not changes then return transaction.failure("UNAVAILABLE", tostring(changes_error)) end
-    if displayed.conversion then
-        local selected_roots: {[string]: boolean} = {}
-        for _, root in ipairs(displayed.conversion.roots) do selected_roots[root.id] = true end
-        for _, root in ipairs(prepared.installed.roots) do
-            if selected_roots[root.id] and root.id ~= displayed.root_id then
-                local selected: string? = nil
-                for _, item in ipairs(displayed.modules) do
-                    if item.component == root.component then selected = item.version; break end
-                end
-                if not selected or selected == "" then return transaction.failure("INVALID", "selected root has no installed version: " .. root.id) end
-                local root_data: {[string]: unknown} = {component = root.component, version = selected}
-                if #root.parameters > 0 then root_data.parameters = root.parameters end
-                local deleted, delete_error = changes:delete(root.id)
-                if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
-                local created_root, root_error = changes:create({id = root.id, kind = "ns.dependency", dependency_root = true, meta = root.meta, data = root_data})
-                if not created_root then return transaction.failure("FAILED", tostring(root_error)) end
-            end
-        end
-    end
-    if request.component == "bee/bee" then
-        local converted: {[string]: boolean} = {}
-        for _, root in ipairs(displayed.conversion and displayed.conversion.roots or {}) do converted[root.id] = true end
-        for _, root in ipairs(prepared.installed.roots) do
-            if inventory.host_component(root) and not converted[root.id] then
-                for _, item in ipairs(displayed.modules) do
-                    if item.component == root.component and item.change == "update" then
-                        local root_data: {[string]: unknown} = {component = root.component, version = item.version}
-                        if #root.parameters > 0 then root_data.parameters = root.parameters end
-                        local updated, update_error = changes:update({id = root.id, kind = "ns.dependency",
-                            dependency_root = true, meta = root.meta, data = root_data})
-                        if not updated then return transaction.failure("FAILED", tostring(update_error)) end
-                        break
-                    end
-                end
-            end
-        end
-    end
-    local data: {[string]: unknown} = {component = request.component, version = request.version}
-    -- Empty Lua tables encode as objects; omit the optional native slice when
-    -- no bindings are supplied.
-    if #request.parameters > 0 then data.parameters = request.parameters end
-    local meta: {[string]: unknown} = {type = "bee.hub_dependency"}
-    for _, root in ipairs(prepared.installed.roots) do if root.id == displayed.root_id then meta = root.meta; break end end
-    local entry = {id = displayed.root_id, kind = "ns.dependency", dependency_root = true, meta = meta, data = data}
-    local staged, stage_error
-    if displayed.conversion and displayed.root_operation == "update" and request.component ~= "bee/bee" then
-        local deleted, delete_error = changes:delete(displayed.root_id)
-        if not deleted then return transaction.failure("FAILED", tostring(delete_error)) end
-        staged, stage_error = changes:create(entry)
-    elseif displayed.root_operation == "create" then staged, stage_error = changes:create(entry)
-    elseif displayed.root_operation == "update" then staged, stage_error = changes:update(entry)
-    else staged, stage_error = changes:delete(displayed.root_id) end
-    if not staged then return transaction.failure("FAILED", tostring(stage_error)) end
+    local changes, changes_error = dependency_changes(prepared, baseline)
+    if not changes then return transaction.failure("FAILED", tostring(changes_error)) end
     local expected: {ExpectedModule} = {}
     for _, item in ipairs(displayed.modules) do
         expected[#expected + 1] = {component = item.component, version = item.version, change = item.change}

@@ -98,6 +98,12 @@ def table_exists(state, database, name):
     return bool(rows(state, database, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)))
 
 
+def governance_failure(text):
+    return (re.search(r"\b[A-Z][A-Z_]+: ", text) is not None
+            or "Request failed:" in text or "No answer from the destination" in text
+            or "Owner acknowledged the step without a new activation" in text)
+
+
 def applications(state):
     if not table_exists(state, "workspace.db", "workspace_state"):
         return []
@@ -248,18 +254,24 @@ class JourneyDesktop(NativeDesktop):
         return time.monotonic() - started
 
     def open_start(self):
+        visible = lambda: any("Apps " in line and "│" in line and line.index("│") < line.index("Apps ")
+                              for line in self.screen.display[1:])
+        if visible():
+            return
         if " BEE ▴" in self.text():
-            self.key(b"\x1bOP")
+            self.mouse(0, 3, 1)
+            self.mouse(0, 3, 1, True)
             self.wait(" BEE ▾")
-        self.key(b"\x1bOP")
-        self.wait_until(lambda: any("Apps " in line and "│" in line and line.index("│") < line.index("Apps ")
-                                  for line in self.screen.display[1:]), "launcher")
+        self.mouse(0, 3, 1)
+        self.mouse(0, 3, 1, True)
+        self.wait_until(visible, "launcher")
 
 
 class Journey:
-    def __init__(self, binary, source, output, hang_seconds=600):
+    def __init__(self, binary, source, output, hang_seconds=600, author_provider="Claude Code"):
         self.binary, self.source, self.output = binary.resolve(), source.resolve(), output.resolve()
         self.hang_seconds = hang_seconds
+        self.author_provider = author_provider
         work_root = (ROOT / ".wippy/owner-journey-work").resolve()
         require(self.source != self.output and self.source not in self.output.parents
                 and self.source != work_root and self.source not in work_root.parents,
@@ -649,14 +661,21 @@ class Journey:
 
     def restart(self):
         before_apps = applications(self.state)
+        checkpoints = {"before_detach": before_apps}
         before_sessions = {item["session_ref"] for item in sessions(self.state)}
         self.ui.quit()
         self.ui.close()
         self.ui = None
+        checkpoints["after_detach"] = applications(self.state)
         self.command(["stop"])
+        checkpoints["after_stop"] = applications(self.state)
         require(not live_owners(self.binary, self.state), "bee stop acknowledged while owner remained")
         self.attach()
         after_apps = applications(self.state)
+        checkpoints["after_attach"] = after_apps
+        evidence = {stage: [{field: app.get(field) for field in ("definition_id", "instance_id", "restart_policy")}
+                            for app in apps] for stage, apps in checkpoints.items()}
+        (self.scratch / f"{self.current.number:02d}-restart-checkpoints.json").write_text(json.dumps(evidence, indent=2) + "\n")
         for app in before_apps:
             require(any(item.get("instance_id") == app.get("instance_id") for item in after_apps), f"restart lost retained app {app.get('definition_id')}")
         require(before_sessions <= {item["session_ref"] for item in sessions(self.state)}, "restart lost session history")
@@ -762,28 +781,30 @@ class Journey:
     def self_edit(self):
         def component():
             self.edit_mode("bee.desktop")
-            # Exact host grant precedes the agent's component authoring action.
             pid = live_owners(self.binary, self.state)
-            self.turn("Read Bee's authoring guide. Change component bee/desktop through approved component publication, "
-                      "not an app overlay: add visible desktop label OWNER JOURNEY CORE. Freeze, publish and stage it "
-                      "for person review; do not apply. Return its exact candidate or Bee's precise refusal.", "OWNER JOURNEY CORE")
-            self.launch("Modules", "MODULES", ("Apps", "Advanced"))
-            self.click("Installed", "Installed")
-            self.ui.wait("bee/desktop")
-            self.click("bee/desktop")
-            self.ui.key(b"u")
-            self.ui.wait("Ready for confirmation")
-            self.ui.key(b"\r")
-            self.ui.wait("MODULES  CONFIRM")
-            self.record_person_prompt("Publish Bee desktop component", self.ui.text())
-            self.ui.key(b"\r")
-            self.ui.wait("MODULES  RESULT")
-            self.frame("component-publication-result")
-            require("Receipt state: complete" in self.ui.text(), "component publication failed: " + self.ui.text())
-            self.ui.wait("OWNER JOURNEY CORE")
+            marker = "OWNER JOURNEY CORE"
+            self.turn("Read Bee's authoring guide. Use the Settings-granted exact bee.desktop namespace to edit "
+                      "only the Lua source of bee.desktop:model (library.lua) through governed base-component publication. "
+                      "Preserve its id, kind, imports and native modules. Keep ns.definition and package version metadata unchanged; "
+                      "the delivery artifact version is separate from registry package metadata. "
+                      "Add a visible desktop window label OWNER JOURNEY CORE using desktop-owned layout or title values. "
+                      "This is a base component edit: do not create an application. Freeze, publish and stage its exact "
+                      "candidate for person review; do not apply. Return its candidate or Bee's precise refusal.", marker, provider=self.author_provider)
+            self.activate_staged("bee.desktop")
+            # The terminal presenter follows its documented explicit F12 reload.
+            self.ui.key(b"\x1b[24~")
+            self.ui.wait(marker)
+            self.frame("component-live-label")
             require(live_owners(self.binary, self.state) == pid, "component self-edit replaced owner PID")
             self.restart()
-            self.ui.wait("OWNER JOURNEY CORE")
+            self.ui.wait(marker)
+            self.frame("component-restarted-label")
+            self.remove_edit_mode()
+            self.ui.key(b"\x1b[24~")
+            self.click("About", "Themes")
+            self.ui.wait("Website")
+            self.ui.wait_until(lambda: marker not in self.ui.text(), "component removal rendered")
+            require(marker not in self.ui.text(), "component removal did not restore the desktop label")
         def hub_update():
             self.update_plan()
             pid = live_owners(self.binary, self.state)
@@ -816,38 +837,62 @@ class Journey:
                  f"Set the label to {marker}. Freeze, publish and stage the exact candidate for this workspace. "
                  "Do not apply, do not write registry or credentials; the person will approve in Bee. "
                  "Return the candidate identity, or the precise refusal from Bee if this path is unavailable.")
-        self.turn(brief, marker)
-        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
-        require("No overlay versions are available" not in self.ui.text(), "agent produced no Governance version for built-in About; Overlays reports No overlay versions are available")
-        self.ui.key(b"\r")
-        self.ui.wait("Staged")
-        self.click("Staged", "Available")
-        self.ui.key(b"\r")
-        self.ui.wait("Preflight")
-        require("blocked" not in self.ui.text().lower(), "Governance preflight refused: " + self.ui.text())
-        self.ui.key(b"\r")
-        self.launch("Needs you", "NEEDS YOU")
-        self.approve()
-        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
-        self.ui.key(b"t")
-        self.click("Apply")
-        self.ui.wait_until(lambda: "settled" in self.ui.text() or "failed" in self.ui.text(), "governed activation outcome")
-        require("failed" not in self.ui.text(), "governed activation failed: " + self.ui.text())
+        self.turn(brief, marker, provider=self.author_provider)
+        self.activate_staged("bee.settings.app")
         self.launch("Settings", "BEE SETTINGS", ("Settings/Help",))
         self.ui.wait(marker)
         require(live_owners(self.binary, self.state) == pid, "authoring change replaced owner PID")
         self.restart()
         self.click("About", "Themes")
         self.ui.wait(marker)
+        self.remove_edit_mode()
+        self.click("About", "Themes")
+        self.ui.wait("Website")
+        require(marker not in self.ui.text(), "removing overlay did not restore original About label")
+
+    def activate_staged(self, source_workspace):
+        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
+        self.click("Available", "Staged")
+        self.ui.key(b"r")
+        self.ui.wait(source_workspace)
+        self.click(source_workspace)
+        self.ui.key(b"\r")
+        self.ui.wait("Read review")
+        self.click("Staged", "Available")
+        self.ui.wait(source_workspace)
+        self.click(source_workspace)
+        self.ui.key(b"\r")
+        self.ui.wait("Preflight")
+        require("blocked" not in self.ui.text().lower(), "Governance preflight refused: " + self.ui.text())
+        self.ui.key(b"\r")
+        self.ui.wait_until(lambda: "Activation approval_bound" in self.ui.text()
+                           or governance_failure(self.ui.text()),
+                           "governed approval preparation acknowledgement or refusal")
+        require("Activation approval_bound" in self.ui.text(), "Governance preparation refused: " + self.ui.text())
+        self.launch("Needs you", "NEEDS YOU")
+        self.approve()
+        self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
+        if not re.search(r"\bApply\b", self.ui.text()):
+            self.ui.key(b"t")
+            self.ui.wait("Apply")
+        self.click("Apply")
+        self.ui.wait_until(lambda: "Activation settled" in self.ui.text() or governance_failure(self.ui.text()),
+                           "governed activation outcome or explicit owner refusal")
+        require(re.search(r"(?m)^\s*(?:Activation\s+)?settled\s+(?:·\s*)?applied(?:\s|$)", self.ui.text()),
+                "governed activation did not settle as applied: " + self.ui.text())
+
+    def remove_edit_mode(self):
+        self.launch("Settings", "BEE SETTINGS", ("Settings/Help",))
         self.click("Edit mode", "Themes")
         self.ui.wait("Edit mode")
         self.ui.key(b"d")
         self.ui.wait("Disable")
         self.record_person_prompt("Remove overlay", self.ui.text())
         self.ui.key(b"\t\r")
-        self.click("About", "Themes")
-        self.ui.wait("Website")
-        require(marker not in self.ui.text(), "removing overlay did not restore original About label")
+        self.ui.wait_until(lambda: any(message in self.ui.text() for message in ("Disabled edit mode for this workspace", "Edit mode is disabled for this workspace"))
+                           or any(label in self.ui.text() for label in ("Edit mode refused:", "Edit mode failed:")),
+                           "host edit-mode removal acknowledgement or exact refusal")
+        require(any(message in self.ui.text() for message in ("Disabled edit mode for this workspace", "Edit mode is disabled for this workspace")), "host edit-mode removal: " + self.ui.text())
 
     def record_person_prompt(self, subject, text):
         # An Inbox detail is the rendered presentation of its existing request,
@@ -891,9 +936,10 @@ class Journey:
         self.ui.wait("SESSION")
 
     def approve(self, approval_id=None):
-        self.ui.wait("pending   ")
-        self.click("pending   ")
-        self.ui.key(b"\r")
+        if "Allow once" not in self.ui.text():
+            self.ui.wait("pending   ")
+            self.click("pending   ")
+            self.ui.key(b"\r")
         self.ui.wait("Allow once")
         self.frame("approval-detail")
         text = self.ui.text()
@@ -1162,6 +1208,8 @@ def main():
     parser.add_argument("--source-state", required=True, type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / ".wippy/owner-journey")
     parser.add_argument("--hang-seconds", type=float, default=600, help="no-progress diagnostic bound; never a speed requirement")
+    parser.add_argument("--author-provider", choices=("Claude Code", "Codex"), default="Claude Code",
+                        help="existing subscription provider for the two owned authoring proofs")
     parser.add_argument("--steps", help="comma-separated journey steps; startup and stop always run")
     args = parser.parse_args()
     require(args.binary.is_file() and os.access(args.binary, os.X_OK), f"BEE_BINARY is not executable: {args.binary}")
@@ -1169,7 +1217,7 @@ def main():
     require((ROOT / ".wippy").resolve() in args.output.resolve().parents, "evidence and scratch state must be under repository .wippy/")
     selected_steps = {int(value) for value in args.steps.split(",")} if args.steps else None
     require(selected_steps is None or selected_steps <= set(range(1, 12)), "journey steps must be 1 through 11")
-    return Journey(args.binary, args.source_state, args.output, args.hang_seconds).run(selected_steps)
+    return Journey(args.binary, args.source_state, args.output, args.hang_seconds, args.author_provider).run(selected_steps)
 
 
 if __name__ == "__main__":

@@ -86,6 +86,25 @@ class DiscoveryCheckTest(unittest.TestCase):
         owner_filter = check.findings('if owner_id:sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then return entry end')
         self.assertTrue(check.unreviewed('modules/gov/src/binding/destination_service.lua', owner_filter, reviewed))
 
+    def test_governed_shadow_reviews_do_not_allow_registry_discovery(self):
+        import json
+        root = Path(__file__).resolve().parents[1]
+        reviewed = json.loads((root / 'build/registry_discovery_allowlist.json').read_text())
+        validations = {
+            'modules/gov/src/binding/preflight.lua': 'id:match("^([^:]+):")',
+            'modules/gov/src/binding/overlay_resolver.lua': 'id:match("^([^:]+):")',
+            'modules/gov/src/security/super_edit.lua': 'protected:sub(1, #requested + 1)',
+        }
+        for path, expression in validations.items():
+            with self.subTest(path=path):
+                self.assertEqual(check.unreviewed(path, check.findings(expression), reviewed), [])
+                discovery = check.findings('registry.find({[".ns"] = namespace})')
+                self.assertTrue(check.unreviewed(path, discovery, reviewed))
+                prefix = check.findings('if entry.id:sub(1, #prefix) == prefix then return entry end')
+                self.assertTrue(check.unreviewed(path, prefix, reviewed))
+        obsolete = check.findings('left:sub(1, #right + 1)\nright:sub(1, #left + 1)')
+        self.assertEqual(len(check.unreviewed('modules/gov/src/security/super_edit.lua', obsolete, reviewed)), 2)
+
     def test_executor_startup_event_key_review_is_exact(self):
         import json
         import tempfile

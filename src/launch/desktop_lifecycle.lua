@@ -45,6 +45,13 @@ local function settle(state: State, child: Child, code: string, message: string)
     child.activation = nil
     if request then answer(state, child.id, request, code, message) end
 end
+local function rendered(state: State, child: Child)
+    if child.phase ~= "running" or child.presentation ~= child.connection or child.replace or child.host_replacing then return end
+    child.ready, child.presentation = true, nil
+    settle(state, child, "", "")
+    if child.restarts > 0 then send(state.owner, "bee.retained.replaced", {version = 1, workspace_id = state.workspace_id,
+        display_id = child.id, pid = child.resource.pid, schema = 1}) end
+end
 local function fail(state: State, child: Child, message: string)
     settle(state, child, "UNAVAILABLE", message)
     child.phase, child.deadline = "stopping", nil
@@ -136,7 +143,7 @@ local function render(state: State, child: Child)
     if not renderer or child.phase ~= "running" then return end
     child.renderer = nil
     if renderer.connection ~= child.connection then return end
-    child.pending, child.phase, child.deadline = uuid.v7(), "render", time.after("10s")
+    child.pending, child.phase, child.deadline, child.ready = uuid.v7(), "render", time.after("10s"), false
     if not send(state.route, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
         request_id = child.pending, op = "render", recipient = child.resource.pid, renderer = renderer.pid}) then
         render_failed(state, child, "Desktop renderer request was not accepted")
@@ -177,8 +184,9 @@ function M.activate(state: State, value: unknown): ()
     if not id or not request or request == "" then return end
     local old = state.children[id]
     if old then
-        if old.ready and old.phase ~= "stopping" and old.phase ~= "save" and old.phase ~= "exit" then answer(state, id, request, "", "")
-        else answer(state, id, request, "BUSY", "Desktop activation or shutdown is pending") end
+        if old.activation or old.phase == "stopping" or old.phase == "save" or old.phase == "exit" or old.phase == "departing" then answer(state, id, request, "BUSY", "Desktop activation or shutdown is pending")
+        elseif old.ready and old.phase == "running" and not old.replace and not old.host_replacing then answer(state, id, request, "", "")
+        else old.activation = request end
         return
     end
     local count = 0
@@ -278,33 +286,18 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
             else fail(state, child, "Desktop host admission failed") end
             return true
         end
-        local rendered = child.phase == "render"
-        local presented = child.presentation == connection
+        local admission_rendered = child.phase == "render"
         child.connection, child.phase, child.pending, child.deadline = connection, "running", "", nil
-        if rendered then
-            child.ready = true
-            settle(state, child, "", "")
-        else child.deadline = time.after("10s") end
+        if admission_rendered then rendered(state, child) else child.deadline = time.after("10s") end
         render(state, child)
-        if rendered and presented then
-            child.presentation = nil
-            send(state.owner, "bee.retained.replaced", {version = 1, workspace_id = state.workspace_id,
-                display_id = child.id, pid = child.resource.pid, schema = 1})
-        end
-    elseif topic == "presented" and child.restarts > 0 then
+    elseif topic == "presented" and not child.replace and not child.host_replacing then
         if type(data) == "table" and data.version == 1 and data.workspace_id == state.workspace_id
             and data.display_id == child.id and contract.text(data.renderer, 160)
             and contract.text(data.generation, 80) then
             local connection = contract.text(data.connection_id, 80)
-            if connection and connection ~= "" then
-                if child.ready and child.phase == "running" and connection == child.connection then
-                    send(state.owner, "bee.retained.replaced", {version = 1, workspace_id = state.workspace_id,
-                        display_id = child.id, pid = child.resource.pid, schema = 1})
-                elseif child.phase == "admit" or child.phase == "render" or child.phase == "running" then
-                    -- The client may present before the host's render receipt
-                    -- reaches us; its exact connection waits for that fence.
-                    child.presentation = connection
-                end
+            if connection and connection ~= "" and (child.phase == "admit" or child.phase == "render" or child.phase == "running") then
+                child.presentation = connection
+                rendered(state, child)
             end
         end
     elseif topic == "quit" and protocol.quit(data, state.workspace_id) and child.phase == "running" then
@@ -348,9 +341,9 @@ function M.event(state: State, event: process.Event): ()
     local revoked = false
     for _, child in pairs(state.children) do
         if event.kind == process.event.EXIT and sender == child.resource.pid then
-            settle(state, child, "UNAVAILABLE", "Desktop exited before activation completed: " .. (decode.exit_error(event.result) or "without an error"))
             if child.replace or child.host_replacing then depart(state, child, true)
-            else desktops.exited(state.resources, event); depart(state, child) end
+            else settle(state, child, "UNAVAILABLE", "Desktop exited before activation completed: " .. (decode.exit_error(event.result) or "without an error"))
+                desktops.exited(state.resources, event); depart(state, child) end
         elseif child.phase ~= "departing" then
             local grants = child.resource.grants
             local attached = (grants.controller and grants.controller.recipient == sender) or grants.observers[sender] ~= nil

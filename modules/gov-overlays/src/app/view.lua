@@ -56,7 +56,7 @@ local function advanced(state: model.State): {Action}
     if state.intent then
         actions[#actions + 1] = {kind = "status", label = " Status "}
         actions[#actions + 1] = {kind = "recover", label = " Recover "}
-        if state.intent.phase == "authorized" or state.intent.phase == "applying" then actions[#actions + 1] = {kind = "step", label = " Apply "} end
+        if model.can_advance(state) then actions[#actions + 1] = {kind = "step", label = " Apply "} end
     end
     return actions
 end

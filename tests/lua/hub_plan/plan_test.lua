@@ -525,6 +525,26 @@ local function define_tests()
                 end
             end)
         end
+        test.it("updates the Settings prerelease during first host-root conversion", function()
+            local captured = state({root("bee/bee", "0.1.0-0.boot.dev"),
+                {id = "bee.deps:settings", kind = "ns.dependency", meta = {type = "bee.component_selection"},
+                    registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/settings", version = "0.1.0-dev"}},
+            }, {{name = "bee/bee", version = "0.1.0-0.boot.dev"}, {name = "bee/settings", version = "0.1.0-dev"}})
+            local target = "0.1.0-ownerjourney.1"
+            local prepared, problem = plan.prepare(captured, 0,
+                request({action = "update", component = "bee/bee", version = target}), source({
+                    ["bee/bee@" .. target] = package("bee/bee", target, "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                    ["bee/settings@" .. target] = package("bee/settings", target, "b"),
+                    ["bee/settings@0.1.0-dev"] = package("bee/settings", "0.1.0-dev", "c"),
+                }), baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                test.not_nil(prepared.plan.conversion)
+                local settings = assert(module_for(prepared.plan.modules, "bee/settings"))
+                test.eq(settings.version, target); test.eq(settings.change, "update")
+            end
+        end)
         for _, pinned in ipairs({false, true}) do
             test.it("lists retained component reason; pinned=" .. tostring(pinned), function()
                 local resident: {unknown} = {root("bee/bee", "1.0.0"), root("acme/app", "1.0.0"),

@@ -56,13 +56,15 @@ entries:
   - entry: bee.gov.env:publication_profiles_ref
     path: .resource_ref
   - entry: bee.gov.security:publication_profiles_read_policy
-    path: .policy.resources
+    path: .policy.resources+=
 - name: target_activation_profiles
   kind: ns.requirement
   meta: {comment: Host-selected activation profiles; the host supplies bee.env:gov_activation_profiles}
   targets:
   - entry: bee.gov.env:activation_profiles_ref
     path: .resource_ref
+  - entry: bee.gov.security:publication_profiles_read_policy
+    path: .policy.resources+=
 - name: target_approval_request_policy
   kind: ns.requirement
   meta: {comment: Host-selected approval request policy for the fixed activation actor; absent selection fails closed}

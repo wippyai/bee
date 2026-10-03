@@ -15,6 +15,7 @@ entries:
   - configured_nodes: []
   lifecycle:
     auto_start: true
+    requires: [bee.gov.service:gov_recovery_service]
     security:
       actor: {id: bee.hive.supervisor}
       policies:

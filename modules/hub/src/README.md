@@ -124,6 +124,12 @@ with migration rollback requires root conversion through an update first.
 
 
 Independent component service transitions use the runtime's existing supervisor.
+An unchanged registration, process and retained library imports need no service
+transition when only the package version advances. Changed code or registration
+still requires owner drain and readiness evidence. Candidate service definitions
+come from the native registry plan for the exact dependency-root transaction,
+including the preserved host requirement parameters. Unlinked artifact entries
+are not compared with installed, linked definitions.
 Each changed `process.service` names an owner `function.lua` in
 `meta.component_lifecycle`; the host selects its exact call grant through
 `bee.hub.binding:target_lifecycle_owners`. Metadata grants no permission.

@@ -9,6 +9,7 @@ entries:
   - {cap: 64, idle_ms: 900000}
   lifecycle:
     auto_start: true
+    requires: [bee.gov.service:gov_recovery_service]
     security:
       actor: {id: bee.workspace.hosts}
       policies: [bee.security.desktop:host_policy, bee.security.desktop:local_supervisor_spawn_policy, bee.security.desktop:workspace_host_manager_policy]

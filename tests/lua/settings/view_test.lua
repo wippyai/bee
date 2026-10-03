@@ -8,6 +8,14 @@ local live_updates = require("live_updates")
 local build_info = require("build_info")
 local function define_tests()
     test.describe("Appearance chooser", function()
+        test.it("retains edit outcomes across unsolicited appearance acknowledgements", function()
+            test.eq(view.appearance_notice("Disabled edit mode for this workspace", "", ""),
+                "Disabled edit mode for this workspace")
+            test.eq(view.appearance_notice("Enabled until grant expiry", "", ""), "Enabled until grant expiry")
+            test.eq(view.appearance_notice("Applying theme", "theme-request", ""), "")
+            test.eq(view.appearance_notice("Disabled edit mode for this workspace", "", "exact display refusal"),
+                "exact display refusal")
+        end)
         test.it("decodes host-selected package updates without a brand prefix", function()
             local reply = {ok = true, replayed = false, value = {
                 modules = {{component = "vendor/selected", installed_version = "1.0.0", locked_version = "1.0.0",
@@ -176,6 +184,16 @@ local function define_tests()
             local has_edit_tab = false
             for _, hit in ipairs(tabs) do if hit.kind == "edit_mode" then has_edit_tab = true end end
             test.is_true(has_edit_tab)
+        end)
+        test.it("states the workspace scope and duration of overlay removal in a decoder-valid confirmation", function()
+            local message = view.confirm_message("", true)
+            test.is_true(message:find("Remove this workspace", 1, true) ~= nil)
+            test.is_true(message:find("Duration: once", 1, true) ~= nil)
+            test.is_true(message:find("until edit mode is enabled again", 1, true) ~= nil)
+            test.is_nil((message:find("%c")))
+            test.not_nil(interaction.spec({version = 1, request_id = "r-2", id = "bee.settings:edit",
+                instance_id = "settings", kind = "confirm", title = "Disable edit mode",
+                message = message, accept = "Disable", initial = ""}))
         end)
         test.it("builds a decoder-valid single-line edit-mode confirmation", function()
             local message = view.confirm_message("bee.ux_demo --for 1m")

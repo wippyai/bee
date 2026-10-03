@@ -17,6 +17,7 @@ import (
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/client/physical"
 	"github.com/wippyai/bee/native/hive/rendezvous"
+	"github.com/wippyai/runtime/api/tty"
 )
 
 type desktopScript struct {
@@ -295,35 +296,65 @@ func TestJoinWithoutPublicationCreatesNoOwnerState(t *testing.T) {
 	}
 }
 
-// A presentation that ended because the display moved to another workspace
-// continues with the client's new session; any other end is final.
 func TestPresentationFollowsTheDisplayIntoItsNewWorkspace(t *testing.T) {
-	previous := hive.DesktopMount{Session: "session-1"}
-	moved := hive.DesktopMount{Session: "session-2"}
+	previous := hive.DesktopMount{Session: "session-1", Mount: "mount-1"}
+	moved := hive.DesktopMount{Session: "session-2", Mount: "mount-2"}
 	asked := 0
 	current := func(context.Context) (hive.DesktopMount, error) { asked++; return moved, nil }
-	if next, followed := followSwitch(context.Background(), current, previous, errors.New("mount expired")); !followed || next.Session != "session-2" {
-		t.Fatalf("next=%+v followed=%v", next, followed)
+	reattach := func(context.Context) (hive.DesktopMount, error) {
+		t.Fatal("reattached a switched session")
+		return hive.DesktopMount{}, nil
 	}
-	for _, ended := range []error{nil, physical.ErrDetached} {
-		if _, followed := followSwitch(context.Background(), current, previous, ended); followed {
-			t.Fatalf("followed after %v", ended)
+	if next, followed, err := followMount(context.Background(), current, reattach, previous, tty.ErrMountExpired); err != nil || !followed || next != moved {
+		t.Fatalf("next=%+v followed=%v err=%v", next, followed, err)
+	}
+	for _, ended := range []error{nil, physical.ErrDetached, errors.New("input failed"), &physical.DeliveryError{Operation: "input", Cause: tty.ErrMountExpired}} {
+		if _, followed, err := followMount(context.Background(), current, reattach, previous, ended); followed || err != nil {
+			t.Fatalf("followed after %v: %v", ended, err)
 		}
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, followed, _ := followMount(canceled, current, reattach, previous, tty.ErrMountExpired); followed {
+		t.Fatal("followed after cancellation")
 	}
 	if asked != 1 {
 		t.Fatalf("asked the owner %d times", asked)
 	}
-	same := func(context.Context) (hive.DesktopMount, error) { return previous, nil }
-	if _, followed := followSwitch(context.Background(), same, previous, errors.New("mount expired")); followed {
-		t.Fatal("followed the same session")
+}
+
+func TestPresentationRenewsExpiredMountWithinSameSession(t *testing.T) {
+	previous := hive.DesktopMount{Session: "session-1", Mount: "old-mount"}
+	renewed := hive.DesktopMount{Session: "session-1", Mount: "new-mount"}
+	current := func(context.Context) (hive.DesktopMount, error) { return previous, nil }
+	reattach := func(context.Context) (hive.DesktopMount, error) { return renewed, nil }
+	if next, followed, err := followMount(context.Background(), current, reattach, previous, tty.ErrMountExpired); err != nil || !followed || next != renewed {
+		t.Fatalf("renewed mount not followed: next=%+v followed=%v err=%v", next, followed, err)
 	}
-	refused := func(context.Context) (hive.DesktopMount, error) { return hive.DesktopMount{}, errors.New("not found") }
-	if _, followed := followSwitch(context.Background(), refused, previous, errors.New("mount expired")); followed {
-		t.Fatal("followed without a current session")
+	alreadyRenewed := func(context.Context) (hive.DesktopMount, error) { return renewed, nil }
+	unexpected := func(context.Context) (hive.DesktopMount, error) {
+		t.Fatal("reattached a fresh mount")
+		return hive.DesktopMount{}, nil
 	}
-	canceled, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, followed := followSwitch(canceled, current, previous, errors.New("mount expired")); followed {
-		t.Fatal("followed after cancellation")
+	if _, followed, err := followMount(context.Background(), alreadyRenewed, unexpected, previous, tty.ErrMountExpired); err != nil || !followed {
+		t.Fatalf("owner's fresh mount not followed: %v", err)
+	}
+	for _, invalid := range []hive.DesktopMount{previous, {Session: "another-session", Mount: "new-mount"}} {
+		reattach := func(context.Context) (hive.DesktopMount, error) { return invalid, nil }
+		if _, followed, err := followMount(context.Background(), current, reattach, previous, tty.ErrMountExpired); followed || err == nil {
+			t.Fatalf("accepted invalid renewal: %+v", invalid)
+		}
+	}
+}
+
+func TestPresentationRetainsOwnerLookupAndRenewalFailures(t *testing.T) {
+	previous := hive.DesktopMount{Session: "session-1", Mount: "mount-1"}
+	cause := errors.New("owner's exact refusal")
+	refused := func(context.Context) (hive.DesktopMount, error) { return hive.DesktopMount{}, cause }
+	current := func(context.Context) (hive.DesktopMount, error) { return previous, nil }
+	for _, lookup := range []func(context.Context) (hive.DesktopMount, error){refused, current} {
+		if _, followed, err := followMount(context.Background(), lookup, refused, previous, tty.ErrMountExpired); followed || !errors.Is(err, cause) {
+			t.Fatalf("owner refusal lost: followed=%v err=%v", followed, err)
+		}
 	}
 }

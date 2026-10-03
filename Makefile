@@ -821,10 +821,14 @@ retained-startup-check:
 	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"
 
 .PHONY: owner-journey
+.PHONY: native-session-unit-check
+native-session-unit-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native test -race -count=1 -tags 'meshclient,physicalclient' ./client/session
+
 .PHONY: owner-journey-unit-check
 owner-journey-unit-check:
 	python3 -m unittest discover -s tests -p test_owner_journey.py
 owner-journey:
 	@test -n "$(BEE_BINARY)" || { echo 'BEE_BINARY must name an existing standalone Bee.' >&2; exit 1; }
 	@test -n "$(BEE_SOURCE_STATE)" || { echo 'BEE_SOURCE_STATE must name an existing state directory (an empty directory is a fresh-state proof).' >&2; exit 1; }
-	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)") $(if $(BEE_JOURNEY_STEPS),--steps "$(BEE_JOURNEY_STEPS)")
+	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)") $(if $(BEE_JOURNEY_AUTHOR_PROVIDER),--author-provider "$(BEE_JOURNEY_AUTHOR_PROVIDER)") $(if $(BEE_JOURNEY_STEPS),--steps "$(BEE_JOURNEY_STEPS)")

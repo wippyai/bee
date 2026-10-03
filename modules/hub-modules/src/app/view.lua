@@ -522,7 +522,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     end
     local actions = 2
     if state.phase == "confirm" then
-        frame.line(painter, height - 2, "Confirm this exact digest; changing package, version, policy, or JSON clears it.", theme.text)
+        frame.line(painter, height - 2, "Duration: once, for this exact digest; edits clear confirmation.", theme.text)
         actions = button(actions, height - 1, "confirm", " Confirm ", plan.ready)
         actions = button(actions, height - 1, "cancel", " Back ", true)
         frame.footer(painter, status, "Enter confirms · Esc returns to the plan")

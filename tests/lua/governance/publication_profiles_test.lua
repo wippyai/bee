@@ -1,6 +1,8 @@
 -- MIT. Publication identity and overlay ownership come only from host config.
 local test = require("test")
 local profiles = require("publication_profiles")
+local activation_profiles = require("activation_profiles")
+local super_edit = require("super_edit")
 
 local WORKSPACE = string.rep("a", 32)
 
@@ -15,6 +17,37 @@ local function define_tests()
             test.eq(config.profiles[1].component, "demo/app")
             test.eq(config.profiles[1].overlay_owner, "bee.apps:demo")
             test.is_false(config.workspace_applications)
+        end)
+        test.it("publishes from the existing Settings edit grant and withdraws it on expiry", function()
+            local grant = assert(super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"bee.settings.app"},
+                "2050-01-01T00:00:00.000Z", {revision = 1, namespaces = {"bee.gov"}, super_edit = {},
+                    entries = {"bee.security.gov:protected_kernel"}}))
+            local activation = assert(activation_profiles.decode(grant))
+            local config = assert(profiles.configuration({profiles = {}}, activation, "node-local"))
+            local selected = assert((profiles.for_source(config, WORKSPACE, "bee.settings.app")))
+            test.eq(selected.component, "bee.settings.app")
+            test.eq(selected.overlay_owner, activation.profiles[1].overlay_owner)
+            test.not_nil((profiles.for_component(config, WORKSPACE, "bee.settings.app", {})))
+            test.is_nil((profiles.for_source(config, string.rep("b", 32), "bee.settings.app")))
+            selected.expires_at = "2000-01-01T00:00:00.000Z"
+            local expired, refused = profiles.for_source(config, WORKSPACE, "bee.settings.app")
+            test.is_nil(expired)
+            test.eq(assert(refused).message, "edit grant expired at 2000-01-01T00:00:00.000Z")
+        end)
+        test.it("retains host-enabled application and driver publication alongside a Settings edit grant", function()
+            local grant = assert(super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"bee.settings.app"},
+                "2050-01-01T00:00:00.000Z", {revision = 1, namespaces = {"bee.gov"}, super_edit = {},
+                    entries = {"bee.security.gov:protected_kernel"}}))
+            local activation = assert(activation_profiles.decode(grant))
+            local config = assert(profiles.configuration({profiles = {}, workspace_applications = true,
+                workspace_drivers = true}, activation, "node-local"))
+            test.not_nil((profiles.for_source(config, WORKSPACE, "bee.settings.app")))
+            local application = assert((profiles.for_component(config, WORKSPACE, "app.tally", {"tally"})))
+            test.eq(application.source_workspace, "tally")
+            local driver = assert((profiles.for_component(config, WORKSPACE, "bee.driver.stub", {"driver.stub"})))
+            test.eq(driver.source_workspace, "driver.stub")
+            local disabled = assert(profiles.configuration({profiles = {}}, activation, "node-local"))
+            test.is_nil((profiles.for_component(disabled, WORKSPACE, "bee.driver.stub", {"driver.stub"})))
         end)
         test.it("rejects duplicate and malformed publication slots", function()
             local profile = {workspace_id = "workspace-a", source_workspace = "apps/demo",

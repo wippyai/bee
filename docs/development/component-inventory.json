@@ -6416,6 +6416,11 @@
       "source": "modules/placement-native/src/service/_index.yaml"
     },
     {
+      "id": "bee.placement.native.service:startup",
+      "kind": "process.lua",
+      "source": "modules/placement-native/src/service/_index.yaml"
+    },
+    {
       "id": "bee.placement.native.service:sweeper",
       "kind": "process.lua",
       "source": "modules/placement-native/src/service/_index.yaml"
@@ -12173,6 +12178,12 @@
       "table": "bee_placement_attempts_next"
     },
     {
+      "line": 710,
+      "owner_namespace": "bee.placement.native",
+      "source": "modules/placement-native/src/migrations/migrations.lua",
+      "table": "bee_placement_attempts_next"
+    },
+    {
       "line": 36,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
@@ -13702,6 +13713,11 @@
       "requirement": "bee.placement.native:target_prepare_policies",
       "resolved_by": "registry source",
       "target": "bee.placement.native.binding:stop"
+    },
+    {
+      "requirement": "bee.placement.native:target_prepare_policies",
+      "resolved_by": "registry source",
+      "target": "bee.placement.native.service:startup"
     },
     {
       "requirement": "bee.placement.native:target_resource_mode",
@@ -16021,6 +16037,10 @@
         {
           "entry": "bee.placement.native.binding:attach",
           "path": ".security.policies"
+        },
+        {
+          "entry": "bee.placement.native.service:startup",
+          "path": ".security.policies"
         }
       ]
     },
@@ -17188,6 +17208,12 @@
     },
     {
       "sources": [
+        "modules/harness/src/carrier/policy.lua"
+      ],
+      "tag": "bee.launch-policy@2"
+    },
+    {
+      "sources": [
         "modules/driver-agy/src/security/_index.yaml",
         "modules/driver-claude/src/security/_index.yaml",
         "modules/driver-codex/src/security/_index.yaml",
@@ -17196,7 +17222,7 @@
         "modules/driver-opencode/src/security/_index.yaml",
         "modules/harness/src/carrier/policy.lua"
       ],
-      "tag": "bee.launch-policy@2"
+      "tag": "bee.launch-policy@3"
     },
     {
       "sources": [
@@ -17345,19 +17371,19 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1834,
+    "entry_count": 1835,
     "namespace_count": 274,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
-    "owned_table_declaration_count": 151,
-    "persisted_id_count": 841,
+    "owned_table_declaration_count": 152,
+    "persisted_id_count": 842,
     "requirement_count": 141,
-    "requirement_target_count": 335,
+    "requirement_target_count": 336,
     "root_src_lua_budget": 19277,
     "root_src_lua_lines": 19274,
-    "schema_tag_count": 70,
+    "schema_tag_count": 71,
     "topic_count": 138
   },
   "topics": [

@@ -1,7 +1,9 @@
-"""Run every registered Lua test entry in four isolated, balanced processes."""
+"""Balance Lua entries across four processes while keeping shared-daemon suites together."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
+import fcntl
 import os
+from pathlib import Path
 import re
 import subprocess
 import time
@@ -31,15 +33,17 @@ DEFAULT_WEIGHT = 1.0
 SHARDS = 4
 
 
-def test_entries(suites=None):
+def test_entries(suites=None, *, resource=None, source=None):
+    source = ROOT / "tests/lua" if source is None else source
     entries = []
-    for index in sorted((ROOT / "tests/lua").rglob("_index.yaml")):
-        if suites is not None and index.relative_to(ROOT / "tests/lua").parts[0] not in suites:
+    for index in sorted(source.rglob("_index.yaml")):
+        if suites is not None and index.relative_to(source).parts[0] not in suites:
             continue
         document = yaml.safe_load(index.read_text())
         entries.extend(document["namespace"] + ":" + entry["name"]
-                       for entry in document.get("entries", []) if entry.get("meta", {}).get("type") == "test")
-    assert entries and len(entries) == len(set(entries)), "Lua test IDs must be unique"
+                       for entry in document.get("entries", []) if entry.get("meta", {}).get("type") == "test"
+                       and (resource is None or resource in entry.get("meta", {}).get("resources", [])))
+    assert (entries or resource is not None) and len(entries) == len(set(entries)), "Lua test IDs must be unique"
     # The upstream runner uses substring filters. Exact IDs are exclusive only
     # while no full test ID is contained in another full test ID.
     assert not any(left in right for left in entries for right in entries if left != right), \
@@ -47,30 +51,54 @@ def test_entries(suites=None):
     return entries
 
 
-def split(entries):
+def split(entries, shared=()):
     groups = [[] for _ in range(SHARDS)]
     loads = [0.0] * SHARDS
-    for entry in sorted(entries, key=lambda name: (-SLOW.get(name, DEFAULT_WEIGHT), name)):
+    shared = sorted(set(shared))
+    assert set(shared) <= set(entries), "Shared daemon entries are not selected: " + ", ".join(sorted(set(shared) - set(entries)))
+    units = [[entry] for entry in entries if entry not in shared]
+    if shared:
+        units.append(shared)
+    for unit in sorted(units, key=lambda names: (-sum(SLOW.get(name, DEFAULT_WEIGHT) for name in names), names)):
         shard = min(range(SHARDS), key=lambda index: (loads[index], index))
-        groups[shard].append(entry)
-        loads[shard] += SLOW.get(entry, DEFAULT_WEIGHT)
+        groups[shard].extend(unit)
+        loads[shard] += sum(SLOW.get(entry, DEFAULT_WEIGHT) for entry in unit)
     assert sorted(entry for group in groups for entry in group) == sorted(entries)
     assert all(groups), "Every Lua unit shard needs at least one entry"
     return groups
 
 
+@contextmanager
+def docker_daemon_lock():
+    override = os.environ.get("BEE_DOCKER_DAEMON_LOCK")
+    path = Path(override) if override else Path.home() / ".cache/bee/bee-docker-daemon.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        print(f"Docker daemon shard: waiting for lock {path}", flush=True)
+        started = time.monotonic()
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            print(f"Docker daemon shard: acquired lock {path} after {time.monotonic() - started:.3f}s", flush=True)
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def run_shard(index, folder, entries, timeout=None):
     started = time.monotonic()
-    result = subprocess.run([
-        str(RUNTIME), "test", "--host", "bee:terminal", "--override",
-        "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
-        # Effect worker tests drain the queues synchronously; avoid racing the workers.
-        "--override", "bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false",
-        "--override", "bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false",
-        "--override", "bee.threads.service:thread_outbox_pump_service:lifecycle.auto_start=false",
-        "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
-        "test", *entries,
-    ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
+    with ExitStack() as resources:
+        if set(entries) & set(test_entries(resource="docker_daemon", source=folder / "src/tests")):
+            resources.enter_context(docker_daemon_lock())
+        result = subprocess.run([
+            str(RUNTIME), "test", "--host", "bee:terminal", "--override",
+            "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
+            # Effect worker tests drain the queues synchronously; avoid racing the workers.
+            "--override", "bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false",
+            "--override", "bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false",
+            "--override", "bee.threads.service:thread_outbox_pump_service:lifecycle.auto_start=false",
+            "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
+            "test", *entries,
+        ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
     output = result.stdout + result.stderr
     plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", output)
     selected = re.search(r"(\d+) tests in \d+ suites", plain)
@@ -96,7 +124,7 @@ def main():
     if not 1 <= jobs <= SHARDS:
         raise ValueError(f"BEE_TEST_JOBS must be between 1 and {SHARDS}")
     entries = test_entries()
-    groups = split(entries)
+    groups = split(entries, test_entries(resource="docker_daemon"))
     with ExitStack() as fixtures:
         folders = [fixtures.enter_context(fixture_workspace(managed_gateway=True)) for _ in groups]
         # Retain the unfiltered strict lint before any test process starts.

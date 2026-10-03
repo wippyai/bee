@@ -125,7 +125,7 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
         profile_id = profile, binding_digest = DIGEST, profile_digest = DIGEST, launch = selected, session_ref = session_ref,
         resources = resources, environment = {}, environment_refs = {}, projections = {assert(bounds.id(projection.projection_id))},
         required_cleanup = "direct_process", required_exit_observation = "eof_gated",
-        timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
+        timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
     }
     request = assert(request_codec.decode(request))
     request.delivery = {arguments = {}, files = {file}}

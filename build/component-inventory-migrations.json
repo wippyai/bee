@@ -1644,6 +1644,13 @@
       "migration": "M2",
       "reason": "Desktop projection actor relocation; exact persisted references convert through additive Placement 10, Sync 11, Gateway 19, Resources 5 and Credentials 8 desktop_projection_references migrations. Preserve workspace/desktop/view IDs, opaque state, topics, version-one handoff and qualified layout schemas; restart owner composition and reissue existing grants.",
       "to": "bee.desktop.service:main"
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.launch-policy@2",
+      "to": "tag:bee.launch-policy@3",
+      "migration": "M5",
+      "reason": "Owner-approved supervised startup removes the caller deadline. The explicit revision-two decoder validates and retires start_ms while preserving its original entry digest; revision three rejects the retired field. Placement migration 11 removes stored request deadlines and introduces precise start_failed state without modifying prior ledgers."
     }
   ],
   "owner_state_migrations": [

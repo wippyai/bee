@@ -198,9 +198,9 @@ governance-activation-unit-check: $(TOOLCHAIN_CURRENT)
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov activation_owner_test activation_owner_admission_test activation_owner_recovery_test activation_owner_migration_test
 .PHONY: placement-startup-unit-check docker-placement-unit-check
 placement-startup-unit-check: $(TOOLCHAIN_CURRENT)
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_startup_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.native native_startup_test startup_test startup_migration_test
 docker-placement-unit-check: $(TOOLCHAIN_CURRENT)
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.docker.tests profile_test spec_test lifecycle_test stdin_test readiness_test projection_test image_test environment_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.placement.docker.tests profile_test spec_test lifecycle_test stdin_test readiness_test boundary_test projection_test image_test environment_test
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py

@@ -21,9 +21,7 @@ M.MAX_REQUIRED_FILES = 8
 M.MAX_REQUIRED_PATH_BYTES = 512
 -- How a launch declares its session ends once the turn is settled.
 M.SESSION_ENDS = {"stdin_close"}
-M.MAX_START_MS = 120000
 M.MAX_STOP_GRACE_MS = 60000
-M.DEFAULT_START_MS = 15000
 M.DEFAULT_STOP_GRACE_MS = 5000
 M.DEFAULT_RETAIN_MS = 30000
 M.MAX_RETAIN_MS = 600000
@@ -322,11 +320,11 @@ local function decode_environment(value: unknown, field: string, values: boolean
     return result, nil
 end
 local function decode_timeouts(value: unknown): (types.Timeouts?, string?)
-    local result: types.Timeouts = {start_ms = M.DEFAULT_START_MS, stop_grace_ms = M.DEFAULT_STOP_GRACE_MS, drain_ms = M.DEFAULT_DRAIN_MS, retain_ms = M.DEFAULT_RETAIN_MS}
+    local result: types.Timeouts = {stop_grace_ms = M.DEFAULT_STOP_GRACE_MS, drain_ms = M.DEFAULT_DRAIN_MS, retain_ms = M.DEFAULT_RETAIN_MS}
     if value == nil then return result, nil end
     local object = bounds.object(value)
     if not object then return nil, "timeouts must be an object" end
-    local unknown_field = bounds.fields(object, {"start_ms", "stop_grace_ms", "drain_ms", "retain_ms"})
+    local unknown_field = bounds.fields(object, {"stop_grace_ms", "drain_ms", "retain_ms"})
     if unknown_field then return nil, "timeouts: " .. unknown_field end
     if object.drain_ms ~= nil then
         local drain = bounds.integer(object.drain_ms)
@@ -337,11 +335,6 @@ local function decode_timeouts(value: unknown): (types.Timeouts?, string?)
         local retain = bounds.integer(object.retain_ms)
         if not retain or retain < 100 or retain > M.MAX_RETAIN_MS then return nil, "timeouts.retain_ms must be between 100 and " .. tostring(M.MAX_RETAIN_MS) end
         result.retain_ms = retain
-    end
-    if object.start_ms ~= nil then
-        local start = bounds.integer(object.start_ms)
-        if not start or start < 1 or start > M.MAX_START_MS then return nil, "timeouts.start_ms must be between 1 and " .. tostring(M.MAX_START_MS) end
-        result.start_ms = start
     end
     if object.stop_grace_ms ~= nil then
         local grace = bounds.integer(object.stop_grace_ms)

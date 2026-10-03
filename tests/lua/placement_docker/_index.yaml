@@ -84,6 +84,7 @@ entries:
   meta:
     type: test
     suite: bee_docker
+    resources: [docker_daemon]
     timeout: 60s
   modules:
   - funcs
@@ -104,6 +105,9 @@ entries:
     service: bee.placement.docker.service:service
     placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    prestart: bee.harness.carrier:prestart
+    bounds: bee.values:bounds
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -115,6 +119,7 @@ entries:
   meta:
     type: test
     suite: bee_docker
+    resources: [docker_daemon]
     timeout: 60s
   modules:
   - funcs
@@ -135,6 +140,9 @@ entries:
     service: bee.placement.docker.service:service
     placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    prestart: bee.harness.carrier:prestart
+    bounds: bee.values:bounds
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -146,6 +154,7 @@ entries:
   meta:
     type: test
     suite: bee_docker
+    resources: [docker_daemon]
     timeout: 60s
   modules:
   - funcs
@@ -166,6 +175,9 @@ entries:
     service: bee.placement.docker.service:service
     placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    prestart: bee.harness.carrier:prestart
+    bounds: bee.values:bounds
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -174,7 +186,9 @@ entries:
   kind: function.lua
   source: file://projection_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     projection: bee.placement.native.service:provider_projection
@@ -184,33 +198,46 @@ entries:
   kind: function.lua
   source: file://image_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     image: bee.placement.docker.service:image
-
 - name: environment_test
   kind: function.lua
   source: file://environment_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     environment: bee.placement.docker.env:environment
-
 - name: creator_policy
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [process.spawn]
-    resources: [bee.placement.docker.tests:creator, bee:workers]
+    actions:
+    - process.spawn
+    resources:
+    - bee.placement.docker.tests:creator
+    - bee:workers
     effect: allow
 - name: creator
   kind: process.lua
   source: file://lifecycle_test.lua
   method: creator
-  meta: {type: test_support}
-  modules: [process, channel, funcs, registry, security, time]
+  meta:
+    type: test_support
+  modules:
+  - process
+  - channel
+  - funcs
+  - registry
+  - security
+  - time
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
@@ -223,3 +250,86 @@ entries:
     service: bee.placement.docker.service:service
     placement_resolver: bee.placement.binding:resolver
     protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    prestart: bee.harness.carrier:prestart
+    bounds: bee.values:bounds
+- name: boundary_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: boundary
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  modules:
+  - funcs
+  - registry
+  - security
+  - process
+  - channel
+  - time
+  imports:
+    placement_decode: bee.placement:decode
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    profiles: bee.placement.profiles:profiles
+    request_codec: bee.placement:request
+    store: bee.placement.native.persist:store
+    spec: bee.placement.docker.binding:spec
+    types: bee.placement:types
+    service: bee.placement.docker.service:service
+    placement_resolver: bee.placement.binding:resolver
+    protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    prestart: bee.harness.carrier:prestart
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.placement.native:apply_test_policy
+    - bee.placement.docker.tests:creator_policy
+- name: refused_profile
+  kind: registry.entry
+  meta:
+    type: bee.placement_profile
+    test_support: true
+  data:
+    schema_revision: bee.placement-profile@1
+    placement_binding: bee.placement.docker.binding:binding
+    image_ref: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
+    user: 99999999999999999999:1000
+    network: none
+    limits:
+      memory: 536870912
+      cpu: 100000
+      pids: 64
+    mounts:
+    - resource: project
+      target: /workspace
+      access: write
+    interactive_route_ref: bee.placement.docker.tests:refused_interactive
+- name: refused_interactive
+  kind: registry.entry
+  meta:
+    type: docker.interactive_executor
+    test_support: true
+  data:
+    image_ref: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
+    executor_ref: bee.placement.docker.tests:refused_executor
+- name: refused_executor
+  kind: exec.docker
+  meta:
+    type: test_support
+  image: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
+  host: unix:///var/run/docker.sock
+  user: 99999999999999999999:1000
+  network_mode: none
+  memory_limit: 536870912
+  cpu_quota: 100000
+  pids_limit: 64
+  auto_remove: false
+  read_only_rootfs: true
+  no_new_privileges: true
+  cap_drop:
+  - ALL
+  tmpfs:
+    /tmp: rw,nosuid,nodev,size=128m

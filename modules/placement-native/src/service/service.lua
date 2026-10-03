@@ -307,7 +307,7 @@ function M.authorize_materialization(attempt: types.Attempt, row: store.Row, req
     if not request.gateway then return nil, nil end
     if not gateway_binding then return nil, fail("INVALID", "gateway_binding is required for a launch with a gateway binding") end
     local carrier_epoch = bounds.integer(row.attachment_generation) or 0
-    local raw, call_error = funcs.call(resources.GATEWAY_AUTHORIZE, {attempt_id = attempt.attempt_id, carrier_epoch = carrier_epoch, binding_id = gateway_binding, ttl_ms = math.max(1000, request.timeouts.start_ms)})
+    local raw, call_error = funcs.call(resources.GATEWAY_AUTHORIZE, {attempt_id = attempt.attempt_id, carrier_epoch = carrier_epoch, binding_id = gateway_binding, ttl_ms = 600000})
     local reply = type(raw) == "table" and raw or nil
     if call_error or not reply or reply.ok ~= true then
         local reply_error = reply and bounds.object(reply.error)
@@ -572,8 +572,7 @@ end
 function M.prepare(value: unknown): Reply
     return M.prepare_local(value, nil)
 end
--- start: spawn the runner and observe its acknowledgment or supervised exit.
--- Idempotent: a live attempt returns its status.
+-- Start admission ends when a durable attempt is monitored, before execution.
 function M.start_local(value: unknown, runner_ref: string?): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "start request must be an object") end
@@ -604,15 +603,12 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
     local reply_topic = "bee.placement.start." .. (uuid.v7() or attempt.attempt_id)
     local replies = assert(process.listen(reply_topic, {message = true}))
     local events = assert(process.events())
-    local runner, spawn_error = process.spawn(runner_ref or resources.RUNNER, host, attempt.attempt_id, process.pid(), reply_topic, gateway_binding, materialization_key, control_token)
-    if not runner then
+    local supervisor, spawn_error = process.spawn_monitored("bee.placement.native.service:startup", host,
+        attempt.attempt_id, process.pid(), reply_topic, runner_ref or resources.RUNNER, host,
+        gateway_binding, materialization_key, control_token, attempt.attachment_generation)
+    if not supervisor then
         process.unlisten(replies)
-        return fail("UNAVAILABLE", "spawn runner: " .. tostring(spawn_error))
-    end
-    local monitored, monitor_error = process.monitor(runner)
-    if not monitored then
-        process.unlisten(replies)
-        return fail("UNCERTAIN", "monitor runner: " .. tostring(monitor_error) .. "; startup outcome is unknown")
+        return fail("UNAVAILABLE", "spawn startup supervisor: " .. tostring(spawn_error))
     end
     local outcome: Reply? = nil
     while not outcome do
@@ -621,29 +617,29 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
             outcome = fail("UNAVAILABLE", "start interrupted")
         elseif selected.channel == replies then
             local message = selected.value
-            if tostring(message:from()) == tostring(runner) then
-                local data: unknown = message:payload():data()
-                if type(data) == "table" and data.started == true then
-                    outcome = succeed(data.attempt)
-                else
-                    local reason = type(data) == "table" and tostring(data.reason) or "runner refused"
-                    outcome = fail("UNAVAILABLE", reason)
-                end
+            if tostring(message:from()) == tostring(supervisor) then
+                local decoded, decode_error = service_reply.decode(message:payload():data())
+                if not decoded then outcome = fail("UNAVAILABLE", "startup admission reply: " .. tostring(decode_error))
+                elseif not decoded.ok then outcome = fail(assert(decoded.error.code, "startup rejection omitted code"), assert(decoded.error.message, "startup rejection omitted cause"))
+                else outcome = succeed(decoded.value) end
             end
         elseif selected.channel == events then
             local event = selected.value
-            if event.kind == process.event.EXIT and tostring(event.from) == tostring(runner) then
-                local reason = "runner exited before acknowledging startup"
-                if event.result and event.result.error then reason = reason .. ": " .. tostring(event.result.error) end
-                outcome = transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "runner.exited", detail = reason}})
-                if outcome.ok then outcome = fail("UNCERTAIN", reason) end
+            if event.kind == process.event.EXIT and tostring(event.from) == tostring(supervisor) then
+                local result = bounds.object(event.result)
+                outcome = fail("UNAVAILABLE", "startup supervisor exited: " .. tostring(result and result.error or event.kind))
             elseif event.kind == process.event.CANCEL then
-                outcome = fail("UNAVAILABLE", "start cancelled")
+                local current, load_error = load(attempt.attempt_id)
+                if not current then outcome = assert(load_error)
+                else
+                    local stopped = M.stop_attempt(current, "cooperative")
+                    outcome = stopped.ok and fail("UNAVAILABLE", "start cancelled") or stopped
+                end
             end
         end
     end
     process.unlisten(replies)
-    process.unmonitor(runner)
+    process.unmonitor(supervisor)
     return outcome
 end
 function M.start(value: unknown): Reply
@@ -707,6 +703,12 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
     if db then control_token = store.runner_authority(db, attempt.attempt_id, nil) end
     if db then db:release() end
     local grace = request and request.timeouts.stop_grace_ms or request_codec.DEFAULT_STOP_GRACE_MS
+    if attempt.execution_state == "starting" and not recorded and (runner == nil or runner == "") then
+        -- The supervisor may still be installing its child monitor. Record
+        -- stop intent; the runner checks it before materialization is released.
+        return transition(attempt.attempt_id, {expected_execution = "starting", execution = "stopping",
+            evidence = {kind = "stop.requested", detail = mode .. " before runner monitor installation"}})
+    end
     if type(runner) == "string" and runner ~= "" and control_token then
         -- The intent is recorded before the runner acts on it: a runner that
         -- observes the exit at once records exited next, and stopping is the
@@ -717,8 +719,12 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
             if current and not transitions.live(current.execution_state) then return succeed(current) end
             return requested
         end
-        local sent = process.send(runner, protocol.TOPIC_CONTROL, {command = "stop", control_token = control_token, mode = mode, grace_ms = grace})
+        local sent, send_error = process.send(runner, protocol.TOPIC_CONTROL, {command = "stop", control_token = control_token, mode = mode, grace_ms = grace})
         if sent then return requested end
+        if attempt.execution_state == "starting" and not recorded then
+            -- The durable stop is also checked by the runner before launch.
+            return transition(attempt.attempt_id, {evidence = {kind = "stop.delivery_failed", detail = tostring(send_error) .. "; durable stop remains requested during startup"}})
+        end
     end
     if recorded then
         local signal = mode == "forced" and 9 or 15
@@ -860,8 +866,21 @@ local function preparer_runner_absent(row: store.Row?, attempt_id: string): bool
     return true
 end
 function M.reconcile_attempt(attempt: types.Attempt): Reply
-    if attempt.execution_state == "exited" or attempt.execution_state == "intended" then return succeed(attempt) end
+    if attempt.execution_state == "start_failed" or attempt.execution_state == "exited" or attempt.execution_state == "intended" then return succeed(attempt) end
     local recorded, _, row = recorded_identity(attempt.attempt_id)
+    if attempt.execution_state == "starting" and row then
+        local db, open_error = store.open()
+        if not db then return fail("STORAGE", open_error or "open placement store") end
+        local monitors, monitor_error = db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('runner.start_accepted', 'runner.monitored') LIMIT 1", {attempt.attempt_id})
+        db:release()
+        if not monitors or monitor_error then return fail("STORAGE", "read startup supervision: " .. tostring(monitor_error)) end
+        if #monitors > 0 then
+            local enforcement = M.enforce_grants(attempt)
+            if enforcement then return enforcement end
+            -- Only the acknowledgement or monitor decides supervised startup.
+            return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "startup outcome belongs to the installed runner monitor"}})
+        end
+    end
     if not recorded then
         if preparer_runner_absent(row, attempt.attempt_id) then
             M.retire_gateway(attempt, "runner ended before child creation")
@@ -875,15 +894,11 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
             if enforcement then return enforcement end
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; no execution identity recorded"}})
         end
-        -- A runner answers status only once its child exists; while it
-        -- prepares the child, its presence is the supervision.
         if attempt.execution_state == "starting" and row then
             local present, presence_error = M.runner_present(row)
             if present == nil then return fail("UNAVAILABLE", presence_error or "runner presence is unknown") end
             if present then
-                local enforcement = M.enforce_grants(attempt)
-                if enforcement then return enforcement end
-                return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "runner present while preparing the child; no execution identity recorded"}})
+                return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "legacy runner is present before child creation"}})
             end
         end
         M.retire_gateway(attempt, "attempt uncertain: no execution identity")
@@ -1007,7 +1022,7 @@ function M.cleanup(value: unknown): Reply
 end
 function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Reply
     if attempt.cleanup_state == "complete" then return succeed(attempt) end
-    if not transitions.may_clean(attempt.execution_state) then return fail("CONFLICT", "cleanup needs a proven exit; execution is " .. attempt.execution_state) end
+    if attempt.execution_state ~= "start_failed" and not transitions.may_clean(attempt.execution_state) then return fail("CONFLICT", "cleanup needs a proven exit; execution is " .. attempt.execution_state) end
     local recorded, identity_error, row = recorded_identity(attempt.attempt_id)
     if identity_error then return fail("STORAGE", identity_error) end
     if not row then return fail("STORAGE", "attempt is not recorded") end
@@ -1015,7 +1030,7 @@ function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Re
     -- Materialization can acknowledge a stop before creating any child. Its
     -- completion and this proof commit together in the existing evidence ledger.
     -- Missing identity alone is never proof; contradictory identity refuses it.
-    if not proven and attempt.exit_source == "runner" and not recorded
+    if not proven and (attempt.start_cancelled or attempt.exit_source == "runner" or attempt.execution_state == "start_failed") and not recorded
         and row.pid == nil and row.pgid == nil and row.start_ticks == nil and row.boot_id == nil then
         local db, open_error = store.open()
         if not db then return fail("STORAGE", open_error or "open placement store") end

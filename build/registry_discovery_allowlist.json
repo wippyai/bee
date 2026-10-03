@@ -175,6 +175,12 @@
   },
   {
     "path": "modules/executor-external/src/binding/run_turn.lua",
+    "expression": "attempt_id .. \":\" .. state",
+    "count": 1,
+    "reason": "Encode the admitted placement attempt startup journal event key from its owner identity and observed state; no registry lookup, discovery or authorization."
+  },
+  {
+    "path": "modules/executor-external/src/binding/run_turn.lua",
     "expression": "write_id .. \":\" .. phase",
     "count": 1,
     "reason": "Encode a journal write event occurrence key; not a registry identity."

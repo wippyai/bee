@@ -24,7 +24,6 @@ local function main(request: unknown, mode: string, controller: string?, crash_a
     local pauses: {string} = {}
     for name in string.gmatch(pause_after or "", "[^,]+") do pauses[#pauses + 1] = name end
     local function after(step: string)
-        print("carrier " .. process.pid() .. ": " .. step)
         if crash_after and step == crash_after then error("crash after " .. step) end
         if step == "committed" and slow_commit_ms and slow_commit_ms > 0 then time.sleep(tostring(math.floor(slow_commit_ms)) .. "ms") end
         if pauses[1] == step then

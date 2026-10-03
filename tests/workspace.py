@@ -250,28 +250,6 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
                                                  "if close_gate then process.unlisten(close_gate) end\n    " + cleanup_anchor)
             broker.write_text(broker_source)
             observe_carrier(folder)
-            placement = folder / "modules/placement-native/src/service/service.lua"
-            placement_source = placement.read_text()
-            begin_close = placement_source.index("function M.close_stdin(")
-            end_close = placement_source.index("-- reconcile:", begin_close)
-            closure = placement_source[begin_close:end_close]
-            timer = 'local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")'
-            if timer in closure:
-                placement_source = placement_source.replace('local time = require("time")',
-                                                            'local time = require("time")\nlocal ctx = require("ctx")')
-                expired = '''local timer: Channel<time.Time>
-    if ctx.get("bee.test.stdin.expired") == true then
-        timer = channel.new(1)
-        timer:send(time.now())
-    else
-        timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
-    end'''
-                placement_source = placement_source.replace(closure, closure.replace(timer, expired))
-                placement.write_text(placement_source)
-                placement_index = folder / "modules/placement-native/src/service/_index.yaml"
-                placement_document = yaml.safe_load(placement_index.read_text())
-                next(entry for entry in placement_document["entries"] if entry["name"] == "service")["modules"].append("ctx")
-                placement_index.write_text(yaml.safe_dump(placement_document, sort_keys=False))
             runner = folder / "modules/placement-native/src/service/runner.lua"
             runner_source = runner.read_text()
             selection = "selected = channel.select(cases)"

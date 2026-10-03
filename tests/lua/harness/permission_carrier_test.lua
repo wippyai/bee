@@ -402,9 +402,7 @@ local function define_tests()
         progress = assert(process.listen("bee.test.carrier.progress", {message = true}))
         local stream = prepare_host()
         test.it("asks, waits, consumes and answers an allowed request through one deterministic write, woken by a hint rather than the poll", function()
-            -- Keep the poll beyond the fixture's permission window. A
-            -- successful answer must then come from the approval hint, even
-            -- when the machine is too busy to meet a wall-clock speed target.
+            -- The approval hint wakes this exchange before its next periodic poll.
             local policy = assert(registry.get(POLICY))
             local exchange = (assert(bounds.object((assert(bounds.object(policy.data))).permission_exchange)))
             exchange.poll_ms = 120000
@@ -675,10 +673,6 @@ local function define_tests()
         end)
         test.it("leaves a write uncertain when the runner is lost during recovery and sends nothing after settlement", function()
             local thread_id, workspace = thread(), fresh("ws")
-            -- The child's own permission wait races decide()'s approval
-            -- delivery; give it the suite's standard window so a busy host
-            -- cannot make it time out before the carrier reaches the crash
-            -- checkpoint below.
             local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "write_intended")
             decide(await_request(workspace, first), "approved")

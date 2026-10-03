@@ -619,6 +619,48 @@ local function define_tests()
             test.eq(((principals.objects(facts.candidate.entries))[1]).id, "private.app:old-overlay")
         end)
 
+        test.it("admits only granted durable shadows and retains their approval base", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},
+                applied = {}, migration_barrier = false, super_edit = true}
+            local deps, spec, state = fixture(policy)
+            state.captured.entries[2] = entry("private.app:main", "function.lua", "original")
+            state.captured.entries[2].registry = {owner = "bee/settings"}
+            state.captured.entries[#state.captured.entries + 1] = entry("private.app:sibling", "function.lua", "retained")
+            state.captured.entries[#state.captured.entries].registry = {owner = "bee/settings"}
+            local replacement = entry("private.app:main", "function.lua", "approved")
+            assert(bounds.object(replacement.data)).imports = {sibling = "private.app:sibling"}
+            changes(spec, {replacement})
+            local facts = resolve(deps, spec)
+            local report = assert(preflight.check(facts.candidate, facts.context))
+            if not report.ready then error(assert(canonical.encode(report.diagnostics))) end
+            test.eq(facts.context.entries["private.app:main"].package, "bee/settings")
+            test.is_true(facts.context.entries["private.app:sibling"] ~= nil)
+            local baseline = facts.candidate.base_digest
+            state.captured.entries[2].data = {source = "return 'changed original'"}
+            test.is_true(resolve(deps, spec).candidate.base_digest ~= baseline)
+            local kernel = assert(bounds.object(state.captured.entries[3].data))
+            kernel.namespaces = {"bee.gov", "private.app"}
+            local protected = resolve(deps, spec)
+            local protected_report = assert(preflight.check(protected.candidate, protected.context))
+            test.is_false(protected_report.ready)
+            local guarded = false
+            for _, diagnostic in ipairs(protected_report.diagnostics) do
+                if diagnostic.code == "PROTECTED_KERNEL" then guarded = true end
+            end
+            test.is_true(guarded)
+            kernel.namespaces = {"bee.gov"}
+            policy.namespaces["private.app"] = false
+            local denied, _, denied_error = resolver.resolve_with(deps, spec)
+            test.is_nil(denied)
+            test.is_true(tostring(denied_error):find("entry collides", 1, true) ~= nil)
+            policy.namespaces["private.app"] = true
+            policy.super_edit = false
+            local ordinary = resolver.resolve_with(deps, spec)
+            test.is_nil(ordinary)
+        end)
+
         test.it("rejects an entry collision with the composed destination registry", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture)()

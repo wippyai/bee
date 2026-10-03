@@ -26,7 +26,7 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: preflight.Migration},
     applied_databases: {[string]: preflight.DatabaseEvidence}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
-    auto_start: boolean?,
+    auto_start: boolean?, super_edit: boolean?,
     applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?,
     workspace_application: boolean?, base_policy_digest: string?, generated_databases: {Object}?}
 -- folder resolves the destination workspace folder file grants are rooted in;
@@ -314,6 +314,7 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
         applied_databases = policy.applied_databases or {}, generated_databases = generated,
         exact_expansion = true,
         migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true,
+        super_edit = policy.super_edit == true,
         protected = protected, host_evidence = evidence}
     return context, nil
 end
@@ -395,12 +396,17 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             if namespace then current_namespace[namespace] = id end
         end
     end
+    -- A person-confirmed super-edit profile admits shadows only within its
+    -- exact namespace ceiling. Keep the durable definitions and ownership in
+    -- the context and approval digest; they remain the base restored on removal.
     for id in pairs(incoming_by_id) do
-        if current[id] then return nil, nil, "private artifact entry collides with destination definition " .. id end
+        local namespace = id:match("^([^:]+):")
+        local shadow = policy.super_edit == true and namespace and policy.namespaces[namespace] == true
+        if current[id] and not shadow then return nil, nil, "private artifact entry collides with destination definition " .. id end
     end
     for namespace in pairs(namespace_set) do
         local conflict = current_namespace[namespace]
-        if conflict then return nil, nil, "private artifact namespace collides with destination definition " .. conflict end
+        if conflict and not (policy.super_edit == true and policy.namespaces[namespace] == true) then return nil, nil, "private artifact namespace collides with destination definition " .. conflict end
     end
 
     local names: {string} = {}
@@ -553,7 +559,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             databases = original_policy.databases, grants = original_policy.grants, modules = original_policy.modules,
             applied = original_policy.applied, applied_databases = original_policy.applied_databases,
             database_bindings = database_bindings, migration_barrier = original_policy.migration_barrier,
-            auto_start = original_policy.auto_start, applications = applications, workspace_id = original_policy.workspace_id,
+            auto_start = original_policy.auto_start, super_edit = original_policy.super_edit, applications = applications, workspace_id = original_policy.workspace_id,
             overlay_owner = original_policy.overlay_owner, source_node = original_policy.source_node,
             source_workspace = original_policy.source_workspace, workspace_application = original_policy.workspace_application,
             base_policy_digest = original_policy.base_policy_digest, generated_databases = generated_databases}

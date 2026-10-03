@@ -111,7 +111,9 @@ service configuration do not replace that controller. Hub transitions below
 also restart code-only service updates.
 An unchanged service registration, process and retained library imports stay
 running across a package version change. A changed registration or retained
-code still requires the owner's admitted lifecycle function.
+code still requires the owner's admitted lifecycle function. Hub compares the
+installed definitions with the native registry plan for its dependency changes,
+so host requirement parameters participate in that comparison.
 Independent component `process.service` changes now use Hub durable receipt
 intent, owner admission/drain and the runtime supervisor stop/start path. Hub
 verifies exact process/handler definitions and the registry revision before

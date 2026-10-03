@@ -297,7 +297,12 @@ not carry `allow.grants` for `security.*`, `funcs.security`, `process.security`
 or a registry apply action. The instance
 sets `allow.auto_start: false`, and preflight refuses any entry declaring
 `lifecycle.auto_start` under such a policy (`AUTO_START_DENIED`); an explicit
-row admits auto start unless it sets that field to `false`. Availability
+row admits auto start unless it sets that field to `false`. An admitted super-edit
+profile can shadow durable definitions only in its exact namespace ceiling;
+preflight retains the original package ownership and definitions in the approval
+base, refuses kind changes, and still enforces the Kernel checks. The profile's
+expiry and explicit-confirmation approver are checked at each resolution.
+Availability
 lists this node's versions the selected profile publishes, boot recovery
 follows every desired slot whose source the host still selects for that owner,
 and the application catalog admits a governed admission record only while its

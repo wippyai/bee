@@ -164,7 +164,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     local stdout = not backend and proc:stdout_stream() or nil
     local stderr = not backend and proc:stderr_stream() or nil
-    local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "native process start"}})
+    local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "executor process start"}})
     if not creating.ok then executor:release(); return refuse(creating.message or "attempt stopped before start") end
     local started, start_error = proc:start()
     assert(evidence(db, attempt_id, "child.start_returned", started and "executor start returned success" or tostring(start_error)))

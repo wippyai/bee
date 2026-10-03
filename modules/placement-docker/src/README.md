@@ -42,6 +42,11 @@ code or exit source. Cancellation before runner claim records that no container
 was dispatched. After dispatch, cleanup requires an observed container exit;
 failed or missing observations report uncertainty and cleanup errors explicitly.
 
+Docker uses the shared Native runner startup timeline described in
+[Native placement](../../placement-native/src/README.md#uncertainty).
+`child.start_returned` records the executor start result; container create and
+start are separate daemon operations within that call.
+
 The Agent application lives in `bee.harness.app`; its placement constructor
 uses the existing terminal lifecycle and hook processing. The Docker sweeper
 reconciles live attempts and enforces revoked resource projections.

@@ -309,6 +309,17 @@ own generation.
 
 ## Uncertainty
 
+The startup acknowledgement budget covers runner launch, materialization, executor
+start and execution identity resolution. The starter listens before spawning the
+runner. Timestamped attempt evidence records `runner.start_accepted`,
+`runner.started`, `runner.materialized`, `child.creating`, `child.start_returned`,
+`child.streams_ready`, `child.identity_requested`, `child.identity_returned`,
+`runner.ack_sending`, `runner.ack_sent` or `runner.ack_failed`, and
+`runner.ack_received` or `runner.start_deadline`. Acknowledgement evidence records
+the sender, destination PID and reply topic. A duplicate runner cannot append
+evidence to an attempt it did not claim. These events trace both Native and
+Docker runners; they do not establish readiness when the acknowledgement expires.
+
 Signal evidence is not exit evidence; the runner records exit only from
 `wait`. Without a live runner, `stop` signals the group only after the
 leader is identified alive by pid, start stamp and boot identity; otherwise

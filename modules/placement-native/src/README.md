@@ -8,7 +8,13 @@ the replaceable `target_root` requirement.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.placement.native` | `service`: the eight contract operations; `runner`: the per-attempt process that materializes the home, starts the child, records its identity, pumps output and input, signals and records exit; `workdir_preparers`: discovery, host authorization, setup and cleanup of workdir preparers; `writable_roots_adapter`: driver profile writable roots argument formatting; `store` and `migrations`: attempts and append-only evidence; `capability`: the measured cleanup capability of this runtime; `identity`: leader pid, start ticks and boot id; `homes`: derived directory keys under the root; `protocol`: runner, service and recipient messages; `resources`: linked references |
+| `bee.placement.native` | Contracts, host requirements and runner/service wire protocol |
+| `bee.placement.native.binding` | Authenticated contract operations and the native process backend |
+| `bee.placement.native.service` | Attempt runner and startup supervision, windows, materialization, cleanup sweep, capability and identity checks, homes and workdir preparers |
+| `bee.placement.native.persist` | Attempts and append-only evidence |
+| `bee.placement.native.migrations` | Immutable schema migrations |
+| `bee.placement.native.env` | Selected resources and linked host references |
+| `bee.placement.native.security` | Permission policies selected by the host |
 
 ## Order of a start
 

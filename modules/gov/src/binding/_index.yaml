@@ -456,7 +456,6 @@ entries:
   source: file://materializer.lua
   modules: [registry, hash]
   imports:
-    drivers: bee.gov.types:drivers
     artifact: bee.gov.types:artifact
     application_admission: bee.gov.types:governed_application_admission
     capability_grants: bee.gov.types:capability_grants
@@ -468,7 +467,6 @@ entries:
   source: file://hub_resolver.lua
   modules: [registry, hash]
   imports:
-    drivers: bee.gov.types:drivers
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
     canonical: bee.values:canonical

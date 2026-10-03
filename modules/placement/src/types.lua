@@ -7,7 +7,7 @@ type Capability = "direct_process" | "process_group" | "contained_tree"
 -- How a runtime lets the runner learn the exit: independently of the pipes,
 -- or only once both streams end.
 type ExitObservation = "independent" | "eof_gated"
-type ExecutionState = "intended" | "starting" | "running" | "stopping" | "exited" | "uncertain"
+type ExecutionState = "intended" | "starting" | "running" | "stopping" | "exited" | "start_failed" | "uncertain"
 type CleanupState = "pending" | "complete" | "uncertain"
 type Access = "read" | "write"
 type Purpose = "project" | "output" | "cache" | "session"
@@ -22,7 +22,7 @@ type ResourceGrant = {name: string, grant_ref: string, root_ref: string, subpath
 -- streams and is recorded as output.drain_elapsed. retain_ms bounds how
 -- long unacknowledged output is kept after the child exited and both
 -- streams ended; expiry is recorded as output.lost.
-type Timeouts = {start_ms: integer, stop_grace_ms: integer, drain_ms: integer, retain_ms: integer}
+type Timeouts = {stop_grace_ms: integer, drain_ms: integer, retain_ms: integer}
 -- A generated configuration file for the private home: reviewed content
 -- rendered by the driver at admission, created in an attempt home or atomically
 -- published in a retained session home. Provider state has separate ownership.
@@ -121,6 +121,7 @@ type Attempt = {
     exit_observation: ExitObservation,
     exit_source: string?,
     start_failure: string?,
+    start_cancelled: boolean?,
     attachment_generation: integer,
     exit: Exit?,
     session_ref: string?,
@@ -146,7 +147,7 @@ M.MAX_COMPOSED_CONFIGURATION_BYTES = 131072
 -- host-selected parts against the policy the request names.
 M.LAUNCH_POLICY_TYPE = "bee.launch_policy"
 M.CAPABILITIES = {"direct_process", "process_group", "contained_tree"}
-M.EXECUTION_STATES = {"intended", "starting", "running", "stopping", "exited", "uncertain"}
+M.EXECUTION_STATES = {"intended", "starting", "running", "stopping", "exited", "start_failed", "uncertain"}
 M.CLEANUP_STATES = {"pending", "complete", "uncertain"}
 M.EXIT_OBSERVATIONS = {"independent", "eof_gated"}
 M.ACCESS = {"read", "write"}

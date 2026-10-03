@@ -49,7 +49,7 @@ local function launch_request(required: {driver_types.RequiredFile}?, environmen
         binding_ref = "bee.driver.codex.binding:binding", policy_ref = CODEX_NAMED_BATCH, profile_id = "named_batch", binding_digest = string.rep("b", 64),
         profile_digest = string.rep("c", 64), launch = value, resources = {}, environment = environment or {}, environment_refs = refs or {}, projections = {},
         required_cleanup = "process_group", required_exit_observation = "independent",
-        timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
+        timeouts = {stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
     return request
 end
 

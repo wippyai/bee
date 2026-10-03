@@ -118,17 +118,21 @@ function M.attempt(db: sql.DB, attempt_id: string): (types.Attempt?, string?)
     if not row then return nil, nil end
     local attempt, project_error = project(row)
     if not attempt then return nil, project_error end
-    if row.placement_kind ~= "docker" then return attempt, nil end
     local failures, failure_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'child.start_failed' ORDER BY sequence DESC LIMIT 1", {attempt_id})
     if not failures or failure_error then return nil, "read start failure: " .. tostring(failure_error or "query returned no rows") end
     if #failures > 0 then
         local reason = bounds.text(failures[1].detail, 4096)
         if not reason then return nil, "start failure evidence is corrupt" end
         attempt.start_failure = reason
-        if attempt.exit_source == "runner" and attempt.exit == nil then
-            attempt.execution_state = "uncertain"
-            attempt.exit_source = nil
-        end
+    end
+    if attempt.execution_state == "exited" and not attempt.start_failure then
+        local cancelled, cancel_error = db:query([[SELECT 1 FROM bee_placement_evidence WHERE attempt_id = ? AND
+            (kind = 'stop.before_start' OR (kind = 'child.not_started' AND EXISTS
+                (SELECT 1 FROM bee_placement_evidence stopped WHERE stopped.attempt_id = ? AND stopped.kind = 'stop.requested')))
+            AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence started WHERE started.attempt_id = ? AND started.kind = 'child.started') LIMIT 1]],
+            {attempt_id, attempt_id, attempt_id})
+        if not cancelled or cancel_error then return nil, "read startup cancellation: " .. tostring(cancel_error) end
+        if #cancelled > 0 then attempt.start_cancelled = true end
     end
     return attempt, nil
 end
@@ -237,7 +241,7 @@ function M.intend(db: sql.DB, request: types.LaunchRequest, digest: string, enco
         WHERE ? IS NULL OR NOT EXISTS (
             SELECT 1 FROM bee_placement_attempts
             WHERE session_ref = ? AND owner_id = ?
-              AND NOT (execution_state = 'exited' AND cleanup_state = 'complete')
+              AND NOT (execution_state IN ('exited', 'start_failed') AND cleanup_state = 'complete')
         )]],
         {request.attempt_id, request.owner_id, request.owner_incarnation, request.action_id, request.idempotency_key, digest, encoded, grants_json,
             placement and placement.kind or nil, placement and placement.spec_json or nil, placement and placement.identity_json or nil,

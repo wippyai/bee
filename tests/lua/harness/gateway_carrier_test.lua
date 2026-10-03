@@ -421,11 +421,13 @@ local function define_tests()
             -- hold, so the executor refuses the start after the token was
             -- materialized into the environment.
             local outcome = run_carrier(request(thread_id, attempt_id, {}, "absent-directory"), "open", nil)
-            test.is_nil(outcome.value)
-            if not tostring(outcome.error):find("bee.placement.native.binding:start", 1, true) then error("unexpected refusal: " .. tostring(outcome.error)) end
+            test.is_nil(outcome.error)
+            local settled = assert(bounds.object(assert(outcome.value).settlement))
+            test.eq(settled.outcome, "failed")
+            test.is_true(assert(bounds.text(settled.reason, 4096)):find("absent-directory", 1, true) ~= nil)
             -- The runner held the materialization key and the token when it
             -- refused; neither reaches the carrier's error nor the records.
-            no_secret_in(tostring(outcome.error), "carrier error")
+            no_secret_in(tostring(settled.reason), "carrier failure")
             for _, item in ipairs(records_of(thread_id)) do no_secret_in(json.encode(item), "thread record") end
             local names, details = evidence_kinds(attempt_id)
             expect_evidence(names, details, "gateway.materialized", true)
@@ -434,7 +436,7 @@ local function define_tests()
             expect_evidence(names, details, "child.exited", false)
             no_token_in(details)
             local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
-            test.eq((assert(bounds.object(status.attempt))).execution_state, "exited")
+            test.eq((assert(bounds.object(status.attempt))).execution_state, "start_failed")
             local binding = binding_of(attempt_id, 1)
             test.eq(binding.valid, false)
             test.eq(binding.reason, "binding is revoked")
@@ -536,7 +538,10 @@ local function define_tests()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
             local launch = request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "4"})
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local old = spawn_carrier(launch, "open", nil, "attempt_started")
+            await_paused(paused, old, "attempt_started")
+            process.unlisten(paused)
             await_presented(attempt_id, 1, 3)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
             -- Once the runner has installed generation 2 it no longer monitors

@@ -105,6 +105,22 @@ end
 
 local function define_tests()
     test.describe("External executor turn", function()
+        test.it("follows a starting attempt and settles a daemon failure with its exact cause", function()
+            local io = success_io()
+            io.start = function(id: string, _gateway: string?): (unknown, string?)
+                return {attempt_id = id, execution_state = "starting", cleanup_state = "pending"}, nil
+            end
+            io.observe = function(_listener: unknown, attempt: unknown, _normalizer: string, _resumed: boolean, _checkpoint: unknown, _request: turn.Request): (unknown, string?)
+                test.eq(assert(bounds.object(attempt)).execution_state, "starting")
+                return nil, "containers/create: fixture daemon refused"
+            end
+            io.reconcile = function(id: string): (unknown, string?)
+                return {attempt_id = id, execution_state = "start_failed", cleanup_state = "pending", start_failure = "containers/create: fixture daemon refused"}, nil
+            end
+            local result = assert(turn.execute(io, base_request()))
+            test.eq(result.outcome, "failed")
+            test.eq(assert(bounds.object(result.error)).message, "containers/create: fixture daemon refused")
+        end)
         test.it("accepts an admitted third-party binding with cross-namespace targets", function()
             local request = base_request()
             request.driver_binding_ref = "vendor.agents:custom"
@@ -226,6 +242,20 @@ local function define_tests()
             test.eq(result.state, "uncertain")
             test.eq(#calls, 1)
             test.eq(calls[1], "reconcile:" .. request.attempt_id)
+        end)
+        test.it("settles explicit cancellation during startup without inventing an exit", function()
+            local io = success_io()
+            io.start = function(): (unknown, nil) return {attempt_id = "attempt-current", execution_state = "starting"}, nil end
+            io.observe = function(): (unknown, nil) return {stopped = true, observations = {}}, nil end
+            io.reconcile = function(id: string): (unknown, nil)
+                return {attempt_id = id, execution_state = "exited", start_cancelled = true, cleanup_state = "complete"}, nil
+            end
+            local result = assert(turn.execute(io, base_request()))
+            test.eq(result.state, "settled")
+            test.eq(result.outcome, "cancelled")
+            local evidence = assert(bounds.object(result.evidence))
+            test.is_nil(evidence.exit)
+            test.is_nil(evidence.exit_source)
         end)
         test.it("persists a host planned placement intent and retains resume identity and usage", function()
             local calls: {string} = {}

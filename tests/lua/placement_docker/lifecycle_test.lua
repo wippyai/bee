@@ -37,7 +37,7 @@ end
 local function running(id: string): types.Attempt
     local started = value(call("start", {attempt_id = id}))
     if started.execution_state ~= "starting" then return started end
-    local deadline = time.after("30s")
+    local deadline = time.after("120s")
     while true do
         local status = call("status", {attempt_id = id})
         assert(status.ok)
@@ -76,7 +76,7 @@ local function request(id: string): types.LaunchRequest
             working_directory_ref = "project", readiness = "none"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {}, required_cleanup = "contained_tree", required_exit_observation = "independent",
-        timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
+        timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
     return assert(request_codec.decode(raw))
 end
 local function creator()
@@ -90,9 +90,10 @@ local function boundary()
             local id = "docker-cancelled-before-create"
             value(call("prepare", request(id)))
             local stopped = value(call("stop", {attempt_id = id}))
-            test.eq(stopped.execution_state, "uncertain")
+            test.eq(stopped.execution_state, "exited")
             test.eq(stopped.cleanup_state, "complete")
-            test.eq(stopped.start_failure, "containers/create: cancelled before Docker runner claim; no container dispatched")
+            test.is_true(stopped.start_cancelled)
+            test.is_nil(stopped.start_failure)
             test.is_nil(stopped.exit)
             test.is_nil(stopped.exit_source)
         end)
@@ -108,7 +109,7 @@ local function boundary()
             test.is_nil(prepared)
             test.not_nil(reason)
             local attempt = assert(store.attempt(db, id))
-            test.eq(attempt.execution_state, "uncertain")
+            test.eq(attempt.execution_state, "start_failed")
             test.is_nil(attempt.exit)
             local recorded = materialization.fail_start(db, id, assert(reason), true)
             test.is_true(recorded.ok)
@@ -129,7 +130,7 @@ local function boundary()
                 test.is_true(recorded.ok)
                 local attempt = assert(store.attempt(db, id))
                 db:release()
-                test.eq(attempt.execution_state, "uncertain")
+                test.eq(attempt.execution_state, "start_failed")
                 test.eq(attempt.start_failure, cause)
                 test.is_nil(attempt.exit)
                 test.is_nil(attempt.exit_source)
@@ -146,14 +147,6 @@ local function boundary()
                 local final = assert(bounds.object(evidence[#evidence]))
                 test.eq(final.kind, "child.start_failed")
                 test.eq(final.detail, cause)
-                db = assert(store.open())
-                assert(store.transition(db, id, {execution = "exited", fields = {exit_source = "runner"},
-                    evidence = {kind = "test.legacy_mask", detail = "legacy start refusal was stored as exited without an exit"}}).ok)
-                local legacy = assert(store.attempt(db, id))
-                db:release()
-                test.eq(legacy.execution_state, "uncertain")
-                test.eq(legacy.start_failure, cause)
-                test.is_nil(legacy.exit_source)
             end)
         end
     end)
@@ -174,7 +167,9 @@ local function run()
             local launched: service.Reply? = nil
             local ok, failure = pcall(function()
                 value(call("prepare", request(id)))
-                launched = call("start", {attempt_id = id})
+                local accepted = value(call("start", {attempt_id = id}))
+                test.eq(accepted.execution_state, "starting")
+                launched = {ok = true, value = running(id)}
             end)
             profile.data.user = original_user
             executor.data.user = original_user
@@ -183,14 +178,14 @@ local function run()
             assert(restore:apply())
             if not ok then error(tostring(failure)) end
             local reply = assert(launched)
-            test.is_false(reply.ok)
+            test.is_true(reply.ok)
             local status = assert(placement_decode.status(call("status", {attempt_id = id}).value))
             local attempt = status.attempt
-            test.eq(attempt.execution_state, "uncertain")
+            test.eq(attempt.execution_state, "start_failed")
             local reason = assert(attempt.start_failure)
             test.is_true(reason:find("failed to start container", 1, true) ~= nil)
             test.is_true(reason:find("user", 1, true) ~= nil)
-            test.is_true(assert(reply.error).message:find(reason, 1, true) ~= nil)
+            test.eq(value(reply).start_failure, reason)
             test.is_nil(attempt.exit)
             test.is_nil(attempt.exit_source)
             test.eq(status.attempt.start_failure, reason)

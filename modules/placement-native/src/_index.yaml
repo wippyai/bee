@@ -156,6 +156,8 @@ entries:
     path: .security.policies
   - entry: bee.placement.native.binding:attach
     path: .security.policies
+  - entry: bee.placement.native.service:startup
+    path: .security.policies
 - name: target_stop_revoked_policies
   kind: ns.requirement
   default: []

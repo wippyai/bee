@@ -15,6 +15,7 @@ function M.execution(value: unknown): types.ExecutionState?
     if value == "running" then return "running" end
     if value == "stopping" then return "stopping" end
     if value == "exited" then return "exited" end
+    if value == "start_failed" then return "start_failed" end
     if value == "uncertain" then return "uncertain" end
     return nil
 end
@@ -42,7 +43,7 @@ end
 function M.attempt(value: unknown): (types.Attempt?, string?)
     local object = bounds.object(value)
     if not object then return nil, "attempt must be an object" end
-    local unknown_field = bounds.fields(object, {"attempt_id", "action_id", "owner_id", "owner_incarnation", "request_digest", "execution_state", "cleanup_state", "capability", "required_cleanup", "exit_observation", "exit_source", "start_failure", "attachment_generation", "exit", "session_ref", "home_ref", "runner", "evidence_count", "created_at", "updated_at", "notice"})
+    local unknown_field = bounds.fields(object, {"attempt_id", "action_id", "owner_id", "owner_incarnation", "request_digest", "execution_state", "cleanup_state", "capability", "required_cleanup", "exit_observation", "exit_source", "start_failure", "start_cancelled", "attachment_generation", "exit", "session_ref", "home_ref", "runner", "evidence_count", "created_at", "updated_at", "notice"})
     if unknown_field then return nil, "attempt: " .. unknown_field end
     local attempt_id, action_id, owner_id = bounds.id(object.attempt_id), bounds.id(object.action_id), bounds.id(object.owner_id)
     local owner_incarnation = bounds.count(object.owner_incarnation)
@@ -59,6 +60,11 @@ function M.attempt(value: unknown): (types.Attempt?, string?)
     end
     local exit_source: string? = nil
     local start_failure: string? = nil
+    local start_cancelled: boolean? = nil
+    if object.start_cancelled ~= nil then
+        if type(object.start_cancelled) ~= "boolean" then return nil, "attempt start_cancelled is invalid" end
+        start_cancelled = object.start_cancelled
+    end
     if object.start_failure ~= nil then
         start_failure = bounds.text(object.start_failure, 4096)
         if not start_failure then return nil, "attempt start_failure is invalid" end
@@ -104,7 +110,7 @@ function M.attempt(value: unknown): (types.Attempt?, string?)
     end
     return {attempt_id = attempt_id, action_id = action_id, owner_id = owner_id, owner_incarnation = owner_incarnation,
         request_digest = request_digest, execution_state = execution_state, cleanup_state = cleanup_state, capability = capability_value,
-        required_cleanup = required_cleanup, exit_observation = observation, exit_source = exit_source, start_failure = start_failure,
+        required_cleanup = required_cleanup, exit_observation = observation, exit_source = exit_source, start_failure = start_failure, start_cancelled = start_cancelled,
         attachment_generation = attachment_generation, exit = exit, session_ref = session_ref, home_ref = home_ref, runner = runner,
         evidence_count = evidence_count, created_at = created_at, updated_at = updated_at, notice = notice}, nil
 end

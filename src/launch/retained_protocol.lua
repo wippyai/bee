@@ -180,6 +180,11 @@ function M.activation_result(value: unknown, workspace_id: string, desktop_id: s
     if (code == "") ~= (value.error == "") then return nil end
     return {request_id = id, error_code = code, error = value.error}
 end
+type StartupFailure = {code: string, component: string, subject: string, message: string, log: string}
+function M.failure_record(code: string, component: string, subject: string, message: string, log: string): StartupFailure
+    if code == "" or component == "" or subject == "" or message == "" then error("Invalid startup failure record") end
+    return {code = code, component = component, subject = subject, message = message, log = log}
+end
 function M.startup_node(pid: string): string?
     local node = types.pid_parts(pid)
     return node ~= "" and node or nil

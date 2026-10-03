@@ -25,9 +25,6 @@ const (
 	// attachmentKeyName is the client's per-attachment Ed25519 identity. It is
 	// distinct from the owner identity and rotated per attachment.
 	attachmentKeyName = "client.key"
-	// waitOwnerTimeout bounds the wait for a freshly started owner to publish
-	// its rendezvous descriptor.
-	waitOwnerTimeout = 30 * time.Second
 	// waitPollInterval is the rendezvous poll interval.
 	waitPollInterval = 25 * time.Millisecond
 )
@@ -218,7 +215,10 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	enrolled := false
 	var observe func() error
 	if seams.progress != nil {
-		previous, _ := readStartup(launch.State)
+		previous, err := readStartup(launch.State)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read previous owner startup: %w", err)
+		}
 		if owned {
 			previous = startupSnapshot{}
 		}
@@ -253,21 +253,33 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		bootPhase(ctx, "owner_spawn", "end")
 		bootPhase(ctx, "owner_wait", "begin")
 		launched, ownerLog = launchID, log
-		startup := ctx
-		if observe == nil {
-			var cancel context.CancelFunc
-			startup, cancel = context.WithTimeout(ctx, waitOwnerTimeout)
-			defer cancel()
-		}
 		held := func() (bool, error) { return seams.owned(launch.State) }
-		published, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, previous, done, wait, held, observe)
+		published, err := waitDescriptorOrExit(ctx, seams.waitDescriptor, directory, previous, done, wait, held, observe)
 		if err != nil {
-			if running, ownedErr := seams.owned(launch.State); ownedErr == nil && running && errors.Is(err, context.DeadlineExceeded) {
-				return fmt.Errorf("a running Bee owner did not publish its rendezvous in time: %w; %s", err, manualOwnerStop(launch.State))
-			}
 			return fmt.Errorf("Bee owner startup: %w", err)
 		}
 		started = published.Launch == launchID
+		if started {
+			phases := observe
+			observe = func() error {
+				if phases != nil {
+					if err := phases(); err != nil {
+						return err
+					}
+				}
+				select {
+				case <-done:
+					if wait != nil {
+						if err := wait(); err != nil {
+							return err
+						}
+					}
+					return errors.New("Bee owner exited before client enrollment")
+				default:
+					return nil
+				}
+			}
+		}
 		bootPhase(ctx, "owner_wait", "end")
 	}
 	owner, err := seams.waitDescriptor(ctx, directory)

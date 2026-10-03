@@ -174,6 +174,11 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			plan.Command = daemonCommand
 		}
 		plan.Args = []string{}
+		if owner {
+			if log := os.Getenv(ownerProgressLogVariable); log != "" {
+				plan.Args = []string{log}
+			}
+		}
 		launched, err := launchIdentity()
 		if err != nil {
 			return app.Plan{}, err
@@ -281,7 +286,7 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 	}
 	environment.RegisterStorage(registryID(), storage)
 	if host.startup != nil {
-		host.startup.advance("Starting services")
+		host.startup.advance("Starting runtime")
 		storage.startup = host.startup
 	}
 	return ctx, nil
@@ -292,6 +297,12 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 // it starts the publisher directly; the cluster it depends on is already up by
 // the time Start runs.
 func (host *Host) Start(ctx context.Context) error {
+	if host.startup != nil {
+		host.startup.advance("Starting services")
+		if err := host.startup.flush(); err != nil {
+			return err
+		}
+	}
 	host.bootLog.phase("runtime_start", "point")
 	if host.ownerState == "" {
 		return nil

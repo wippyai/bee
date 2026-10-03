@@ -66,7 +66,10 @@ func startCutoverOwner(ctx context.Context, state, dir, executable string) (resu
 	if err != nil {
 		return err
 	}
-	baseline, _ := readStartup(state)
+	baseline, err := readStartup(state)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return errors.Join(fmt.Errorf("read previous owner startup: %w", err), log.Close())
+	}
 	command := execOwnerCommand(executable, app.Launch{State: state, Dir: dir}, log)
 	command.Env = append(os.Environ(), ownerLaunchVariable+"="+launchID, ownerProgressLogVariable+"="+log.Name())
 	done, wait, err := startDetachedCommand(ctx, command)

@@ -127,7 +127,7 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process, channel, security, time, logger, io, system, registry, ctx, uuid, env]
+  modules: [process, channel, security, time, logger, io, json, system, registry, ctx, uuid, env]
   imports: &owner_imports
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership

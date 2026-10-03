@@ -39,43 +39,12 @@ func (s startupSnapshot) belongsTo(pid int, launch string) bool {
 	return s.Version == 1 && s.PID == pid && s.Launch == launch
 }
 
-type startupWait struct {
-	last     time.Time
-	timeout  time.Duration
-	sequence uint64
-	phase    string
-	pid      int
-	launch   string
-}
-
-func newStartupWait(now time.Time, timeout time.Duration) *startupWait {
-	return &startupWait{last: now, timeout: timeout, phase: "preparing owner"}
-}
-func (w *startupWait) observe(now time.Time, s startupSnapshot) error {
-	if s.Version == 1 {
-		if s.PID != w.pid || s.Launch != w.launch || s.Sequence > w.sequence {
-			w.last, w.sequence, w.pid, w.launch = now, s.Sequence, s.PID, s.Launch
-			w.phase = s.Phase
-		}
-		if s.Error != "" {
-			return errors.New(s.Error)
-		}
-		if s.Stopped && !s.Ready {
-			return fmt.Errorf("Bee owner exited during %s", w.phase)
-		}
-	}
-	if now.Sub(w.last) >= w.timeout {
-		return fmt.Errorf("Bee startup stalled during %s: no progress for %s", w.phase, w.timeout)
-	}
-	return nil
-}
-
 func readStartup(state string) (startupSnapshot, error) {
 	file, err := privatefile.New(filepath.Join(state, startupDirectory), startupFile, ".read.lock")
 	if err != nil {
 		return startupSnapshot{}, err
 	}
-	data, err := file.Read(context.Background(), 4096)
+	data, err := file.Read(context.Background(), 65536)
 	if err != nil {
 		return startupSnapshot{}, err
 	}
@@ -85,7 +54,7 @@ func readStartup(state string) (startupSnapshot, error) {
 	if err := decoder.Decode(&s); err != nil {
 		return s, err
 	}
-	if s.Version != 1 || s.PID <= 0 || s.Sequence == 0 || len(s.Launch) > 128 || s.Phase == "" || len(s.Phase) > 256 || strings.ContainsAny(s.Phase, "\r\n\x00") || len(s.Error) > 2048 {
+	if s.Version != 1 || s.PID <= 0 || s.Sequence == 0 || len(s.Launch) > 128 || s.Phase == "" || len(s.Phase) > 256 || strings.ContainsAny(s.Phase, "\r\n\x00") || len(s.Error) > 32768 {
 		return s, errors.New("invalid Bee startup progress")
 	}
 	if err := decoder.Decode(new(json.RawMessage)); err != io.EOF {
@@ -165,29 +134,6 @@ func (m *startupMonitor) cacheProgress(path string, read bool) {
 	}
 	m.mutex.Unlock()
 	m.advance("")
-}
-func (m *startupMonitor) cacheInstallation(path string) error {
-	relative, err := filepath.Rel(filepath.Join(m.state, "cache", "lua"), path)
-	if err != nil {
-		return err
-	}
-	stage, _, _ := strings.Cut(relative, string(os.PathSeparator))
-	if !strings.HasPrefix(stage, ".seed-stage-") {
-		return nil
-	}
-	info, err := os.Stat(filepath.Join(m.state, "cache", "lua", stage))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	m.mutex.Lock()
-	phase := m.snapshot.Phase
-	m.mutex.Unlock()
-	if err == nil && info.IsDir() && phase == "Loading application" {
-		m.advance("Installing Lua cache")
-	} else if errors.Is(err, os.ErrNotExist) && phase == "Installing Lua cache" {
-		m.advance("Loading registry")
-	}
-	return nil
 }
 func (m *startupMonitor) publish(phase string) error {
 	if phase == "" || len(phase) > 256 || strings.ContainsAny(phase, "\r\n\x00") {
@@ -326,17 +272,23 @@ func (m *startupMonitor) logProgress() error {
 		m.pending = rest
 		line = strings.TrimSpace(line)
 		if phase, ok := strings.CutPrefix(line, startupProgressPrefix); ok && phase != "" && len(phase) <= 256 && !strings.ContainsAny(phase, "\r\n\x00") {
-			_ = m.publish(phase)
+			if err := m.publish(phase); err != nil {
+				return err
+			}
 		}
-		if detail, ok := strings.CutPrefix(line, "BEE_STARTUP_FAILED "); ok {
+		if detail, ok := strings.CutPrefix(line, startupFailurePrefix); ok {
+			failure, err := decodeStartupFailure(detail)
+			if err != nil {
+				return fmt.Errorf("decode owner startup failure: %w", err)
+			}
 			m.mutex.Lock()
-			m.snapshot.Error = detail[:min(len(detail), 2048)]
+			m.snapshot.Error = failure.detail()
 			m.dirty = true
 			m.mutex.Unlock()
 		}
 	}
-	if len(m.pending) > 4096 {
-		m.pending = m.pending[len(m.pending)-4096:]
+	if len(m.pending) > 1024*1024 {
+		return errors.New("owner startup log line exceeds 1048576 bytes")
 	}
 	return nil
 }
@@ -356,10 +308,6 @@ func (m *startupMonitor) run(ctx context.Context) {
 			}
 			path := event.Path()
 			if strings.HasPrefix(path, cache) {
-				if err := m.cacheInstallation(path); err != nil {
-					m.fail(err)
-					return
-				}
 				m.cacheProgress(path, cacheVerificationRead(event.Event()))
 			}
 			name := filepath.Base(path)
@@ -493,7 +441,6 @@ func (line *startupLine) clear() error {
 }
 
 func observeStartup(state string, previous startupSnapshot, report *startupLine) func() error {
-	wait := newStartupWait(time.Now(), waitOwnerTimeout)
 	return func() error {
 		s, err := readStartup(state)
 		if errors.Is(err, os.ErrNotExist) {
@@ -504,8 +451,11 @@ func observeStartup(state string, previous startupSnapshot, report *startupLine)
 		if s.PID == previous.PID && s.Launch == previous.Launch {
 			s = startupSnapshot{}
 		}
-		if err := wait.observe(time.Now(), s); err != nil {
-			return err
+		if s.Error != "" {
+			return errors.New(s.Error)
+		}
+		if s.Stopped && !s.Ready {
+			return fmt.Errorf("Bee owner exited during %s", s.Phase)
 		}
 		if s.Version == 1 && !s.Ready && report != nil {
 			return report.show(s.Phase)

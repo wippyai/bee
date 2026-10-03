@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/wippyai/bee/native/internal/privatefile"
 )
@@ -154,7 +153,7 @@ func TestMigrationPublisherIsInactiveAfterStartup(t *testing.T) {
 	}
 }
 
-func TestRepeatedChecksDoNotHideAStalledMigration(t *testing.T) {
+func TestRepeatedChecksPreserveActiveMigrationAndSequence(t *testing.T) {
 	monitor, err := beginStartup(context.Background(), t.TempDir(), "stalled", "")
 	if err != nil {
 		t.Fatal(err)
@@ -165,24 +164,19 @@ func TestRepeatedChecksDoNotHideAStalledMigration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	start := time.Unix(1, 0)
-	wait := newStartupWait(start, 10*time.Second)
 	monitor.mutex.Lock()
-	s := monitor.snapshot
+	before := monitor.snapshot.Sequence
 	monitor.mutex.Unlock()
-	if err := wait.observe(start, s); err != nil {
-		t.Fatal(err)
-	}
 	for _, phase := range []string{"Checking data: approval", "Checking data: approval 5/5", "Checking data: approval 1/5"} {
 		if err := monitor.publish(phase); err != nil {
 			t.Fatal(err)
 		}
 	}
 	monitor.mutex.Lock()
-	s = monitor.snapshot
+	snapshot := monitor.snapshot
 	monitor.mutex.Unlock()
-	if err := wait.observe(start.Add(10*time.Second), s); err == nil {
-		t.Fatal("repeated and regressing checks hid a stalled thread migration")
+	if snapshot.Sequence != before || snapshot.Phase != "Upgrading data: thread 27->28" {
+		t.Fatalf("checks changed migration progress: %+v", snapshot)
 	}
 }
 

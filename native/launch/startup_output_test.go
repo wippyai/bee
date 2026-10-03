@@ -4,6 +4,7 @@ package launch
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestStartupLoadsApplicationBeforeCacheInstallation(t *testing.T) {
+func TestStartupCacheEventsDoNotSelectPhases(t *testing.T) {
 	monitor, err := beginStartup(context.Background(), t.TempDir(), "phases", "")
 	if err != nil {
 		t.Fatal(err)
@@ -19,38 +20,20 @@ func TestStartupLoadsApplicationBeforeCacheInstallation(t *testing.T) {
 	defer monitor.stop()
 	monitor.cancel()
 	<-monitor.done
-	phase, err := monitor.Get(context.Background(), "phase")
-	if err != nil || phase != "Loading application" {
-		t.Fatalf("initial phase = %q, %v", phase, err)
-	}
 	stage := filepath.Join(monitor.state, "cache", "lua", ".seed-stage-fixture")
 	if err := os.Mkdir(stage, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := monitor.cacheInstallation(stage); err != nil {
-		t.Fatal(err)
+	monitor.cacheProgress(stage, false)
+	phase, err := monitor.Get(context.Background(), "phase")
+	if err != nil || phase != "Loading application" {
+		t.Fatalf("cache filename selected phase: %q %v", phase, err)
 	}
-	phase, _ = monitor.Get(context.Background(), "phase")
-	if phase != "Installing Lua cache" {
-		t.Fatalf("extraction phase = %q", phase)
-	}
-	if err := os.Remove(stage); err != nil {
-		t.Fatal(err)
-	}
-	if err := monitor.cacheInstallation(stage); err != nil {
-		t.Fatal(err)
-	}
-	phase, _ = monitor.Get(context.Background(), "phase")
-	if phase != "Loading registry" {
-		t.Fatalf("completed extraction phase = %q", phase)
-	}
-	monitor.advance("Starting services")
-	if err := monitor.cacheInstallation(stage); err != nil {
-		t.Fatal(err)
-	}
-	phase, _ = monitor.Get(context.Background(), "phase")
-	if phase != "Starting services" {
-		t.Fatalf("late cache event regressed phase = %q", phase)
+	monitor.advance("Loading registry")
+	monitor.cacheProgress(stage, false)
+	phase, err = monitor.Get(context.Background(), "phase")
+	if err != nil || phase != "Loading registry" {
+		t.Fatalf("lost explicitly published phase: %q %v", phase, err)
 	}
 }
 
@@ -105,17 +88,22 @@ func TestStartupProgressClearsBeforeDesktopOrFailureOutput(t *testing.T) {
 func TestStartupFailureNamesCauseLogAndRecovery(t *testing.T) {
 	state := t.TempDir()
 	log := filepath.Join(state, "owner-fixture.log")
-	detail := "app Settings could not be restored: checkpoint schema is unsupported"
-	chain := "Hive supervisor failed before retained workspace readiness: " + detail + "\nstack traceback:\nfull causal chain"
-	if err := os.WriteFile(log, []byte("BEE_STARTUP_FAILED "+chain+"\n"), 0600); err != nil {
+	detail := "Bee owner startup: Settings cannot restore its checkpoint"
+	record, err := json.Marshal(map[string]string{"code": "CHECKPOINT_UNSUPPORTED", "component": "bee.apps", "subject": "bee.settings.app:app", "message": detail, "log": log})
+	if err != nil {
 		t.Fatal(err)
 	}
-	cause := errors.New("the running Bee owner did not enroll this client: " + chain + "; try bee stop")
+	chain := "Hive supervisor failed before readiness\nstack traceback:\nfull causal chain"
+	if err := os.WriteFile(log, append(append([]byte("BEE_STARTUP_FAILED "), record...), []byte("\n"+chain+"\n")...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cause := errors.New("owner exit status 1: " + chain)
 	failure := ownerStartupFailure(cause, state, log, nil)
-	want := "Bee could not start: " + detail + "\nFull owner log: " + log + "\nTo boot the shipped bundle, run: bee --state '" + state + "' recover"
+	want := "Bee could not start: [CHECKPOINT_UNSUPPORTED] bee.apps (bee.settings.app:app): " + detail + "\nFull owner log: " + log + "\nTo boot the shipped bundle, run: bee --state '" + state + "' recover"
 	if got := failure.Error(); got != want {
 		t.Fatalf("failure output = %q, want %q", got, want)
 	}
+
 	if !errors.Is(failure, cause) {
 		t.Fatal("lost the original causal chain")
 	}
@@ -170,5 +158,102 @@ func TestStartupObserverKeepsOwnerLogOutOfProgress(t *testing.T) {
 	data, err := os.ReadFile(log)
 	if err != nil || string(data) != ownerOutput {
 		t.Fatalf("owner log changed: %q, %v", data, err)
+	}
+}
+
+func TestStartupFailureWithoutRecordPreservesEveryCauseLine(t *testing.T) {
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	if err := os.WriteFile(log, []byte("bee: unrelated diagnostic\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cause := errors.New("Bee owner startup: first cause\nsecond independent cause")
+	failure := ownerStartupFailure(cause, state, log, nil)
+	if !strings.Contains(failure.Error(), cause.Error()) {
+		t.Fatalf("rewrote exact cause: %v", failure)
+	}
+}
+
+func TestStartupFailureRejectsMalformedRecordsAndKeepsTheirCause(t *testing.T) {
+	for _, raw := range []string{`{"code":"x"}`, `{"code":"x","component":"bee.launch","subject":"node","message":"failed","log":"","authority":true}`, `{} {}`} {
+		if _, err := decodeStartupFailure(raw); err == nil {
+			t.Fatalf("accepted malformed failure: %s", raw)
+		}
+	}
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	record := startupFailureRecord{Code: "FAILED", Component: "bee.launch", Subject: "node", Message: "exact cause", Log: log}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(log, append([]byte(startupFailurePrefix+"{}\n"+startupFailurePrefix), append(encoded, '\n')...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cause := errors.New("owner exit status 1")
+	failure := ownerStartupFailure(cause, state, log, nil)
+	if !strings.Contains(failure.Error(), "exact cause") || !strings.Contains(failure.Error(), "decode owner startup failure") || !errors.Is(failure, cause) {
+		t.Fatalf("masked record failure: %v", failure)
+	}
+}
+
+func TestOwnerPublishesStructuredFailureToStartupObserver(t *testing.T) {
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	record := startupFailureRecord{Code: "FAILED", Component: "bee.launch", Subject: "workspace", Message: "exact cause\nsecond cause", Log: log}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(log, append([]byte(startupFailurePrefix), append(encoded, '\n')...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	monitor, err := beginStartup(context.Background(), state, "failure", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	monitor.cancel()
+	<-monitor.done
+	if err := monitor.logProgress(); err != nil {
+		t.Fatal(err)
+	}
+	if err := monitor.flush(); err != nil {
+		t.Fatal(err)
+	}
+	if err := observeStartup(state, startupSnapshot{}, nil)(); err == nil || err.Error() != record.detail() {
+		t.Fatalf("rewrote published failure: %v", err)
+	}
+}
+
+func TestStartupLogPreservesAValidRecordAcrossReadChunks(t *testing.T) {
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	record := startupFailureRecord{Code: "FAILED", Component: "bee.launch", Subject: "workspace", Message: strings.Repeat("root cause ", 1000), Log: log}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	padding := strings.Repeat("diagnostic\n", 5500)
+	if err := os.WriteFile(log, append([]byte(padding+startupFailurePrefix), append(encoded, '\n')...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	monitor, err := beginStartup(context.Background(), state, "long-failure", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	monitor.cancel()
+	<-monitor.done
+	for i := 0; i < 2; i++ {
+		if err := monitor.logProgress(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := monitor.flush(); err != nil {
+		t.Fatal(err)
+	}
+	if err := observeStartup(state, startupSnapshot{}, nil)(); err == nil || err.Error() != record.detail() {
+		t.Fatalf("truncated a structured owner cause across chunks: %v", err)
 	}
 }

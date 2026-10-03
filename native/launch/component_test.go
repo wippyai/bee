@@ -359,3 +359,17 @@ func TestHostRegistersReadOnlyEnvironment(t *testing.T) {
 		t.Fatal("read-only storage accepted Set")
 	}
 }
+
+func TestPlanPassesOwnerLogToStructuredFailureProducer(t *testing.T) {
+	state := t.TempDir()
+	path := filepath.Join(state, "owner-fixture.log")
+	t.Setenv(ownerProgressLogVariable, path)
+	host := newHost(systemHostResolver())
+	plan, err := host.Plan(context.Background(), app.Launch{Dir: makeProject(t), State: state, Explicit: true, Op: app.OpRun, Command: desktopCommand, Args: []string{ownerArgument}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Args) != 1 || plan.Args[0] != path {
+		t.Fatalf("owner has no explicit failure log path: %#v", plan.Args)
+	}
+}

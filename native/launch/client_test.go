@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -765,7 +766,11 @@ func TestClientStartupFailureUsesTheStartedOwnersLog(t *testing.T) {
 	state := t.TempDir()
 	log := filepath.Join(state, "owner-fixture.log")
 	reason := "app Settings could not be restored: checkpoint schema is unsupported"
-	if err := os.WriteFile(log, []byte("BEE_STARTUP_FAILED "+reason+"\nfull causal chain\n"), 0600); err != nil {
+	record, err := json.Marshal(startupFailureRecord{Code: "CHECKPOINT_UNSUPPORTED", Component: "bee.apps", Subject: "bee.settings.app:app", Message: reason, Log: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(log, append(append([]byte(startupFailurePrefix), record...), []byte("\nfull causal chain\n")...), 0600); err != nil {
 		t.Fatal(err)
 	}
 	var report bytes.Buffer
@@ -781,11 +786,11 @@ func TestClientStartupFailureUsesTheStartedOwnersLog(t *testing.T) {
 		},
 		report: &report,
 	}
-	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	err = runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
 	if got := report.String(); got != "\r\x1b[2KStarting Bee…\r\x1b[2K" {
 		t.Fatalf("startup failure left progress or forwarded owner output: %q", got)
 	}
-	if err == nil || !strings.HasPrefix(err.Error(), "Bee could not start: "+reason+"\nFull owner log: "+log+"\n") || !strings.HasSuffix(err.Error(), " recover") {
+	if err == nil || !strings.HasPrefix(err.Error(), "Bee could not start: [CHECKPOINT_UNSUPPORTED] bee.apps (bee.settings.app:app): "+reason+"\nFull owner log: "+log+"\n") || !strings.HasSuffix(err.Error(), " recover") {
 		t.Fatalf("startup failure output = %v", err)
 	}
 }
@@ -847,5 +852,48 @@ func TestClientStartsOwnerLogForwardingOnlyAfterReadiness(t *testing.T) {
 	defer cancel()
 	if err := runClientEnsuresOwner(ctx, clientLaunch(state), seams, joinRequest{Intent: intent}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestClientStartupWaitUsesOnlyTheCallersDeadline(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	read := seams.waitDescriptor
+	seams.waitDescriptor = func(ctx context.Context, directory string) (rendezvous.Descriptor, error) {
+		if _, bounded := ctx.Deadline(); bounded {
+			return rendezvous.Descriptor{}, errors.New("startup invented a deadline")
+		}
+		return read(ctx, directory)
+	}
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientObservesOwnerExitAfterPublicationBeforeEnrollment(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	done := make(chan struct{})
+	cause := errors.New("owner exited: fixture registry failure")
+	start := seams.startOwner
+	seams.startOwner = func(ctx context.Context, launch app.Launch, id string) (<-chan struct{}, func() error, string, error) {
+		_, _, _, err := start(ctx, launch, id)
+		return done, func() error { return cause }, "", err
+	}
+	seams.waitEnrolled = func(_ context.Context, _, _ string, _ ed25519.PublicKey, observe func() error) error {
+		close(done)
+		if observe == nil {
+			return errors.New("enrollment lost owner supervision")
+		}
+		return observe()
+	}
+	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	if !errors.Is(err, cause) {
+		t.Fatalf("lost exact owner exit cause: %v", err)
+	}
+	if owner.joined != 0 {
+		t.Fatal("joined an exited owner")
 	}
 }

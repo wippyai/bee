@@ -72,17 +72,23 @@ func waitEnrolled(ctx context.Context, state, node string, public ed25519.Public
 		if err != nil || !startup.belongsTo(descriptor.OwnerPID, descriptor.Launch) {
 			startup = startupSnapshot{}
 		}
+		if startup.Error != "" {
+			return errors.New(startup.Error)
+		}
+		if startup.Stopped && !startup.Ready {
+			return fmt.Errorf("Bee owner exited during %s", startup.Phase)
+		}
+		if observe != nil {
+			if err := observe(); err != nil {
+				return err
+			}
+		}
 		if err == nil {
 			ownerSeen = true
 			if key, ok := enrollment.Resolve(ctx, descriptor.Execution, node); ok && key.Equal(public) {
 				if startup.Version == 0 || (startup.Ready && !startup.Stopped) {
 					return nil
 				}
-			}
-		}
-		if observe != nil {
-			if err := observe(); err != nil {
-				return err
 			}
 		}
 		if ownerSeen {

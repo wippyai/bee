@@ -4,6 +4,16 @@ local retained = require("retained")
 
 local function define_tests()
     test.describe("retained workspace startup failure", function()
+        test.it("builds a structured failure without rewriting its message or subject", function()
+            local fault = retained.failure_record("CHECKPOINT_UNSUPPORTED", "bee.apps", "bee.settings.app:app",
+                "Bee owner startup: checkpoint schema is unsupported", "/state/owner.log")
+            test.eq(fault.code, "CHECKPOINT_UNSUPPORTED")
+            test.eq(fault.component, "bee.apps")
+            test.eq(fault.subject, "bee.settings.app:app")
+            test.eq(fault.message, "Bee owner startup: checkpoint schema is unsupported")
+            test.eq(fault.log, "/state/owner.log")
+        end)
+
         test.it("gets the local node identity from the owner process before Hive starts", function()
             test.eq(retained.startup_node("{node@bee.launch:owner|1}"), "node")
             test.is_nil(retained.startup_node("{bee.launch:owner|1}"))

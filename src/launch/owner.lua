@@ -6,6 +6,7 @@ local security = require("security")
 local time = require("time")
 local logger = require("logger")
 local io = require("io")
+local json = require("json")
 local system = require("system")
 local retained = require("retained")
 local ownership = require("ownership")
@@ -65,8 +66,10 @@ local function controller(owner: string, checkpoint: unknown?)
     process.unlisten(updates); process.unlisten(acks)
 end
 
-local function main(controller_owner: string?, controller_checkpoint: unknown?)
+local function main(owner_log: string?, controller_owner: string?, controller_checkpoint: unknown?)
     if controller_owner then return controller(controller_owner, controller_checkpoint) end
+    local failure_component, failure_subject, failure_code = "bee.launch", "workspace", "OWNER_STARTUP_FAILED"
+    local failure_message: string? = nil
     local supervisor = ""
     local controller_pid = ""
     local registered = false
@@ -101,7 +104,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
         local replacement_failures = 0
         local function spawn_controller(saved: unknown?)
             local started, start_error = process.with_options({}):with_context({["bee.owner_command"] = self})
-                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:owner", "bee:workers", self, saved)
+                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:owner", "bee:workers", "", self, saved)
             if not started then error("Start owner controller: " .. tostring(start_error)) end
             controller_pid = tostring(started)
         end
@@ -131,55 +134,36 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
             end
         end
         local announced = false
-        local startup_started = time.now()
-        local function startup_now_ms(): integer
-            return math.floor(time.now():sub(startup_started):milliseconds())
-        end
-        local startup = startup_progress.new(startup_now_ms(), 10000)
-        local function startup_deadline()
-            local remaining = math.max(1, startup_progress.remaining(startup, startup_now_ms()))
-            return time.after(tostring(remaining) .. "ms")
-        end
-        local deadline = startup_deadline()
         local heartbeat = time.ticker("250ms")
         local heartbeats = heartbeat:channel()
-        local startup_phase = "starting"
         local function observe_startup()
             local failure = retained.stored_startup_failure(env.get("bee.launch:startup_error"))
-            if failure then error(failure) end
-            local raw = env.get("bee.env:startup_sequence")
-            local sequence = raw and tonumber(raw)
-            if sequence and sequence > 0 and sequence == math.floor(sequence) then
-                local phase = env.get("bee.env:startup_phase")
-                if phase and phase ~= "" then startup_phase = phase end
-                if startup_progress.advance(startup, startup_progress.phase(startup), startup_now_ms(), math.floor(sequence)) then
-                    deadline = startup_deadline()
-                end
+            if failure then
+                failure_component, failure_subject, failure_code = "bee.hive", key or "workspace", "HIVE_STARTUP_FAILED"
+                failure_message = failure
+                error(failure)
             end
         end
         observe_startup()
         while true do
             local cases = {ready:case_receive(), progress:case_receive(), controller_ready:case_receive(), replacing:case_receive(),
                 events:case_receive(), stops.channel:case_receive(), failures:case_receive()}
-            if not announced then cases[#cases + 1] = deadline:case_receive(); cases[#cases + 1] = heartbeats:case_receive() end
+            if not announced then cases[#cases + 1] = heartbeats:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Retained owner channel closed") end
             if selected.channel == heartbeats then
                 observe_startup()
-            elseif selected.channel == deadline then
-                observe_startup()
-                local now_ms = startup_now_ms()
-                if startup_progress.expired(startup, now_ms) then
-                    error("Retained workspace startup stalled during " .. startup_phase .. ": no progress for 10s")
-                end
-                deadline = startup_deadline()
             elseif selected.channel == stops.channel then
                 if command_stop.accept(selected.value) then return end
             elseif selected.channel == failures then
                 local message = selected.value
                 local node = retained.startup_node(tostring(process.pid()))
                 local reason = node and retained.startup_failure(tostring(message:from()), message:payload():data(), node) or nil
-                if reason then error(reason) end
+                if reason then
+                    failure_component, failure_subject, failure_code = "bee.hive", key or "workspace", "HIVE_STARTUP_FAILED"
+                    failure_message = reason
+                    error(reason)
+                end
             elseif selected.channel == progress then
                 if not announced then
                     local sender = tostring(selected.value:from())
@@ -189,12 +173,9 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                         announcer = bridge and tostring(bridge) or ""
                     end
                     local phase = sender == announcer and startup_progress.decode(selected.value:payload():data()) or nil
-                    if phase and startup_progress.advance(startup, phase,
-                        startup_now_ms()) then
-                        deadline = startup_deadline()
+                    if phase then
                         logger:info("Retained workspace startup progressed", {phase = phase})
-                        startup_phase = phase
-                        env.set("bee.env:startup_phase", phase)
+                        assert(env.set("bee.env:startup_phase", phase))
                     end
                 end
             elseif selected.channel == events then
@@ -211,8 +192,10 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                     assert(process.send(controller_pid, "bee.owner.state", checkpoint))
                 end
                 if event.kind == process.event.EXIT and tostring(event.from) == supervisor then
+                    failure_component, failure_subject, failure_code = "bee.launch", supervisor, "SUPERVISOR_EXITED"
+                    failure_message = decode.exit_error(event.result) or "Workspace supervisor exited without a result"
                     supervisor = ""
-                    error("Retained workspace supervisor exited: " .. (decode.exit_error(event.result) or "without a result"))
+                    error(failure_message)
                 end
             else
                 local message = selected.value
@@ -246,7 +229,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                         if not value then error("Invalid retained workspace readiness") end
                         announced = true
                         heartbeat:stop()
-                        env.set("bee.env:startup_phase", "running")
+                        assert(env.set("bee.env:startup_phase", "running"))
                         local node = system.node.id()
                         local seed = system.node.addr()
                         if not node or node == "" or not seed or seed == "" then
@@ -270,7 +253,12 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
     process.unlisten(progress)
     process.unlisten(controller_ready); process.unlisten(replacing)
     process.unlisten(failures)
-    if not ok then io.print("BEE_STARTUP_FAILED " .. tostring(err)); error(err) end
+    if not ok then
+        local fault = retained.failure_record(failure_code, failure_component, failure_subject,
+            failure_message or tostring(err), owner_log or "")
+        assert(io.print("BEE_STARTUP_FAILED " .. assert(json.encode(fault))))
+        error(err)
+    end
 end
 
 return {main = main}

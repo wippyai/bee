@@ -194,31 +194,35 @@ runtime/Lua boot events with their original timestamps. Normal launches select
 no diagnostic file. See the [measurement contract](../../docs/development/boot-measurement.md).
 
 Retained startup publishes an owner-only `startup/progress.json` under the selected state.
-The launch identity and PID bind it to the elected owner. The first phase is
-`Loading application`, covering deployment and registry loading. `Installing Lua
-cache` appears only while the runtime's cache extraction staging directory exists.
-After extraction it reports `Loading registry`; an embedded cache read in place
-does not emit the installation phase. One observer carries the current phase
-from publication into enrollment on a single line updated in place. The client
-clears that line before the desktop handshake or failure output. Owner log lines
-stay in the owner log during startup. A client that starts the elected owner
-begins forwarding new owner log writes only after that owner's retained readiness;
-it skips the existing boot log and stops forwarding when the client leaves.
-Cache creation/writes (and verification reads on Linux),
-owned migration publications and writes from migrations in flight advance its
-sequence. Clients show the current phase and bound publication and enrollment
-by thirty seconds without advancing progress. The retained Lua owner uses the
-same sequence for its ten-second inactivity bound; repeated or regressing
-counters do not renew either wait. Repeated or regressing ledger checkpoints
-and repeated reads of a verified cache file do not advance the sequence.
+The launch identity and PID bind it to the elected owner. The owner explicitly
+publishes `Loading application`, `Starting runtime`, `Starting services` and its
+retained workspace phases. Cache filesystem events advance the sequence without
+selecting a phase. The runtime exposes no cache-installation lifecycle hook.
+One observer carries the current phase from publication into enrollment on a
+single line updated in place. The client clears that line before the desktop
+handshake or failure output. Owner log lines stay in the owner log during
+startup. A client that starts the elected owner begins forwarding new owner log
+writes only after that owner's retained readiness; it skips the existing boot
+log and stops forwarding when the client leaves. Cache creation/writes (and
+verification reads on Linux), owned migration publications and writes from
+migrations in flight advance its sequence. Publication and enrollment follow
+owner readiness, reported failures and the started owner's process exit;
+the native client and Lua owner command impose no elapsed-time failure deadline.
+Ctrl-C cancels the client's wait.
+The Lua owner also follows readiness and failure events rather than an inactivity
+watchdog. Repeated or regressing ledger checkpoints and repeated reads of a
+verified cache file do not advance the sequence.
 The supervisor sends a readiness event after local name registration, waking
 enrollment without its one-second retry delay. The event grants no authority:
 the publisher rechecks the exact local supervisor and preserves overlay,
 descriptor and client-list publication order. Enrollment waits for retained
 readiness before starting the desktop handshake. A failed startup kills only the owner
 started by that invocation and waits for its exact process to exit. The terminal
-prints one cause line and the full owner log path; the log retains the causal
-chain. Recovery advice names `bee --state 'SELECTED_STATE' recover`, which boots
+prints the owner's structured `BEE_STARTUP_FAILED` record's code, component,
+subject and message unchanged, followed by its full log path. The owner receives
+that path directly from native launch; the log retains the full causal chain.
+Without a record, the client preserves every line of the observed exit or other
+failure. Malformed records and cleanup or log failures remain visible. Recovery advice names `bee --state 'SELECTED_STATE' recover`, which boots
 the shipped bundle with fresh registry history and preserves application state.
 Operating system locks and SQLite transactions recover on the next start. Normal desktop
 detachment retains the owner. The host environment keeps launch facts read-only

@@ -233,7 +233,7 @@ local function main(value: unknown)
         if not intent then status = refused or "Workspace unavailable"; dirty = true; return end
         local title = mode == "control" and "Control this workspace here?" or "Observe this workspace here?"
         local workspace_label = workspace.label ~= "" and workspace.label or names.label(workspace.workspace_id)
-        local message = model.text("Workspace " .. workspace_label .. " (" .. workspace.workspace_id .. ") on " .. node.label, 512)
+        local message = model.attach_message(workspace_label, workspace.workspace_id, node.label, mode)
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = mode == "control" and "Control" or "Observe"})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, intent = intent}
@@ -292,6 +292,8 @@ local function main(value: unknown)
                 local decoded = remote.frame(message:payload():data(), width, viewport_height)
                 if decoded.kind == "valid" then
                     current.rows, current.cursor, dirty = decoded.frame.rows, decoded.frame.cursor, true
+                else
+                    error("Remote desktop frame rejected: " .. decoded.error)
                 end
             end
         elseif view then

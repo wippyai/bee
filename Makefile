@@ -611,6 +611,10 @@ hive-supervisor-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go -C native test -race -count=1 -v ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go -run '^TestHiveSupervisor'
 
+.PHONY: hive-viewer-unit-check
+hive-viewer-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.hive desktop_viewer_test
+
 .PHONY: attachments-check
 attachments-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import lifecycle; lifecycle.detached()'
@@ -804,7 +808,10 @@ retained-startup-check:
 	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"
 
 .PHONY: owner-journey
+.PHONY: owner-journey-unit-check
+owner-journey-unit-check:
+	python3 -m unittest discover -s tests -p test_owner_journey.py
 owner-journey:
 	@test -n "$(BEE_BINARY)" || { echo 'BEE_BINARY must name an existing standalone Bee.' >&2; exit 1; }
 	@test -n "$(BEE_SOURCE_STATE)" || { echo 'BEE_SOURCE_STATE must name an existing state directory (an empty directory is a fresh-state proof).' >&2; exit 1; }
-	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)")
+	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)") $(if $(BEE_JOURNEY_STEPS),--steps "$(BEE_JOURNEY_STEPS)")

@@ -212,6 +212,11 @@ fake-supervisor process on the supervisor host (absent supervisor, wrong
 host, stale and impostor replies, malformed replies, deadlines). Support
 entries carry `meta.type: test_support`.
 
+`make hive-viewer-unit-check` runs the remote viewer regression in the disposable
+composition, including frame delivery, parent-close cleanup and refusal of
+invalid arguments or an unavailable supervisor. The viewer fixtures import the
+terminal component's shared delivery library from `bee.terminal.service:delivery`.
+
 Do not name a variable `interface`: it is a reserved word of the typed Lua
 grammar, and until the runtime pin carries runtime PR 691 the parse error is
 only visible in the lint summary count.

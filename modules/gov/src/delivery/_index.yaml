@@ -85,6 +85,7 @@ entries:
   imports:
     resolution: bee.gov.delivery:resolver
     drivers: bee.gov.workspace:drivers
+    driver_admission: bee.gov.activation:driver_admission
     artifact: bee.gov.delivery:artifact
     canonical: bee.values:canonical
     bounds: bee.values:bounds

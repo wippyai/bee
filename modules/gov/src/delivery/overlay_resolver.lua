@@ -14,6 +14,7 @@ local protected_kernel = require("protected_kernel")
 local lists = require("lists")
 local resolution = require("resolution")
 local drivers = require("drivers")
+local driver_admission = require("driver_admission")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -156,7 +157,7 @@ local function path_value(entry: Entry, path: unknown): (unknown?, string?)
 end
 
 local function requirement(entry: Entry, package: string, final: {[string]: Entry},
-    catalog: capability_model.Vocabulary?): (Object?, string?)
+    catalog: capability_model.Vocabulary?): (preflight.Requirement?, string?)
     local data = object(entry.data) or entry
     local targets, targets_error = bounds.dense_list(data.targets, 64, "requirement targets")
     if not targets then return nil, targets_error end
@@ -235,15 +236,8 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         if not destination then return nil, "requirement target entry is absent: " .. target_id end
         local driver = drivers.source_of(package)
         if driver and not target_id:match("^" .. package:gsub("%.", "%%.") .. "[.:]") then
-            local binding_id = bounds.id(data.default)
-            local binding = binding_id and object(final[binding_id]) or nil
-            local binding_meta = binding and object(binding.meta) or nil
-            if capability_request or target_id ~= "bee.harness.launch:harness_activation"
-                or target.path ~= ".bindings +=" or #targets ~= 1
-                or not meta or meta.value_kind ~= "contract.binding"
-                or not binding_id or binding_id:sub(1, #package + 9) ~= package .. ".binding:"
-                or not binding or binding.kind ~= "contract.binding" or not binding_meta
-                or binding_meta.type ~= "harness.driver" then
+            local binding_id = driver_admission.append(entry, final)
+            if capability_request or not binding_id then
                 return nil, "workspace driver requirements may only append their own harness binding to host activation"
             end
             selected = binding_id
@@ -424,6 +418,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id) < (right.id) end)
     local candidate_entries: {preflight.Entry} = {}
     local requirements: {preflight.Requirement} = {}
+    local driver_requirements: {[string]: preflight.DriverRequirement} = {}
     local candidate_migrations: {preflight.Migration} = {}
     local final: {[string]: Entry} = {}
     for id, entry in pairs(current_raw) do
@@ -478,6 +473,15 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             local item, item_error = requirement(entry, component, final, catalog)
             if not item then return nil, nil, item_error end
             requirements[#requirements + 1] = item
+            if drivers.source_of(component) and item.value and #item.targets == 1
+                and item.targets[1] == driver_admission.TARGET then
+                for _, measured in ipairs(candidate_entries) do
+                    if measured.id == item.id then
+                        driver_requirements[item.id] = {binding = item.value, digest = measured.digest}
+                        break
+                    end
+                end
+            end
         end
     end
     local capability_proposal: capability_grants.Proposal? = nil
@@ -650,6 +654,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local context, context_error = policy_context(policy, captured, base_digest,
         current, installed, kernel, evidence)
     if not context then return nil, nil, context_error end
+    context.driver_requirements = driver_requirements
     local dependencies: {string} = {}
     local artifacts: {preflight.Artifact} = {{component = component, version = version, digest = artifact_digest,
         dependencies = dependencies, namespaces = names}}

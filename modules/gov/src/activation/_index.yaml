@@ -12,6 +12,7 @@ entries:
     protected_kernel: bee.gov.activation:protected_kernel
     application_admission: bee.gov.activation:governed_application_admission
     capability_grants: bee.gov.capability:capability_grants
+    driver_admission: bee.gov.activation:driver_admission
 - name: protected_kernel
   kind: library.lua
   source: file://protected_kernel.lua

@@ -122,7 +122,7 @@ func beginStartup(ctx context.Context, state, launch, log string) (*startupMonit
 		return nil, errors.New("owner progress log is outside its state")
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	m := &startupMonitor{snapshot: startupSnapshot{Version: 1, PID: os.Getpid(), Launch: launch, Sequence: 1, Phase: "Installing Lua cache"}, state: state, log: log, events: make(chan notify.EventInfo, 4096), cancel: cancel, done: make(chan struct{}), dirty: true, upgraded: map[string]string{}, publications: map[string]uint64{}, cacheReads: map[string]bool{}}
+	m := &startupMonitor{snapshot: startupSnapshot{Version: 1, PID: os.Getpid(), Launch: launch, Sequence: 1, Phase: "Loading application"}, state: state, log: log, events: make(chan notify.EventInfo, 4096), cancel: cancel, done: make(chan struct{}), dirty: true, upgraded: map[string]string{}, publications: map[string]uint64{}, cacheReads: map[string]bool{}}
 	if err := notify.Watch(cache+string(os.PathSeparator)+"...", m.events, cacheProgressEvents()...); err != nil {
 		cancel()
 		return nil, err
@@ -165,6 +165,29 @@ func (m *startupMonitor) cacheProgress(path string, read bool) {
 	}
 	m.mutex.Unlock()
 	m.advance("")
+}
+func (m *startupMonitor) cacheInstallation(path string) error {
+	relative, err := filepath.Rel(filepath.Join(m.state, "cache", "lua"), path)
+	if err != nil {
+		return err
+	}
+	stage, _, _ := strings.Cut(relative, string(os.PathSeparator))
+	if !strings.HasPrefix(stage, ".seed-stage-") {
+		return nil
+	}
+	info, err := os.Stat(filepath.Join(m.state, "cache", "lua", stage))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	m.mutex.Lock()
+	phase := m.snapshot.Phase
+	m.mutex.Unlock()
+	if err == nil && info.IsDir() && phase == "Loading application" {
+		m.advance("Installing Lua cache")
+	} else if errors.Is(err, os.ErrNotExist) && phase == "Installing Lua cache" {
+		m.advance("Loading registry")
+	}
+	return nil
 }
 func (m *startupMonitor) publish(phase string) error {
 	if phase == "" || len(phase) > 256 || strings.ContainsAny(phase, "\r\n\x00") {
@@ -333,6 +356,10 @@ func (m *startupMonitor) run(ctx context.Context) {
 			}
 			path := event.Path()
 			if strings.HasPrefix(path, cache) {
+				if err := m.cacheInstallation(path); err != nil {
+					m.fail(err)
+					return
+				}
 				m.cacheProgress(path, cacheVerificationRead(event.Event()))
 			}
 			name := filepath.Base(path)
@@ -440,7 +467,7 @@ func (m *startupMonitor) List(ctx context.Context) (map[string]string, error) {
 
 func observeStartup(state string, previous startupSnapshot, report io.Writer) func() error {
 	wait := newStartupWait(time.Now(), waitOwnerTimeout)
-	phase := ""
+	emitted := map[string]bool{}
 	return func() error {
 		s, err := readStartup(state)
 		if errors.Is(err, os.ErrNotExist) {
@@ -454,10 +481,10 @@ func observeStartup(state string, previous startupSnapshot, report io.Writer) fu
 		if err := wait.observe(time.Now(), s); err != nil {
 			return err
 		}
-		if s.Version == 1 && s.Phase != phase {
-			phase = s.Phase
+		if s.Version == 1 && !emitted[s.Phase] {
+			emitted[s.Phase] = true
 			if report != nil {
-				_, err := fmt.Fprintln(report, phase+"…")
+				_, err := fmt.Fprintln(report, s.Phase+"…")
 				return err
 			}
 		}

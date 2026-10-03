@@ -24,6 +24,14 @@ Explicit `--state` selects the state directory. The standalone executable
 preserves the caller's working directory for native commands; application and
 registry state remain in the selected state directory.
 
+Retained startup first reports `Loading application…`. It reports `Installing Lua
+cache…` only during cache extraction; reading an embedded cache in place does not
+install it. Startup phases share one observer across owner publication and client
+enrollment. On failure, Bee prints the cause, the full owner log path and the
+exact recovery command with the selected state: `bee --state 'STATE' recover`.
+The log keeps the full causal chain. Recovery boots the shipped bundle with fresh
+registry history while preserving workspace and application state.
+
 ## Build and check
 
 ```sh

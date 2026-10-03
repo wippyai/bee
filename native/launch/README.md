@@ -194,7 +194,13 @@ runtime/Lua boot events with their original timestamps. Normal launches select
 no diagnostic file. See the [measurement contract](../../docs/development/boot-measurement.md).
 
 Retained startup publishes an owner-only `startup/progress.json` under the selected state.
-The launch identity and PID bind it to the elected owner. Cache creation/writes (and verification reads on Linux),
+The launch identity and PID bind it to the elected owner. The first phase is
+`Loading application`, covering deployment and registry loading. `Installing Lua
+cache` appears only while the runtime's cache extraction staging directory exists;
+After extraction it reports `Loading registry`; an embedded cache read in place
+does not emit the installation phase. One observer carries
+phase output from publication into enrollment, so their shared phase prints once.
+Cache creation/writes (and verification reads on Linux),
 owned migration publications and writes from migrations in flight advance its
 sequence. Clients show the current phase and bound publication and enrollment
 by thirty seconds without advancing progress. The retained Lua owner uses the
@@ -206,8 +212,11 @@ enrollment without its one-second retry delay. The event grants no authority:
 the publisher rechecks the exact local supervisor and preserves overlay,
 descriptor and client-list publication order. Enrollment waits for retained
 readiness before starting the desktop handshake. A failed startup kills only the owner
-started by that invocation and waits for its exact process to exit; operating
-system locks and SQLite transactions recover on the next start. Normal desktop
+started by that invocation and waits for its exact process to exit. The terminal
+prints one cause line and the full owner log path; the log retains the causal
+chain. Recovery advice names `bee --state 'SELECTED_STATE' recover`, which boots
+the shipped bundle with fresh registry history and preserves application state.
+Operating system locks and SQLite transactions recover on the next start. Normal desktop
 detachment retains the owner. The host environment keeps launch facts read-only
 and exposes startup phase and migration progress fields only to their selected
 owner scopes. Migration publications use the native environment storage without

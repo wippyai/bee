@@ -38,12 +38,12 @@ type clientSeams struct {
 	owned func(state string) (bool, error)
 	// startOwner starts a detached owner that publishes launchID as its launch
 	// identity.
-	startOwner     func(ctx context.Context, launch app.Launch, launchID string) (done <-chan struct{}, wait func() error, err error)
+	startOwner     func(ctx context.Context, launch app.Launch, launchID string) (done <-chan struct{}, wait func() error, log string, err error)
 	waitDescriptor func(ctx context.Context, directory string) (rendezvous.Descriptor, error)
 	join           func(ctx context.Context, join joinRequest) error
 	// waitEnrolled blocks until the owner has registered the client's node in the
 	// local enrollment, or the context ends.
-	waitEnrolled func(ctx context.Context, state, node string, public ed25519.PublicKey) error
+	waitEnrolled func(ctx context.Context, state, node string, public ed25519.PublicKey, observe func() error) error
 	// report receives the foreground route line.
 	report         io.Writer
 	progressReport io.Writer
@@ -211,6 +211,8 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	// identity it handed its child.
 	started := false
 	launched := ""
+	ownerLog := ""
+	enrolled := false
 	var observe func() error
 	if seams.progress != nil {
 		previous, _ := readStartup(launch.State)
@@ -224,8 +226,15 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		observe = seams.progress(launch.State, previous, progressReport)
 	}
 	defer func() {
-		if result != nil && launched != "" && seams.abortOwner != nil {
-			result = errors.Join(result, seams.abortOwner(launch.State, launched))
+		if result != nil && launched != "" {
+			var abortError error
+			if seams.abortOwner != nil {
+				abortError = seams.abortOwner(launch.State, launched)
+				result = errors.Join(result, abortError)
+			}
+			if ownerLog != "" && !enrolled {
+				result = ownerStartupFailure(result, launch.State, ownerLog, abortError)
+			}
 		}
 	}()
 	if !owned {
@@ -238,13 +247,13 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		if err != nil {
 			return err
 		}
-		done, wait, err := seams.startOwner(ctx, launch, launchID)
+		done, wait, log, err := seams.startOwner(ctx, launch, launchID)
 		if err != nil {
 			return err
 		}
 		bootPhase(ctx, "owner_spawn", "end")
 		bootPhase(ctx, "owner_wait", "begin")
-		launched = launchID
+		launched, ownerLog = launchID, log
 		startup := ctx
 		if observe == nil {
 			var cancel context.CancelFunc
@@ -305,10 +314,11 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	// until the enrollment lists this node with this key before the mesh
 	// handshake.
 	if seams.waitEnrolled != nil {
-		if err := seams.waitEnrolled(ctx, launch.State, join.Node, join.Public); err != nil {
+		if err := seams.waitEnrolled(ctx, launch.State, join.Node, join.Public, observe); err != nil {
 			return fmt.Errorf("the running Bee owner did not enroll this client: %w; try `bee stop` for this project; if it also times out, %s", err, manualOwnerStop(launch.State))
 		}
 	}
+	enrolled = true
 	join.State = launch.State
 	bootPhase(ctx, "client_enrollment", "end")
 	bootPhase(ctx, "client_join", "begin")

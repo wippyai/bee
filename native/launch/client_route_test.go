@@ -36,7 +36,7 @@ func TestWaitEnrolledReturnsCorruptRendezvousImmediately(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = waitEnrolled(ctx, state, "bee-client-test", public)
+	err = waitEnrolled(ctx, state, "bee-client-test", public, nil)
 	if err == nil || errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("corrupt rendezvous result = %v", err)
 	}

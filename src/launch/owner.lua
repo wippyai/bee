@@ -270,7 +270,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
     process.unlisten(progress)
     process.unlisten(controller_ready); process.unlisten(replacing)
     process.unlisten(failures)
-    if not ok then io.print("BEE_STARTUP_FAILED " .. tostring(err):gsub("%c", " ")); error(err) end
+    if not ok then io.print("BEE_STARTUP_FAILED " .. tostring(err)); error(err) end
 end
 
 return {main = main}

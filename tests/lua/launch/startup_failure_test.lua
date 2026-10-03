@@ -31,10 +31,10 @@ local function define_tests()
             test.is_nil(retained.stored_startup_failure(string.rep("x", 4097)))
         end)
 
-        test.it("keeps a forwarded boot error on one line", function()
+        test.it("preserves the full forwarded boot error for the owner log", function()
             test.eq(retained.startup_failure("{node@bee.hive.service:supervisor_host|1}",
                 {version = 1, error = "bind failed\nsecond line"}, "node"),
-                "Hive supervisor failed before retained workspace readiness: bind failed second line")
+                "Hive supervisor failed before retained workspace readiness: bind failed\nsecond line")
         end)
     end)
 end

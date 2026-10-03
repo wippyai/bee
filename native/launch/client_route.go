@@ -51,13 +51,11 @@ func defaultClientSeams() clientSeams {
 
 // waitEnrolled polls the owner-seeded enrollment until it lists the client node
 // with this client's key.
-func waitEnrolled(ctx context.Context, state, node string, public ed25519.PublicKey) error {
+func waitEnrolled(ctx context.Context, state, node string, public ed25519.PublicKey, observe func() error) error {
 	enrollment, err := rendezvous.NewEnrollment(ownerDirectory(state))
 	if err != nil {
 		return err
 	}
-	progressWait := newStartupWait(time.Now(), waitOwnerTimeout)
-	phase := ""
 	ownerSeen := false
 	for {
 		if err := ctx.Err(); err != nil {
@@ -82,12 +80,8 @@ func waitEnrolled(ctx context.Context, state, node string, public ed25519.Public
 				}
 			}
 		}
-		if err := progressWait.observe(time.Now(), startup); err != nil {
-			return err
-		}
-		if startup.Version == 1 && startup.Phase != phase {
-			phase = startup.Phase
-			if _, err := fmt.Fprintln(os.Stderr, phase+"…"); err != nil {
+		if observe != nil {
+			if err := observe(); err != nil {
 				return err
 			}
 		}
@@ -213,24 +207,24 @@ func printDesktops(out io.Writer, catalog hive.DesktopCatalog) error {
 
 // startDetachedOwner starts `bee --state <state> start` in its own session so the
 // owner outlives this client.
-func startDetachedOwner(ctx context.Context, launch app.Launch, launchID string) (<-chan struct{}, func() error, error) {
+func startDetachedOwner(ctx context.Context, launch app.Launch, launchID string) (<-chan struct{}, func() error, string, error) {
 	executable, err := os.Executable()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if !filepath.IsAbs(launch.State) || !filepath.IsAbs(launch.Dir) {
-		return nil, nil, errRelativeOwnerLaunch
+		return nil, nil, "", errRelativeOwnerLaunch
 	}
 	log, err := openOwnerLog(launch.State)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	command := execOwnerCommand(executable, launch, log)
 	command.Env = append(os.Environ(), ownerLaunchVariable+"="+launchID, ownerProgressLogVariable+"="+log.Name())
 	done, wait, err := startDetachedCommand(ctx, command)
 	if err != nil {
 		_ = log.Close()
-		return nil, nil, err
+		return nil, nil, "", err
 	}
-	return done, func() error { defer func() { _ = log.Close() }(); return wait() }, nil
+	return done, func() error { defer func() { _ = log.Close() }(); return wait() }, log.Name(), nil
 }

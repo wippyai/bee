@@ -187,7 +187,7 @@ end
 function M.stored_startup_failure(raw: unknown): string?
     local detail = bounds.text(raw, 4096)
     if not detail then return nil end
-    detail = detail:gsub("%c", " "):gsub("^%s+", ""):gsub("%s+$", "")
+    detail = detail:gsub("^%s+", ""):gsub("%s+$", "")
     return detail ~= "" and ("Hive supervisor failed before retained workspace readiness: " .. detail) or nil
 end
 function M.startup_failure(sender: string, raw: unknown, local_node: string): string?

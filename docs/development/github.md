@@ -63,8 +63,8 @@ the runner OS and architecture:
 | `go-v1`: hash of all `go.sum` files, `native/go.mod` and the builder lock, then job name | Go's `GOCACHE` and `GOMODCACHE` | Repository check, unit, pack, check shards and platform builds |
 | `lua-v2`: runtime commit, hash of all `*.lua` files, then job name | `.wippy/test-cache` (shared by disposable test homes) | Unit, pack, check shards and platform builds |
 
-The toolchain inputs include the runtime commit, repository, Go version, tags
-and patches, plus the exact native components. Application packs and data do
+The toolchain inputs include the runtime commit, repository, Go version and tags,
+plus the exact native components. Application packs and data do
 not enter a toolchain build, so changing them does not force a rebuild. The
 builder lock names its exact source commit. The toolchain cache has no broad
 restore prefix: a changed build input rebuilds it. On an exact hit,

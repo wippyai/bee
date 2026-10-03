@@ -1,8 +1,8 @@
 # Dependency notices
 
 Release artifacts include the applicable notices for Bee, the linked runtime
-and bundled native sources. Bee-owned code and artwork are MIT. Runtime patches
-retain their upstream license, and native third-party notices are kept in
+and bundled native sources. Bee-owned code and artwork are MIT. The linked
+runtime retains its upstream license, and native third-party notices are kept in
 THIRD_PARTY_NOTICES.md.
 
 Before publishing an artifact, generate its dependency inventory from that

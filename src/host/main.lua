@@ -1,4 +1,5 @@
 -- MIT. Stable workspace owner; no physical terminal, session or presenter.
+local funcs = require("funcs")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -24,14 +25,19 @@ local execution = require("execution")
 local handoff = require("handoff")
 type Channel = channel.Channel
 
--- The broker gives its applications 8 s to stop what they own before it
--- terminates them; its own stop outlasts that.
+-- Broker stop grace outlasts its applications' 8 s stop bound.
 local BROKER_STOP_GRACE = "10s"
 
--- The owner selects which catalog workspace this host serves; the host never
--- infers it from the database it opens.
+-- The owner selects the catalog workspace this host serves.
 local function main(owner: string, workspace: unknown, database_resource: string?, checkpoint: unknown?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
+    local migration_policy = assert(security.policy("bee.security.hub:receipt_metadata_policy"))
+    local migration_executor = assert(funcs.new():with_scope(security.new_scope({migration_policy})))
+    local migration, migration_error = migration_executor:call("bee.hub.binding:receipt_metadata")
+    if migration_error then error("Migrate Hub receipt metadata: " .. tostring(migration_error)) end
+    if type(migration) ~= "table" or migration.ok ~= true then
+        error("Migrate Hub receipt metadata: " .. tostring(type(migration) == "table" and migration.message or "invalid migration reply"))
+    end
     assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -59,14 +65,10 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local database, database_error = persistence.open(database_resource, workspace)
     if not database then error(tostring(database_error)) end
     local host_registry_name = ""
-    -- Recovery must observe every durable prepared fence before any admission
-    -- can issue a controlling bind. Unresolved intents stay fenced for the
-    -- supervisor/client reconciliation path; they are never silently failed.
+    -- Reconcile durable prepared fences before controlling binds; unresolved intents stay fenced.
     local recovered, recovery_error = database.assignments:reconcile()
     if not recovered then database:close(); error("Reconcile display assignments: " .. tostring(recovery_error)) end
-    -- Only transfers that were already prepared when this host started can be
-    -- reconciled from a later manual restore. A runtime prepare still needs its
-    -- broker revoke reply before it is eligible to commit.
+    -- Restore reconciles only startup prepares; runtime prepares require broker revoke replies.
     local recovered_prepared: {[string]: string} = {}
     local function assignment_key(view_id: string, instance_id: string): string
         return view_id .. "\0" .. instance_id

@@ -5476,6 +5476,11 @@
       "source": "modules/hub/src/binding/_index.yaml"
     },
     {
+      "id": "bee.hub.binding:receipt_metadata",
+      "kind": "function.lua",
+      "source": "modules/hub/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.hub.binding:target_lifecycle_owners",
       "kind": "ns.requirement",
       "source": "modules/hub/src/binding/_index.yaml"
@@ -5742,6 +5747,11 @@
     },
     {
       "id": "bee.hub.types:lifecycle",
+      "kind": "library.lua",
+      "source": "modules/hub/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hub.types:operations",
       "kind": "library.lua",
       "source": "modules/hub/src/types/_index.yaml"
     },
@@ -7454,6 +7464,11 @@
       "id": "bee.security.hive:workspace_command_policy",
       "kind": "security.policy",
       "source": "src/security/hive/_index.yaml"
+    },
+    {
+      "id": "bee.security.hub:receipt_metadata_policy",
+      "kind": "security.policy",
+      "source": "src/security/hub/_index.yaml"
     },
     {
       "id": "bee.security.storage:client_storage_policy",
@@ -9459,6 +9474,7 @@
       "target_ids": [
         "userspace.docker.service:root.service",
         "userspace.docker:database",
+        "userspace.docker:docker_client",
         "userspace.docker:process_host"
       ],
       "version": "0.5.17"
@@ -9469,7 +9485,8 @@
       "source_module": "modules/placement-docker",
       "target_ids": [
         "wippy.bootloader:application_host",
-        "wippy.bootloader:bootloader.service"
+        "wippy.bootloader:bootloader.service",
+        "wippy.bootloader:env_storage"
       ],
       "version": "0.3.16"
     }
@@ -11148,6 +11165,13 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.security.hive",
       "source": "src/security/hive/_index.yaml"
+    },
+    {
+      "namespace": "bee.security.hub",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.security.hub",
+      "source": "src/security/hub/_index.yaml"
     },
     {
       "namespace": "bee.security.storage",
@@ -19007,14 +19031,14 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1890,
-    "namespace_count": 290,
+    "entry_count": 1893,
+    "namespace_count": 291,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 154,
-    "persisted_id_count": 894,
+    "persisted_id_count": 895,
     "requirement_count": 173,
     "requirement_target_count": 448,
     "root_src_lua_budget": 8991,

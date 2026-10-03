@@ -301,6 +301,7 @@ entries:
   - hash
   - time
   imports:
+    artifact: bee.gov.types:artifact
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     transaction: bee.persist.persist:transaction
@@ -437,6 +438,7 @@ entries:
   source: file://overlay_resolver.lua
   modules: [registry, hash]
   imports:
+    workspace_applications: bee.gov.types:workspace_applications
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
     canonical: bee.values:canonical
@@ -460,6 +462,7 @@ entries:
   source: file://capability_access.lua
   modules: [registry, security, hash]
   imports:
+    bounds: bee.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model

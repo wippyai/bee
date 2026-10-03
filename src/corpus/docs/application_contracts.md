@@ -353,9 +353,11 @@ cold-resume contract; a surviving session service would be required to rejoin
 a PTY.
 
 Retained-instance alias attestation and restore-open failures are isolated to
-that instance. The broker keeps the saved record, logs its exact reason with
-workspace, instance and definition identities, and publishes an acknowledgement
-notice through the existing question delivery channel. Apps → Restoration
+that instance. Alias recovery uses the exact admitted binding's overlay owner
+to preserve its stable application identity. The broker keeps the saved record,
+logs its exact reason with workspace, instance and definition identities, and
+publishes an acknowledgement notice through the existing question delivery
+channel. Apps → Restoration
 failures and Needs you expose these notices even without a live view. A missing
 admission reports `Retained application is not admitted: <definition ID>`.
 Other admitted applications continue restoring and opening. Acknowledgement

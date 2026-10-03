@@ -200,6 +200,8 @@ local function define_tests()
             local expression = body.expression
             test.is_true(expression:find('resource in ["acme:research"]', 1, true) ~= nil)
             test.is_true(expression:find("agent_call", 1, true) == nil)
+            test.is_true(expression:find("resource matches", 1, true) == nil)
+            test.is_true(expression:find("bee.sessions.binding:run", 1, true) ~= nil)
         end)
         test.it("grants scoped HTTP only through the host gateway", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,

@@ -61,7 +61,9 @@ local function configure()
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
     local admitted = false
-    for _, binding in ipairs(bindings) do if binding == "bee.placement.native:fixture_agent_binding" then admitted = true end end
+    for _, binding in ipairs(bindings) do
+        if binding == "bee.placement.native:fixture_agent_binding" then admitted = true end
+    end
     if not admitted then bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding" end
     changes:update(activation)
     assert(changes:apply())
@@ -256,6 +258,11 @@ local function run()
             call("cleanup", {attempt_id = id})
             if not ok then error(tostring(failure)) end
         end)
+    end)
+end
+local function input_tests()
+    test.describe("Docker placement stdin", function()
+        configure()
         for index, input in ipairs({"literal 'quotes' $(no-substitution)\n", ""}) do
             local title = index == 1 and "delivers quoted initial input and EOF to a real Docker child"
                 or "gives an argv-based batch provider immediate EOF for empty input"
@@ -283,6 +290,11 @@ local function run()
                 if not cleaned then error(tostring(cleanup_error)) end
             end)
         end
+    end)
+end
+local function readiness_tests()
+    test.describe("Docker placement readiness", function()
+        configure()
         test.it("refuses changed profile admission before preparing an image", function()
             local selected = request("docker-stale-profile")
             selected.placement_profile_digest = string.rep("0", 64)
@@ -319,4 +331,4 @@ local function isolated_cases(definition: () -> ())
         return result
     end
 end
-return {run = isolated_cases(run), boundary = isolated_cases(boundary), creator = creator}
+return {run = isolated_cases(run), boundary = isolated_cases(boundary), input = isolated_cases(input_tests), readiness = isolated_cases(readiness_tests), creator = creator}

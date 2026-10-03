@@ -5,6 +5,7 @@ import json
 import re
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'build'))
 SHIPPED_BASELINE = '893d1216'
 SPEC = importlib.util.spec_from_file_location('layout_check', ROOT / 'build/layout_check.py')
 LAYOUT = importlib.util.module_from_spec(SPEC)
@@ -30,7 +32,7 @@ def sql(path, constant="LAYOUT_REFERENCES_SQL"):
         if not literal:
             raise ValueError("migration literal is missing: " + parts[index])
         result += literal[1] + parts[index + 1]
-    return result.removesuffix(']]')
+    return result.strip().removesuffix(']]')
 
 
 def persisted_reference_moves():
@@ -74,6 +76,21 @@ entries:
 """)
             self.assertIn('bee.deps:example: dangling linker/import target bee.example:missing', LAYOUT.audit(root)[0])
 
+    def test_governance_relocation_keeps_discovery_imports(self):
+        binding = yaml.safe_load((ROOT / 'modules/gov/src/binding/_index.yaml').read_text())
+        types = yaml.safe_load((ROOT / 'modules/gov/src/types/_index.yaml').read_text())
+        entries = {entry['name']: entry for entry in binding['entries'] + types['entries']}
+        expected = {
+            'overlay_resolver': {'workspace_applications': 'bee.gov.types:workspace_applications'},
+            'capability_access': {'bounds': 'bee.values:bounds'},
+            'destination_service': {'artifact': 'bee.gov.types:artifact'},
+            'workspace_applications': {'bounds': 'bee.values:bounds'},
+        }
+        for name, imports in expected.items():
+            with self.subTest(entry=name):
+                for alias, target in imports.items():
+                    self.assertEqual(entries[name]['imports'].get(alias), target)
+
     def test_repository(self):
         errors, namespaces, entries, targets, dangling = LAYOUT.audit(ROOT)
         self.assertEqual(errors, [])
@@ -81,6 +98,23 @@ entries:
         self.assertGreater(entries, 1600)
         self.assertGreater(targets, 150)
         self.assertEqual(dangling, 0)
+
+    def test_admission_generation_migration_preserves_measured_history(self):
+        database = sqlite3.connect(':memory:')
+        database.execute('CREATE TABLE bee_governance_activation_intents (overlay_owner TEXT, application_admission_bytes TEXT, application_admission_digest TEXT)')
+        rows = [
+            ('bee.governance.workspace_applications:workspace.todo', '{"immutable":"prior"}', 'a' * 64),
+            ('bee.gov.apps:workspace.todo', '{"immutable":"current"}', 'b' * 64),
+            ('vendor:owner', None, None),
+        ]
+        database.executemany('INSERT INTO bee_governance_activation_intents VALUES (?, ?, ?)', rows)
+        database.executescript(sql('modules/gov/src/migrations/schema.lua', 'APPLICATION_ADMISSION_GENERATION_SQL'))
+        self.assertEqual(database.execute('SELECT overlay_owner, application_admission_bytes, application_admission_digest FROM bee_governance_activation_intents').fetchall(), rows)
+        self.assertEqual(database.execute('SELECT application_admission_generation FROM bee_governance_activation_intents').fetchall(), [('prior',), ('current',), ('current',)])
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE bee_governance_activation_intents SET application_admission_generation = 'unknown'")
+        with self.assertRaises(sqlite3.OperationalError):
+            database.executescript(sql('modules/gov/src/migrations/schema.lua', 'APPLICATION_ADMISSION_GENERATION_SQL'))
 
     def test_wrong_folder_or_source_is_rejected(self):
         with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-rule-') as temporary:

@@ -67,7 +67,8 @@ service generation rollback remain proposals.
 ## Exposure
 
 An operation is a `function.lua` entry with `meta.hive: open | approval |
-policy` and a `meta.hive_operation` block (revision, title, bounded input and
+policy`, a required string `meta.hive_service` naming its wire owner service,
+and a `meta.hive_operation` block (revision, title, bounded input and
 output schemas, limits). The host ceiling is an ordinary security policy with
 actions `hive.expose.<mode>` over entry ids; the catalog includes an operation
 only when the ceiling admits its mode, and the supervisor resolves it again at
@@ -77,6 +78,9 @@ and the install grant writes a policy over exactly those operation ids into
 the `bee.security.hive:hive_exposure_scope` group the supervisor loads. Open
 dispatch additionally admits only the peers in the host's
 `bee.hive.supervisor:exposure_audiences` table for a listed operation.
+The supervisor matches the request owner to the operation's declared
+`meta.hive_service`, measured with the operation. An entry namespace does not
+select its service or authorize invocation. Existing service wire IDs stay stable.
 Interfaces are `registry.entry` entries with `meta.type:
 hive.interface` naming `operation_ref`, fixed arguments and allowed arguments;
 they narrow and never widen.
@@ -207,6 +211,11 @@ from one snapshot, and the client against a real
 fake-supervisor process on the supervisor host (absent supervisor, wrong
 host, stale and impostor replies, malformed replies, deadlines). Support
 entries carry `meta.type: test_support`.
+
+`make hive-viewer-unit-check` runs the remote viewer regression in the disposable
+composition, including frame delivery, parent-close cleanup and refusal of
+invalid arguments or an unavailable supervisor. The viewer fixtures import the
+terminal component's shared delivery library from `bee.terminal.service:delivery`.
 
 Do not name a variable `interface`: it is a reserved word of the typed Lua
 grammar, and until the runtime pin carries runtime PR 691 the parse error is

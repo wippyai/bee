@@ -3,6 +3,7 @@ local test = require("test")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
+local registry = require("registry")
 local bounds = require("bounds")
 local appearance = require("appearance")
 local fixture = require("fixture")
@@ -12,14 +13,37 @@ local interaction = require("interaction")
 local WORKSPACE = string.rep("e", 32)
 local function define_tests()
     test.describe("Retained application fault isolation", function()
-        test.it("keeps the broker ready and reports an exact alias rejection and an unavailable app", fixture.case(function(scope: fixture.State)
+        test.it("recovers the admitted overlay identity while reporting an alias rejection and an unavailable app", fixture.case(function(scope: fixture.State)
             local owner = tostring(process.pid())
             local instance = "retained-invalid"
+            local overlay_owner = "vendor.retained:overlay"
+            local original = assert(registry.get("bee.security:application_admission"))
+            scope.cleanup[#scope.cleanup + 1] = function()
+                local changes = registry.snapshot():changes()
+                assert(changes:update(original)); assert(changes:apply())
+            end
+            local admitted = assert(registry.get("bee.security:application_admission"))
+            local bindings = assert(bounds.array(assert(bounds.object(admitted.data)).bindings, 64))
+            local selected = false
+            for _, raw in ipairs(bindings) do
+                local binding = assert(bounds.object(raw))
+                if binding.definition_id == "bee.settings.app:app" then
+                    binding.overlay_owner = overlay_owner
+                    selected = true
+                end
+            end
+            test.is_true(selected)
+            local changes = registry.snapshot():changes()
+            assert(changes:update(admitted)); assert(changes:apply())
             local attester = harness.principal("retained-attester", {"bee.security.threads:application_thread_alias_policy"}, WORKSPACE)
             test.is_true((attester:call("register_app_alias", {
                 stable = assert(identity.stable(WORKSPACE, "bee.console.app:app")).id,
                 instance = "bee.application:" .. WORKSPACE .. ":" .. instance,
                 workspace_id = WORKSPACE, definition_id = "bee.console.app:app"})).ok)
+            test.is_true((attester:call("register_app_alias", {
+                stable = assert(identity.stable(WORKSPACE, "bee.settings.app:app", overlay_owner)).id,
+                instance = "bee.application:" .. WORKSPACE .. ":retained-valid",
+                workspace_id = WORKSPACE, definition_id = "bee.settings.app:app"})).ok)
             local questions = assert(process.listen("bee.interaction.state", {message = true}))
             scope.cleanup[#scope.cleanup + 1] = function() assert(process.unlisten(questions)) end
             local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner,
@@ -28,6 +52,7 @@ local function define_tests()
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {
                     {instance_id = instance, definition_id = "bee.settings.app:app"},
+                    {instance_id = "retained-valid", definition_id = "bee.settings.app:app"},
                     {instance_id = "retained-missing", definition_id = "removed.app:app"}})))
             scope.brokers[broker] = true
             test.eq(tostring(scope.catalogs:receive():from()), broker)
@@ -44,6 +69,9 @@ local function define_tests()
                 elseif selected.channel == scope.ready then ready = true
                 else
                     local specs = assert(interaction.snapshot(selected.value:payload():data()))
+                    for _, spec in ipairs(specs) do
+                        test.is_true(spec.instance_id ~= "retained-valid", spec.message)
+                    end
                     if #specs == 2 then
                         local messages: {[string]: string} = {}
                         for _, spec in ipairs(specs) do messages[spec.instance_id] = spec.message end

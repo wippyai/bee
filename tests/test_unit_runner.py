@@ -10,6 +10,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 import focused_lua
 from unit import daemon_lock_path, docker_daemon_lock, report_shard, run_shard, split, test_entries
 from workspace import ROOT
@@ -50,6 +52,31 @@ entries:
                 self.assertEqual(test_entries(resource="docker_daemon"),
                                  ["fixture.unrelated:first", "fixture.unrelated:second"])
                 self.assertEqual(test_entries(resource="unused"), [])
+
+    def test_split_docker_lifecycle_entries_share_the_daemon_shard(self):
+        shared = test_entries(resource="docker_daemon")
+        expected = {"bee.placement.docker.tests:" + name
+                    for name in ("lifecycle_test", "stdin_test", "readiness_test")}
+        self.assertTrue(expected <= set(shared))
+        groups = split(test_entries(), shared)
+        self.assertEqual(sum(bool(expected & set(group)) for group in groups), 1)
+
+    def test_docker_fixture_imports_resolve_current_component_entries(self):
+        namespaces, declared = set(), set()
+        for manifest in (ROOT / "modules/placement-docker/src").rglob("_index.yaml"):
+            document = yaml.safe_load(manifest.read_text())
+            namespace = document["namespace"]
+            namespaces.add(namespace)
+            declared.update(f"{namespace}:{entry['name']}" for entry in document["entries"])
+        fixture = yaml.safe_load((ROOT / "tests/lua/placement_docker/_index.yaml").read_text())
+        checked = 0
+        for entry in fixture["entries"]:
+            for target in entry.get("imports", {}).values():
+                if target.partition(":")[0] in namespaces:
+                    with self.subTest(entry=entry["name"], target=target):
+                        self.assertIn(target, declared)
+                    checked += 1
+        self.assertGreater(checked, 0)
 
     def test_failed_shard_prints_ids_and_untruncated_assertion(self):
         output = "early log\n" + ("other case\n" * 1000) + "Assertion failed: expected recovery state\n"

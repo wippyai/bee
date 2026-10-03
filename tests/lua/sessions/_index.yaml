@@ -218,7 +218,7 @@ entries:
   source: file://wiring_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [registry]
+  modules: [registry, security]
   imports:
     test: wippy.test:test
     journal: bee.sessions.binding:threads_journal

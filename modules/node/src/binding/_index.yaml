@@ -34,6 +34,7 @@ entries:
     type: tool
     title: Describe node
     hive: policy
+    hive_service: bee.node.binding
     hive_operation:
       revision: '1'
       title: Describe node
@@ -65,6 +66,7 @@ entries:
     type: tool
     title: Update node description
     hive: policy
+    hive_service: bee.node.binding
     hive_operation:
       revision: '1'
       title: Update node description
@@ -136,6 +138,7 @@ entries:
     - bee.node.security:store_policy
   meta:
     hive: policy
+    hive_service: bee.node.binding
     hive_operation:
       revision: '1'
       title: Node description snapshot
@@ -170,6 +173,7 @@ entries:
     - bee.node.security:store_policy
   meta:
     hive: policy
+    hive_service: bee.node.binding
     hive_operation:
       revision: '1'
       title: Node description changes

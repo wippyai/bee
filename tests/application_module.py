@@ -52,6 +52,14 @@ local function main()
     fault.message = "unavailable"
     local projection = {ok = false, error = fault, value = {revision = 1}, replayed = true}
     if caller.decode(projection) or not caller.envelope(projection) then error("failure projection boundary changed") end
+    local failure = assert(caller.envelope(projection))
+    if failure.ok or not failure.error or failure.error.code ~= "UNAVAILABLE"
+        or failure.error.message ~= "unavailable" or failure.error.retryable ~= false
+        or failure.replayed ~= true then error("failure envelope lost its fault or replay evidence") end
+    if type(failure.value) ~= "table" or failure.value.revision ~= 1 then
+        error("failure envelope lost its operation-specific projection")
+    end
+    if caller.envelope({ok = false, value = {revision = 1}}) then error("failure without a fault accepted") end
     if caller.decode({ok = false, error = {code = "UNAVAILABLE", message = "bad", extra = true}}) then
         error("unknown fault field accepted")
     end

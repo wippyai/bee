@@ -1827,5 +1827,21 @@
       "migration": "M5",
       "reason": "Owner-approved supervised startup removes the caller deadline. The explicit revision-two decoder validates and retires start_ms while preserving its original entry digest; revision three rejects the retired field. Placement migration 11 removes stored request deadlines and introduces precise start_failed state without modifying prior ledgers."
     }
+  ],
+  "owner_state_migrations": [
+    {
+      "migration": "M6",
+      "owner": "bee.hub",
+      "implementation": "bee.hub.binding:receipt_metadata",
+      "id": 1,
+      "reason": "Append registry revisions tagging historical Hub operation metadata; preserve receipt IDs, data, digests and prior history. Host admission selects the exact callable entry."
+    },
+    {
+      "migration": "M5",
+      "owner": "bee.gov",
+      "store": "bee_governance_activation_intents",
+      "id": 17,
+      "reason": "Append admission identity generation column and classify existing historical rows once; preserve frozen admission bytes and digests."
+    }
   ]
 }

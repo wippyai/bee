@@ -629,6 +629,7 @@ entries:
   meta:
     comment: Implementation facts for any caller; the Hive metadata is inert when no Hive supervisor runs
     hive: open
+    hive_service: bee.threads.binding
     hive_operation:
       revision: '1'
       title: Threads capabilities

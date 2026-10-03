@@ -79,14 +79,13 @@ end
 
 -- The profile that publishes one component into one workspace.
 function M.for_component(configuration: Configuration, workspace_id: string,
-    component: string): (Profile?, Refusal?)
+    component: string, sources: {string}): (Profile?, Refusal?)
     for _, item in ipairs(configuration.profiles) do
         if item.workspace_id == workspace_id and item.component == component then return item, nil end
     end
-    local source_workspace = workspace_applications.source_of(component)
-    if source_workspace then
-        local profile = derived(configuration, workspace_id, source_workspace)
-        if profile then return profile, nil end
+    for _, source in ipairs(sources) do
+        local profile = derived(configuration, workspace_id, source)
+        if profile and profile.component == component then return profile, nil end
     end
     return nil, refusal(configuration, component, "this workspace has no publication profile for component " .. component)
 end

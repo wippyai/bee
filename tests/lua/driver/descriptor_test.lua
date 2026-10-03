@@ -16,6 +16,38 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("follows the declared configure target across unrelated namespaces", function()
+            local pinned = assert(registry.snapshot())
+            local binding = assert(pinned:get("bee.driver.claude.binding:binding"))
+            local original = assert(pinned:get("bee.driver.claude.binding:configure"))
+            local data = assert(bounds.object(binding.data))
+            local contracts = assert(bounds.array(data.contracts, 16))
+            local contract = assert(bounds.object(contracts[1]))
+            local methods = copy_object(assert(bounds.object(contract.methods)))
+            methods.configure = "vendor.renderer:compose"
+            local activation = assert(pinned:get(resolver.ACTIVATION))
+            local active_data = assert(bounds.object(activation.data))
+            local active_refs = assert(bounds.ids(active_data.bindings, true))
+            active_refs[#active_refs + 1] = "vendor.binding:managed"
+            local overlay = assert(registry.overlay("bee.driver.tests:discovery"))
+            local changed = overlay:changes()
+            assert(changed:update({id = activation.id, kind = activation.kind, meta = activation.meta,
+                data = {schema_revision = active_data.schema_revision, bindings = active_refs}}))
+            assert(changed:create({id = "vendor.binding:managed", kind = binding.kind, meta = binding.meta,
+                data = {contracts = {{contract = contract.contract, methods = methods}}}}))
+            assert(changed:create({id = "vendor.renderer:compose", kind = original.kind, data = original.data, meta = original.meta}))
+            assert(changed:apply())
+            local fresh = assert(registry.snapshot())
+            local renderer, err = resolver.configure_renderer(fresh, "vendor.binding:managed", "vendor.renderer:compose")
+            local cleanup = assert(registry.overlay("bee.driver.tests:discovery")):changes()
+            assert(cleanup:delete(activation.id))
+            assert(cleanup:delete("vendor.binding:managed"))
+            assert(cleanup:delete("vendor.renderer:compose"))
+            assert(cleanup:apply())
+            test.is_nil(err)
+            test.eq(renderer, "claude")
+            test.is_nil(resolver.configure_renderer(fresh, "vendor.binding:managed", "bee.driver.codex.binding:configure"))
+        end)
         test.it("resolves an admitted binding's renderer after its configure target is replaced", function()
             local ref = "bee.driver.claude.binding:binding"
             local pinned = assert(registry.snapshot())

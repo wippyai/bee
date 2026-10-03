@@ -179,6 +179,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, logger]
   imports:
+    workspaces: bee.workspace.types:selection
     clock: bee.values:clock
     hosts: bee.launch:hosts
     leases: bee.workspace.client:host_leases

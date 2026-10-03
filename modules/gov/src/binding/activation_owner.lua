@@ -123,7 +123,7 @@ local function desired_intent(config: Config, intent: Object): ({unknown}?, Obje
     if type(bytes) ~= "string" or type(digest) ~= "string" then
         return nil, nil, failure("CONFLICT", "immutable application admission blob is incomplete")
     end
-    local measured, admission_error = application_admission.decode(bytes, digest)
+    local measured, admission_error = application_admission.decode(bytes, digest, intent.application_admission_generation)
     if not measured then return nil, nil, failure("CONFLICT", tostring(admission_error)) end
     local record = measured.record
     if record.workspace_id ~= intent.workspace_id or record.overlay_owner ~= config.overlay_owner
@@ -131,7 +131,7 @@ local function desired_intent(config: Config, intent: Object): ({unknown}?, Obje
         or record.source_workspace ~= intent.source_workspace or record.artifact_digest ~= intent.artifact_digest then
         return nil, nil, failure("CONFLICT", "immutable application admission does not match activation identity")
     end
-    return entries, {bytes = measured.bytes, digest = measured.digest}, nil
+    return entries, {bytes = measured.bytes, digest = measured.digest, identity_generation = intent.application_admission_generation}, nil
 end
 
 local function composed_base_diagnostic(intent: Object, current: Object): string?

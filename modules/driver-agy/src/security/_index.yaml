@@ -7,13 +7,13 @@ entries:
     type: bee.launch_policy
     comment: Host-selected bounded Gemini batch policy with a retained user login and caller-owned thread MCP
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     allowed_overrides:
     - thread
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-    start_ms: 15000
+
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
@@ -49,13 +49,13 @@ entries:
     comment: Host-selected executable binding for the component-owned Antigravity window; missing host executable leaves the
       declaration unavailable
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     allowed_overrides:
     - thread
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-    start_ms: 15000
+
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false

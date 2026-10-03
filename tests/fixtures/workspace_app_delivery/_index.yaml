@@ -34,10 +34,10 @@ entries:
     comment: The shipped Claude batch surface with the scripted protocol executable at its far end; the acceptance fills the
       executable and the answer file
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
     required_exit_observation: eof_gated
-    start_ms: 10000
+
     stop_grace_ms: 500
     drain_ms: 2000
     runner_drain_ms: 1000

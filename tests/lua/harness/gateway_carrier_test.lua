@@ -143,18 +143,22 @@ local function record_exit(event: process.Event)
     if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
     exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
 end
-local function await_carrier(pid: string, label: string, timeout_ms: integer?): Outcome
+local function await_exit(pid: string, label: string, timeout_ms: integer?): Outcome
     local events = assert(process.events())
-    local deadline = time.after(tostring(timeout_ms or 40000) .. "ms")
+    local deadline = timeout_ms and time.after(tostring(timeout_ms) .. "ms") or nil
     while not exited[pid] do
-        local selected = channel.select({events:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error(label .. " did not finish") end
+        local cases = {events:case_receive()}
+        if deadline then cases[#cases + 1] = deadline:case_receive() end
+        local selected = channel.select(cases)
+        if not selected.ok then error(label .. " exit wait interrupted") end
+        if deadline and selected.channel == deadline then error(label .. " exceeded the caller's " .. tostring(timeout_ms) .. " ms wait") end
+        if selected.value.kind == process.event.CANCEL then error(label .. " exit wait cancelled") end
         record_exit(selected.value)
     end
     return exited[pid]
 end
 local function run_carrier(request_value: Object, mode: string, crash_after: string?, timeout_ms: integer?): Outcome
-    return await_carrier(spawn_carrier(request_value, mode, crash_after, nil), mode, timeout_ms)
+    return await_exit(spawn_carrier(request_value, mode, crash_after, nil), mode, timeout_ms)
 end
 local function continue_carrier(pid: string)
     process.send(pid, "bee.carrier.continue", {})
@@ -177,49 +181,41 @@ local function await_paused(paused: Channel<process.Message>, pid: string, wante
         error(pid .. " exited before holding at " .. wanted .. ": " .. tostring(exited[pid].error or "completed"))
     end
 end
--- The fixture child's report is an asynchronously committed stream notice.
+-- After a monitored carrier EXIT its durable stream commits are complete;
+-- inspect those records directly, without waiting for an absent producer.
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
-    for _ = 1, 32 do
+    while true do
         local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
-        if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
-        cursor = math.floor(page.scanned_through)
+        local through = bounds.integer(page.scanned_through)
+        if not through or through <= cursor then error("fixture record page did not advance its cursor") end
+        cursor = through
     end
     return all
 end
 local function notice(thread_id: string, prefix: string): Object?
-    local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
-    local cursor = 0
-    while true do
-        local page = call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
-        for _, item in ipairs(principals.objects(page.records)) do
-            if item.kind == "observation" and item.source == "stream" then
-                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
-                if data.type == "notice" and (data.code == "stderr" or data.code == "informational") then
-                    local text = tostring((assert(bounds.object(data.content))).text)
-                    local envelope = json.decode(text)
-                    if type(envelope) == "table" and type(envelope.content) == "string" then
-                        text = envelope.content
-                    end
-                    local start = text:find(prefix, 1, true)
-                    if start then
-                        local decoded, err = json.decode(text:sub(start + #prefix))
-                        if err or type(decoded) ~= "table" then error(prefix .. " report unreadable: " .. text) end
-                        return assert(bounds.object(decoded))
-                    end
+    for _, item in ipairs(records_of(thread_id)) do
+        if item.kind == "observation" and item.source == "stream" then
+            local data = assert(bounds.object((assert(bounds.object(item.body))).data))
+            if data.type == "notice" and (data.code == "stderr" or data.code == "informational") then
+                local text = tostring((assert(bounds.object(data.content))).text)
+                local envelope = json.decode(text)
+                if type(envelope) == "table" and type(envelope.content) == "string" then text = envelope.content end
+                local start = text:find(prefix, 1, true)
+                if start then
+                    local decoded, err = json.decode(text:sub(start + #prefix))
+                    if err then error(prefix .. " report decode: " .. tostring(err)) end
+                    local result = bounds.object(decoded)
+                    if not result then error(prefix .. " report must be an object") end
+                    return result
                 end
             end
         end
-        cursor = math.floor(tonumber(page.scanned_through) or cursor)
-        if page.has_more ~= true then
-            local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
-            if remaining <= 0 then return nil end
-            call("bee.threads.binding:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
-        end
     end
+    return nil
 end
 local function report(thread_id: string, attempt_id: string?): Object
     local found = notice(thread_id, "gateway:")
@@ -439,7 +435,7 @@ local function define_tests()
             process.unlisten(paused)
             open_gateway()
             continue_carrier(pid)
-            local outcome = await_carrier(pid, "paused carrier")
+            local outcome = await_exit(pid, "paused carrier")
             test.is_nil(outcome.value)
             test.is_true(tostring(outcome.error):find("earlier listener epoch", 1, true) ~= nil)
             local names, details = evidence_kinds(attempt_id)
@@ -462,7 +458,7 @@ local function define_tests()
             local live = binding_of(attempt_id, 1)
             test.eq(live.valid, true)
             assert(process.terminate(pid), "terminate carrier")
-            await_carrier(pid, "terminated carrier")
+            await_exit(pid, "terminated carrier")
             -- Once the runner has observed the loss, the child keeps its token
             -- within the takeover grace.
             await_evidence(attempt_id, "carrier.lost")
@@ -497,9 +493,9 @@ local function define_tests()
             local replacement = spawn_carrier(launch, "resume", nil, nil)
             await_evidence(attempt_id, "attach.fenced", "runner installed generation 2")
             assert(process.terminate(old), "terminate old carrier")
-            await_carrier(old, "old carrier")
+            await_exit(old, "old carrier")
             assert(process.terminate(replacement), "terminate replacement carrier")
-            await_carrier(replacement, "replacement carrier")
+            await_exit(replacement, "replacement carrier")
             await_evidence(attempt_id, "carrier.lost", "under generation 2")
             await_evidence(attempt_id, "gateway.revoked", "lost under generation 2; no takeover")
             local names, details = evidence_kinds(attempt_id)
@@ -516,7 +512,7 @@ local function define_tests()
             await_presented(attempt_id, 1, 3)
             await_evidence(attempt_id, "child.exited")
             assert(process.terminate(pid), "terminate carrier")
-            await_carrier(pid, "terminated carrier")
+            await_exit(pid, "terminated carrier")
             await_evidence(attempt_id, "carrier.lost")
             local resumed = run_carrier(launch, "resume", nil)
             if not resumed.value then error("resumed carrier failed: " .. tostring(resumed.error)) end
@@ -540,11 +536,11 @@ local function define_tests()
             -- the old carrier, whose exit then revokes nothing.
             await_evidence(attempt_id, "attach.fenced", "runner installed generation 2")
             assert(process.terminate(old), "terminate old carrier")
-            await_carrier(old, "old carrier")
+            await_exit(old, "old carrier")
             local inherited = binding_of(attempt_id, 2)
             test.eq(inherited.valid, true)
             test.eq(inherited.carrier_epoch, 1)
-            local outcome = await_carrier(replacement, "replacement carrier")
+            local outcome = await_exit(replacement, "replacement carrier")
             if not outcome.value then error("replacement carrier failed: " .. tostring(outcome.error)) end
             test.eq(outcome.value.epoch, 2)
             local seen = report(thread_id)
@@ -570,13 +566,29 @@ local function define_tests()
             local pid = spawn_carrier(launch, "open", nil, "attempt_started")
             await_presented(attempt_id, 1, 3)
             assert(process.terminate(pid), "terminate carrier")
-            await_carrier(pid, "terminated carrier")
+            await_exit(pid, "terminated carrier")
             await_evidence(attempt_id, "carrier.lost")
             act(attempt_id)
             -- Force the real enforcement path instead of racing the periodic
             -- sweeper. The fixture must still report an actual HTTP denial.
+            local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
+            local runner = (assert(bounds.object(status.attempt))).runner
+            assert(type(runner) == "string", "live runner before revocation enforcement")
+            assert(process.monitor(runner))
+            -- The token changed while the original carrier was lost. Attach
+            -- its consumer before enforcing the stop: output retention is a
+            -- declared bound, and an absent consumer cannot acknowledge it.
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+            local replacement = spawn_carrier(launch, "resume", nil, "reattached")
+            await_paused(paused, replacement, "reattached", false)
+            process.unlisten(paused)
+            local _, fenced_details = evidence_kinds(attempt_id)
+            assert(detail_with(fenced_details, "runner installed generation 2"), "replacement attachment was not fenced")
+            continue_carrier(replacement)
             call("bee.placement.native.binding:reconcile", {attempt_id = attempt_id})
-            local resumed = run_carrier(launch, "resume", nil)
+            local runner_exit = await_exit(runner, "native runner")
+            if runner_exit.error then error("native runner: " .. runner_exit.error) end
+            local resumed = await_exit(replacement, "replacement carrier")
             if not resumed.value then error("resumed carrier failed: " .. tostring(resumed.error)) end
             local seen = report(thread_id, attempt_id)
             test.eq(seen.read, 200)
@@ -705,7 +717,7 @@ local function define_tests()
             end
             test.neq(binding_id, "")
             continue_carrier(pid)
-            local outcome = await_carrier(pid, "flooded carrier")
+            local outcome = await_exit(pid, "flooded carrier")
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
             local reported = hook_report(thread_id)
             local flood = assert(bounds.object(reported.flood))
@@ -738,7 +750,7 @@ local function define_tests()
             local old = spawn_carrier(launch, "open", nil, pauses)
             await_paused(paused, old, pause_at, false)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
-            local outcome = await_carrier(replacement, "replacement carrier")
+            local outcome = await_exit(replacement, "replacement carrier")
             if not outcome.value then error("replacement carrier failed: " .. tostring(outcome.error)) end
             continue_carrier(old)
             -- An original held after its commit acknowledges nothing the
@@ -754,7 +766,7 @@ local function define_tests()
                 process.terminate(old)
             end
             process.unlisten(paused)
-            fenced = await_carrier(old, "fenced carrier")
+            fenced = await_exit(old, "fenced carrier")
             test.is_nil(fenced.value)
             local committed = hook_records(thread_id)
             local seen: {[string]: integer} = {}
@@ -833,7 +845,7 @@ local function define_tests()
             test.eq(refused.ok, false)
             test.eq((assert(bounds.object(refused.error))).code, "UNAVAILABLE")
             continue_carrier(pid)
-            local outcome = await_carrier(pid, "draining carrier")
+            local outcome = await_exit(pid, "draining carrier")
             open_gateway()
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
             test.eq((assert(bounds.object(outcome.value.settlement))).outcome, "succeeded")
@@ -849,7 +861,7 @@ local function define_tests()
             call("bee.gateway.binding:revoke", {binding_id = live.binding_id})
             call("bee.placement.native.binding:reconcile", {attempt_id = attempt_id})
             continue_carrier(pid)
-            local outcome = await_carrier(pid, "revoked carrier")
+            local outcome = await_exit(pid, "revoked carrier")
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
             local seen = report(thread_id)
             test.eq(seen.read, 200)

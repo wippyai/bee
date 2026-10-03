@@ -204,15 +204,21 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     local version: string? = nil
     local docker = false
     local docker_target: string? = nil
+    local preparation_reason: string? = nil
+    local probe_failure: string? = nil
     local function runtime_capture(argv: {string}): (string?, integer?, string?, boolean?)
-        if not docker_target then return capture(argv, 3000, false) end
+        if not docker_target then return capture(argv, docker and 0 or 3000, false) end
         local args: {string} = {}
         for index, argument in ipairs(argv) do if index > 1 then args[#args + 1] = argument end end
         local raw, err = funcs.call(docker_target, {placement_profile_ref = placement_profile_ref, runtime_name = executable_name, probe_argv = args})
         local reply = not err and bounds.object(raw)
         local value = reply and reply.ok == true and bounds.object(reply.value)
         local output = value and bounds.text(value.probe_output, 131072)
-        if not output then return nil, nil, "Docker runtime probe is unavailable", false end
+        if not output then
+            local fault = reply and bounds.object(reply.error)
+            probe_failure = tostring(err or fault and fault.message or "Docker runtime probe returned no output")
+            return nil, nil, probe_failure, false
+        end
         return output, 0, nil, false
     end
     if placement_profile_ref then
@@ -232,20 +238,25 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
                 return result
             end
             if not image or type(image.present) ~= "boolean" or type(image.runtime_present) ~= "boolean" then
-                local result = unknown(provider, capability_error and tostring(capability_error) or "Docker runtime readiness is unavailable")
+                local fault = reply and bounds.object(reply.error)
+                local result = unknown(provider, tostring(capability_error or fault and fault.message or "Docker runtime readiness returned no image observation"):gsub("[%c]", " "):sub(1, 512))
                 cache.drivers[cache_key] = result; return result
             end
-            if image.present ~= true or image.runtime_present ~= true then
+            if image.runtime_present ~= true or (image.present ~= true and image.buildable ~= true) then
                 local result = unknown(provider, bounds.line(image.reason, 1024) or (image.present == true and "Docker image does not declare this runtime artifact" or "Docker runtime image is missing; a registry digest is fetched on first launch"))
                 cache.drivers[cache_key] = result; return result
             end
             executable_present = true
-            docker_target = target
+            if image.present == true then docker_target = target
+            else preparation_reason = bounds.line(image.reason, 512) end
             local image_digest = bounds.line(image.image_digest, 128)
             if not image_digest then return unknown(provider, "Docker image has no immutable cache identity") end
             cache_key = cache_key .. "\n" .. image_digest
             if cache.drivers[cache_key] then return cache.drivers[cache_key] end
-            version = probe_version.read(executable_name, bounds.object(selected.version_probe) or {}, runtime_capture)
+            if image.present == true then
+                version = probe_version.read(executable_name, bounds.object(selected.version_probe) or {}, runtime_capture)
+            else version = probe_version.read(executable_path, bounds.object(selected.version_probe) or {}, runtime_capture) end
+            if probe_failure then return unknown(provider, probe_failure:gsub("[%c]", " "):sub(1, 512)) end
             platform = {os = bounds.line(image.os, 32), arch = bounds.line(image.arch, 32)}
             compatible = platform.os ~= nil and platform.arch ~= nil and bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
         end
@@ -301,7 +312,9 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
                 local key = table.concat(argv, "\n")
                 local output = help_cache[key]
                 if not output then
-                    output = runtime_capture(argv) or ""
+                    local observed, _, help_error = runtime_capture(argv)
+                    if help_error then return unknown(provider, help_error:gsub("[%c]", " "):sub(1, 512)) end
+                    output = observed or ""
                     help_cache[key] = output
                 end
                 supported = args ~= nil and flag ~= nil and output:find(flag, 1, true) ~= nil
@@ -320,6 +333,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             capabilities[path] = {supported = supported, reason = reason}
         end
     end
+    if result.status == "ready" and preparation_reason then result.reason = preparation_reason end
     result.capabilities = capabilities
     cache.drivers[cache_key] = result
     return result

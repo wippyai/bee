@@ -787,6 +787,9 @@ retained-startup-check:
 	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"
 
 .PHONY: owner-journey
+.PHONY: owner-journey-unit-check
+owner-journey-unit-check:
+	python3 -m unittest discover -s tests -p test_owner_journey.py
 owner-journey:
 	@test -n "$(BEE_BINARY)" || { echo 'BEE_BINARY must name an existing standalone Bee.' >&2; exit 1; }
 	@test -n "$(BEE_SOURCE_STATE)" || { echo 'BEE_SOURCE_STATE must name an existing state directory (an empty directory is a fresh-state proof).' >&2; exit 1; }

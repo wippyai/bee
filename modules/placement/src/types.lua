@@ -13,6 +13,7 @@ type Access = "read" | "write"
 type Purpose = "project" | "output" | "cache" | "session"
 type StopMode = "cooperative" | "forced"
 type LoginNotice = {code: "LOGIN_REQUIRED", provider: string, command: string}
+type PreparationProgress = {version: integer, profile_ref: string, detail: string}
 -- One admitted resource: an fs.directory root the host admits, a subpath
 -- inside it, and the access the owner granted. grant_ref is the owner's
 -- reference for that decision; placement records it, never interprets it.

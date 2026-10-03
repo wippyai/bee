@@ -13,12 +13,14 @@ It uses `NativeDesktop` and the existing synchronized-frame PTY decoder.
 Run an owned step with `BEE_JOURNEY_STEPS=11` (or a comma-separated list).
 Startup and clean owner stop always run; omitting the selection runs every step.
 
-State is copied under `.wippy/owner-journey-work/`: SQLite read-only backups
-include committed WAL data; other regular files use `cp -a`. Names matching
-`cred|secret|token|key`, provider `auth.json`, PEM files and links are excluded
-before opening them. SQLite sidecars are excluded. Copied runtime caches are
-archived outside the selected state so Bee can rematerialize excluded module
-artifacts from its binary, while all copied owner databases remain intact.
+State is copied under `.wippy/owner-journey-work/`: SQLite read-only backups for
+`*.db`, `*.db.*` and `*.sqlite` include committed WAL data; other files and links
+use `cp -a` without following links. Names matching `credentials.db*` or
+`secret|token|key` are excluded before opening them, case-insensitively. Logs,
+`lock`, `*.lock`, `*.pid` and SQLite sidecars are excluded; dependency manifests
+`wippy.lock` and `resolution.lock` are retained. Cache and deployment
+content stays in the copied state, including the public `bee/credentials`
+package, so recorded module evidence remains available for offline startup.
 Bee creates its fresh credential store. The work directory is removed after
 process cleanup; provider homes and credential projections are never evidence.
 
@@ -27,7 +29,9 @@ startup refusal. Step 7 runs last, after the extended cases. Step 4 accepts only
 running or an explicit `start_failed` carrying the Docker daemon's cause; the
 real subscription case still fails if Docker cannot run. Claude is required;
 Codex is exercised when its OS-user subscription login evidence exists. The
-native fixture emits protocol initialization and waits on a named pipe until
+deterministic fixture is compiled from Go with CGO disabled as a Linux ELF
+runtime artifact for both native and Docker placement. Its private fixture home has fake login evidence,
+projected through the same broker as a subscription. It emits protocol initialization and waits on a named pipe until
 the test observes both a rendered working state and placement's running state.
 Real agents use Bee's credential projection and the OS user's subscription;
 API-key environment variables are removed, and provider login-status metadata
@@ -66,9 +70,12 @@ files, safe owner-state snapshots, copied/excluded path inventory and subcase
 outcomes. Approval requests are recorded by owner identity, proposal scope,
 prompt, duration and previous grant; repeated grants, split decisions, routine
 opening prompts and incomplete/overlong prompt screens fail the journey.
+The driver selects the pending Inbox row, waits for its rendered Allow once
+action, and observes both the owner's exact decision and the approved frame.
+Allow once commits that decision without another confirmation dialog.
 
 Harness safety regressions run with:
 
 ```sh
-python3 -m unittest discover -s tests -p test_owner_journey.py
+make owner-journey-unit-check
 ```

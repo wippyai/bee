@@ -24,7 +24,7 @@ type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, t
 type EntrySortKey = {ref: string, title: string, ready: boolean, driver: string?}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "starting" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
-type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
+type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, progress: string?, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
     activity_evidence: sessions_protocol.ActivityEvidence?, turns: {Turn}, details: boolean?, unsent: Unsent?, notice: string, thread_cursor: integer?}
@@ -141,6 +141,7 @@ end
 local function settle(turn: Turn, observed: unknown)
     local await = observed
     if await.tag == "ready" then
+        turn.progress = nil
         local result = await.result
         if result.outcome == "succeeded" then
             turn.state, turn.text = "ready", render(result.value)
@@ -170,6 +171,16 @@ function M.placement_progress(raw: unknown): ({state: TurnState, cause: string?}
         return {state = "failed", cause = cause}, nil
     end
     return nil, "placement observation has no startup transition"
+end
+function M.preparation_progress(raw: unknown): ({state: "starting", detail: string}?, string?)
+    local data = bounds.object(raw)
+    if not data or bounds.fields(data, {"type", "segment_id", "operation", "channel", "text"})
+        or data.type ~= "text" or data.segment_id ~= "executor-progress" or data.operation ~= "replace" or data.channel ~= "progress" then
+        return nil, "executor preparation progress has invalid fields"
+    end
+    local detail = bounds.text(data.text, 4096)
+    if not detail then return nil, "executor preparation progress has invalid detail" end
+    return {state = "starting", detail = detail}, nil
 end
 local function observe_thread(conv: Conversation)
     local thread = conv.session.snapshot.thread_ref
@@ -204,9 +215,15 @@ local function observe_thread(conv: Conversation)
                                     if not progress then conv.notice = assert(progress_error)
                                     elseif turn.state == "queued" or turn.state == "starting" or turn.state == "working" then
                                         turn.state = progress.state
+                                        if progress.state ~= "starting" then turn.progress = nil end
                                         if progress.cause then turn.text = progress.cause end
                                     end
                                 end
+                            elseif observation.type == "text" and data.channel == "progress" and data.segment_id == "executor-progress"
+                                and (turn.state == "queued" or turn.state == "starting" or turn.state == "working") then
+                                local progress, progress_error = M.preparation_progress(data)
+                                if not progress then conv.notice = assert(progress_error)
+                                else turn.state, turn.progress = progress.state, progress.detail end
                             elseif observation.type == "text" and (turn.state == "queued" or turn.state == "starting" or turn.state == "working")
                                 and data.channel ~= "progress" and type(data.text) == "string" and #data.text <= 65536 then
                                 local segment = bounds.id(data.segment_id) or "answer"

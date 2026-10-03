@@ -196,9 +196,7 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			}
 			host.nodeIdentity, host.legacyNodeIdentity = identity.NodeID, identity.LegacyNodeID
 			host.bootLog.phase("owner_prepare", "end")
-			if host.bootLog != nil {
-				config = bootLoggingConfig(config)
-			}
+			config = bootLoggingConfig(config)
 			monitor, err := beginStartup(ctx, state, launched, os.Getenv(ownerProgressLogVariable))
 			if err != nil {
 				return nil, nil, errors.Join(err, release())

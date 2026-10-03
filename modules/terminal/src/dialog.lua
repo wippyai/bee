@@ -3,7 +3,6 @@ local tty = require("tty")
 local interaction = require("interaction")
 local appearance = require("appearance")
 
-type Kind = interaction.Kind
 type Action = "" | "accept" | "cancel"
 type Spec = interaction.Spec
 type State = {spec: Spec, left: string, right: string, selected: boolean, focus: string}

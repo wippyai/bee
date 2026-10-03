@@ -5,7 +5,7 @@ from contextlib import ExitStack
 from pathlib import Path
 import subprocess
 
-from unit import report_shard, run_shard, split, test_entries
+from unit import docker_daemon_lock, report_shard, run_shard, split, test_entries
 from workspace import ROOT, fixture_workspace, observe_carrier
 
 RUNTIME_FILES = (
@@ -30,6 +30,9 @@ def main():
     groups = split(entries, test_entries(resource="docker_daemon"))
     for iteration in range(1, args.runs + 1):
         with ExitStack() as fixtures:
+            # All four processes start under load together, after the shared
+            # daemon is available; run_shard must not acquire the lock twice.
+            fixtures.enter_context(docker_daemon_lock())
             folders = [fixtures.enter_context(fixture_workspace(managed_gateway=True)) for _ in groups]
             if args.baseline:
                 for name in args.baseline_path or RUNTIME_FILES:
@@ -73,7 +76,7 @@ def main():
             results = []
             with ThreadPoolExecutor(max_workers=4) as executor:
                 tasks = [executor.submit(run_shard, index, folders[index], group,
-                                         log=args.logs / f"run-{iteration:02d}-shard-{index + 1}.log")
+                                         log=args.logs / f"run-{iteration:02d}-shard-{index + 1}.log", docker_locked=True)
                          for index, group in enumerate(groups)]
                 for task in as_completed(tasks):
                     result = task.result()

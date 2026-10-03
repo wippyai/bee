@@ -79,10 +79,10 @@ def docker_daemon_lock():
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def run_shard(index, folder, entries, timeout=None, log=None):
+def run_shard(index, folder, entries, timeout=None, log=None, docker_locked=False):
     started = time.monotonic()
     with ExitStack() as resources:
-        if set(entries) & set(test_entries(resource="docker_daemon", source=folder / "src/tests")):
+        if not docker_locked and set(entries) & set(test_entries(resource="docker_daemon", source=folder / "src/tests")):
             resources.enter_context(docker_daemon_lock())
         handle = resources.enter_context(Path(log).open("w")) if log is not None else None
         result = subprocess.run([

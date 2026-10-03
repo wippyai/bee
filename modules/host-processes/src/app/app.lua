@@ -103,11 +103,6 @@ local function main(value: unknown)
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then break end
         elseif event.channel == ticks then
-            if pending then
-                local next_pending, timeout = stop_request.tick(pending)
-                pending = next_pending
-                if timeout then status = timeout; dirty = true end
-            end
             if not paused then sample() end
         elseif event.channel == states then
             local msg = event.value

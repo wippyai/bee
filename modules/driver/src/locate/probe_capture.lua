@@ -74,9 +74,10 @@ function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Relea
     local deadline = time.after(tostring(timeout) .. "ms")
     while streams_received < 2 or not exit_received do
         local selected = channel.select({results:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then
+        if not selected.ok then cleanup(true); return nil, nil, "host probe completion channel closed" end
+        if selected.channel == deadline then
             cleanup(true)
-            return nil, nil, "host probe timed out"
+            return nil, nil, "host probe timeout_ms=" .. tostring(timeout) .. " expired"
         end
         local serial = selected.value
         if type(serial) ~= "number" then error("invalid completion identity") end

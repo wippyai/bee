@@ -4,7 +4,6 @@ local client = require("client")
 local channel = require("channel")
 local process = require("process")
 local uuid = require("uuid")
-local time = require("time")
 local json = require("json")
 local funcs = require("funcs")
 local appearance = require("appearance")
@@ -30,7 +29,6 @@ local function main(value: unknown)
     local preferences: appearance.Preferences = appearance.defaults()
     local confirmed: appearance.Preferences = preferences
     local status = ""
-    local pending_timeout: time.Timer? = nil
     local pane: view.Pane = "theme"
     local offset = 0
     local last_checkpoint = ""
@@ -54,10 +52,6 @@ local function main(value: unknown)
     local edit_query_op = ""
     local edit_input = ""
     local running, dirty = true, true
-    local function arm_pending_timeout()
-        if pending_timeout then pending_timeout:stop() end
-        pending_timeout = assert(time.timer("5s"))
-    end
     local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or (pane == "background" and #appearance.backgrounds() or (pane == "about" and view.about_count(width, live_status, live_pending, binary_info) or 0))) end
     local function selected(): integer
         if pane == "taskbar" then return preferences.taskbar == "icons" and 2 or 1 end
@@ -83,24 +77,22 @@ local function main(value: unknown)
         elseif pane == "background" then next_preferences = {theme = preferences.theme, background = appearance.backgrounds()[value], taskbar = preferences.taskbar}
         else next_preferences = {theme = preferences.theme, background = preferences.background, taskbar = value == 2 and "icons" or "labels"} end
         preferences = next_preferences
-        pending = uuid.v7(); arm_pending_timeout(); status = ""
+        pending = uuid.v7(); status = ""
         if broker then
             local sent, err = process.send(broker, "bee.appearance.request", {version = 1, request_id = pending, op = "set", theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar})
             if not sent then
                 pending = ""; preferences = confirmed; status = tostring(err)
-                if pending_timeout then pending_timeout:stop(); pending_timeout = nil end
             end
         end
         reveal(); dirty = true
     end
     local function inherit()
         if not broker then return end
-        pending = uuid.v7(); arm_pending_timeout(); status = ""
+        pending = uuid.v7(); status = ""
         local sent, err = process.send(broker, "bee.appearance.request", {version = 1, request_id = pending,
             op = "inherit", theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar})
         if not sent then
             pending = ""; status = tostring(err)
-            if pending_timeout then pending_timeout:stop(); pending_timeout = nil end
         end
         dirty = true
     end
@@ -201,14 +193,10 @@ local function main(value: unknown)
         end
         local cases = {input:case_receive(), lifecycle:case_receive(), states:case_receive(), queries:case_receive()}
         if update_read then cases[#cases + 1] = update_read.response:case_receive() end
-        if pending_timeout then cases[#cases + 1] = pending_timeout:channel():case_receive() end
         local event = channel.select(cases)
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
-        elseif pending_timeout and event.channel == pending_timeout:channel() then
-            pending_timeout = nil
-            if pending ~= "" then pending = ""; preferences = confirmed; status = "Appearance update timed out"; dirty = true end
         elseif update_read and event.channel == update_read.response then
             local current = update_read
             local result, result_error = current.future:result()
@@ -237,7 +225,6 @@ local function main(value: unknown)
                     if pending == "" or pending == payload.request_id then
                         preferences = confirmed
                         pending = ""
-                        if pending_timeout then pending_timeout:stop(); pending_timeout = nil end
                         dirty = true
                         status = type(payload.error) == "string" and payload.error or ""
                     end
@@ -320,7 +307,6 @@ local function main(value: unknown)
             end
         end
     end
-    if pending_timeout then pending_timeout:stop() end
     if update_read then update_read.future:cancel() end
     process.unlisten(states)
     process.unlisten(queries)

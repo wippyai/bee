@@ -4,8 +4,8 @@ local events = require("events")
 local system = require("system")
 local funcs = require("funcs")
 local security = require("security")
-local time = require("time")
 local channel = require("channel")
+local process = require("process")
 local bounds = require("bounds")
 local lifecycle = require("lifecycle")
 local M = {}
@@ -80,21 +80,34 @@ local function owner(service: lifecycle.Service, digest: string, phase: string):
     return nil
 end
 local function supervisor(id: string, action: string, expected: string): string?
-    local current, read_error = system.supervisor.state(id)
-    if not current then return tostring(read_error or "service is not supervised: " .. id) end
+    local subscription, subscribe_error = events.subscribe("supervisor", "service.update")
+    if not subscription then return tostring(subscribe_error) end
+    local updates = subscription:channel()
+    local signals = assert(process.events())
+    local function finish(problem: string?): string?
+        subscription:close()
+        return problem
+    end
     local function reached(status: string, desired: string): boolean
         return desired == expected and (status == expected or (expected == "stopped" and status == "exited"))
     end
-    if reached(current.status, current.desired) then return nil end
+    local current, read_error = system.supervisor.state(id)
+    if not current then return finish(tostring(read_error or "service is not supervised: " .. id)) end
+    if reached(current.status, current.desired) then return finish(nil) end
     local sent, send_error = events.send("supervisor", "service." .. action, id)
-    if not sent then return tostring(send_error or "supervisor refused service transition") end
-    local deadline = time.after("30s")
+    if not sent then return finish(tostring(send_error or "supervisor refused service transition")) end
     while true do
         local state, problem = system.supervisor.state(id)
-        if not state then return tostring(problem or "service state unavailable") end
-        if reached(state.status, state.desired) then return nil end
-        local selected = channel.select({time.after("25ms"):case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then return "service transition is uncertain: " .. id end
+        if not state then return finish(tostring(problem or "service state unavailable")) end
+        if reached(state.status, state.desired) then return finish(nil) end
+        if state.status == "failed" or (expected == "running" and state.status == "exited") then
+            return finish("service " .. id .. " entered " .. state.status .. ": " .. tostring(state.details))
+        end
+        local selected = channel.select({updates:case_receive(), signals:case_receive()})
+        if not selected.ok then return finish("service transition event channel closed: " .. id) end
+        if selected.channel == signals and selected.value.kind == process.event.CANCEL then
+            return finish("service transition wait cancelled: " .. id)
+        end
     end
 end
 function M.quiesce(work: lifecycle.Work, digest: string): string?

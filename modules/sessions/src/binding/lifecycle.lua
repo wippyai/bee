@@ -12,13 +12,14 @@ local function handle(raw: unknown): unknown
     if not security.can("bee.sessions.lifecycle", lifecycle.SERVICE) then error("host lifecycle authority required") end
     local request = lifecycle.request(raw)
     if not request or not lifecycle.intent(request) then error("invalid durable scheduler lifecycle intent") end
+    local signals = assert(process.events())
     local scheduler = process.registry.lookup("bee.sessions.scheduler")
     if request.phase == "ready" then
-        local deadline = time.after("5s")
         while not scheduler do
             local poll = time.after("25ms")
-            local selected = channel.select({poll:case_receive(), deadline:case_receive()})
-            if not selected.ok or selected.channel ~= poll then error("scheduler registration is not ready") end
+            local selected = channel.select({poll:case_receive(), signals:case_receive()})
+            if not selected.ok then error("scheduler registration wait channel closed") end
+            if selected.channel == signals and selected.value.kind == process.event.CANCEL then error("scheduler registration wait cancelled") end
             scheduler = process.registry.lookup("bee.sessions.scheduler")
         end
     end
@@ -35,18 +36,28 @@ local function handle(raw: unknown): unknown
     end
     local topic = lifecycle.TOPIC .. "." .. tostring(assert(uuid.v4()))
     local inbox = assert(process.listen(topic, {message = true}))
+    assert(process.monitor(scheduler))
     local sent, problem = process.send(scheduler, lifecycle.TOPIC, {request = request, topic = topic})
     if not sent then process.unlisten(inbox); error(tostring(problem)) end
-    local deadline = time.after("60s")
     while true do
-        local selected = channel.select({inbox:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then process.unlisten(inbox); error("scheduler drain or readiness is uncertain") end
+        local selected = channel.select({inbox:case_receive(), signals:case_receive()})
+        if not selected.ok then process.unmonitor(scheduler); process.unlisten(inbox); error("scheduler lifecycle reply channel closed") end
+        if selected.channel == signals then
+            local event = selected.value
+            if event.kind == process.event.CANCEL or (event.kind == process.event.EXIT and tostring(event.from) == tostring(scheduler)) then
+                process.unmonitor(scheduler); process.unlisten(inbox)
+                local result = bounds.object(event.result)
+                error(event.kind == process.event.CANCEL and "scheduler lifecycle wait cancelled" or "scheduler exited before lifecycle acknowledgement: " .. tostring(result and result.error or "without a result"))
+            end
+            goto next_lifecycle_reply
+        end
         local message = selected.value
         if message:from() == scheduler then
             local reply = bounds.object(message:payload():data())
-            process.unlisten(inbox)
+            process.unmonitor(scheduler); process.unlisten(inbox)
             return reply
         end
+        ::next_lifecycle_reply::
     end
 end
 return {handle = handle}

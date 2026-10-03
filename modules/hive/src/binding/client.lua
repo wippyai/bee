@@ -73,7 +73,7 @@ local function call(self: Client, owner_ref: OwnerRef, target: Target, input: {[
         if not selected.ok then
             outcome = failed(request_id, "UNAVAILABLE", "reply channel closed")
         elseif selected.channel == deadline then
-            outcome = failed(request_id, "DEADLINE_EXCEEDED", "no reply before the timeout")
+            outcome = failed(request_id, "DEADLINE_EXCEEDED", "Hive reply timeout=" .. (settings.timeout or DEFAULT_TIMEOUT) .. " expired; dispatched operation outcome requires reconciliation")
         else
             local message = selected.value
             if tostring(message:from()) == pid then

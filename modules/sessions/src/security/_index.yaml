@@ -115,7 +115,7 @@ entries:
 - name: lifecycle_policy
   kind: security.policy
   policy:
-    actions: [bee.sessions.lifecycle, registry.get, registry.snapshot, process.registry.lookup, process.send]
+    actions: [bee.sessions.lifecycle, registry.get, registry.snapshot, process.registry.lookup, process.send, process.monitor]
     resources: [bee.sessions.service:scheduler_service, 'bee.hub.operations:*', bee.sessions.scheduler, bee.threads.binding:work_scan, '*']
     effect: allow
 - name: lifecycle_worker_policy

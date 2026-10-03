@@ -148,20 +148,7 @@ function M.watch(db: sql.DB, actor: string, request: unknown): Result
     local lookup, lookup_err = process.registry.lookup(M.WAITER_NAME)
     if not lookup_err and lookup then
         waiter_pid = tostring(lookup)
-        local sent = process.send(waiter_pid, M.TOPIC_REGISTER, {version = 1, waiter_id = waiter_id, topic = topic, thread_id = thread_id, after_sequence = after, deadline_at = deadline_at})
-        if sent then
-            local ack_deadline = time.after(tostring(M.REGISTER_ACK_MS) .. "ms")
-            while not registered do
-                local selected = channel.select({wakeups:case_receive(), ack_deadline:case_receive()})
-                if not selected.ok or selected.channel == ack_deadline then break end
-                local message = selected.value
-                if tostring(message:from()) == waiter_pid and message:topic() == topic then
-                    local data: unknown = message:payload():data()
-                    if type(data) == "table" and data.registered == true then registered = true end
-                    if type(data) == "table" and data.registered == false then break end
-                end
-            end
-        end
+        process.send(waiter_pid, M.TOPIC_REGISTER, {version = 1, waiter_id = waiter_id, topic = topic, thread_id = thread_id, after_sequence = after, deadline_at = deadline_at})
     end
     local function finish(result: Result): Result
         if registered and waiter_pid then process.send(waiter_pid, M.TOPIC_UNREGISTER, {version = 1, waiter_id = waiter_id}) end
@@ -184,6 +171,10 @@ function M.watch(db: sql.DB, actor: string, request: unknown): Result
             if selected.ok and selected.channel == wakeups then
                 local message = selected.value
                 woke = waiter_pid ~= nil and tostring(message:from()) == waiter_pid
+                if woke then
+                    local data: unknown = message:payload():data()
+                    if type(data) == "table" and data.registered == true then registered = true end
+                end
             end
             if woke or not registered or not selected.ok then
                 local again = watch_check(db, actor, thread_id, after)
@@ -235,20 +226,7 @@ function M.wait(db: sql.DB, actor: string, request: unknown): Result
     local lookup, lookup_err = process.registry.lookup(M.WAITER_NAME)
     if not lookup_err and lookup then
         waiter_pid = tostring(lookup)
-        local sent = process.send(waiter_pid, M.TOPIC_REGISTER, {version = 1, waiter_id = waiter_id, topic = topic, thread_id = wait.thread_id, after_sequence = wait.after, deadline_at = deadline_at})
-        if sent then
-            local ack_deadline = time.after(tostring(M.REGISTER_ACK_MS) .. "ms")
-            while not registered do
-                local selected = channel.select({wakeups:case_receive(), ack_deadline:case_receive()})
-                if not selected.ok or selected.channel == ack_deadline then break end
-                local message = selected.value
-                if tostring(message:from()) == waiter_pid and message:topic() == topic then
-                    local data: unknown = message:payload():data()
-                    if type(data) == "table" and data.registered == true then registered = true end
-                    if type(data) == "table" and data.registered == false then break end
-                end
-            end
-        end
+        process.send(waiter_pid, M.TOPIC_REGISTER, {version = 1, waiter_id = waiter_id, topic = topic, thread_id = wait.thread_id, after_sequence = wait.after, deadline_at = deadline_at})
     end
     local outcome: Result? = nil
     local function finish(result: Result): Result
@@ -273,6 +251,10 @@ function M.wait(db: sql.DB, actor: string, request: unknown): Result
             if selected.ok and selected.channel == wakeups then
                 local message = selected.value
                 woke = waiter_pid ~= nil and tostring(message:from()) == waiter_pid
+                if woke then
+                    local data: unknown = message:payload():data()
+                    if type(data) == "table" and data.registered == true then registered = true end
+                end
             end
             if woke or not registered or not selected.ok then
                 local again = check(db, actor, mutation, wait, digest, false)

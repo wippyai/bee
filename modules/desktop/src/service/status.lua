@@ -8,10 +8,9 @@ local M = {}
 type Channel = channel.Channel
 type Phase = "update" | "read" | "watch"
 type Start = (reader.Intent) -> (funcs.Future?, string?)
-type Pending = {future: funcs.Future, response: Channel<unknown>, generation: integer, phase: Phase, deadline: integer}
+type Pending = {future: funcs.Future, response: Channel<unknown>, generation: integer, phase: Phase}
 type State = {reader: reader.Reader, start: Start, pending: Pending?, phase: Phase, due: integer, closed: boolean}
 M.RETRY_MS = 5000
-M.TIMEOUT_MS = 35000
 function M.new(start: Start): State
     return {reader = reader.new(), start = start, pending = nil, phase = "update", due = 0, closed = false}
 end
@@ -33,14 +32,11 @@ local function failed(state: State, now: integer)
     state.due = now + M.RETRY_MS
 end
 -- Call at most once per owner event-loop turn. now is the owner's monotonic
--- millisecond clock. A deadline retires the future before another is admitted.
+-- millisecond clock. Binding changes and close retire the admitted future.
 function M.advance(state: State, key: string, now: integer): Pending?
     if state.closed or not state.reader.thread_id then return nil end
     local pending = state.pending
-    if pending then
-        if now >= pending.deadline then cancel(state); failed(state, now) end
-        return state.pending
-    end
+    if pending then return pending end
     if now < state.due then return nil end
     local intent: reader.Intent? = nil
     if state.phase == "update" then intent = reader.update_intent(state.reader, key)
@@ -52,7 +48,7 @@ function M.advance(state: State, key: string, now: integer): Pending?
     local response = future:response()
     if not response then future:cancel(); failed(state, now); return nil end
     local admitted: Pending = {future = future, response = response, generation = intent.generation,
-        phase = state.phase, deadline = now + M.TIMEOUT_MS}
+        phase = state.phase}
     state.pending = admitted
     return admitted
 end

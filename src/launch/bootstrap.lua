@@ -3,7 +3,6 @@ local process = require("process")
 local channel = require("channel")
 local tty = require("tty")
 local security = require("security")
-local time = require("time")
 local physical = require("physical")
 local input_decode = require("input_decode")
 local contract = require("contract")
@@ -38,17 +37,13 @@ function M.open(): Started?
             :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:supervisor", "bee:workers", self, workspaces.classic())
         if not pid then error(tostring(spawn_error)) end
         supervisor = tostring(pid)
-        local deadline = time.after("10s")
         while true do
-            local selected = channel.select({boot:case_receive(), events:case_receive(), input:case_receive(), deadline:case_receive()})
+            local selected = channel.select({boot:case_receive(), events:case_receive(), input:case_receive()})
             if not selected.ok then
                 process.terminate(supervisor); supervisor = ""
                 return nil, "Local host startup channel closed", true
             end
-            if selected.channel == deadline then
-                process.terminate(supervisor); supervisor = ""
-                return nil, "Local host startup timed out", true
-            elseif selected.channel == input then
+            if selected.channel == input then
                 local event = input_decode.decode(selected.value)
                 if event then
                     if event.type == "close" or (event.type == "key" and event.ctrl and event.key == "q" and event.action ~= "release") then

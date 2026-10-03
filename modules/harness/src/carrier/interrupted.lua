@@ -92,20 +92,24 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
         if err then return nil, tostring(err) end
         return future, nil
     end, key)
-    local deadline = now() + BUDGET_MS
     local draining = false
-    while now() < deadline do
+    while true do
         if hooks.may_start(state) and not draining then
             delivery.shutdown(driver, now(), false)
             draining = true
         end
         if hooks.finished(state) then break end
         local pending = delivery.advance(driver, now())
-        local timer = assert(time.timer(tostring(math.max(1, math.min(delivery.due(driver), deadline) - now())) .. "ms"))
-        local cases = {timer:channel():case_receive()}
-        if pending then cases[#cases + 1] = pending.response:case_receive() end
+        local timer: time.Timer? = nil
+        local cases = {}
+        if pending then cases[#cases + 1] = pending.response:case_receive()
+        else
+            timer = assert(time.timer(tostring(math.max(1, delivery.due(driver) - now())) .. "ms"))
+            cases[#cases + 1] = timer:channel():case_receive()
+        end
         local selected = channel.select(cases)
-        timer:stop()
+        if timer then timer:stop() end
+        if not selected.ok then delivery.cancel(driver); return false, "interrupted window hook delivery channel closed" end
         if pending and selected.channel == pending.response then delivery.complete(driver, pending, now()) end
     end
     delivery.cancel(driver)

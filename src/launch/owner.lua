@@ -42,16 +42,24 @@ local function controller(owner: string, checkpoint: unknown?)
                 local request_id = uuid.v7()
                 assert(process.send(owner, "bee.owner.replacing", {version = 1, schema = 1,
                     request_id = request_id, checkpoint = state}))
-                local deadline = time.after("3s")
                 while true do
-                    local reply = channel.select({acks:case_receive(), deadline:case_receive()})
-                    if not reply.ok or reply.channel == deadline then error("Owner replacement was not acknowledged") end
+                    local reply = channel.select({acks:case_receive(), events:case_receive()})
+                    if not reply.ok then error("Owner replacement acknowledgement channel closed") end
+                    if reply.channel == events then
+                        local event = reply.value
+                        if event.kind == process.event.CANCEL then return end
+                        if event.kind == process.event.EXIT and tostring(event.from) == owner then
+                            error("Owner exited before replacement acknowledgement: " .. (decode.exit_error(event.result) or "without a result"))
+                        end
+                        goto next_ack
+                    end
                     local message = reply.value
                     local value: unknown = message:payload():data()
                     if tostring(message:from()) == owner and type(value) == "table"
                         and value.version == 1 and value.schema == 1 and value.request_id == request_id then
                         return
                     end
+                    ::next_ack::
                 end
             end
         elseif selected.channel == updates then
@@ -131,16 +139,6 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
             end
         end
         local announced = false
-        local startup_started = time.now()
-        local function startup_now_ms(): integer
-            return math.floor(time.now():sub(startup_started):milliseconds())
-        end
-        local startup = startup_progress.new(startup_now_ms(), 10000)
-        local function startup_deadline()
-            local remaining = math.max(1, startup_progress.remaining(startup, startup_now_ms()))
-            return time.after(tostring(remaining) .. "ms")
-        end
-        local deadline = startup_deadline()
         local heartbeat = time.ticker("250ms")
         local heartbeats = heartbeat:channel()
         local startup_phase = "starting"
@@ -152,27 +150,18 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
             if sequence and sequence > 0 and sequence == math.floor(sequence) then
                 local phase = env.get("bee.env:startup_phase")
                 if phase and phase ~= "" then startup_phase = phase end
-                if startup_progress.advance(startup, startup_progress.phase(startup), startup_now_ms(), math.floor(sequence)) then
-                    deadline = startup_deadline()
-                end
+
             end
         end
         observe_startup()
         while true do
             local cases = {ready:case_receive(), progress:case_receive(), controller_ready:case_receive(), replacing:case_receive(),
                 events:case_receive(), stops.channel:case_receive(), failures:case_receive()}
-            if not announced then cases[#cases + 1] = deadline:case_receive(); cases[#cases + 1] = heartbeats:case_receive() end
+            if not announced then cases[#cases + 1] = heartbeats:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Retained owner channel closed") end
             if selected.channel == heartbeats then
                 observe_startup()
-            elseif selected.channel == deadline then
-                observe_startup()
-                local now_ms = startup_now_ms()
-                if startup_progress.expired(startup, now_ms) then
-                    error("Retained workspace startup stalled during " .. startup_phase .. ": no progress for 10s")
-                end
-                deadline = startup_deadline()
             elseif selected.channel == stops.channel then
                 if command_stop.accept(selected.value) then return end
             elseif selected.channel == failures then
@@ -189,9 +178,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
                         announcer = bridge and tostring(bridge) or ""
                     end
                     local phase = sender == announcer and startup_progress.decode(selected.value:payload():data()) or nil
-                    if phase and startup_progress.advance(startup, phase,
-                        startup_now_ms()) then
-                        deadline = startup_deadline()
+                    if phase then
                         logger:info("Retained workspace startup progressed", {phase = phase})
                         startup_phase = phase
                         env.set("bee.env:startup_phase", phase)

@@ -17333,7 +17333,7 @@
     "requirement_count": 141,
     "requirement_target_count": 335,
     "root_src_lua_budget": 19277,
-    "root_src_lua_lines": 19276,
+    "root_src_lua_lines": 19148,
     "schema_tag_count": 70,
     "topic_count": 138
   },
@@ -17473,7 +17473,6 @@
     },
     {
       "sources": [
-        "src/apps/broker.lua",
         "src/host/main.lua"
       ],
       "topic": "bee.app.replace_failed"

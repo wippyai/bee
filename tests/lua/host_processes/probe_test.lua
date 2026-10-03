@@ -88,19 +88,12 @@ local function define_tests()
             test.is_true(oversized_services.error:find("oversized service snapshot", 1, true) ~= nil)
         end)
 
-        test.it("times out stop requests after a bounded number of refresh ticks", function()
+        test.it("keeps the exact stop request pending until a correlated reply", function()
             local pending = stop_request.begin("request-1")
             test.is_true(stop_request.matches(pending, "request-1"))
             test.is_false(stop_request.matches(pending, "request-2"))
-            for _ = 1, stop_request.TIMEOUT_TICKS - 1 do
-                local next_pending, timeout = stop_request.tick(pending)
-                if not next_pending then error("stop request ended before its timeout") end
-                test.is_nil(timeout)
-                pending = next_pending
-            end
-            local expired, timeout = stop_request.tick(pending)
-            test.is_nil(expired)
-            test.eq(timeout, stop_request.TIMEOUT)
+            test.is_false(stop_request.matches(pending, nil))
+            test.is_true(stop_request.matches(pending, "request-1"))
         end)
     end)
 end

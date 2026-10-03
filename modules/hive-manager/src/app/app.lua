@@ -35,7 +35,6 @@ local function own_node(): string
     if not node or node == "" then return "local" end
     return node
 end
-local VIEW_TIMEOUT = "30s"
 local function open_directory(handle: hive.Client, open_view: (directory.Attach) -> directory.Outcome): directory.Directory
     return directory.live({
         local_node = own_node(),
@@ -66,6 +65,7 @@ local function main(value: unknown)
     local frames = assert(process.listen(desktop_protocol.VIEW_FRAME, {message = true}))
     -- The open remote view, if any: this window draws its rows until it exits.
     local view: remote.View? = nil
+    local viewer_exits = channel.new(64)
     local pending_viewers: {[string]: string} = {}
     local viewer_intents: {[string]: string} = {}
     local state: model.State = model.new(model.names(entry_data(NAMES)))
@@ -99,12 +99,19 @@ local function main(value: unknown)
             pending_viewers[request.idempotency_key] = viewer
             viewer_intents[viewer] = request.idempotency_key
         end
-        local deadline = time.after(VIEW_TIMEOUT)
         local outcome: directory.Outcome? = nil
         while not outcome do
-            local selected = channel.select({view_states:case_receive(), deadline:case_receive()})
-            if not selected.ok or selected.channel == deadline then
-                outcome = {ok = false, code = "UNCERTAIN", message = "The remote view did not report within " .. VIEW_TIMEOUT .. "; retry will reconcile the same owner request"}
+            local selected = channel.select({view_states:case_receive(), viewer_exits:case_receive()})
+            if not selected.ok then
+                outcome = {ok = false, code = "UNAVAILABLE", message = "Remote view acknowledgement channel closed"}
+            elseif selected.channel == viewer_exits then
+                local event = type(selected.value) == "table" and selected.value or nil
+                if not event then error("Invalid viewer lifecycle event") end
+                if event.kind == process.event.CANCEL then outcome = {ok = false, code = "CANCELLED", message = "Remote view wait cancelled"}
+                elseif event.kind == process.event.EXIT and tostring(event.from) == viewer then
+                    local result = type(event.result) == "table" and event.result or nil
+                    outcome = {ok = false, code = "UNAVAILABLE", message = "Remote viewer exited before attachment: " .. tostring(result and result.error or "without a result")}
+                end
             elseif tostring(selected.value:from()) == viewer then
                 local decoded = remote.state(selected.value:payload():data())
                 if decoded.kind == "attached" then
@@ -265,6 +272,9 @@ local function main(value: unknown)
             updates:case_receive(), frames:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
+            if event.value.kind == process.event.CANCEL or (event.value.kind == process.event.EXIT and viewer_intents[tostring(event.value.from)]) then
+                viewer_exits:send(event.value)
+            end
             local happened = event.value
             if happened.kind == process.event.CANCEL then running = false
             elseif happened.kind == process.event.EXIT and view and tostring(happened.from) == view.pid then

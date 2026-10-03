@@ -3,7 +3,6 @@
 local security = require("security")
 local process = require("process")
 local uuid = require("uuid")
-local time = require("time")
 local channel = require("channel")
 local bounds = require("bounds")
 local catalog = require("catalog")
@@ -33,14 +32,26 @@ local function publish(request: unknown, expected: string): Result
     local topic = "bee.hub.result." .. id
     local replies, listen_error = process.listen(topic, {message = true})
     if not replies then return transaction.failure("UNAVAILABLE", tostring(listen_error)) end
-    local pid, spawn_error = process.spawn("bee.hub.service:worker", host, process.pid(), topic, request, expected)
+    local pid, spawn_error = process.spawn_monitored("bee.hub.service:worker", host, process.pid(), topic, request, expected)
     if not pid then process.unlisten(replies); return transaction.failure("UNAVAILABLE", tostring(spawn_error)) end
-    local deadline = time.after("120s")
+    local events = assert(process.events())
     while true do
-        local event = channel.select({replies:case_receive(), deadline:case_receive()})
-        if not event.ok or event.channel == deadline then
+        local event = channel.select({replies:case_receive(), events:case_receive()})
+        if not event.ok then
             process.unlisten(replies)
-            return transaction.failure("UNCERTAIN", "operation is still running or its reply was lost; check its result")
+            return transaction.failure("UNCERTAIN", "Hub worker reply channel closed")
+        end
+        if event.channel == events then
+            local observed = event.value
+            if observed.kind == process.event.CANCEL then
+                process.unlisten(replies)
+                return transaction.failure("CANCELLED", "Hub operation wait cancelled")
+            end
+            if observed.kind == process.event.EXIT and tostring(observed.from) == tostring(pid) then
+                process.unlisten(replies)
+                return transaction.failure("UNCERTAIN", "Hub worker exited before its reply: " .. tostring(type(observed.result) == "table" and observed.result.error or "without a result"))
+            end
+            goto next_worker_event
         end
         local message = event.value
         if message:from() == pid then
@@ -48,6 +59,7 @@ local function publish(request: unknown, expected: string): Result
             process.unlisten(replies)
             return result or transaction.failure("UNCERTAIN", "invalid worker reply; check the operation result")
         end
+        ::next_worker_event::
     end
     return transaction.failure("UNCERTAIN", "Hub worker did not return a result")
 end
@@ -108,15 +120,27 @@ local function handle(raw: unknown): Result
             local supplied = bounds.object(value.request) or {}
             worker_request = {plan_digest = value.expected_digest, component = supplied.component}
         end
-        local pid, spawn_error = process.spawn("bee.hub.service:publish_worker", host,
+        local pid, spawn_error = process.spawn_monitored("bee.hub.service:publish_worker", host,
             process.pid(), topic, operation, worker_request)
         if not pid then process.unlisten(replies); return transaction.failure("UNAVAILABLE", tostring(spawn_error)) end
-        local deadline = time.after("300s")
+        local events = assert(process.events())
         while true do
-            local event = channel.select({replies:case_receive(), deadline:case_receive()})
-            if not event.ok or event.channel == deadline then
+            local event = channel.select({replies:case_receive(), events:case_receive()})
+            if not event.ok then
                 process.unlisten(replies)
-                return transaction.failure("UNCERTAIN", "publication is still running or its reply was lost; check its result")
+                return transaction.failure("UNCERTAIN", "Hub publication reply channel closed")
+            end
+            if event.channel == events then
+                local observed = event.value
+                if observed.kind == process.event.CANCEL then
+                    process.unlisten(replies)
+                    return transaction.failure("CANCELLED", "Hub operation wait cancelled")
+                end
+                if observed.kind == process.event.EXIT and tostring(observed.from) == tostring(pid) then
+                    process.unlisten(replies)
+                    return transaction.failure("UNCERTAIN", "Hub worker exited before its reply: " .. tostring(type(observed.result) == "table" and observed.result.error or "without a result"))
+                end
+                goto next_worker_event
             end
             local message = event.value
             if message:from() == pid then
@@ -124,6 +148,7 @@ local function handle(raw: unknown): Result
                 process.unlisten(replies)
                 return result or transaction.failure("UNCERTAIN", "invalid publish worker reply; check the publication result")
             end
+            ::next_worker_event::
         end
         return transaction.failure("UNCERTAIN", "Hub publish worker did not return a result")
     end

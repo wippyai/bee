@@ -121,8 +121,7 @@ local function main(owner: string, width: integer, height: integer, preferences:
             local pending = status_driver.advance(current, uuid.v7(), now())
             if current.reader.availability ~= availability then changed = true end
             if pending then cases[#cases + 1] = pending.response:case_receive() end
-            local due = pending and pending.deadline or current.due
-            if not next_due or due < next_due then next_due = due end
+            if not pending and (not next_due or current.due < next_due) then next_due = current.due end
         end
         if changed then send_scene() end
         if next_due then

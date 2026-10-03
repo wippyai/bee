@@ -11,7 +11,7 @@ function M.accepts_updates(state: State): boolean
     return state.phase == "starting" or state.phase == "ready" or state.phase == "close_requested"
         or state.phase == "close_confirming" or state.phase == "close_unresponsive"
 end
-function M.start(now: number): State return {phase = "starting", deadline = now + 3, failure = ""} end
+function M.start(_: number): State return {phase = "starting", deadline = 0, failure = ""} end
 -- A ready producer that returns without an error result closed its own view.
 -- Only an error result from a ready producer is an unexpected exit.
 function M.exit_event(state: State, failed: boolean): Event
@@ -33,7 +33,7 @@ function M.reduce(state: State, event: Event, now: number, close_grace_ms: integ
     -- Negotiation is opt-in at the broker boundary. No cleanup deadline begins
     -- until the app/user accepts; silence is never permission to terminate.
     if event == "request_close" and state.phase == "ready" then
-        return {phase = "close_requested", deadline = now + 2, failure = ""}, "query_close"
+        return {phase = "close_requested", deadline = 0, failure = ""}, "query_close"
     end
     if event == "confirm_close" and state.phase == "close_requested" then
         return {phase = "close_confirming", deadline = 0, failure = ""}, "none"
@@ -52,11 +52,7 @@ function M.reduce(state: State, event: Event, now: number, close_grace_ms: integ
         return {phase = "terminating", deadline = now + 1, failure = state.failure}, "terminate"
     end
     if event == "tick" and state.deadline > 0 and now >= state.deadline then
-        if state.phase == "close_requested" then
-            return {phase = "close_unresponsive", deadline = 0, failure = ""}, "close_timeout"
-        elseif state.phase == "starting" then
-            return {phase = "terminating", deadline = now + 1, failure = "startup_timeout"}, "terminate"
-        elseif state.phase == "stopping" or state.phase == "terminating" then
+        if state.phase == "stopping" or state.phase == "terminating" then
             return {phase = "terminating", deadline = now + 1, failure = state.failure}, "terminate"
         end
     end

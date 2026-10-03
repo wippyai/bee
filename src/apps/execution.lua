@@ -3,6 +3,7 @@ local process = require("process")
 local security = require("security")
 local channel = require("channel")
 local time = require("time")
+local logger = require("logger")
 
 type Launch = {
     definition_id: string,
@@ -74,6 +75,7 @@ function M.stop(pids: {string}, events: Channel<process.Event>, grace: string): 
                 remaining = remaining - 1
             end
         else
+            logger:warn("Execution stop grace=" .. grace .. " expired; escalating to termination")
             escalated = true
             for pid in pairs(live) do
                 local _, terminate_error = process.terminate(pid)

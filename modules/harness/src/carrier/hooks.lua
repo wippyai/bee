@@ -31,7 +31,7 @@ type State = {
     batch: Batch?, checkpoint_intent: Intent?, commit: Intent?, ack: Intent?,
     checkpoint_key: string?,
     closing: boolean, closed: boolean, sealed: boolean, started: boolean,
-    drain_deadline: integer?, unresolved: boolean,
+    unresolved: boolean,
     activity: string?,
 }
 local function object(value: unknown): Object
@@ -79,7 +79,7 @@ function M.new(config: Config): State
         batch = nil, checkpoint_intent = nil, commit = nil, ack = nil,
         checkpoint_key = nil,
         closing = false, closed = false, sealed = false, started = false,
-        drain_deadline = nil, unresolved = false, activity = nil,
+        unresolved = false, activity = nil,
     }
 end
 -- Rebuild hook delivery around a checkpoint already committed by an earlier
@@ -123,7 +123,7 @@ function M.resume(config: Config, point: checkpoint.Checkpoint?, revision: integ
         batch = nil, checkpoint_intent = nil, commit = nil, ack = nil,
         checkpoint_key = "launch:" .. config.attempt_id .. ":window:checkpoint:" .. tostring(epoch),
         closing = false, closed = false, sealed = false, started = false,
-        drain_deadline = nil, unresolved = false, activity = nil,
+        unresolved = false, activity = nil,
     }, nil
 end
 function M.decode(raw: unknown): Reply?
@@ -235,7 +235,6 @@ function M.shutdown(state: State, now: integer, closed: boolean)
     if closed then state.closed = true end
     if state.closing then return end
     state.closing = true
-    state.drain_deadline = now + state.drain_ms
     state.inflight = nil
     state.due = now
     if state.unresolved or not state.hooks_enabled or not state.binding_id then
@@ -243,15 +242,6 @@ function M.shutdown(state: State, now: integer, closed: boolean)
     else
         state.work = "seal"
     end
-end
-function M.expire(state: State, now: integer)
-    state.clock = now
-    local deadline = state.drain_deadline
-    if state.work == "done" or not deadline or now < deadline then return end
-    state.unresolved = true
-    state.inflight = nil
-    state.work = "done"
-    state.due = now
 end
 function M.may_start(state: State): boolean return state.started end
 function M.finished(state: State): boolean return state.work == "done" and state.inflight == nil end

@@ -2,7 +2,6 @@
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
-local time = require("time")
 local logger = require("logger")
 local protocol = require("protocol")
 local decode = require("decode")
@@ -21,15 +20,11 @@ local function main()
         host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
             :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, workspaces.classic())))
         local started = false
-        local deadline = time.after("10s")
         while true do
             local cases = {ready:case_receive(), events:case_receive()}
-            if not started then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Headless supervisor channel closed") end
-            if selected.channel == deadline then
-                error("Workspace startup timed out")
-            elseif selected.channel == events then
+            if selected.channel == events then
                 local event = selected.value
                 -- Cancellation already invalidates this execution context.
                 -- The host handles cancellation/owner exit through its cleanup;

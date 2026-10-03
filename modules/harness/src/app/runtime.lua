@@ -176,15 +176,17 @@ local function drain_hooks(driver: delivery.Driver)
     while not hooks.finished(driver.state) do
         local cases = {}
         if pending then cases[#cases + 1] = pending.response:case_receive() end
-        local wait = math.max(1, delivery.due(driver) - now_ms())
-        local timer = assert(time.timer(tostring(wait) .. "ms"))
-        cases[#cases + 1] = timer:channel():case_receive()
+        local timer: time.Timer? = nil
+        if not pending then
+            local wait = math.max(1, delivery.due(driver) - now_ms())
+            timer = assert(time.timer(tostring(wait) .. "ms"))
+            cases[#cases + 1] = timer:channel():case_receive()
+        end
         local selected = channel.select(cases)
-        timer:stop()
+        if timer then timer:stop() end
         if pending and selected.channel == pending.response then
             delivery.complete(driver, pending, now_ms())
         end
-        hooks.expire(driver.state, now_ms())
         if hooks.finished(driver.state) then break end
         pending = delivery.advance(driver, now_ms())
     end
@@ -806,7 +808,6 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     local checkpoint_id: string? = nil
     local checkpoint_error: string? = encode_error
     if encoded and not retained then checkpoint_id, checkpoint_error = client.checkpoint(launch, encoded) end
-    local checkpoint_deadline = now_ms() + 6000
     local published_activity: string? = nil
     local published_title: string? = nil
     local function publish_title()
@@ -826,22 +827,13 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), done:case_receive(), checkpoint_results:case_receive()}
         if pending then cases[#cases + 1] = pending.response:case_receive() end
         local timer: time.Timer? = nil
-        if (state.hooks_enabled and not hooks.finished(state)) or pending or checkpoint_id then
-            local due = checkpoint_deadline
-            if (state.hooks_enabled and not hooks.finished(state)) or pending then
-                due = delivery.due(driver)
-                if checkpoint_id then due = math.min(due, checkpoint_deadline) end
-            end
+        if not pending and state.hooks_enabled and not hooks.finished(state) then
+            local due = delivery.due(driver)
             timer = assert(time.timer(tostring(math.max(1, due - now_ms())) .. "ms"))
             cases[#cases + 1] = timer:channel():case_receive()
         end
         local selected = channel.select(cases)
         if timer then timer:stop() end
-        if checkpoint_id and now_ms() >= checkpoint_deadline then
-            checkpoint_id = nil
-            checkpoint_error = "application checkpoint acknowledgement timed out"
-            publish_title()
-        end
         if pending and selected.channel == pending.response then
             delivery.complete(driver, pending, now_ms())
             local activity = state.activity

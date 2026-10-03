@@ -2,13 +2,12 @@
 -- Only the authenticated bootstrap owner may reach this adapter. It owns no SQL.
 local funcs = require("funcs")
 local channel = require("channel")
-local time = require("time")
 local contract = require("contract")
 type Channel = channel.Channel
 type Request = {request_id: string, op: "list" | "allocate", desktop_id: string?}
 type Identity = {desktop_id: string, is_default: boolean}
 type Reply = {code: string, message: string, desktop_id: string, desktops: {Identity}}
-type Pending = {request: Request, future: funcs.Future, response: Channel<unknown>, deadline: Channel<time.Time>}
+type Pending = {request: Request, future: funcs.Future, response: Channel<unknown>}
 local M = {}
 function M.request(value: unknown, workspace_id: string): Request?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
@@ -68,11 +67,11 @@ function M.start(request: Request): (Pending?, string?)
     if not future then return nil, tostring(err) end
     -- The pinned manifest exposes this native response channel as any. Its
     -- payload remains unknown until complete validates the function reply.
-    return {request = request, future = future, response = future:response(), deadline = time.after("5s")}
+    return {request = request, future = future, response = future:response()}
 end
 function M.complete(pending: Pending): Reply
     local result, err = pending.future:result()
-    if err or not result then return M.failure(pending.request, "UNAVAILABLE", "Desktop storage operation outcome is unknown") end
+    if err or not result then return M.failure(pending.request, "UNAVAILABLE", "Desktop storage failed: " .. tostring(err or "missing result")) end
     local reply = decode(result:data(), pending.request)
     return reply or M.failure(pending.request, "UNAVAILABLE", "Invalid desktop storage reply; operation outcome is unknown")
 end

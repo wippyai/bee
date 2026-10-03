@@ -133,7 +133,6 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local paused = false
         local waiting_presenter = false
         local presenter_failures = 0
-        local presenter_deadline = time.after("3s")
         local inbox_state: inbox.State? = nil
         local shutdown_question: interaction.Wire? = nil
         local shutdown_answered = ""
@@ -343,10 +342,17 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             -- this owner. Its acknowledgement carries the entire final projection.
             local request_id = uuid.v7()
             send(session, "bee.desktop.command", {version = 1, op = "snapshot", request_id = request_id})
-            local deadline = time.after("1s")
             while true do
-                local selected = channel.select({acknowledgements:case_receive(), deadline:case_receive()})
-                if not selected.ok or selected.channel == deadline then error("Client layout save acknowledgement timed out") end
+                local selected = channel.select({acknowledgements:case_receive(), events:case_receive()})
+                if not selected.ok then error("Client layout save acknowledgement channel closed") end
+                if selected.channel == events then
+                    local event = selected.value
+                    if event.kind == process.event.CANCEL then error("Client layout save cancelled") end
+                    if event.kind == process.event.EXIT and (tostring(event.from) == session or tostring(event.from) == owner or tostring(event.from) == host) then
+                        error("Client layout save dependency exited: " .. tostring(event.from) .. ": " .. (decode.exit_error(event.result) or "without acknowledging the snapshot"))
+                    end
+                    goto next_snapshot_ack
+                end
                 local message = selected.value
                 if tostring(message:from()) == session then
                     local data: unknown = message:payload():data()
@@ -357,6 +363,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                         return
                     end
                 end
+                ::next_snapshot_ack::
             end
         end
         local function request_quit(): boolean
@@ -459,7 +466,6 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local updates = assert(display.view:updates())
         local function spawn_presenter(): nil
             waiting_presenter = true
-            presenter_deadline = time.after("3s")
             local grant = assert(display.view:grant())
             local presenter_actor = assert(security.new_actor("bee.desktop/" .. workspace_id, {workspace_id = workspace_id}))
             presenter = tostring(assert(process.with_options({terminal = grant}):with_actor(presenter_actor):with_context({["bee.workspace_owner"] = self,
@@ -562,7 +568,6 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 -- stop consuming app removals and scene edits. Host cleanup must
                 -- not overwrite the layout that will be restored on next boot.
                 if saved_for_exit then cases = {events:case_receive(), supervisor_controls:case_receive(), copy_results:case_receive()} end
-                if waiting_presenter and not saved_for_exit then cases[#cases + 1] = presenter_deadline:case_receive() end
                 -- These channels are independent of admission delivery. Leave their
                 -- initial snapshots queued until we can validate the connection.
                 if connection_id ~= "" and not saved_for_exit then
@@ -578,10 +583,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 if not saved_for_exit then cases[#cases + 1] = switch_answers:case_receive() end
                 local selected = channel.select(cases)
                 if not selected.ok then break end
-                if selected.channel == presenter_deadline then
-                    log:warn("Presenter readiness timed out", {workspace_id = workspace_id, presenter = presenter})
-                    pause_presenter()
-                elseif defaults_ticks and selected.channel == defaults_ticks then
+                if defaults_ticks and selected.channel == defaults_ticks then
                     local defaults = node_defaults
                     if defaults and layout.appearance_mode == "inherit" and defaults_request == "" and next(appearance_pending) == nil
                         and (layout.preferences.theme ~= defaults.preferences.theme
@@ -619,14 +621,22 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             connection_id, renderer_generation, controls_apps)
                         if not handoff.decode(checkpoint, owner, host, workspace_id) then error("Cannot checkpoint client replacement") end
                         send(owner, "bee.client.replace", checkpoint)
-                        local deadline = time.after("3s")
                         while true do
-                            local answer = channel.select({replace_acks:case_receive(), deadline:case_receive()})
-                            if not answer.ok or answer.channel == deadline then error("Client replacement was not acknowledged") end
+                            local answer = channel.select({replace_acks:case_receive(), events:case_receive()})
+                            if not answer.ok then error("Client replacement acknowledgement channel closed") end
+                            if answer.channel == events then
+                                local event = answer.value
+                                if event.kind == process.event.CANCEL then return end
+                                if event.kind == process.event.EXIT and tostring(event.from) == owner then
+                                    error("Client owner exited before replacement acknowledgement: " .. (decode.exit_error(event.result) or "without a result"))
+                                end
+                                goto next_replacement_ack
+                            end
                             local message = answer.value
                             local data: unknown = message:payload():data()
                             if tostring(message:from()) == owner and type(data) == "table" and data.version == 1
                                 and data.workspace_id == workspace_id and data.display_id == database.client_id then break end
+                            ::next_replacement_ack::
                         end
                         break
                     end

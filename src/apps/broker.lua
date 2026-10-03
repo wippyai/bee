@@ -32,7 +32,7 @@ type AliasBackfill = {instance_id: string, definition_id: string}
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
-type Checkpoint = {request_id: string, pid: string, deadline: number, resume_state: string}
+type Checkpoint = {request_id: string, pid: string, resume_state: string}
 type Replacement = {revision: string, code: string, exited: boolean}
 type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
     descriptor: contract.Descriptor, code: string, notice: string?, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string, failure_detail: string?,
@@ -327,7 +327,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local shutdown_dialog: interaction.Spec? = nil
     local quit_sent = false
     local cleanup_request = ""
-    local cleanup_deadline = 0
     local cleanup_complete = false
     local function publish_dialogs()
         local items: {interaction.Wire} = {}
@@ -1066,8 +1065,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local running = true
     local replace_requested = false
     local replace_acked = false
-    local replace_deadline = 0
-    local replace_started = 0
     local replace_retry_at = 0
     local deadline_timer: time.Timer? = nil
     local admission_poller = assert(time.ticker("1s"))
@@ -1077,12 +1074,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if value > 0 and (due == nil or value < due) then due = value end
         end
         if replace_requested and not replace_acked then
-            consider(replace_started + 10)
             consider(replace_retry_at)
         end
-        if replace_acked then consider(replace_deadline) end
-        if cleanup_request ~= "" and not cleanup_complete then consider(cleanup_deadline) end
-        for _, waiter in pairs(checkpoint_waiters) do consider(waiter.deadline) end
         for _, item in pairs(instances) do consider(item.state.deadline) end
         for _, raw_coordinator in pairs(binding_engine.coordinators) do
             local coordinator: BindingCoordinator = raw_coordinator
@@ -1112,11 +1105,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             next_admission_check = now() + 1
         end
         if replace_requested and not replace_acked then
-            if current - replace_started >= 10 then
-                process.send(owner, "bee.app.replace_failed", {version = 1, schema = 1,
-                    workspace_id = workspace_id, broker = tostring(process.pid()), reason = "drain_timeout"})
-                replace_requested = false
-            elseif current >= replace_retry_at then
+            if current >= replace_retry_at then
                 process.send(owner, "bee.app.replacing", {version = 1, schema = 1,
                     workspace_id = workspace_id, broker = tostring(process.pid())})
                 replace_retry_at = current + 0.1
@@ -1134,15 +1123,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     thread_binding.reset(coordinator)
                     thread_binding.drive(binding_engine, binding_context, coordinator, {kind = "recover", binding = binding})
                 end
-            end
-        end
-        for id, waiter in pairs(checkpoint_waiters) do
-            if current >= waiter.deadline then
-                process.send(waiter.pid, "bee.app.checkpoint_result", {version = 1, request_id = waiter.request_id,
-                    error_code = "timeout", error = "Checkpoint persistence timed out"})
-                checkpoint_waiters[id] = nil
-                local item = find_pid(waiter.pid)
-                if item then start_replacement(item) end
             end
         end
         for _, item in pairs(instances) do
@@ -1179,7 +1159,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if tostring(message:from()) == owner and type(data) == "table" and data.version == 1
                 and data.schema == 1 and data.workspace_id == workspace_id and data.broker == tostring(process.pid()) then
                 if data.accepted == true then
-                    replace_acked, replace_deadline = true, now() + 5
+                    replace_acked = true
                     replace_retry_at = 0
                 elseif replace_requested then replace_retry_at = now() + 0.1 end
             end
@@ -1284,8 +1264,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if event.kind == process.event.CANCEL or (event.kind == process.event.EXIT and tostring(event.from) == owner) then break end
             if event.kind == process.event.OUTDATED then
                 replace_requested = true
-                replace_started = now()
-                replace_retry_at = replace_started + 0.1
+                replace_retry_at = now() + 0.1
                 process.send(owner, "bee.app.replacing", {version = 1, schema = 1,
                     workspace_id = workspace_id, broker = tostring(process.pid())})
             end
@@ -1418,7 +1397,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                             end
                         end
                         local routed_id = uuid.v7()
-                        checkpoint_waiters[routed_id] = {request_id = request_id, pid = item.execution_pid, deadline = now() + 5,
+                        checkpoint_waiters[routed_id] = {request_id = request_id, pid = item.execution_pid,
                             resume_state = data.resume_state}
                         local record = identified(item, "open", routed_id)
                         record.resume_state = data.resume_state
@@ -1600,7 +1579,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     fingerprints[req.request_id] = fingerprint
                     if req.op == "shutdown" then
                         if cleanup_request == "" then
-                            cleanup_request, cleanup_deadline = req.request_id, now() + 3.5
+                            cleanup_request = req.request_id
                             shutdown_dialog = nil
                             publish_dialogs()
                             for _, item in pairs(instances) do
@@ -1794,25 +1773,14 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if not live and not writes then
                 cleanup_complete = true
                 emit(contract.reply(cleanup_request, "shutdown"), true)
-            elseif now() >= cleanup_deadline then
-                cleanup_complete = true
-                emit(contract.reply(cleanup_request, "shutdown", "cleanup_incomplete",
-                    "Workspace cleanup timed out; some process exits or writes remain unacknowledged"), true)
+
             end
         end
         if replace_acked then
             local writes = false
             for _ in pairs(checkpoint_waiters) do writes = true; break end
             if not writes then break end
-            if now() >= replace_deadline then
-                for id, waiter in pairs(checkpoint_waiters) do
-                    process.send(waiter.pid, "bee.app.checkpoint_result", {version = 1,
-                        request_id = waiter.request_id, error_code = "uncertain",
-                        error = "Broker replacement ended before checkpoint persistence was acknowledged"})
-                    checkpoint_waiters[id] = nil
-                end
-                break
-            end
+
         end
         if now() >= next_admission_check then process_deadlines() end
         acknowledge_binding_recovery()

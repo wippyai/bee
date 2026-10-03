@@ -4,10 +4,9 @@ local funcs = require("funcs")
 local channel = require("channel")
 local hooks = require("hooks")
 local M = {}
-M.TIMEOUT_MS = 35000
 type Channel = channel.Channel
 type Start = (hooks.Intent) -> (funcs.Future?, string?)
-type Pending = {identity: string, future: funcs.Future, response: Channel<unknown>, intent: hooks.Intent, deadline: integer}
+type Pending = {identity: string, future: funcs.Future, response: Channel<unknown>, intent: hooks.Intent}
 type Driver = {state: hooks.State, start: Start, key: () -> string, pending: Pending?}
 function M.new(state: hooks.State, start: Start, key: () -> string): Driver
     return {state = state, start = start, key = key, pending = nil}
@@ -19,17 +18,10 @@ local function cancel(driver: Driver)
 end
 function M.advance(driver: Driver, now: integer): Pending?
     local state = driver.state
-    hooks.expire(state, now)
+    state.clock = now
     if hooks.finished(state) then cancel(driver); return nil end
     local pending = driver.pending
-    if pending then
-        if now >= pending.deadline then
-            cancel(driver)
-            hooks.lost(state, pending.identity)
-        else
-            return pending
-        end
-    end
+    if pending then return pending end
     local intent = hooks.next_intent(state, driver.key(), now)
     if not intent then return nil end
     local identity = driver.key()
@@ -47,22 +39,12 @@ function M.advance(driver: Driver, now: integer): Pending?
         hooks.backoff(state, now)
         return nil
     end
-    local deadline = now + M.TIMEOUT_MS
-    local drain = state.drain_deadline
-    if drain and drain < deadline then deadline = drain end
-    local admitted: Pending = {identity = identity, future = future, response = response, intent = intent, deadline = deadline}
+    local admitted: Pending = {identity = identity, future = future, response = response, intent = intent}
     driver.pending = admitted
     return admitted
 end
 function M.complete(driver: Driver, pending: Pending, now: integer): boolean
     if driver.pending ~= pending then return false end
-    if now >= pending.deadline then
-        cancel(driver)
-        driver.state.clock = now
-        hooks.lost(driver.state, pending.identity)
-        hooks.expire(driver.state, now)
-        return false
-    end
     driver.pending = nil
     driver.state.clock = now
     local result, err = pending.future:result()
@@ -82,8 +64,6 @@ function M.shutdown(driver: Driver, now: integer, closed: boolean)
     hooks.shutdown(driver.state, now, closed)
 end
 function M.due(driver: Driver): integer
-    local pending = driver.pending
-    if pending then return pending.deadline end
     return driver.state.due
 end
 function M.cancel(driver: Driver)

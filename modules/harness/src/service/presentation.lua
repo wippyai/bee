@@ -1,7 +1,6 @@
 -- MIT. Retained presentation uses the admitted window executor and hooks.
 local process = require("process")
 local channel = require("channel")
-local time = require("time")
 local uuid = require("uuid")
 local hash = require("hash")
 local security = require("security")
@@ -22,26 +21,39 @@ local function rpc(target: string?, request: Object, startup: admission.Request?
     local token = CALLER .. assert(uuid.v7())
     local replies = assert(process.listen(REPLY, {message = true}))
     assert(process.registry.register(token))
+    local signals = assert(process.events())
     request.caller_token = token
     local sent: boolean? = nil
     local err: unknown = nil
     if startup and name then
-        local spawned, spawn_error = process.with_options({}):with_scope(assert(security.scope())):spawn("bee.harness.service:presentation_owner", "bee:workers", startup, name, token, operation_key)
+        local spawned, spawn_error = process.with_options({}):with_scope(assert(security.scope())):spawn_monitored("bee.harness.service:presentation_owner", "bee:workers", startup, name, token, operation_key)
         if spawned then target = tostring(spawned); sent = true else err = spawn_error end
-    elseif target then sent, err = process.send(target, TOPIC, request) end
+    elseif target then
+        local monitored, monitor_error = process.monitor(target)
+        if monitored then sent, err = process.send(target, TOPIC, request) else err = monitor_error end
+    end
     local reply: Object = fail(tostring(err or "window owner did not answer"))
     if sent then
-        local timer = assert(time.timer("30s"))
         while true do
-            local event = channel.select({replies:case_receive(), timer:channel():case_receive()})
-            if not event.ok or event.channel ~= replies then break end
+            local event = channel.select({replies:case_receive(), signals:case_receive()})
+            if not event.ok then reply = fail("window reply channel closed"); break end
+            if event.channel == signals then
+                local observed = event.value
+                if observed.kind == process.event.CANCEL then reply = fail("window wait cancelled"); break end
+                if observed.kind == process.event.EXIT and tostring(observed.from) == target then
+                    local result = bounds.object(observed.result)
+                    reply = fail("window owner exited before acknowledgement: " .. tostring(result and result.error or "without a result")); break
+                end
+                goto next_window_reply
+            end
             if tostring(event.value:from()) == target then
                 local value = bounds.object(event.value:payload():data())
                 if value and value.caller_token == token then reply = value; reply.caller_token = nil; break end
             end
+            ::next_window_reply::
         end
-        timer:stop()
     end
+    if target then process.unmonitor(target) end
     process.registry.unregister(token, process.registry.LOCAL)
     process.unlisten(replies)
     return reply

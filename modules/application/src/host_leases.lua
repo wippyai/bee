@@ -219,10 +219,12 @@ function M.read_holdings(query: {after: string?, limit: integer?}?, timeout: str
     local timer, timer_error = time.timer(timeout)
     if not timer then process.unlisten(answers); return nil, tostring(timer_error) end
     local deadline = timer:channel()
+    local interruption = "host manager reply channel closed"
     local answer: unknown? = nil
     while true do
         local selected = channel.select({answers:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then break end
+        if not selected.ok then break end
+        if selected.channel == deadline then interruption = "host manager wait timeout=" .. timeout .. " expired"; break end
         if tostring(selected.value:from()) == tostring(manager) then
             local data: unknown = selected.value:payload():data()
             local object = bounds.object(data)
@@ -231,7 +233,7 @@ function M.read_holdings(query: {after: string?, limit: integer?}?, timeout: str
     end
     timer:stop()
     process.unlisten(answers)
-    if answer == nil then return nil, "the host manager did not answer the holdings request" end
+    if answer == nil then return nil, interruption .. " during holdings" end
     local page, invalid = M.holdings_result(answer)
     if not page then return nil, invalid or "the host manager answered a malformed holdings page" end
     return page, nil
@@ -267,10 +269,12 @@ function M.acquire(selected: string, timeout: string): (Lease?, string?)
         return nil, tostring(timer_error)
     end
     local deadline = timer:channel()
+    local interruption = "host manager reply channel closed"
     local result: Result? = nil
     while true do
         local selected = channel.select({results:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then break end
+        if not selected.ok then break end
+        if selected.channel == deadline then interruption = "host manager wait timeout=" .. timeout .. " expired"; break end
         if tostring(selected.value:from()) == tostring(manager) then
             local candidate = M.result(selected.value:payload():data())
             if candidate and candidate.request_id == request_id then result = candidate; break end
@@ -281,7 +285,7 @@ function M.acquire(selected: string, timeout: string): (Lease?, string?)
     if not result then
         process.send(manager, M.RELEASE, {version = 1, lease = name})
         release_name(name)
-        return nil, "the host manager did not answer; the lease was released"
+        return nil, interruption .. " during acquire; lease release requested"
     end
     if result.error_code ~= "" then
         release_name(name)
@@ -305,10 +309,12 @@ function M.attach(lease: Lease, timeout: string): (HostReadiness?, string?)
     local timer, timer_error = time.timer(timeout)
     if not timer then process.unlisten(answers); return nil, tostring(timer_error) end
     local deadline = timer:channel()
+    local interruption = "host manager reply channel closed"
     local answer: Attached? = nil
     while true do
         local selected = channel.select({answers:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then break end
+        if not selected.ok then break end
+        if selected.channel == deadline then interruption = "host manager wait timeout=" .. timeout .. " expired"; break end
         if tostring(selected.value:from()) == tostring(manager) then
             local candidate = M.attached(selected.value:payload():data())
             if candidate and candidate.request_id == request_id then answer = candidate; break end
@@ -316,7 +322,7 @@ function M.attach(lease: Lease, timeout: string): (HostReadiness?, string?)
     end
     timer:stop()
     process.unlisten(answers)
-    if not answer then return nil, "the host manager did not answer the attach" end
+    if not answer then return nil, interruption .. " during attach" end
     if answer.workspace_id ~= lease.workspace_id then return nil, "the host manager attached another workspace" end
     if answer.result.kind == "failed" then return nil, answer.result.code .. ": " .. answer.result.message end
     if answer.result.value.workspace_id ~= lease.workspace_id then return nil, "the host manager attached another workspace" end

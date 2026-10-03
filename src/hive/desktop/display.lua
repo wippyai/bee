@@ -64,11 +64,21 @@ local function register_lifetime(owner_node: string): (string?, string?)
     local sent, send_error = process.send(supervisor, protocol.LIFETIME,
         {version = 1, op = "register", ticket = ticket, owner_node = owner_node})
     if not sent or send_error then process.unlisten(replies); return nil, "local lifetime registration unavailable" end
-    local guard = time.after(DEFAULT_TIMEOUT)
+    local signals = assert(process.events())
+    assert(process.monitor(supervisor))
     local result: string? = nil
     while true do
-        local selected = channel.select({replies:case_receive(), guard:case_receive()})
-        if not selected.ok or selected.channel == guard then result = "local lifetime registration timed out"; break end
+        local selected = channel.select({replies:case_receive(), signals:case_receive()})
+        if not selected.ok then result = "local lifetime reply channel closed"; break end
+        if selected.channel == signals then
+            local event = selected.value
+            if event.kind == process.event.CANCEL then result = "local lifetime registration cancelled"; break end
+            if event.kind == process.event.EXIT and tostring(event.from) == supervisor then
+                local observed = type(event.result) == "table" and event.result or nil
+                result = "local supervisor exited before lifetime registration: " .. tostring(observed and observed.error or "without a result"); break
+            end
+            goto next_lifetime_reply
+        end
         local message = selected.value
         if tostring(message:from()) == supervisor then
             local data: unknown = message:payload():data()
@@ -77,7 +87,9 @@ local function register_lifetime(owner_node: string): (string?, string?)
                 break
             end
         end
+        ::next_lifetime_reply::
     end
+    process.unmonitor(supervisor)
     process.unlisten(replies)
     if result then return nil, result end
     return ticket, nil

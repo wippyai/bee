@@ -348,21 +348,18 @@ function M.cancel(run: Run, wait_ms: integer?, idempotency_key: string?, options
     if intent_refused then return intent_refused end
     local deadline = math.floor(time.now():unix_nano() / 1000000) + budget
     local stopped = false
-    local uncertain_stop = false
     while math.floor(time.now():unix_nano() / 1000000) < deadline do
         if not stopped then
-            local live, _, cur_stored = M.status(run)
+            local live, status_error, cur_stored = M.status(run)
+            if not live then return status_error or fail("UNAVAILABLE", "the attempt did not answer") end
             if live and live.state == "ended" then return {ok = true, error = nil, value = live} end
             if live and (live.state == "running" or live.state == "cancelling") and cur_stored then
                 if opts.stop then
                     local ok_stop, stop_refused = opts.stop(cur_stored)
                     if ok_stop then
                         stopped = true
-                    elseif stop_refused and stop_refused.error and stop_refused.error.code == "DENIED" then
-                        return stop_refused
                     else
-                        uncertain_stop = true
-                        stopped = true
+                        return stop_refused or fail("UNAVAILABLE", "stop failed")
                     end
                 else
                     stopped = true
@@ -375,17 +372,18 @@ function M.cancel(run: Run, wait_ms: integer?, idempotency_key: string?, options
             if remaining <= 0 then break end
             local wait_slice = remaining > 1000 and 1000 or remaining
             local wait_reply = M.wait(run, wait_slice)
-            if wait_reply.ok and wait_reply.value then
+            if not wait_reply.ok then return wait_reply end
+            if wait_reply.value then
                 local after = bounds.object(wait_reply.value)
                 if after and after.state == "ended" then return {ok = true, error = nil, value = after} end
             end
         end
     end
 
-    local final_status = M.status(run)
+    local final_status, final_error = M.status(run)
+    if not final_status then return final_error or fail("UNAVAILABLE", "the attempt did not answer") end
     if final_status and final_status.state == "ended" then return {ok = true, error = nil, value = final_status} end
-    return {ok = true, error = nil, value = {thread_id = run.thread_id, attempt_id = run.attempt_id,
-        state = "cancelling", cancel_intent = true, uncertain = uncertain_stop or nil}}
+    return fail("DEADLINE_EXCEEDED", "Cancellation observation wait_ms=" .. tostring(budget) .. " expired; recorded state=" .. tostring(final_status.state))
 end
 
 function M.cancelled(run: Run): boolean

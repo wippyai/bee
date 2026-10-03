@@ -113,8 +113,8 @@ entries:
   meta:
     comment: The explicitly admitted Agent Open facade may address the selected local workspace host; it cannot publish, activate or edit the registry.
   policy:
-    expression: '((action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "process.registry.register" && resource matches "^bee[.]app[.](open|presentation)/[0-9a-f-]+$") || (action == "process.registry.unregister" && resource matches "^bee[.]app[.](open|presentation)/[0-9a-f-]+$") || action == "process.send")'
-    actions: [process.registry.lookup, process.registry.register, process.registry.unregister, process.send]
+    expression: '((action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "process.registry.register" && resource matches "^bee[.]app[.](open|presentation)/[0-9a-f-]+$") || (action == "process.registry.unregister" && resource matches "^bee[.]app[.](open|presentation)/[0-9a-f-]+$") || action in ["process.send", "process.monitor"])'
+    actions: [process.registry.lookup, process.registry.register, process.registry.unregister, process.send, process.monitor]
     resources: '*'
     effect: allow
 - name: sync_distribution_policy

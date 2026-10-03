@@ -1485,11 +1485,11 @@ function M.close(io: IO, session: Session): (placement_types.Attempt?, string?)
     local binding_id = session.checkpoint.gateway_binding
     if binding_id and session.plan.gateway and #session.plan.gateway.hooks > 0 then
         io.call(M.GATEWAY .. ":seal", {binding_id = binding_id})
-        local deadline = io.now_ms() + session.plan.policy.drain_ms
         local was_settled = session.settled
         session.settled = nil
-        while io.now_ms() < deadline do
-            local drained = M.drain_hooks(io, session)
+        while true do
+            local drained, drain_error = M.drain_hooks(io, session)
+            if drain_error then session.settled = was_settled; return nil, drain_error end
             if drained == 0 then break end
         end
         session.settled = was_settled
@@ -1645,6 +1645,7 @@ function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Set
     -- output; elapsed time never implies completeness.
     if session.output == "open" then session.output = "incomplete" end
     local reason = decided.reason
+    if drain_elapsed and not M.drained(session) then reason = reason .. "; carrier drain_ms=" .. tostring(session.plan.policy.drain_ms) .. " expired after runner exit" end
     if session.output ~= "complete" then
         reason = reason .. "; output " .. session.output .. ", so the ended streams do not prove complete output"
     end

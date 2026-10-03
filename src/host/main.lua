@@ -149,7 +149,6 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local restore_schedule = restores.new(restore_queue)
     local ready = resumed ~= nil
     local host_upgrading = false
-    local upgrade_deadline: Channel<time.Time>? = nil
     local stopping = false
     local fatal: string? = nil
     local broker_exited = false
@@ -167,7 +166,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
     -- Keys are internal broker request IDs, never caller receipt IDs.  This
     -- keeps transfer replies out of the ordinary client-route namespace.
     local pending_transfers: {[string]: {request: transfer.Request, source: string, caller: string, receipt: string}} = {}
-    type OpenWaiters = {callers: {string}, definition_id: string, arguments_fingerprint: string, expires: number?, display_id: string?}
+    type OpenWaiters = {callers: {string}, definition_id: string, arguments_fingerprint: string, display_id: string?}
     local pending_opens: {[string]: OpenWaiters} = {}
     local MAX_OPEN_WAITERS = 16
     local MAX_PENDING_OPENS = 64
@@ -303,7 +302,6 @@ local function main(owner: string, workspace: unknown, database_resource: string
         if committed then snapshot = next end
         return committed, err
     end
-    local open_timer: time.Timer? = nil
     local function binding_failure(request: binding_protocol.Request)
         -- Storage errors are deliberately not forwarded as an authority or
         -- database diagnostic. The coordinator receives a stable typed fault
@@ -353,76 +351,41 @@ local function main(owner: string, workspace: unknown, database_resource: string
                 local request_id = uuid.v7()
                 assert(process.send(owner, "bee.host.upgrading", {version = 1, schema = 1,
                     workspace_id = workspace_id, request_id = request_id, broker = broker}))
-                local deadline = time.after("3s")
                 local acknowledged = false
                 while true do
-                    local response = channel.select({upgrade_acks:case_receive(), deadline:case_receive()})
-                    if not response.ok or response.channel == deadline then break end
+                    local response = channel.select({upgrade_acks:case_receive(), events:case_receive()})
+                    if not response.ok then error("Host upgrade acknowledgement channel closed") end
+                    if response.channel == events then
+                        local event = response.value
+                        if event.kind == process.event.CANCEL then error("Host upgrade cancelled") end
+                        if event.kind == process.event.EXIT and (tostring(event.from) == owner or tostring(event.from) == broker) then
+                            error("Host upgrade dependency exited: " .. tostring(event.from) .. ": " .. (decode.exit_error(event.result) or "without a result"))
+                        end
+                        goto next_upgrade_ack
+                    end
                     local message = response.value
                     local value: unknown = message:payload():data()
                     if tostring(message:from()) == owner and type(value) == "table"
                         and value.version == 1 and value.schema == 1 and value.workspace_id == workspace_id
                         and value.request_id == request_id then acknowledged = true; break end
+                    ::next_upgrade_ack::
                 end
                 if acknowledged then
                     database:close()
                     process.upgrade("", owner, workspace, database_resource, saved)
-                else
-                    host_upgrading, upgrade_deadline = false, nil
-                resume_clients()
-                    deliver("bee.host.upgrade_failed", {version = 1, schema = 1,
-                        workspace_id = workspace_id, reason = "owner_ack_timeout"})
+
                 end
             end
             local cases = {requests:case_receive(), open_requests:case_receive(), replies:case_receive(), catalogs:case_receive(),
                 checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), transfer_requests:case_receive(), broker_replacements:case_receive(), broker_replace_failures:case_receive(),
                 selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), broker_ready:case_receive(), binding_requests:case_receive(), binding_recovered:case_receive(), events:case_receive()}
-            if upgrade_deadline then cases[#cases + 1] = upgrade_deadline:case_receive() end
-            local next_expiry: number? = nil
-            for _, pending in pairs(pending_opens) do
-                if pending.expires and (not next_expiry or pending.expires < next_expiry) then next_expiry = pending.expires end
-            end
-            if next_expiry then
-                local delay = math.max(1, math.ceil(next_expiry * 1000 - time.now():unix_nano() / 1000000))
-                open_timer = assert(time.timer(tostring(delay) .. "ms"))
-                cases[#cases + 1] = open_timer:channel():case_receive()
-            end
             local selected = channel.select(cases)
-            local expired = open_timer and selected.channel == open_timer:channel()
-            if open_timer then open_timer:stop(); open_timer = nil end
             if not selected.ok then break end
-            if upgrade_deadline and selected.channel == upgrade_deadline then
-                host_upgrading, upgrade_deadline = false, nil
-                resume_clients()
-                deliver("bee.host.upgrade_failed", {version = 1, schema = 1,
-                    workspace_id = workspace_id, reason = "drain_timeout"})
-            elseif expired then
-                local now = clock.epoch_seconds(time.now())
-                for request_id, raw_pending in pairs(pending_opens) do
-                    local pending: OpenWaiters = raw_pending
-                    if pending.expires and now >= pending.expires then
-                        -- Keep the bounded in-flight record until the broker
-                        -- settles, so a late success can still claim the
-                        -- originating display assignment. Its slot remains
-                        -- charged as backpressure; no retry is issued.
-                        local reply = contract.reply(request_id, "open", "uncertain", "Application open outcome is unknown")
-                        reply.workspace_id = workspace_id
-                        local callers: {string} = pending.callers
-                        for _, caller in ipairs(callers) do
-                            process.send(caller, "bee.host.application.reply", {version = 1, workspace_id = workspace_id,
-                                request_id = request_id, reply = reply})
-                        end
-                        local released: {string} = {}
-                        pending.callers = released
-                        pending.expires = nil
-                    end
-                end
-            elseif selected.channel == events then
+            if selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then break end
                 if event.kind == process.event.OUTDATED then
                     host_upgrading, ready = true, false
-                    upgrade_deadline = time.after("5s")
                 end
                 if event.kind == process.event.EXIT and tostring(event.from) == broker then
                     broker_exited = true
@@ -590,8 +553,6 @@ local function main(owner: string, workspace: unknown, database_resource: string
                             local fingerprint = contract.argument_fingerprint(request.arguments)
                             if waiters.definition_id ~= request.definition_id or waiters.arguments_fingerprint ~= fingerprint then
                                 send_open(caller, contract.reply(request.request_id, "open", "request_conflict", "Request ID was reused for another application"))
-                            elseif not waiters.expires then
-                                send_open(caller, contract.reply(request.request_id, "open", "uncertain", "Application open outcome is unknown"))
                             elseif #waiters.callers >= MAX_OPEN_WAITERS then
                                 send_open(caller, contract.reply(request.request_id, "open", "busy", "Too many callers are waiting for this open"))
                             else
@@ -605,7 +566,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                             else
                                 pending_opens[request.request_id] = {callers = {caller}, definition_id = request.definition_id,
                                     arguments_fingerprint = contract.argument_fingerprint(request.arguments),
-                                    expires = clock.epoch_seconds(time.now()) + 30, display_id = display_id}
+                                    display_id = display_id}
                                 local sent, send_error = process.send(broker, "bee.app.request", {version = 1, request_id = request.request_id, op = "open",
                                     workspace_id = workspace_id, id = "", instance_id = "", definition_id = request.definition_id,
                                     thread_id = request.provenance and request.provenance.thread_id or nil, runtime_provenance = request.provenance,
@@ -784,7 +745,6 @@ local function main(owner: string, workspace: unknown, database_resource: string
         end
     end
     local completed, run_error = pcall(run)
-    if open_timer then open_timer:stop() end
     pending_opens = {}
     database:close()
     process.registry.unregister(host_registry_name)

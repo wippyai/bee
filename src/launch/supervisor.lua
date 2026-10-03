@@ -68,7 +68,8 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             local deadline = time.after("1s")
             while true do
                 local selected = channel.select({acknowledgements:case_receive(), deadline:case_receive()})
-                if not selected.ok or selected.channel == deadline then return end
+                if not selected.ok then log:warn("Client failure-report reply channel closed", {original_failure = failure}); return end
+                if selected.channel == deadline then log:warn("Client failure-report acknowledgement bound=1s expired", {original_failure = failure}); return end
                 local message = selected.value
                 if tostring(message:from()) == recipient
                     and protocol.request(message:payload():data(), workspace) == request_id then return end
@@ -142,7 +143,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local connection_id = ""
         local replacing_host = false
         local host_restarts = 0
-        local host_deadline: Channel<time.Time>? = nil
         local phase: Phase = "booting"
         local pending = ""
         local quit_pending = false
@@ -150,11 +150,9 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local deferred_renderer: string? = nil
         local deferred_quit: protocol.Quit? = nil
         local question: interaction.Spec? = nil
-        local deadline = time.after("10s")
         local function advance(next_phase: Phase)
             local previous = phase
             phase = next_phase
-            if next_phase ~= "running" then deadline = time.after("10s") end
             if previous ~= next_phase then report_startup_progress(next_phase) end
         end
         local function send(recipient: string, topic: string, value: unknown)
@@ -264,33 +262,17 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 cases[#cases + 1] = activations:case_receive()
             end
             if retained_displays then
-                for _, timer in ipairs(desktop_lifecycle.deadlines(retained_displays)) do cases[#cases + 1] = timer:case_receive() end
                 cases[#cases + 1] = switch_requests:case_receive()
                 cases[#cases + 1] = switch_results:case_receive()
             end
             if current_storage then
                 cases[#cases + 1] = current_storage.response:case_receive()
-                cases[#cases + 1] = current_storage.deadline:case_receive()
             end
-            if phase ~= "running" then cases[#cases + 1] = deadline:case_receive() end
-            if host_deadline then cases[#cases + 1] = host_deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Local supervisor channel closed") end
-            if retained_displays and desktop_lifecycle.timeout(retained_displays, selected.channel) then
-                -- This deadline belongs only to the selected desktop.
-            elseif current_storage and (selected.channel == current_storage.response or selected.channel == current_storage.deadline) then
+            if current_storage and selected.channel == current_storage.response then
                 storage_pending = nil
-                local reply = selected.channel == current_storage.response and desktop_storage.complete(current_storage)
-                    or desktop_storage.cancel(current_storage)
-                storage_reply(current_storage.request, reply)
-            elseif selected.channel == deadline then
-                if phase ~= "rendering" then error("Local supervisor timed out during " .. phase) end
-                -- The host may still complete revocation. Preserve its ownership
-                -- and let an explicit retry reconcile with that outcome.
-                advance("running"); pending = ""
-                send(client, "bee.client.control", {version = 1, workspace_id = workspace_id, request_id = uuid.v7(), op = "pause"})
-            elseif host_deadline and selected.channel == host_deadline then
-                error("Replacement workspace host did not become ready")
+                storage_reply(current_storage.request, desktop_storage.complete(current_storage))
             elseif selected.channel == events then
                 local event = selected.value
                 if retained_displays then desktop_lifecycle.event(retained_displays, event) end
@@ -321,7 +303,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                     if tostring(event.from) == host and retained_displays and lease then
                         if not replacing_host then desktop_lifecycle.host_replacing(retained_displays) end
                         replacing_host = true
-                        host_deadline = time.after("10s")
                     elseif tostring(event.from) == host and retained_displays and not lease then
                         if not replacing_host then desktop_lifecycle.host_replacing(retained_displays) end
                         replacing_host = true
@@ -330,7 +311,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                         host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
                             :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, workspace, database_resource)))
                         route = host
-                        host_deadline = time.after("10s")
                     elseif tostring(event.from) == host and (failure ~= nil or (phase ~= "finishing" and phase ~= "stopping")) then
                         error("Local workspace host exited during " .. phase .. ": " .. (failure or "without completing cleanup"))
                     end
@@ -353,13 +333,12 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                     and data.version == 1 and data.schema == 1 and data.workspace_id == workspace_id and data.host == host then
                     if not replacing_host and retained_displays then desktop_lifecycle.host_replacing(retained_displays) end
                     replacing_host = true
-                    host_deadline = time.after("10s")
                 elseif selected.channel == lease_replaced and lease and sender == route and replacing_host
                     and type(data) == "table" and data.version == 1 and data.schema == 1
                     and data.workspace_id == workspace_id and contract.text(data.host, 160) then
                     host = assert(contract.text(data.host, 160))
                     assert(process.monitor(host))
-                    replacing_host, host_deadline = false, nil
+                    replacing_host = false
                     host_restarts = 0
                     if retained_displays then desktop_lifecycle.host_replaced(retained_displays, host, route) end
                     if retained_owner then send(retained_owner, "bee.retained.host_replaced", {version = 1,
@@ -404,7 +383,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 elseif selected.channel == hosts and sender == host and replacing_host and not lease then
                     local value = protocol.host(data)
                     if not value or value.workspace_id ~= workspace_id then error("Invalid replacement host readiness") end
-                    replacing_host, host_deadline = false, nil
+                    replacing_host = false
                     host_restarts = 0
                     if retained_displays then desktop_lifecycle.host_replaced(retained_displays, host, route) end
                     if retained_owner then send(retained_owner, "bee.retained.host_replaced", {version = 1,

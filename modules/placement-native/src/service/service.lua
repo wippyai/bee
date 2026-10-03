@@ -763,15 +763,28 @@ function M.close_stdin(value: unknown): Reply
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STDIN, {message = true}))
     process.send(runner, protocol.TOPIC_CONTROL, {command = "close_stdin", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
-    local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
+    local events = assert(process.events())
+    assert(process.monitor(runner))
     local answer: protocol.StdinReply? = nil
     while not answer do
-        local selected = channel.select({replies:case_receive(), timer:case_receive()})
-        if not selected.ok or selected.channel == timer then break end
+        local selected = channel.select({replies:case_receive(), events:case_receive()})
+        if not selected.ok then process.unmonitor(runner); process.unlisten(replies); error("runner acknowledgement channel closed") end
+        if selected.channel == events then
+            local event = selected.value
+            if event.kind == process.event.CANCEL then process.unmonitor(runner); process.unlisten(replies); error("runner acknowledgement wait cancelled") end
+            if event.kind == process.event.EXIT and tostring(event.from) == runner then
+                local result = bounds.object(event.result)
+                process.unmonitor(runner); process.unlisten(replies)
+                error("runner exited before acknowledgement: " .. tostring(result and result.error or "without a result"))
+            end
+            goto next_runner_reply
+        end
         local message = selected.value
         local accepted = protocol.stdin_reply_accepted(tostring(message:from()), message:payload():data(), expected)
         if accepted then answer = accepted end
+        ::next_runner_reply::
     end
+    process.unmonitor(runner)
     process.unlisten(replies)
     if not answer then return fail("CONFLICT", "the runner did not answer the stdin closure") end
     local current = load(attempt.attempt_id)
@@ -792,12 +805,24 @@ local function runner_status(row: store.Row?, attempt: types.Attempt): (string?,
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STATUS, {message = true}))
     process.send(runner, protocol.TOPIC_CONTROL, {command = "status", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
-    local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
+    local events = assert(process.events())
+    local monitored, monitor_error = process.monitor(runner)
+    if not monitored then process.unlisten(replies); return nil, "runner monitor failed: " .. tostring(monitor_error) end
     local detail: string? = nil
     local execution: string? = nil
     while true do
-        local selected = channel.select({replies:case_receive(), timer:case_receive()})
-        if not selected.ok or selected.channel == timer then break end
+        local selected = channel.select({replies:case_receive(), events:case_receive()})
+        if not selected.ok then process.unmonitor(runner); process.unlisten(replies); error("runner acknowledgement channel closed") end
+        if selected.channel == events then
+            local event = selected.value
+            if event.kind == process.event.CANCEL then process.unmonitor(runner); process.unlisten(replies); error("runner acknowledgement wait cancelled") end
+            if event.kind == process.event.EXIT and tostring(event.from) == runner then
+                local result = bounds.object(event.result)
+                process.unmonitor(runner); process.unlisten(replies)
+                return nil, "runner exited before acknowledgement: " .. tostring(result and result.error or "without a result")
+            end
+            goto next_runner_reply
+        end
         local message = selected.value
         local status = protocol.status_reply_accepted(tostring(message:from()), message:payload():data(), expected)
         if status then
@@ -805,7 +830,9 @@ local function runner_status(row: store.Row?, attempt: types.Attempt): (string?,
             detail = "runner reports " .. status.execution .. ", generation " .. tostring(status.generation) .. ", eof " .. tostring(status.eof_seen) .. ", pending outputs " .. tostring(status.pending_outputs) .. ", remembered writes " .. tostring(status.remembered_writes)
             break
         end
+        ::next_runner_reply::
     end
+    process.unmonitor(runner)
     process.unlisten(replies)
     return execution, detail
 end
@@ -868,15 +895,16 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
                 evidence = {kind = "child.not_started", detail = "preparer intent persisted; runner absent; no child creation intent"}})
         end
         if attempt.execution_state == "uncertain" then return succeed(attempt) end
-        local supervised, supervised_detail = runner_status(row, attempt)
-        if supervised then
-            local enforcement = M.enforce_grants(attempt)
-            if enforcement then return enforcement end
-            return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; no execution identity recorded"}})
+        if attempt.execution_state ~= "starting" then
+            local supervised, supervised_detail = runner_status(row, attempt)
+            if supervised then
+                local enforcement = M.enforce_grants(attempt)
+                if enforcement then return enforcement end
+                return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; no execution identity recorded"}})
+            end
+            if supervised_detail then return fail("UNAVAILABLE", supervised_detail) end
         end
-        -- A runner answers status only once its child exists; while it
-        -- prepares the child, its presence is the supervision.
-        if attempt.execution_state == "starting" and row then
+        if row then
             local present, presence_error = M.runner_present(row)
             if present == nil then return fail("UNAVAILABLE", presence_error or "runner presence is unknown") end
             if present then
@@ -898,7 +926,7 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; " .. observation.detail}})
         end
         M.retire_gateway(attempt, "attempt uncertain: " .. observation.detail)
-        return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unobserved", detail = observation.detail}})
+        return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unobserved", detail = observation.detail .. (supervised_detail and "; " .. supervised_detail or "")}})
     end
     if observation.alive then
         local enforcement = M.enforce_grants(attempt)
@@ -1107,15 +1135,19 @@ function M.attach(value: unknown): Reply
         -- at the execution channel, not only at the thread.
         local fences = assert(process.listen(protocol.TOPIC_FENCED, {message = true}))
         process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", control_token = control_token, recipient = recipient, generation = generation})
-        local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
+        local events = assert(process.events())
+        assert(process.monitor(runner))
         local fenced = false
         local answered = false
         local refused = false
         local refusal_reason: string? = nil
         while not answered do
-            local selected = channel.select({fences:case_receive(), timer:case_receive()})
-            if not selected.ok or selected.channel == timer then
-                answered = true
+            local selected = channel.select({fences:case_receive(), events:case_receive()})
+            if not selected.ok then process.unmonitor(runner); process.unlisten(fences); return fail("UNAVAILABLE", "runner fencing reply channel closed")
+            elseif selected.channel == events then
+                local event = selected.value
+                if event.kind == process.event.CANCEL then process.unmonitor(runner); process.unlisten(fences); return fail("CANCELLED", "runner fencing wait cancelled") end
+                if event.kind == process.event.EXIT and tostring(event.from) == runner then answered = true end
             else
                 local message = selected.value
                 local data: unknown = message:payload():data()
@@ -1127,6 +1159,7 @@ function M.attach(value: unknown): Reply
                 end
             end
         end
+        process.unmonitor(runner)
         process.unlisten(fences)
         if refused then
             local restored = transition(attempt.attempt_id, {fields = {attachment_generation = attempt.attachment_generation, recipient = previous_recipient},
@@ -1139,7 +1172,7 @@ function M.attach(value: unknown): Reply
                 transition(attempt.attempt_id, {evidence = {kind = "attach.unanswered", detail = "runner gone after exit; generation " .. tostring(generation) .. " has nothing to attach to"}})
                 return fail("CONFLICT", "the attempt has exited and its runner is gone")
             end
-            return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "attach.unfenced", detail = "runner did not install generation " .. tostring(generation) .. " within " .. tostring(protocol.FENCE_TIMEOUT_MS) .. " ms"}})
+            return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "attach.unfenced", detail = "runner exited before acknowledging generation " .. tostring(generation)}})
         end
         return transition(attempt.attempt_id, {evidence = {kind = "attach.fenced", detail = "runner installed generation " .. tostring(generation)}})
     end

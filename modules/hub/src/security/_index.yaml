@@ -43,7 +43,7 @@ entries:
 - name: worker_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [process.spawn], resources: [bee.hub.service:worker, bee.hub.service:publish_worker], effect: allow}
+  policy: {actions: [process.spawn, process.spawn.monitored], resources: [bee.hub.service:worker, bee.hub.service:publish_worker], effect: allow}
 - name: worker_host_policy
   kind: security.policy
   groups: [execution_scope]
@@ -72,7 +72,7 @@ entries:
   kind: security.policy
   groups: [execution_scope]
   policy:
-    actions: [events.send, system.read]
+    actions: [events.send, events.subscribe, system.read]
     resources: [supervisor, hosts]
     effect: allow
 - name: lifecycle_owner_policy

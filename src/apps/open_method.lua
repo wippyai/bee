@@ -1,7 +1,6 @@
 local process = require("process")
 local security = require("security")
 local channel = require("channel")
-local time = require("time")
 local ctx = require("ctx")
 local bounds = require("bounds")
 local hash = require("hash")
@@ -13,7 +12,6 @@ local M = {}
 local BINDING_KEY = "bee.gateway.binding"
 local HOST_PREFIX = "bee.workspace.host/"
 local CALLER_PREFIX = "bee.app.open/"
-local MAX_WAIT_MS = 30000
 
 local function fail(code: string, message: string): {[string]: unknown}
     return {ok = false, error = {code = code, message = message}}
@@ -94,12 +92,26 @@ function M.handle(raw: unknown): {[string]: unknown}
         process.registry.unregister(caller_token, process.registry.LOCAL)
         return fail("UNAVAILABLE", tostring(send_error or "workspace host rejected request"))
     end
-    local timer = assert(time.timer(tostring(MAX_WAIT_MS) .. "ms"))
-    local deadline = timer:channel()
+    local signals = assert(process.events())
+    local monitored, monitor_error = process.monitor(host)
+    if not monitored then
+        process.unlisten(replies); process.registry.unregister(caller_token, process.registry.LOCAL)
+        return fail("UNAVAILABLE", "Monitor application host: " .. tostring(monitor_error))
+    end
+    local interrupted = "Application reply channel closed"
     local reply: protocol.Reply? = nil
     while true do
-        local selected = channel.select({replies:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then break end
+        local selected = channel.select({replies:case_receive(), signals:case_receive()})
+        if not selected.ok then break end
+        if selected.channel == signals then
+            local event = selected.value
+            if event.kind == process.event.CANCEL then interrupted = "Application open wait cancelled"; break end
+            if event.kind == process.event.EXIT and tostring(event.from) == tostring(host) then
+                local result = bounds.object(event.result)
+                interrupted = "Application host exited before open acknowledgement: " .. tostring(result and result.error or "without a result"); break
+            end
+            goto next_open_reply
+        end
         if selected.value:from() == tostring(host) then
             local candidate = protocol.reply(selected.value:payload():data(), workspace_id)
             if candidate and candidate.request_id == request then
@@ -107,11 +119,12 @@ function M.handle(raw: unknown): {[string]: unknown}
                 break
             end
         end
+        ::next_open_reply::
     end
-    timer:stop()
+    process.unmonitor(host)
     process.unlisten(replies)
     process.registry.unregister(caller_token, process.registry.LOCAL)
-    if not reply then return fail("uncertain", "Application open outcome is unknown: workspace host did not answer") end
+    if not reply then return fail("uncertain", interrupted) end
     local result = reply.reply
     if result.error_code ~= "" then return fail(result.error_code, result.error) end
     return {ok = true, value = {workspace_id = workspace_id, definition_id = result.definition_id,

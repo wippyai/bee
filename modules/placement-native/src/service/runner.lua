@@ -464,7 +464,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 process.send(recipient, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested})
             end
         elseif kill_armed and selected.channel == kill_timer then
-            if not exited then signal(9, "signal.kill", "grace elapsed after " .. kill_why) end
+            if not exited then signal(9, "signal.kill", "stop grace_ms=" .. tostring(request.timeouts.stop_grace_ms) .. " expired after " .. kill_why) end
             kill_armed = false
         elseif selected.channel == controls then
             local message = selected.value

@@ -115,7 +115,6 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local active_selection: selection.State? = nil
     local pending_clipboard: string? = nil
     local remote_copy_reply: string? = nil
-    local clipboard_timeout: time.Timer? = nil
     local pending_transfers: {[string]: {id: string, instance_id: string, target_display_id: string}} = {}
     local status: string = "Starting workspace"
     local window_failure: {id: string, text: string}? = nil
@@ -138,10 +137,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
 
     local function clear_pending_clipboard()
         pending_clipboard = nil
-        if clipboard_timeout then
-            clipboard_timeout:stop()
-            clipboard_timeout = nil
-        end
+
     end
 
     -- Predict only input ownership, never committed drawing or producer sizes.
@@ -270,8 +266,6 @@ local function main(owner: string, initial_application: string?, secondary_appli
             return
         end
         pending_clipboard = request_id
-        if clipboard_timeout then clipboard_timeout:stop() end
-        clipboard_timeout = assert(time.timer("10s"))
         status = "Clipboard requested"
     end
     local function clipboard_result(value: unknown): {request_id: string, status: string, error: string}?
@@ -445,7 +439,6 @@ local function main(owner: string, initial_application: string?, secondary_appli
             transfer_updates:case_receive(), transfer_results:case_receive(), attachment_updates:case_receive(),
             dialog_states:case_receive(), dialog_results:case_receive(), delivery_updates.channel:case_receive(),
             workspace_pages:case_receive(), switch_results:case_receive()}
-        if clipboard_timeout then cases[#cases + 1] = clipboard_timeout:channel():case_receive() end
         local selected = channel.select(cases)
         if not selected.ok then break end
         if selected.channel == attention_updates then
@@ -657,13 +650,6 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     end
                     if not pending_request then adopt_routing() end
                 end
-                dirty = true
-            end
-        elseif clipboard_timeout and selected.channel == clipboard_timeout:channel() then
-            clipboard_timeout = nil
-            if pending_clipboard then
-                pending_clipboard = nil
-                status = "Clipboard request unavailable: timed out"
                 dirty = true
             end
         elseif selected.channel == delivery_updates.channel then
@@ -1046,7 +1032,6 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
         if dirty and hydrated then paint() end
     end
-    if clipboard_timeout then clipboard_timeout:stop() end
     process.unlisten(dialog_states)
     process.unlisten(dialog_results)
     process.unlisten(clipboard_results)

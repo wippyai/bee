@@ -2,8 +2,6 @@
 -- The actor owns all children and grants. This library creates no workspace host.
 local process = require("process")
 local security = require("security")
-local channel = require("channel")
-local time = require("time")
 local logger = require("logger")
 local log = logger:named("bee.launch.desktop")
 local uuid = require("uuid")
@@ -14,11 +12,10 @@ local decode = require("decode")
 local contract = require("contract")
 local retained_protocol = require("retained_protocol")
 local handoff = require("handoff")
-type Channel = channel.Channel
 type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stopping" | "departing" | "replacing"
 type Renderer = {pid: string, connection: string}
 type Child = {id: string, resource: desktops.Desktop, phase: Phase, connection: string, pending: string,
-    ready: boolean, activation: string?, deadline: Channel<time.Time>?, renderer: Renderer?, replace: boolean,
+    ready: boolean, activation: string?, renderer: Renderer?, replace: boolean,
     host_replacing: boolean, restarts: integer, presentation: string?}
 -- host: the workspace host desktops talk to; route: the host's owner-side
 -- address for desktop admission, the host itself or the node host manager.
@@ -47,7 +44,7 @@ local function settle(state: State, child: Child, code: string, message: string)
 end
 local function fail(state: State, child: Child, message: string)
     settle(state, child, "UNAVAILABLE", message)
-    child.phase, child.deadline = "stopping", nil
+    child.phase = "stopping"
     process.terminate(child.resource.pid)
     -- Keep the writer reservation until its actual EXIT, including failed stop.
 end
@@ -60,7 +57,7 @@ local function restart_child(state: State, child: Child)
         return
     end
     child.phase, child.connection, child.pending, child.ready = "boot", "", "", false
-    child.deadline, child.renderer, child.replace, child.presentation = time.after("10s"), nil, false, nil
+    child.renderer, child.replace, child.presentation = nil, false, nil
     child.host_replacing = false
     child.restarts = child.restarts + 1
 end
@@ -69,7 +66,7 @@ end
 -- from its owner, so the departure is announced there and the display identity
 -- stays held until the host reports the release.
 local function depart(state: State, child: Child, replacing: boolean?)
-    child.phase, child.deadline, child.ready, child.renderer, child.presentation = replacing and "replacing" or "departing", nil, false, nil, nil
+    child.phase, child.ready, child.renderer, child.presentation = replacing and "replacing" or "departing", false, nil, nil
     if replacing and child.host_replacing then
         child.pending = ""
         if state.replacement_ready then restart_child(state, child) end
@@ -121,7 +118,6 @@ function M.host_upgraded(state: State): ()
 end
 local function control(state: State, child: Child, op: string): boolean
     child.pending = uuid.v7()
-    child.deadline = time.after("10s")
     return send(child.resource.pid, "bee.client.control", {version = 1, workspace_id = state.workspace_id,
         request_id = child.pending, op = op})
 end
@@ -129,14 +125,14 @@ local function render_failed(state: State, child: Child, message: string)
     if not child.ready then fail(state, child, message); return end
     child.phase, child.renderer, child.presentation = "running", nil, nil
     if not control(state, child, "pause") then fail(state, child, "Desktop pause request was not accepted"); return end
-    child.pending, child.deadline = "", nil
+    child.pending = ""
 end
 local function render(state: State, child: Child)
     local renderer = child.renderer
     if not renderer or child.phase ~= "running" then return end
     child.renderer = nil
     if renderer.connection ~= child.connection then return end
-    child.pending, child.phase, child.deadline = uuid.v7(), "render", time.after("10s")
+    child.pending, child.phase = uuid.v7(), "render"
     if not send(state.route, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
         request_id = child.pending, op = "render", recipient = child.resource.pid, renderer = renderer.pid}) then
         render_failed(state, child, "Desktop renderer request was not accepted")
@@ -191,28 +187,13 @@ function M.activate(state: State, value: unknown): ()
         options = {version = 1, desktop_id = selected_id, quit_mode = "supervisor", node_defaults = true, hive_supervisor = state.owner}}, state.scope)
     if not resource then answer(state, id, request, "UNAVAILABLE", tostring(err)); return end
     state.children[id] = {id = id, resource = resource, phase = "boot", connection = "", pending = "",
-        ready = false, activation = request, deadline = time.after("10s"), replace = false,
+        ready = false, activation = request, replace = false,
         host_replacing = false, restarts = 0}
 end
 function M.find(state: State, id: string): desktops.Desktop?
     local child = state.children[id]
     if not child or not child.ready or child.phase == "stopping" or child.phase == "save" or child.phase == "exit" then return nil end
     return child.resource
-end
-function M.deadlines(state: State): {Channel<time.Time>}
-    local result: {Channel<time.Time>} = {}
-    for _, child in pairs(state.children) do if child.deadline then result[#result + 1] = child.deadline end end
-    return result
-end
-function M.timeout(state: State, selected: unknown): boolean
-    for _, child in pairs(state.children) do
-        if child.deadline and child.deadline == selected then
-            if child.phase == "render" then render_failed(state, child, "Desktop renderer admission timed out")
-            else fail(state, child, "Desktop timed out during " .. child.phase) end
-            return true
-        end
-    end
-    return false
 end
 local function renderer_value(data: unknown, workspace_id: string): Renderer?
     if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id then return nil end
@@ -261,7 +242,7 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
     if topic == "ready" and child.phase == "boot" then
         local ready = protocol.ready(data, state.workspace_id, false)
         if not ready or ready.client_id ~= child.id then fail(state, child, "Desktop acknowledged another identity"); return true end
-        child.phase, child.pending, child.deadline = "admit", uuid.v7(), time.after("10s")
+        child.phase, child.pending = "admit", uuid.v7()
         if not send(state.route, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
             request_id = child.pending, op = "admit", recipient = child.resource.pid,
             permissions = {open = true, close = true, control = true, appearance = true}, display_id = child.id}) then
@@ -280,11 +261,11 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
         end
         local rendered = child.phase == "render"
         local presented = child.presentation == connection
-        child.connection, child.phase, child.pending, child.deadline = connection, "running", "", nil
+        child.connection, child.phase, child.pending = connection, "running", ""
         if rendered then
             child.ready = true
             settle(state, child, "", "")
-        else child.deadline = time.after("10s") end
+        end
         render(state, child)
         if rendered and presented then
             child.presentation = nil
@@ -314,7 +295,7 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
         child.phase = "exit"
         if not control(state, child, "exit") then fail(state, child, "Desktop exit request was not accepted") end
     elseif topic == "finished" and child.phase == "exit" and protocol.request(data, state.workspace_id) == child.pending then
-        child.phase, child.deadline = "stopping", time.after("10s")
+        child.phase = "stopping"
     end
     return true
 end

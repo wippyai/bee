@@ -4,6 +4,7 @@
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
+local logger = require("logger")
 local funcs = require("funcs")
 local uuid = require("uuid")
 local machine = require("machine")
@@ -137,13 +138,19 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     -- after its grace. Any other live child is stopped after settlement.
     local ended = false
     local function await_exit()
-        local grace = time.after(tostring(plan.policy.stop_grace_ms + plan.policy.runner_drain_ms + plan.policy.drain_ms) .. "ms")
         while not session.exit do
-            local selected = channel.select({exits:case_receive(), grace:case_receive()})
-            if not selected.ok or selected.channel == grace then break end
+            local selected = channel.select({exits:case_receive(), events:case_receive()})
+            if not selected.ok then error("Session exit acknowledgement channel closed") end
+            if selected.channel == events then
+                local event = selected.value
+                if event.kind == process.event.CANCEL then error("Session exit wait cancelled") end
+                if event.kind == process.event.EXIT then machine.on_runner_exit(session, tostring(event.from)) end
+                goto next_session_exit
+            end
             local message = selected.value
             local data = placement_protocol.decode_exit(message:payload():data())
             if data then machine.on_exit(io, session, tostring(message:from()), data) end
+            ::next_session_exit::
         end
     end
     local function end_session(record: boolean)
@@ -221,6 +228,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
                 flush_queued()
             end
         elseif draining and selected.channel == drain_timer then
+            logger:warn("Carrier drain_ms=" .. tostring(plan.policy.drain_ms) .. " expired after observed runner exit; unresolved delivery remains incomplete")
             drain_elapsed = true
         elseif poll_ms > 0 and selected.channel == poll_timer:channel() then
             refresh(true)

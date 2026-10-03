@@ -82,8 +82,18 @@ local TABS: {frame.Tab} = {{kind = "theme", label = "Themes", short = "Theme"}, 
     {kind = "taskbar", label = "Tabs", short = "Tabs"}, {kind = "edit_mode", label = "Edit mode", short = "Edit"},
     {kind = "about", label = "About", short = "About"}}
 -- The edit-mode confirmation the interaction decoder accepts: one line naming
--- the exact namespaces and duration, so the question dispatches.
-function M.confirm_message(input: string): string
+-- the exact scope and duration, so the question dispatches.
+-- An appearance-state refresh is unrelated to an edit-mode outcome. Only a
+-- matching appearance operation's success clears its own notice; errors show.
+function M.appearance_notice(current: string, pending: string, failure: string): string
+    if failure ~= "" then return failure end
+    return pending ~= "" and "" or current
+end
+
+function M.confirm_message(input: string, disabling: boolean?): string
+    if disabling then
+        return "Remove this workspace's super-edit profiles and active overlays? Duration: once; removal persists until edit mode is enabled again."
+    end
     return "Enable these exact namespaces and duration: " .. input:gsub("%c", " ")
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, pane: Pane, offset: integer, message: string?, live: live_updates.Status?, live_pending: boolean?, info: build_info.Info?): Frame

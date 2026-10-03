@@ -596,7 +596,7 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
-        test.it("yields after exact materialization and remeasures before settling next step", function()
+        test.it("settles exact materialization after remeasurement even with an unchanged base revision", function()
             local workspace = "workspace-activation-yield"
             local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
             local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
@@ -622,7 +622,8 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-yield", "activation-yield")).phase, "authorized")
             test.eq(ok(owner.step(config, "intent-yield", "activation-yield")).phase, "applying")
             local materialized = ok(owner.step(config, "intent-yield", "activation-yield"))
-            test.eq(materialized.phase, "applying")
+            test.eq(materialized.phase, "settled")
+            test.eq(materialized.outcome, "applied")
             test.is_true(applied)
             test.eq(apply_count, 1)
             local settled = ok(owner.step(config, "intent-yield", "activation-yield"))
@@ -944,7 +945,7 @@ local function define_tests()
             assert(plan_store.close(plans))
         end)
 
-        test.it("leaves an apply uncertain when the base moves during the apply", function()
+        test.it("leaves an apply uncertain when the base digest changes without advancing its revision", function()
             local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-composed-apply")
             if not plans then error(tostring(plan_error)) end
             local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-composed-apply")
@@ -956,13 +957,13 @@ local function define_tests()
             local applied = false
             local apply_count = 0
             local config: owner.Config = {plans = plans, activations = activations,
-                resolver = shifting_resolver(entry, world),
+                resolver = shifting_resolver(entry, world, true),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
-                    world.revision, world.digest = 5, SHA_B
+                    world.digest = SHA_B
                     return {changed = true}, nil
                 end}
             ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",

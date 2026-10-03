@@ -38,7 +38,13 @@ Overlays shows the destination-local plan. It displays the measured artifact,
 preflight report and report digest, diagnostics and remedies, pending migrations,
 and entries added, changed or removed against the captured composed base. It
 also shows selection, approval and activation state. A malformed report,
-blocked preflight or stale plan cannot be selected or prepared.
+blocked preflight or stale plan cannot be selected or prepared. Preparation is
+acknowledged as `approval_bound` before the person decides in Inbox. The approval
+names applying and recovering the exact version until it is replaced or removed;
+host admission remains required. Apply advances acknowledged owner revisions
+through consumption, authorization and application. An unknown answer retains
+the same receipt key and stops; an unchanged revision requires inspection before
+another step.
 
 The activation owner re-resolves and re-preflights immediately before applying.
 It applies only the exact reviewed definitions through a generation-fenced
@@ -46,6 +52,18 @@ overlay API and records the observed outcome. A generation conflict or a base
 that changes during the operation leaves an explicit uncertain or refused
 result; the owner does not infer success or write registry history. Restart
 recovery restores only the previously authorized desired intent.
+
+For an admitted durable shadow, the external base binds the replaced entry's
+identity, kind and registry-owned module. The exact incoming definition is
+bound by the candidate; its replaced body is not an external dependency.
+Referenced external definitions, other entries in the selected namespace and
+the host's kernel manifest remain measured. This base stays stable after native
+shadow application, so supervised activation can settle its own apply. A complete
+replacement that omits an existing durable shadow is refused because the runtime
+does not expose the original definition for final-state reference validation.
+Settings' explicit disable operation removes shadows through the native owner,
+which restores their original definitions. Its confirmation names the workspace,
+the one-operation duration, and removal lasting until edit mode is enabled again.
 
 ### Protected kernel
 

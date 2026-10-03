@@ -42,8 +42,7 @@ local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured,
         revision = 19,
         entries = {
             {id = "bee.host:db", kind = "db.sql.sqlite", data = {}, registry = {owner = "bee/host"}},
-            {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"},
-                registry = {owner = "host/overlay"}},
+            {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"}},
             {id = "bee.security.gov:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
                 data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}},
                 registry = {owner = "bee/host"}},
@@ -320,7 +319,7 @@ local function define_tests()
             local candidate, context, err = resolver.resolve_with(deps, spec)
             test.is_nil(candidate)
             test.is_nil(context)
-            test.is_true(tostring(err):find("selected overlay", 1, true) ~= nil)
+            test.eq(err, "cannot measure restored durable definition omitted by candidate: bee:ordinary-policy")
         end)
 
         test.it("projects a requested thread grant before its atomic install", function()
@@ -619,7 +618,7 @@ local function define_tests()
             test.eq(((principals.objects(facts.candidate.entries))[1]).id, "private.app:old-overlay")
         end)
 
-        test.it("admits only granted durable shadows and retains their approval base", function()
+        test.it("admits only granted durable shadows and binds their identity and external base", function()
             local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
                 packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
                 kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},
@@ -639,7 +638,15 @@ local function define_tests()
             test.is_true(facts.context.entries["private.app:sibling"] ~= nil)
             local baseline = facts.candidate.base_digest
             state.captured.entries[2].data = {source = "return 'changed original'"}
+            test.eq(resolve(deps, spec).candidate.base_digest, baseline)
+            state.captured.entries[2].registry = {owner = "bee/other"}
             test.is_true(resolve(deps, spec).candidate.base_digest ~= baseline)
+            state.captured.entries[2].registry = {owner = "bee/settings"}
+            state.captured.entries[2].kind = "library.lua"
+            local changed_kind = resolve(deps, spec)
+            test.is_true(changed_kind.candidate.base_digest ~= baseline)
+            test.is_false(assert(preflight.check(changed_kind.candidate, changed_kind.context)).ready)
+            state.captured.entries[2].kind = "function.lua"
             local kernel = assert(bounds.object(state.captured.entries[3].data))
             kernel.namespaces = {"bee.gov", "private.app"}
             local protected = resolve(deps, spec)
@@ -659,6 +666,37 @@ local function define_tests()
             policy.super_edit = false
             local ordinary = resolver.resolve_with(deps, spec)
             test.is_nil(ordinary)
+        end)
+
+        test.it("keeps a durable shadow's external base stable through application and replacement", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},
+                applied = {}, migration_barrier = false, super_edit = true}
+            local deps, spec, state = fixture(policy)
+            local durable = entry("private.app:main", "function.lua", "durable")
+            durable.registry = {owner = "bee/settings"}
+            state.captured.entries[2] = durable
+            local shadow = entry("private.app:main", "function.lua", "shadow")
+            changes(spec, {shadow})
+            local before = resolve(deps, spec)
+            state.captured.entries[2] = shadow
+            shadow.registry = {owner = "bee/settings"}
+            assert(state.captured.overlay_ids)["private.app:main"] = true
+            local applied = resolve(deps, spec)
+            test.eq(applied.candidate.base_digest, before.candidate.base_digest)
+            local before_report = assert(preflight.check(before.candidate, before.context))
+            local applied_report = assert(preflight.check(applied.candidate, applied.context))
+            test.is_true(applied_report.ready)
+            test.eq(applied_report.plan_digest, before_report.plan_digest)
+            test.eq(applied.context.entries["private.app:main"].package, "bee/settings")
+            test.is_true(applied.context.installed_entries["private.app:main"] ~= nil)
+            local next_entry = entry("private.app:next", "function.lua", "next")
+            assert(bounds.object(next_entry.data)).imports = {original = "private.app:main"}
+            changes(spec, {next_entry})
+            local replaced, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(replaced)
+            test.eq(problem, "cannot measure restored durable definition omitted by candidate: private.app:main")
         end)
 
         test.it("rejects an entry collision with the composed destination registry", function()

@@ -164,6 +164,18 @@ local function define_tests()
             local detailed_kinds: {[string]: boolean} = {}
             for _, hit in ipairs(detailed.hits) do detailed_kinds[hit.kind] = true end
             test.is_true(detailed_kinds.step and detailed_kinds.recover and detailed_kinds.status)
+            local intent = assert(state.intent)
+            for _, phase in ipairs({"approval_bound", "consuming", "authorized", "applying"}) do
+                intent.phase = phase
+                local advancing = view.draw(80, 18, appearance.defaults(), state, 0)
+                local can_apply = false
+                for _, hit in ipairs(advancing.hits) do if hit.kind == "step" then can_apply = true end end
+                test.is_true(can_apply)
+            end
+            intent.phase = "settled"
+            for _, hit in ipairs(view.draw(80, 18, appearance.defaults(), state, 0).hits) do
+                test.is_false(hit.kind == "step")
+            end
         end)
 
         test.it("does not offer activation preparation for a locally rejected plan with a ready preflight", function()

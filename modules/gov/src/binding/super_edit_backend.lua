@@ -74,7 +74,7 @@ function M.handle(raw: unknown): {[string]: unknown}
     if not operation or not current_actor(operation) then return failure("DENIED", "super-edit profile writer is not authorized") end
     if operation == "disable_all" then
         if not request or bounds.fields(request, {"operation"}) then return failure("INVALID", "boot fallback request is invalid") end
-    elseif operation ~= "enable" and operation ~= "disable" then
+    elseif operation ~= "enable" and operation ~= "disable" and operation ~= "status" then
         return failure("INVALID", "super-edit profile request is invalid")
     end
     local workspace_id = request and bounds.text(request.workspace_id, 32) or nil
@@ -88,6 +88,22 @@ function M.handle(raw: unknown): {[string]: unknown}
     if not profile_entry then return failure("UNAVAILABLE", profile_error or "activation profile entry is unavailable") end
     local data = bounds.object(profile_entry.data)
     if not data then return failure("INVALID", "host activation profiles are malformed") end
+    if operation == "status" then
+        local decoded, decode_error = activation_profiles.decode(data)
+        if not decoded then return failure("INVALID", tostring(decode_error)) end
+        local enabled = false
+        local grants: {string} = {}
+        for _, profile in ipairs(decoded.profiles) do
+            if profile.workspace_id == workspace_id and profile.super_edit then
+                enabled = true
+                grants[#grants + 1] = profile.source_workspace .. " until " .. profile.expires_at
+            end
+        end
+        table.sort(grants)
+        return transaction.success({changed = false, enabled = enabled,
+            message = enabled and ("Edit mode enabled for " .. table.concat(grants, ", "))
+                or "Edit mode is disabled for this workspace"}, false)
+    end
     local updated: Object?
     local notice = ""
     if operation == "enable" then

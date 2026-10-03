@@ -302,6 +302,8 @@ profile can shadow durable definitions only in its exact namespace ceiling;
 preflight retains the original package ownership and definitions in the approval
 base, refuses kind changes, and still enforces the Kernel checks. The profile's
 expiry and explicit-confirmation approver are checked at each resolution.
+Activation measurement preserves this host authority when normalizing the
+transient registry revision; denied preflight reports retain their diagnostics.
 Availability
 lists this node's versions the selected profile publishes, boot recovery
 follows every desired slot whose source the host still selects for that owner,

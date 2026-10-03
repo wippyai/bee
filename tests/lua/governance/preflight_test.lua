@@ -220,6 +220,31 @@ local function define_tests()
             open_candidate.entries = {entry_of("bee.gateway:shadow")}
             test.is_true(checked(open_candidate, open_context).ready)
         end)
+        test.it("honors an exact host carve-out for a transitive kernel dependency", function()
+            local candidate, context = fixture()
+            local opened = {revision = 1, namespaces = {"host.kernel", "demo"},
+                super_edit = {"demo"}, entries = {"bee.security.gov:protected_kernel"}}
+            context.protected = opened
+            context.super_edit = true
+            context.kinds["library.lua"] = true
+            candidate.requirements, candidate.migrations = {}, {}
+            candidate.entries = {entry_of("demo:layout")}
+            context.entries["demo:layout"] = entry_of("demo:layout")
+            context.entries["host.kernel:presenter"] = candidate_entry("host.kernel:presenter",
+                "function.lua", "host/kernel", SHA, {"demo:layout"})
+            test.is_true(checked(candidate, context).ready)
+            context.super_edit = false
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            context.super_edit = true
+            context.namespaces.demo = false
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            context.namespaces.demo = true
+            opened.entries[#opened.entries + 1] = "demo:layout"
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            opened.entries[#opened.entries] = nil
+            opened.super_edit = {}
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+        end)
         test.it("decodes the super-edit set as an optional exact list", function()
             local base = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.gov:protected_kernel"}}
             test.eq(#assert(protected_kernel.decode(base)).super_edit, 0)

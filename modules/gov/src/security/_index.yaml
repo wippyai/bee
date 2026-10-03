@@ -53,7 +53,7 @@ entries:
     expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions: [db.get, registry.get, registry.snapshot, registry.preview, registry.apply, system.read, env.get,
       funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get,
-      registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
+      registry.overlay.get, registry.overlay.apply, registry.overlay.shadow, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
     resources: '*'
     effect: allow
 - name: staging_policy
@@ -91,7 +91,7 @@ entries:
   meta: {comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action}
   policy:
     expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
-    actions: [db.get, registry.get, registry.preview, system.read, env.get, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
+    actions: [db.get, registry.get, registry.preview, system.read, env.get, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.shadow, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
     resources: '*'
     effect: allow
 - name: destination_execution_policy

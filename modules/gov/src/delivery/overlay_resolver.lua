@@ -386,6 +386,22 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             local measured, measured_error = measured_entry(entry, component, true)
             if not measured then return nil, nil, measured_error end
             installed[id] = measured
+            -- Native shadows retain their claimed durable module ownership;
+            -- overlay-authored entries have none. This is registry provenance,
+            -- never artifact metadata or an entry-name convention.
+            local metadata = object(entry.registry)
+            if metadata and bounds.text(metadata.owner, 160) then
+                if not incoming_by_id[id] then
+                    return nil, nil, "cannot measure restored durable definition omitted by candidate: " .. id
+                end
+                local package, package_error = captured.owner(entry)
+                if not package then return nil, nil, package_error or "captured shadow has no trusted durable owner" end
+                local claimed, claimed_error = measured_entry(entry, package, true)
+                if not claimed then return nil, nil, claimed_error end
+                current[id] = claimed
+                local namespace = id:match("^([^:]+):")
+                if namespace then current_namespace[namespace] = id end
+            end
         else
             local package, package_error = captured.owner(entry)
             if not package then return nil, nil, package_error or "captured registry entry has no trusted local owner" end
@@ -397,8 +413,8 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         end
     end
     -- A person-confirmed super-edit profile admits shadows only within its
-    -- exact namespace ceiling. Keep the durable definitions and ownership in
-    -- the context and approval digest; they remain the base restored on removal.
+    -- exact namespace ceiling. Retain trusted durable identity and ownership
+    -- in the context; the native registry owns restoration on removal.
     for id in pairs(incoming_by_id) do
         local namespace = id:match("^([^:]+):")
         local shadow = policy.super_edit == true and namespace and policy.namespaces[namespace] == true
@@ -591,12 +607,25 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         if physical then relevant_ids[physical] = true end
     end
     local relevant: {preflight.Entry} = {}
+    local replaced: {Object} = {}
     for id, raw in pairs(current) do
         local namespace = id:match("^([^:]+):")
-        if relevant_ids[id] or (namespace and namespace_set[namespace]) then relevant[#relevant + 1] = raw end
+        if incoming_by_id[id] and policy.super_edit == true and namespace and policy.namespaces[namespace] == true then
+            -- The exact incoming body is already bound by the candidate. Its
+            -- replaced body is not an external dependency. Bind the claimed
+            -- identity, kind and module owner so measurement stays stable after
+            -- native shadow application without duplicating native owner state.
+            replaced[#replaced + 1] = {id = id, kind = raw.kind, package = raw.package}
+        elseif relevant_ids[id] or (namespace and namespace_set[namespace]) then
+            relevant[#relevant + 1] = raw
+        end
     end
     table.sort(relevant, function(left: preflight.Entry, right: preflight.Entry): boolean return left.id < right.id end)
-    local base_bytes, base_error = canonical.encode({entries = relevant}, 1048576)
+    table.sort(replaced, function(left: Object, right: Object): boolean return (left.id) < (right.id) end)
+    local measurement: Object = {entries = relevant}
+    -- Preserve ordinary private-overlay measurements byte-for-byte.
+    if #replaced > 0 then measurement.replaced = replaced end
+    local base_bytes, base_error = canonical.encode(measurement, 1048576)
     if not base_bytes then return nil, nil, "measure relevant registry base: " .. tostring(base_error or "unknown error") end
     local base_digest, base_measure_error = hash.sha256(base_bytes)
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end

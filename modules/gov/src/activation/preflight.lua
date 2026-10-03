@@ -419,6 +419,10 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     end
     local function protect(id: string)
         if kernel[id] or not state(id) then return end
+        local namespace = id:match("^([^:]+):")
+        if context.super_edit == true and namespace and context.namespaces[namespace] == true
+            and protected_kernel.opened(manifest, namespace)
+            and not protected_kernel.names(manifest, id) then return end
         kernel[id] = true
         pending_kernel[#pending_kernel + 1] = id
     end

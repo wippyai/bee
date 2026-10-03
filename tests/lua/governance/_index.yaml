@@ -73,15 +73,15 @@ entries:
   kind: function.lua
   source: file://destination_public_test.lua
   method: run
-  modules: [funcs]
+  modules: [funcs, registry]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.gov:destination_public_test_policy]}
-  imports: {principals: bee.test.principals:bound, bounds: bee.values:bounds, test: wippy.test:test}
+  security: {policies: [bee.gov:destination_public_test_policy, bee.gov:gateway_test_policy]}
+  imports: {principals: bee.test.principals:bound, bounds: bee.values:bounds, test: wippy.test:test, caller: bee.app:caller}
 - name: destination_service_test
   kind: function.lua
   source: file://destination_service_test.lua
   method: run
-  modules: [registry]
+  modules: [registry, funcs, security]
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
@@ -551,3 +551,12 @@ entries:
     actions: [funcs.call, bee.gov.delivery.manage]
     resources: '*'
     effect: allow
+- name: shadow_materializer_probe
+  kind: function.lua
+  source: file://shadow_materializer_probe.lua
+  method: apply
+  modules: [registry, hash]
+  meta: {type: test_support}
+  imports:
+    bounds: bee.values:bounds
+    materializer: bee.gov.delivery:materializer

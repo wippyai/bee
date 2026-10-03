@@ -209,8 +209,9 @@ function M.request_activation(executor: Executor, value: unknown, policy_raw: un
     if not proposal then return nil, proposal_error end
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,
-        prompt = {text = "Establish and recover " .. tostring(item.source_workspace)
-            .. " version " .. tostring(item.version) .. " in this workspace?"}})
+        prompt = {text = "Allow Bee to apply and recover " .. tostring(item.source_workspace)
+            .. " version " .. tostring(item.version) .. " in this workspace. Duration: this exact version"
+            .. " until replaced or removed; host admission remains required."}})
     local approved, approved_error = reply(raw, call_error)
     if not approved then return nil, approved_error end
     local approval_id, proposal_digest = bounds.id(approved.approval_id), hex(approved.proposal_digest)

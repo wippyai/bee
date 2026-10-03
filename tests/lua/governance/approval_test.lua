@@ -12,11 +12,19 @@ local function plan(): {[string]: unknown}
         artifact_digest = string.rep("b", 64), preflight_digest = string.rep("c", 64)}
 end
 
-local function executor(change: boolean?): approval.Executor
+local function executor(change: boolean?, inspect_prompt: boolean?): approval.Executor
     local selected = {}
     function selected.call(self: approval.Executor, method: string, request: unknown): (unknown?, unknown?)
         local value = assert(bounds.object(request))
         if method == "bee.approvals.binding:request" then
+            if inspect_prompt then
+                local prompt = assert(bounds.object(value.prompt))
+                assert(type(prompt.text) == "string")
+                test.is_true(prompt.text:find("Allow Bee to apply and recover application-a version v1", 1, true) ~= nil)
+                test.is_true(prompt.text:find("this workspace", 1, true) ~= nil)
+                test.is_true(prompt.text:find("Duration:", 1, true) ~= nil)
+                test.is_true(prompt.text:find("until replaced or removed", 1, true) ~= nil)
+            end
             local proposal = assert(bounds.object(value.proposal))
             if change then proposal = {kind = "operation", ref = "other", revision = "other", payload = {}} end
             local bytes = assert(canonical.encode(proposal))
@@ -63,7 +71,7 @@ local function define_tests()
                 resolution_digest = string.rep("c", 64), preflight_digest = string.rep("d", 64),
                 application_admission_digest = string.rep("f", 64),
                 effect_key = string.rep("e", 64)}
-            local bound, bind_error = approval.request_activation(executor(), intent, "user-approval", "activation-1")
+            local bound, bind_error = approval.request_activation(executor(nil, true), intent, "user-approval", "activation-1")
             if not bound then error(tostring(bind_error)) end
             intent.approval_id, intent.approval_proposal_digest = bound.approval_id, bound.approval_proposal_digest
             intent.approval_owner_incarnation = bound.owner_incarnation

@@ -35,6 +35,15 @@ local function admission_blob(value: application_admission.Measurement): (Admiss
     return {bytes = decoded.bytes, digest = decoded.digest, record = decoded.record}, nil
 end
 
+local function preflight_failure(report: preflight.Report, label: string): string
+    local reasons: {string} = {}
+    for index, diagnostic in ipairs(report.diagnostics) do
+        if index > 8 then break end
+        reasons[#reasons + 1] = diagnostic.code .. ":" .. diagnostic.target .. ": " .. diagnostic.message
+    end
+    return label .. ": " .. table.concat(reasons, ", ")
+end
+
 function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     context: preflight.Context): ({[string]: unknown}?, string?)
     local plan = bounds.object(plan_raw)
@@ -86,14 +95,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     if next(measured_entries) then return nil, "resolved candidate omits an exact artifact entry" end
     local report, report_error = preflight.check(candidate, context)
     if not report then return nil, report_error end
-    if not report.ready then
-        local reasons: {string} = {}
-        for index, diagnostic in ipairs(report.diagnostics) do
-            if index > 8 then break end
-            reasons[#reasons + 1] = diagnostic.code .. ":" .. diagnostic.target
-        end
-        return nil, "destination preflight is not ready: " .. table.concat(reasons, ", ")
-    end
+    if not report.ready then return nil, preflight_failure(report, "destination preflight is not ready") end
     if #candidate.migrations > 0 then
         for _, entry in ipairs(candidate.entries) do
             if entry.auto_start then
@@ -117,10 +119,11 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         installed_entries = context.installed_entries, applied = context.applied,
         applied_databases = context.applied_databases, generated_databases = context.generated_databases,
         exact_expansion = context.exact_expansion, migration_barrier = context.migration_barrier,
-        auto_start = context.auto_start, protected = context.protected, host_evidence = context.host_evidence}
+        auto_start = context.auto_start, super_edit = context.super_edit,
+        protected = context.protected, host_evidence = context.host_evidence}
     local durable_report, durable_error = preflight.check(durable_candidate, durable_context)
     if not durable_report then return nil, durable_error or "cannot normalize destination preflight" end
-    if not durable_report.ready then return nil, durable_error or "cannot normalize destination preflight" end
+    if not durable_report.ready then return nil, preflight_failure(durable_report, "normalized destination preflight is not ready") end
     local report_bytes, report_digest, encode_error = preflight.encode_report(durable_report)
     if not report_bytes then return nil, encode_error end
     if not report_digest then return nil, encode_error end

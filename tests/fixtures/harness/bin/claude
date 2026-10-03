@@ -88,7 +88,7 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
   # then the fixture waits for a correlated control_response line on stdin.
   # allow continues the captured stream; deny reports the denial and ends;
   # an uncorrelated or malformed line is ignored and the wait continues;
-  # silence past the timeout ends with a permission_timeout result.
+  # An explicitly requested protocol bound ends with a permission_timeout result.
   id="$BEE_FIXTURE_PERMISSION"
   timeout="${BEE_FIXTURE_PERMISSION_TIMEOUT:-}"
   # The stream comes in on descriptor 3 so the response is read from stdin.
@@ -123,7 +123,7 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
             printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_eof","result":"stdin ended before permission response","session_id":"fixture"}\n'
             exit 2 ;;
           timeout)
-            printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_timeout","result":"no permission response","session_id":"fixture"}\n'
+            printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_timeout","result":"no permission response within %s seconds (fixture permission protocol bound)","session_id":"fixture"}\n' "$timeout"
             exit 2 ;;
         esac ;;
     esac

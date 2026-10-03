@@ -24,6 +24,7 @@ local clock = require("clock")
 local store = require("store")
 local approval_outbox = require("outbox")
 local runtime_lease = require("runtime_lease")
+local windows = require("windows")
 local M = {}
 M.LEDGER = {table = "bee_approval_schema_migrations", label = "approval"}
 M.REQUEST = "bee.approvals.request"
@@ -61,7 +62,7 @@ type Object = {[string]: unknown}
 type RequestKind = "permission" | "question"
 type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
 type Decision = "approved" | "denied"
-type Row = {
+type Row = {window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer, reallow: boolean,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, requester_key: string, request_digest: string, request_kind: RequestKind,
     policy: string, proposal_json: string, proposal: Object, proposal_digest: string,
@@ -73,7 +74,7 @@ type Row = {
     expires_ms: integer, expires_at: string, created_at: string, updated_at: string?,
     effect_completed_at: string?, effect_result_json: string?, effect_result: unknown,
 }
-type ApprovalView = {requesting_session: string?,
+type ApprovalView = {window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer, reallow: boolean, requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, request_kind: RequestKind, policy: string, proposal: Object,
     proposal_digest: string, prompt: Object, response_schema: Object, thread_id: string?,
@@ -133,7 +134,7 @@ local function advance_incarnation(value: unknown): (integer?, string?)
     if advanced == nil then return nil, "authority incarnation is corrupt" end
     return advanced, nil
 end
-local decode_row: (unknown) -> (Row?, string?)
+local decode_row: (unknown, sql.Transaction) -> (Row?, string?)
 local function digest_of(value: unknown, maximum_bytes: integer?): (string?, string?, string?)
     local encoded, encode_error = canonical.encode(value, maximum_bytes)
     if not encoded then return nil, nil, encode_error end
@@ -180,7 +181,7 @@ end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
 local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
-    runtime_lease = true, complete_installation_effect = true, complete_publication_effect = true, reconcile = true}
+    grant_window = true, runtime_lease = true, complete_installation_effect = true, complete_publication_effect = true, reconcile = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
 -- other authorities through the executor; the operation then runs inside
@@ -220,7 +221,7 @@ local function run(request: unknown, name: string): Reply
     return M.reply(result)
 end
 function M.view(row: Row): ApprovalView
-    return {approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
+    return {window_grant = row.window_grant, allowed_by_grant = row.allowed_by_grant, window_max_ttl_ms = row.window_max_ttl_ms, reallow = row.reallow, approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
         requesting_session = row.requester_id:match("^bs:") and row.requester_id or nil,
         requester_id = row.requester_id, request_kind = row.request_kind, policy = row.policy, proposal = row.proposal, proposal_digest = row.proposal_digest,
         prompt = row.prompt, response_schema = row.response_schema, thread_id = row.thread_id, binding = row.binding, revision = row.revision, state = row.state,
@@ -234,7 +235,7 @@ local function load(tx: sql.Transaction, approval_id: string): (Row?, string?)
     local raw, err = store.request(tx, approval_id)
     if err then return nil, err end
     if raw == nil then return nil, nil end
-    return decode_row(raw)
+    return decode_row(raw, tx)
 end
 -- The authority incarnation is established by the authority process before
 -- any request is served; a missing row means no authority on this node.
@@ -401,7 +402,7 @@ local function stored_json(object: Object, key: string, optional: boolean, objec
     if not encoded or encoded ~= raw then return nil, key .. " is not canonical JSON: " .. tostring(encode_error or "encoding differs") end
     return value, nil
 end
-decode_row = function(raw: unknown): (Row?, string?)
+decode_row = function(raw: unknown, tx: sql.Transaction): (Row?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "approval row is not an object" end
     local approval_id = bounds.id(value.approval_id)
@@ -520,7 +521,31 @@ decode_row = function(raw: unknown): (Row?, string?)
         or ((effect_completed_at ~= nil) ~= (effect_result ~= nil)) then
         return nil, "approval effect metadata is corrupt"
     end
-    local row: Row = {approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation,
+    local scope_digest, scope_error = windows.scope_digest(proposal)
+    if not scope_digest then return nil, scope_error end
+    local grant: windows.Grant? = nil
+    local grant_id = value.window_grant_id == nil and nil or bounds.id(value.window_grant_id)
+    local automatic = value.allowed_by_grant == nil and nil or bounds.id(value.allowed_by_grant)
+    if (value.window_grant_id ~= nil and not grant_id) or (value.allowed_by_grant ~= nil and (not automatic or automatic ~= grant_id)) then return nil, "approval window reference is corrupt" end
+    if grant_id then
+        local raw_grant, read_error = store.window(tx, grant_id)
+        if read_error then return nil, read_error end
+        local grant_error: string? = nil
+        grant, grant_error = windows.decode(raw_grant)
+        if not grant then return nil, grant_error end
+        if grant.owner_node ~= owner_node or grant.workspace_id ~= workspace_id or grant.requester_id ~= requester_id
+            or grant.policy ~= policy or grant.scope_digest ~= scope_digest or state ~= "decided" or decision ~= "approved" then
+            return nil, "approval window does not cover this request"
+        end
+    end
+    local policies, policies_error = resources.policies()
+    if not policies then return nil, policies_error end
+    local configured = policies[policy]
+    local maximum = request_kind == "permission" and configured and configured.max_ttl_ms or 0
+    local previous, previous_error = store.matching_windows(tx, owner_node, workspace_id, requester_id, policy, scope_digest)
+    if previous_error or not previous then return nil, previous_error end
+    local prior = #previous > 0
+    local row: Row = {window_grant = grant, allowed_by_grant = automatic, window_max_ttl_ms = maximum, reallow = state == "pending" and prior, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation,
         workspace_id = workspace_id, requester_id = requester_id, requester_key = requester_key, request_digest = request_digest,
         request_kind = request_kind, policy = policy, proposal_json = stored_proposal_json, proposal = proposal,
         proposal_digest = proposal_digest, prompt_json = prompt_json, prompt = prompt,
@@ -645,7 +670,7 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
     local existing_rows, existing_error = store.request_by_key(tx, actor, key)
     if existing_error or not existing_rows then return storage("read approval request") end
     if #existing_rows > 0 then
-        local existing, decode_error = decode_row(existing_rows[1])
+        local existing, decode_error = decode_row(existing_rows[1], tx)
         if not existing then return storage("decode existing approval request: " .. tostring(decode_error)) end
         if existing.request_digest ~= request_digest then return failure("CONFLICT", "idempotency key was used by a different request") end
         return success(M.view(existing), true)
@@ -683,12 +708,35 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
         response_schema = schema, expires_at = stamp(expires), state = "pending"}
     local change_error = record_change(tx, row, 1, "pending", nil, actor, "requested", now, body)
     if change_error then return storage(change_error) end
+    if request_kind == "permission" then
+        local scope_digest, scope_error = windows.scope_digest(proposal)
+        if not scope_digest then return storage(scope_error or "measure approval window scope") end
+        local grants, grant_error = store.matching_windows(tx, owner, workspace_id, actor, policy_name, scope_digest)
+        if grant_error or not grants then return storage(grant_error or "read matching approval windows") end
+        for _, raw_grant in ipairs(grants) do
+            local grant, decode_error = windows.decode(raw_grant)
+            if not grant then return storage(decode_error or "decode approval window") end
+            local authorized = false
+            for _, approver in ipairs(policy.approvers) do
+                if type(approver) == "string" and approver == grant.granted_by then authorized = true end
+                if type(approver) == "table" and approver.definition_id == grant.granted_definition then authorized = true end
+            end
+            if authorized and not grant.revoked_at and grant.until_ms > now and grant.until_ms - grant.granted_ms <= policy.max_ttl_ms then
+                local attach_error = store.attach_window(tx, row.approval_id, grant.grant_id, true)
+                if attach_error then return storage(attach_error) end
+                local settled, settle_error = settle(tx, row, "decided", "approved", grant.granted_by, nil, grant.granted_by,
+                    "allowed by window grant " .. grant.grant_id, now)
+                if not settled then return storage(settle_error or "settle by approval window") end
+                return success(M.view(settled), false)
+            end
+        end
+    end
     return success(M.view(row), false)
 end
 -- decide: an eligible approver settles the pending revision for the exact
 -- proposal digest; an identical retry replays, anything else conflicts.
 local function op_decide(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "expected_revision", "decision", "proposal_digest", "response"})
+    local unknown_field = bounds.fields(object, {"approval_id", "expected_revision", "decision", "proposal_digest", "response", "window_ttl_ms"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local approval_id = bounds.id(object.approval_id)
     if not approval_id then return failure("INVALID_ARGUMENT", "approval_id is not an identifier") end
@@ -710,6 +758,13 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     local may_decide, policy_error = eligible(actor, row)
     if policy_error then return storage(policy_error) end
     if not may_decide then return failure("DENIED", "caller is not an eligible approver for this request") end
+    local window_ttl: integer? = nil
+    if object.window_ttl_ms ~= nil then
+        window_ttl = bounds.integer(object.window_ttl_ms)
+        if not window_ttl or window_ttl < 1 then return failure("INVALID_ARGUMENT", "window_ttl_ms must be a positive integer") end
+        if decision ~= "approved" or row.request_kind ~= "permission" or response ~= nil then return failure("INVALID_ARGUMENT", "windows approve permissions without a response") end
+        if window_ttl > row.window_max_ttl_ms then return failure("FORBIDDEN", "window_ttl_ms exceeds the policy ceiling of " .. tostring(row.window_max_ttl_ms)) end
+    end
     if row.proposal_digest ~= proposal_digest then return failure("CONFLICT", "proposal digest does not match the recorded proposal", M.view(row)) end
     if row.request_kind == "question" and decision == "approved" and response == nil then return failure("INVALID_ARGUMENT", "a question needs a response to be approved") end
     local current, expire_error, expired_now = expire_if_due(tx, row, now)
@@ -718,12 +773,43 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
         local wanted = ""
         if response ~= nil then wanted = canonical.encode(response) or "" end
         local same_response = wanted == (text(current.response_json) or "")
-        if current.decider_id == actor and current.decision == decision and same_response then return success(M.view(current), true) end
+        local same_window = window_ttl == nil and current.window_grant == nil
+            or (window_ttl ~= nil and current.window_grant ~= nil and current.allowed_by_grant == nil
+                and current.window_grant.until_ms - current.window_grant.granted_ms == window_ttl)
+        if current.decider_id == actor and current.decision == decision and same_response and same_window then return success(M.view(current), true) end
         return failure("CONFLICT", "request was decided " .. tostring(current.decision) .. " by " .. tostring(current.decider_id), M.view(current))
     end
     if expired_now then return refusal("INVALID_STATE", "request expired at its deadline", M.view(current)) end
     if current.state ~= "pending" then return failure("INVALID_STATE", "request is " .. tostring(current.state), M.view(current)) end
     if current.revision ~= expected then return failure("CONFLICT", "request is at revision " .. tostring(current.revision), M.view(current)) end
+    if window_ttl then
+        local grant_id = current.approval_id
+        local scope_digest, scope_error = windows.scope_digest(current.proposal)
+        if not scope_digest then return storage(scope_error or "measure approval window scope") end
+        local matches, match_error = store.matching_windows(tx, current.owner_node, current.workspace_id, current.requester_id, current.policy, scope_digest)
+        if not matches or match_error then return storage(match_error or "read approval window") end
+        local reused = false
+        if #matches > 0 then
+            local previous, decode_error = windows.decode(matches[1])
+            if not previous then return storage(decode_error or "decode approval window") end
+            if not previous.revoked_at and previous.granted_by == actor and previous.granted_ms == now and previous.until_ms == now + window_ttl then
+                grant_id = previous.grant_id
+                reused = true
+            end
+        end
+        if not reused then
+            local grant: windows.Grant = {grant_id = grant_id, owner_node = current.owner_node, workspace_id = current.workspace_id,
+                requester_id = current.requester_id, policy = current.policy, scope_digest = scope_digest,
+                granted_by = actor, granted_definition = authenticated_definition(actor), granted_ms = now, granted_at = stamp(now),
+                until_ms = now + window_ttl, until_at = stamp(now + window_ttl), revoked_at = nil}
+            local supersede_error = store.supersede_windows(tx, grant)
+            if supersede_error then return storage(supersede_error) end
+            local grant_error = store.insert_window(tx, grant)
+            if grant_error then return storage(grant_error) end
+        end
+        local attach_error = store.attach_window(tx, current.approval_id, grant_id, false)
+        if attach_error then return storage(attach_error) end
+    end
     local settled, settle_error = settle(tx, current, "decided", decision, actor, response, actor, "decided " .. decision, now)
     if not settled then return storage(settle_error or "settle decision") end
     return success(M.view(settled), false)
@@ -734,7 +820,7 @@ end
 -- mixed batch is refused before any decision commits and one failing item
 -- rolls the whole batch back.
 local function op_decide_batch(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"decisions"})
+    local unknown_field = bounds.fields(object, {"decisions", "window_ttl_ms"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local items = bounds.dense_list(object.decisions, M.MAX_BATCH, "decisions")
     if not items or #items < 1 then return failure("INVALID_ARGUMENT", "decisions must list 1 to " .. tostring(M.MAX_BATCH) .. " requests") end
@@ -759,6 +845,13 @@ local function op_decide_batch(tx: sql.Transaction, actor: string, object: Objec
     for _, raw in ipairs(items) do
         local decision = bounds.object(raw)
         if not decision then return failure("INVALID_ARGUMENT", "decision must be an object") end
+        if object.window_ttl_ms ~= nil then
+            if decision.window_ttl_ms ~= nil then return failure("INVALID_ARGUMENT", "a batch has one window choice") end
+            local copied: Object = {}
+            for key, value in pairs(decision) do copied[key] = value end
+            copied.window_ttl_ms = object.window_ttl_ms
+            decision = copied
+        end
         local settled = op_decide(tx, actor, decision, now, prepared)
         if not settled.ok then
             local fault = bounds.object(raw)
@@ -866,7 +959,7 @@ local function op_installation_effects(tx: sql.Transaction, actor: string, objec
     if err or not rows then return storage("read approved installation effects") end
     local effects: {Object} = {}
     for _, raw in ipairs(rows) do
-        local row, decode_error = decode_row(raw)
+        local row, decode_error = decode_row(raw, tx)
         if not row then return storage("decode installation effect: " .. tostring(decode_error)) end
         effects[#effects + 1] = M.view(row)
     end
@@ -920,7 +1013,7 @@ local function op_publication_effects(tx: sql.Transaction, actor: string, object
     if err or not rows then return storage("read approved publication effects") end
     local effects: {Object} = {}
     for _, raw in ipairs(rows) do
-        local row, decode_error = decode_row(raw)
+        local row, decode_error = decode_row(raw, tx)
         if not row then return storage("decode publication effect: " .. tostring(decode_error)) end
         effects[#effects + 1] = M.view(row)
     end
@@ -1080,7 +1173,7 @@ local function op_feed_snapshot(tx: sql.Transaction, actor: string, object: Obje
     local page_bytes, truncated = 0, false
     for index, raw in ipairs(rows) do
         if index > limit then break end
-        local row, decode_error = decode_row(raw)
+        local row, decode_error = decode_row(raw, tx)
         if not row then return storage("decode approval snapshot: " .. tostring(decode_error)) end
         local raw_row = bounds.object(raw)
         local sequence = raw_row and bounds.count(raw_row.last_sequence)
@@ -1167,7 +1260,7 @@ local function op_list(tx: sql.Transaction, actor: string, object: Object, now: 
     if err or not rows then return storage("list approval requests") end
     local views: {Object} = {}
     for _, raw in ipairs(rows) do
-        local row, decode_error = decode_row(raw)
+        local row, decode_error = decode_row(raw, tx)
         if not row then return storage("decode approval list: " .. tostring(decode_error)) end
         views[#views + 1] = M.view(row)
     end
@@ -1184,14 +1277,14 @@ local function op_reconcile(tx: sql.Transaction, actor: string, object: Object, 
     if due_error or not due then return storage("read due requests") end
     local expired = 0
     for _, raw in ipairs(due) do
-        local row, decode_error = decode_row(raw)
+        local row, decode_error = decode_row(raw, tx)
         if not row then return storage("decode due approval: " .. tostring(decode_error)) end
         local settled, settle_error, expired_now = expire_if_due(tx, row, now)
         if not settled then return storage(settle_error or "expire request") end
         if expired_now then expired = expired + 1 end
     end
     local horizon = now - M.RETENTION_MS
-    local stale, stale_error = store.retained(tx, horizon, M.EXPIRE_BOUND)
+    local stale, stale_error = store.retained(tx, horizon, now, M.EXPIRE_BOUND)
     if stale_error or not stale then return storage("read retained requests") end
     local forgotten = 0
     for _, raw in ipairs(stale) do
@@ -1202,6 +1295,8 @@ local function op_reconcile(tx: sql.Transaction, actor: string, object: Object, 
         if delete_error then return storage("forget retained request") end
         forgotten = forgotten + 1
     end
+    local window_error = store.forget_windows(tx, horizon)
+    if window_error then return storage(window_error) end
     return success({expired = expired, forgotten = forgotten, more = #due == M.EXPIRE_BOUND}, expired == 0 and forgotten == 0)
 end
 -- establish: the authority process advances the incarnation once per start,
@@ -1316,6 +1411,45 @@ local function op_runtime_lease(tx: sql.Transaction, actor: string, request: Obj
     return success({lease_ref = ref, consumed = true}, false)
 end
 
+local function op_grant_window(tx: sql.Transaction, actor: string, request: Object, now: integer, prepared: Object?): Result
+    local extra = bounds.fields(request, {"operation", "workspace_id", "grant_id", "after_id"})
+    if extra then return failure("INVALID_ARGUMENT", extra) end
+    local owner, node_error = node()
+    if not owner then return failure("UNAVAILABLE", node_error or "native node identity is unavailable") end
+    local definition = authenticated_definition(actor)
+    if request.operation == "list" then
+        local workspace = bounds.id(request.workspace_id)
+        local after = request.after_id == nil and "" or bounds.id(request.after_id)
+        if not workspace or after == nil then return failure("INVALID_ARGUMENT", "workspace_id and optional after_id must be identifiers") end
+        if not security.can(M.DECIDE, workspace) then return failure("DENIED", "caller has no approval decision authority in this workspace") end
+        local rows, err = store.active_windows(tx, owner, workspace, actor, definition, now, after)
+        if not rows or err then return storage(err or "list active approval windows") end
+        local grants: {windows.Grant} = {}
+        local more = #rows > M.MAX_LIST
+        for index, raw in ipairs(rows) do
+            if index > M.MAX_LIST then break end
+            local grant, decode_error = windows.decode(raw)
+            if not grant then return storage(decode_error or "decode approval window") end
+            grants[#grants + 1] = grant
+        end
+        return success({grants = grants, more = more, next_id = more and grants[#grants].grant_id or nil}, false)
+    end
+    if request.operation ~= "revoke" then return failure("INVALID_ARGUMENT", "operation must be list or revoke") end
+    local id = bounds.id(request.grant_id)
+    if not id then return failure("INVALID_ARGUMENT", "grant_id must be an identifier") end
+    local raw, read_error = store.window(tx, id)
+    if read_error then return storage(read_error) end
+    if not raw then return failure("NOT_FOUND", "approval window does not exist") end
+    local grant, decode_error = windows.decode(raw)
+    if not grant then return storage(decode_error or "decode approval window") end
+    if grant.owner_node ~= owner or not security.can(M.DECIDE, grant.workspace_id)
+        or (request.workspace_id ~= nil and request.workspace_id ~= grant.workspace_id)
+        or (actor ~= grant.granted_by and (not definition or definition ~= grant.granted_definition)) then return failure("DENIED", "caller does not own this node's approval window") end
+    local revoke_error = store.revoke_window(tx, id, stamp(now))
+    if revoke_error then return storage(revoke_error) end
+    return success({grant_id = id, revoked = true}, grant.revoked_at ~= nil)
+end
+operations.grant_window = op_grant_window
 operations.runtime_lease = op_runtime_lease
 operations.attention_count = op_attention_count
 operations.node_summary = op_node_summary
@@ -1326,6 +1460,7 @@ operations.publication_effects, operations.complete_publication_effect = op_publ
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
+function M.grant_window(value: unknown): Reply return run(value, "grant_window") end
 function M.runtime_lease(value: unknown): Reply return run(value, "runtime_lease") end
 function M.request(value: unknown): Reply return run(value, "request") end
 function M.decide(value: unknown): Reply return run(value, "decide") end

@@ -771,3 +771,9 @@ RETAINED_EVIDENCE ?= .wippy/retained-proof
 retained-startup-check:
 	@test -n "$(RETAINED_STATE_COPY)" || { echo 'Set RETAINED_STATE_COPY to a non-credential database copy directory.' >&2; exit 1; }
 	python3 tests/retained_startup.py "$(abspath $(BEE_BINARY))" --copy "$(abspath $(RETAINED_STATE_COPY))" --evidence "$(abspath $(RETAINED_EVIDENCE))"
+
+.PHONY: owner-journey
+owner-journey:
+	@test -n "$(BEE_BINARY)" || { echo 'BEE_BINARY must name an existing standalone Bee.' >&2; exit 1; }
+	@test -n "$(BEE_SOURCE_STATE)" || { echo 'BEE_SOURCE_STATE must name an existing state directory (an empty directory is a fresh-state proof).' >&2; exit 1; }
+	python3 tests/owner_journey.py --binary "$(abspath $(BEE_BINARY))" --source-state "$(abspath $(BEE_SOURCE_STATE))" $(if $(BEE_JOURNEY_HANG_SECONDS),--hang-seconds "$(BEE_JOURNEY_HANG_SECONDS)")

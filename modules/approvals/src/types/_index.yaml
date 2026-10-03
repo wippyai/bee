@@ -6,3 +6,8 @@ entries:
   source: file://runtime_lease.lua
   imports:
     bounds: bee.values:bounds
+- name: windows
+  kind: library.lua
+  source: file://windows.lua
+  modules: [hash]
+  imports: {bounds: bee.values:bounds, canonical: bee.values:canonical}

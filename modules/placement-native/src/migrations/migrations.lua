@@ -830,7 +830,7 @@ DROP TABLE bee_placement_attempts;
 ALTER TABLE bee_placement_attempts_next RENAME TO bee_placement_attempts;
 CREATE INDEX bee_placement_attempts_action ON bee_placement_attempts (owner_id, action_id);
 ]], rebuild = true},
-        {id = 12, name = "hive_component_references", sql = HIVE_REFERENCES_SQL, rebuild = false},
+    {id = 12, name = "hive_component_references", sql = HIVE_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

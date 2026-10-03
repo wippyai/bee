@@ -177,7 +177,6 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             selected = channel.select(cases)
         end
         if not selected.ok then break end
-        if hooking and selected.channel == hooks_ticker:channel() then drain_hooks() end
         if selected.channel == states then
             local message = selected.value
             local hint = placement_protocol.decode_state_hint(message:payload():data())
@@ -247,6 +246,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             end
         end
         if selected.channel ~= poll_timer:channel() and selected.channel ~= hints then advance(false) end
+        drain_hooks()
         if plan.launch.session_end == "stdin_close" and not session.exit and session.runner and not ended and machine.ready_to_settle(session, drain_elapsed) then
             -- Every exchange is closed on record before input closes.
             local closed_all, close_error = machine.close_exchanges(io, session, drain_elapsed)

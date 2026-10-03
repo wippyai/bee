@@ -417,7 +417,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             return call_error or decode_error
         end
         if answer.attempt.attachment_generation ~= generation then return "stdin closure belongs to another generation" end
-        if answer.attempt.execution_state == "exited" and answer.attempt.exit_source then
+        if not answer.closed and answer.attempt.execution_state == "exited" and answer.attempt.exit_source then
             exited = true
             exit_uncertain = false
             return completion_event("process_exited")

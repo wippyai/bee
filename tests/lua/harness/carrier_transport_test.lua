@@ -161,12 +161,14 @@ local function define_tests()
             ended.exit_source = "runtime.wait"
             ended.exit = {code = 0}
             local commits = 0
+            local closure_succeeded = false
             local io: machine.IO = {call = function(target: string, value: unknown): (unknown, string?)
                 if target == machine.CARRIER_OPS .. ":commit" then
                     commits = commits + 1
                     return commit_reply(value, commits), nil
                 elseif target == "bee.placement.native.binding:close_stdin" then
-                    return {ok = true, value = {attempt = ended, closed = false, reason = "the child has exited"}}, nil
+                    return {ok = true, value = {attempt = ended, closed = closure_succeeded,
+                        reason = not closure_succeeded and "the child has exited" or nil}}, nil
                 end
                 error("an exited child must not be stopped: " .. target)
             end,
@@ -187,6 +189,12 @@ local function define_tests()
             test.eq(stale, "none")
             test.eq(stale_error, "stdin closure belongs to another generation")
             test.is_nil(session.exit)
+            ended.attachment_generation = 1
+            closure_succeeded = true
+            local closed, closed_error = machine.end_session(io, session, true)
+            test.eq(closed, "closed", "a closure that succeeded before exit remains recorded")
+            test.is_nil(closed_error)
+            test.eq(commits, 2)
         end)
         test.it("refuses an unserializable normalizer state before commit or output acknowledgment", function()
             local selected = plan("session", "stream-json")

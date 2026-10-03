@@ -85,7 +85,7 @@ local function make_request(attempt_id: string, options: types.WorkdirOptions?):
         projections = {},
         required_cleanup = "direct_process",
         required_exit_observation = "eof_gated",
-        timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
+        timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
     }
     return req
 end

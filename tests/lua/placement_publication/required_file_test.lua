@@ -14,7 +14,7 @@ local function request(required: {driver_types.RequiredFile}?, environment: {[st
         profile_id = "window", binding_digest = string.rep("b", 64), profile_digest = string.rep("c", 64),
         launch = launch, resources = {}, environment = environment or {}, environment_refs = {}, projections = {},
         required_cleanup = "process_group", required_exit_observation = "independent",
-        timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
+        timeouts = {stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
     return value
 end
 local function define_tests()

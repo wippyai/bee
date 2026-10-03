@@ -201,7 +201,7 @@ pending work. Reject invalid versions before changing state.
 
 Import generic bounds, canonical JSON, clock conversions and reply decoding
 directly from `bee.values`. Domain checks stay with their owning components;
-retained startup phases and deadlines live in `bee.app.status:startup_progress`.
+retained startup phase decoding lives in `bee.app.status:startup_progress`.
 
 Authenticate `message:from()` and the relevant instance, launch token,
 execution generation or operation grant. A PID in a payload is not
@@ -256,6 +256,15 @@ make standalone
 
 `make test TEST_JOBS=1` runs the same four isolated Lua shards sequentially
 on a loaded host. The default runs all four in parallel.
+Tests declaring `meta.resources: [docker_daemon]` share one shard so a run
+does not issue container creates from separate test processes against the same
+host daemon. That shard holds an exclusive `flock` across checkouts for its
+runtime process. The unit and focused Lua runners use the same lock, selected
+from the test entries' resource metadata. `BEE_DOCKER_DAEMON_LOCK` selects the
+lock file; otherwise it is `~/.cache/bee/bee-docker-daemon.lock`, one path
+shared by every checkout of the same user. The runner prints when it waits and when it acquires the lock, including the wait duration.
+The wait has no timeout and can be interrupted. Failures release the lock and
+retain their cause. The remaining entries retain their balanced parallel shards.
 
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's

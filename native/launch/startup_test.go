@@ -2,39 +2,55 @@
 package launch
 
 import (
+	"context"
 	"testing"
-	"time"
 )
 
-func TestStartupWaitTracksDelayedPhaseAndNamesARealStall(t *testing.T) {
-	start := time.Unix(1, 0)
-	wait := newStartupWait(start, 10*time.Second)
-	for sequence := uint64(1); sequence <= 8; sequence++ {
-		now := start.Add(time.Duration(sequence) * 9 * time.Second)
-		value := startupSnapshot{Version: 1, PID: 42, Launch: "attempt", Sequence: sequence, Phase: "Upgrading data: threads 27->28"}
-		if err := wait.observe(now, value); err != nil {
-			t.Fatalf("progressing upgrade killed at %s: %v", now.Sub(start), err)
+func TestStartupObservationWaitsForSupervisionAndReportsExactFailure(t *testing.T) {
+	state := t.TempDir()
+	monitor, err := beginStartup(context.Background(), state, "slow", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	monitor.cancel()
+	<-monitor.done
+	observe := observeStartup(state, startupSnapshot{}, nil)
+	for i := 0; i < 100; i++ {
+		if err := observe(); err != nil {
+			t.Fatalf("live unchanged owner declared failed: %v", err)
 		}
 	}
-	stalled := startupSnapshot{Version: 1, PID: 42, Launch: "attempt", Sequence: 8, Phase: "Upgrading data: threads 27->28"}
-	if err := wait.observe(start.Add(82*time.Second), stalled); err == nil {
-		t.Fatal("a repeated heartbeat hid a real stall")
+	monitor.mutex.Lock()
+	monitor.snapshot.Error = "fixture exact cause\nsecond cause"
+	monitor.dirty = true
+	monitor.mutex.Unlock()
+	if err := monitor.flush(); err != nil {
+		t.Fatal(err)
+	}
+	if err := observe(); err == nil || err.Error() != "fixture exact cause\nsecond cause" {
+		t.Fatalf("lost published failure: %v", err)
 	}
 }
 
-func TestStartupProgressRefusesDuplicateAndRegressingCounters(t *testing.T) {
-	start := time.Unix(1, 0)
-	wait := newStartupWait(start, 10*time.Second)
-	value := startupSnapshot{Version: 1, PID: 42, Launch: "attempt", Sequence: 3, Phase: "Applying workspace migration"}
-	if err := wait.observe(start, value); err != nil {
+func TestStartupObservationEndsOnOwnerStopAndIgnoresPreviousLaunch(t *testing.T) {
+	state := t.TempDir()
+	monitor, err := beginStartup(context.Background(), state, "old", "")
+	if err != nil {
 		t.Fatal(err)
 	}
-	value.Sequence = 2
-	if err := wait.observe(start.Add(9*time.Second), value); err != nil {
+	previous, err := readStartup(state)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := wait.observe(start.Add(10*time.Second), value); err == nil {
-		t.Fatal("regressing progress postponed the stall")
+	if err := monitor.stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := observeStartup(state, previous, nil)(); err != nil {
+		t.Fatalf("stale owner failure controlled new launch: %v", err)
+	}
+	if err := observeStartup(state, startupSnapshot{}, nil)(); err == nil {
+		t.Fatal("stopped owner left wait active")
 	}
 }
 

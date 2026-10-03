@@ -128,7 +128,7 @@ func (b *bootLog) capture(value event.Event) error {
 			fields[field.Key] = field.String
 		}
 		_, err := fmt.Fprintf(b.output, "Retained application restoration failed: %s [workspace=%s, instance=%s, definition=%s]\n",
-			fields["error"], fields["workspace_id"], fields["instance_id"], fields["definition_id"])
+			fields["reason"], fields["workspace_id"], fields["instance_id"], fields["definition_id"])
 		return err
 	}
 	if b.file == nil {

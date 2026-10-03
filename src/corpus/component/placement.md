@@ -74,14 +74,24 @@ Failures are recorded as placement evidence.
 - `prepare` fails closed when the runtime cannot provide `required_cleanup`;
   nothing is materialized first.
 - Execution state (`intended`, `starting`, `running`, `stopping`, `exited`,
-  `uncertain`) and cleanup state (`pending`, `complete`, `uncertain`) are
-  separate. Cleanup runs only from `exited`. A process-group absence proof
+  `start_failed`, `uncertain`) and cleanup state (`pending`, `complete`, `uncertain`) are
+  separate. Cleanup requires an observed exit, proven absence, or recorded proof that no child was created. A process-group absence proof
   requires a successful, fully decoded process-table query; command failure,
   malformed output and an empty result retain uncertainty. A failed signal
   probe is never evidence that the group is gone.
+- Docker start refusal records `child.start_failed` and exposes its exact cause
+  as `start_failure` in status and placement events. Sessions reports a failed
+  launch as `start_failed`; cleanup still requires daemon proof of a stopped or absent container.
 - Signal evidence is not exit evidence. A liveness observation is returned
   beside the recorded state, never folded into it.
 - Capabilities: `direct_process` controls the launched pid only,
   `process_group` controls what remains in the created group, and
   `contained_tree` needs a stronger boundary than a process group. A
   descendant that starts its own session escapes a group.
+
+Structured `start` returns a monitored, durable `starting` attempt. Bound
+recipients follow owner state notifications through `running` or `start_failed`;
+there is no startup timeout field. Stop and declared lifecycle cancellation use
+the existing stop operation. Native placement migration 11 converts persisted
+request deadlines explicitly; launch-policy revision three removes the field,
+and revision two validates and ignores it when decoding historical entries.

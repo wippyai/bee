@@ -125,7 +125,7 @@ Required cleanup, exit observation and signal capability come from the
 host-selected launch policy. A profile may request stronger requirements, but
 the caller and driver cannot weaken policy. A prepared attempt keeps its pinned
 policy if the registry changes. Process state (`intended`, `starting`,
-`running`, `stopping`, `exited`, `uncertain`) and cleanup state (`pending`,
+`running`, `stopping`, `exited`, `start_failed`, `uncertain`) and cleanup state (`pending`,
 `complete`, `uncertain`) are separate. Signal evidence or an empty/failed
 process-table response is not proof of exit or process-group absence.
 
@@ -223,3 +223,14 @@ accepted adapter and measured fixture/native executable.
 canonical thread observations and acknowledgment IDs. It rejects malformed or
 sparse batches and duplicate IDs. An empty batch is idle. Hook observations do
 not establish a turn result when no turn ID exists.
+
+Structured placement startup returns while the monitored runner is `starting`.
+Carriers record that observation and follow `bee.placement.started` hints by
+reading the authenticated placement owner. `running` records the thread start;
+`start_failed` settles with the exact cause. Explicit cancellation before child
+creation settles from placement's `start_cancelled` evidence without inventing
+a process exit. The executor quiet period begins after startup acknowledgement. The external executor publishes
+the same placement observations to Sessions. The Agent UI shows `starting`
+until acknowledgement and displays a refusal cause when startup fails.
+Launch-policy revision three removes the startup deadline; its revision-two
+decoder explicitly validates and ignores the retired `start_ms` field.

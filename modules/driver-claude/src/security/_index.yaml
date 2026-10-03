@@ -7,13 +7,13 @@ entries:
     type: bee.launch_policy
     comment: Host-selected Claude turn budget for agentic research actions on a caller-owned thread
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     allowed_overrides:
     - thread
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-    start_ms: 15000
+
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
@@ -63,13 +63,13 @@ entries:
       tools. A person selects it as a saved profile in the Agent window (press N for a new profile, name it, and choose Claude
       Code).
   data:
-    schema_revision: bee.launch-policy@2
+    schema_revision: bee.launch-policy@3
     allowed_overrides:
     - thread
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-    start_ms: 15000
+
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false

@@ -176,4 +176,6 @@ before marking itself stopped and forwards it to the owner's registered route.
 A host-owned memory variable (`bee.launch:startup_error`) retains the same cause
 if failure precedes route registration. Only the selected Hive supervisor can
 write it; the startup owner reads it immediately and on its existing heartbeat.
-The owner fails with that diagnostic before the no-progress watchdog fires.
+The owner reports that diagnostic through a structured startup failure record.
+The startup owner command follows readiness and failure events without an
+inactivity deadline.

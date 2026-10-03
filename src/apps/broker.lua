@@ -302,7 +302,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             message = message, accept = "Acknowledge", initial = "", restoration = true}
         restoration_failures[record.instance_id] = spec
         log:error("Retained application restoration failed", {workspace_id = workspace_id,
-            instance_id = record.instance_id, definition_id = record.definition_id, error = message})
+            instance_id = record.instance_id, definition_id = record.definition_id, reason = message})
     end
     local function backfill_retained_aliases(records: {AliasBackfill})
         local current = admission.current

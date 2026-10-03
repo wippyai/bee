@@ -16,8 +16,12 @@ local placement_decode = require("placement_decode")
 local spec = require("spec")
 local placement_resolver = require("placement_resolver")
 local service = require("service")
+local materialization = require("materialization")
+local prestart = require("prestart")
+local bounds = require("bounds")
 local OWNER = "bee.test.docker"
 local PROFILE = "bee.placement.docker.tests:profile"
+local REFUSED_PROFILE = "bee.placement.docker.tests:refused_profile"
 local POLICY = "bee.placement.native:test_launch_policy_without_provider"
 local ROOT = "bee.placement.native:project_fixture"
 local function call(method: string, value: unknown, owner: string?): service.Reply
@@ -34,7 +38,7 @@ end
 local function running(id: string): types.Attempt
     local started = value(call("start", {attempt_id = id}))
     if started.execution_state ~= "starting" then return started end
-    local deadline = time.after("30s")
+    local deadline = time.after("120s")
     while true do
         local status = call("status", {attempt_id = id})
         assert(status.ok)
@@ -53,33 +57,140 @@ local function configure()
     local roots = assert(registry.get("bee.placement.native.env:placement_admitted_roots"))
     roots.data.roots = {{root_ref = ROOT, access = "write"}}; changes:update(roots)
     local policy = assert(registry.get(POLICY))
-    policy.data.placement_profiles = {PROFILE}; changes:update(policy)
+    policy.data.placement_profiles = {PROFILE, REFUSED_PROFILE}; changes:update(policy)
     local activation = assert(registry.get("bee.harness.launch:harness_activation"))
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
-    bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding"; changes:update(activation)
+    local admitted = false
+    for _, binding in ipairs(bindings) do if binding == "bee.placement.native:fixture_agent_binding" then admitted = true end end
+    if not admitted then bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding" end
+    changes:update(activation)
     assert(changes:apply())
 end
-local function request(id: string): types.LaunchRequest
-    local profile = assert(profiles.resolve(registry.snapshot(), PROFILE))
+local function request(id: string, profile_ref: string?): types.LaunchRequest
+    local ref = profile_ref or PROFILE
+    local profile = assert(profiles.resolve(registry.snapshot(), ref))
     local raw = {idempotency_key = id, owner_id = OWNER, owner_incarnation = 1, action_id = id, attempt_id = id,
         binding_ref = "bee.placement.native:fixture_agent_binding", policy_ref = POLICY, profile_id = "batch",
         binding_digest = string.rep("a", 64), profile_digest = string.rep("a", 64),
-        placement_binding_ref = spec.BINDING, placement_binding_digest = assert(placement_resolver.resolve(registry.snapshot(), spec.BINDING)).binding_digest, placement_profile_ref = PROFILE, placement_profile_digest = profile.digest,
+        placement_binding_ref = spec.BINDING, placement_binding_digest = assert(placement_resolver.resolve(registry.snapshot(), spec.BINDING)).binding_digest, placement_profile_ref = ref, placement_profile_digest = profile.digest,
         launch = {executable = "/bin/sh", argv = {"-c", "printf running; sleep 60"}, environment = {},
             working_directory_ref = "project", readiness = "none"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {}, required_cleanup = "contained_tree", required_exit_observation = "independent",
-        timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
+        timeouts = {stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
     return assert(request_codec.decode(raw))
 end
 local function creator()
     local events = assert(process.events())
     events:receive()
 end
+local function boundary()
+    test.describe("Docker failed-start reporting", function()
+        configure()
+        test.it("reports cancellation before create without inventing an exit", function()
+            local id = "docker-cancelled-before-create"
+            value(call("prepare", request(id)))
+            local stopped = value(call("stop", {attempt_id = id}))
+            test.eq(stopped.execution_state, "exited")
+            test.eq(stopped.cleanup_state, "complete")
+            test.is_true(stopped.start_cancelled)
+            test.is_nil(stopped.start_failure)
+            test.is_nil(stopped.exit)
+            test.is_nil(stopped.exit_source)
+        end)
+        test.it("keeps materialization refusal separate from container exit", function()
+            local id = "docker-materialization-refused"
+            value(call("prepare", request(id)))
+            local loaded = assert(service.load({attempt_id = id}, true))
+            loaded.request.environment.HOME = "/unadmitted-home"
+            local db = assert(store.open())
+            assert(store.transition(db, id, {execution = "starting", fields = {runner_pid = process.pid()},
+                evidence = {kind = "runner.started", detail = "fixture owns materialization"}}).ok)
+            local prepared, reason = materialization.prepare(db, loaded.request, id, 0, nil, nil, spec.HOME)
+            test.is_nil(prepared)
+            test.not_nil(reason)
+            local attempt = assert(store.attempt(db, id))
+            test.eq(attempt.execution_state, "start_failed")
+            test.is_nil(attempt.exit)
+            local recorded = materialization.fail_start(db, id, assert(reason), true)
+            test.is_true(recorded.ok)
+            test.eq(assert(recorded.attempt).start_failure, reason)
+            assert(store.transition(db, id, {cleanup = "complete", evidence = {kind = "test.cleanup", detail = "materialization refused before scratch creation"}}).ok)
+            db:release()
+        end)
+        for index, cause in ipairs({
+            'failed to create container: Post "http://docker/v1.45/containers/create": context deadline exceeded',
+            'containers/create: HTTP 500: daemon create refused',
+            'failed to start container: unable to find user 99999999999999999999: no matching entries in passwd file',
+        }) do
+            test.it("preserves failed launch cause " .. tostring(index) .. " in status and session failure", function()
+                local id = "docker-failed-" .. tostring(index)
+                value(call("prepare", request(id)))
+                local db = assert(store.open())
+                assert(store.transition(db, id, {execution = "starting", evidence = {kind = "child.creating", detail = "executor startup dispatched"}}).ok)
+                local recorded = materialization.fail_start(db, id, cause, true)
+                test.is_true(recorded.ok)
+                local attempt = assert(store.attempt(db, id))
+                db:release()
+                test.eq(attempt.execution_state, "start_failed")
+                test.eq(attempt.start_failure, cause)
+                test.is_nil(attempt.exit)
+                test.is_nil(attempt.exit_source)
+                local decoded = assert(placement_decode.attempt(attempt))
+                test.eq(decoded.start_failure, cause)
+                local inspected = prestart.inspect(function(_target: string, _value: unknown): (unknown, unknown?)
+                    return {ok = true, value = {attempt = attempt, liveness = {observed = false, at = store.now(), detail = cause}}}, nil
+                end, "fixture:status", nil, id, "failed", "launch failed")
+                test.eq(inspected.outcome, "failed")
+                test.eq(inspected.reason, "launch failed; failed start: " .. cause)
+                local page = call("evidence", {attempt_id = id, limit = 64})
+                test.is_true(page.ok)
+                local evidence = assert(bounds.array(assert(bounds.object(page.value)).evidence, 64))
+                local final = assert(bounds.object(evidence[#evidence]))
+                test.eq(final.kind, "child.start_failed")
+                test.eq(final.detail, cause)
+            end)
+        end
+    end)
+end
 local function run()
     test.describe("Real Docker placement lifecycle", function()
         configure()
+        test.it("retains the real daemon start refusal as a failed launch", function()
+            local id = "docker-start-refused-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
+            value(call("prepare", request(id, REFUSED_PROFILE)))
+            local accepted = value(call("start", {attempt_id = id}))
+            test.eq(accepted.execution_state, "starting")
+            local reply: service.Reply = {ok = true, value = running(id)}
+            test.is_true(reply.ok)
+            local status = assert(placement_decode.status(call("status", {attempt_id = id}).value))
+            local attempt = status.attempt
+            test.eq(attempt.execution_state, "start_failed")
+            local reason = assert(attempt.start_failure)
+            test.is_true(reason:find("failed to start container", 1, true) ~= nil,
+                "expected a daemon start refusal; retained failure: " .. reason)
+            test.is_true(reason:find("user", 1, true) ~= nil,
+                "expected the invalid user refusal; retained failure: " .. reason)
+            test.eq(value(reply).start_failure, reason)
+            test.is_nil(attempt.exit)
+            test.is_nil(attempt.exit_source)
+            test.eq(status.attempt.start_failure, reason)
+            local inspected = prestart.inspect(function(_target: string, _value: unknown): (unknown, unknown?)
+                return {ok = true, value = status}, nil
+            end, "fixture:status", nil, id, "failed", "launch failed")
+            test.eq(inspected.outcome, "failed")
+            test.eq(inspected.reason, "launch failed; failed start: " .. reason)
+            local page = call("evidence", {attempt_id = id, limit = 64})
+            test.is_true(page.ok)
+            local evidence = assert(bounds.array(assert(bounds.object(page.value)).evidence, 64))
+            local found = false
+            for _, item in ipairs(evidence) do
+                local event = assert(bounds.object(item))
+                if event.kind == "child.start_failed" then test.eq(event.detail, reason); found = true end
+            end
+            test.is_true(found)
+        end)
         test.it("keeps a live runner's creation phase when no container exists yet", function()
             local id = "docker-creating-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
             value(call("prepare", request(id)))
@@ -206,4 +317,24 @@ local function run()
         end)
     end)
 end
-return {run = test.run_cases(run), creator = creator}
+local function isolated_cases(definition: () -> ())
+    local cases = test.run_cases(definition)
+    return function(options)
+        local originals: {[string]: unknown} = {}
+        for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots",
+            POLICY, "bee.harness.launch:harness_activation"}) do
+            originals[ref] = assert(registry.get(ref)).data
+        end
+        local ok, result = pcall(cases, options)
+        local changes = assert(registry.snapshot()):changes()
+        for ref, data in pairs(originals) do
+            local entry = assert(registry.get(ref))
+            entry.data = data
+            changes:update(entry)
+        end
+        assert(changes:apply())
+        if not ok then error(tostring(result)) end
+        return result
+    end
+end
+return {run = isolated_cases(run), boundary = isolated_cases(boundary), creator = creator}

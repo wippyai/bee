@@ -73,6 +73,10 @@ function M.conversion(raw: unknown): (Conversion?, string?)
     return {version = 1, roots = selected}, nil
 end
 
+function M.host_component(root: Root): boolean
+    return root.meta.type == "bee.component_selection" and (root.owner == "" or root.owner == "bee/bee")
+end
+
 function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     local state = bounds.object(raw)
     local version = bounds.integer(revision)
@@ -163,21 +167,23 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             if not target or not constraint then return nil, "invalid dependency identity" end
             local bucket = module(target)
             local meta = bounds.object(entry.meta) or {}
-            local host_selection = owned.root == true and meta.type == "bee.component_selection"
-            local managed = (host_selection and meta.independent == true) or (owned.root == true and owner == "" and (meta.type == "bee.hub_dependency" or published_roots[id] == target))
-            if host_selection then
-                selected = true
-                if owner ~= "" then conversion[#conversion + 1] = {id = id, component = target} end
-            elseif owner ~= "" then add_once(bucket.used_by, owner) end
+            local host_selection = false
             if owned.root == true then
                 local supplied: unknown = data.parameters
                 if supplied == nil then supplied = {} end
                 local parameters, parameter_error = requirements.parameters(supplied)
                 if not parameters then return nil, parameter_error end
-                roots[#roots + 1] = {id = id, owner = owner, component = target, version = constraint, parameters = parameters, managed = managed, meta = meta}
+                local root: Root = {id = id, owner = owner, component = target, version = constraint, parameters = parameters, managed = false, meta = meta}
+                host_selection = M.host_component(root)
+                root.managed = (host_selection and meta.independent == true) or (owner == "" and (meta.type == "bee.hub_dependency" or published_roots[id] == target))
+                roots[#roots + 1] = root
                 add_once(bucket.roots, id)
                 bucket.direct = true
             end
+            if host_selection then
+                selected = true
+                if owner ~= "" then conversion[#conversion + 1] = {id = id, component = target} end
+            elseif owner ~= "" then add_once(bucket.used_by, owner) end
         end
     end
     if deployment then module(deployment).direct = true end
@@ -191,10 +197,6 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)
     table.sort(roots, function(a: Root, b: Root): boolean return a.id < b.id end)
     return {version = version, modules = modules, roots = roots, deployment = deployment, conversion = #conversion > 0 and {version = 1, roots = conversion} or nil, selected = selected}, nil
-end
-
-function M.host_component(root: Root): boolean
-    return root.meta.type == "bee.component_selection"
 end
 
 -- Explicit host selections and Hub-authored roots enter planning. Other

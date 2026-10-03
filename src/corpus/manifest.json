@@ -171,9 +171,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 16504,
+      "bytes": 16709,
       "id": "docs/hub_inspection",
-      "sha256": "9e8f1e2fd995c282f0149ef6dbe58a8c8436fa617ec15aab94af11e8bc68bc9f",
+      "sha256": "7c9b50f8f3d653f644da958ff6b6b0ee911d0b1f303ad131d86ba6c23927e3e5",
       "source": "docs/guides/hub.md",
       "title": "Hub installation and package reads",
       "topic": "registry"
@@ -654,7 +654,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 775640,
+    "bytes": 775845,
     "documents": 81
   }
 }

@@ -92,7 +92,10 @@ catalog selection still excludes prereleases unless the range admits them.
 
 The host declares component selections with `meta.type: bee.component_selection`
 on its existing dependency entries and marks independently managed roots with
-`meta.independent: true`. Hub-created roots declare `meta.type: bee.hub_dependency`;
+`meta.independent: true`. Inventory requires registry root evidence and ownership
+by the host or `bee/bee` before treating that metadata as a host selection.
+A tag on another package's dependency does not make it a host selection.
+Hub-created roots declare `meta.type: bee.hub_dependency`;
 existing published operation receipts also retain the exact root they selected. The first operation transfers Bee
 component roots to host ownership in the same Registry change as the operation
 receipt, retaining their IDs, live versions and parameters. Inventory and review

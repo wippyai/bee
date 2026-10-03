@@ -11,7 +11,7 @@ end
 function M.main(attempt_id: string, supervisor: string, reply_topic: string, _binding: string?, _key: string?, control_token: string, _materialization_epoch: integer)
     local events = assert(process.events())
     local advances = assert(process.listen("bee.test.startup.advance", {message = true}))
-    local controls = assert(process.listen("bee.placement.control", {message = true}))
+    local controls = assert(process.listen(protocol.TOPIC_CONTROL, {message = true}))
     local launch = assert(process.listen(reply_topic .. ".launch", {message = true}))
     assert(process.send(supervisor, reply_topic, {ready = true}))
     local released = channel.select({launch:case_receive(), events:case_receive()})
@@ -34,7 +34,6 @@ function M.main(attempt_id: string, supervisor: string, reply_topic: string, _bi
     local cancelled = row.execution_state == "stopping"
     local request = assert(store.request(row))
     assert(type(row.recipient) == "string")
-    assert(process.send(row.recipient, "bee.test.startup.pending", {attempt_id = attempt_id}))
     if cancelled then
         assert(store.transition(db, attempt_id, {execution = "exited", cleanup = "complete",
             evidence = {kind = "child.not_started", detail = "explicit cancellation before child creation"}}).ok)

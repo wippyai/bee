@@ -112,7 +112,8 @@ and marks the owner unavailable when it cannot be queried.
 The bundled `bee.approvals.inbox.app:app` reads the launch workspace and host-listed
 workspaces through the approval owner, displays the proposed effect, target,
 requester and expiry, and submits `decide` with the viewed revision and
-proposal digest after its confirmation question. `withdraw` is an explicit
+proposal digest from the opened decision screen. Allow once and Deny each take
+one key; permission windows offer duration choices on that screen. `withdraw` is an explicit
 requester operation; closing the app expires nothing. All displayed text and
 keys are bounded and control characters are removed. A conflict or settled
 state refreshes the owner's record and is never resubmitted. A lost answer is
@@ -195,7 +196,7 @@ application. `bee.gov` exposes the destination operations `lease_propose`,
 
 The lease operations need the dedicated delivery action
 `bee.gov.delivery.lease`, which the host grants to the bundled inbox. In the
-inbox, `L` on an open pending activation request opens a form with an expiry
+inbox, `E` on an open pending activation request opens a form with an expiry
 choice, a max-applies number and up to three ceiling extras (a capability id
 and its `key=value` parameters, validated as typed), and files the lease
 request; once a person approves it, `G` on that request grants the lease. `V`
@@ -208,6 +209,60 @@ workspace in a single transaction. Each item carries the same fields as
 `decide`; a mixed batch or a failing item commits nothing. The inbox marks
 pending requests with `M` and decides the marked set with `B` (approve) or
 `N` (deny) after one confirmation.
+
+## Person-chosen approval windows
+
+On an opened permission request, `A` allows once, `F` allows for 30 minutes,
+`L` opens longer choices, and `D` denies. Longer choices are four hours, until
+the end of the UTC day, and 24 hours; choices exceeding the smallest policy
+ceiling in the displayed batch are absent. The bundled host policies cap windows
+at one day and retain the default ten-minute request lifetime. Indefinite
+"until revoked" authority is unavailable under a finite policy ceiling. Questions
+still require their explicit response and cannot create an automatic window.
+Governance lease reviews retain their full terms and scroll-before-allow check.
+
+The screen states the subject, capability, scope and duration choice. Pending
+permissions from one requester, workspace, authoritative owner and declared
+action are displayed as one decision; requests without a declared action group
+by requester/workspace. Up to 16 requests settle through `decide_batch` in one
+transaction. Its optional `window_ttl_ms` applies to the whole batch, creating
+one exact grant per distinct request scope. A mixed or failing batch commits
+neither decisions nor grants. A question or governance lease review keeps its
+own response/review screen.
+
+A grant covers only the exact requester, workspace, policy and proposal scope
+on the native node that owns the approval. Generic proposals require a complete
+canonical match. Validated managed permission exchanges retain the exact
+attempt/action, plan, adapter, tool and input digest while excluding the two
+exchange correlation identifiers. No path wildcard, broader tool permission,
+new attempt or other node is authorized. Registry metadata grants nothing.
+
+`decide` accepts optional positive `window_ttl_ms` on an approved permission
+without a response. The owner checks the current policy cap, records who granted
+it, when, and until when, and retains it durably. A matching new request settles
+as approved by the grant in the request transaction and records its history,
+feed change and thread notices. Its view carries `window_grant` and
+`allowed_by_grant`; Needs you displays "allowed by your 30 min grant" (or the
+chosen duration). Each request still has its own effect-consumption receipt and
+request lifetime. Restart preserves the window; existing decisions still use
+the usual incarnation revalidation.
+
+At exact expiry the next request is pending again and its view has `reallow=true`.
+The same screen offers Re-allow for 30 minutes, Re-allow longer, Allow once and
+Deny, subject to the current policy cap. `U` lists your active grants on the
+local authoritative node; `X` revokes the selected grant immediately. The owner
+operation `grant_window` supports `{operation="list", workspace_id, after_id?}`
+and `{operation="revoke", grant_id, workspace_id?}`. Listing returns `grants`,
+`more`, and `next_id` for pages of 64. Decision authority and the issuing actor
+or admitted application definition are checked; other approvers cannot revoke
+your grant. Revocation stops subsequent automatic decisions without rewriting
+settlements that already committed. Grant administration is node-local and has
+no Hive exposure; remote Inbox feeds show the owning node's recorded history.
+
+Migration 6 (`approval_windows`, M5) appends the grant store and settlement
+references. Its source request stays retained while the window is active;
+applied migration SQL, prior ledger checksums, stored approval identities,
+projection schema and wire topics remain unchanged.
 
 ## Storage and migrations
 

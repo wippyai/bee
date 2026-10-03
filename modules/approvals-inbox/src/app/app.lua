@@ -9,12 +9,13 @@ local channel = require("channel")
 local process = require("process")
 local time = require("time")
 local uuid = require("uuid")
-local json = require("json")
 local funcs = require("funcs")
 local registry = require("registry")
 local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
+local windows = require("windows")
+local clock = require("clock")
 local view = require("view")
 local inbox = require("inbox")
 local feeds = require("feeds")
@@ -124,6 +125,32 @@ local function main(value: unknown)
             end
         end
         rows = model.rows(state)
+        if state.grants_view then
+            local collected: {windows.Grant} = {}
+            for _, workspace in ipairs(local_workspaces) do
+                local after: string? = nil
+                repeat
+                    local reply = owner:invoke("bee.approvals.binding:grant_window", {operation = "list", workspace_id = workspace, after_id = after})
+                    if not reply then error("approval window list outcome unknown") end
+                    if reply.kind ~= "success" then error(reply.message) end
+                    if type(reply.value) ~= "table" then error("INVALID_REPLY: approval window list is not an object") end
+                    local body = reply.value
+                    if type(body.grants) ~= "table" or type(body.more) ~= "boolean" then error("INVALID_REPLY: approval window list is malformed") end
+                    for _, raw in ipairs(body.grants) do
+                        local grant, grant_error = windows.decode(raw)
+                        if not grant then error(grant_error) end
+                        if #collected >= 256 then error("CAPACITY_EXHAUSTED: active approval windows exceed 256") end
+                        collected[#collected + 1] = grant
+                    end
+                    if body.more then
+                        if type(body.next_id) ~= "string" or body.next_id == after then error("INVALID_REPLY: approval window cursor did not advance") end
+                        after = body.next_id
+                    else after = nil end
+                until not after
+            end
+            state.grants = collected
+            state.grant_selected = math.floor(math.max(1, math.min(state.grant_selected, #collected)))
+        end
         if slice.leases_view then
             for _, workspace in ipairs(state.workspaces) do
                 local intent = leases.list_intent(workspace, workspace)
@@ -146,6 +173,23 @@ local function main(value: unknown)
     end
     -- An answer that never arrived is recovered from the owner's record.
     local function recover()
+        local pending = state.pending
+        if pending and pending.kind == "batch" then
+            local views: {model.ApprovalView} = {}
+            for _, item in ipairs(pending.items) do
+                local reply = owner:invoke("bee.approvals.binding:read", {approval_id = item.approval_id})
+                if not reply then state.notice = "Batch outcome unknown: owner did not answer"; return end
+                if reply.kind ~= "success" then state.notice = reply.message; return end
+                local view, err = model.decode_view(reply.value)
+                if not view or view.approval_id ~= item.approval_id then state.notice = "INVALID_REPLY: " .. tostring(err or "batch identity differs"); return end
+                model.apply_read(state, view.approval_id, reply)
+                if view.state == "pending" then state.notice = "Batch outcome unknown: decision may remain in flight"; return end
+                views[#views + 1] = view
+            end
+            model.apply_answer(state, pending.request_id, {kind = "success", value = {decisions = views}})
+            rows = model.rows(state); dirty = true
+            return
+        end
         local intent = model.recovery_intent(state)
         if not intent then return end
         local reply: model.Reply = owner:invoke(intent.target, intent.request) or unknown_answer()
@@ -153,18 +197,18 @@ local function main(value: unknown)
         rows = model.rows(state)
         dirty = true
     end
-    local function act(kind: string)
+    local function act(kind: string, ttl_ms: integer?)
         local request_id = uuid.v7()
         local intent: model.Intent? = nil
         local refused: string? = nil
         if kind == "withdraw" then intent, refused = model.withdraw_intent(state, request_id)
-        else intent, refused = model.decision_intent(state, request_id, kind == "approve" and "approved" or "denied") end
+        else intent, refused = model.combined_intent(state, request_id, kind == "approve" and "approved" or "denied", ttl_ms) end
         if not intent then status = refused or ""; dirty = true; return end
         status = ""
         dirty = true
         local reply = owner:invoke(intent.target, intent.request)
         model.apply_answer(state, request_id, reply)
-        if not reply then recover() end
+        if state.pending then recover() end
         rows = model.rows(state)
         dirty = true
     end
@@ -230,8 +274,34 @@ local function main(value: unknown)
         dialog = {request_id = request_id, kind = "revoke", confirmation = nil, view = nil}
         dirty = true
     end
-    -- Every decision passes through the shell's confirmation; nothing acts
-    -- on a row selection or a key alone.
+    local function allow_window(ttl_ms: integer)
+        if dialog or state.pending or busy then return end
+        if leases.is_review(state.detail) and not slice.review_complete then status = "Scroll to the end of the lease terms before approving"; dirty = true; return end
+        if ttl_ms > model.window_cap(state) then status = "Duration exceeds the approval policy"; dirty = true; return end
+        perform(function() act("approve", ttl_ms); state.longer = false end)
+    end
+    local function longer()
+        if dialog or state.pending or busy then return end
+        if not model.confirmation(state) then status = "Open a pending request before choosing a duration"; dirty = true; return end
+        if leases.is_review(state.detail) and not slice.review_complete then status = "Scroll to the end of the lease terms before choosing a duration"; dirty = true; return end
+        state.longer_choices = {}
+        for _, choice in ipairs(windows.choices(model.window_cap(state), clock.milliseconds())) do
+            if choice.ttl_ms ~= 1800000 then state.longer_choices[#state.longer_choices + 1] = choice end
+        end
+        state.longer = true; dirty = true
+    end
+    local function revoke_window()
+        if busy or state.pending then return end
+        local grant = state.grants[state.grant_selected]
+        if not grant then return end
+        perform(function()
+            local reply = owner:invoke("bee.approvals.binding:grant_window", {operation = "revoke", workspace_id = grant.workspace_id, grant_id = grant.grant_id})
+            if not reply then status = "Revocation outcome unknown; refresh to read active windows"
+            elseif reply.kind ~= "success" then status = reply.message
+            else status = "Revoked" end
+            refresh()
+        end)
+    end
     local function ask(kind: string)
         if dialog or state.pending or busy then return end
         local selected = model.selected_row(state)
@@ -240,9 +310,10 @@ local function main(value: unknown)
         if kind == "approve" and leases.is_review(state.detail) and not slice.review_complete then
             status = "Scroll to the end of the lease terms before approving"; dirty = true; return
         end
-        local title = kind == "approve" and "Approve this request?" or (kind == "deny" and "Deny this request?" or "Withdraw this request?")
+        if kind == "approve" or kind == "deny" then perform(function() act(kind); state.longer = false end); return end
+        local title = "Withdraw this request?"
         local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
-        local accept = kind == "approve" and "Approve" or (kind == "deny" and "Deny" or "Withdraw")
+        local accept = "Withdraw"
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = accept})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, kind = kind, confirmation = confirmation}
@@ -346,7 +417,20 @@ local function main(value: unknown)
                     local text = tostring(data.key or "")
                     status = ""
                     leases.say(slice, "")
-                    if text == "v" then
+                    if state.grants_view then
+                        if key == "up" or text == "k" then state.grant_selected = math.floor(math.max(1, state.grant_selected - 1)); dirty = true
+                        elseif key == "down" or text == "j" then state.grant_selected = math.floor(math.max(1, math.min(#state.grants, state.grant_selected + 1))); dirty = true
+                        elseif text == "x" then revoke_window()
+                        elseif text == "r" then perform(refresh)
+                        elseif text == "u" or key == "esc" or key == "escape" then state.grants_view = false; dirty = true end
+                    elseif state.longer and tonumber(text) then
+                        local choice = state.longer_choices[math.floor(tonumber(text))]
+                        if choice then allow_window(choice.ttl_ms) end
+                    elseif text == "u" then
+                        state.grants_view = true; slice.leases_view = false; perform(refresh); dirty = true
+                    elseif text == "f" then allow_window(1800000)
+                    elseif text == "l" and model.window_cap(state) > 0 then longer()
+                    elseif text == "v" then
                         leases.show_leases(slice, not slice.leases_view); offset = 0
                         perform(refresh); dirty = true
                     elseif slice.leases_view then
@@ -368,7 +452,7 @@ local function main(value: unknown)
                         status = refused or ""; dirty = true
                     elseif text == "b" then ask_batch("approved")
                     elseif text == "n" then ask_batch("denied")
-                    elseif text == "l" then ask_lease("lease_propose")
+                    elseif text == "l" or text == "e" then ask_lease("lease_propose")
                     elseif text == "g" then ask_lease("lease_grant")
                     elseif text == "s" or text == "b" then
                         local detail = state.detail
@@ -384,13 +468,23 @@ local function main(value: unknown)
                     elseif text == "r" then perform(function() if state.pending then recover() else refresh() end end)
                     elseif text == "t" then model.toggle_technical(state); dirty = true
                     elseif key == "esc" or key == "escape" then
-                        if leases.is_review(state.detail) then model.select(state, nil); dirty = true else running = false end
+                        if state.longer then state.longer = false; dirty = true
+                        elseif leases.is_review(state.detail) then model.select(state, nil); dirty = true else running = false end
                     end
                 elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                     local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                     if hit then
                         status = ""
-                        if hit.kind == "lease_row" then
+                        if hit.kind == "window_row" then state.grant_selected = hit.index; dirty = true
+                        elseif hit.kind == "window_revoke" then revoke_window()
+                        elseif hit.kind == "windows" then state.grants_view = true; slice.leases_view = false; perform(refresh)
+                        elseif hit.kind == "window_back" then state.grants_view = false; dirty = true
+                        elseif hit.kind == "allow_30" then allow_window(1800000)
+                        elseif hit.kind == "allow_longer" then longer()
+                        elseif hit.kind == "window_choice" then
+                            local choice = state.longer_choices[hit.index]
+                            if choice then allow_window(choice.ttl_ms) end
+                        elseif hit.kind == "lease_row" then
                             local row = leases.rows(slice)[hit.index]
                             if row then leases.select(slice, row); dirty = true end
                         elseif hit.kind == "revoke" then ask_revoke()

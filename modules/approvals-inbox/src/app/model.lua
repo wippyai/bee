@@ -9,6 +9,7 @@ local json = require("json")
 local text = require("text")
 local bounds = require("bounds")
 local caller = require("caller")
+local windows = require("windows")
 local M = {}
 M.TEXT_LIMIT = 512
 M.LINE_LIMIT = 160
@@ -25,7 +26,7 @@ type Prompt = {text: string, artifact_ref: nil} | {text: nil, artifact_ref: stri
 type OperationProposal = {kind: "operation", ref: string, revision: string, action_id: nil, input_digest: string?, payload: Object}
 type AttemptProposal = {kind: "attempt", ref: string, revision: string, action_id: string?, input_digest: string?, payload: Object}
 type Proposal = OperationProposal | AttemptProposal
-type ApprovalView = {requesting_session: string?,
+type ApprovalView = {window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer?, reallow: boolean?, requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, request_kind: RequestKind, policy: string, proposal: Proposal,
     proposal_digest: string, prompt: Prompt, revision: integer, state: ApprovalState,
@@ -63,11 +64,13 @@ type Row = {
     view: ApprovalView,
 }
 type Pending =
+    {kind: "batch", request_id: string, approval_id: string, revision: integer, decision: Decision, items: {ApprovalView}} |
     {kind: "decide", request_id: string, approval_id: string, revision: integer, decision: Decision} |
     {kind: "withdraw", request_id: string, approval_id: string, revision: integer, decision: nil}
 type Intent = {target: string, request: Object}
 type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, owner_node: string, owner_incarnation: integer}
 type State = {
+    grants_view: boolean, grants: {windows.Grant}, grant_selected: integer, longer: boolean, longer_choices: {windows.Choice},
     workspaces: {string},
     cursors: {[string]: integer},
     unavailable: {[string]: string},
@@ -177,7 +180,7 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     local extra = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "request_kind", "policy",
         "proposal", "proposal_digest", "prompt", "response_schema", "thread_id", "binding", "revision", "state", "decision", "decider_id",
         "decided_at", "response", "validated_incarnation", "validated_by", "validated_at", "consumer_id", "consumed_effect", "consumed_at",
-        "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at", "source_approval_id", "source_workspace_id", "requesting_session"})
+        "window_grant", "allowed_by_grant", "window_max_ttl_ms", "reallow", "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at", "source_approval_id", "source_workspace_id", "requesting_session"})
     if extra then return nil, extra end
     local approval_id, owner_node, workspace_id = bounds.id(view.approval_id), bounds.id(view.owner_node), bounds.id(view.workspace_id)
     local requester_id, policy = bounds.id(view.requester_id), bounds.id(view.policy)
@@ -247,7 +250,21 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
         or (view.updated_at ~= nil and not updated_at) then return nil, "approval view has invalid timestamps" end
     local requesting_session = view.requesting_session == nil and nil or bounds.id(view.requesting_session)
     if view.requesting_session ~= nil and (not requesting_session or not requesting_session:match("^bs:[^:]+:[^:]+:[^:]+$")) then return nil, "requesting session is invalid" end
-    local decoded_view: ApprovalView = {requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
+    local grant: windows.Grant? = nil
+    if view.window_grant ~= nil then
+        local grant_error: string? = nil
+        grant, grant_error = windows.decode(view.window_grant)
+        if not grant then return nil, grant_error end
+        local scope_digest, scope_error = windows.scope_digest(proposal)
+        if not scope_digest then return nil, scope_error end
+        if grant.owner_node ~= owner_node or grant.requester_id ~= requester_id or grant.policy ~= policy
+            or grant.scope_digest ~= scope_digest or state ~= "decided" or approval_decision ~= "approved" then return nil, "approval window scope differs" end
+    end
+    local automatic = view.allowed_by_grant == nil and nil or bounds.id(view.allowed_by_grant)
+    local cap = view.window_max_ttl_ms == nil and 0 or bounds.count(view.window_max_ttl_ms)
+    if cap == nil or (view.reallow ~= nil and type(view.reallow) ~= "boolean")
+        or (view.allowed_by_grant ~= nil and (not automatic or not grant or automatic ~= grant.grant_id)) then return nil, "approval window metadata is invalid" end
+    local decoded_view: ApprovalView = {window_grant = grant, allowed_by_grant = automatic, window_max_ttl_ms = cap, reallow = view.reallow == true, requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
         requester_id = requester_id, request_kind = request_kind_value, policy = policy, proposal = proposal, proposal_digest = proposal_digest,
         prompt = prompt, revision = revision, state = state, decision = approval_decision, decider_id = decider_id,
         expires_at = expires_at, created_at = created_at, response_schema = response_schema, thread_id = thread_id, binding = binding,
@@ -372,7 +389,7 @@ function M.reset_cursor(state: State, workspace: string)
     state.cursors[workspace] = 0
 end
 function M.new(workspaces: {string}): State
-    return {workspaces = workspaces, cursors = {}, unavailable = {}, rows = {}, selected = nil, detail = nil, technical = false, pending = nil, notice = ""}
+    return {grants_view = false, grants = {}, grant_selected = 1, longer = false, longer_choices = {}, workspaces = workspaces, cursors = {}, unavailable = {}, rows = {}, selected = nil, detail = nil, technical = false, pending = nil, notice = ""}
 end
 -- inbox_intent: the next bounded page of one workspace's changes.
 function M.inbox_intent(state: State, workspace: string): Intent
@@ -478,6 +495,7 @@ end
 function M.select(state: State, approval_id: string?)
     if approval_id ~= state.selected then state.detail = nil end
     state.selected = approval_id
+    state.longer = false
 end
 function M.move(state: State, delta: integer)
     local list = M.rows(state)
@@ -535,7 +553,7 @@ end
 -- loaded and pending, at the revision and digest the viewer saw; nothing
 -- else is asked. The intent stays pending until the owner answers or a
 -- read recovers it.
-function M.decision_intent(state: State, request_id: string, decision: string): (Intent?, string?)
+function M.decision_intent(state: State, request_id: string, decision: string, ttl_ms: integer?): (Intent?, string?)
     if state.pending then return nil, "a request is already awaiting the owner" end
     local selected_decision = bounds.member(decision, {"approved", "denied"})
     if not selected_decision then return nil, "decision must be approved or denied" end
@@ -543,9 +561,53 @@ function M.decision_intent(state: State, request_id: string, decision: string): 
     local selected = state.selected
     if not detail or not selected or detail.approval_id ~= selected then return nil, "open the request before deciding" end
     if detail.state ~= "pending" then return nil, "the request is " .. M.text(detail.state, 40) end
+    if ttl_ms and (ttl_ms < 1 or ttl_ms > (detail.window_max_ttl_ms or 0) or selected_decision ~= "approved" or detail.request_kind ~= "permission") then return nil, "duration exceeds this request's policy" end
     local revision = detail.revision
     state.pending = {kind = "decide", request_id = request_id, approval_id = selected, revision = revision, decision = selected_decision}
-    return {target = "bee.approvals.binding:decide", request = {approval_id = selected, expected_revision = revision, decision = selected_decision, proposal_digest = detail.proposal_digest}}, nil
+    return {target = "bee.approvals.binding:decide", request = {approval_id = selected, expected_revision = revision, decision = selected_decision, proposal_digest = detail.proposal_digest, window_ttl_ms = ttl_ms}}, nil
+end
+function M.decision_group(state: State): {ApprovalView}
+    local detail = state.detail
+    if not detail or detail.state ~= "pending" then return {} end
+    if detail.request_kind ~= "permission" or detail.proposal.ref == "bee.gov:grant-lease" then return {detail} end
+    local action = detail.proposal.action_id or bounds.id(detail.proposal.payload.action_id)
+    local group: {ApprovalView} = {}
+    for _, row in ipairs(M.rows(state)) do
+        local view = row.approval_id == detail.approval_id and detail or row.view
+        if view.state == "pending" and view.request_kind == "permission" and view.requester_id == detail.requester_id
+            and view.workspace_id == detail.workspace_id and view.owner_node == detail.owner_node
+            and (view.proposal.action_id or bounds.id(view.proposal.payload.action_id)) == action then group[#group + 1] = view end
+    end
+    return group
+end
+function M.window_cap(state: State): integer
+    local cap: integer = 31536000000
+    local group = M.decision_group(state)
+    if #group == 0 then return 0 end
+    for _, view in ipairs(group) do
+        local limit = bounds.integer(view.window_max_ttl_ms or 0)
+        if limit == nil then error("approval policy cap is not an integer") end
+        if limit < cap then cap = limit end
+    end
+    return cap
+end
+function M.combined_intent(state: State, request_id: string, decision: string, ttl_ms: integer?): (Intent?, string?)
+    if state.pending then return nil, "a request is already awaiting the owner" end
+    local group = M.decision_group(state)
+    if #group <= 1 then return M.decision_intent(state, request_id, decision, ttl_ms) end
+    if #group > 16 then return nil, "CAPACITY_EXHAUSTED: a combined decision exceeds 16 requests" end
+    if decision ~= "approved" and decision ~= "denied" then return nil, "decision must be approved or denied" end
+    if ttl_ms and (ttl_ms < 1 or ttl_ms > M.window_cap(state) or decision ~= "approved") then return nil, "duration exceeds this batch's policy" end
+    local items: {Object} = {}
+    for _, view in ipairs(group) do items[#items + 1] = {approval_id = view.approval_id, expected_revision = view.revision, proposal_digest = view.proposal_digest, decision = decision} end
+    local detail = assert(state.detail)
+    state.pending = {kind = "batch", request_id = request_id, approval_id = detail.approval_id, revision = detail.revision, decision = decision, items = group}
+    return {target = "bee.approvals.binding:decide_batch", request = {decisions = items, window_ttl_ms = ttl_ms}}, nil
+end
+function M.history(view: ApprovalView): string?
+    local grant = view.window_grant
+    if view.allowed_by_grant and grant then return "allowed by your " .. windows.duration(grant.until_ms - grant.granted_ms) .. " grant" end
+    return nil
 end
 -- withdraw_intent: the pending request whose detail is loaded; the owner
 -- alone knows whether the viewer is its requester and refuses otherwise.
@@ -571,6 +633,28 @@ function M.apply_answer(state: State, request_id: string, reply: Reply?)
     if not pending or pending.request_id ~= request_id then return end
     if not reply then
         state.notice = "The owner's answer is unknown; reading the request"
+        return
+    end
+    if reply.kind == "failure" and reply.code == "UNKNOWN_OUTCOME" then
+        state.notice = M.text(reply.code .. ": " .. reply.message, M.LINE_LIMIT)
+        return
+    end
+    if pending.kind == "batch" and reply.kind == "success" then
+        local body = bounds.object(reply.value)
+        local raw_views = body and bounds.array(body.decisions, 16)
+        if not raw_views or #raw_views ~= #pending.items then state.notice = "INVALID_REPLY: batch decision count differs"; return end
+        local views: {ApprovalView} = {}
+        for index, raw in ipairs(raw_views) do
+            local view, err = M.decode_view(raw)
+            if not view or view.approval_id ~= pending.items[index].approval_id then state.notice = "INVALID_REPLY: " .. tostring(err or "batch identity differs"); return end
+            views[#views + 1] = view
+        end
+        for _, view in ipairs(views) do
+            local known = state.rows[view.approval_id]
+            keep(state, view, known and known.seq or 0)
+        end
+        state.pending = nil
+        state.notice = "Recorded: " .. tostring(#views) .. " requests " .. pending.decision
         return
     end
     local row = state.rows[pending.approval_id]

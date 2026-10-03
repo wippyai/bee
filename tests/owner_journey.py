@@ -284,7 +284,7 @@ class Journey:
         self.stub_bin = self.folder / "bin"
         self.stub_bin.mkdir()
         stub = self.stub_bin / "claude"
-        shutil.copy2(ROOT / "tests/fixtures/owner_journey/claude.sh", stub)
+        shutil.copy2(ROOT / "tests/fixtures/owner_journey/claude.py", stub)
         stub.chmod(0o700)
         self.environment["PATH"] = str(self.stub_bin) + ":" + self.original_path
         self.ready = False
@@ -972,32 +972,55 @@ class Journey:
             require("established" in self.command(["hive", "peers"]), "live app observation lost its admitted peer session")
 
         def remote_approval():
-            primary = self.ui
-            self.ui = peer
-            try:
-                session = self.choose_agent()
-                peer.key(b"JOURNEY_HIVE_APPROVAL\r")
-                peer.wait_until(lambda: bool(rows(state, "approvals.db",
-                    "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")), "node 2 native tool permission approval")
-                pending = rows(state, "approvals.db", "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")
-                require(len(pending) == 1, f"node 2 raised {len(pending)} pending approvals for one tool request")
-                approval_id = pending[0]["approval_id"]
-            finally:
-                self.ui = primary
-            self.launch("Needs you", "NEEDS YOU")
-            self.ui.wait("pending")
-            self.ui.key(b"\r")
-            self.approve()
-            self.ui.wait_until(lambda: bool(rows(state, "approvals.db",
-                "SELECT approval_id FROM bee_approval_requests WHERE approval_id=? AND decision='approved'", (approval_id,))),
-                "node 2 observes node 1 decision")
-            self.frame("remote-approval-decided")
-            peer.wait_until(lambda: bool(rows(state, "threads.db",
-                "SELECT work_ref FROM bee_session_work WHERE session_ref=? AND phase='settled'", (session["session_ref"],))),
-                "native fixture consumes the remote approval and settles")
-            work = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? ORDER BY sequence",
-                        (session["session_ref"],))
-            require(STUB_MARKER in work[-1]["result_json"], "native Hive approval work settled with " + work[-1]["result_json"])
+            gate = self.work / "hive-approval-release"
+            os.mkfifo(gate, 0o600)
+            with os.fdopen(os.open(gate, os.O_RDWR | os.O_NONBLOCK), "wb", buffering=0) as release:
+                primary = self.ui
+                self.ui = peer
+                try:
+                    session = self.choose_agent()
+                    peer.key(("JOURNEY_HIVE_APPROVAL JOURNEY_GATE=" + str(gate) + "\r").encode())
+                    peer.wait_until(lambda: "OWNER JOURNEY REVIEW STAGED" in peer.text() or bool(rows(state, "threads.db",
+                        "SELECT result_json FROM bee_session_work WHERE session_ref=? AND phase='settled'", (session["session_ref"],))),
+                        "native session stages its review or observed work settlement")
+                    if "OWNER JOURNEY REVIEW STAGED" not in peer.text():
+                        settled = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? AND phase='settled'",
+                                       (session["session_ref"],))
+                        raise JourneyFailure("native review settled before staging: " + settled[-1]["result_json"])
+                    self.launch("Overlays", "OVERLAYS", ("Apps", "Advanced"))
+                    peer.key(b"\r")
+                    peer.wait("Staged")
+                    self.click("Staged", "Available")
+                    peer.key(b"\r")
+                    peer.wait("Preflight")
+                    require("blocked" not in peer.text().lower(), "native review preflight refused: " + peer.text())
+                    peer.key(b"\r")
+                    peer.wait_until(lambda: bool(rows(state, "approvals.db",
+                        "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")), "node 2 native review approval")
+                    pending = rows(state, "approvals.db", "SELECT approval_id FROM bee_approval_requests WHERE state='pending'")
+                    if not pending:
+                        settled = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? AND phase='settled'",
+                                       (session["session_ref"],))
+                        raise JourneyFailure("native review settled before approval: " + settled[-1]["result_json"])
+                    require(len(pending) == 1, f"node 2 raised {len(pending)} pending approvals for one review")
+                    approval_id = pending[0]["approval_id"]
+                finally:
+                    self.ui = primary
+                self.launch("Needs you", "NEEDS YOU")
+                self.ui.wait("pending")
+                self.ui.key(b"\r")
+                self.approve()
+                self.ui.wait_until(lambda: bool(rows(state, "approvals.db",
+                    "SELECT approval_id FROM bee_approval_requests WHERE approval_id=? AND decision='approved'", (approval_id,))),
+                    "node 2 observes node 1 decision")
+                self.frame("remote-approval-decided")
+                release.write(b"observed exact remote approval\n")
+                peer.wait_until(lambda: bool(rows(state, "threads.db",
+                    "SELECT work_ref FROM bee_session_work WHERE session_ref=? AND phase='settled'", (session["session_ref"],))),
+                    "native fixture completes after the exact remote decision is observed")
+                work = rows(state, "threads.db", "SELECT result_json FROM bee_session_work WHERE session_ref=? ORDER BY sequence",
+                            (session["session_ref"],))
+                require(STUB_MARKER in work[-1]["result_json"], "native Hive approval work settled with " + work[-1]["result_json"])
         self.cases([("Hive live app counts 0 to 1 to 0", remote_visibility),
                     ("Hive remote approval", remote_approval)])
         peer.quit()

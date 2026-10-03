@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: MIT
 """Safety and failure reporting for the source-state journey harness."""
 import json
+import importlib.util
+import io
+from contextlib import redirect_stdout
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -105,24 +108,45 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(journey.run(selected_steps={11}), 0)
         self.assertEqual([call.args[0] for call in journey.run_step.call_args_list], [1, 11, 7])
 
-    def test_native_fixture_waits_for_correlated_tool_approval(self):
-        fixture = ROOT / 'tests/fixtures/owner_journey/claude.sh'
-        with subprocess.Popen(['sh', str(fixture), 'JOURNEY_HIVE_APPROVAL'], stdin=subprocess.PIPE,
-                              stdout=subprocess.PIPE, text=True) as process:
-            self.assertEqual(json.loads(process.stdout.readline())['subtype'], 'init')
-            request = json.loads(process.stdout.readline())
-            self.assertEqual(request['request']['subtype'], 'can_use_tool')
-            self.assertEqual(request['request']['tool_name'], 'Bash')
-            self.assertEqual(request['request']['tool_use_id'], 'hive-tool-call-1')
-            process.stdin.write(json.dumps({'type': 'control_response', 'response': {
-                'request_id': request['request_id'], 'response': {'behavior': 'allow'}}}, separators=(',', ':')) + '\n')
-            process.stdin.flush()
-            remainder, _ = process.communicate()
-            self.assertEqual(process.returncode, 0)
-            self.assertIn('OWNER JOURNEY STUB OUTPUT', remainder)
-            frames = [json.loads(line) for line in remainder.splitlines()]
-            result = next(frame for frame in frames if frame['type'] == 'user')
-            self.assertEqual(result['message']['content'][0]['tool_use_id'], 'hive-tool-call-1')
+    def fixture_gateway(self, values):
+        spec = importlib.util.spec_from_file_location('journey_provider', ROOT / 'tests/fixtures/owner_journey/claude.py')
+        provider = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(provider)
+        config = {'mcpServers': {'bee': {'url': 'http://127.0.0.1:12345/mcp',
+            'headers': {'Authorization': 'Bearer ${BEE_GATEWAY_TOKEN}'}}}}
+        calls = []
+        responses = iter([{'result': {}}] + [{'result': {'content': [{'type': 'text', 'text': json.dumps(value)}]}}
+                                         for value in values])
+        def respond(request, timeout):
+            calls.append(json.loads(request.data))
+            response = Mock()
+            response.__enter__ = Mock(return_value=io.StringIO(json.dumps(next(responses))))
+            response.__exit__ = Mock(return_value=False)
+            return response
+        output = io.StringIO()
+        with patch.dict('os.environ', {'BEE_GATEWAY_TOKEN': 'fixture-only'}), \
+             patch.object(provider.urllib.request, 'urlopen', side_effect=respond), \
+             patch.object(provider.time, 'sleep'), redirect_stdout(output):
+            provider.main(['--mcp-config', json.dumps(config), 'JOURNEY_HIVE_APPROVAL'])
+        return calls, output.getvalue()
+
+    def test_native_fixture_stages_the_frozen_review_through_its_gateway(self):
+        calls, output = self.fixture_gateway([
+            {'ok': True, 'value': {'example': {'path': 'entries.json', 'entries_json': 'reviewed-example'}}},
+            {'ok': True, 'value': {'revision': 1}},
+            {'ok': True, 'value': {'revision': 2}},
+            {'ok': True, 'value': {'digest': 'frozen-digest'}},
+            {'ok': True, 'value': {'ready': True, 'diagnostics': []}}])
+        self.assertEqual(calls[-1]['params']['name'], 'delivery')
+        self.assertEqual(calls[-1]['params']['arguments']['snapshot_digest'], 'frozen-digest')
+        self.assertEqual(calls[3]['params']['arguments']['content'], 'reviewed-example')
+        self.assertIn('OWNER JOURNEY REVIEW STAGED', output)
+        self.assertIn('OWNER JOURNEY STUB OUTPUT', output)
+        self.assertNotIn('fixture-only', output)
+
+    def test_native_fixture_preserves_gateway_refusal(self):
+        with self.assertRaisesRegex(ValueError, 'DENIED.*fixture refusal'):
+            self.fixture_gateway([{'ok': False, 'error': {'code': 'DENIED', 'message': 'fixture refusal'}}])
 
     def test_cycling_loading_frames_do_not_hide_a_hang(self):
         (ROOT / '.wippy').mkdir(exist_ok=True)

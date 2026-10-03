@@ -23,7 +23,7 @@ local function launch(session: string): types.LaunchRequest
         launch = {executable = "sh", argv = {}, environment = {}, readiness = "none", home_ref = "session"},
         session_ref = session, resources = {{name = "session", grant_ref = "test-session", root_ref = "bee.placement.native.env:root",
             subpath = "", access = "write", purpose = "session"}}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = "process_group",
-        required_exit_observation = "independent", timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000},
+        required_exit_observation = "independent", timeouts = {stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000},
         delivery = {arguments = {}, files = {{revision = "fixture@1", path = "config.json", content = "approved",
             digest = string.rep("d", 64), provider_ref = "bee.test:provider"}}}}
     return value
@@ -57,7 +57,7 @@ local function own_evidence(db: sql.DB, id: string): integer
 end
 local function define_tests()
     test.describe("Retained configuration publication outcomes", function()
-        test.it("keeps a published but unsynced attempt uncertain and prevents successor admission", function()
+        test.it("reports unsynced publication as a startup failure and prevents successor admission", function()
             local db, open_error = store.open()
             if not db then error(open_error or "store") end
             local session = fresh()
@@ -71,7 +71,8 @@ local function define_tests()
             test.eq(outcome.observed.publications, 1)
             local attempt = store.attempt(db, id)
             if not attempt then db:release(); error("attempt disappeared") end
-            test.eq(attempt.execution_state, "uncertain")
+            test.eq(attempt.execution_state, "start_failed")
+            test.eq(attempt.start_failure, "configuration published; durability requires inspection")
             test.eq(attempt.cleanup_state, "pending")
             local blocked = intend(db, launch(session))
             test.is_false(blocked.ok)

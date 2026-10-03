@@ -2,8 +2,8 @@
 -- executor handle, materializes the home, starts the child, records its
 -- identity, pumps bounded output to the bound recipient, accepts
 -- acknowledged input, signals on request, and records the exit it
--- observed. When the runner is cancelled, the child is stopped; nothing
--- outlives the runner unobserved.
+-- observed. Startup failures retain their cause; cleanup still requires
+-- proof that the admitted execution scope is gone.
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -37,7 +37,7 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
     if not result.ok then return false, result.message end
     return true, nil
 end
-local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?, control_token: string, backend: process_backend.Backend?)
+local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?, control_token: string, materialization_epoch: integer, backend: process_backend.Backend?)
     local function cleanup(attempt: types.Attempt): (boolean, string?)
         if backend then return backend.cleanup(attempt, true) end
         local reply = service.cleanup_attempt(attempt, true)
@@ -75,18 +75,34 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     local claimed = false
     local child_created = false
+    local function acknowledge_start(value: unknown)
+        if claimed then
+            assert(evidence(db, attempt_id, "runner.ack_sending", "from " .. process.pid() .. " to " .. starter .. " topic " .. reply_topic))
+        end
+        local sent, send_error = process.send(starter, reply_topic, value)
+        if claimed then
+            assert(evidence(db, attempt_id, sent and "runner.ack_sent" or "runner.ack_failed", send_error and tostring(send_error) or "startup acknowledgement queued"))
+        end
+        if not sent then error("startup acknowledgement: " .. tostring(send_error)) end
+    end
     local function refuse(reason: string)
         if claimed and not child_created then
-            store.transition(db, attempt_id, {execution = "exited", fields = {exit_source = "runner"},
-                evidence = {kind = "child.not_started", detail = reason}})
+            local current = store.attempt(db, attempt_id)
+            if not current or (not current.start_failure and not current.start_cancelled) then
+                local recorded = materialization.fail_start(db, attempt_id, reason, backend ~= nil)
+                if not recorded.ok then reason = reason .. "; record failed start: " .. tostring(recorded.message) end
+            end
             local attempt = store.attempt(db, attempt_id)
             if attempt then
-                local cleaned, cleanup_error = cleanup(attempt)
+                local cleaned: boolean
+                local cleanup_error: string?
+                if backend then cleaned, cleanup_error = backend.cleanup(attempt)
+                else cleaned, cleanup_error = cleanup(attempt) end
                 if not cleaned then reason = reason .. "; cleanup: " .. tostring(cleanup_error) end
             end
         end
         retire_gateway("start refused: " .. reason)
-        process.send(starter, reply_topic, {started = false, reason = reason})
+        acknowledge_start({started = false, reason = reason})
         db:release()
     end
     local row, row_error = store.row(db, attempt_id)
@@ -96,16 +112,44 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local recipient: string? = type(row.recipient) == "string" and row.recipient or nil
     local generation = type(row.attachment_generation) == "number" and math.floor(row.attachment_generation) or 0
     local group = row.capability == "process_group"
-    local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
-    if not starting.ok then return refuse(starting.message or "attempt is not intended") end
+    if row.runner_pid ~= nil and row.runner_pid ~= process.pid() then return refuse("attempt belongs to another runner") end
+    local launch = assert(process.listen(reply_topic .. ".launch", {message = true}))
+    assert(process.send(starter, reply_topic, {ready = true}))
+    while true do
+        local selected = channel.select({launch:case_receive(), events:case_receive()})
+        assert(selected.ok, "runner launch interrupted")
+        if selected.channel == events then return end
+        local message = selected.value
+        local data = bounds.object(message:payload():data())
+        if tostring(message:from()) == starter and data and data.control_token == control_token then break end
+    end
+    process.unlisten(launch)
+    row = assert(store.row(db, attempt_id))
+    recipient = type(row.recipient) == "string" and row.recipient or nil
+    generation = type(row.attachment_generation) == "number" and math.floor(row.attachment_generation) or 0
+    if row.runner_pid ~= process.pid() then return refuse("attempt belongs to another runner") end
+    if row.execution_state == "stopping" then
+        local cancelled = materialization.fail_start(db, attempt_id, "explicit stop before runner materialization", backend ~= nil, true)
+        assert(cancelled.ok, cancelled.message)
+        acknowledge_start({started = false, reason = "explicit stop before runner materialization"})
+        db:release()
+        return
+    end
+    local starting = store.transition(db, attempt_id, {expected_execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
+    if not starting.ok then return refuse(starting.message or "attempt is not starting") end
     claimed = true
+    local initial_carrier_loss: string? = nil
     if recipient then
         local monitored, monitor_error = process.monitor(recipient)
-        if not monitored then return refuse("monitor carrier: " .. tostring(monitor_error)) end
+        if not monitored then
+            initial_carrier_loss = "monitor carrier " .. recipient .. ": " .. tostring(monitor_error)
+            assert(evidence(db, attempt_id, "carrier.lost", initial_carrier_loss))
+        end
     end
-    local materialized, materialization_error, bound_gateway = materialization.prepare(db, request, attempt_id, generation, expected_binding, materialization_key, backend and backend.guest_home or nil)
+    local materialized, materialization_error, bound_gateway = materialization.prepare(db, request, attempt_id, materialization_epoch, expected_binding, materialization_key, backend and backend.guest_home or nil)
     gateway_binding = bound_gateway
     if not materialized then return refuse(materialization_error or "attempt materialization") end
+    assert(evidence(db, attempt_id, "runner.materialized", "attempt launch materialization complete"))
     local executor: exec.Executor? = nil
     local proc: exec.Process? = nil
     local stdin_materialized = false
@@ -121,15 +165,15 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         local executor_error
         if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
         if not executor then
-            evidence(db, attempt_id, "executor.failed", tostring(executor_error), {execution = "exited"})
-            return refuse("executor unavailable")
+            evidence(db, attempt_id, "executor.failed", tostring(executor_error), {})
+            return refuse("executor unavailable: " .. tostring(executor_error))
         end
         -- The plan's measurement is checked against what the path opens now,
         -- immediately before exec; a change refuses the start on record.
         if request.executable then
             local verified, verify_error = executable.verify(request.launch.executable, request.executable)
             if not verified then
-                evidence(db, attempt_id, "executable.changed", tostring(verify_error), {execution = "exited"})
+                evidence(db, attempt_id, "executable.changed", tostring(verify_error), {})
                 executor:release()
                 return refuse(verify_error or "executable changed")
             end
@@ -141,28 +185,36 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     if not executor then return refuse("placement executor unavailable") end
     if not proc then
+        if backend then executor:release(); return refuse("executor refused the command") end
         -- The executor's own text is not recorded: it may quote the command
         -- or the environment it refused.
-        evidence(db, attempt_id, "child.refused", "executor refused the command", {execution = "exited"})
+        evidence(db, attempt_id, "child.refused", "executor refused the command", {})
         executor:release()
         return refuse("executor refused the command")
     end
     local stdout = not backend and proc:stdout_stream() or nil
     local stderr = not backend and proc:stderr_stream() or nil
-    local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "native process start"}})
+    local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "executor process start"}})
     if not creating.ok then executor:release(); return refuse(creating.message or "attempt stopped before start") end
     local started, start_error = proc:start()
+    assert(evidence(db, attempt_id, "child.start_returned", started and "executor start returned success" or tostring(start_error)))
     if not started then
-        evidence(db, attempt_id, "child.start_failed", "the child did not start", {execution = "exited"})
+        if backend then
+            proc:close(true)
+            executor:release()
+            return refuse(tostring(start_error))
+        end
         executor:release()
-        return refuse("the child did not start")
+        return refuse(tostring(start_error))
     end
     child_created = true
     if backend then
         stdout = proc:stdout_stream()
         stderr = proc:stderr_stream()
     end
+    assert(evidence(db, attempt_id, "child.streams_ready", "executor stdout and stderr streams acquired"))
     local fields: {[string]: unknown} = {}
+    assert(evidence(db, attempt_id, "child.identity_requested", "resolve execution identity before acknowledgement"))
     if backend then
         local identified, identify_error = backend.identity(request)
         if not identified then proc:signal(9); executor:release(); return refuse(identify_error or "Docker identity unavailable") end
@@ -183,8 +235,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             end
         end
     end
+    assert(evidence(db, attempt_id, "child.identity_returned", "execution identity resolution returned"))
     local detail = recorded and ("pid " .. tostring(recorded.pid) .. " group " .. tostring(recorded.pgid)) or "no pid available from this runtime"
-    local running = store.transition(db, attempt_id, {execution = "running", fields = fields, evidence = {kind = "child.started", detail = detail}})
+    local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", fields = fields, evidence = {kind = "child.started", detail = detail}})
     if not running.ok then
         local current = store.row(db, attempt_id)
         if current and current.execution_state == "stopping" and current.runner_pid == process.pid() then
@@ -195,14 +248,14 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 executor:release()
                 return refuse(recorded_start.message or "record child identity after startup stop")
             end
-            process.send(starter, reply_topic, {started = false, reason = "stop requested during startup"})
+            acknowledge_start({started = false, reason = "stop requested during startup"})
         else
             proc:close(true)
             executor:release()
             return refuse(running.message or "record start")
         end
     else
-        process.send(starter, reply_topic, {started = true, attempt = running.attempt})
+        acknowledge_start({started = true, attempt = running.attempt})
     end
     local stdin_closed = false
     if stdin_materialized then
@@ -340,6 +393,11 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local takeover_timer = time.after("1ms")
     local takeover_armed = false
     local lost_generation = 0
+    if initial_carrier_loss and gateway_binding then
+        lost_generation = generation
+        takeover_timer = time.after(tostring(protocol.TAKEOVER_GRACE_MS) .. "ms")
+        takeover_armed = true
+    end
     local streams_closed = false
     local truncated = false
     local function close_streams()

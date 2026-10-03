@@ -1078,7 +1078,7 @@ local function define_tests()
             for key, item in pairs(assert(bounds.object(original_definition))) do changed_definition[key] = item end
             for key, item in pairs(assert(bounds.object(original_policy))) do changed_policy[key] = item end
             changed_definition.title = "Changed launch title"
-            changed_policy.start_ms = 23456
+            changed_policy.stop_grace_ms = 23456
             local ok, failure = pcall(function()
                 definition_entry.data = changed_definition
                 policy_entry.data = changed_policy
@@ -1138,7 +1138,7 @@ local function define_tests()
             local original_policy = policy_entry.data
             local changed_policy: {[string]: unknown} = {}
             for key, item in pairs(assert(bounds.object(original_policy))) do changed_policy[key] = item end
-            changed_policy.start_ms = 23456
+            changed_policy.stop_grace_ms = 23456
 
             local mismatch_request = fresh("plan-fenced")
             local ok, failure = pcall(function()

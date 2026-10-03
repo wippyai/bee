@@ -705,6 +705,54 @@ WHERE kind = 'workdir_preparer.state'
     {id = 8, name = "layout_registry_references", sql = LAYOUT_REFERENCES_SQL, rebuild = false},
     {id = 9, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
     {id = 10, name = "desktop_projection_references", sql = DESKTOP_REFERENCES_SQL, rebuild = false},
+    {id = 11, name = "supervised_startup", sql = [[
+
+CREATE TABLE bee_placement_attempts_next (
+    attempt_id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    owner_incarnation INTEGER NOT NULL CHECK (owner_incarnation > 0),
+    action_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    request_digest TEXT NOT NULL,
+    request_json TEXT NOT NULL,
+    grants_json TEXT,
+    placement_kind TEXT,
+    placement_spec_json TEXT,
+    placement_identity_json TEXT,
+    execution_state TEXT NOT NULL CHECK (execution_state IN ('intended', 'starting', 'running', 'stopping', 'exited', 'start_failed', 'uncertain')),
+    cleanup_state TEXT NOT NULL CHECK (cleanup_state IN ('pending', 'complete', 'uncertain')),
+    capability TEXT NOT NULL CHECK (capability IN ('direct_process', 'process_group', 'contained_tree')),
+    required_cleanup TEXT NOT NULL CHECK (required_cleanup IN ('direct_process', 'process_group', 'contained_tree')),
+    exit_observation TEXT NOT NULL CHECK (exit_observation IN ('independent', 'eof_gated')),
+    exit_source TEXT CHECK (exit_source IN ('runner', 'reconcile', 'terminal')),
+    attachment_generation INTEGER NOT NULL DEFAULT 0 CHECK (attachment_generation >= 0),
+    recipient TEXT,
+    runner_pid TEXT,
+    home_key TEXT,
+    session_ref TEXT,
+    pid INTEGER,
+    pgid INTEGER,
+    start_ticks INTEGER,
+    boot_id TEXT,
+    exit_code INTEGER,
+    exit_signal INTEGER,
+    evidence_count INTEGER NOT NULL DEFAULT 0 CHECK (evidence_count >= 0),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (owner_id, idempotency_key)
+);
+INSERT INTO bee_placement_attempts_next SELECT
+ attempt_id, owner_id, owner_incarnation, action_id, idempotency_key, request_digest,
+ json_remove(request_json, '$.timeouts.start_ms'), grants_json, placement_kind, placement_spec_json, placement_identity_json,
+ CASE WHEN EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'child.start_failed') AND exit_code IS NULL AND exit_signal IS NULL AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence observed WHERE observed.attempt_id = bee_placement_attempts.attempt_id AND observed.kind IN ('child.exited', 'docker.exited', 'reconcile.absent')) THEN 'start_failed' ELSE execution_state END,
+ cleanup_state, capability, required_cleanup, exit_observation,
+ CASE WHEN EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'child.start_failed') AND exit_code IS NULL AND exit_signal IS NULL AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence observed WHERE observed.attempt_id = bee_placement_attempts.attempt_id AND observed.kind IN ('child.exited', 'docker.exited', 'reconcile.absent')) THEN NULL ELSE exit_source END,
+ attachment_generation, recipient, runner_pid, home_key, session_ref, pid, pgid, start_ticks, boot_id, exit_code, exit_signal,
+ evidence_count, created_at, updated_at FROM bee_placement_attempts;
+DROP TABLE bee_placement_attempts;
+ALTER TABLE bee_placement_attempts_next RENAME TO bee_placement_attempts;
+CREATE INDEX bee_placement_attempts_action ON bee_placement_attempts (owner_id, action_id);
+]], rebuild = true},
 }
 function M.all(): {Migration}
     return list

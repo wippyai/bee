@@ -33,6 +33,14 @@ type StatusProbe = {runner: string, attempt_id: string, generation: integer, pro
 -- closed, or why not; evidence carries the same fact.
 type StdinReply = {attempt_id: string, generation: integer, probe: string, closed: boolean, reason: string?}
 type Attached = {attempt_id: string, generation: integer}
+-- State notifications are hints; recipients read the authenticated owner value.
+function M.decode_state_hint(raw: unknown): Attached?
+    local value = bounds.object(raw)
+    if not value or bounds.fields(value, {"attempt_id", "generation"}) then return nil end
+    local attempt_id, generation = bounds.id(value.attempt_id), bounds.count(value.generation)
+    if not attempt_id or generation == nil then return nil end
+    return {attempt_id = attempt_id, generation = generation}
+end
 type Fenced = {attempt_id: string, generation: integer, fenced: boolean}
 type WriteStatus = {attempt_id: string, generation: integer, write_id: string, status: "accepted" | "unknown"}
 type Input = {write_id: string, generation: integer, data: string}

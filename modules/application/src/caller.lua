@@ -22,7 +22,7 @@ function M.envelope(raw: unknown): Envelope?
         if decoded.value == nil then return nil end
         return {ok = true, error = nil, value = decoded.value, replayed = decoded.replayed}
     end
-    return {ok = false, error = decoded.error, value = decoded.value, replayed = decoded.replayed}
+    return decoded
 end
 
 function M.decode(raw: unknown): Reply?

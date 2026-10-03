@@ -51,7 +51,15 @@ The application broker drains checkpoint persistence and exits after its owner
 acknowledges replacement. The workspace host starts a new broker and restores
 automatic application records. Viewport grants belong to the old broker and
 are reissued through the owner's existing admission path; manual executions
-are not restarted automatically. `make broker-upgrade-check` checks automatic
+are not restarted automatically. An individual retained alias or restore-open
+failure keeps its saved record and reports its exact reason in the startup log
+and Apps/Needs you without terminating the broker or host.
+`make retained-startup-check RETAINED_STATE_COPY=PATH` checks fresh startup,
+copied non-credential state, a second restart and isolated restoration failures
+against the standalone executable. The copy fixture snapshots committed WAL
+data, creates fresh credentials, and reconstructs the omitted client catalog's
+default identity from the saved display assignments in a fresh client store.
+`make broker-upgrade-check` checks automatic
 Settings recovery and the retained desktop after a live definition change.
 If a replacement broker cannot start, the retained supervisor restarts the
 workspace host from its durable checkpoint and reattaches its desktops;

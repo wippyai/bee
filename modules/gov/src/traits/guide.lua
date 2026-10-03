@@ -231,10 +231,14 @@ local DELIVERY_STEPS = {"review the plan in Overlays", "select it there",
 
 -- The steps a person takes after an agent requests delivery. Exposed so the
 -- delivery tool and the guide cannot disagree about who does what.
-function M.delivery_steps(): {string}
+function M.delivery_steps(source_overlay_id: string?): ({string}, string)
     local copied: {string} = {}
     for index, step in ipairs(DELIVERY_STEPS) do copied[index] = step end
-    return copied
+    if drivers.name(source_overlay_id) then
+        copied[#copied] = "open Agents and create a saved profile for the new driver"
+        return copied, "Agents"
+    end
+    return copied, "start menu"
 end
 
 -- Guide sections, each readable alone. The index names them; a section read

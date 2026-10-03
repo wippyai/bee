@@ -132,13 +132,13 @@ local function request_operation(workspace_id: string, source_workspace: string,
     local report, report_error = preflight.decode_report(plan.preflight_bytes, plan.preflight_digest)
     if not report then return failure("INTERNAL", "staged preflight report: " .. tostring(report_error)) end
     local ready = report.ready == true and #report.diagnostics == 0 and #report.pending_migrations == 0
+    local steps, opening = guide.delivery_steps(source_workspace)
     return transaction.success({ready = ready, plan_digest = plan.plan_digest,
         artifact_digest = plan.artifact_digest, version = version, source_overlay_id = source_workspace,
         component = component, diagnostics = diagnostic_rows(report),
         pending_migrations = #report.pending_migrations,
-        human_steps = {"review the plan in Overlays", "select it there", "prepare the activation there",
-            "approve it in Approvals", "let the activation owner apply the overlay", "open it from the start menu"},
-        human_steps_where = {review = "Overlays", approve = "Approvals", open = "start menu"}}, false)
+        human_steps = steps,
+        human_steps_where = {review = "Overlays", approve = "Approvals", open = opening}}, false)
 end
 
 -- Check a frozen candidate without staging a version: resolve the host
@@ -157,13 +157,13 @@ local function preflight_operation(workspace_id: string, source_workspace: strin
     if not prepared then return prepare_error end
     local descriptor = object(prepared.descriptor)
     if not descriptor then return failure("INTERNAL", "publication returned no descriptor") end
+    local steps, opening = guide.delivery_steps(source_workspace)
+    table.insert(steps, 1, "request delivery to stage this version and read its preflight verdict")
     return transaction.success({staged = false, version = version, source_overlay_id = source_workspace,
         component = component, artifact_digest = descriptor.digest, descriptor = descriptor,
         snapshot_digest = snapshot_digest,
-        human_steps = {"request delivery to stage this version and read its preflight verdict",
-            "review the plan in Overlays", "select it there", "prepare the activation there",
-            "approve it in Approvals", "let the activation owner apply the overlay", "open it from the start menu"},
-        human_steps_where = {review = "Overlays", approve = "Approvals", open = "start menu"}}, false)
+        human_steps = steps,
+        human_steps_where = {review = "Overlays", approve = "Approvals", open = opening}}, false)
 end
 -- Read the staged plan and, when an intent is named, its activation status.
 local function status_operation(workspace_id: string, source_workspace: string, version: string,

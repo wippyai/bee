@@ -1,9 +1,9 @@
 -- MIT. Bounded interaction values; identity checks belong to the receiving owner.
 type Kind = "confirm" | "text"
 type Spec = {request_id: string, id: string, instance_id: string, kind: Kind,
-    title: string, message: string, accept: string, initial: string}
+    title: string, message: string, accept: string, initial: string, restoration: boolean?}
 type Wire = {version: integer, request_id: string, id: string, instance_id: string, kind: Kind,
-    title: string, message: string, accept: string, initial: string}
+    title: string, message: string, accept: string, initial: string, restoration: boolean?}
 type Response = {request_id: string, id: string, instance_id: string, action: "accept" | "cancel", value: string}
 type Result = {version: integer, request_id: string, id: string, instance_id: string, error_code: string, error: string}
 local M = {}
@@ -19,16 +19,17 @@ function M.spec(value: unknown): Spec?
     if kind ~= "confirm" and kind ~= "text" then return nil end
     local request_id = text(value.request_id, 80, true)
     local id, instance_id = text(value.id, 80, true), text(value.instance_id, 80, true)
-    local title, message = text(value.title, 80, true), text(value.message, 512, false)
+    local title, message = text(value.title, 80, true), value.restoration == true and bounds.text(value.message, 4096) or text(value.message, 512, false)
     local accept, initial = text(value.accept, 24, true), text(value.initial or "", 256, false)
     if not request_id or not id or not instance_id or not title or not message or not accept or not initial then return nil end
     if kind == "confirm" and initial ~= "" then return nil end
+    if value.restoration ~= nil and type(value.restoration) ~= "boolean" then return nil end
     return {request_id = request_id, id = id, instance_id = instance_id, kind = kind,
-        title = title, message = message, accept = accept, initial = initial}
+        title = title, message = message, accept = accept, initial = initial, restoration = value.restoration == true or nil}
 end
 function M.wire(value: Spec): Wire
     return {version = 1, request_id = value.request_id, id = value.id, instance_id = value.instance_id,
-        kind = value.kind, title = value.title, message = value.message, accept = value.accept, initial = value.initial}
+        kind = value.kind, title = value.title, message = value.message, accept = value.accept, initial = value.initial, restoration = value.restoration}
 end
 function M.response(value: unknown): Response?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
@@ -58,14 +59,17 @@ function M.snapshot(value: unknown): {Spec}?
     if type(value) ~= "table" or value.version ~= 1 or type(value.items) ~= "table" then return nil end
     local count = 0
     for key in pairs(value.items) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 16 then return nil end
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 32 then return nil end
         count = count + 1
     end
     local result: {Spec} = {}
     local views: {[string]: boolean} = {}
+    local ordinary, restorations = 0, 0
     for i = 1, count do
         local item = M.spec(value.items[i])
         if not item or views[item.id] then return nil end
+        if item.restoration then restorations = restorations + 1 else ordinary = ordinary + 1 end
+        if ordinary > 16 or restorations > 16 then return nil end
         views[item.id] = true
         result[#result + 1] = item
     end

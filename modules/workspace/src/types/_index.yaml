@@ -15,6 +15,7 @@ entries:
   - json
   imports:
     appearance: bee.ui:appearance
+    bounds: bee.values:bounds
 - name: catalog
   kind: library.lua
   source: file://catalog.lua

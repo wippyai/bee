@@ -12,7 +12,11 @@ function M.open_at(resource: string, count: integer): (sql.DB?, string?)
     local db, open_error = persist.open({resource = resource, ledger = M.LEDGER, migrations = migrations.prefix(count)})
     if not db then return nil, open_error end
     if count >= 28 then
-        local migrated, migration_error = definition_migration.apply(db)
+        local migrated, migration_error = definition_migration.apply(db, 1)
+        if not migrated then db:release(); return nil, migration_error end
+    end
+    if count >= 30 then
+        local migrated, migration_error = definition_migration.apply(db, 2)
         if not migrated then db:release(); return nil, migration_error end
     end
     return db, nil

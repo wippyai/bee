@@ -1658,6 +1658,13 @@
       "to": "tag:bee.launch-policy@3",
       "migration": "M5",
       "reason": "Owner-approved supervised startup removes the caller deadline. The explicit revision-two decoder validates and retires start_ms while preserving its original entry digest; revision three rejects the retired field. Placement migration 11 removes stored request deadlines and introduces precise start_failed state without modifying prior ledgers."
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.governance-component-guide@11",
+      "to": "tag:bee.governance-component-guide@12",
+      "migration": "M0",
+      "reason": "Authoring guide presentation revision documents the implemented Sessions picker visibility and saved-copy controls; stored artifacts, approvals and records retain their schemas."
     }
   ]
 }

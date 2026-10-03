@@ -11,6 +11,15 @@ local json = require("json")
 
 local function define_tests()
     test.describe("Governance application guide", function()
+        test.it("explains how an approved driver becomes selectable in Sessions", function()
+            local text = guide.driver_delivery()
+            for _, needle in ipairs({"presentation.start_menu = true", "Sessions", "N", "E", "headless"}) do
+                test.not_nil((string.find(text, needle, 1, true)))
+            end
+            local steps, next_app = guide.delivery_steps("driver.stubagent")
+            test.eq(next_app, "Sessions")
+            test.not_nil((string.find(steps[#steps], "N", 1, true)))
+        end)
         test.it("names the artifact file and one process.lua application entry", function()
             local value = guide.value()
             test.eq(value.revision, guide.REVISION)

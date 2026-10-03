@@ -12,7 +12,7 @@ local drivers = require("drivers")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@11"
+M.REVISION = "bee.governance-component-guide@12"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -235,8 +235,8 @@ function M.delivery_steps(source_overlay_id: string?): ({string}, string)
     local copied: {string} = {}
     for index, step in ipairs(DELIVERY_STEPS) do copied[index] = step end
     if drivers.name(source_overlay_id) then
-        copied[#copied] = "open Agents and create a saved profile for the new driver"
-        return copied, "Agents"
+        copied[#copied] = "open Sessions, press N and select the new driver; E customizes a saved copy"
+        return copied, "Sessions"
     end
     return copied, "start menu"
 end
@@ -332,13 +332,17 @@ function M.driver_delivery(): string
         .. " Add an ns.requirement in .binding with meta.value_kind contract.binding, data.default your own"
         .. " harness binding ID and one data.targets entry {entry = bee.harness.launch:harness_activation,"
         .. " path = .bindings +=}. This append is the only allowed host target; all targets must exist."
-        .. " In .profiles declare a bee.launch_definition with binding_ref, profile_id and session_profile_id;"
-        .. " select an owned bee.launch_policy in policy_ref with the reviewed executable mapping,"
+        .. " In .profiles declare a bee.launch_definition with binding_ref, profile_id and session_profile_id."
+        .. " Set presentation.start_menu = true so the person can select it in Sessions (N opens the agent picker)."
+        .. " A false value keeps the definition programmatic and hides it from this picker, including saved copies."
+        .. " Structured CLI turns use default_mode session and a session_profile_id naming the headless profile."
+        .. " Select an owned bee.launch_policy in policy_ref with the reviewed executable mapping,"
         .. " private HOME, no credentials for an account-free CLI and native placement."
         .. " Inspect built-in definitions and policies for their required schema fields."
         .. " Keep credentials, gateway tools and host HOME absent unless separately admitted by the host."
-        .. " After approval, open Agents, create a saved profile and select the new driver; choose headless"
-        .. " to run structured CLI turns. Existing sessions retain their pinned routes; new sessions use the new binding."
+        .. " After approval settles, open Sessions, press N and select the new driver to open an idle session."
+        .. " Enter a task to run the CLI. E customizes a saved copy of the selected definition; choose headless"
+        .. " for structured CLI turns. Existing sessions retain their pinned routes; new sessions use the new binding."
 end
 
 type Section = {id: string, title: string, body: fun(): string}

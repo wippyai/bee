@@ -508,7 +508,8 @@ def owner_histories(project, probe):
                     db.executescript(sql)
                     db.execute(f'INSERT INTO {table} VALUES (?, ?, ?, ?)',
                         (identity, name, hashlib.sha256((name + '\n' + sql).encode()).hexdigest(), 'original'))
-                populate(db, owner, original)
+                telemetry_service = 'bee.hive.telemetry.binding' if variant == 'main' else 'bee.hive.telemetry'
+                populate(db, owner, original, telemetry_service=telemetry_service)
                 before = db.execute(f'SELECT * FROM {table} ORDER BY id').fetchall()
             index = probe / '_index.yaml'
             document = yaml.safe_load(index.read_text())

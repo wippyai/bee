@@ -61,7 +61,8 @@ leave its own thread. `close` is owner-only and refuses while lifecycle work is
 unsettled. `register_app_alias` and `fence_app` are application broker-only
 operations. The broker backfills retained instances before it becomes ready,
 attests each newly opened instance for its app's stable identity (definition
-plus workspace, refined by the overlay owner for governed apps), and fences
+plus workspace, refined by the overlay owner declared in protected admission
+metadata for governed apps), and fences
 that family out of every thread when admission is lost.
 
 An application instance without its own member row still belongs through its
@@ -334,7 +335,7 @@ This grant does not permit `bee.threads.binding:record`, which also accepts
 observations and has a different authority contract. A direct `record` call
 can fail at the function-call boundary before Threads returns an operation
 reply. `notify` wakes a watcher on the caller's own thread and carries no
-message body. `bee.app:client.thread_request` is scoped to the
+message body. `bee.app.threads:client.request` is scoped to the
 initiating thread and is not a child-thread messaging route.
 
 ## Cross-node inbox forwarding
@@ -373,7 +374,7 @@ watches still settle on forwarded commits. The outbox pump is a supervised
 sender, delivers each through the destination's admission and settles only
 on the destination's own reply, so an unknown outcome settles nothing and
 the lease lapses. Its transport is host-selected through the `sender`
-requirement: the bundled host links `bee.hive.service:inbox_sender`, and a
+requirement: the bundled host links `bee.hive.binding:inbox_sender`, and a
 composition that links no sender leaves due rows queued and reports each
 delivery unknown.
 

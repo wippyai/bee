@@ -8,37 +8,67 @@ decides; a grant may open a direct session.
 Cluster telemetry lives in the optional `bee/hive-telemetry` package
 (`bee.hive.telemetry`); this module keeps the protocol itself lean.
 
-## Slices
+## Ownership
 
-| Slice | Responsibility |
+| Namespace | Responsibility |
 |---|---|
-| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, `canonical`, `principals` (the destination identity table), `output` (contract validation), `invoke_check`, the supervisor-host provenance resource, and the default host composition (`replica_sender`, `supervisor_service`, `workspaces`) |
-| `bee.hive.registry` | `catalog`, the registry read model for operation exposure and interfaces |
-| `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, generic adapter routing, guarded dispatch, epochs |
-| `bee.hive.desktop` | Root-owned desktop integration |
+| `bee.hive` | Protocol envelopes and shared types; dependency and host requirement declarations |
+| `bee.hive.types` | Peer/enrollment/invite values, route selection, workspace queries and page decoding |
+| `bee.hive.binding` | Client, authenticated dispatch, policy admission, workspace operations and feature senders |
+| `bee.hive.exposure` | Operation exposure and interface catalog |
+| `bee.hive.security` | Workspace-call policy template |
+| `bee.hive.service` | Supervisor, display command and remote viewer processes |
+| `bee.hive.desktop` | Desktop bridge, catalog, grant/session handling and presentation helpers |
 
-The Hive workspace listing API and desktop `list` operation share
-`bee.hive.workspace:workspace_query` for label, cursor and page-size validation. The
-workspace listing handler validates a dense, bounded catalog page and requires
-the local node identity before it returns results.
+Hive workspace listing and desktop `list` share
+`bee.hive.types:workspace_query` for label, cursor and page-size validation.
+The listing handler validates a dense, bounded catalog page and requires the
+local node identity before returning results.
+
+## Public adapter protocol
+
+`bee.hive:types` is the public value boundary for feature-owned adapters.
+Alongside request/reply decoding, it exports `PrincipalMapping` and
+`PrincipalMappings`, `decode_principal_mappings`, `resolve_principal` and
+`principal_actor`. Principal mappings preserve the `bee.hive.member@1`
+encoding: the actor uses the first 128 bits of SHA-256 over the issuer, a
+newline and the subject. The host's existing principal mapping entry and schema
+remain unchanged. `exposure_action` supplies the existing exposure action name;
+`INVOKE_CHECK` names the callable check that runs under the mapped caller's own
+actor and scope. These values select no authority.
+
+Threads' destination adapter lives in `bee.threads.hive.binding` and imports
+this public protocol directly. It imports no Hive implementation children. Hive's own policy admission uses the same principal decoder.
 
 ## Host composition
 
-`bee.hive.service:supervisor_service` is the default `process.service`. It starts
-`bee.hive.supervisor:main` on `bee.hive.service:supervisor_host` with an empty
-`configured_nodes` list, so a fresh Bee can route local calls while remaining
-portable and offline. That default puts no transport credentials or network
-settings in the registry. Its lifecycle actor and policies are selected by the
-host composition, not by an ordinary application.
+The root selects `bee.hive.service:supervisor_service`, which starts
+`bee.hive.service:supervisor` on the native-known
+`bee.hive.service:supervisor_host` with an empty `configured_nodes` list.
+Its lifecycle actor remains `bee.hive.supervisor`. A fresh Bee routes local
+calls without transport credentials or network settings in the registry.
+The host selects the implementation's private protocol imports and function
+grants through `bee.deps:hive` parameters; package metadata grants no authority.
 
-An admitted host overlay may replace that service input with peer node IDs and
-an optional validated desktop configuration. TLS, seeds, ports and native
-membership settings remain outside the registry; they are not service input.
+The root retains native process hosts, supervisor service selection, protected
+principal mappings and adapter/audience tables. An admitted host overlay may
+replace service input with peer node IDs and a validated desktop configuration.
+TLS, seeds, ports, native membership, pinned identities and invites remain
+outside the registry; they are not service input.
+
+Moving the three process definitions appends exact-reference conversions to the
+Placement, Sync, Gateway, Resources and Credentials ledgers. Existing migration
+SQL, app IDs, native hosts, enrollment, mapping IDs, topics and schemas remain
+unchanged. Workspace operation requests use owner service `bee.hive.binding`;
+owner migrations convert that field only inside structured `owner_ref` values.
+Apply this source move through a full node restart. Hive supervisor handoff and
+service generation rollback remain proposals.
 
 ## Exposure
 
 An operation is a `function.lua` entry with `meta.hive: open | approval |
-policy` and a `meta.hive_operation` block (revision, title, bounded input and
+policy`, a required string `meta.hive_service` naming its wire owner service,
+and a `meta.hive_operation` block (revision, title, bounded input and
 output schemas, limits). The host ceiling is an ordinary security policy with
 actions `hive.expose.<mode>` over entry ids; the catalog includes an operation
 only when the ceiling admits its mode, and the supervisor resolves it again at
@@ -48,6 +78,9 @@ and the install grant writes a policy over exactly those operation ids into
 the `bee.security.hive:hive_exposure_scope` group the supervisor loads. Open
 dispatch additionally admits only the peers in the host's
 `bee.hive.supervisor:exposure_audiences` table for a listed operation.
+The supervisor matches the request owner to the operation's declared
+`meta.hive_service`, measured with the operation. An entry namespace does not
+select its service or authorize invocation. Existing service wire IDs stay stable.
 Interfaces are `registry.entry` entries with `meta.type:
 hive.interface` naming `operation_ref`, fixed arguments and allowed arguments;
 they narrow and never widen.
@@ -73,8 +106,8 @@ routing and the host-selected grant table, not the per-feature adapter code.
 ## Joining a hive
 
 A node joins another node's hive with one invite; no address, port or key file
-is typed. The operations, all implemented by the Bee root's supervisor
-(`src/hive/supervisor/invites.lua`) and native launch (`native/launch`):
+is typed. The operations, all implemented by the Hive supervisor
+(`service/main.lua` and `types/invites.lua`) and native launch (`native/launch`):
 
 | Operation | Principal and route | Effect |
 |---|---|---|
@@ -178,6 +211,11 @@ from one snapshot, and the client against a real
 fake-supervisor process on the supervisor host (absent supervisor, wrong
 host, stale and impostor replies, malformed replies, deadlines). Support
 entries carry `meta.type: test_support`.
+
+`make hive-viewer-unit-check` runs the remote viewer regression in the disposable
+composition, including frame delivery, parent-close cleanup and refusal of
+invalid arguments or an unavailable supervisor. The viewer fixtures import the
+terminal component's shared delivery library from `bee.terminal.service:delivery`.
 
 Do not name a variable `interface`: it is a reserved word of the typed Lua
 grammar, and until the runtime pin carries runtime PR 691 the parse error is

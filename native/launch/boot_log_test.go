@@ -2,14 +2,43 @@
 package launch
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/event"
+	"go.uber.org/zap"
 )
+
+type rejectedOwnerLog struct{ cause error }
+
+func (output rejectedOwnerLog) Write([]byte) (int, error) { return 0, output.cause }
+
+func TestOwnerLogPreservesOutputFailure(t *testing.T) {
+	cause := errors.New("owner startup log is full")
+	log := &bootLog{logger: zap.NewNop(), output: rejectedOwnerLog{cause: cause}}
+	if err := log.capture(event.Event{Data: json.RawMessage(`{"entry":{"message":"Retained application restoration failed"},"fields":[{"key":"error","string":"original restoration reason"}]}`)}); !errors.Is(err, cause) {
+		t.Fatalf("startup output error = %v", err)
+	}
+}
+
+func TestOwnerLogRetainsExactRestorationReasonsWithoutDiagnosticLogging(t *testing.T) {
+	var output bytes.Buffer
+	log := &bootLog{logger: zap.NewNop(), output: &output}
+	if err := log.capture(event.Event{Data: json.RawMessage(`{"entry":{"message":"Retained application restoration failed"},"fields":[{"key":"error","type":"error","string":""},{"key":"reason","type":"string","string":"application instance is attested for another app"},{"key":"instance_id","string":"retained-bad"},{"key":"workspace_id","string":"workspace"},{"key":"definition_id","string":"app"}]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.capture(event.Event{Data: json.RawMessage(`{"entry":{"message":"unrelated payload"},"fields":[{"key":"error","string":"unrelated"}]}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "Retained application restoration failed: application instance is attested for another app [workspace=workspace, instance=retained-bad, definition=app]\n" {
+		t.Fatal(got)
+	}
+}
 
 func TestBootLogKeepsPhaseTimestampsAndRejectsUnrelatedPayloads(t *testing.T) {
 	directory := t.TempDir()

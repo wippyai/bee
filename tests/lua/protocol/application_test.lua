@@ -7,6 +7,12 @@ local client = require("client")
 local arguments = require("arguments")
 local function define_tests()
     test.describe("Application admission policy bound", function()
+        test.it("carries explicit host-admitted overlay ownership without classifying definition names", function()
+            test.is_nil(assert(contract.binding({definition_id = "app.fixture:app", policies = {}})).overlay_owner)
+            test.eq(assert(contract.binding({definition_id = "vendor:window", policies = {}, overlay_owner = "declared:owner"})).overlay_owner, "declared:owner")
+            test.is_nil(contract.binding({definition_id = "vendor:window", policies = {}, overlay_owner = "bad\nowner"}))
+            test.is_nil(contract.binding({definition_id = "vendor:window", policies = {}, overlay_owner = 1}))
+        end)
         test.it("admits the reviewed native and Docker Agent policies and rejects overflow", function()
             local policies: {string} = {}
             for index = 1, 18 do policies[index] = "test:policy" .. tostring(index) end

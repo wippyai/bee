@@ -12,6 +12,7 @@ local M = {}
 type Limits = {max_input_bytes: integer, max_output_bytes: integer}
 type Operation = {
     operation_ref: string,
+    service_id: string,
     mode: types.Mode,
     revision: string,
     input_schema: {[string]: unknown},
@@ -38,23 +39,17 @@ type Snapshot = {
 type ResolvedCall = {operation: Operation, input: {[string]: unknown}, input_digest: string, generation: integer}
 M.INTERFACE_TYPE = "hive.interface"
 local MAX_DIAGNOSTICS = 64
-local function exposure_action(mode: string): string
-    return "hive.expose." .. mode
-end
-function M.exposure_action(mode: string): string
-    return exposure_action(mode)
-end
 M.EXPOSURE_SCOPE = "bee.security.hive:hive_exposure_scope"
 -- The host ceiling for one operation: the caller's direct grant, or the
 -- exposure scope the supervisor loads through the host facade policy.
 -- Install grants join that scope; fixed host policies keep working.
 function M.admits(mode: string, operation_ref: string): boolean
-    if security.can(exposure_action(mode), operation_ref) then return true end
+    if security.can(types.exposure_action(mode), operation_ref) then return true end
     local actor = security.actor()
     if actor == nil then return false end
     local scope, scope_error = security.named_scope(M.EXPOSURE_SCOPE)
     if scope == nil or scope_error ~= nil then return false end
-    return scope:evaluate(actor, exposure_action(mode), operation_ref) == "allow"
+    return scope:evaluate(actor, types.exposure_action(mode), operation_ref) == "allow"
 end
 -- The invocation action a principal's own scope must grant on an
 -- operation; exposure publishes, invocation authorizes.
@@ -95,11 +90,9 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
     if entry.kind ~= "function.lua" then return nil, entry_id .. ": exposure requires a function.lua entry" end
     local meta = bounds.object(entry.meta) or {}
     local mode: unknown = meta.hive
-    local supported = false
-    for _, candidate in ipairs(types.MODES) do
-        if candidate == mode then supported = true end
-    end
     if mode ~= "open" and mode ~= "approval" and mode ~= "policy" then return nil, entry_id .. ": meta.hive must be open, approval or policy" end
+    local service_id = bounds.id(meta.hive_service)
+    if not service_id then return nil, entry_id .. ": meta.hive_service is required" end
     local exposure_mode: types.Mode = mode
     local declaration = bounds.object(meta.hive_operation)
     if not declaration then return nil, entry_id .. ": meta.hive_operation is required" end
@@ -135,11 +128,11 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
     if security_config and bounds.object(security_config.actor) then
         return nil, entry_id .. ": an exposed operation cannot replace the caller's actor"
     end
-    local material, encode_error = canonical.encode({kind = entry.kind, data = data, declaration = declaration, mode = mode})
+    local material, encode_error = canonical.encode({kind = entry.kind, data = data, declaration = declaration, mode = mode, service_id = service_id})
     if not material then return nil, entry_id .. ": entry is not measurable: " .. tostring(encode_error) end
     local measured, hash_error = hash.sha256(material)
     if hash_error or not measured then return nil, entry_id .. ": entry is not measurable" end
-    return {operation_ref = entry_id, mode = exposure_mode, revision = revision, input_schema = input, output_schema = output,
+    return {operation_ref = entry_id, service_id = service_id, mode = exposure_mode, revision = revision, input_schema = input, output_schema = output,
         limits = limits, measured = measured, title = title}, nil
 end
 function M.decode_operation(entry: {[string]: unknown}): (Operation?, string?)

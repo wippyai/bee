@@ -18,7 +18,7 @@ entries:
 - name: sessions
   kind: library.lua
   source: file://sessions.lua
-  imports: {protocol: bee.app:sessions_protocol}
+  imports: {protocol: bee.sessions.types:protocol}
 - name: json_schema
   kind: library.lua
   source: file://json_schema.lua

@@ -187,7 +187,7 @@ def targeting(packed):
                 for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                     shutil.copy2(ROOT / name, project / name)
                 if boundary == "workspace":
-                    actor = project / "src/client/main.lua"
+                    actor = project / "modules/client/src/service/main.lua"
                     source = actor.read_text().replace("        local function send(", "        local reject_target = true\n        local function send(")
                     anchor = '            local sent, err = process.send(recipient, topic, value)'
                     owner_id = "workspace_id"

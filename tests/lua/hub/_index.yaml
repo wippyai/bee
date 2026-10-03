@@ -69,7 +69,7 @@ entries:
     test: wippy.test:test
     effect: bee.gov.binding:migration_effect
     migration_runner: bee.hub.binding:migration_runner
-    migration_work: bee.gov.activation:migration_work
+    migration_work: bee.gov.types:migration_work
     canonical: bee.values:canonical
 - name: migration_runner_test
   kind: function.lua

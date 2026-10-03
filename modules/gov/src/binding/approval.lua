@@ -91,8 +91,9 @@ function M.request(executor: Executor, value: unknown, policy_raw: unknown, key_
     if not proposal then return nil, proposal_error end
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy,
-        proposal = proposal, prompt = {text = "Apply " .. tostring(item.source_workspace)
-            .. " version " .. tostring(item.version) .. " to this workspace?"}})
+        proposal = proposal, prompt = {text = "Apply Bee application " .. tostring(item.source_workspace)
+            .. " version " .. tostring(item.version) .. " in workspace " .. tostring(item.workspace_id)
+            .. "?\nScope: this exact reviewed version. Duration: one operation."}})
     local approval, approval_error = reply(raw, call_error)
     if not approval then return nil, approval_error end
     local approval_id = bounds.id(approval.approval_id)
@@ -209,8 +210,9 @@ function M.request_activation(executor: Executor, value: unknown, policy_raw: un
     if not proposal then return nil, proposal_error end
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,
-        prompt = {text = "Allow Bee to apply and recover " .. tostring(item.source_workspace)
-            .. " version " .. tostring(item.version) .. " in this workspace. Duration: this exact version"
+        prompt = {text = "Allow Bee to apply and recover Bee application " .. tostring(item.source_workspace)
+            .. " version " .. tostring(item.version) .. " in workspace " .. tostring(item.workspace_id)
+            .. ". Scope: this exact reviewed activation in this workspace. Duration: this exact version"
             .. " until replaced or removed; host admission remains required."}})
     local approved, approved_error = reply(raw, call_error)
     if not approved then return nil, approved_error end

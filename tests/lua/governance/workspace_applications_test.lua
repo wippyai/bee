@@ -29,22 +29,25 @@ end
 
 local function define_tests()
     test.describe("workspace application naming", function()
-        test.it("derives one namespace, application entry and owner from an overlay name", function()
+        test.it("derives the namespace and owner while resolving the application declaration", function()
             local identity = assert(naming.identity(WORKSPACE, "tally_2"))
             test.eq(identity.namespace, "app.tally_2")
             test.eq(identity.component, "app.tally_2")
-            test.eq(identity.definition_id, "app.tally_2:app")
+            test.eq(naming.application({{id = "app.tally_2:window", kind = "process.lua", meta = {type = "bee.app"}}}), "app.tally_2:window")
+            test.is_nil(naming.application({{id = "app.tally_2:app", kind = "process.lua", meta = {type = "helper"}}}))
+            test.is_nil(naming.application({{id = "app.tally_2:first", kind = "process.lua", meta = {type = "bee.app"}},
+                {id = "app.tally_2:second", kind = "process.lua", meta = {type = "bee.app"}}}))
             test.eq(identity.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".tally_2")
             test.eq(naming.prior_owner(WORKSPACE, "tally_2"),
                 "bee.governance.workspace_applications:" .. WORKSPACE .. ".tally_2")
-            test.eq(naming.source_of("app.tally_2"), "tally_2")
-            test.is_nil(naming.source_of("vendor.tally"))
+            test.eq(assert(naming.identity(WORKSPACE, "tally_2")).component, "app.tally_2")
+            test.is_nil(naming.name("vendor.tally"))
         end)
         test.it("refuses names that cannot be a namespace segment and states the rule", function()
             for _, name in ipairs({"Tally", "2tally", "tally-app", "tally.app", "", string.rep("a", 49)}) do
                 local identity, refused = naming.identity(WORKSPACE, name)
                 test.is_nil(identity)
-                test.not_nil((string.find(refused, "app.<overlay_id>:app", 1, true)))
+                test.not_nil((string.find(refused, "meta.type bee.app", 1, true)))
             end
         end)
     end)
@@ -81,7 +84,7 @@ local function define_tests()
             test.is_nil((next(profile.databases)))
             local applications = principals.objects(profile.applications)
             test.eq(#applications, 1)
-            test.eq(applications[1].definition_id, "app.tally:app")
+            test.is_nil(applications[1].definition_id)
             test.eq((principals.strings(applications[1].policies))[1], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(applications[1].thread_access, "none")
             test.eq(#profile.policy_digest, 64)
@@ -105,13 +108,13 @@ local function define_tests()
             local vocabulary = decoded_vocabulary
             local catalog_revision, template_revision = capability_model.revisions(vocabulary, "threads.read")
             if not catalog_revision or not template_revision then error("threads.read is absent from the host catalog") end
-            local requested = assert(grants.propose(vocabulary, identity.overlay_owner, identity.definition_id, {{
-                id = "app.tally:threads", expected_kind = "security.policy", targets = {identity.definition_id},
+            local requested = assert(grants.propose(vocabulary, identity.overlay_owner, "app.tally:app", {{
+                id = "app.tally:threads", expected_kind = "security.policy", targets = {"app.tally:app"},
                 capability_request = {capability = "threads.read", parameters = {scope = "owned"},
                     catalog_revision = catalog_revision, template_revision = template_revision,
-                    target = identity.definition_id, path = ".security.policies +="}}}))
+                    target = "app.tally:app", path = ".security.policies +="}}}))
             local installed = assert(grants.record(identity.overlay_owner, WORKSPACE,
-                identity.definition_id, requested, "approved-1", 1))
+                "app.tally:app", requested, "approved-1", 1))
             local configuration = assert(profiles.configuration(configured(), NODE))
             local selected = assert(profiles.select(configuration, WORKSPACE, NODE, "tally", installed, vocabulary))
             test.is_true(selected.grants[requested.policies[1].id])

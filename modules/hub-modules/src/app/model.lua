@@ -6,7 +6,6 @@ local canonical = require("canonical")
 local hash = require("hash")
 local text = require("text")
 local bounds = require("bounds")
-local workspace_applications = require("workspace_applications")
 local M = {}
 
 M.MAX_TEXT = 512
@@ -21,7 +20,7 @@ type Object = {[string]: unknown}
 type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
 type Intent = {operation: string, request: Object?, expected_digest: string?}
 type Phase = "catalog" | "installed" | "authoring" | "details" | "operations" | "plan" | "confirm" | "result"
-type Item = {component: string, title: string, description: string, latest_version: string}
+type Item = {component: string, title: string, description: string, latest_version: string, application: boolean?}
 type Version = {version: string, yanked: boolean}
 type Detail = {component: string, title: string, description: string, readme: string, versions: {Version}, page: integer, total_versions: integer}
 type Module = {component: string, version: string, source: string, direct: boolean, used_by: {string}}
@@ -87,7 +86,7 @@ end
 local function authored_component(value: unknown): string?
     local package = component(value)
     if package then return package end
-    if type(value) == "string" and workspace_applications.source_of(value) then return value end
+    if type(value) == "string" and #value <= 160 and value:match("^[a-z][a-z0-9_.-]*%.[a-z0-9_.-]+$") then return value end
     return nil
 end
 
@@ -291,7 +290,7 @@ function M.set_publication_field(state: State, field: string, raw: unknown): str
     if type(raw) ~= "string" then return "publication value must be text" end
     local value = raw:match("^%s*(.-)%s*$") or ""
     if field == "component" then
-        if value ~= "" and not authored_component(value) then return "component must use namespace/name or app.<overlay_id> form" end
+        if value ~= "" and not authored_component(value) then return "component must use namespace/name or a dotted authored identity" end
         state.publication_component = value
     elseif field == "version" then
         if value ~= "" and not version(value) then return "version is invalid" end
@@ -728,77 +727,18 @@ function M.select_requirement(state: State, index: integer)
     state.selected_requirement = math.floor(math.max(1, math.min(#state.requirements, index)))
 end
 
-local BUILTIN_APPLICATIONS: {[string]: boolean} = {
-    ["bee/terminal"] = true,
-    ["bee/harness"] = true,
-    ["bee/console"] = true,
-    ["bee/workspace-manager"] = true,
-    ["bee/approvals-inbox"] = true,
-    ["bee/hive-manager"] = true,
-    ["bee/threads-timeline"] = true,
-    ["bee/host-processes"] = true,
-    ["bee/gov-overlays"] = true,
-    ["bee/hub-modules"] = true,
-    ["bee/settings"] = true,
-    ["bee/bee"] = true,
-}
-
-local BEE_LIBRARIES: {[string]: boolean} = {
-    ["bee/sync"] = true,
-    ["bee/threads"] = true,
-    ["bee/persist"] = true,
-    ["bee/gateway"] = true,
-    ["bee/protocol"] = true,
-    ["bee/capability"] = true,
-    ["bee/placement"] = true,
-    ["bee/placement-native"] = true,
-    ["bee/credentials"] = true,
-    ["bee/resources"] = true,
-    ["bee/node"] = true,
-    ["bee/docs"] = true,
-    ["bee/hive"] = true,
-    ["bee/hive-telemetry"] = true,
-    ["bee/gov"] = true,
-    ["bee/application"] = true,
-    ["bee/agents"] = true,
-    ["bee/git-worktree"] = true,
-}
-
-function M.is_application(item: Item): boolean
-    local comp = item.component:lower()
-    local title = item.title:lower()
-    local desc = item.description:lower()
-
-    if BUILTIN_APPLICATIONS[comp] or comp:find("^bee/driver%-") then
-        return true
-    end
-    if comp:find("^wippy/") or comp:find("^kickside/") or BEE_LIBRARIES[comp] then
-        return false
-    end
-    if comp:find("/lib") or comp:find("%-lib$") or comp:find("^acme/lib") then
-        return false
-    end
-    if desc:find("framework") or title:find("framework")
-        or desc:find("library") or title:find("library")
-        or desc:find("utilities") or title:find("utilities")
-        or desc:find("migration") or title:find("migration")
-        or desc:find("binding") or title:find("binding") then
-        return false
-    end
-    return true
+function M.is_library(item: Item): boolean
+    return item.application == false
 end
 
 local function component_status_installed(installed: {Module}, comp_name: string): string?
     for _, mod in ipairs(installed) do
         if mod.component == comp_name then
-            if mod.source == "builtin" or mod.source == "core" or mod.source == "system" or BUILTIN_APPLICATIONS[comp_name] then
+            if mod.source == "builtin" or mod.source == "core" or mod.source == "system" then
                 return "built-in"
             end
             return "installed"
         end
-    end
-    if BUILTIN_APPLICATIONS[comp_name] then
-        return "built-in"
     end
     return nil
 end
@@ -829,7 +769,7 @@ function M.visible_catalog(state: State): {Item}
     end
     local apps: {Item} = {}
     for _, item in ipairs(source) do
-        if M.is_application(item) then
+        if not M.is_library(item) then
             apps[#apps + 1] = item
         end
     end
@@ -854,7 +794,7 @@ function M.set_developer_packages(state: State, enabled: boolean)
 end
 
 local function catalog_rank(installed: {Module}, item: Item): integer
-    local is_app = M.is_application(item)
+    local is_app = not M.is_library(item)
     local status = component_status_installed(installed, item.component)
     if is_app then
         if status == "built-in" then return 1 end
@@ -879,8 +819,11 @@ function M.apply_catalog(state: State, reply: Reply)
         local item = object(raw)
         if not item then state.notice = "Invalid catalog item"; return end
         local name = component(item.component)
+        local application: boolean? = nil
+        if type(item.application) == "boolean" then application = item.application end
+        if item.application ~= nil and application == nil then state.notice = "Invalid application metadata"; return end
         if name then rows[#rows + 1] = {component = name, title = M.text(item.title, 160),
-            description = M.text(item.description, 512), latest_version = M.text(item.latest_version, 128)} end
+            description = M.text(item.description, 512), latest_version = M.text(item.latest_version, 128), application = application} end
     end
     local installed = state.installed
     table.sort(rows, function(a: Item, b: Item): boolean
@@ -966,7 +909,7 @@ function M.apply_updates(state: State, reply: Reply)
     for _, raw in ipairs(supplied) do
         local item = object(raw)
         local name = item and component(item.component)
-        if not item or not name or not name:match("^bee/") or seen[name]
+        if not item or not name or seen[name]
             or type(item.update_available) ~= "boolean" then
             state.update_status = "error"; state.notice = "Invalid Bee pack update row"; return
         end

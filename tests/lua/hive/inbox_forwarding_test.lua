@@ -15,7 +15,6 @@ local time = require("time")
 local uuid = require("uuid")
 local system = require("system")
 local types = require("types")
-local principals = require("principals")
 local adapter = require("admission")
 local harness = require("harness")
 local sends = require("sends")
@@ -41,7 +40,7 @@ local MEMBER_POLICIES = {"bee.security.threads:thread_observe_policy", "bee.secu
     "bee.security.hive:hive_thread_invoke_policy", "bee.threads:inbox_send_test_policy",
     "bee.hive:inbox_discover_test_policy"}
 local function install(mappings: {Object})
-    local entry = registry.get(principals.ENTRY)
+    local entry = registry.get(types.PRINCIPAL_MAPPINGS_ENTRY)
     if not entry then error("mappings entry") end
     (assert(bounds.object(entry.data))).mappings = mappings
     local changes = registry.snapshot():changes()
@@ -49,13 +48,13 @@ local function install(mappings: {Object})
     local applied, err = changes:apply()
     if not applied then error("install mappings: " .. tostring(err)) end
 end
-local ALPHA_ACTOR = principals.actor_of(REMOTE, ALPHA)
-local BETA_ACTOR = principals.actor_of(REMOTE, BETA)
+local ALPHA_ACTOR = types.principal_actor(REMOTE, ALPHA)
+local BETA_ACTOR = types.principal_actor(REMOTE, BETA)
 local function both()
     install({{issuer = REMOTE, subject_id = ALPHA, policies = MEMBER_POLICIES}, {issuer = REMOTE, subject_id = BETA, policies = MEMBER_POLICIES}})
 end
-local function current_mappings(): principals.Mappings
-    local mappings, err = adapter.mappings(registry.get(principals.ENTRY))
+local function current_mappings(): types.PrincipalMappings
+    local mappings, err = adapter.mappings(registry.get(types.PRINCIPAL_MAPPINGS_ENTRY))
     if not mappings then error(tostring(err)) end
     return mappings
 end

@@ -12,13 +12,13 @@ entries:
   - system
   imports:
     bounds: bee.values:bounds
-    publication_profiles: bee.gov.delivery:publication_profile_decoder
-    activation_profiles: bee.gov.activation:activation_profile_decoder
+    publication_profiles: bee.gov.types:publication_profile_decoder
+    activation_profiles: bee.gov.types:activation_profile_decoder
     transaction: bee.persist.persist:transaction
-    preflight: bee.gov.activation:preflight
+    preflight: bee.gov.binding:preflight
     guide: bee.gov.traits:guide
-    protocol: bee.gov.delivery:delivery_protocol
-    resources: bee.gov.delivery:staging_resources
+    protocol: bee.gov.types:delivery_protocol
+    resources: bee.gov.binding:staging_resources
   security:
     policies:
     - bee.gov.security:delivery_facade_policy
@@ -85,9 +85,9 @@ entries:
   imports:
     bounds: bee.values:bounds
     transaction: bee.persist.persist:transaction
-    super_edit: bee.gov.activation:super_edit
-    activation_profiles: bee.gov.activation:activation_profile_decoder
-    protected_kernel: bee.gov.activation:protected_kernel
+    super_edit: bee.gov.security:super_edit
+    activation_profiles: bee.gov.types:activation_profile_decoder
+    protected_kernel: bee.gov.types:protected_kernel
   meta:
     type: internal
 - name: recovery_service
@@ -98,9 +98,9 @@ entries:
   - uuid
   imports:
     bounds: bee.values:bounds
-    resources: bee.gov.delivery:staging_resources
+    resources: bee.gov.binding:staging_resources
     activation_store: bee.gov.persist:activation_store
-    headless_revert: bee.gov.activation:headless_revert
+    headless_revert: bee.gov.binding:headless_revert
     destination_service: bee.gov.binding:destination_service
     transaction: bee.persist.persist:transaction
 - name: destination_call
@@ -129,9 +129,9 @@ entries:
   - hash
   imports: &id002
     bounds: bee.values:bounds
-    capability_gateway: bee.gov.capability:capability_gateway
-    capability_access: bee.gov.capability:capability_access
-    capability_files: bee.gov.capability:capability_files
+    capability_gateway: bee.gov.types:capability_gateway
+    capability_access: bee.gov.binding:capability_access
+    capability_files: bee.gov.types:capability_files
   security:
     policies:
     - bee.gov.security:gateway_policy
@@ -171,7 +171,7 @@ entries:
   - funcs
   - security
   imports:
-    protocol: bee.gov.workspace:workspace_protocol
+    protocol: bee.gov.types:workspace_protocol
     guide: bee.gov.traits:guide
     transaction: bee.persist.persist:transaction
     bounds: bee.values:bounds
@@ -190,8 +190,9 @@ entries:
       retry key. Freeze stages measured content only; it neither requests approval
       nor activates it. Use BeeComponents to inspect installed and Hub components
       for examples. Binary files use canonical base64. There is no host filesystem
-      or registry access.
-    input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["guide","create","list","read","put","append","remove","freeze"]},"overlay_id":{"type":"string","minLength":1,"maxLength":160},"expected_revision":{"type":"integer","minimum":0,"maximum":9007199254740990},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","minLength":1,"maxLength":240},"offset":{"type":"integer","minimum":0,"maximum":4194304},"limit":{"type":"integer","minimum":1,"maximum":16384},"result_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"content":{"type":"string","maxLength":4194304},"content_base64":{"type":"string","maxLength":5592408},"snapshot_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
+      write or registry access. Source reads a bounded non-private file relative to
+      the authenticated workspace folder; it names no overlay.
+    input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["guide","source","create","list","read","put","append","remove","freeze"]},"overlay_id":{"type":"string","minLength":1,"maxLength":160},"expected_revision":{"type":"integer","minimum":0,"maximum":9007199254740990},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","minLength":1,"maxLength":240},"offset":{"type":"integer","minimum":0,"maximum":4194304},"limit":{"type":"integer","minimum":1,"maximum":16384},"result_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"content":{"type":"string","maxLength":4194304},"content_base64":{"type":"string","maxLength":5592408},"snapshot_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
 
       '
 - name: approval
@@ -206,14 +207,14 @@ entries:
   modules:
   - hash
   imports:
-    resolution: bee.gov.delivery:resolver
+    resolution: bee.gov.types:resolver
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     approval: bee.gov.binding:approval
     plan_store: bee.gov.persist:plan_store
     replicas: bee.sync.persist:replicas
-    delivery: bee.gov.delivery:delivery
-    preflight: bee.gov.activation:preflight
+    delivery: bee.gov.types:delivery
+    preflight: bee.gov.binding:preflight
     transaction: bee.persist.persist:transaction
 - name: publisher
   kind: library.lua
@@ -222,7 +223,7 @@ entries:
   - base64
   imports:
     bounds: bee.values:bounds
-    delivery: bee.gov.delivery:delivery
+    delivery: bee.gov.types:delivery
     replicas: bee.sync.persist:replicas
     sync: bee.sync.persist:store
     transaction: bee.persist.persist:transaction
@@ -237,18 +238,18 @@ entries:
   - json
   imports:
     bounds: bee.values:bounds
-    artifact: bee.gov.delivery:artifact
-    materializer: bee.gov.delivery:materializer
-    application_admission: bee.gov.activation:governed_application_admission
-    publication_profiles: bee.gov.delivery:publication_profile_decoder
-    activation_profiles: bee.gov.activation:activation_profile_decoder
-    workspace_applications: bee.gov.workspace:workspace_applications
-    capability_grants: bee.gov.capability:capability_grants
+    artifact: bee.gov.types:artifact
+    materializer: bee.gov.binding:materializer
+    application_admission: bee.gov.types:governed_application_admission
+    publication_profiles: bee.gov.types:publication_profile_decoder
+    workspace_applications: bee.gov.types:workspace_applications
+    capability_grants: bee.gov.types:capability_grants
+    activation_profiles: bee.gov.types:activation_profile_decoder
     capability_model: bee.capability:model
     publisher: bee.gov.binding:publisher
     staging: bee.gov.persist:staging
     activation_store: bee.gov.persist:activation_store
-    resources: bee.gov.delivery:staging_resources
+    resources: bee.gov.binding:staging_resources
     sync_resources: bee.sync.env:resources
     transaction: bee.persist.persist:transaction
 - name: activation_owner
@@ -257,18 +258,18 @@ entries:
   modules:
   - json
   imports:
-    resolution: bee.gov.delivery:resolver
+    resolution: bee.gov.types:resolver
     bounds: bee.values:bounds
     transaction: bee.persist.persist:transaction
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
     lease_store: bee.gov.persist:lease_store
-    activation_measure: bee.gov.activation:activation_measure
-    migration_work: bee.gov.activation:migration_work
+    activation_measure: bee.gov.binding:activation_measure
+    migration_work: bee.gov.types:migration_work
     approval: bee.gov.binding:approval
-    preflight: bee.gov.activation:preflight
-    artifact: bee.gov.delivery:artifact
-    application_admission: bee.gov.activation:governed_application_admission
+    preflight: bee.gov.binding:preflight
+    artifact: bee.gov.types:artifact
+    application_admission: bee.gov.types:governed_application_admission
 - name: migration_effect
   kind: library.lua
   source: file://migration_effect.lua
@@ -278,8 +279,8 @@ entries:
     canonical: bee.values:canonical
     hub_migrations: bee.hub.activation:migrations
     migration_runner: bee.hub.binding:migration_runner
-    migration_work: bee.gov.activation:migration_work
-    materializer: bee.gov.delivery:materializer
+    migration_work: bee.gov.types:migration_work
+    materializer: bee.gov.binding:materializer
 - name: lease_grants
   kind: library.lua
   source: file://lease_grants.lua
@@ -290,7 +291,7 @@ entries:
     canonical: bee.values:canonical
     transaction: bee.persist.persist:transaction
     capability_model: bee.capability:model
-    lease_model: bee.gov.delivery:lease_model
+    lease_model: bee.gov.types:lease_model
     lease_store: bee.gov.persist:lease_store
 - name: destination_service
   kind: library.lua
@@ -303,10 +304,12 @@ entries:
   - hash
   - time
   imports:
+    driver_admission: bee.gov.types:driver_admission
+    artifact: bee.gov.types:artifact
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     transaction: bee.persist.persist:transaction
-    resources: bee.gov.delivery:staging_resources
+    resources: bee.gov.binding:staging_resources
     sync_resources: bee.sync.env:resources
     replicas: bee.sync.persist:replicas
     plan_store: bee.gov.persist:plan_store
@@ -314,20 +317,20 @@ entries:
     lease_store: bee.gov.persist:lease_store
     lease_grants: bee.gov.binding:lease_grants
     activation_owner: bee.gov.binding:activation_owner
-    hub_resolver: bee.gov.delivery:hub_resolver
-    overlay_resolver: bee.gov.delivery:overlay_resolver
-    delivery: bee.gov.delivery:delivery
+    hub_resolver: bee.gov.binding:hub_resolver
+    overlay_resolver: bee.gov.binding:overlay_resolver
+    delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
-    materializer: bee.gov.delivery:materializer
+    materializer: bee.gov.binding:materializer
     migration_effect: bee.gov.binding:migration_effect
-    migration_work: bee.gov.activation:migration_work
+    migration_work: bee.gov.types:migration_work
     migration_runner: bee.hub.binding:migration_runner
-    activation_profiles: bee.gov.activation:activation_profile_decoder
-    capability_grants: bee.gov.capability:capability_grants
+    activation_profiles: bee.gov.types:activation_profile_decoder
+    capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
-    capability_files: bee.gov.capability:capability_files
-    workspace_applications: bee.gov.workspace:workspace_applications
-    preflight: bee.gov.activation:preflight
+    capability_files: bee.gov.types:capability_files
+    workspace_applications: bee.gov.types:workspace_applications
+    preflight: bee.gov.binding:preflight
 - name: destination_backend_call
   kind: function.lua
   source: file://destination_backend.lua
@@ -347,9 +350,11 @@ entries:
   - security
   - system
   imports:
-    protocol: bee.gov.workspace:workspace_protocol
+    protocol: bee.gov.types:workspace_protocol
     staging: bee.gov.persist:staging
-    resources: bee.gov.delivery:staging_resources
+    source: bee.gov.binding:source
+    bounds: bee.values:bounds
+    resources: bee.gov.binding:staging_resources
     transaction: bee.persist.persist:transaction
   meta:
     type: internal
@@ -365,3 +370,155 @@ entries:
   - contract: bee.gov:overlay_contract
     methods:
       call: bee.gov.binding:overlay_call
+- name: driver_bindings
+  kind: function.lua
+  source: file://destination_service.lua
+  method: driver_bindings
+  modules: [registry, security, system, funcs, hash, time]
+  imports:
+    driver_admission: bee.gov.types:driver_admission
+    artifact: bee.gov.types:artifact
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist.persist:transaction
+    resources: bee.gov.binding:staging_resources
+    sync_resources: bee.sync.env:resources
+    replicas: bee.sync.persist:replicas
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    lease_grants: bee.gov.binding:lease_grants
+    activation_owner: bee.gov.binding:activation_owner
+    hub_resolver: bee.gov.binding:hub_resolver
+    overlay_resolver: bee.gov.binding:overlay_resolver
+    delivery: bee.gov.types:delivery
+    destination: bee.gov.binding:destination
+    materializer: bee.gov.binding:materializer
+    migration_effect: bee.gov.binding:migration_effect
+    migration_work: bee.gov.types:migration_work
+    migration_runner: bee.hub.binding:migration_runner
+    activation_profiles: bee.gov.types:activation_profile_decoder
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    capability_files: bee.gov.types:capability_files
+    workspace_applications: bee.gov.types:workspace_applications
+    preflight: bee.gov.binding:preflight
+  security:
+    policies: [bee.gov.security:driver_bindings_policy]
+- name: preflight
+  kind: library.lua
+  source: file://preflight.lua
+  modules: [hash, json]
+  imports:
+    driver_admission: bee.gov.types:driver_admission
+    canonical: bee.values:canonical
+    lists: bee.gov.types:lists
+    bounds: bee.values:bounds
+    protected_kernel: bee.gov.types:protected_kernel
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+- name: headless_revert
+  kind: library.lua
+  source: file://headless_revert.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist.persist:transaction
+    activation_store: bee.gov.persist:activation_store
+- name: activation_measure
+  kind: library.lua
+  source: file://activation_measure.lua
+  modules: [hash, json]
+  imports:
+    artifact: bee.gov.types:artifact
+    preflight: bee.gov.binding:preflight
+    migration_work: bee.gov.types:migration_work
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+- name: application_admissions
+  kind: library.lua
+  source: file://application_admissions.lua
+  modules: [registry, logger]
+  imports:
+    bounds: bee.values:bounds
+    activation_store: bee.gov.persist:activation_store
+    resources: bee.gov.binding:staging_resources
+    activation_profiles: bee.gov.types:activation_profile_decoder
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    workspace_applications: bee.gov.types:workspace_applications
+    governed_admission: bee.gov.types:governed_application_admission
+- name: materializer
+  kind: library.lua
+  source: file://materializer.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.gov.types:artifact
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_files: bee.gov.types:capability_files
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+- name: hub_resolver
+  kind: library.lua
+  source: file://hub_resolver.lua
+  modules: [registry, hash]
+  imports:
+    resolution: bee.gov.types:resolver
+    artifact: bee.gov.types:artifact
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+    application_admission: bee.gov.types:governed_application_admission
+    protected_kernel: bee.gov.types:protected_kernel
+    preflight: bee.gov.binding:preflight
+    lists: bee.gov.types:lists
+- name: overlay_resolver
+  kind: library.lua
+  source: file://overlay_resolver.lua
+  modules: [registry, hash]
+  imports:
+    drivers: bee.gov.types:drivers
+    driver_admission: bee.gov.types:driver_admission
+    workspace_applications: bee.gov.types:workspace_applications
+    resolution: bee.gov.types:resolver
+    artifact: bee.gov.types:artifact
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+    application_admission: bee.gov.types:governed_application_admission
+    protected_kernel: bee.gov.types:protected_kernel
+    capability_model: bee.capability:model
+    capability_grants: bee.gov.types:capability_grants
+    capability_files: bee.gov.types:capability_files
+    preflight: bee.gov.binding:preflight
+    lists: bee.gov.types:lists
+- name: staging_resources
+  kind: library.lua
+  source: file://staging_resources.lua
+  modules:
+  - registry
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+- name: capability_access
+  kind: library.lua
+  source: file://capability_access.lua
+  modules: [registry, security, hash]
+  imports:
+    bounds: bee.values:bounds
+    capability_gateway: bee.gov.types:capability_gateway
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    workspace_applications: bee.gov.types:workspace_applications
+
+- name: source
+  kind: library.lua
+  source: file://source.lua
+  modules: [fs, base64, hash]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.gov.types:workspace_protocol
+    transaction: bee.persist.persist:transaction

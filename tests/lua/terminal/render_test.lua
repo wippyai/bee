@@ -18,6 +18,25 @@ local catalog: {menu.Descriptor} = {
 }
 local function define_tests()
     test.describe("Desktop presentation boundaries", function()
+        test.it("lists retained restoration failures in Apps and Needs you", function()
+            local failures: {menu.Item} = {{label = "retained-invalid", action = "restoration:retained-invalid", enabled = true}}
+            local entries = menu.items(false, false, false, {{definition_id = "inbox:app", title = "Inbox", group = "", role = "approvals"}}, failures)
+            local apps, attention = false, false
+            for _, item in ipairs(entries) do
+                if item.label == "Apps" then
+                    for _, child in ipairs(item.children or {}) do
+                        if child.label == "Restoration failures" then
+                            test.eq(assert(child.children)[1].action, "restoration:retained-invalid")
+                            apps = true
+                        end
+                    end
+                elseif item.label == "Needs you" then
+                    test.eq(assert(item.children)[2].action, "restoration:retained-invalid")
+                    attention = true
+                end
+            end
+            test.is_true(apps); test.is_true(attention)
+        end)
         test.it("shows an incompatible checkpoint notice inside the same window with a custom label", function()
             local scene = model.add(model.new(100, 30), "view", "instance", "App")
             scene = model.place(scene, "view", {x = 2, y = 2, width = 96, height = 25})
@@ -33,7 +52,7 @@ local function define_tests()
             test.eq(scene.windows[1].instance_id, "instance")
         end)
         test.it("accepts only exact aggregate attachment state for its display", function()
-            local info = connection.new("{Antares@bee.client:main|one}", string.rep("a", 32),
+            local info = connection.new("{Antares@bee.client.service:main|one}", string.rep("a", 32),
                 string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
             test.eq(info.hive, "Supervisor ready")
             test.eq(info.attachments, "Not reported")
@@ -69,7 +88,7 @@ local function define_tests()
         end)
         test.it("shows the saved workspace label with the identity behind Details", function()
             local workspace = string.rep("c", 32)
-            local info = connection.new("{Antares@bee.client:main|one}", workspace,
+            local info = connection.new("{Antares@bee.client.service:main|one}", workspace,
                 string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
             connection.set_workspace_label(info, "ux-demo")
             local canvas = tty.canvas(100, 18)

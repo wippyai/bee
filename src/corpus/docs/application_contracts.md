@@ -140,7 +140,7 @@ does not mutate thread obligations or delivery history.
 
 ## Running managed agents
 
-An application opens and drives managed agents with `bee.app:sessions`,
+An application opens and drives managed agents with `bee.sessions.client:sessions`,
 which calls the `bee.sessions` owner contracts as the application's own actor.
 The SDK grants nothing: the host admits the caller and the owner authorizes
 every operation. The flow is catalog, open, send, await, close. `send` is the
@@ -148,7 +148,7 @@ only way to give a session work, and its receipt proves intake only; the result
 comes from `await`.
 
 ```lua
-local sessions = require("sessions")   -- imports: sessions: bee.app:sessions
+local sessions = require("sessions")   -- imports: sessions: bee.sessions.client:sessions
 
 local ready = sessions.catalog{}                        -- definitions whose executor is ready
 local s, fault = sessions.open{definition = "bee.driver.codex.profiles:research_batch", operation_key = "research/open"}
@@ -188,7 +188,8 @@ an authorization list; `catalog` lists the ones that are ready, and the host
 still decides admission when `open` runs. The Agent app manages saved profiles;
 a caller must obtain an exact ID and revision from the person.
 
-`client.thread_request` routes operations for an authenticated initiating
+Applications explicitly select `bee/application-threads` and import
+`bee.app.threads:client`. Its `request` helper routes operations for an authenticated initiating
 thread through the broker when a host grants that thread access. The shipped
 workspace-application rule sets `thread_access: none`. A UI may show its own
 work statuses and the results `await` returns, but cannot claim a live
@@ -350,6 +351,19 @@ binding removes the saved record and prevents restoration. Stored JSON never
 contains credentials, grants, PIDs or runtime objects. Native Terminal has no
 cold-resume contract; a surviving session service would be required to rejoin
 a PTY.
+
+Retained-instance alias attestation and restore-open failures are isolated to
+that instance. Alias recovery uses the exact admitted binding's overlay owner
+to preserve its stable application identity. The broker keeps the saved record,
+logs its exact reason with workspace, instance and definition identities, and
+publishes an acknowledgement notice through the existing question delivery
+channel. Apps → Restoration
+failures and Needs you expose these notices even without a live view. A missing
+admission reports `Retained application is not admitted: <definition ID>`.
+Other admitted applications continue restoring and opening. Acknowledgement
+clears the notice; it does not delete the record or authorize an application.
+Successful restoration clears its notice. Catalog admission changes recheck
+the retained aliases. Only the broker can publish restoration notices.
 
 ## Questions and close
 

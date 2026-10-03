@@ -80,7 +80,7 @@ function M.snapshot(state: State, connection_id: string): Snapshot?
     if not selection then return nil end
     local items: {interaction.Wire} = {}
     for _, item in ipairs(state.items) do
-        if contains(selection, item.id, item.instance_id) then items[#items + 1] = interaction.wire(item) end
+        if item.restoration or contains(selection, item.id, item.instance_id) then items[#items + 1] = interaction.wire(item) end
     end
     return {version = 1, workspace_id = state.workspace_id, connection_id = connection_id,
         selection_revision = selection.revision, revision = state.revision, items = items}
@@ -90,9 +90,10 @@ function M.answer(state: State, connection_id: string, data: unknown): (interact
     if not selection or type(data) ~= "table" or data.workspace_id ~= state.workspace_id
         or data.connection_id ~= connection_id or data.selection_revision ~= selection.revision then return nil, "stale_selection" end
     local response = interaction.response(data)
-    if not response or not contains(selection, response.id, response.instance_id) then return nil, "invalid_response" end
+    if not response then return nil, "invalid_response" end
     for _, item in ipairs(state.items) do
-        if item.request_id == response.request_id and item.id == response.id and item.instance_id == response.instance_id then
+        if item.request_id == response.request_id and item.id == response.id and item.instance_id == response.instance_id
+            and (item.restoration or contains(selection, response.id, response.instance_id)) then
             if item.kind == "confirm" and response.value ~= "" then return nil, "invalid_response" end
             if state.dispatched[item.request_id] then return nil, "already_dispatched" end
             return response, nil

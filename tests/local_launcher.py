@@ -30,7 +30,7 @@ def run():
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "modules", project / "modules")
-        presenter = project / "src/terminal/main.lua"
+        presenter = project / "modules/terminal/src/service/main.lua"
         code = presenter.read_text()
         anchor = 'local action = bindings.action('
         assert code.count(anchor) == 1
@@ -52,7 +52,7 @@ def run():
         (database / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee.client.db", "entries": [
             {"name": "local", "kind": "db.sql.sqlite", "file": "${env:bee.env:workspace_db_path}.client"},
         ]}, sort_keys=False))
-        index = project / "src/client/_index.yaml"
+        index = project / "modules/client/src/service/_index.yaml"
         document = yaml.safe_load(index.read_text())
         entry = next(e for e in document["entries"] if e["name"] == "local")
         entry["meta"] = {"command": {"name": "local-client-probe", "short": "Local entry acceptance", "security": {
@@ -210,7 +210,7 @@ def run():
 
         # Manual recovery belongs to the host, even when the client has discarded
         # its old tab. Opening from Start must receive the saved state and IDs.
-        client_file = project / "src/client/main.lua"
+        client_file = project / "modules/client/src/service/main.lua"
         client_code = client_file.read_text()
         send_anchor = '        local function send(recipient: string, topic: string, value: unknown)\n'
         reply_anchor = '                            reply = result.reply\n'

@@ -242,9 +242,6 @@ contents. Projection still reads only the provider's host-admitted files.
 Writes, creates, renames and deletes retain root containment. Windows keeps the
 contained behavior because equivalent ownership/ACL evidence is unavailable.
 
-External-link support requires the runtime release containing
-[wippyai/runtime#890](https://github.com/wippyai/runtime/pull/890). Bee's current
-runtime pin remains unchanged: it safely ignores the new field and retains
-containment, so external links remain unavailable until the runtime is upgraded.
-The proof-only `BEE_RUNTIME=/path/to/local/tool make login-links-check` exercises
-synthetic accepted and refused files through broker, locate and the Agent model.
+The pinned runtime implements external-link support. `make login-links-check`
+exercises synthetic accepted and refused files through broker, locate and the
+Agent model using the same upstream toolchain as the other gates.

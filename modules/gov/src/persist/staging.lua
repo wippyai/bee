@@ -558,9 +558,22 @@ local function read(store: Store, tx: sql.Transaction, actor: string, input: pro
     return shared.success(value(store, input.workspace_id, current.revision, part), false)
 end
 
--- Host services may read one exact immutable file after selecting the source
--- workspace themselves. This does not expose mutable authoring state and does
--- not impersonate the actor that owns the workspace.
+-- Publication selects source identities from this owner's existing authored overlays.
+function M.sources(store: Store): ({string}?, string?)
+    local rows, query_error = store.db:query("SELECT workspace_id FROM bee_governance_workspaces WHERE owner_node = ? ORDER BY workspace_id LIMIT ?", {store.node, 16385})
+    if not rows or query_error then return nil, tostring(query_error or "read authored overlay identities") end
+    if #rows > 16384 then return nil, "authored overlay identities exceed their bound" end
+    local result: {string} = {}
+    for _, row in ipairs(rows) do
+        local name = bounds.id(row.workspace_id)
+        if not name then return nil, "authored overlay identity is invalid" end
+        result[#result + 1] = name
+    end
+    return result, nil
+end
+
+-- Host services read one exact immutable file after selecting the source.
+-- This grants no mutable authoring access or source actor impersonation.
 function M.read_frozen(store: Store, workspace_raw: string, path_raw: string, digest_raw: string): Result
     if store.closed then return failure("CLOSED", "workspace store is closed") end
     local workspace_id = bounds.id(workspace_raw)

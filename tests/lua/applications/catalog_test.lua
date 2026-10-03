@@ -61,7 +61,7 @@ local function project(binding_profile: Object, definition: Object, owner: strin
         bindings = selected, artifact_entries = {definition},
         registry_entries = {find(principals.objects(state.entries), POLICY)}, overlay_ids = {}})
     if not projected then error(tostring(project_error)) end
-    return {id = projected.id, kind = "registry.entry", data = projected.record}
+    return {id = projected.id, kind = "registry.entry", meta = {type = admission.SCHEMA}, data = projected.record}
 end
 
 local function measured(binding_profile: Object, definition: Object): Object
@@ -142,6 +142,17 @@ local function define_tests()
             test.is_true(ok)
             test.is_true(observed ~= before)
             test.is_false(admitted)
+        end)
+        test.it("reports malformed declared governed admission instead of omitting it", function()
+            local id = "fixture.admission:malformed"
+            local changes = assert(assert(registry.snapshot()):changes())
+            assert(changes:create({id = id, kind = "registry.entry", meta = {type = admission.SCHEMA}, data = {bindings = {}}}))
+            assert(changes:apply())
+            local valid, problem = pcall(catalog.read, WORKSPACE)
+            local cleanup = assert(assert(registry.snapshot()):changes())
+            assert(cleanup:delete(id)); assert(cleanup:apply())
+            test.is_false(valid)
+            test.contains(tostring(problem), "application admission record is invalid")
         end)
         test.it("tracks imported renderer bytes without changing the application revision", function()
             local original = assert(registry.get("bee.settings.app:view"))
@@ -343,7 +354,7 @@ local function define_tests()
                 bindings = selected_profile.applications, artifact_entries = {definition},
                 registry_entries = {find(principals.objects(state.entries), POLICY)}, overlay_ids = {}})
             if not measured then error("project restored admission: " .. tostring(measure_error)) end
-            local derived: Object = {id = measured.id, kind = "registry.entry", data = measured.record}
+            local derived: Object = {id = measured.id, kind = "registry.entry", meta = {type = admission.SCHEMA}, data = measured.record}
 
             local original_profiles = assert(registry.get("bee.env:gov_activation_profiles"))
             local original_database_ref = assert(registry.get("bee.gov.env:database_ref"))
@@ -449,6 +460,7 @@ local function define_tests()
             test.eq((principals.strings(files.policies))[1], "bee.security.files:read_policy")
             test.eq((principals.strings(files.policies))[2], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(files.thread_access, "observe_post")
+            test.is_nil(files.overlay_owner, "host-composed packages retain their existing thread identity")
             test.is_true(has(selected, "bee.settings.app:app"))
             test.is_true(selected.evidence ~= "")
             test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline.app:app"))

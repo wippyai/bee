@@ -34,8 +34,8 @@ identities (the default desktop and up to 32 allocated ones) belong to the
 client node and double as the display IDs workspaces record. Each desktop keeps
 one layout per workspace it shows in `client_layouts`, keyed by
 `(desktop_id, workspace_id)` with its own generation and import receipt;
-`bee.client:store.open(resource, workspace_id, desktop_id?)` binds a handle to
-one pair and `bee.client:store.desktops(resource)` lists and allocates
+`bee.client.persist:store.open(resource, workspace_id, desktop_id?)` binds a handle to
+one pair and `bee.client.persist:store.desktops(resource)` lists and allocates
 identities. A layout written before migration 3 stays on its identity row until
 the first workspace that its import receipt and every target name opens it;
 that workspace adopts it in one transaction under the same desktop identity.
@@ -176,4 +176,6 @@ before marking itself stopped and forwards it to the owner's registered route.
 A host-owned memory variable (`bee.launch:startup_error`) retains the same cause
 if failure precedes route registration. Only the selected Hive supervisor can
 write it; the startup owner reads it immediately and on its existing heartbeat.
-The owner fails with that diagnostic before the no-progress watchdog fires.
+The owner reports that diagnostic through a structured startup failure record.
+The startup owner command follows readiness and failure events without an
+inactivity deadline.

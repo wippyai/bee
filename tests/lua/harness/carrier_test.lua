@@ -658,35 +658,40 @@ local function define_drain_tests()
             if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            -- A small stream with a descendant holding the pipes: the drain
-            -- arms while the carrier is already dead after its first commit,
-            -- so later acknowledgments never come and the drain fires on
-            -- schedule. A pause cannot hold the silence instead: an
-            -- unacknowledged spool fills and the child never reaches exit.
-            -- FLOOD_EXIT would skip the orphan, so the stream stays small.
-            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
-                BEE_FIXTURE_ORPHAN = "5"})
-            local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed")
-            test.is_nil(crashed.value)
-            test.is_true(tostring(crashed.error):find("crash after committed", 1, true) ~= nil)
-            local drained, finished = false, false
-            for _ = 1, 300 do
-                local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
-                for _, item in ipairs(principals.objects(page.evidence)) do
-                    if item.kind == "output.drain_elapsed" then drained = true end
-                    if item.kind == "runner.finished" then finished = true end
+            local gate = require("orphan_gate")
+            local path = fixture_bin() .. "/" .. fresh("orphan") .. ".fifo"
+            gate.create(path)
+            local ok, problem = pcall(function()
+                local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
+                    BEE_FIXTURE_ORPHAN_FIFO = path})
+                local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed")
+                test.is_nil(crashed.value)
+                test.is_true(tostring(crashed.error):find("crash after committed", 1, true) ~= nil)
+                local drained, finished, exited, lost = false, false, false, false
+                for _ = 1, 300 do
+                    local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
+                    for _, item in ipairs(principals.objects(page.evidence)) do
+                        if item.kind == "output.drain_elapsed" then drained = true end
+                        if item.kind == "runner.finished" then finished = true end
+                        if item.kind == "child.exited" then exited = true end
+                        if item.kind == "output.lost" then lost = true end
+                    end
+                    if drained and finished then break end
+                    time.sleep("100ms")
                 end
-                if drained and finished then break end
-                time.sleep("100ms")
-            end
+                test.is_true(exited, "the producer exits independently of its pipe-holding descendant")
+                test.is_true(drained, "open descendant pipes exhaust the declared post-exit drain")
+                test.is_true(lost, "the silent carrier leaves unacknowledged output for retention expiry")
+                test.is_true(finished)
+            end)
+            gate.release(path)
             data.runner_drain_ms = saved_drain
             data.retain_ms = saved_retain
             local widened = registry.snapshot():changes()
             widened:update(policy)
             local restored, restore_error = widened:apply()
             if not restored then error("restore runner drain: " .. tostring(restore_error)) end
-            test.is_true(drained)
-            test.is_true(finished)
+            if not ok then error(tostring(problem)) end
         end)
         test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
             local thread_id = thread()

@@ -23,12 +23,22 @@ local function has(list: {string}, item: string): boolean
     return false
 end
 local function operation(): {[string]: unknown}
-    return {id = "bee.hive:probe_open", kind = "function.lua", meta = {hive = "open", hive_operation = {revision = "1", title = "Probe",
+    return {id = "bee.hive:probe_open", kind = "function.lua", meta = {hive = "open", hive_service = "bee.hive", hive_operation = {revision = "1", title = "Probe",
         input = {type = "object", additionalProperties = false, properties = {name = {type = "string"}, count = {type = "integer"}}},
         output = {type = "object", additionalProperties = false, properties = {}}}}, data = {source = "file://probe_open.lua", method = "handle"}}
 end
 local function define_tests()
     test.describe("Hive catalog", function()
+        test.it("declares the owner service independently of the operation identity", function()
+            local entry = operation()
+            entry.id = "vendor.renamed:telemetry"
+            local meta = assert(bounds.object(entry.meta))
+            meta.hive_service = "bee.hive.telemetry.binding"
+            local declared = assert(catalog.decode_operation(entry))
+            test.eq(declared.service_id, "bee.hive.telemetry.binding")
+            meta.hive_service = nil
+            test.is_nil(catalog.decode_operation(entry))
+        end)
         test.it("includes only operations the host ceiling admits", function()
             local full = probe({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.hive:probe_exposure_policy"})
             test.is_true(has(full.operations, "bee.hive.telemetry.binding:stats"))

@@ -22,7 +22,12 @@ SLOW = {
     "bee.harness.catalog:carrier_test": 80.0,
     "bee.harness.catalog:carrier_stream_test": 90.0,
     "bee.harness.catalog:carrier_drain_test": 65.0,
-    "bee.placement.native:native_test": 25.0,
+    "bee.placement.native:native_test": 5.0,
+    "bee.placement.native:native_execution_test": 5.0,
+    "bee.placement.native:native_configuration_test": 5.0,
+    "bee.placement.native:native_output_test": 5.0,
+    "bee.placement.native:native_credentials_test": 5.0,
+    "bee.placement.native:native_cleanup_test": 5.0,
 }
 DEFAULT_WEIGHT = 1.0
 SHARDS = 4
@@ -63,10 +68,20 @@ def split(entries, shared=()):
     return groups
 
 
+def daemon_lock_path():
+    """One lock per Docker daemon, in the user's XDG cache directory."""
+    identity = subprocess.run(["docker", "info", "--format", "{{.ID}}"], capture_output=True, text=True, check=False)
+    daemon = identity.stdout.strip()
+    if identity.returncode != 0 or not daemon:
+        raise RuntimeError(f"Docker daemon identity unavailable: {identity.stderr.strip() or 'empty ID'}")
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return cache / "bee" / f"docker-daemon-{daemon.replace(':', '-')}.lock"
+
+
 @contextmanager
 def docker_daemon_lock():
     override = os.environ.get("BEE_DOCKER_DAEMON_LOCK")
-    path = Path(override) if override else Path.home() / ".cache/bee/bee-docker-daemon.lock"
+    path = Path(override) if override else daemon_lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as handle:
         print(f"Docker daemon shard: waiting for lock {path}", flush=True)

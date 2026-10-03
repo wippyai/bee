@@ -127,7 +127,7 @@ local function define_tests()
                 return candidate_entry(id, "library.lua", package, SHA, references)
             end
             local candidate, context = fixture()
-            context.entries["bee.gov.activation:preflight"] = entry("bee.gov.activation:preflight", "bee/gov", {"shared.util:bounds"})
+            context.entries["bee.gov.binding:preflight"] = entry("bee.gov.binding:preflight", "bee/gov", {"shared.util:bounds"})
             context.entries["shared.util:bounds"] = entry("shared.util:bounds", "bee/shared", {})
             local policies = entry("bee.security.approvals:approver_policies", "bee", {"demo:run"})
             policies.kind = "registry.entry"

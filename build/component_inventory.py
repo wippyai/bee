@@ -194,13 +194,9 @@ def load_external_proofs(index_documents):
                     dependencies.append(entry)
         if not dependencies:
             raise ValueError(f"{component}@{version} is not declared by {source_module} registry sources")
-        component_namespace = component.replace("/", ".")
         for entry_id in target_ids:
             if not REGISTRY_ID.fullmatch(entry_id):
                 raise ValueError(f"invalid external target id in proof: {entry_id}")
-            namespace = entry_id.split(":", 1)[0]
-            if namespace != component_namespace and not namespace.startswith(component_namespace + "."):
-                raise ValueError(f"{entry_id} is outside the {component} namespace")
             if entry_id in external_entries:
                 raise ValueError(f"duplicate external target proof: {entry_id}")
             external_entries[entry_id] = {
@@ -394,7 +390,7 @@ def build_inventory():
             if entry_id in entries:
                 raise ValueError(f"duplicate registry id {entry_id} in {rel(path)}")
             entries[entry_id] = {"id": entry_id, "kind": kind, "source": rel(path)}
-            if kind in PERSISTED_KINDS:
+            if kind in PERSISTED_KINDS or (kind == "function.lua" and entry.get("meta", {}).get("hive")):
                 persisted_ids.add(entry_id)
             if kind == "ns.requirement":
                 targets = entry.get("targets", []) or []

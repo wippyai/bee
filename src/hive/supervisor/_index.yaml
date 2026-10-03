@@ -1,94 +1,6 @@
 version: '1.0'
 namespace: bee.hive.supervisor
 entries:
-- name: peers
-  kind: library.lua
-  source: file://peers.lua
-  imports:
-    types: bee.hive:types
-    bounds: bee.values:bounds
-- name: registration
-  kind: library.lua
-  source: file://registration.lua
-- name: enrollment
-  kind: library.lua
-  source: file://enrollment.lua
-  imports:
-    bounds: bee.values:bounds
-- name: invites
-  kind: library.lua
-  source: file://invites.lua
-  imports:
-    bounds: bee.values:bounds
-- name: admission
-  kind: library.lua
-  source: file://admission.lua
-  modules: [time]
-  imports:
-    types: bee.hive:types
-    peers: bee.hive.supervisor:peers
-    catalog: bee.hive.exposure:catalog
-    clock: bee.values:clock
-- name: main
-  kind: process.lua
-  source: file://main.lua
-  method: main
-  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash, events]
-  security: {policies: [bee.security.hive:hive_policy_exposure_policy, bee.security.hive:hive_readiness_policy]}
-  imports:
-    types: bee.hive:types
-    bounds: bee.values:bounds
-    peers: bee.hive.supervisor:peers
-    enrollment: bee.hive.supervisor:enrollment
-    invites: bee.hive.supervisor:invites
-    owner_stop: bee.hive.supervisor:owner_stop
-    registration: bee.hive.supervisor:registration
-    admission: bee.hive.supervisor:admission
-    policy_admission: bee.hive.supervisor:policy_admission
-    principals: bee.hive.security:principals
-    desktop_owner: bee.hive.desktop:owner
-    desktop_protocol: bee.hive.desktop:protocol
-    catalog: bee.hive.exposure:catalog
-    adapters: bee.hive.supervisor:adapters
-    workspace_commands: bee.hive.supervisor:workspace_commands
-    clock: bee.values:clock
-- name: owner_stop
-  kind: library.lua
-  source: file://owner_stop.lua
-  imports:
-    bounds: bee.values:bounds
-    types: bee.hive:types
-- name: workspace_commands
-  kind: library.lua
-  source: file://workspace_commands.lua
-  imports:
-    bounds: bee.values:bounds
-    types: bee.hive:types
-- name: workspace_command
-  kind: function.lua
-  source: file://workspace_command.lua
-  method: handle
-  modules: [funcs, security]
-  meta:
-    comment: Runs one bee workspace command of an enrolled local client under the catalog grants the host attaches here
-  security: {policies: [bee.security.storage:workspace_catalog_read_policy, bee.security.storage:workspace_catalog_manage_policy, bee.security.hive:workspace_command_catalog_policy]}
-  imports:
-    bounds: bee.values:bounds
-    types: bee.hive:types
-    commands: bee.hive.supervisor:workspace_commands
-- name: advertise
-  kind: function.lua
-  source: file://advertise_method.lua
-  method: handle
-  modules: [process]
-  security: {policies: [bee.security.hive:hive_names_policy, bee.security.hive:hive_advertise_policy]}
-  imports:
-    types: bee.hive:types
-- name: audiences
-  kind: library.lua
-  source: file://exposure_audiences.lua
-  imports:
-    bounds: bee.values:bounds
 - name: exposure_audiences
   kind: registry.entry
   meta:
@@ -97,33 +9,6 @@ entries:
       as its ceiling, and the owner's own callers bypass audiences
   data:
     audiences: []
-- name: policy_admission
-  kind: library.lua
-  source: file://policy_admission.lua
-  modules: [funcs, security, registry, system, time, logger]
-  imports:
-    clock: bee.values:clock
-    dispatch: bee.hive.supervisor:dispatch
-    types: bee.hive:types
-    bounds: bee.values:bounds
-    catalog: bee.hive.exposure:catalog
-    principals: bee.hive.security:principals
-    canonical: bee.values:canonical
-- name: admit_policy
-  kind: function.lua
-  source: file://policy_admission.lua
-  method: handle
-  modules: [funcs, security, registry, system, time, logger]
-  security:
-    policies: [bee.hive.supervisor:policy_identity_policy, bee.hive.supervisor:policy_actor_policy, bee.security.hive:policy_admission_policy, bee.security.hive:hive_policy_exposure_policy, bee.security.hive:hive_exposure_facade_policy]
-  imports:
-    clock: bee.values:clock
-    dispatch: bee.hive.supervisor:dispatch
-    types: bee.hive:types
-    bounds: bee.values:bounds
-    catalog: bee.hive.exposure:catalog
-    principals: bee.hive.security:principals
-    canonical: bee.values:canonical
 - name: policy_identity_policy
   kind: security.policy
   policy:
@@ -143,33 +28,6 @@ entries:
     comment: Host-owned table of the trusted issuer and subject pairs admitted to thread operations and the policies each acts under; the actor is derived from the pair; an empty table admits no forwarded thread operation
   data:
     mappings: []
-- name: adapters
-  kind: library.lua
-  source: file://adapters.lua
-  imports:
-    bounds: bee.values:bounds
-- name: dispatch
-  kind: library.lua
-  source: file://dispatch.lua
-  modules: [json, funcs, security, registry]
-  imports:
-    canonical: bee.values:canonical
-    types: bee.hive:types
-    catalog: bee.hive.exposure:catalog
-    bounds: bee.values:bounds
-    audiences: bee.hive.supervisor:audiences
-
-- name: execute
-  kind: function.lua
-  source: file://dispatch.lua
-  method: dispatch
-  modules: [json, funcs, security, registry]
-  imports:
-    canonical: bee.values:canonical
-    types: bee.hive:types
-    catalog: bee.hive.exposure:catalog
-    bounds: bee.values:bounds
-    audiences: bee.hive.supervisor:audiences
 - name: hive_operation_adapters
   kind: registry.entry
   meta:
@@ -180,6 +38,6 @@ entries:
     - operations: [bee.threads.binding:send, bee.threads.binding:send_status, bee.threads.binding:inbox_resolve,
         bee.threads.binding:inbox_describe, bee.threads.binding:inbox_send, bee.threads.binding:inbox_reply,
         bee.threads.binding:notify, bee.threads.binding:watch]
-      worker: bee.threads.hive:admit
+      worker: bee.threads.hive.binding:admit
     - operations: [bee.sync.binding:replica_receive]
       worker: bee.sync.binding:admit

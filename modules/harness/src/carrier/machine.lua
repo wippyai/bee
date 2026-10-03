@@ -1476,9 +1476,9 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
             local intended, intent_error = M.commit(io, session, {input_record(session, "close_intended", {})})
             if not intended then return "none", intent_error end
         end
-        -- A refusal (the attempt already gone, no runner) is a closure
-        -- that did not happen, on record with its reason; the stop path
-        -- then settles what remains.
+        -- A refused closure with an observed exit needs no signal.
+        -- A successful closure remains recorded even if the child exits
+        -- during the reply; other refusals retain the stop fallback.
         local close_target = session.plan.placement_binding.methods.close_stdin
         if not close_target then return "none", "selected placement cannot close stdin" end
         local raw, call_error = io.call(close_target, {attempt_id = session.plan.request.attempt_id})
@@ -1489,6 +1489,12 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
         if reply.ok then
             local answer, answer_error = placement_decode.stdin_closure(reply.value, session.plan.request.attempt_id)
             if not answer then return "none", "placement returned malformed close_stdin data: " .. tostring(answer_error) end
+            if answer.attempt.attachment_generation ~= session.epoch then return "none", "stdin closure belongs to another generation" end
+            if not answer.closed and answer.attempt.execution_state == "exited" and answer.attempt.exit_source then
+                local exit = answer.attempt.exit
+                session.exit = {code = exit and exit.code or nil, signal = exit and exit.signal or nil, uncertain = false}
+                return "none", nil
+            end
             closed = answer.closed
             if answer.reason then reason = answer.reason end
         else

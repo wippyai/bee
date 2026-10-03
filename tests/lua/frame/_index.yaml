@@ -30,7 +30,7 @@ entries:
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
-    viz: bee.app:viz
+    viz: bee.ui.viz:viz
     appearance: bee.ui:appearance
 - name: forms_test
   kind: function.lua
@@ -41,7 +41,7 @@ entries:
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
-    forms: bee.app:forms
+    forms: bee.ui.forms:forms
     appearance: bee.ui:appearance
 - name: diagram_test
   kind: function.lua
@@ -52,6 +52,6 @@ entries:
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
-    viz: bee.app:viz
-    diagram: bee.app:diagram
+    viz: bee.ui.viz:viz
+    diagram: bee.ui.diagram:diagram
     appearance: bee.ui:appearance

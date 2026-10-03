@@ -1,17 +1,32 @@
 # Overlay authoring and preflight
 
-Internal typed checks over a destination-host-resolved package closure. The
-`hub_resolver` module supplies the internal destination resolution adapter; this
-library has no publication, SQL, network, approval or process permissions. It
-is not a public install/update API.
+Governance owns caller-scoped overlay authoring, measured admission and
+approval-bound destination activation. Its root registers the component,
+dependencies, host requirements and public contracts. Registry metadata
+describes capabilities; only host-selected permissions authorize operations.
 
-`bee.gov.delivery:resolver` owns the shared `Resolver` interface for staging and
+`bee.gov.types` owns the artifact, application admission, capability, profile,
+lease, authoring and delivery schemas, value decoders and measurement formats.
+`bee.gov.binding` owns resolution, preflight, materialization, live admission
+selection and activation operations. `bee.gov.persist` owns SQL repositories,
+`bee.gov.migrations` the immutable ledger, `bee.gov.service` recovery processes,
+`bee.gov.security` policy templates and scopes, and `bee.gov.traits` agent tools.
+The host injects selected resources through the existing requirements.
+
+This M0 role correction changes library IDs and direct imports together. Public
+contracts and bindings, process IDs, stores, topics, schema tags and digest
+algorithms retain their identities; no row migration is needed. Before deploying
+these moved definitions, quiesce pending effects that reference removed helper
+IDs and restart consuming owners. Frozen artifacts and Registry/Hub/Governance
+receipts remain immutable; publication alone does not replace active closures.
+
+`bee.gov.types:resolver` owns the shared `Resolver` interface for staging and
 activation: `resolve` returns the measured candidate and destination context,
 and optional `revision` observes the current registry revision. Hub and overlay
 resolvers implement this interface with the same method receiver type.
 
-The primary planned consumer activates internal packs/changes in service-owned
-ephemeral overlays, without durable registry publication. Agents call a scoped
+The destination owner activates reviewed changes in owner-local ephemeral
+overlays without durable registry publication. Agents call a scoped
 headless governance trait; they do not receive the owner's writer permissions.
 The internal overlay materializer now replaces one complete owner-local overlay
 from exact decoded artifact entries. `activation_owner` binds the selected plan,
@@ -23,7 +38,7 @@ captures exact work and runs it behind a prerequisite overlay before the full
 application overlay becomes visible. The agent execution environment is separate.
 Persistent target ledgers remain authoritative even for ephemeral definitions.
 
-`bee.gov.workspace:workspace` now freezes trusted in-memory file records into a
+`bee.gov.types:workspace` now freezes trusted in-memory file records into a
 deterministic binary-safe snapshot. It copies records, measures each file's bytes
 and SHA-256, hashes a sorted length-framed manifest, and binds workspace identity
 and revision. It rejects path traversal, drive/stream paths, duplicate paths,
@@ -68,7 +83,7 @@ its internal `workspace_id`.
 For an application candidate, the author writes `entries.json` as a plain JSON
 list of complete registry entries and freezes it with the other source files.
 The publication preparation service parses that exact frozen file and uses
-`bee.gov.delivery:artifact` to create the canonical measured envelope. It executes
+`bee.gov.types:artifact` to create the canonical measured envelope. It executes
 no code and does not mutate the overlay or frozen snapshot.
 `bee.gov.binding:publication_call` checks `bee.gov.delivery.manage` for prepare
 or `bee.gov.delivery.publish` for publish against the caller's exact workspace
@@ -101,7 +116,7 @@ conflicts, entry ownership and scoped permissions, explicit deletion and unchang
 durable history on the candidate executable. Logical overlay ownership is not
 automatic process-exit cleanup. Expanded packages, service readiness and migration
 ordering remain unproved by this registry-entry-only fixture.
-`bee.gov.delivery:materializer` keeps the overlay owner outside transferred data,
+`bee.gov.binding:materializer` keeps the overlay owner outside transferred data,
 copies and remeasures the desired artifact, and deletes definitions no longer in
 that owner's complete desired set. Cleanup can reconcile and observe the exact
 empty owner overlay without making an empty application artifact publishable. It
@@ -203,7 +218,7 @@ failure falls back to this last good generation, and a committed migration
 whose compensation cannot complete stops in recovery rather than booting
 incompatible code against newer data.
 
-`bee.gov.delivery:hub_resolver` now provides the destination resolution adapter.
+`bee.gov.binding:hub_resolver` now provides the destination resolution adapter.
 It captures one atomic registry state, asks the runtime to plan a
 host-selected Hub dependency root, reconstructs the complete selected closure
 from the planned final state, and retains definitions absent from the plan
@@ -257,6 +272,12 @@ overlay and approval policies are removed from the migration call scope.
 grant is still authority over the physical SQL resource and is not table-level
 confinement.
 
+New measured application admission records declare `identity_generation` as
+`current`. An explicitly measured `prior` generation retains the historical
+admission ID independently of owner spelling. Governance migration 17 adds the
+generation to existing activation rows and leaves their admission bytes and
+digests unchanged; restoration uses that recorded generation.
+
 The activation configuration may carry one `workspace_applications` rule
 beside its explicit rows, and the publication configuration a matching
 `workspace_applications: true`. `activation_profiles.select` returns an
@@ -264,10 +285,13 @@ explicit row for a source, or else instantiates the rule for an overlay whose
 name `workspace_applications` accepts, authored on this node or, while the
 rule's `hive` flag is set, received over Hive; a name stays with the source
 node whose desired activation holds its slot. The instance has component and
-namespace `app.<overlay_id>`, the application `app.<overlay_id>:app`, the
-rule's approval policy, kinds, modules, base admission policies and thread access,
-and a private overlay owner per destination workspace. The instance is
-measured into the policy digest exactly like an explicit row. A live host grant
+namespace `app.<overlay_id>`, the rule's approval policy, kinds, modules, base admission policies and thread access,
+and a private overlay owner per destination workspace. The captured artifact
+selects exactly one `process.lua` application by `meta.type: bee.app`; its entry
+name is unrestricted. The instance is
+measured into the policy digest exactly like an explicit row. Staging, plan
+comparison and activation select the same host base policy in the destination
+resolver before binding the captured application declaration. A live host grant
 record adds generated policy IDs to `allow.grants` and the application's
 admission binding; its recorded thread access also selects the application
 binding. Activation writes the generated policies, requirement defaults, grant
@@ -353,3 +377,41 @@ Activation and selected-plan storage failures include the failing SQL operation
 and native SQLite message. The activation owner propagates
 these failures before applying an overlay; a failed commit never reports a
 prepared or authorized activation.
+
+## Workspace CLI drivers
+
+A host may select `workspace_drivers` in its existing activation and publication
+profile configuration. Local `driver.<name>` overlays own `bee.driver.<name>`
+child namespaces; they do not create application admission records. Publication
+selects a component from the staging owner's authored overlay list and requires
+the host's driver publication rule or an explicit profile. The same
+freeze, delivery, review, exact approval and activation ledger applies. A driver
+requirement may append its own `harness.driver` binding to
+`bee.harness.launch:harness_activation` at `.bindings +=`; other host targets
+are refused. Raw overlay requirements remain declarations. The host selects
+`bee.gov.binding:driver_bindings` as the activation declaration's admission
+reader. The shared driver resolver combines the original host selection with
+bindings derived from consumed desired artifacts in the existing activation
+store whose exact code overlays are present. It adds no stored record or second
+catalog; boot recovery restores approved code before it becomes selectable.
+The reader checks the exact owner selected by the host profile against each
+consumed desired artifact. An explicit profile may choose a different owner ID;
+owner spelling supplies no admission authority. Store read failures retain their
+reported cause.
+Preflight and recovery decode the exact owned append declaration through
+`bee.gov.types:driver_admission`. Activation retains this measurement when normalizing the registry
+revision for durable approval evidence. That host evidence admits the
+declaration's protected target; replacement requirements and edits to the
+protected host entry remain refused. Descriptor policies grant only registry
+reads. Launch definitions,
+policies and executable mappings are part of the reviewed artifact; metadata
+alone never activates a driver.
+
+The overlay `source` operation uses `bee.gov.binding:source` to read a bounded window of a non-private file in
+the authenticated workspace folder. It names no overlay or workspace; the caller
+needs `bee.gov.overlay.source` on its actor-metadata workspace. The backend uses
+the host-selected workspace folder catalog operation and filesystem root. Paths
+are relative or absolute within that root; hidden/credential paths and shared-root
+workspace subfolders are refused. Each read returns canonical base64,
+`window_digest`, `next_offset` and `eof`, with a 16,384-byte limit. It neither
+executes nor writes source and does not open the staging store.

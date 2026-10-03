@@ -20,6 +20,7 @@ local migrations = require("migrations")
 local migration_work = require("migration_work")
 local lifecycle = require("lifecycle")
 local service_lifecycle = require("service_lifecycle")
+local operations = require("operations")
 local M = {}
 type Result = transaction.Result
 type ExpectedModule = {component: string, version: string, change: string}
@@ -195,11 +196,13 @@ function M.status(raw: unknown, options: unknown?): Result
             end
             page = decoded_page
         end
-        local state, state_error = snapshot:state()
-        if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
+        local entries, find_error = snapshot:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.hub_operation"})
+        if find_error then return transaction.failure("UNAVAILABLE", tostring(find_error)) end
         local owned: {Receipt} = {}
-        for _, item in ipairs(state.entries) do
-            if item.id:sub(1, 19) == "bee.hub.operations:" then
+        for _, item in ipairs(entries) do
+            local candidate, receipt_error = operations.record(item)
+            if receipt_error then return transaction.failure("INTERNAL", receipt_error) end
+            if candidate then
                 local data = bounds.object(item.data)
                 if data and data.actor_id == actor:id() then
                     local receipt = decode_receipt(data)
@@ -231,7 +234,7 @@ local function save(receipt: Receipt): Result
     if not snapshot then return transaction.failure("UNCERTAIN", tostring(problem)) end
     local changes, change_error = snapshot:changes()
     if not changes then return transaction.failure("UNCERTAIN", tostring(change_error)) end
-    local entry = {id = receipt_id(receipt.digest), kind = "registry.entry", data = receipt}
+    local entry = {id = receipt_id(receipt.digest), kind = "registry.entry", meta = {type = "bee.hub_operation"}, data = receipt}
     local stored = snapshot:get(entry.id)
     local staged, stage_error
     if stored then staged, stage_error = changes:update(entry)
@@ -345,7 +348,7 @@ local function remove_with_migrations(receipt: Receipt): Result
     local removed, remove_error = changes:delete(root_id)
     if not removed then return incomplete_removal(receipt, tostring(remove_error)) end
     removal.published, receipt.state, receipt.message = true, "published", "Migration rollback completed; dependency removal published"
-    local recorded, record_error = changes:update({id = receipt_id(receipt.digest), kind = "registry.entry", data = receipt})
+    local recorded, record_error = changes:update({id = receipt_id(receipt.digest), kind = "registry.entry", meta = {type = "bee.hub_operation"}, data = receipt})
     if not recorded then removal.published = false; return incomplete_removal(receipt, tostring(record_error)) end
     local published, publish_error = changes:apply()
     if not published then return transaction.failure("UNCERTAIN", tostring(publish_error)) end
@@ -634,7 +637,7 @@ local function publish_intent(receipt: Receipt): Result
     end
     receipt.state, receipt.message = "published", "Dependency change published; readiness pending"
     if receipt.lifecycle_work then receipt.lifecycle_work.phase = "published" end
-    local recorded, record_error = changes:update({id = receipt_id(receipt.digest), kind = "registry.entry", data = receipt})
+    local recorded, record_error = changes:update({id = receipt_id(receipt.digest), kind = "registry.entry", meta = {type = "bee.hub_operation"}, data = receipt})
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()
     if not applied then return failed_apply(receipt, apply_error) end
@@ -700,10 +703,13 @@ function M.apply(raw: unknown, expected: unknown): Result
     end
     if previous.code ~= "NOT_FOUND" then return previous end
     local current = registry.snapshot()
-    local current_state = current and current:state()
-    if not current_state then return transaction.failure("UNAVAILABLE", "cannot inspect pending component lifecycles") end
-    for _, entry in ipairs(current_state.entries) do
-        if entry.id:sub(1, 19) == "bee.hub.operations:" then
+    if not current then return transaction.failure("UNAVAILABLE", "cannot inspect pending component lifecycles") end
+    local entries, find_error = current:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.hub_operation"})
+    if find_error then return transaction.failure("UNAVAILABLE", tostring(find_error)) end
+    for _, entry in ipairs(entries) do
+        local recorded, receipt_error = operations.record(entry)
+        if receipt_error then return transaction.failure("INTERNAL", receipt_error) end
+        if recorded then
             local pending = decode_receipt(entry.data)
             if pending and pending.lifecycle_work and pending.state ~= "complete" and pending.state ~= "failed" then
                 return transaction.failure("BUSY", "component lifecycle needs recovery: " .. pending.digest)

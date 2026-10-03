@@ -17,10 +17,15 @@ local function executor(change: boolean?, inspect_prompt: boolean?): approval.Ex
     function selected.call(self: approval.Executor, method: string, request: unknown): (unknown?, unknown?)
         local value = assert(bounds.object(request))
         if method == "bee.approvals.binding:request" then
+            local prompt = assert(bounds.object(value.prompt))
+            local wording = assert(bounds.text(prompt.text))
+            test.is_true(wording:find("Bee application", 1, true) ~= nil)
+            test.is_true(wording:find("workspace-a", 1, true) ~= nil)
+            test.is_true(wording:find("Duration:", 1, true) ~= nil)
             if inspect_prompt then
                 local prompt = assert(bounds.object(value.prompt))
                 assert(type(prompt.text) == "string")
-                test.is_true(prompt.text:find("Allow Bee to apply and recover application-a version v1", 1, true) ~= nil)
+                test.is_true(prompt.text:find("Allow Bee to apply and recover Bee application application-a version v1", 1, true) ~= nil)
                 test.is_true(prompt.text:find("this workspace", 1, true) ~= nil)
                 test.is_true(prompt.text:find("Duration:", 1, true) ~= nil)
                 test.is_true(prompt.text:find("until replaced or removed", 1, true) ~= nil)

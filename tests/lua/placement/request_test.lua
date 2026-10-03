@@ -85,6 +85,17 @@ local function define_tests()
             spec.login = {provider = "fixture", command = "fixture login", files = {}, any_of = {}}
             test.is_nil(request.decode(value))
         end)
+        test.it("admits an account-free private home without ambient file projections", function()
+            local value = launch()
+            local spec = assert(bounds.object(value.launch))
+            spec.provider_home = {provider = "stubagent", private = true, files = {}}
+            local decoded, err = request.decode(value)
+            if not decoded or not decoded.launch.provider_home then error(tostring(err)) end
+            test.eq(decoded.launch.provider_home.provider, "stubagent")
+            test.is_true(decoded.launch.provider_home.private)
+            test.eq(#decoded.launch.provider_home.files, 0)
+            test.eq(request.digest(decoded), request.digest(assert(request.decode(value))))
+        end)
         test.it("decodes exact provider-home files and bounded private environment roots", function()
             local value = launch()
             local spec = assert(bounds.object(value.launch))

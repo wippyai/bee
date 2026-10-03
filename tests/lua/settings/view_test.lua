@@ -16,6 +16,18 @@ local function define_tests()
             test.eq(view.appearance_notice("Disabled edit mode for this workspace", "", "exact display refusal"),
                 "exact display refusal")
         end)
+        test.it("decodes host-selected package updates without a brand prefix", function()
+            local reply = {ok = true, replayed = false, value = {
+                modules = {{component = "vendor/selected", installed_version = "1.0.0", locked_version = "1.0.0",
+                    available_version = "1.1.0", update_available = true}},
+                bee_update = {installed_version = "1.0.0", available_version = "", update_available = false,
+                    needs_new_binary = false, reason = ""}, catalog_error = ""}}
+            local status = live_updates.decode(reply)
+            test.eq(status.state, "ready")
+            test.eq(status.modules[1].component, "vendor/selected")
+            reply.value.modules[1].component = "unqualified"
+            test.eq(live_updates.decode(reply).state, "error")
+        end)
         test.it("shows errors in compact settings without losing selection controls", function()
             local frame = view.draw(28, 6, appearance.defaults(), "theme", 0, "Permission denied")
             test.is_true(table.concat(frame.rows, "\n"):find("Permission denied", 1, true) ~= nil)
@@ -137,7 +149,7 @@ local function define_tests()
             valid.unexpected = true
             test.eq(live_updates.decode(valid).state, "error")
             valid.unexpected = nil
-            valid.value.modules = {{component = "example/app", installed_version = "1.0.0",
+            valid.value.modules = {{component = "example/app/extra", installed_version = "1.0.0",
                 available_version = "2.0.0", update_available = true}}
             test.eq(live_updates.decode(valid).state, "error")
             valid.value.modules = {}

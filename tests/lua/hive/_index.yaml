@@ -8,8 +8,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
-    enrollment: bee.hive.supervisor:enrollment
+    peers: bee.hive.types:peers
+    enrollment: bee.hive.types:enrollment
     types: bee.hive:types
 - name: peer_restart_test
   kind: function.lua
@@ -18,7 +18,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
+    peers: bee.hive.types:peers
     types: bee.hive:types
 - name: invites_test
   kind: function.lua
@@ -27,7 +27,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    invites: bee.hive.supervisor:invites
+    invites: bee.hive.types:invites
 - name: probe_exposure_policy
   kind: security.policy
   meta: {type: test_support}
@@ -50,6 +50,7 @@ entries:
   meta:
     type: test_support
     hive: open
+    hive_service: bee.hive
     hive_operation:
       revision: '1'
       title: Probe operation
@@ -67,6 +68,7 @@ entries:
   meta:
     type: test_support
     hive: open
+    hive_service: bee.hive
 - name: probe_policy_mode
   kind: function.lua
   source: file://probe_open.lua
@@ -74,6 +76,7 @@ entries:
   meta:
     type: test_support
     hive: policy
+    hive_service: bee.hive
     hive_operation:
       revision: '1'
       title: Policy probe
@@ -165,7 +168,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    principals: bee.hive.security:principals
+    types: bee.hive:types
 - name: thread_admission_test
   kind: function.lua
   source: file://thread_admission_test.lua
@@ -178,8 +181,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
-    principals: bee.hive.security:principals
-    admission: bee.threads.hive:admission
+    admission: bee.threads.hive.binding:admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
 - name: inbox_forwarding_test
@@ -194,8 +196,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
-    principals: bee.hive.security:principals
-    admission: bee.threads.hive:admission
+    admission: bee.threads.hive.binding:admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
 - name: desktop_catalog_test
@@ -230,7 +231,7 @@ entries:
     owner: bee.hive.desktop:owner
     catalog: bee.hive.desktop:catalog
     protocol: bee.hive.desktop:protocol
-    enrollment: bee.hive.supervisor:enrollment
+    enrollment: bee.hive.types:enrollment
 - name: display_standin
   kind: process.lua
   source: file://display_standin.lua
@@ -291,11 +292,29 @@ entries:
   source: file://desktop_viewer_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [process, channel, time]
+  modules: [process, channel, time, registry]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
     protocol: bee.hive.desktop:protocol
+    decode: bee.protocol:decode
+
+- name: viewer_fixture
+  kind: library.lua
+  source: file://viewer_fixture.lua
+  meta: {type: test_support}
+  imports:
+    display: bee.hive.desktop:display
+    remote: bee.hive.desktop:remote
+    delivery: bee.terminal.service:delivery
+
+- name: viewer_display_fixture
+  kind: library.lua
+  source: file://viewer_display_fixture.lua
+  meta: {type: test_support}
+  imports:
+    display: bee.hive.desktop:display
+    delivery: bee.terminal.service:delivery
 
 - name: inbox_discover_test_policy
   kind: security.policy

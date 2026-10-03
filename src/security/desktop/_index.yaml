@@ -108,8 +108,9 @@ entries:
 - name: host_policy
   kind: security.policy.expr
   policy:
-    expression: action != "process.host" || resource == "bee:workers"
+    expression: '(action == "funcs.call" && resource == "bee.hub.binding:receipt_metadata") || (action != "funcs.call" && (action != "process.host" || resource == "bee:workers"))'
     actions:
+    - funcs.call
     - process.send
     - process.monitor
     - process.unmonitor
@@ -121,6 +122,7 @@ entries:
     - process.context
     - process.security
     - security.policy.get
+    - funcs.security
     - security.scope.create
     resources: '*'
     effect: allow
@@ -139,7 +141,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.desktop.service:main
-    - bee.terminal:main
+    - bee.terminal.service:main
     effect: allow
 - name: host_spawn_policy
   kind: security.policy
@@ -156,13 +158,14 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.client:list_desktops
-    - bee.client:allocate_desktop
+    - bee.client.binding:list_desktops
+    - bee.client.binding:allocate_desktop
     effect: allow
 - name: desktop_catalog_resource_policy
   kind: security.policy
   policy:
     actions:
+    - registry.get
     - bee.client.desktops.read
     - bee.client.desktops.allocate
     resources:
@@ -176,7 +179,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.host:main
-    - bee.client:main
+    - bee.client.service:main
     effect: allow
 - name: retained_owner_spawn_policy
   kind: security.policy

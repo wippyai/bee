@@ -12,7 +12,7 @@ entries:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     catalog: bee.apps:catalog
-    admission: bee.gov.activation:governed_application_admission
+    admission: bee.gov.types:governed_application_admission
     activation_store: bee.gov.persist:activation_store
     canonical: bee.values:canonical
     test: wippy.test:test
@@ -90,7 +90,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    protocol: bee.app:thread_protocol
+    protocol: bee.app.threads.types:protocol
 - name: client_test
   kind: function.lua
   source: file://client_test.lua
@@ -99,6 +99,7 @@ entries:
   imports:
     test: wippy.test:test
     client: bee.app:client
+    threads: bee.app.threads:client
 - name: folder_picker_test
   kind: function.lua
   source: file://folder_picker_test.lua
@@ -106,7 +107,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    picker: bee.app:folder_picker
+    picker: bee.ui.picker:folder
     caller: bee.app:caller
 - name: thread_binding_test
   kind: function.lua
@@ -193,3 +194,17 @@ entries:
     test: wippy.test:test
     appearance: bee.ui:appearance
     fixture: bee.apps.fixture:scope
+- name: broker_retained_test
+  kind: function.lua
+  source: file://broker_retained_test.lua
+  method: run
+  modules: [process, channel, security, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    appearance: bee.ui:appearance
+    fixture: bee.apps.fixture:scope
+    harness: bee.threads:harness
+    identity: bee.threads.records:app_identity
+    interaction: bee.app:interaction

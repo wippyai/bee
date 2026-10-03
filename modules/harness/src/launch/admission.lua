@@ -470,6 +470,9 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         else effective_profile.placement = {kind = "native", home = default_private_home and "private" or "machine"} end
     end
     if not effective_profile.presentation then effective_profile.presentation = chosen == "window" and "window" or "headless" end
+    if session_route and effective_profile.presentation == "headless" and not launch.session_resource then
+        return nil, fail("UNAVAILABLE", "the selected definition has no retained session resource")
+    end
     local budget_error = budgets.accounting(effective_profile.budgets, descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile.presentation, descriptor and descriptor.codec)
     if budget_error then return nil, fail("UNSUPPORTED_CAPABILITY", budget_error) end
     return {budget_capabilities = descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile = effective_profile,

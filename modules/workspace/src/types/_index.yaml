@@ -6,6 +6,7 @@ entries:
   source: file://selection.lua
   modules:
   - hash
+  - registry
   imports:
     bounds: bee.values:bounds
 - name: recovery
@@ -15,6 +16,7 @@ entries:
   - json
   imports:
     appearance: bee.ui:appearance
+    bounds: bee.values:bounds
 - name: catalog
   kind: library.lua
   source: file://catalog.lua

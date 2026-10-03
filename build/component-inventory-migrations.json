@@ -1646,11 +1646,223 @@
       "to": "bee.desktop.service:main"
     },
     {
+      "category": "ids",
+      "from": "bee.client:main",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local_command",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local_command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:local_application",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:local_application"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:desktop",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:desktop"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:application",
+      "migration": "M2",
+      "reason": "Client actor relocation; no actor definition is stored in client layouts or owner tables. Preserve client_db, desktop/workspace/view/instance identities, qualified layouts, topics and version-one handoff. Restart composition and reissue host grants.",
+      "to": "bee.client.service:application"
+    },
+    {
+      "category": "ids",
+      "from": "bee.terminal:main",
+      "migration": "M2",
+      "reason": "Presenter actor relocation; no actor definition is stored in desktop/client layouts or owner tables. Preserve existing topics, qualified layouts and viewport grants; restart composition and replace the presenter through F12. No persisted row rewrite.",
+      "to": "bee.terminal.service:main"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:target_terminal_display",
+      "migration": "M2",
+      "reason": "Client component requirement relocation; all dependency parameters and linker targets are updated in the same composition. Preserve stored references and immutable applied SQL; no stored row rewrite. Historic registry artifacts remain immutable; restart composition and reissue host grants.",
+      "to": "bee.client:target_launch_display"
+    },
+    {
+      "category": "ids",
+      "from": "bee.client:target_protocol_input",
+      "migration": "M2",
+      "reason": "Client component requirement relocation; all dependency parameters and linker targets are updated in the same composition. Preserve stored references and immutable applied SQL; no stored row rewrite. Historic registry artifacts remain immutable; restart composition and reissue host grants.",
+      "to": "bee.client:target_terminal_input"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.supervisor:main",
+      "migration": "M4",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
+      "to": "bee.hive.service:supervisor"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.desktop:command",
+      "migration": "M4",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
+      "to": "bee.hive.service:display_command"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.desktop:viewer",
+      "migration": "M4",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart.",
+      "to": "bee.hive.service:viewer"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.api:workspaces",
+      "migration": "M4",
+      "reason": "Hive implementation placement; additive Placement 12, Sync 12, Gateway 20, Resources 6 and Credentials 9 hive_component_references migrations convert exact stored references. Native hosts, supervisor name, service registration, enrollment, mapping IDs, peers, invites, topics and schemas remain unchanged; coordinated owner restart. Structured workspace owner_ref.service_id changes from bee.hive.api to bee.hive.binding in the same owner conversions.",
+      "to": "bee.hive.binding:workspaces"
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive_manager:app",
+      "to": "bee.hive.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.manager:app",
+      "to": "bee.hive.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.inbox:app",
+      "to": "bee.approvals.inbox.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals.inbox:app",
+      "to": "bee.approvals.inbox.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.modules:app",
+      "to": "bee.hub.modules.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub.modules:app",
+      "to": "bee.hub.modules.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.overlays:app",
+      "to": "bee.gov.overlays.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.workspaces:app",
+      "to": "bee.workspace.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.workspace.manager:app",
+      "to": "bee.workspace.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.timeline:app",
+      "to": "bee.threads.timeline.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads.timeline:app",
+      "to": "bee.threads.timeline.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.processes:app",
+      "to": "bee.host.processes.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.governance-component-guide@10",
+      "to": "tag:bee.governance-component-guide@11",
+      "migration": "M0",
+      "reason": "Authoring guide presentation revision adds custom-driver instructions; stored artifacts, approval schema and records remain unchanged."
+    },
+    {
       "category": "schemas",
       "from": "tag:bee.launch-policy@2",
       "to": "tag:bee.launch-policy@3",
       "migration": "M5",
       "reason": "Owner-approved supervised startup removes the caller deadline. The explicit revision-two decoder validates and retires start_ms while preserving its original entry digest; revision three rejects the retired field. Placement migration 11 removes stored request deadlines and introduces precise start_failed state without modifying prior ledgers."
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.governance-component-guide@11",
+      "to": "tag:bee.governance-component-guide@12",
+      "migration": "M0",
+      "reason": "Authoring guide presentation revision documents the implemented Sessions picker visibility and saved-copy controls; stored artifacts, approvals and records retain their schemas."
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.governance-component-guide@12",
+      "to": "tag:bee.governance-component-guide@13",
+      "migration": "M0",
+      "reason": "Authoring guide presentation revision names the existing retained session resource required for headless Sessions; persisted IDs, records and schemas stay unchanged."
+    }
+  ],
+  "owner_state_migrations": [
+    {
+      "migration": "M6",
+      "owner": "bee.hub",
+      "implementation": "bee.hub.binding:receipt_metadata",
+      "id": 1,
+      "reason": "Append registry revisions tagging historical Hub operation metadata; preserve receipt IDs, data, digests and prior history. Host admission selects the exact callable entry."
+    },
+    {
+      "migration": "M5",
+      "owner": "bee.gov",
+      "store": "bee_governance_activation_intents",
+      "id": 17,
+      "reason": "Append admission identity generation column and classify existing historical rows once; preserve frozen admission bytes and digests."
     }
   ]
 }

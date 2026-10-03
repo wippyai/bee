@@ -215,8 +215,8 @@ installed grant record under the same containment rule as a local upgrade. An
 application name belongs to the source node whose activation holds it; an
 overlay with the same name from another node is refused instead of replacing
 it. With `hive: false` the rule covers only overlays this node authored. Overlay `todo` gets
-component and namespace `app.todo`, the application entry `app.todo:app` under
-the ordinary application boundary, and the private overlay owner
+component and namespace `app.todo`, exactly one `process.lua` entry declaring
+`meta.type: bee.app` under the ordinary application boundary, and the private overlay owner
 `bee.gov.apps:<workspace_id>.todo`. Nothing under the
 rule starts itself: an entry that declares `lifecycle.auto_start` is refused at
 preflight with `AUTO_START_DENIED`, so the application runs only while the
@@ -231,7 +231,12 @@ for capability requests. A request declares `meta.value_kind: security.policy`,
 `meta.capability`, bounded `meta.parameters`, and a printable `meta.reason`. Its
 single target must be its own `bee.app` process entry at
 `.security.policies +=`, except a `hive.expose` request, whose target is one of
-the artifact's own Hive operations at the requested mode. The destination
+the artifact's own Hive operations at the requested mode. Those functions
+also declare a string `meta.hive_service` with their existing owner service wire
+ID and the `meta.hive_operation` input/output contract. The supervisor measures
+and verifies that declared service; namespace spelling grants no routing or
+invocation authority. Application and operation targets may occupy different
+child namespaces of the same measured artifact. The destination
 resolver checks the request against the host-owned `bee.security.capability:capability_catalog`,
 preserves the normalized parameters, reason, target, and catalog/template
 revisions in the measured candidate, and includes the catalog definition in

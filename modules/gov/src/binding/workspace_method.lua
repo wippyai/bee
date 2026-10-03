@@ -58,9 +58,14 @@ local function handle(raw: unknown): Result
         return transaction.success(guide.value({section = request.section, include_example = request.include_example}), false)
     end
     local actor = security.actor()
-    local action = (request.operation == "read" or request.operation == "list")
+    local metadata = actor and bounds.object(actor:meta()) or nil
+    local workspace = metadata and bounds.id(metadata.workspace_id) or nil
+    if request.operation == "source" and not workspace then
+        return transaction.failure("DENIED", "source requires an authenticated workspace")
+    end
+    local action = request.operation == "source" and "bee.gov.overlay.source" or (request.operation == "read" or request.operation == "list")
         and "bee.gov.overlay.read" or "bee.gov.overlay.write"
-    local resource = request.owned and "own-overlays" or request.workspace_id
+    local resource = request.operation == "source" and workspace or request.owned and "own-overlays" or request.workspace_id
     if not actor or not security.can(action, resource) then
         return transaction.failure("DENIED", "overlay operation is not authorized")
     end

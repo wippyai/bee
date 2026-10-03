@@ -144,8 +144,6 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     end
     local raw_files, files_error = bounds.array(object.files, M.MAX_REQUIRED_FILES)
     if not raw_files then return nil, "launch.provider_home.files must be a dense list: " .. tostring(files_error) end
-    local file_count = #raw_files
-    if file_count < 1 then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
     local files: {driver_types.ProviderHomeFile} = {}
     local seen: {[string]: boolean} = {}
     for index, raw in ipairs(raw_files) do

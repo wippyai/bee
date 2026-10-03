@@ -26,6 +26,7 @@ local appearance = require("appearance")
 local restore_view = require("restore_view")
 local frame_ui = require("frame")
 local bounds = require("bounds")
+local placement_decode = require("placement_decode")
 
 local THREADS = "bee.threads.binding"
 type Fault = {code: string, message: string}
@@ -695,10 +696,9 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             preparation = finished
         elseif selected_event.channel == progress_events then
             local message = selected_event.value
-            local data = bounds.object(message:payload():data())
+            local data = placement_decode.preparation_progress(message:payload():data())
             if tostring(message:from()) == tostring(process.registry.lookup("bee.placement.docker/image")) and data
-                and data.version == 1 and not bounds.fields(data, {"version", "profile_ref", "detail"})
-                and data.profile_ref == plan.request.placement_profile_ref and type(data.detail) == "string" and #data.detail <= 4096 then
+                and data.profile_ref == plan.request.placement_profile_ref then
                 local surface = assert(tty.surface())
                 local width, height = tty.screen_size()
                 local frame = restore_view.draw(width, height, appearance.defaults(), data.detail, "Preparing Docker image", "")

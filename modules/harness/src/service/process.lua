@@ -70,13 +70,11 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local hints = assert(process.listen(hints_topic, {message = true}))
     local waiter_id = io.key()
     local hint_after = 0
-    local registered_until = 0
     local function register_hints()
         local pid, lookup_error = process.registry.lookup(machine.WAITER_NAME)
         if lookup_error or not pid then return end
         local deadline = io.now_ms() + machine.HINT_REGISTRATION_MS
         process.send(tostring(pid), "bee.threads.wait.register", {version = 1, waiter_id = waiter_id, topic = hints_topic, thread_id = request.thread_id, after_sequence = hint_after, deadline_at = deadline})
-        registered_until = deadline
     end
     local function unregister_hints()
         local pid, lookup_error = process.registry.lookup(machine.WAITER_NAME)

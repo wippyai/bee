@@ -1737,6 +1737,90 @@
       "to": "bee.hive.binding:workspaces"
     },
     {
+      "category": "ids",
+      "from": "bee.hive_manager:app",
+      "to": "bee.hive.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.hive.manager:app",
+      "to": "bee.hive.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.inbox:app",
+      "to": "bee.approvals.inbox.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.approvals.inbox:app",
+      "to": "bee.approvals.inbox.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.modules:app",
+      "to": "bee.hub.modules.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.hub.modules:app",
+      "to": "bee.hub.modules.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.overlays:app",
+      "to": "bee.gov.overlays.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.workspaces:app",
+      "to": "bee.workspace.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.workspace.manager:app",
+      "to": "bee.workspace.manager.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.timeline:app",
+      "to": "bee.threads.timeline.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.threads.timeline:app",
+      "to": "bee.threads.timeline.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
+      "category": "ids",
+      "from": "bee.processes:app",
+      "to": "bee.host.processes.app:app",
+      "migration": "M3",
+      "reason": "Threads migration 30 widens the existing definition ledger and appends identity conversion 2 after conversion 1: aliases, stable actors, membership, sender rules and mutable command/subscription/session receipts move together; instance IDs, attestation creation time and active flags remain. Workspace migrations 9-13 already convert retained checkpoint and binding definitions. No prior migration bytes or immutable artifacts change. Other owner stores in the supplied non-credential state have no references to these prior stable actors."
+    },
+    {
       "category": "schemas",
       "from": "tag:bee.governance-component-guide@10",
       "to": "tag:bee.governance-component-guide@11",

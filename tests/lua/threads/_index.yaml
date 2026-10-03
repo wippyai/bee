@@ -511,3 +511,8 @@ entries:
   file: .wippy/threads-definition-upgrade.db
   lifecycle:
     auto_start: true
+
+- name: retained_definition_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/threads-retained-definition-test.db

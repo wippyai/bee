@@ -49,8 +49,8 @@ function M.observe(state: State, data: unknown): boolean
         for _, target in ipairs(state.targets) do
             if target.view_id == spec.id and target.instance_id == spec.instance_id then selected = target end
         end
-        if not selected then return false end
-        spec.id = selected.tab_id
+        if not selected and not spec.restoration then return false end
+        if selected then spec.id = selected.tab_id end
         items[#items + 1] = spec
         local pending = state.pending[spec.request_id]
         if pending then retained[spec.request_id] = pending end
@@ -66,6 +66,12 @@ function M.answer(state: State, data: unknown): Answer?
         if item.id == response.id and item.instance_id == response.instance_id and item.request_id == response.request_id then
             if item.kind == "confirm" and response.value ~= "" then return nil end
             found = true
+            if item.restoration then
+                state.pending[response.request_id] = {tab_id = response.id, id = response.id, instance_id = response.instance_id}
+                return {version = 1, workspace_id = state.workspace_id, connection_id = state.connection_id,
+                    selection_revision = state.selection_revision, request_id = response.request_id,
+                    id = response.id, instance_id = response.instance_id, action = response.action, value = response.value}
+            end
         end
     end
     if not found then return nil end

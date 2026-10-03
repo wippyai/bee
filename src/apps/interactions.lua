@@ -12,7 +12,7 @@ function M.add(state: State, spec: protocol.Spec, client_request_id: string, exe
     if count >= 16 then return false end
     -- Copy the projection: callers cannot mutate an admitted request later.
     local copy: protocol.Spec = {request_id = spec.request_id, id = spec.id, instance_id = spec.instance_id,
-        kind = spec.kind, title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial}
+        kind = spec.kind, title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial, restoration = spec.restoration}
     state.items[spec.id] = {spec = copy, client_request_id = client_request_id, execution_pid = execution_pid, closing = closing}
     return true
 end
@@ -32,7 +32,7 @@ function M.snapshot(state: State): {protocol.Spec}
     for _, item in pairs(state.items) do
         local spec = item.spec
         result[#result + 1] = {request_id = spec.request_id, id = spec.id, instance_id = spec.instance_id,
-            kind = spec.kind, title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial}
+            kind = spec.kind, title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial, restoration = spec.restoration}
     end
     table.sort(result, function(a, b) return a.id < b.id end)
     return result

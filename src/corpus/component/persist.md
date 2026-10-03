@@ -56,7 +56,7 @@ completion reports only after commit. A batch completes after its single
 commit; rollback never announces completion. The host-selected store scope
 grants reads and writes only to this progress field, backed by the native host
 environment without a terminal. Ready owners and isolated compositions expose
-an empty field. Repeated or regressing checkpoints do not renew startup waits.
+an empty field. Startup follows owner readiness and failure events.
 Migration SQL and checksums remain unchanged.
 
 The transaction runner classifies SQLite busy (5) and locked (6) from

@@ -18,6 +18,25 @@ local catalog: {menu.Descriptor} = {
 }
 local function define_tests()
     test.describe("Desktop presentation boundaries", function()
+        test.it("lists retained restoration failures in Apps and Needs you", function()
+            local failures: {menu.Item} = {{label = "retained-invalid", action = "restoration:retained-invalid", enabled = true}}
+            local entries = menu.items(false, false, false, {{definition_id = "inbox:app", title = "Inbox", group = "", role = "approvals"}}, failures)
+            local apps, attention = false, false
+            for _, item in ipairs(entries) do
+                if item.label == "Apps" then
+                    for _, child in ipairs(item.children or {}) do
+                        if child.label == "Restoration failures" then
+                            test.eq(assert(child.children)[1].action, "restoration:retained-invalid")
+                            apps = true
+                        end
+                    end
+                elseif item.label == "Needs you" then
+                    test.eq(assert(item.children)[2].action, "restoration:retained-invalid")
+                    attention = true
+                end
+            end
+            test.is_true(apps); test.is_true(attention)
+        end)
         test.it("shows an incompatible checkpoint notice inside the same window with a custom label", function()
             local scene = model.add(model.new(100, 30), "view", "instance", "App")
             scene = model.place(scene, "view", {x = 2, y = 2, width = 96, height = 25})

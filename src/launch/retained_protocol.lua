@@ -180,6 +180,11 @@ function M.activation_result(value: unknown, workspace_id: string, desktop_id: s
     if (code == "") ~= (value.error == "") then return nil end
     return {request_id = id, error_code = code, error = value.error}
 end
+type StartupFailure = {code: string, component: string, subject: string, message: string, log: string}
+function M.failure_record(code: string, component: string, subject: string, message: string, log: string): StartupFailure
+    if code == "" or component == "" or subject == "" or message == "" then error("Invalid startup failure record") end
+    return {code = code, component = component, subject = subject, message = message, log = log}
+end
 function M.startup_node(pid: string): string?
     local node = types.pid_parts(pid)
     return node ~= "" and node or nil
@@ -187,7 +192,7 @@ end
 function M.stored_startup_failure(raw: unknown): string?
     local detail = bounds.text(raw, 4096)
     if not detail then return nil end
-    detail = detail:gsub("%c", " "):gsub("^%s+", ""):gsub("%s+$", "")
+    detail = detail:gsub("^%s+", ""):gsub("%s+$", "")
     return detail ~= "" and ("Hive supervisor failed before retained workspace readiness: " .. detail) or nil
 end
 function M.startup_failure(sender: string, raw: unknown, local_node: string): string?

@@ -340,10 +340,13 @@ def startup_failure():
                 'allowed_nodes': [], 'local_clients': True}}]}}))
         owner = project / 'src/launch/owner.lua'
         owner_source = owner.read_text()
-        owner_source = owner_source.replace('if failure then error(failure) end',
-            'if failure then assert(io.print("OWNER_STARTUP_FAILURE_MS " .. tostring(startup_now_ms()))); error(failure) end', 1)
-        owner_source = owner_source.replace('if reason then error(reason) end',
-            'if reason then assert(io.print("OWNER_STARTUP_FAILURE_MS " .. tostring(startup_now_ms()))); error(reason) end', 1)
+        owner_source = owner_source.replace('    local failure_component, failure_subject, failure_code',
+            '    local startup_started = time.now()\n    local function startup_now_ms(): integer\n'
+            '        return math.floor(time.now():sub(startup_started):milliseconds())\n    end\n'
+            '    local failure_component, failure_subject, failure_code', 1)
+        for statement in ('failure_message = failure', 'failure_message = reason'):
+            owner_source = owner_source.replace(statement,
+                'assert(io.print("OWNER_STARTUP_FAILURE_MS " .. tostring(startup_now_ms()))); ' + statement, 1)
         owner.write_text(owner_source)
         started = time.monotonic()
         result = subprocess.run([str(RUNTIME), 'run', '--verbose', '--host', 'bee:terminal',
@@ -355,7 +358,11 @@ def startup_failure():
         digest = hashlib.sha256((expected[1] + '\n' + expected[2]).encode()).hexdigest()
         message = f'workspace migration 9 (nested_bee_names_v1) checksum changed: expected {digest}, found unknown'
         assert result.returncode and message in output, output
-        assert 'Hive supervisor failed before retained workspace readiness:' in output, output
+        record = re.search(r'^BEE_STARTUP_FAILED (.+)$', output, re.M)
+        assert record, output
+        fault = json.loads(record[1])
+        assert fault['code'] == 'HIVE_STARTUP_FAILED' and fault['component'] == 'bee.hive', fault
+        assert fault['subject'] and message in fault['message'], fault
         assert 'startup stalled' not in output, output
         measured = re.search(r'^OWNER_STARTUP_FAILURE_MS (\d+)$', output, re.M)
         assert measured and int(measured[1]) < 1000, output

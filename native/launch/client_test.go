@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -142,10 +143,10 @@ type fakeOwner struct {
 func (f *fakeOwner) seams(directory string) clientSeams {
 	return clientSeams{
 		owned: func(string) (bool, error) { return f.started > 0, nil },
-		startOwner: func(_ context.Context, _ app.Launch, launchID string) (<-chan struct{}, func() error, error) {
+		startOwner: func(_ context.Context, _ app.Launch, launchID string) (<-chan struct{}, func() error, string, error) {
 			f.started++
 			f.descriptor.Launch = launchID
-			return nil, func() error { return nil }, nil
+			return nil, func() error { return nil }, "", nil
 		},
 		waitDescriptor: func(context.Context, string) (rendezvous.Descriptor, error) {
 			if f.started == 0 {
@@ -159,7 +160,7 @@ func (f *fakeOwner) seams(directory string) clientSeams {
 			f.joined++
 			return nil
 		},
-		waitEnrolled: func(context.Context, string, string, ed25519.PublicKey) error { return nil },
+		waitEnrolled: func(context.Context, string, string, ed25519.PublicKey, func() error) error { return nil },
 		report:       io.Discard,
 		released: func(context.Context, string) error {
 			f.events = append(f.events, "released")
@@ -266,7 +267,7 @@ func TestClientRejectsOlderOwnerBeforeEnrollment(t *testing.T) {
 	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
 	owner.descriptor.ClientRevision = ""
 	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
-	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey) error {
+	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey, func() error) error {
 		t.Fatal("enrolled with an incompatible owner")
 		return nil
 	}
@@ -304,7 +305,7 @@ func TestClientExplainsRunningOwnerWithoutRendezvousOrEnrollment(t *testing.T) {
 		t.Fatalf("missing descriptor: %v", err)
 	}
 	seams = owner.seams(filepath.Join(state, rendezvous.DirectoryName))
-	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey) error {
+	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey, func() error) error {
 		return errors.New("owner did not enroll this client before the timeout")
 	}
 	err = runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
@@ -318,7 +319,7 @@ func TestClientWaitsForEnrollmentBeforeJoining(t *testing.T) {
 	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
 	waited := false
 	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
-	seams.waitEnrolled = func(_ context.Context, gotState, node string, _ ed25519.PublicKey) error {
+	seams.waitEnrolled = func(_ context.Context, gotState, node string, _ ed25519.PublicKey, _ func() error) error {
 		waited = true
 		if gotState != state || node == "" {
 			t.Fatalf("waitEnrolled(%q, %q)", gotState, node)
@@ -339,8 +340,8 @@ func TestClientFailsWhenOwnerExitsBeforePublishing(t *testing.T) {
 	close(done)
 	seams := clientSeams{
 		owned: func(string) (bool, error) { return false, nil },
-		startOwner: func(context.Context, app.Launch, string) (<-chan struct{}, func() error, error) {
-			return done, func() error { return errors.New("owner exited") }, nil
+		startOwner: func(context.Context, app.Launch, string) (<-chan struct{}, func() error, string, error) {
+			return done, func() error { return errors.New("owner exited") }, "", nil
 		},
 		waitDescriptor: func(context.Context, string) (rendezvous.Descriptor, error) {
 			return rendezvous.Descriptor{}, os.ErrNotExist
@@ -375,8 +376,8 @@ func TestClientReportsItsRoute(t *testing.T) {
 		running bool
 		want    string
 	}{
-		{name: "cold", running: false, want: "Starting Bee…\n" + detachedLine},
-		{name: "warm", running: true, want: "Connecting to Hive…\n" + detachedLine},
+		{name: "cold", running: false, want: "\r\x1b[2KStarting Bee…\r\x1b[2K" + detachedLine},
+		{name: "warm", running: true, want: "\r\x1b[2KConnecting to Hive…\r\x1b[2K" + detachedLine},
 	} {
 		t.Run(route.name, func(t *testing.T) {
 			state := t.TempDir()
@@ -555,8 +556,8 @@ func TestClientJoinsTheWinnerWhenItsOwnerContenderLoses(t *testing.T) {
 		// contender has exited.
 		return checks > 1, nil
 	}
-	seams.startOwner = func(context.Context, app.Launch, string) (<-chan struct{}, func() error, error) {
-		return lost, func() error { won = true; return errors.New("exit status 1") }, nil
+	seams.startOwner = func(context.Context, app.Launch, string) (<-chan struct{}, func() error, string, error) {
+		return lost, func() error { won = true; return errors.New("exit status 1") }, "", nil
 	}
 	reads := 0
 	seams.waitDescriptor = func(context.Context, string) (rendezvous.Descriptor, error) {
@@ -693,7 +694,7 @@ func TestClientStopsTheOwnerItStartedForARefusedCommand(t *testing.T) {
 			seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
 			if scenario.lost {
 				start := seams.startOwner
-				seams.startOwner = func(ctx context.Context, launch app.Launch, _ string) (<-chan struct{}, func() error, error) {
+				seams.startOwner = func(ctx context.Context, launch app.Launch, _ string) (<-chan struct{}, func() error, string, error) {
 					return start(ctx, launch, strings.Repeat("e", 32))
 				}
 			}
@@ -717,5 +718,182 @@ func TestClientStopsTheOwnerItStartedForARefusedCommand(t *testing.T) {
 				t.Fatalf("stops = %+v, want %d asked alone", stops, scenario.stops)
 			}
 		})
+	}
+}
+
+func TestClientCarriesPhaseObserverFromPublicationIntoEnrollment(t *testing.T) {
+	state := t.TempDir()
+	monitor, err := beginStartup(context.Background(), state, "phase-output", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	monitor.advance("Starting services")
+	if err := monitor.flush(); err != nil {
+		t.Fatal(err)
+	}
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	var report bytes.Buffer
+	seams.progressReport = &report
+	seams.progress = observeStartup
+	start := seams.startOwner
+	seams.startOwner = func(ctx context.Context, launch app.Launch, id string) (<-chan struct{}, func() error, string, error) {
+		monitor.mutex.Lock()
+		monitor.snapshot.Launch = id
+		monitor.dirty = true
+		monitor.mutex.Unlock()
+		if err := monitor.flush(); err != nil {
+			t.Fatal(err)
+		}
+		return start(ctx, launch, id)
+	}
+	seams.waitEnrolled = func(_ context.Context, _, _ string, _ ed25519.PublicKey, observe func() error) error {
+		if observe == nil {
+			t.Fatal("enrollment has no shared observer")
+		}
+		return observe()
+	}
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := report.String(); got != "\r\x1b[2KStarting Bee…\r\x1b[2KStarting services…\r\x1b[2K" {
+		t.Fatalf("phase handoff output = %q", got)
+	}
+}
+
+func TestClientStartupFailureUsesTheStartedOwnersLog(t *testing.T) {
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	reason := "app Settings could not be restored: checkpoint schema is unsupported"
+	record, err := json.Marshal(startupFailureRecord{Code: "CHECKPOINT_UNSUPPORTED", Component: "bee.apps", Subject: "bee.settings.app:app", Message: reason, Log: log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(log, append(append([]byte(startupFailurePrefix), record...), []byte("\nfull causal chain\n")...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var report bytes.Buffer
+	done := make(chan struct{})
+	close(done)
+	seams := clientSeams{
+		owned: func(string) (bool, error) { return false, nil },
+		startOwner: func(context.Context, app.Launch, string) (<-chan struct{}, func() error, string, error) {
+			return done, func() error { return errors.New("exit status 1") }, log, nil
+		},
+		waitDescriptor: func(context.Context, string) (rendezvous.Descriptor, error) {
+			return rendezvous.Descriptor{}, os.ErrNotExist
+		},
+		report: &report,
+	}
+	err = runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	if got := report.String(); got != "\r\x1b[2KStarting Bee…\r\x1b[2K" {
+		t.Fatalf("startup failure left progress or forwarded owner output: %q", got)
+	}
+	if err == nil || !strings.HasPrefix(err.Error(), "Bee could not start: [CHECKPOINT_UNSUPPORTED] bee.apps (bee.settings.app:app): "+reason+"\nFull owner log: "+log+"\n") || !strings.HasSuffix(err.Error(), " recover") {
+		t.Fatalf("startup failure output = %v", err)
+	}
+}
+
+func TestClientStartsOwnerLogForwardingOnlyAfterReadiness(t *testing.T) {
+	state := t.TempDir()
+	log := filepath.Join(state, "owner-fixture.log")
+	if err := os.WriteFile(log, []byte("owner before boot\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	monitor, err := beginStartup(context.Background(), state, "pending", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer monitor.stop()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	start := seams.startOwner
+	seams.startOwner = func(ctx context.Context, launch app.Launch, id string) (<-chan struct{}, func() error, string, error) {
+		done, wait, _, err := start(ctx, launch, id)
+		monitor.mutex.Lock()
+		monitor.snapshot.Launch, monitor.dirty = id, true
+		monitor.mutex.Unlock()
+		if err := monitor.flush(); err != nil {
+			t.Fatal(err)
+		}
+		return done, wait, log, err
+	}
+	capture := &ownerLogCapture{writes: make(chan string, 1)}
+	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey, func() error) error {
+		select {
+		case got := <-capture.writes:
+			t.Fatalf("owner output forwarded during enrollment: %q", got)
+		default:
+		}
+		if err := monitor.Set(context.Background(), "phase", "running"); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	}
+	seams.progressReport = capture
+	seams.report = io.Discard
+	intent := clientIntent{hive: &hiveCommand{}}
+	seams.join = func(ctx context.Context, join joinRequest) error {
+		if err := os.WriteFile(log, []byte("owner before boot\nowner after boot\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case got := <-capture.writes:
+			if got != "owner after boot\n" {
+				t.Fatalf("forwarded output = %q", got)
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := runClientEnsuresOwner(ctx, clientLaunch(state), seams, joinRequest{Intent: intent}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientStartupWaitUsesOnlyTheCallersDeadline(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	read := seams.waitDescriptor
+	seams.waitDescriptor = func(ctx context.Context, directory string) (rendezvous.Descriptor, error) {
+		if _, bounded := ctx.Deadline(); bounded {
+			return rendezvous.Descriptor{}, errors.New("startup invented a deadline")
+		}
+		return read(ctx, directory)
+	}
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientObservesOwnerExitAfterPublicationBeforeEnrollment(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	done := make(chan struct{})
+	cause := errors.New("owner exited: fixture registry failure")
+	start := seams.startOwner
+	seams.startOwner = func(ctx context.Context, launch app.Launch, id string) (<-chan struct{}, func() error, string, error) {
+		_, _, _, err := start(ctx, launch, id)
+		return done, func() error { return cause }, "", err
+	}
+	seams.waitEnrolled = func(_ context.Context, _, _ string, _ ed25519.PublicKey, observe func() error) error {
+		close(done)
+		if observe == nil {
+			return errors.New("enrollment lost owner supervision")
+		}
+		return observe()
+	}
+	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	if !errors.Is(err, cause) {
+		t.Fatalf("lost exact owner exit cause: %v", err)
+	}
+	if owner.joined != 0 {
+		t.Fatal("joined an exited owner")
 	}
 }

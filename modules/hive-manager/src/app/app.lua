@@ -292,6 +292,8 @@ local function main(value: unknown)
                 local decoded = remote.frame(message:payload():data(), width, viewport_height)
                 if decoded.kind == "valid" then
                     current.rows, current.cursor, dirty = decoded.frame.rows, decoded.frame.cursor, true
+                else
+                    error("Remote desktop frame rejected: " .. decoded.error)
                 end
             end
         elseif view then

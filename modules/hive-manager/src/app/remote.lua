@@ -20,7 +20,7 @@ type Attached = {session_id: string, mode: Mode, workspace_id: string, desktop_i
 type Failed = {code: string, message: string}
 type State = {kind: "attached", attached: Attached} | {kind: "failed", failure: Failed}
 type Frame = {rows: {string}, cursor: Cursor}
-type FrameResult = {kind: "valid", frame: Frame} | {kind: "invalid"}
+type FrameResult = {kind: "valid", frame: Frame} | {kind: "invalid", error: string}
 local function line(value: unknown, limit: integer): string?
     if type(value) ~= "string" or #value > limit or value:find("[%c]") then return nil end
     return value
@@ -68,24 +68,26 @@ end
 -- One rendered frame: bounded in count, total bytes and viewport coordinates.
 function M.frame(value: unknown, width: integer, height: integer): FrameResult
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"version", "rows", "cursor"}) or object.version ~= 1 then return {kind = "invalid"} end
+    if not object or bounds.fields(object, {"version", "rows", "cursor"}) or object.version ~= 1 then return {kind = "invalid", error = "Invalid frame envelope or version"} end
     local raw_rows = bounds.array(object.rows, M.MAX_ROWS)
-    if not raw_rows then return {kind = "invalid"} end
+    if not raw_rows then return {kind = "invalid", error = "Invalid frame row array"} end
     local rows: {string} = {}
     local total_bytes = 0
     for index, raw in ipairs(raw_rows) do
-        if type(raw) ~= "string" or #raw > M.MAX_ROW_BYTES or raw:find("%c") then return {kind = "invalid"} end
+        if type(raw) ~= "string" or #raw > M.MAX_ROW_BYTES then return {kind = "invalid", error = "Invalid frame row or row byte limit exceeded"} end
+        local unstyled = raw:gsub("\27%[[0-9;:]*m", "")
+        if unstyled:find("%c") then return {kind = "invalid", error = "Frame row contains a control outside ANSI styling"} end
         total_bytes = total_bytes + #raw
-        if total_bytes > M.MAX_FRAME_BYTES then return {kind = "invalid"} end
+        if total_bytes > M.MAX_FRAME_BYTES then return {kind = "invalid", error = "Frame byte limit exceeded"} end
         rows[index] = raw
     end
     local cursor: Cursor = {x = 0, y = 0, visible = false}
     if object.cursor ~= nil then
         local raw_cursor = bounds.object(object.cursor)
-        if not raw_cursor or bounds.fields(raw_cursor, {"x", "y", "visible"}) then return {kind = "invalid"} end
+        if not raw_cursor or bounds.fields(raw_cursor, {"x", "y", "visible"}) then return {kind = "invalid", error = "Invalid frame cursor"} end
         local x, y = bounds.integer(raw_cursor.x), bounds.integer(raw_cursor.y)
         if not x or not y or x < 0 or y < 0 or x >= width or y >= height or type(raw_cursor.visible) ~= "boolean" then
-            return {kind = "invalid"}
+            return {kind = "invalid", error = "Invalid frame cursor coordinates or visibility"}
         end
         cursor = {x = x, y = y, visible = raw_cursor.visible}
     end

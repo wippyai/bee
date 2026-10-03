@@ -7,6 +7,9 @@ local model = require("model")
 local directory = require("directory")
 local types = require("types")
 local interaction = require("interaction")
+local dialog = require("dialog")
+local tty = require("tty")
+local appearance = require("appearance")
 type Object = {[string]: unknown}
 local OWNER_ONE = string.rep("a", 32)
 local OWNER_TWO = string.rep("b", 32)
@@ -30,6 +33,15 @@ local function catalog(): directory.Catalog
 end
 local function define_tests()
     test.describe("Hive Manager model", function()
+        test.it("keeps the grant duration visible in the rendered confirmation", function()
+            local message = model.attach_message("Calm Willow", "e25f6905-02d3-4d9a-89ac-470f044abbbe", "Hidden Puddle", "observe")
+            local state = dialog.open({request_id = "confirm", id = "view", instance_id = "instance", kind = "confirm",
+                title = "Observe this workspace here?", message = message, accept = "Observe", initial = ""})
+            local canvas = tty.canvas(160, 48)
+            dialog.draw(canvas, state, 160, 48, appearance.defaults())
+            local rows = table.concat(canvas:rows(), "\n")
+            test.is_true(rows:find("Duration: until you leave", 1, true) ~= nil)
+        end)
         test.it("states the remote scope and lifetime for observation and control", function()
             local modes: {directory.Mode} = {"observe", "control"}
             for _, mode in ipairs(modes) do

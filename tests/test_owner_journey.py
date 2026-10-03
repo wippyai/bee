@@ -113,12 +113,16 @@ class ReportTests(unittest.TestCase):
             request = json.loads(process.stdout.readline())
             self.assertEqual(request['request']['subtype'], 'can_use_tool')
             self.assertEqual(request['request']['tool_name'], 'Bash')
+            self.assertEqual(request['request']['tool_use_id'], 'hive-tool-call-1')
             process.stdin.write(json.dumps({'type': 'control_response', 'response': {
                 'request_id': request['request_id'], 'response': {'behavior': 'allow'}}}, separators=(',', ':')) + '\n')
             process.stdin.flush()
             remainder, _ = process.communicate()
             self.assertEqual(process.returncode, 0)
             self.assertIn('OWNER JOURNEY STUB OUTPUT', remainder)
+            frames = [json.loads(line) for line in remainder.splitlines()]
+            result = next(frame for frame in frames if frame['type'] == 'user')
+            self.assertEqual(result['message']['content'][0]['tool_use_id'], 'hive-tool-call-1')
 
     def test_cycling_loading_frames_do_not_hide_a_hang(self):
         (ROOT / '.wippy').mkdir(exist_ok=True)

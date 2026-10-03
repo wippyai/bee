@@ -23,8 +23,8 @@ type Outcome = directory.Outcome
 type Mode = directory.Mode
 function M.attach_message(workspace_label: string, workspace_id: string, node_label: string, mode: Mode): string
     local capability = mode == "observe" and "Read-only observation." or "Input and resize control."
-    return "Workspace " .. workspace_label .. " (" .. workspace_id .. ") on " .. node_label .. ". "
-        .. capability .. " Duration: until you leave, the connection ends or the owner stops."
+    return "Duration: until you leave, the connection ends or the owner stops. " .. capability
+        .. " Workspace " .. workspace_label .. " (" .. workspace_id .. ") on " .. node_label .. "."
 end
 type Status = "unknown" | "reachable" | "unavailable"
 type PresenceSample = {role: string, cluster_size: integer, sampled_at: string}

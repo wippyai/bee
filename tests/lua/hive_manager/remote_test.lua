@@ -43,6 +43,11 @@ local function define_tests()
             if unversioned.kind == "failed" then test.eq(unversioned.failure.code, "INVALID_STATE") end
         end)
         test.it("accepts bounded frames only", function()
+            local styled = remote.frame({version = 1, rows = {"\27[38;2;216;226;239mNo applications open\27[0m"}}, 80, 24)
+            test.eq(styled.kind, "valid")
+            if styled.kind == "valid" then
+                test.eq(styled.frame.rows[1], "\27[38;2;216;226;239mNo applications open\27[0m")
+            end
             local frame = remote.frame({version = 1, rows = {"one", "two"}, cursor = {x = 3, y = 1, visible = true}}, 8, 4)
             test.eq(frame.kind, "valid")
             if frame.kind == "valid" then
@@ -55,6 +60,9 @@ local function define_tests()
             test.eq(remote.frame({version = 1, rows = many}, 8, 4).kind, "invalid")
             test.eq(remote.frame({version = 1, rows = {[1] = "one", [3] = "three"}}, 8, 4).kind, "invalid")
             test.eq(remote.frame({version = 1, rows = {"one\27[2J"}}, 8, 4).kind, "invalid")
+            local unsafe = remote.frame({version = 1, rows = {"\27]52;c;clipboard\7"}}, 8, 4)
+            test.eq(unsafe.kind, "invalid")
+            if unsafe.kind == "invalid" then test.eq(unsafe.error, "Frame row contains a control outside ANSI styling") end
             test.eq(remote.frame({version = 1, rows = {"one"}, cursor = {x = 8, y = 0, visible = true}}, 8, 4).kind, "invalid")
             test.eq(remote.frame({version = 1, rows = {"one"}, cursor = {x = 0, y = 4, visible = true}}, 8, 4).kind, "invalid")
             local large = string.rep("x", remote.MAX_ROW_BYTES)

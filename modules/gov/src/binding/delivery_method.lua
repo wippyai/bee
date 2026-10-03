@@ -14,6 +14,7 @@ local guide = require("guide")
 local transaction = require("transaction")
 local protocol = require("protocol")
 local publication_profiles = require("publication_profiles")
+local activation_profiles = require("activation_profiles")
 local system = require("system")
 
 local M = {}
@@ -52,7 +53,13 @@ end
 local function profile_for(workspace_id: string, source_workspace: string): (Object?, Result?)
     local entry, entry_error = resources.publication_profiles()
     if not entry then return nil, failure("UNAVAILABLE", tostring(entry_error or "publication profiles are unavailable")) end
-    local configuration, configuration_error = publication_profiles.decode(entry.data)
+    local activation_entry, activation_error = resources.activation_profiles()
+    if not activation_entry then return nil, failure("UNAVAILABLE", tostring(activation_error)) end
+    local activation, decode_error = activation_profiles.decode(activation_entry.data)
+    if not activation then return nil, failure("UNAVAILABLE", tostring(decode_error)) end
+    local node, node_error = system.node.id()
+    if not node then return nil, failure("UNAVAILABLE", tostring(node_error)) end
+    local configuration, configuration_error = publication_profiles.configuration(entry.data, activation, node)
     if not configuration then return nil, failure("UNAVAILABLE", configuration_error or "publication profiles are unavailable") end
     local profile, refused = publication_profiles.for_source(configuration, workspace_id, source_workspace)
     if not profile then

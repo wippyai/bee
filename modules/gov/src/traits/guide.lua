@@ -296,7 +296,9 @@ function M.after_freeze(): string
     return "After freeze, publication prepare parses " .. M.ENTRIES_PATH
         .. " from that exact snapshot into the canonical artifact (" .. M.SCHEMA
         .. "). Requesting delivery stages the version at this destination and reads its preflight verdict;"
-        .. " a refusal names the diagnostic and its remedy. Then a person must " .. join(DELIVERY_STEPS)
+        .. " a refusal names the diagnostic and its remedy. A person-confirmed Settings edit grant uses its"
+        .. " exact namespace as overlay_id and source_overlay_id. Publication derives that source and overlay"
+        .. " owner from the existing activation profile and refuses an expired grant. Then a person must " .. join(DELIVERY_STEPS)
         .. ". Only the activation owner may write an overlay. A pack may append migration functions for an"
         .. " existing host-admitted database when every imported dependency is already installed and no"
         .. " auto-start consumer is present. Governance seals the exact functions and runs them before exposing"

@@ -289,8 +289,8 @@ names every shipped namespace a host-selected scope lives in or is reached from
 `bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
 `bee.sync`, `bee.host`, `bee.client`, `bee.desktop`,
 `bee.terminal`, `bee.node` and `bee.workspace`), and its `super_edit` list is
-the host's explicit carve-out of protected namespaces, empty in the shipped
-composition. A super-edit profile row carries `expires_at`; it is admitted only
+the host's explicit carve-out of protected namespaces. Bee selects
+`bee.settings.app` and `bee.desktop` there. A super-edit profile row carries `expires_at`; it is admitted only
 while unexpired, must set `allow.auto_start: false`, must name a dedicated
 `super-edit`-prefixed approver policy declared with `confirm: explicit`, and may
 not carry `allow.grants` for `security.*`, `funcs.security`, `process.security`
@@ -305,7 +305,12 @@ source's selected profile names the same owner and bindings.
 
 Bee Settings is the only caller of the protected profile writer: the local
 person enters the exact namespace list and duration and confirms the same
-values before the host adds one profile per namespace. Settings can remove the
+values before the host adds one profile per namespace. The facade validates the
+broker-issued Settings definition and workspace together. Publication projects
+its source and overlay owner from the same activation row, preserving its expiry;
+it creates no separate publication grant. These rows select the overlay resolver
+and admit `tty` for renderer code, with no auto start or security/registry grants.
+Settings can remove the
 current workspace's super-edit rows and their overlay entries. A failed local
 host readiness check removes expiring rows and their overlays before one
 startup retry. `bee gov revert OWNER` uses the fixed recovery actor to restore

@@ -144,7 +144,7 @@ entries:
   meta: {comment: Public delivery facade dependencies; profile access is injected as one exact host-selected entry}
   policy:
     actions: [funcs.call, security.actor.get, registry.get]
-    resources: [bee.gov.binding:publication_call, bee.gov.binding:destination_call, bee.gov.env:publication_profiles_ref]
+    resources: [bee.gov.binding:publication_call, bee.gov.binding:destination_call, bee.gov.env:publication_profiles_ref, bee.gov.env:activation_profiles_ref]
     effect: allow
 - name: gateway_policy
   kind: security.policy.expr

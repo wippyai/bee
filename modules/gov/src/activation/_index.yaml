@@ -26,6 +26,8 @@ entries:
   kind: library.lua
   source: file://super_edit.lua
   modules: [hash]
+  imports:
+    protected_kernel: bee.gov.activation:protected_kernel
 - name: headless_revert
   kind: library.lua
   source: file://headless_revert.lua

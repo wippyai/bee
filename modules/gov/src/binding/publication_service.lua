@@ -17,6 +17,7 @@ local transaction = require("transaction")
 local materializer = require("materializer")
 local application_admission = require("application_admission")
 local publication_profiles = require("publication_profiles")
+local activation_profiles = require("activation_profiles")
 local workspace_applications = require("workspace_applications")
 local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
@@ -67,7 +68,13 @@ end
 local function load(): (publication_profiles.Configuration?, string?)
     local entry, entry_error = resources.publication_profiles()
     if not entry then return nil, tostring(entry_error or "publication profiles are unavailable") end
-    return publication_profiles.decode(entry.data)
+    local activation_entry, activation_error = resources.activation_profiles()
+    if not activation_entry then return nil, tostring(activation_error) end
+    local activation, decode_error = activation_profiles.decode(activation_entry.data)
+    if not activation then return nil, tostring(decode_error) end
+    local node, node_error = system.node.id()
+    if not node then return nil, tostring(node_error) end
+    return publication_profiles.configuration(entry.data, activation, node)
 end
 
 -- Returns the measured artifact, or a named refusal code with its reason. The

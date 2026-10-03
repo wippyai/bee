@@ -88,8 +88,12 @@ without a further write.
 Bee Settings exposes a person-only **Edit mode** action. It accepts an exact
 list of namespaces and a duration up to 24 hours, then asks the person to
 confirm that list. The protected host writer adds one profile per namespace;
-it refuses the protected kernel, withholds auto start and security or registry
-grants, and requires an explicit `super-edit` approver. Agents and overlays
+it refuses protected namespaces outside the host carve-outs, withholds auto start
+and security or registry grants, admits the terminal rendering module `tty`, and
+requires an explicit `super-edit` approver. Publication derives its source and
+overlay owner from that existing activation profile, uses the overlay resolver,
+and refuses the source after the edit grant expires. Author the namespace as the
+overlay ID; freeze `entries.json` and request delivery of that source. Agents and overlays
 cannot call this writer. Settings can disable the current workspace's profiles
 and remove their overlay entries. Enabling a namespace that already has a
 super-edit profile requires disabling it first.

@@ -13,6 +13,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     publication_profiles: bee.gov.delivery:publication_profile_decoder
+    activation_profiles: bee.gov.activation:activation_profile_decoder
     transaction: bee.persist.persist:transaction
     preflight: bee.gov.activation:preflight
     guide: bee.gov.traits:guide
@@ -240,6 +241,7 @@ entries:
     materializer: bee.gov.delivery:materializer
     application_admission: bee.gov.activation:governed_application_admission
     publication_profiles: bee.gov.delivery:publication_profile_decoder
+    activation_profiles: bee.gov.activation:activation_profile_decoder
     workspace_applications: bee.gov.workspace:workspace_applications
     capability_grants: bee.gov.capability:capability_grants
     capability_model: bee.capability:model

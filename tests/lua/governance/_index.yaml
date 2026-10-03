@@ -92,13 +92,15 @@ entries:
   kind: function.lua
   source: file://super_edit_test.lua
   method: run
-  modules: [hash]
+  security: {policies: [bee.gov:plan_test_policy]}
+  modules: [hash, security, funcs, registry]
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     super_edit: bee.gov.activation:super_edit
+    principal: bee.apps:principal
 - name: headless_revert_test
   kind: function.lua
   source: file://headless_revert_test.lua
@@ -119,6 +121,8 @@ entries:
   imports:
     test: wippy.test:test
     publication_profiles: bee.gov.delivery:publication_profile_decoder
+    activation_profiles: bee.gov.activation:activation_profile_decoder
+    super_edit: bee.gov.activation:super_edit
 - name: workspace_applications_test
   kind: function.lua
   source: file://workspace_applications_test.lua

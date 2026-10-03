@@ -182,11 +182,7 @@ local function define_tests()
             -- super-edit set can open one.
             local entry = assert(registry.get("bee.security.gov:protected_kernel"))
             local manifest = assert(protected_kernel.decode(entry))
-            local shipped = {"bee.gateway", "bee.harness", "bee.credentials", "bee.placement",
-                "bee.placement.native", "bee.resources", "bee.threads", "bee.hive", "bee.env", "bee.sync",
-                "bee.host", "bee.client", "bee.desktop", "bee.terminal", "bee.node",
-                "bee.workspace"}
-            for _, namespace in ipairs(shipped) do
+            for _, namespace in ipairs(manifest.namespaces) do
                 local shadowed: preflight.Candidate, shadow_context: preflight.Context = fixture()
                 shadow_context.protected = manifest
                 shadowed.artifacts[1].namespaces = {"demo", namespace}
@@ -197,11 +193,16 @@ local function define_tests()
                 shadowed.migrations = {}
                 shadowed.entries = {entry_of(namespace .. ":shadow")}
                 local report = checked(shadowed, shadow_context)
-                test.is_false(report.ready)
-                test.is_true(has(report, "PROTECTED_KERNEL"), "namespace " .. namespace .. " was not protected")
+                if protected_kernel.namespace(manifest, namespace) then
+                    test.is_false(report.ready)
+                    test.is_true(has(report, "PROTECTED_KERNEL"), "namespace " .. namespace .. " was not protected")
+                else test.is_true(report.ready) end
             end
             -- Every kernel namespace is a prefix-free root; a namespace the
             -- host did not name stays open to an ordinary profile.
+            test.is_false(protected_kernel.namespace(manifest, "bee.settings.app"))
+            test.is_false(protected_kernel.namespace(manifest, "bee.desktop"))
+            test.is_true(protected_kernel.namespace(manifest, "bee.security"))
             test.is_true(protected_kernel.namespace(manifest, "bee.gateway.api"))
             test.is_false(protected_kernel.namespace(manifest, "app.tally"))
             local opened = {revision = manifest.revision, namespaces = manifest.namespaces,

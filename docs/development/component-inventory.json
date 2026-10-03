@@ -13325,6 +13325,11 @@
       "target": "bee.gov.env:activation_profiles_ref"
     },
     {
+      "requirement": "bee.gov:target_activation_profiles",
+      "resolved_by": "registry source",
+      "target": "bee.gov.security:publication_profiles_read_policy"
+    },
+    {
       "requirement": "bee.gov:target_approval_consume_policy",
       "resolved_by": "registry source",
       "target": "bee.gov.env:approval_consume_policy_ref"
@@ -15362,6 +15367,10 @@
         {
           "entry": "bee.gov.env:activation_profiles_ref",
           "path": ".resource_ref"
+        },
+        {
+          "entry": "bee.gov.security:publication_profiles_read_policy",
+          "path": ".policy.resources+="
         }
       ]
     },
@@ -15428,7 +15437,7 @@
         },
         {
           "entry": "bee.gov.security:publication_profiles_read_policy",
-          "path": ".policy.resources"
+          "path": ".policy.resources+="
         }
       ]
     },
@@ -17389,7 +17398,7 @@
     "owned_table_declaration_count": 153,
     "persisted_id_count": 841,
     "requirement_count": 141,
-    "requirement_target_count": 337,
+    "requirement_target_count": 338,
     "root_src_lua_budget": 19277,
     "root_src_lua_lines": 19276,
     "schema_tag_count": 71,

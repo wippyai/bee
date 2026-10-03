@@ -1,6 +1,7 @@
 -- MIT. Host activation policy updates for person-confirmed, time-bounded overlays.
 local M = {}
 local hash = require("hash")
+local protected_kernel = require("protected_kernel")
 
 local MAX_NAMESPACES = 32
 local MAX_PROFILES = 64
@@ -81,11 +82,11 @@ end
 
 function M.is_kernel(namespace_raw: unknown, kernel_raw: unknown): boolean
     local requested = namespace(namespace_raw)
-    if not requested or type(kernel_raw) ~= "table" then return true end
-    for _, protected_raw in ipairs(kernel_raw) do
-        local protected = namespace(protected_raw)
-        if not protected then return true end
-        if intersects(requested, protected) then return true end
+    local manifest = protected_kernel.decode(kernel_raw)
+    if not requested or not manifest then return true end
+    if protected_kernel.namespace(manifest, requested) then return true end
+    for _, protected in ipairs(manifest.namespaces) do
+        if protected:sub(1, #requested + 1) == requested .. "." then return true end
     end
     return false
 end
@@ -143,9 +144,9 @@ function M.enable(configuration_raw: unknown, workspace_raw: unknown, node_raw: 
         end
         result[#result + 1] = {workspace_id = workspace, source_node = node, source_workspace = item,
             component = item, overlay_owner = overlay_owner,
-            approval_policy = APPROVAL_POLICY, resolver = "hub", parameters = {}, expires_at = expires,
+            approval_policy = APPROVAL_POLICY, resolver = "overlay", parameters = {}, expires_at = expires,
             allow = {packages = {item}, namespaces = {item}, kinds = ALLOWED_KINDS,
-                databases = {}, grants = {}, modules = {}, auto_start = false}}
+                databases = {}, grants = {}, modules = {"tty"}, auto_start = false}}
     end
     if #result > MAX_PROFILES then return nil, "activation profile limit would be exceeded" end
     local output: Object = {}

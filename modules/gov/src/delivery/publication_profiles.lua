@@ -4,10 +4,12 @@
 -- own agents authored under the workspace-application naming rule.
 local bounds = require("bounds")
 local workspace_applications = require("workspace_applications")
+local time = require("time")
+local activation_profiles = require("activation_profiles")
 
 local M = {}
 local MAX_PROFILES = 64
-type Profile = {workspace_id: string, source_workspace: string, component: string, overlay_owner: string}
+type Profile = {workspace_id: string, source_workspace: string, component: string, overlay_owner: string, expires_at: string?}
 type Configuration = {profiles: {Profile}, workspace_applications: boolean}
 type Refusal = {message: string, remedy: string}
 
@@ -50,6 +52,34 @@ function M.decode(raw: unknown): (Configuration?, string?)
     return {profiles = profiles, workspace_applications = enabled == true}, nil
 end
 
+function M.configuration(raw: unknown, activation: activation_profiles.DecodedConfiguration,
+    source_node: string): (Configuration?, string?)
+    local configuration, err = M.decode(raw)
+    if not configuration then return nil, err end
+    for _, edit in ipairs(activation.profiles) do
+        if edit.super_edit and edit.source_node == source_node then
+            for _, selected in ipairs(configuration.profiles) do
+                if selected.workspace_id == edit.workspace_id
+                    and (selected.component == edit.component or selected.source_workspace == edit.source_workspace) then
+                    return nil, "publication profile conflicts with edit grant: " .. edit.source_workspace
+                end
+            end
+            if #configuration.profiles >= MAX_PROFILES then return nil, "publication profile capacity is exceeded" end
+            configuration.profiles[#configuration.profiles + 1] = {workspace_id = edit.workspace_id,
+                source_workspace = edit.source_workspace, component = edit.component,
+                overlay_owner = edit.overlay_owner, expires_at = edit.expires_at}
+        end
+    end
+    return {profiles = configuration.profiles, workspace_applications = configuration.workspace_applications}, nil
+end
+
+local function expiry(profile: Profile): Refusal?
+    if profile.expires_at and profile.expires_at <= time.now():utc():format("2006-01-02T15:04:05.000Z07:00") then
+        return {message = "edit grant expired at " .. profile.expires_at, remedy = "request a new edit grant in Bee Settings"}
+    end
+    return nil
+end
+
 local function derived(configuration: Configuration, workspace_id: string, source_workspace: string): (Profile?, string?)
     if not configuration.workspace_applications then return nil, nil end
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
@@ -70,7 +100,11 @@ end
 function M.for_source(configuration: Configuration, workspace_id: string,
     source_workspace: string): (Profile?, Refusal?)
     for _, item in ipairs(configuration.profiles) do
-        if item.workspace_id == workspace_id and item.source_workspace == source_workspace then return item, nil end
+        if item.workspace_id == workspace_id and item.source_workspace == source_workspace then
+            local expired = expiry(item)
+            if expired then return nil, expired end
+            return item, nil
+        end
     end
     local profile, reason = derived(configuration, workspace_id, source_workspace)
     if profile then return profile, nil end
@@ -81,7 +115,11 @@ end
 function M.for_component(configuration: Configuration, workspace_id: string,
     component: string): (Profile?, Refusal?)
     for _, item in ipairs(configuration.profiles) do
-        if item.workspace_id == workspace_id and item.component == component then return item, nil end
+        if item.workspace_id == workspace_id and item.component == component then
+            local expired = expiry(item)
+            if expired then return nil, expired end
+            return item, nil
+        end
     end
     local source_workspace = workspace_applications.source_of(component)
     if source_workspace then

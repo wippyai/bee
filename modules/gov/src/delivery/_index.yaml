@@ -45,7 +45,9 @@ entries:
 - name: publication_profile_decoder
   kind: library.lua
   source: file://publication_profiles.lua
+  modules: [time]
   imports:
+    activation_profiles: bee.gov.activation:activation_profile_decoder
     bounds: bee.values:bounds
     workspace_applications: bee.gov.workspace:workspace_applications
 - name: materializer

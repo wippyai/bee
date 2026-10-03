@@ -102,7 +102,7 @@ function M.handle(raw: unknown): {[string]: unknown}
         local owners, owner_error = owner_ids(namespaces, assert(workspace_id))
         if not owners then return failure("UNAVAILABLE", owner_error or "allocate overlay identities") end
         local expires = time.now():add(duration):utc():format(FORMAT)
-        updated, parse_error = super_edit.enable(data, workspace_id, node, namespaces, expires, manifest.namespaces, owners)
+        updated, parse_error = super_edit.enable(data, workspace_id, node, namespaces, expires, manifest, owners)
         if not updated then return failure("INVALID", parse_error or "super-edit profile is invalid") end
         local decoded, decode_error = activation_profiles.decode(updated)
         if not decoded then return failure("INVALID", tostring(decode_error or "activation profiles are invalid")) end

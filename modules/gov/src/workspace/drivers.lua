@@ -1,7 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local M = {}
 type Identity = {name: string, component: string, overlay_owner: string, namespaces: {string}}
-M.PREFIX = "driver."
 M.OWNER_PREFIX = "bee.gov.drivers:"
 M.RULE = "name the overlay driver.<name>, with a lowercase letter followed by lowercase letters or digits (at most 40 characters); put implementations in bee.driver.<name>.binding, descriptors in .descriptor, profiles and launch definitions in .profiles, and launch policies in .security"
 

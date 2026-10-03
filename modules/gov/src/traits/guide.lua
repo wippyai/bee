@@ -306,7 +306,7 @@ end
 function M.driver_delivery(): string
     return drivers.RULE .. "."
         .. " Read a CLI script with overlay operation source and its absolute path or a path relative to"
-        .. " the authenticated session workdir (no overlay_id); use a relative path for a project-relative root. Source returns a base64 window,"
+        .. " the authenticated workspace folder (no overlay_id); use a relative path for a project-relative root. Source returns a base64 window,"
         .. " window_digest, next_offset and eof; page with offset and limit up to 16384."
         .. " It refuses private paths, foreign folders and workspaces without their own filesystem root."
         .. " Inspect the installed bee/driver package docs and built-in driver entries with components."

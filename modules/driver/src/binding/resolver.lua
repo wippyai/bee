@@ -1,6 +1,6 @@
 -- MIT. The lower binding resolver shared by carrier-adjacent placement and
 -- the harness catalog. It reads one pinned registry generation and answers
--- only activation plus a driver's contract target; profile presentation and
+-- only host selection, consumed driver admission and a contract target; profile presentation and
 -- permission adapters remain owned by the harness catalog.
 local registry = require("registry")
 local funcs = require("funcs")

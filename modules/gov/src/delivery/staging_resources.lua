@@ -74,6 +74,8 @@ function M.workspace_folder_policy(): (string?, string?)
     return linked(M.WORKSPACE_FOLDER_POLICY_REF, POLICY_KINDS, "workspace folder read policy")
 end
 
+-- Resolve the catalog folder under its host-selected read policy. The caller
+-- uses this configuration to root approved volumes or bounded source reads.
 function M.workspace_folder(workspace_id: string): (unknown?, string?)
     local read_id, read_error = M.workspace_folder_read()
     local policy_id, policy_error = M.workspace_folder_policy()

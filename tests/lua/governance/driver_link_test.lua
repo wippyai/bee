@@ -52,7 +52,7 @@ local function define_tests()
                 test.is_true(bounds.ids(bindings, true) ~= nil)
             end
         end)
-        test.it("refuses a host-list replacement and a foreign binding before projection", function()
+        test.it("refuses a host-list replacement and a foreign binding before selection", function()
             for _, path in ipairs({".bindings", ".bindings +="}) do
                 local entries = {{id = "bee.driver.link.binding:activation", kind = "ns.requirement",
                     data = {default = "bee.driver.claude.binding:binding", targets = {{entry = activation.TARGET, path = path}}}}}

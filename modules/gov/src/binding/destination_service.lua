@@ -268,11 +268,6 @@ local function approval_executor(): (owner.Executor?, string?)
     return executor, nil
 end
 
--- The destination workspace's folder, read from the node workspace catalog
--- under the host-selected folder policy and resolved against its admitted
--- root, for rooting file grants. It is configuration only; the host installs
--- the volume after approval.
-
 local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
     activation_store: activations.Store?, base_policy_digest: string?): unknown
     local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)

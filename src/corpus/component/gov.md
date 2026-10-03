@@ -362,7 +362,7 @@ policies and executable mappings are part of the reviewed artifact; metadata
 alone never activates a driver.
 
 The overlay `source` operation reads a bounded window of a non-private file in
-the authenticated session workdir. It names no overlay or workspace; the caller
+the authenticated workspace folder. It names no overlay or workspace; the caller
 needs `bee.gov.overlay.source` on its actor-metadata workspace. The backend uses
 the host-selected workspace folder catalog operation and filesystem root. Paths
 are relative or absolute within that root; hidden/credential paths and shared-root

@@ -19,17 +19,26 @@ function M.main(attempt_id: string, supervisor: string, reply_topic: string, _bi
     process.unlisten(launch)
     local db = assert(store.open())
     local pending = assert(store.row(db, attempt_id))
-    local cancelled = pending.execution_state == "stopping"
-    local claimed = store.transition(db, attempt_id, {expected_execution = cancelled and "stopping" or "starting", fields = {runner_pid = process.pid()},
-        evidence = {kind = "runner.started", detail = "controllable fixture"}})
+    local pending_request = assert(store.request(pending))
+    local recipient = pending.recipient
+    assert(type(recipient) == "string", "fixture recipient")
+    if pending_request.launch.argv[1] == "cancel_before_claim" then
+        assert(process.send(recipient, "bee.test.startup.claim", {attempt_id = attempt_id}))
+        local advanced = assert((advances:receive()))
+        assert(tostring(advanced:from()) == recipient, "fixture claim barrier sender")
+    end
+    assert(pending.runner_pid == process.pid(), "fixture runner ownership")
+    local claimed = store.transition(db, attempt_id, {evidence = {kind = "runner.started", detail = "controllable fixture"}})
     assert(claimed.ok, claimed.message)
     local row = assert(store.row(db, attempt_id))
+    local cancelled = row.execution_state == "stopping"
     local request = assert(store.request(row))
     assert(type(row.recipient) == "string")
     assert(process.send(row.recipient, "bee.test.startup.pending", {attempt_id = attempt_id}))
     if cancelled then
         assert(store.transition(db, attempt_id, {execution = "exited", cleanup = "complete",
             evidence = {kind = "child.not_started", detail = "explicit cancellation before child creation"}}).ok)
+        assert(process.send(row.recipient, "bee.test.startup.state", {attempt_id = attempt_id}))
     end
     while true do
         local selected = channel.select({advances:case_receive(), controls:case_receive(), events:case_receive()})
@@ -42,6 +51,7 @@ function M.main(attempt_id: string, supervisor: string, reply_topic: string, _bi
                 cancelled = true
                 assert(store.transition(db, attempt_id, {execution = "exited", cleanup = "complete",
                     evidence = {kind = "child.not_started", detail = "explicit cancellation before child creation"}}).ok)
+                assert(process.send(row.recipient, "bee.test.startup.state", {attempt_id = attempt_id}))
             end
         else break end
     end

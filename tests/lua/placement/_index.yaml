@@ -484,6 +484,7 @@ entries:
   security:
     policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_service_policy]
   imports:
+    protocol: bee.placement.native:protocol
     test: wippy.test:test
     store: bee.placement.native.persist:store
     request: bee.placement:request

@@ -12,7 +12,7 @@ local drivers = require("drivers")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@12"
+M.REVISION = "bee.governance-component-guide@13"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -336,6 +336,9 @@ function M.driver_delivery(): string
         .. " Set presentation.start_menu = true so the person can select it in Sessions (N opens the agent picker)."
         .. " A false value keeps the definition programmatic and hides it from this picker, including saved copies."
         .. " Structured CLI turns use default_mode session and a session_profile_id naming the headless profile."
+        .. " Set session_resource = session in the launch definition: the host's existing retained session"
+        .. " resource is required to open headless Sessions. This name selects an existing host resource;"
+        .. " do not create a resource entry, database or alternative session store."
         .. " Select an owned bee.launch_policy in policy_ref with the reviewed executable mapping,"
         .. " private HOME, no credentials for an account-free CLI and native placement."
         .. " Inspect built-in definitions and policies for their required schema fields."

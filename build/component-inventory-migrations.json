@@ -1665,6 +1665,13 @@
       "to": "tag:bee.governance-component-guide@12",
       "migration": "M0",
       "reason": "Authoring guide presentation revision documents the implemented Sessions picker visibility and saved-copy controls; stored artifacts, approvals and records retain their schemas."
+    },
+    {
+      "category": "schemas",
+      "from": "tag:bee.governance-component-guide@12",
+      "to": "tag:bee.governance-component-guide@13",
+      "migration": "M0",
+      "reason": "Authoring guide presentation revision names the existing retained session resource required for headless Sessions; persisted IDs, records and schemas stay unchanged."
     }
   ]
 }

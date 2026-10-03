@@ -498,6 +498,8 @@ entries:
   source: file://staging_resources.lua
   modules:
   - registry
+  - funcs
+  - security
   imports:
     bounds: bee.values:bounds
 - name: capability_access

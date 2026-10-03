@@ -7,6 +7,7 @@ type Receive = (boolean) -> unknown
 local function record(exited: {[string]: Outcome}, raw: unknown)
     local event = assert(bounds.object(raw), "invalid process event")
     local kind, from = event.kind, event.from
+    if kind == process.event.CANCEL then error("process observation cancelled") end
     assert(type(kind) == "string" and type(from) == "string", "invalid process event identity")
     if kind ~= process.event.EXIT then return end
     local result: {[string]: unknown} = {}

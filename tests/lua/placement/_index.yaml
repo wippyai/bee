@@ -296,6 +296,7 @@ entries:
   security:
     policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_store_policy, bee.credentials.security:credential_store_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy]
   imports:
+    exits: bee.harness.catalog:exits
     placement_decode: bee.placement:decode
     bounds: bee.values:bounds
     principals: bee.test.principals:bound

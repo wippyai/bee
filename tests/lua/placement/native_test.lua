@@ -40,6 +40,7 @@ local quote = require("quote")
 local types = require("types")
 local placement_decode = require("placement_decode")
 local executable_stream = require("executable_stream")
+local exits = require("exits")
 type PreparedConfiguration = {environment: {[string]: string}, working_directory: string, arguments: {string}}
 local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
     path = ".codex/auth.json", content_format = "json", initialize = {}}}
@@ -3055,13 +3056,31 @@ local function define_tests()
             assert(not call_error, tostring(call_error))
             local started = attempt_of(principals.reply(raw))
             test.eq(started.execution_state, "starting")
-            local selected = channel.select({pending:case_receive(), time.after("5s"):case_receive()})
+            local runner = assert(started.runner)
+            assert(process.monitor(runner))
+            local events = assert(process.events())
+            exits.paused(runner, "startup.pending", {}, function(poll: boolean): unknown
+                local selected
+                if poll then
+                    selected = channel.select({pending:case_receive(), default = true})
+                    if selected.default then return nil end
+                else selected = channel.select({pending:case_receive(), events:case_receive()}) end
+                assert(selected.ok, "startup barrier observation channel closed")
+                if selected.channel == events then return selected.value end
+                local message = selected.value
+                local data = assert(bounds.object(message:payload():data()), "invalid startup barrier")
+                return {kind = "pause", from = tostring(message:from()), step = data.attempt_id == prepared.attempt_id and "startup.pending" or "other"}
+            end)
             process.unlisten(pending)
-            assert(selected.ok and selected.channel == pending, "fixture did not begin")
-            local runner = tostring(selected.value:from())
-            test.eq(started.runner, runner)
+            local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
             assert(process.send(runner, "bee.test.startup.advance", {}))
-            assert(wait_for(function() return value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt.execution_state == "running" end, 3000))
+            while true do
+                local status = assert(placement_decode.status(value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))))
+                if status.attempt.execution_state == "running" then break end
+                assert(not status.attempt.start_failure, tostring(status.attempt.start_failure))
+                assert((states:receive()), "startup publication channel closed")
+            end
+            process.unlisten(states)
             assert(process.terminate(runner))
             local recorded = kinds(prepared.attempt_id)
             test.is_true(has(recorded, "runner.start_accepted"))

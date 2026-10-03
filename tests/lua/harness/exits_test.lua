@@ -54,6 +54,16 @@ local function define_tests()
             end)
             test.eq(saved.carrier.error, "crash after approval_created")
         end)
+        test.it("reports cancellation while awaiting an approval barrier", function()
+            local ok, cause = pcall(function()
+                exits.paused("carrier", "approval_created", {}, function(poll: boolean): unknown
+                    if poll then return nil end
+                    return {kind = process.event.CANCEL}
+                end)
+            end)
+            test.is_false(ok)
+            test.is_true(tostring(cause):find("process observation cancelled", 1, true) ~= nil)
+        end)
         test.it("reports the unchanged deadline when an awaited exit is absent", function()
             local ok, cause = pcall(function()
                 exits.collect({"missing"}, {}, function(_poll: boolean): process.Event? return nil end, "carrier")

@@ -17,7 +17,9 @@ from native_client import hold_owner, live_owners, stop_owner
 from native_workspace import NativeDesktop, STATE_ENVIRONMENT
 
 ROOT = Path(__file__).resolve().parents[1]
-SENSITIVE = re.compile(r"cred|secret|token|key|auth\.json|\.pem$", re.I)
+SENSITIVE = re.compile(r"^credentials\.db.*$|secret|token|key", re.I)
+TRANSIENT = re.compile(r"(?:^|\.)lock$|\.pid$|\.log$|-(?:wal|shm|journal)$", re.I)
+DATABASE = re.compile(r"\.db(?:\..*)?$|\.sqlite$", re.I)
 START_FAILURE = re.compile(r"BEE_STARTUP_FAILED[^\r\n]*|bee: failed[^\r\n]*|Backfill retained application alias[^\r\n]*|(?:startup|restore|migration|boot)[^\r\n]*(?:failed|failure)|dependency resolution failed[^\r\n]*", re.I)
 FAILURE = re.compile(r"start_failed|LOGIN_REQUIRED|PROTECTED_KERNEL|(?:^|\W)(?:FAILED|Error:|START_FAILED|STARTUP_FAILURE)(?:\W|$)")
 MARKER = "OWNER JOURNEY ANSWER"
@@ -46,21 +48,24 @@ def safe_copy(source, destination):
     def visit(folder, target):
         for item in sorted(folder.iterdir()):
             relative = item.relative_to(source)
-            if SENSITIVE.search(item.name) or item.is_symlink():
-                excluded.append({"path": str(relative), "reason": "sensitive name or symlink"})
+            if SENSITIVE.search(item.name):
+                excluded.append({"path": str(relative), "reason": "sensitive name"})
+                continue
+            if TRANSIENT.search(item.name) and item.name.lower() not in {"wippy.lock", "resolution.lock"}:
+                excluded.append({"path": str(relative), "reason": "log, process lock/pid or SQLite sidecar"})
                 continue
             output = target / item.name
-            if item.is_dir():
+            if item.is_symlink():
+                subprocess.run(["cp", "-a", "--", str(item), str(output)], check=True)
+                copied.append(str(relative))
+            elif item.is_dir():
                 output.mkdir()
                 visit(item, output)
                 shutil.copystat(item, output)
             elif item.is_file():
                 # SQLite backup includes committed WAL pages. Never copy a WAL
                 # beside its backup; workspace.db.client is also an owner DB.
-                if item.name.endswith(("-wal", "-shm", "-journal")):
-                    excluded.append({"path": str(relative), "reason": "SQLite sidecar"})
-                    continue
-                if item.suffix == ".db" or item.name.endswith(".db.client"):
+                if DATABASE.search(item.name):
                     with closing(sqlite3.connect(item.as_uri() + "?mode=ro", uri=True)) as original:
                         original.execute("BEGIN")
                         original.execute("SELECT name FROM sqlite_master LIMIT 1").fetchall()
@@ -455,15 +460,6 @@ class Journey:
     def start(self):
         manifest = safe_copy(self.source, self.state)
         (self.scratch / "copy.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        # Sealed module cache names can themselves match the exclusion rule
-        # (credentials-*.wapp). Let the binary rematerialize its own bundle;
-        # archive copied caches outside its state, retaining every owner DB.
-        archived = self.work / "copied-runtime-cache"
-        for name in ("deployments", "cache"):
-            copied_cache = self.state / name
-            if copied_cache.is_dir():
-                archived.mkdir(exist_ok=True)
-                copied_cache.rename(archived / name)
         self.baseline_apps = applications(self.state)
         self.baseline_approvals = set()
         if table_exists(self.state, "approvals.db", "bee_approval_requests"):

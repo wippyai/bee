@@ -6,6 +6,7 @@ local json = require("json")
 local protected_kernel = require("protected_kernel")
 local application_admission = require("application_admission")
 local capability_grants = require("capability_grants")
+local driver_admission = require("driver_admission")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
@@ -15,6 +16,7 @@ type CapabilityRequest = {capability: string, parameters: {[string]: string | {s
     target: string, path: string, catalog_revision: integer, template_revision: integer}
 type Requirement = {id: string, package: string, value: string?, expected_kind: string?, targets: {string},
     capability_request: CapabilityRequest?}
+type DriverRequirement = {binding: string, digest: string}
 type Migration = {id: string, target_db: string, checksum: string, ordinal: integer}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
 type DatabaseEvidence = {database_id: string, table_prefix: string?, kind: string, package: string, digest: string}
@@ -31,7 +33,8 @@ type Context = {node_id: string, registry_revision: integer, registry_digest: st
     grants: {[string]: boolean}, modules: {[string]: boolean},
     database_bindings: {[string]: DatabaseBinding}?,
     entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
-    migration_barrier: boolean, auto_start: boolean, protected: protected_kernel.Manifest?, host_evidence: HostEvidence}
+    migration_barrier: boolean, auto_start: boolean, protected: protected_kernel.Manifest?, host_evidence: HostEvidence,
+    driver_requirements: {[string]: DriverRequirement}?}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
     base_revision: integer, policy_digest: string, ready: boolean, diagnostics: {Diagnostic}, pending_migrations: {string}}
@@ -597,7 +600,13 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if not target and not item.capability_request then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
         elseif target and item.expected_kind and target.kind ~= item.expected_kind then issue("BINDING_KIND", item.id, "resource does not match declared kind", "select a resource of the declared kind") end
         for _, reference in ipairs(item.targets) do
-            if guarded(reference) then
+            local append = context.driver_requirements and context.driver_requirements[item.id] or nil
+            local measured = final[item.id]
+            local admitted_append = append and item.value == append.binding and measured
+                and measured.digest == append.digest and measured.kind == "ns.requirement"
+                and item.expected_kind == "contract.binding" and #item.targets == 1
+                and reference == driver_admission.TARGET
+            if guarded(reference) and not admitted_append then
                 issue("PROTECTED_KERNEL", item.id, "requirement selects into protected kernel definition " .. reference, PROTECTED_REMEDY)
             end
             if not final[reference] then issue("DANGLING_REQUIREMENT_TARGET", item.id, "missing target entry " .. reference, "repair the package requirement target") end

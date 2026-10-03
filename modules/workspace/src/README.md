@@ -24,7 +24,9 @@ The host supplies `target_db`, `target_roots`, `target_scope` and
 `target_facade_policy`. The component creates no database or second resource
 record. Requirements link database configuration onto the existing store entry
 and catalog configuration onto its implementation. Explicit store opens also
-accept host-selected reserved database IDs under the caller's database grant.
+accept host-selected SQL resource IDs under the caller's exact registry-read
+and database grants. Resource kind validation reads the selected descriptor;
+the ID's namespace does not establish its kind or authority.
 `target_application_protocol`, `target_decode` and `target_model` link the
 existing host value codecs until their owning components are extracted. Linked
 metadata selects dependencies and resources; it grants no authority.

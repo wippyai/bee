@@ -112,8 +112,10 @@ one vendor-pack byte changes.
 Agy, Claude, Codex, Grok, Muse and OpenCode each have a separate driver pack
 (`bee/driver-agy`, `bee/driver-claude`, `bee/driver-codex`, `bee/driver-grok`,
 `bee/driver-muse` and `bee/driver-opencode`). The shared `bee/driver` pack owns
-the contract, kit and transport. Installing a driver does not activate it or grant execution: the host
-still selects its profile, executable and permissions.
+the contract, shared bindings, codecs and transport. Installing a driver does
+not activate it or grant execution: the host still selects its profile,
+executable and permissions. Local workspace drivers use the same governed
+review and approval path described in the [governance contract](../../modules/gov/src/README.md#workspace-cli-drivers).
 
 The pinned Go builder assembles only the sealed generated manifest. It verifies
 every WAPP and runtime-patch hash before embedding them. The input

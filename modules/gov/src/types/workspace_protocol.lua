@@ -1,7 +1,7 @@
 local bounds = require("bounds")
 local base64 = require("base64")
 local M = {}
-type Operation = "create" | "put" | "append" | "remove" | "list" | "read" | "freeze" | "guide"
+type Operation = "create" | "put" | "append" | "remove" | "list" | "read" | "freeze" | "guide" | "source"
 type Request = {operation: Operation, workspace_id: string, expected_revision: integer?,
     idempotency_key: string?, path: string?, content: string?, snapshot_digest: string?,
     offset: integer?, limit: integer?, result_digest: string?, owned: boolean?,
@@ -18,10 +18,24 @@ function M.decode(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "request must be an object" end
     local op = value.operation
-    if op ~= "create" and op ~= "put" and op ~= "append" and op ~= "remove" and op ~= "list" and op ~= "read" and op ~= "freeze" and op ~= "guide" then
+    if op ~= "create" and op ~= "put" and op ~= "append" and op ~= "remove" and op ~= "list" and op ~= "read" and op ~= "freeze" and op ~= "guide" and op ~= "source" then
         return nil, "unknown workspace operation"
     end
     local operation: Operation = op
+    if op == "source" then
+        local extra = bounds.fields(value, {"operation", "workspace_id", "path", "offset", "limit"})
+        if extra then return nil, extra end
+        if value.workspace_id ~= nil and value.workspace_id ~= "" then return nil, "source names no overlay_id" end
+        local source_path = value.path
+        local selected = path(source_path)
+        if type(source_path) == "string" and source_path:sub(1, 1) == "/" and path(source_path:sub(2)) then selected = source_path end
+        local offset = value.offset == nil and 0 or bounds.count(value.offset)
+        local limit = value.limit == nil and 16384 or bounds.count(value.limit)
+        if not selected or not offset or offset > 4194304 or not limit or limit < 1 or limit > 16384 then
+            return nil, "source needs a canonical path and a bounded file window"
+        end
+        return {operation = "source", workspace_id = "", path = selected, offset = offset, limit = limit}, nil
+    end
     -- guide is read-only and names no workspace: it returns this destination's
     -- authoring contract, so it is decoded before workspace identity is required.
     if op == "guide" then
@@ -137,7 +151,7 @@ function M.overlay_schema(text_bound: integer, base64_bound: integer): {[string]
     local identity = {type = "string", minLength = 1, maxLength = 160}
     return {type = "object", additionalProperties = false, required = {"operation"},
         properties = {
-            operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "append", "remove", "freeze"},
+            operation = {type = "string", enum = {"guide", "source", "create", "list", "read", "put", "append", "remove", "freeze"},
                 description = "guide reads this destination's authoring contract; list without overlay_id "
                     .. "returns your own overlay IDs, list with one returns its files"},
             overlay_id = identity,
@@ -175,8 +189,8 @@ function M.decode_overlay(raw: unknown): (Request?, string?)
     -- Unknown fields name exactly what the caller sent. This is a strict
     -- boundary, not an alias for an older dialect.
     if extra then return nil, extra end
-    if value.operation == "guide" and value.overlay_id ~= nil then
-        return nil, "guide names no overlay_id"
+    if (value.operation == "guide" or value.operation == "source") and value.overlay_id ~= nil then
+        return nil, tostring(value.operation) .. " names no overlay_id"
     end
     local translated: {[string]: unknown} = {}
     for key, item in pairs(value) do translated[key] = item end

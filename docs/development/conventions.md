@@ -33,7 +33,20 @@ parallel registry records or stored state for the same information.
 paths, component roots, local sources, application entries, process placement,
 host-free requirement defaults, duplicate Lua sources, orphan files and
 requirement/import and named approver definition targets. Domain ownership, dynamic registry discovery and
-public API reachability also require review.
+public API reachability also require review. The same lint gate runs
+`build/registry_discovery_check.py` after strict Lua lint. Its allowlist records
+exact expressions, occurrence counts and review reasons for declared target
+resolution, host policy scope validation and immutable persisted identity codecs.
+
+Discover entries with `registry.find` by kind, contract binding and typed
+metadata. Follow the binding's declared method target exactly. Namespace or ID
+spelling cannot classify a provider, application, service or installed package,
+and metadata never authorizes an entry: the host admits the exact entry and
+its policies. Relative requirement targets resolve in their declared namespace;
+namespace collision and protected host-scope checks are publication constraints.
+Existing measured history is decoded and verified against its exact persisted
+record identity. Hub receipt migration 1 appends metadata tags in a new registry
+revision; it preserves earlier revisions and the receipt data and digests.
 
 The generated [component inventory](component-inventory.json) records current
 namespace and entry IDs, requirement targets, topics, owner resources and
@@ -261,10 +274,32 @@ does not issue container creates from separate test processes against the same
 host daemon. That shard holds an exclusive `flock` across checkouts for its
 runtime process. The unit and focused Lua runners use the same lock, selected
 from the test entries' resource metadata. `BEE_DOCKER_DAEMON_LOCK` selects the
-lock file; otherwise it is `~/.cache/bee/bee-docker-daemon.lock`, one path
-shared by every checkout of the same user. The runner prints when it waits and when it acquires the lock, including the wait duration.
+lock file; otherwise it is `docker-daemon-<daemon ID>.lock` under `bee/` in the
+user's XDG cache directory, so every checkout using the same daemon shares one
+lock and an unreachable daemon fails with its exact error. The runner prints when it waits and when it acquires the lock, including the wait duration.
 The wait has no timeout and can be interrupted. Failures release the lock and
 retain their cause. The remaining entries retain their balanced parallel shards.
+
+`make native-placement-unit-check` runs native home/admission, execution,
+configuration, output, credential, cleanup and startup suites together with
+workdir preparation, provider configuration and instruction-builder
+checks. Each native suite captures and restores shared fixture registry state
+independently within the existing test entry timeout. The bounded sweep regression
+accounts for earlier cases' retained attempts in the same owner store and verifies
+every reconciliation outcome.
+
+`make docker-placement-unit-check` runs Docker admission, failure reporting,
+image, environment and real container lifecycle tests under the shared daemon
+lock. Docker and native placement checks observe startup acknowledgements,
+runner exit and both output EOFs through one fixture observer. Failed launches
+report their retained cause before waiting for output; the test entry timeout
+bounds a broken fixture.
+
+`make harness-drain-unit-check` covers carrier post-exit draining. Its silent
+consumer fixture holds descendant pipes behind a FIFO until the test releases
+them, so host load cannot close those pipes before the declared drain expires.
+`make harness-fixture-unit-check` proves that fixture lifecycle; `make
+unit-runner-check` covers shard selection, failure reporting and Docker locking.
 
 `make check` covers typed source, permissions, persistence, source/pack
 behavior and terminal acceptance. Release CI runs it as the Makefile's

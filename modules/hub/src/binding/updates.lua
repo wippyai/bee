@@ -11,25 +11,16 @@ type Pack = {component: string, installed_version: string, locked_version: strin
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
 type Binary = {native_module: string, native_version: string, runtime_commit: string}
 type Result = {modules: {Pack}, bee_update: BeeUpdate, catalog_error: string, binary: Binary?}
-local MAX_STATUS_PAGES = 16
-
-local function bee_component(name: string): boolean
-    return name == "bee/bee" or name:match("^bee/") ~= nil
-end
-
-local function latest_versions(): ({[string]: string}, string)
+local function latest_versions(selected: {[string]: boolean}): ({[string]: string}, string)
     local versions: {[string]: string} = {}
-    local page = 1
-    while page <= MAX_STATUS_PAGES do
-        local result, problem = catalog.browse({keyword = "bee", page = page})
-        if not result then return versions, tostring(problem or "Bee package catalog is unavailable") end
-        for _, item in ipairs(result.items) do
-            if bee_component(item.component) then versions[item.component] = item.latest_version end
-        end
-        if result.page * result.page_size >= result.total then break end
-        page = page + 1
+    local names: {string} = {}
+    for name in pairs(selected) do names[#names + 1] = name end
+    table.sort(names)
+    for _, name in ipairs(names) do
+        local result, problem = catalog.detail({component = name, page = 1})
+        if not result then return versions, tostring(problem or "package catalog is unavailable") end
+        versions[name] = result.latest_version
     end
-    if page > MAX_STATUS_PAGES then return versions, "Bee package catalog exceeds the status bound" end
     return versions, ""
 end
 
@@ -40,10 +31,15 @@ function M.read(): (Result?, string?)
     if not state then return nil, tostring(state_error) end
     local installed, inventory_error = inventory.decode(state, snapshot:version():id())
     if not installed then return nil, tostring(inventory_error) end
-    local available, catalog_error = latest_versions()
+    local selected: {[string]: boolean} = {}
+    if installed.deployment then selected[installed.deployment] = true end
+    for _, root in ipairs(installed.roots) do
+        if inventory.host_component(root) then selected[root.component] = true end
+    end
+    local available, catalog_error = latest_versions(selected)
     local packs: {Pack} = {}
     for _, item in ipairs(installed.modules) do
-        if bee_component(item.component) then
+        if selected[item.component] then
             local latest = available[item.component] or ""
             local compared = latest ~= "" and item.version ~= "" and semver.compare(latest, item.version) or nil
             packs[#packs + 1] = {component = item.component, installed_version = item.version, locked_version = item.locked_version,

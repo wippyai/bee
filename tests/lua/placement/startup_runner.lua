@@ -41,7 +41,7 @@ function M.main(attempt_id: string, supervisor: string, reply_topic: string, _bi
     local cancelled = row.execution_state == "stopping"
     local request = assert(store.request(row))
     assert(type(row.recipient) == "string")
-    assert(process.send(row.recipient, "bee.test.startup.pending", {attempt_id = attempt_id}))
+    assert(process.send(row.recipient, "bee.test.startup.pending", {attempt_id = attempt_id, supervisor = supervisor, reply_topic = reply_topic}))
     if cancelled then
         assert(store.transition(db, attempt_id, {execution = "exited", cleanup = "complete",
             evidence = {kind = "child.not_started", detail = "explicit cancellation before child creation"}}).ok)

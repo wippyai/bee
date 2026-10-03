@@ -8,6 +8,7 @@ entries:
   policy:
     actions: [registry.get, registry.snapshot, funcs.call, bee.harness.permission.answer]
     resources:
+    - bee.gov.binding:driver_bindings
     - bee.executor.external.binding:answer_hook
     - "bs:*"
     - bee.sessions.binding:open

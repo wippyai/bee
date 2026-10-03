@@ -10,8 +10,10 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 import focused_lua
-from unit import docker_daemon_lock, report_shard, run_shard, split, test_entries
+from unit import daemon_lock_path, docker_daemon_lock, report_shard, run_shard, split, test_entries
 from workspace import ROOT
 
 
@@ -50,6 +52,31 @@ entries:
                 self.assertEqual(test_entries(resource="docker_daemon"),
                                  ["fixture.unrelated:first", "fixture.unrelated:second"])
                 self.assertEqual(test_entries(resource="unused"), [])
+
+    def test_split_docker_lifecycle_entries_share_the_daemon_shard(self):
+        shared = test_entries(resource="docker_daemon")
+        expected = {"bee.placement.docker.tests:" + name
+                    for name in ("lifecycle_test", "stdin_test", "readiness_test")}
+        self.assertTrue(expected <= set(shared))
+        groups = split(test_entries(), shared)
+        self.assertEqual(sum(bool(expected & set(group)) for group in groups), 1)
+
+    def test_docker_fixture_imports_resolve_current_component_entries(self):
+        namespaces, declared = set(), set()
+        for manifest in (ROOT / "modules/placement-docker/src").rglob("_index.yaml"):
+            document = yaml.safe_load(manifest.read_text())
+            namespace = document["namespace"]
+            namespaces.add(namespace)
+            declared.update(f"{namespace}:{entry['name']}" for entry in document["entries"])
+        fixture = yaml.safe_load((ROOT / "tests/lua/placement_docker/_index.yaml").read_text())
+        checked = 0
+        for entry in fixture["entries"]:
+            for target in entry.get("imports", {}).values():
+                if target.partition(":")[0] in namespaces:
+                    with self.subTest(entry=entry["name"], target=target):
+                        self.assertIn(target, declared)
+                    checked += 1
+        self.assertGreater(checked, 0)
 
     def test_failed_shard_prints_ids_and_untruncated_assertion(self):
         output = "early log\n" + ("other case\n" * 1000) + "Assertion failed: expected recovery state\n"
@@ -146,12 +173,14 @@ with unit.docker_daemon_lock():
 
     def test_default_paths_and_override(self):
         for values, expected in [
-            ({"XDG_RUNTIME_DIR": str(self.folder / "runtime")}, self.folder / ".cache/bee/bee-docker-daemon.lock"),
-            ({}, self.folder / ".cache/bee/bee-docker-daemon.lock"),
-            ({"BEE_DOCKER_DAEMON_LOCK": str(self.lock), "XDG_RUNTIME_DIR": str(self.folder / "runtime")}, self.lock),
+            ({"XDG_CACHE_HOME": str(self.folder / "xdg")}, self.folder / "xdg/bee/docker-daemon-ABCD-1234.lock"),
+            ({}, self.folder / ".cache/bee/docker-daemon-ABCD-1234.lock"),
+            ({"BEE_DOCKER_DAEMON_LOCK": str(self.lock), "XDG_CACHE_HOME": str(self.folder / "xdg")}, self.lock),
         ]:
+            identity = subprocess.CompletedProcess(["docker"], 0, stdout="ABCD:1234\n", stderr="")
             with self.subTest(values=values), patch.dict(os.environ, values, clear=True), \
-                    patch("unit.Path.home", return_value=self.folder), redirect_stdout(StringIO()):
+                    patch("unit.Path.home", return_value=self.folder), \
+                    patch("unit.subprocess.run", return_value=identity), redirect_stdout(StringIO()):
                 with docker_daemon_lock():
                     self.assertTrue(expected.is_file())
                     with expected.open("a") as handle:
@@ -207,3 +236,11 @@ with unit.docker_daemon_lock():
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DaemonIdentityTest(unittest.TestCase):
+    def test_unreachable_daemon_names_the_cause(self):
+        failure = subprocess.CompletedProcess(["docker"], 1, stdout="", stderr="Cannot connect to the Docker daemon")
+        with patch("unit.subprocess.run", return_value=failure):
+            with self.assertRaisesRegex(RuntimeError, "Cannot connect to the Docker daemon"):
+                daemon_lock_path()

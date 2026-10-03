@@ -10,6 +10,12 @@ local function call(request: unknown): {[string]: unknown}
 end
 
 local function define_tests()
+    test.describe("Source workspace authentication", function()
+        test.it("refuses an author with no authenticated workspace metadata", function()
+            local result = call({operation = "source", path = "bin/cli"})
+            test.eq(result.code, "DENIED")
+        end)
+    end)
     test.describe("Governance overlay facade vocabulary", function()
         test.it("projects lower-layer workspace failures at the public boundary", function()
             local result = call({operation = "list", overlay_id = "method-vocabulary-missing"})

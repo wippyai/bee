@@ -6,6 +6,7 @@ entries:
   source: file://catalog.lua
   modules:
   - hub
+  - registry
   imports:
     bounds: bee.values:bounds
 - name: updates
@@ -63,6 +64,7 @@ entries:
     migrations: bee.hub.activation:migrations
     migration_work: bee.hub.activation:migration_work
     lifecycle: bee.hub.types:lifecycle
+    operations: bee.hub.types:operations
     service_lifecycle: bee.hub.binding:lifecycle
 - name: publish
   kind: library.lua
@@ -122,3 +124,15 @@ entries:
   targets:
   - entry: bee.hub.security:lifecycle_owner_policy
     path: .policy.resources
+- name: receipt_metadata
+  kind: function.lua
+  source: file://receipt_metadata.lua
+  method: handle
+  modules: [registry, security]
+  imports:
+    bounds: bee.values:bounds
+    operations: bee.hub.types:operations
+    transaction: bee.persist.persist:transaction
+  security:
+    policies: [bee.hub.security:read_policy, bee.hub.security:publisher_policy, bee.hub.security:receipt_policy]
+  meta: {type: bee.registry_metadata_migration, version: 1}

@@ -3,6 +3,16 @@ local bounds = require("bounds")
 local types = require("types")
 local M = {}
 
+function M.preparation_progress(value: unknown): (types.PreparationProgress?, string?)
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"version", "profile_ref", "detail"}) or object.version ~= 1 then
+        return nil, "preparation progress has invalid fields or version"
+    end
+    local profile, detail = bounds.id(object.profile_ref), bounds.text(object.detail, 4096)
+    if not profile or not detail then return nil, "preparation progress requires a profile and bounded detail" end
+    return {version = 1, profile_ref = profile, detail = detail}, nil
+end
+
 local function digest(value: unknown): string?
     local decoded = bounds.text(value, 64)
     if not decoded or #decoded ~= 64 or not decoded:match("^[0-9a-f]+$") then return nil end
@@ -142,7 +152,7 @@ function M.status(value: unknown): (types.Status?, string?)
     return {attempt = attempt, liveness = {observed = observed, alive = alive, at = at, detail = detail}, private_home = private_home}, nil
 end
 
-type StdinClosure = {closed: boolean, reason: string?}
+type StdinClosure = {attempt: types.Attempt, closed: boolean, reason: string?}
 function M.stdin_closure(value: unknown, attempt_id: string): (StdinClosure?, string?)
     local object = bounds.object(value)
     if not object then return nil, "close_stdin result must be an object" end
@@ -158,7 +168,7 @@ function M.stdin_closure(value: unknown, attempt_id: string): (StdinClosure?, st
         if not reason or reason == "" then return nil, "close_stdin refusal reason is invalid" end
     end
     if (object.closed == true and reason ~= nil) or (object.closed == false and reason == nil) then return nil, "close_stdin result and reason disagree" end
-    return {closed = object.closed, reason = reason}, nil
+    return {attempt = attempt, closed = object.closed, reason = reason}, nil
 end
 
 return M

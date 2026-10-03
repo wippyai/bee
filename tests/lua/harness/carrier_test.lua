@@ -696,65 +696,66 @@ local function define_drain_tests()
             if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            -- A small stream with a descendant holding the pipes: the drain
-            -- arms while the carrier is already dead after its first commit,
-            -- so later acknowledgments never come and the drain fires on
-            -- schedule. A pause cannot hold the silence instead: an
-            -- unacknowledged spool fills and the child never reaches exit.
-            -- FLOOD_EXIT would skip the orphan, so the stream stays small.
+            local gate = require("orphan_gate")
             local release = fixture_bin() .. "/" .. fresh("silent-orphan")
-            command({"mkfifo", release})
-            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
-                BEE_FIXTURE_ORPHAN_RELEASE = release})
-            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed", nil, "placement_started")
-            local events = assert(process.events())
-            exits.paused(pid, "placement_started", exited, function(poll: boolean): unknown
-                local selected
-                if poll then
-                    selected = channel.select({paused:case_receive(), default = true})
-                    if selected.default then return nil end
-                else selected = channel.select({paused:case_receive(), events:case_receive()}) end
-                assert(selected.ok, "silent-consumer barrier observation closed")
-                if selected.channel == events then return selected.value end
-                local message = selected.value
-                return {kind = "pause", from = tostring(message:from()), step = message:payload():data()}
+            gate.create(release)
+            local ok, problem = pcall(function()
+                local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
+                    BEE_FIXTURE_ORPHAN_FIFO = release})
+                local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+                local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed", nil, "placement_started")
+                local events = assert(process.events())
+                exits.paused(pid, "placement_started", exited, function(poll: boolean): unknown
+                    local selected
+                    if poll then
+                        selected = channel.select({paused:case_receive(), default = true})
+                        if selected.default then return nil end
+                    else selected = channel.select({paused:case_receive(), events:case_receive()}) end
+                    assert(selected.ok, "silent-consumer barrier observation closed")
+                    if selected.channel == events then return selected.value end
+                    local message = selected.value
+                    return {kind = "pause", from = tostring(message:from()), step = message:payload():data()}
+                end)
+                local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
+                local runner = assert(bounds.text(assert(bounds.object(status.attempt)).runner, 256))
+                assert(process.monitor(runner))
+                assert(process.send(pid, "bee.carrier.continue", {}))
+                local outcomes = await_carriers({pid, runner}, "silent-consumer supervision")
+                test.is_nil(outcomes[pid].value)
+                test.is_true(tostring(outcomes[pid].error):find("crash after committed", 1, true) ~= nil)
+                test.is_nil(outcomes[runner].error)
+                process.unmonitor(runner)
+                process.unlisten(paused)
+                local drained, finished, child_exited, lost = false, false, false, false
+                local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
+                for _, item in ipairs(principals.objects(page.evidence)) do
+                    if item.kind == "output.drain_elapsed" then drained = true end
+                    if item.kind == "runner.finished" then finished = true end
+                    if item.kind == "child.exited" then child_exited = true end
+                    if item.kind == "output.lost" then lost = true end
+                end
+                test.is_true(child_exited, "the producer exits independently of its pipe-holding descendant")
+                test.is_true(drained, "open descendant pipes exhaust the declared post-exit drain")
+                test.is_true(lost, "the silent carrier leaves unacknowledged output for retention expiry")
+                test.is_true(finished)
             end)
-            local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
-            local runner = assert(bounds.text(assert(bounds.object(status.attempt)).runner, 256))
-            assert(process.monitor(runner))
-            assert(process.send(pid, "bee.carrier.continue", {}))
-            local outcomes = await_carriers({pid, runner}, "silent-consumer supervision")
-            test.is_nil(outcomes[pid].value)
-            test.is_true(tostring(outcomes[pid].error):find("crash after committed", 1, true) ~= nil)
-            test.is_nil(outcomes[runner].error)
-            process.unmonitor(runner)
-            process.unlisten(paused)
-            command({"sh", "-c", 'exec 3<> "$1"; printf "release\n" >&3', "sh", release})
-            command({"rm", release})
-            local drained, finished = false, false
-            local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
-            for _, item in ipairs(principals.objects(page.evidence)) do
-                if item.kind == "output.drain_elapsed" then drained = true end
-                if item.kind == "runner.finished" then finished = true end
-            end
+            gate.release(release)
             data.runner_drain_ms = saved_drain
             data.retain_ms = saved_retain
             local widened = registry.snapshot():changes()
             widened:update(policy)
             local restored, restore_error = widened:apply()
             if not restored then error("restore runner drain: " .. tostring(restore_error)) end
-            test.is_true(drained)
-            test.is_true(finished)
+            if not ok then error(tostring(problem)) end
         end)
         test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
             local release = fixture_bin() .. "/" .. fresh("truncated-orphan")
-            command({"mkfifo", release})
-            local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_ORPHAN_RELEASE = release}), "open", nil)
-            command({"sh", "-c", 'exec 3<> "$1"; printf "release\n" >&3', "sh", release})
-            command({"rm", release})
+            local gate = require("orphan_gate")
+            gate.create(release)
+            local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_ORPHAN_FIFO = release}), "open", nil)
+            gate.release(release)
             if not outcome.value then error("orphan run failed: " .. tostring(outcome.error)) end
             local settlement = assert(bounds.object(outcome.value.settlement))
             test.eq(settlement.outcome, "uncertain")

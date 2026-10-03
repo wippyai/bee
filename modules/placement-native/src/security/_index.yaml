@@ -6,8 +6,9 @@ entries:
   meta:
     comment: The receipts store, the linked references, the placement root and the executor, for the runner and the service
   policy:
-    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    expression: '(action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action != "funcs.call" && ((resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")))'
     actions:
+    - funcs.call
     - env.get
     - env.set
     - db.get
@@ -18,6 +19,7 @@ entries:
     - security.scope.create
     - funcs.security
     resources:
+    - bee.gov.binding:driver_bindings
     - bee.persist.env:startup_progress
     - bee.placement.native.env:db
     - bee.placement.native.env:database_ref

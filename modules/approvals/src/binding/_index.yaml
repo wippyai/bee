@@ -28,6 +28,7 @@ entries:
   security: {policies: []}
   meta:
     hive: policy
+    hive_service: bee.approvals.binding
     hive_operation:
       revision: '1'
       title: Authorized approval snapshot
@@ -59,6 +60,7 @@ entries:
     policies: []
   meta:
     hive: policy
+    hive_service: bee.approvals.binding
     hive_operation:
       revision: '1'
       title: Authorized approval changes
@@ -96,6 +98,7 @@ entries:
   kind: function.lua
   meta:
     hive: policy
+    hive_service: bee.approvals.binding
     hive_operation:
       revision: '1'
       title: Decide one exact approval
@@ -150,6 +153,7 @@ entries:
   kind: function.lua
   meta:
     hive: policy
+    hive_service: bee.approvals.binding
     hive_operation:
       revision: '1'
       title: Withdraw own approval request
@@ -220,6 +224,7 @@ entries:
   kind: function.lua
   meta:
     hive: policy
+    hive_service: bee.approvals.binding
     hive_operation:
       revision: '1'
       title: Read authorized approval request

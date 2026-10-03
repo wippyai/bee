@@ -10,7 +10,7 @@ type Request = {version: integer, request_id: string, op: RequestOp, workspace_i
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,
     group: string, role: string, singleton: boolean, resume_schema: string, restart_policy: string}
 type ThreadAccess = "none" | "observe_post"
-type Binding = {definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean, scope_management: boolean, close_grace_ms: integer, thread_access: ThreadAccess}
+type Binding = {overlay_owner: string?, definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean, scope_management: boolean, close_grace_ms: integer, thread_access: ThreadAccess}
 local function request_op(value: unknown): RequestOp?
     if value == "open" then return "open" end
     if value == "close" then return "close" end
@@ -97,7 +97,7 @@ end
 function M.binding(value: unknown): Binding?
     if type(value) ~= "table" or type(value.policies) ~= "table" then return nil end
     for key in pairs(value) do
-        if key ~= "definition_id" and key ~= "policies" and key ~= "appearance_write" and key ~= "application_stop" and key ~= "scope_management" and key ~= "close_grace_ms" and key ~= "thread_access" then return nil end
+        if key ~= "overlay_owner" and key ~= "definition_id" and key ~= "policies" and key ~= "appearance_write" and key ~= "application_stop" and key ~= "scope_management" and key ~= "close_grace_ms" and key ~= "thread_access" then return nil end
     end
     local id = M.text(value.definition_id, 160)
     if not id or id == "" then return nil end
@@ -120,7 +120,9 @@ function M.binding(value: unknown): Binding?
         or close_grace_ms < 0 or close_grace_ms > 60000 or close_grace_ms ~= math.floor(close_grace_ms)) then return nil end
     local thread_access = decode_thread_access(value.thread_access)
     if not thread_access then return nil end
-    return {definition_id = id, policies = policies, appearance_write = value.appearance_write == true,
+    local overlay_owner = value.overlay_owner ~= nil and M.text(value.overlay_owner, 160) or nil
+    if value.overlay_owner ~= nil and (not overlay_owner or overlay_owner == "" or overlay_owner:find("%c")) then return nil end
+    return {overlay_owner = overlay_owner, definition_id = id, policies = policies, appearance_write = value.appearance_write == true,
         application_stop = value.application_stop == true, scope_management = value.scope_management == true,
         close_grace_ms = close_grace_ms == nil and 250 or math.floor(close_grace_ms), thread_access = thread_access}
 end

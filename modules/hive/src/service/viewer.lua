@@ -140,8 +140,7 @@ local function main(parent: string, node: unknown, workspace: unknown, selected_
         end
     end
     process.unlisten(retry)
-    process.unlisten(closes)
-    if not opened then return end
+    if not opened then process.unlisten(closes); return end
     local handle = opened.handle
     local target = opened.target
     local session = display.session_id(handle) or ""
@@ -158,14 +157,14 @@ local function main(parent: string, node: unknown, workspace: unknown, selected_
     end
     local shown = ""
     while not failure do
-        local selected = channel.select({delivery_updates:case_receive(), inputs:case_receive(), resizes:case_receive(),
+        local selected = channel.select({delivery_updates.channel:case_receive(), inputs:case_receive(), resizes:case_receive(),
             closes:case_receive(), retries:case_receive(), events:case_receive()})
         if not selected.ok then break end
         if selected.channel == events then
             local event = selected.value
             if event.kind == process.event.CANCEL then break end
             if (event.kind == process.event.EXIT or event.kind == process.event.LINK_DOWN) and tostring(event.from) == parent then break end
-        elseif selected.channel == delivery_updates then
+        elseif selected.channel == delivery_updates.channel then
             if delivery.poll({session}) then
                 local frame, frame_error = display.content(handle, confirmed_width, confirmed_height)
                 if frame then
@@ -209,7 +208,7 @@ local function main(parent: string, node: unknown, workspace: unknown, selected_
             end
         end
     end
-    for _, subscription in ipairs({inputs, resizes, retries}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({inputs, resizes, retries, closes}) do process.unlisten(subscription) end
     local detached, detach_error = display.close(handle)
     if failure then error(failure) end
     if not detached then error(detach_error or "Detach remote desktop") end

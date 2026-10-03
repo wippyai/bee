@@ -8,6 +8,7 @@ local resolver = require("overlay_resolver")
 local capability_grants = require("capability_grants")
 local application_admission = require("application_admission")
 local preflight = require("preflight")
+local activation_measure = require("activation_measure")
 local canonical = require("canonical")
 local hash = require("hash")
 
@@ -96,7 +97,103 @@ local function changes(spec: Object, entries: {Entry})
     spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
 end
 
+local function driver_fixture(target_path: string?, action: string?): (Deps, Object)
+    local binding_id = "bee.driver.stub.binding:binding"
+    local items: {Entry} = {
+        {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = {}},
+        {id = "bee.driver.stub.binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
+            data = {default = binding_id, targets = {{entry = "bee.harness.launch:harness_activation", path = target_path or ".bindings +="}}}},
+        {id = "bee.driver.stub.security:descriptor_read", kind = "security.policy", data = {policy = {effect = "allow", actions = {action or "registry.get"}, resources = {"*"}}}},
+    }
+    local made = assert(artifact.create(items))
+    local deps, spec, facts = fixture()
+    facts.captured.entries[#facts.captured.entries + 1] = {id = "bee.harness.launch:harness_activation", kind = "registry.entry",
+        data = {bindings = {"bee.driver.claude.binding:binding"}}, registry = {owner = "bee/host"}}
+    for _, entry in ipairs(facts.captured.entries) do
+        if entry.id == "bee.security.gov:protected_kernel" then
+            entry.data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {},
+                entries = {"bee.security.gov:protected_kernel", "bee.harness.launch:harness_activation"}}
+        end
+    end
+    deps.root = function(_: unknown): (resolver.Root?, string?) return {component = "bee.driver.stub", version = "v1"}, nil end
+    deps.policy = function(_: unknown, _: resolver.Captured, _: resolver.Root): (Policy?, string?)
+        return {node_id = "node-destination", policy_digest = SHA, packages = {["bee.driver.stub"] = true},
+            namespaces = {["bee.driver.stub.binding"] = true, ["bee.driver.stub.security"] = true},
+            kinds = {["contract.binding"] = true, ["ns.requirement"] = true, ["security.policy"] = true},
+            databases = {}, grants = {["bee.driver.stub.security:descriptor_read"] = true}, modules = {}, applied = {}, migration_barrier = false}, nil
+    end
+    spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
+    return deps, spec
+end
+
 local function define_tests()
+    test.describe("Workspace driver admission", function()
+        test.it("measures an owned activation append through existing preflight", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            test.eq(facts.candidate.requirements[1].value, "bee.driver.stub.binding:binding")
+            test.eq(facts.candidate.requirements[1].targets[1], "bee.harness.launch:harness_activation")
+            local verdict = assert(preflight.check(facts.candidate, facts.context))
+            test.is_true(verdict.ready)
+        end)
+        test.it("retains the exact driver append while normalizing activation evidence", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            spec.plan_digest, spec.revision, spec.selection_revision = SHA, 1, 1
+            spec.selected, spec.review_status = true, "accepted"
+            local measured, problem = activation_measure.measure(spec, facts.candidate, facts.context)
+            if not measured then error(tostring(problem)) end
+            local report = assert(bounds.object(measured.report))
+            test.is_true(report.ready)
+            test.eq(report.base_revision, 0)
+            facts.context.driver_requirements = nil
+            test.is_nil(activation_measure.measure(spec, facts.candidate, facts.context))
+        end)
+        test.it("refuses a replacement of the host activation catalog", function()
+            local deps, spec = driver_fixture(".bindings")
+            local candidate, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_true(tostring(problem):find("may only append", 1, true) ~= nil)
+        end)
+        test.it("keeps the protected target closed without the exact host append measurement", function()
+            for _, change in ipairs({"missing", "binding", "digest"}) do
+                local deps, spec = driver_fixture()
+                local facts = resolve(deps, spec)
+                local appends = assert(facts.context.driver_requirements)
+                local append = assert(appends["bee.driver.stub.binding:activation"])
+                if change == "missing" then facts.context.driver_requirements = nil
+                elseif change == "binding" then append.binding = "bee.driver.claude.binding:binding"
+                else append.digest = string.rep("b", 64) end
+                local verdict = assert(preflight.check(facts.candidate, facts.context))
+                test.is_false(verdict.ready)
+                local protected = false
+                for _, diagnostic in ipairs(verdict.diagnostics) do
+                    if diagnostic.code == "PROTECTED_KERNEL" then protected = true end
+                end
+                test.is_true(protected)
+            end
+        end)
+        test.it("refuses editing the protected host entry even with an admitted append", function()
+            local deps, spec = driver_fixture()
+            local facts = resolve(deps, spec)
+            local protected = assert(facts.context.entries["bee.harness.launch:harness_activation"])
+            facts.candidate.entries[#facts.candidate.entries + 1] = protected
+            local verdict = assert(preflight.check(facts.candidate, facts.context))
+            test.is_false(verdict.ready)
+            local refused = false
+            for _, diagnostic in ipairs(verdict.diagnostics) do
+                if diagnostic.code == "PROTECTED_KERNEL" and diagnostic.target == protected.id then refused = true end
+            end
+            test.is_true(refused)
+        end)
+        test.it("refuses executable authority disguised as descriptor access", function()
+            local deps, spec = driver_fixture(nil, "exec.run")
+            local candidate, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_true(tostring(problem):find("only read registry", 1, true) ~= nil)
+        end)
+    end)
+
     test.describe("private overlay artifact resolver", function()
         test.it("blocks checkpoint metadata the application catalog cannot open", function()
             local deps, spec = fixture(nil)

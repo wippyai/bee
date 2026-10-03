@@ -186,11 +186,11 @@ if [ -n "$stream_json" ]; then
   while IFS= read -r _; do :; done
 fi
 if [ -n "${BEE_FIXTURE_AFTER_CLOSE:-}" ]; then printf '%s\n' "after:terminal" >&2; fi
-if [ -n "${BEE_FIXTURE_ORPHAN_RELEASE:-}" ]; then
-  # The test owns this FIFO. The descendant holds both pipes until release.
-  (read -r _ < "$BEE_FIXTURE_ORPHAN_RELEASE" &)
-fi
-if [ -n "${BEE_FIXTURE_ORPHAN:-}" ]; then
+if [ -n "${BEE_FIXTURE_ORPHAN_FIFO:-}" ]; then
+  exec 3<>"$BEE_FIXTURE_ORPHAN_FIFO"
+  (IFS= read -r _ <&3) &
+  exec 3>&-
+elif [ -n "${BEE_FIXTURE_ORPHAN:-}" ]; then
   # A descendant that outlives the fixture while holding its pipes.
   (sleep "$BEE_FIXTURE_ORPHAN" &)
 fi

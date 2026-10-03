@@ -473,8 +473,11 @@ local function has(list: {string}, wanted: string): boolean
     end
     return false
 end
-local function define_tests()
-    test.describe("Native placement", function()
+local function home_tests()
+    test.describe("Native placement homes and admission", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("coalesces short reads within the bounded output chunk and preserves stream bytes", function()
             local buffers = output_buffer.new()
             local source = string.rep("x", output_buffer.MAX_BYTES * 2 + 17)
@@ -885,13 +888,6 @@ local function define_tests()
             executor:release()
             if not ok then error(tostring(failure)) end
         end)
-        resource_mode("host_configured")
-        admit_root("bee.placement.native.env:placement_admitted_roots")
-        admit_root("bee.resources.env:resource_roots")
-        activate_fixture_binding()
-        local measured = value(service.capabilities())
-        local capability = tostring(measured.capability)
-        local observation = tostring(measured.exit_observation)
         test.it("stops an unstarted retained attempt without holding its session or creating a child", function()
             for _, required in ipairs({"direct_process", "process_group"}) do
                 if types.satisfies(capability, required) then
@@ -1135,6 +1131,14 @@ local function define_tests()
                 test.eq(grouped.error and grouped.error.code, "UNSUPPORTED_CAPABILITY")
             end
         end)
+    end)
+end
+
+local function execution_tests()
+    test.describe("Native placement execution", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("refuses a duplicate runner before it can materialize the claimed attempt", function()
             local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "direct_process")))
             local db, open_error = store.open()
@@ -1258,7 +1262,7 @@ local function define_tests()
             test.is_false(forged_stop_accepted, "unauthenticated stop ended the child")
         end)
         test.it("restores the prior attachment when the runner refuses a replacement recipient", function()
-            local request = launch({"sh", "-c", "sleep 3"}, "direct_process")
+            local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
             local prepared = attempt_of(call(OWNER, "prepare", request))
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
             local attached = attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
@@ -1270,6 +1274,8 @@ local function define_tests()
             local db = assert(store.open())
             local after_row = store.row(db, prepared.attempt_id)
             db:release()
+            local stopped = call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"})
+            test.is_true(stopped.ok, "refusal fixture child did not accept stop")
             local eof_count = 0
             local deadline = time.after("5s")
             while eof_count < 2 do
@@ -1517,7 +1523,10 @@ local function define_tests()
                     return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
                 end, 8000) then error("the child did not exit after end of input") end
                 local again = call(OWNER, "close_stdin", {attempt_id = prepared.attempt_id})
-                test.eq(again.error and again.error.code, "CONFLICT")
+                local ended = value(again)
+                test.eq(ended.closed, false)
+                test.eq(ended.reason, "the child has exited")
+                test.eq((assert(bounds.object(ended.attempt))).execution_state, "exited")
             else
                 test.eq(closed.closed, false)
                 test.eq(closed.reason, "executor cannot close stdin")
@@ -1526,6 +1535,34 @@ local function define_tests()
             end
             process.unlisten(outputs)
         end)
+        test.it("reports an already observed exit when stdin closure races a short-lived CLI", function()
+            local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "exit 0"}, "direct_process")))
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
+            call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
+            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            local observed = false
+            while not observed do
+                local data = assert(bounds.object(exits:receive():payload():data()))
+                observed = data.attempt_id == prepared.attempt_id
+            end
+            process.unlisten(exits)
+            local closed = value(call(OWNER, "close_stdin", {attempt_id = prepared.attempt_id}))
+            local decoded = assert(placement_decode.stdin_closure(closed, prepared.attempt_id))
+            test.is_false(decoded.closed)
+            test.eq(decoded.reason, "the child has exited")
+            local attempt = assert(bounds.object(closed.attempt))
+            test.eq(attempt.execution_state, "exited")
+            test.is_true(type(attempt.exit_source) == "string")
+            test.is_false(has(kinds(prepared.attempt_id), "stdin.closed"))
+        end)
+    end)
+end
+
+local function configuration_tests()
+    test.describe("Native placement configuration", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("prepares the planner's default options without a configuration conflict", function()
             local policy = assert(registry.get(NO_PROVIDER_POLICY))
             local policy_data = assert(bounds.object(policy.data))
@@ -2185,6 +2222,14 @@ local function define_tests()
             test.eq(blocked.error and blocked.error.code, "CONFLICT")
             test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
         end)
+    end)
+end
+
+local function output_tests()
+    test.describe("Native placement output", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("drains for a bounded time after an independently observed exit while descendants hold the pipes", function()
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
             local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
@@ -2535,6 +2580,14 @@ local function define_tests()
             end, 8000) then error("revoke_all did not stop the child: " .. table.concat(kinds(attempt_id), ",")) end
             resource_mode("host_configured")
         end)
+    end)
+end
+
+local function credentials_tests()
+    test.describe("Native placement credentials", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("refuses file credentials before intent without a selected retained home", function()
             local source = "bee.credentials:codex_login_fixture"
             admit_login_source(source)
@@ -3047,46 +3100,6 @@ local function define_tests()
             end, 8000) then error("successor retained launch did not exit") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
         end)
-        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
-            local request = launch({"sh", "-c", "true"}, "direct_process")
-            local prepared = attempt_of(call(OWNER, "prepare", request))
-            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
-            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
-            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
-            assert(not call_error, tostring(call_error))
-            local started = attempt_of(principals.reply(raw))
-            test.eq(started.execution_state, "starting")
-            local runner = assert(started.runner)
-            assert(process.monitor(runner))
-            local events = assert(process.events())
-            exits.paused(runner, "startup.pending", {}, function(poll: boolean): unknown
-                local selected
-                if poll then
-                    selected = channel.select({pending:case_receive(), default = true})
-                    if selected.default then return nil end
-                else selected = channel.select({pending:case_receive(), events:case_receive()}) end
-                assert(selected.ok, "startup barrier observation channel closed")
-                if selected.channel == events then return selected.value end
-                local message = selected.value
-                local data = assert(bounds.object(message:payload():data()), "invalid startup barrier")
-                return {kind = "pause", from = tostring(message:from()), step = data.attempt_id == prepared.attempt_id and "startup.pending" or "other"}
-            end)
-            process.unlisten(pending)
-            local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
-            assert(process.send(runner, "bee.test.startup.advance", {}))
-            while true do
-                local status = assert(placement_decode.status(value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))))
-                if status.attempt.execution_state == "running" then break end
-                assert(not status.attempt.start_failure, tostring(status.attempt.start_failure))
-                assert((states:receive()), "startup publication channel closed")
-            end
-            process.unlisten(states)
-            assert(process.terminate(runner))
-            local recorded = kinds(prepared.attempt_id)
-            test.is_true(has(recorded, "runner.start_accepted"))
-            test.is_false(has(recorded, "runner.start_deadline"))
-            test.is_true(has(recorded, "child.started"))
-        end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()
             local workspace = fresh("ws")
@@ -3217,6 +3230,128 @@ local function define_tests()
                 test.is_nil((tostring(row and row.request_json):find(SENTINEL, 1, true)))
             end
         end)
+    end)
+end
+
+local function startup_tests()
+    test.describe("Supervised placement startup", function()
+        test.it("returns a monitored starting attempt without waiting for acknowledgement", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            local raw, call_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id})
+            assert(not call_error, tostring(call_error))
+            local started = attempt_of(principals.reply(raw))
+            test.eq(started.execution_state, "starting")
+            local runner = assert(started.runner)
+            assert(process.monitor(runner))
+            local events = assert(process.events())
+            exits.paused(runner, "startup.pending", {}, function(poll: boolean): unknown
+                local selected
+                if poll then
+                    selected = channel.select({pending:case_receive(), default = true})
+                    if selected.default then return nil end
+                else selected = channel.select({pending:case_receive(), events:case_receive()}) end
+                assert(selected.ok, "startup barrier observation channel closed")
+                if selected.channel == events then return selected.value end
+                local message = selected.value
+                local data = assert(bounds.object(message:payload():data()), "invalid startup barrier")
+                return {kind = "pause", from = tostring(message:from()), step = data.attempt_id == prepared.attempt_id and "startup.pending" or "other"}
+            end)
+            process.unlisten(pending)
+            local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            while true do
+                local status = assert(placement_decode.status(value(call(OWNER, "status", {attempt_id = prepared.attempt_id}))))
+                if status.attempt.execution_state == "running" then break end
+                assert(not status.attempt.start_failure, tostring(status.attempt.start_failure))
+                assert((states:receive()), "startup publication channel closed")
+            end
+            process.unlisten(states)
+            assert(process.terminate(runner))
+            local recorded = kinds(prepared.attempt_id)
+            test.is_true(has(recorded, "runner.start_accepted"))
+            test.is_false(has(recorded, "runner.start_deadline"))
+            test.is_true(has(recorded, "child.started"))
+        end)
+        for _, command in ipairs({"acknowledge", "refuse", "crash"}) do
+            test.it("retains monitored startup until runner " .. command, function()
+                local mode = command == "crash" and "exit" or command
+                local request = launch({"sh", mode}, "direct_process")
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+                attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+                local future = assert(caller(OWNER):async("bee.placement.native:fixture_start_unacknowledged", {attempt_id = prepared.attempt_id}))
+                local accepted = attempt_of(principals.reply(await(future)))
+                test.eq(accepted.execution_state, "starting")
+                local message = assert((pending:receive()), "startup barrier observation channel closed")
+                process.unlisten(pending)
+                local runner = tostring(message:from())
+                local events = assert(process.events())
+                assert(process.monitor(runner))
+                local data = assert(bounds.object(message:payload():data()))
+                local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
+                local runner_ended = false
+                local ok, failure = pcall(function()
+                    test.eq(data.attempt_id, prepared.attempt_id)
+                    test.eq(accepted.runner, runner)
+                    assert(type(data.supervisor) == "string" and type(data.reply_topic) == "string")
+                    local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                    test.eq(current.execution_state, "starting")
+                    test.eq(current.runner, runner)
+                    test.is_false(has(kinds(prepared.attempt_id), "child.started"))
+                    assert(process.send(data.supervisor, data.reply_topic, {started = true}))
+                    assert(process.send(runner, "bee.test.startup.advance", {}))
+                    local expected = command == "acknowledge" and "running" or "start_failed"
+                    while true do
+                        local observed = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                        local acknowledged = command == "crash" or has(kinds(prepared.attempt_id), "runner.ack_received")
+                        if observed.execution_state == expected and acknowledged then break end
+                        local selected = channel.select({states:case_receive(), events:case_receive()})
+                        assert(selected.ok, "startup state observation channel closed")
+                        if selected.channel == events then
+                            local event = selected.value
+                            assert(event.kind ~= process.event.CANCEL, "startup observation cancelled")
+                            if event.kind == process.event.EXIT and tostring(event.from) == runner then runner_ended = true end
+                        end
+                    end
+                    local acknowledgements = 0
+                    for _, kind in ipairs(kinds(prepared.attempt_id)) do
+                        if kind == "runner.ack_received" then acknowledgements = acknowledgements + 1 end
+                    end
+                    test.eq(acknowledgements, command == "crash" and 0 or 1)
+                    local observed = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
+                    if command == "acknowledge" then
+                        test.eq(observed.attempt_id, prepared.attempt_id)
+                        test.is_nil(observed.start_failure)
+                    elseif command == "refuse" then
+                        test.eq(observed.start_failure, "fixture daemon refused containers/create")
+                    else
+                        local detail = tostring(observed.start_failure)
+                        test.is_true(detail:find("runner exited before acknowledging startup", 1, true) ~= nil)
+                        test.is_true(detail:find("fixture runner crashed before acknowledgement", 1, true) ~= nil)
+                    end
+                end)
+                if command == "acknowledge" or not ok then process.terminate(runner) end
+                while not runner_ended do
+                    local ended = assert((events:receive()), "startup supervision channel closed")
+                    assert(ended.kind ~= process.event.CANCEL, "startup observation cancelled")
+                    if ended.kind == process.event.EXIT and tostring(ended.from) == runner then runner_ended = true end
+                end
+                process.unlisten(states)
+                process.unmonitor(runner)
+                if not ok then error(tostring(failure)) end
+            end)
+        end
+    end)
+end
+
+local function cleanup_tests()
+    test.describe("Native placement cleanup", function()
+        local measured = value(service.capabilities())
+        local capability = tostring(measured.capability)
+        local observation = tostring(measured.exit_observation)
         test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
             local ids: {string} = {}
             for index = 1, 3 do
@@ -3232,6 +3367,11 @@ local function define_tests()
             -- as uncertain or exited is not swept again.
             local previous_bound = service.SWEEP_BOUND
             service.SWEEP_BOUND = 2
+            local db = assert(store.open())
+            local rows = assert(db:query("SELECT COUNT(*) AS total FROM bee_placement_attempts"))
+            db:release()
+            local retained = assert(bounds.integer(rows[1].total))
+            local sweep_bound = math.ceil(retained / service.SWEEP_BOUND)
             local function touched_count(): integer
                 local total = 0
                 for _, id in ipairs(ids) do
@@ -3246,9 +3386,12 @@ local function define_tests()
                 return total
             end
             local sweeps = 0
-            while sweeps == 0 or (touched_count() < 3 and sweeps < 3) do
+            while sweeps == 0 or (touched_count() < 3 and sweeps < sweep_bound) do
                 local swept = value(service.sweep())
                 test.is_true((swept.reconciled) <= 2)
+                for _, outcome in ipairs(principals.objects(swept.outcomes)) do
+                    test.is_true(outcome.ok == true, "sweep " .. tostring(outcome.attempt_id) .. ": " .. tostring(outcome.code))
+                end
                 sweeps = sweeps + 1
             end
             service.SWEEP_BOUND = previous_bound
@@ -3361,14 +3504,23 @@ local function define_tests()
         end
     end)
 end
-local cases = test.run_cases(define_tests)
-return {run = function(options)
-    local originals: {{[string]: unknown}} = {}
-    for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
-    local ok, result = pcall(cases, options)
-    local changes = assert(registry.snapshot()):changes()
-    for _, original in ipairs(originals) do changes:update(registry_input(original)) end
-    assert(changes:apply())
-    if not ok then error(tostring(result)) end
-    return result
-end}
+local function suite(define_tests: () -> ())
+    return function(options)
+        local originals: {{[string]: unknown}} = {}
+        for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots", "bee.resources.env:resource_roots", "bee.credentials.env:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness.launch:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+        resource_mode("host_configured")
+        admit_root("bee.placement.native.env:placement_admitted_roots")
+        admit_root("bee.resources.env:resource_roots")
+        activate_fixture_binding()
+        local cases = test.run_cases(define_tests)
+        local ok, result = pcall(cases, options)
+        local changes = assert(registry.snapshot()):changes()
+        for _, original in ipairs(originals) do changes:update(registry_input(original)) end
+        assert(changes:apply())
+        if not ok then error(tostring(result)) end
+        return result
+    end
+end
+
+return {run = suite(home_tests), execution = suite(execution_tests), configuration = suite(configuration_tests),
+    output = suite(output_tests), credentials = suite(credentials_tests), startup = suite(startup_tests), cleanup = suite(cleanup_tests)}

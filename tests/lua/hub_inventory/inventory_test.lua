@@ -5,9 +5,9 @@ local function define_tests()
     test.describe("Hub installed inventory", function()
         test.it("derives independent selection from the host dependency without a second record", function()
             local result = assert(inventory.decode({entries = {
-                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "bee/bee", root = true},
                     data = {component = "bee/files", version = "1.0.0", parameters = {{name = "folder", value = "selected"}}}},
-                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "", root = true},
+                {id = "bee.deps:hub", kind = "ns.dependency", meta = {type = "bee.component_selection"}, registry = {owner = "", root = true},
                     data = {component = "bee/hub", version = "1.0.0"}},
             }}, 4))
             test.eq(#result.roots, 2)
@@ -18,10 +18,33 @@ local function define_tests()
         end)
         test.it("does not grant independent management to another package's selection", function()
             local result = assert(inventory.decode({entries = {
-                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "acme/app", root = true},
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "acme/app", root = true},
                     data = {component = "bee/files", version = "1.0.0"}},
             }}, 1))
             test.eq(result.roots[1].managed, false)
+            test.is_false(inventory.host_component(result.roots[1]))
+            test.is_nil(result.conversion)
+            test.eq(result.modules[2].used_by[1], "acme/app")
+        end)
+        test.it("discovers host selection by metadata regardless of namespace and component spelling", function()
+            local result = assert(inventory.decode({entries = {
+                {id = "custom.selection:editor", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true},
+                    registry = {owner = "bee/bee", root = true}, data = {component = "acme/editor", version = "1.0.0"}},
+            }}, 1))
+            test.is_true(result.roots[1].managed)
+            test.is_true(inventory.host_component(result.roots[1]))
+            test.eq(assert(result.conversion).roots[1].id, "custom.selection:editor")
+            test.eq(#result.modules[1].used_by, 0)
+        end)
+        test.it("does not treat an untagged host dependency as an independent selection", function()
+            local result = assert(inventory.decode({entries = {
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/files", version = "1.0.0"}},
+            }}, 1))
+            test.is_false(result.roots[1].managed)
+            test.is_false(inventory.host_component(result.roots[1]))
+            test.is_nil(result.conversion)
+            test.eq(result.modules[2].used_by[1], "bee/bee")
         end)
         test.it("leaves third-party declarations in the host namespace outside Bee root conversion", function()
             local result = assert(inventory.decode({entries = {

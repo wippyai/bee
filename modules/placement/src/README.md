@@ -54,6 +54,8 @@ Failures are recorded as placement evidence.
 - A launch may declare a private `provider_home` with exact source and
   destination paths for its ambient login and configuration files, plus the
   provider environment roots that must point inside the private attempt home.
+  The file list may be empty for an account-free CLI and admits at most eight
+  exact projections; an empty list imports no ambient files.
   Native placement checks file projections against that declaration before
   projecting them; only a declared login file may request broker write-back.
   These files do not grant the child access to the rest of the source home.
@@ -68,6 +70,8 @@ Failures are recorded as placement evidence.
   window between that measurement and the exec is the runtime's.
 - A launch may declare `session_end: stdin_close`: the harness ends when
   stdin closes, and the owner asks `close_stdin` once the turn is decided.
+  An already exited child returns its attempt with `closed: false` and a reason;
+  callers retain the exit evidence without treating it as stdin closure.
   The runner closes it and answers, recording `stdin.closed` or
   `stdin.uncertain` apart from input acceptance and exit; stop and cleanup
   keep signal and cleanup authority.

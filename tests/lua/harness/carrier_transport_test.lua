@@ -181,6 +181,57 @@ local function define_tests()
             local refused = placement_decode.stdin_closure({attempt = placement_attempt(nil), closed = false, reason = "runner unavailable"}, "attempt")
             test.eq(refused and refused.reason, "runner unavailable")
         end)
+        test.it("keeps terminal settlement when stdin closure returns a proven exit", function()
+            local selected = plan("session", "stream-json")
+            selected.launch.session_end = "stdin_close"
+            local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)
+            local session: machine.Session = {plan = selected, turn_id = "turn:attempt:1", turn_open = true, epoch = 1, revision = 0,
+                checkpoint = point, decoder = stream_json.new(machine.MAX_FRAME_BYTES), normalizer = nil,
+                terminal = {outcome = "succeeded", answer = "done", resume_ref = "resume"},
+                stream_ended = false, exit = nil, eof = {stdout = false, stderr = false}, runner = "runner",
+                settled = nil, recovered = false, output = "open", pending_hint = nil, placement_evidence = 0,
+                stderr_sequence = 0, last_sequence = {stdout = 0, stderr = 0}, held_from = nil, dropping_stdout = false}
+            local ended = placement_attempt(nil)
+            ended.execution_state = "exited"
+            ended.attachment_generation = 1
+            ended.exit_source = "runtime.wait"
+            ended.exit = {code = 0}
+            local commits = 0
+            local closure_succeeded = false
+            local io: machine.IO = {call = function(target: string, value: unknown): (unknown, string?)
+                if target == machine.CARRIER_OPS .. ":commit" then
+                    commits = commits + 1
+                    return commit_reply(value, commits), nil
+                elseif target == "bee.placement.native.binding:close_stdin" then
+                    return {ok = true, value = {attempt = ended, closed = closure_succeeded,
+                        reason = not closure_succeeded and "the child has exited" or nil}}, nil
+                end
+                error("an exited child must not be stopped: " .. target)
+            end,
+                send = function(_: string, _: string, _: unknown) error("no new input after exit") end,
+                self_pid = function(): string return "carrier" end,
+                now_ms = function(): integer return 1000000 end,
+                key = function(): string return "key" end}
+            local ending, err = machine.end_session(io, session, true)
+            test.is_nil(err)
+            test.eq(ending, "none")
+            test.eq(session.exit and session.exit.code, 0)
+            test.eq(commits, 1, "only closure intent is recorded; exit is not stdin closure")
+            test.is_true(machine.ready_to_settle(session, false))
+            test.is_false(machine.drained(session), "the pending output still needs draining")
+            session.exit = nil
+            ended.attachment_generation = 2
+            local stale, stale_error = machine.end_session(io, session, false)
+            test.eq(stale, "none")
+            test.eq(stale_error, "stdin closure belongs to another generation")
+            test.is_nil(session.exit)
+            ended.attachment_generation = 1
+            closure_succeeded = true
+            local closed, closed_error = machine.end_session(io, session, true)
+            test.eq(closed, "closed", "a closure that succeeded before exit remains recorded")
+            test.is_nil(closed_error)
+            test.eq(commits, 2)
+        end)
         test.it("refuses an unserializable normalizer state before commit or output acknowledgment", function()
             local selected = plan("session", "stream-json")
             local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)

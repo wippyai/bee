@@ -51,11 +51,40 @@ local function define_tests()
         test.it("updates a component this installer holds and installs any other", function()
             local decoded = installation.decode("install", {component = "acme/tool"})
             if not decoded then error("decode") end
-            local roots = {roots = {{id = "bee.hub.deps:" .. DIGEST, component = "acme/tool", version = "1.0.0"}}}
+            local roots = {roots = {{id = "host.selection:tool", component = "acme/tool", version = "1.0.0", managed = true}}}
             test.eq(installation.action(decoded, roots), "update")
-            test.eq(installation.action(decoded, {roots = {{id = "bee.deps:host", component = "acme/tool"}}}), "install")
+            test.eq(installation.action(decoded, {roots = {{id = "bee.deps:host", component = "acme/tool", managed = false}}}), "install")
+            test.eq(installation.action(decoded, {roots = {{id = "bee.hub.deps:" .. DIGEST,
+                component = "acme/tool", managed = false}}}), "install")
+            test.eq(installation.action(decoded, {roots = {{id = "host.selection:other",
+                component = "acme/other", managed = true}}}), "install")
             test.eq(installation.action(decoded, {roots = {}}), "install")
             local _, problem = installation.action(decoded, {})
+            test.not_nil(problem)
+        end)
+
+        test.it("rejects incomplete ownership evidence instead of selecting install", function()
+            local decoded = assert(installation.decode("install", {component = "acme/tool"}))
+            for _, root in ipairs({{id = "host:tool", component = "acme/tool"},
+                {id = "host:tool", component = "acme/tool", managed = "true"},
+                {component = "acme/tool", managed = true},
+                {id = "host:tool", managed = true}}) do
+                local action, problem = installation.action(decoded, {roots = {root}})
+                test.is_nil(action)
+                test.not_nil(problem)
+            end
+        end)
+
+        test.it("validates every installed root before selecting an action", function()
+            local decoded = assert(installation.decode("install", {component = "acme/tool"}))
+            local installed = {roots = {{id = "host:tool", component = "acme/tool", managed = true},
+                {id = "host:other", component = "acme/other"}}}
+            local action, problem = installation.action(decoded, installed)
+            test.is_nil(action)
+            test.not_nil(problem)
+            local sparse: {[integer]: unknown} = {[2] = {id = "host:tool", component = "acme/tool", managed = true}}
+            action, problem = installation.action(decoded, {roots = sparse})
+            test.is_nil(action)
             test.not_nil(problem)
         end)
 

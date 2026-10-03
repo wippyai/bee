@@ -8,3 +8,9 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
+    operations: bee.hub.types:operations
+- name: operations
+  kind: library.lua
+  source: file://operations.lua
+  imports:
+    bounds: bee.values:bounds

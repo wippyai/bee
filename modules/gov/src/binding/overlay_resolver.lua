@@ -6,6 +6,7 @@ local artifact = require("artifact")
 local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
+local workspace_applications = require("workspace_applications")
 local application_admission = require("application_admission")
 local capability_model = require("capability_model")
 local capability_grants = require("capability_grants")
@@ -13,6 +14,8 @@ local capability_files = require("capability_files")
 local protected_kernel = require("protected_kernel")
 local lists = require("lists")
 local resolution = require("resolution")
+local drivers = require("drivers")
+local driver_admission = require("driver_admission")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -154,8 +157,8 @@ local function path_value(entry: Entry, path: unknown): (unknown?, string?)
     return value, nil
 end
 
-local function requirement(entry: Entry, package: string, final: {[string]: Entry},
-    catalog: capability_model.Vocabulary?): (Object?, string?)
+local function requirement(entry: Entry, package: string, final: {[string]: Entry}, owned: {[string]: boolean},
+    catalog: capability_model.Vocabulary?): (preflight.Requirement?, string?)
     local data = object(entry.data) or entry
     local targets, targets_error = bounds.dense_list(data.targets, 64, "requirement targets")
     if not targets then return nil, targets_error end
@@ -209,7 +212,6 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         local params = capability_request.parameters
         local mode = params.mode
         local operations = params.operations
-        local request_namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
         if type(mode) ~= "string" or type(operations) ~= "table" then
             return nil, "Hive exposure parameters are invalid"
         end
@@ -217,8 +219,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         for _, ref in ipairs(operations) do
             local candidate = type(ref) == "string" and object(final[ref]) or nil
             local candidate_meta = candidate and object(candidate.meta) or nil
-            local candidate_namespace = type(ref) == "string" and (ref):match("^([^:]+):") or nil
-            if not candidate or candidate.kind ~= "function.lua" or candidate_namespace ~= request_namespace
+            if not candidate or candidate.kind ~= "function.lua" or not owned[ref]
                 or not candidate_meta or candidate_meta.hive ~= mode then
                 return nil, "Hive exposure operation " .. tostring(ref) .. " is not this artifact's " .. tostring(mode) .. " operation"
             end
@@ -232,16 +233,21 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         result_targets[#result_targets + 1] = target_id
         local destination = object(final[target_id])
         if not destination then return nil, "requirement target entry is absent: " .. target_id end
-        if capability_request then
+        local driver = drivers.source_of(package)
+        if driver and not target_id:match("^" .. package:gsub("%.", "%%.") .. "[.:]") then
+            local binding_id = driver_admission.append(entry, final)
+            if capability_request or not binding_id then
+                return nil, "workspace driver requirements may only append their own harness binding to host activation"
+            end
+            selected = binding_id
+        elseif capability_request then
             if exposure then
                 if target.path ~= ".security.policies +=" or not exposure[target_id] then
                     return nil, "Hive exposure requirement must append policies to one of its own operations"
                 end
             else
-                local request_namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
-                local target_namespace = target_id:match("^([^:]+):")
                 local target_meta = object(destination.meta)
-                if target.path ~= ".security.policies +=" or target_namespace ~= request_namespace
+                if target.path ~= ".security.policies +=" or not owned[target_id]
                     or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.app" then
                     return nil, "capability requirement must append policies to its own application"
                 end
@@ -409,6 +415,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id) < (right.id) end)
     local candidate_entries: {preflight.Entry} = {}
     local requirements: {preflight.Requirement} = {}
+    local driver_requirements: {[string]: preflight.DriverRequirement} = {}
     local candidate_migrations: {preflight.Migration} = {}
     local final: {[string]: Entry} = {}
     for id, entry in pairs(current_raw) do
@@ -419,6 +426,20 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         -- overlay instruction. Keep the exact public definition ID and body.
         local clean: Entry = {}
         for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
+        if drivers.source_of(component) and (clean.kind == "security.policy" or clean.kind == "security.policy.expr") then
+            local data = object(clean.data)
+            local policy_data = data and object(data.policy) or nil
+            local actions = policy_data and bounds.dense_list(policy_data.actions, 2, "driver descriptor actions") or nil
+            if clean.id ~= component .. ".security:descriptor_read" or not policy_data
+                or policy_data.effect ~= "allow" or not actions or #actions == 0 then
+                return nil, nil, "workspace driver policies must be descriptor read policies"
+            end
+            for _, action in ipairs(actions) do
+                if action ~= "registry.get" and action ~= "registry.snapshot" then
+                    return nil, nil, "workspace driver policies may only read registry descriptors"
+                end
+            end
+        end
         final[clean.id] = clean
         local measured, measured_error = measured_entry(clean, component)
         if not measured then return nil, nil, measured_error end
@@ -435,6 +456,8 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 ordinal = ordinal, checksum = measured.digest}
         end
     end
+    local artifact_ids: {[string]: boolean} = {}
+    for _, entry in ipairs(incoming) do artifact_ids[entry.id] = true end
     for _, entry in ipairs(incoming) do
         if entry.kind == "ns.requirement" then
             local meta = object(entry.meta)
@@ -446,9 +469,18 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 if not decoded then return nil, nil, catalog_error end
                 catalog = decoded
             end
-            local item, item_error = requirement(entry, component, final, catalog)
+            local item, item_error = requirement(entry, component, final, artifact_ids, catalog)
             if not item then return nil, nil, item_error end
             requirements[#requirements + 1] = item
+            if drivers.source_of(component) and item.value and #item.targets == 1
+                and item.targets[1] == driver_admission.TARGET then
+                for _, measured in ipairs(candidate_entries) do
+                    if measured.id == item.id then
+                        driver_requirements[item.id] = {binding = item.value, digest = measured.digest}
+                        break
+                    end
+                end
+            end
         end
     end
     local capability_proposal: capability_grants.Proposal? = nil
@@ -457,7 +489,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
     if policy.workspace_application then
         local app_binding = policy.applications and object(policy.applications[1]) or nil
-        local app_id = app_binding and bounds.id(app_binding.definition_id) or nil
+        local app_id, application_error = workspace_applications.application(incoming)
+        if not app_id then return nil, nil, application_error end
+        if app_binding then app_binding.definition_id = app_id end
         local owner = bounds.id(policy.overlay_owner)
         local catalog_entry = current_raw["bee.security.capability:capability_catalog"]
         local vocabulary, catalog_error = capability_model.decode(catalog_entry)
@@ -599,7 +633,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             or policy.source_workspace ~= source_workspace or not bounds.id(policy.overlay_owner) then
             return nil, nil, "application admission policy does not match the selected activation profile"
         end
-        local projection, projection_error = application_admission.project({workspace_id = policy.workspace_id,
+        local projection, projection_error = application_admission.project({identity_generation = "current", workspace_id = policy.workspace_id,
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
             source_workspace = policy.source_workspace, artifact_digest = artifact_digest,
             bindings = policy.applications, artifact_entries = expected,
@@ -621,6 +655,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local context, context_error = policy_context(policy, captured, base_digest,
         current, installed, kernel, evidence)
     if not context then return nil, nil, context_error end
+    context.driver_requirements = driver_requirements
     local dependencies: {string} = {}
     local artifacts: {preflight.Artifact} = {{component = component, version = version, digest = artifact_digest,
         dependencies = dependencies, namespaces = names}}

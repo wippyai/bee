@@ -10,6 +10,20 @@ end
 
 local function define_tests()
     test.describe("Application folder picker reply boundary", function()
+        test.it("names an admitted workspace root without interpreting its registry identity", function()
+            for _, ref in ipairs({"host.storage:projects", "bee.env:workspace_root"}) do
+                local state = picker.new()
+                picker.apply_roots(state, success({roots = {{root_ref = ref, access = "write"}}}))
+                test.is_true(picker.open(state))
+                test.eq(picker.location(state), "Workspace root")
+                picker.apply_folders(state, success({root_ref = ref, path = "", access = "write",
+                    folders = {{name = "project"}}}))
+                test.is_true(picker.open(state))
+                test.eq(picker.location(state), "Workspace root/project")
+                test.eq(state.root and state.root.root_ref, ref)
+            end
+        end)
+
         test.it("rejects malformed roots without replacing the last complete list", function()
             local state = picker.new()
             picker.apply_roots(state, success({roots = {{root_ref = "bee.env:workspace_root", access = "write"}}}))

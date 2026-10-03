@@ -4,8 +4,7 @@ local funcs = require("funcs")
 local registry = require("registry")
 local security = require("security")
 local process = require("process")
-local channel = require("channel")
-local time = require("time")
+local completion = require("completion")
 local protocol = require("protocol")
 local principals = require("principals")
 local profiles = require("profiles")
@@ -35,20 +34,20 @@ local function value(reply: service.Reply): types.Attempt
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return assert(placement_decode.attempt(reply.value))
 end
-local function running(id: string): types.Attempt
-    local started = value(call("start", {attempt_id = id}))
-    if started.execution_state ~= "starting" then return started end
-    local deadline = time.after("120s")
-    while true do
-        local status = call("status", {attempt_id = id})
-        assert(status.ok)
-        local observed = assert(placement_decode.status(status.value))
-        if observed.attempt.execution_state ~= "starting" then return observed.attempt end
-        local poll = time.after("50ms")
-        local selected = channel.select({poll:case_receive(), deadline:case_receive()})
-        assert(selected.ok and selected.channel == poll, "Docker start never left its accepted starting state")
-    end
-    error("Docker start did not finish")
+local function placement_call(method: string, input: unknown): service.Reply
+    return call(method, input)
+end
+local function running(id: string, allow_failure: boolean?): types.Attempt
+    local watch = completion.listen()
+    local ok, result = pcall(function(): types.Attempt
+        completion.attach(watch, placement_call, id)
+        local accepted = value(call("start", {attempt_id = id}))
+        test.eq(accepted.execution_state, "starting")
+        return completion.started(watch, placement_call, id, allow_failure ~= true)
+    end)
+    completion.close(watch)
+    if not ok then error(tostring(result)) end
+    return result
 end
 local function configure()
     local changes = registry.snapshot():changes()
@@ -62,7 +61,9 @@ local function configure()
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
     local admitted = false
-    for _, binding in ipairs(bindings) do if binding == "bee.placement.native:fixture_agent_binding" then admitted = true end end
+    for _, binding in ipairs(bindings) do
+        if binding == "bee.placement.native:fixture_agent_binding" then admitted = true end
+    end
     if not admitted then bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding" end
     changes:update(activation)
     assert(changes:apply())
@@ -119,6 +120,26 @@ local function boundary()
             assert(store.transition(db, id, {cleanup = "complete", evidence = {kind = "test.cleanup", detail = "materialization refused before scratch creation"}}).ok)
             db:release()
         end)
+        test.it("rejects a retained startup refusal before waiting for Docker output", function()
+            local id = "docker-output-start-refused"
+            value(call("prepare", request(id)))
+            local cause = "containers/create: HTTP 500: exact fixture refusal"
+            local db = assert(store.open())
+            assert(store.transition(db, id, {execution = "starting", evidence = {kind = "child.creating", detail = "fixture create"}}).ok)
+            assert(materialization.fail_start(db, id, cause, true).ok)
+            db:release()
+            for _, observe in ipairs({
+                function(watch: completion.Watch) completion.started(watch, placement_call, id, true) end,
+                function(watch: completion.Watch) completion.wait(watch, placement_call, id, true,
+                    function(_output: protocol.Output) error("failed launch produced output") end) end,
+            }) do
+                local watch = completion.listen()
+                local ok, reason = pcall(function() observe(watch) end)
+                completion.close(watch)
+                test.is_false(ok)
+                test.is_true(tostring(reason):find(cause, 1, true) ~= nil, tostring(reason))
+            end
+        end)
         for index, cause in ipairs({
             'failed to create container: Post "http://docker/v1.45/containers/create": context deadline exceeded',
             'containers/create: HTTP 500: daemon create refused',
@@ -160,9 +181,7 @@ local function run()
         test.it("retains the real daemon start refusal as a failed launch", function()
             local id = "docker-start-refused-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
             value(call("prepare", request(id, REFUSED_PROFILE)))
-            local accepted = value(call("start", {attempt_id = id}))
-            test.eq(accepted.execution_state, "starting")
-            local reply: service.Reply = {ok = true, value = running(id)}
+            local reply: service.Reply = {ok = true, value = running(id, true)}
             test.is_true(reply.ok)
             local status = assert(placement_decode.status(call("status", {attempt_id = id}).value))
             local attempt = status.attempt
@@ -239,68 +258,43 @@ local function run()
             call("cleanup", {attempt_id = id})
             if not ok then error(tostring(failure)) end
         end)
-        test.it("delivers quoted initial input and EOF to a real Docker child", function()
-            local id = "docker-stdin-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
-            local selected = request(id)
-            selected.launch.argv = {"-c", "cat; printf '\\nEOF_OK'"}
-            selected.launch.stdin = "literal 'quotes' $(no-substitution)\n"
-            selected.launch.stdin_eof = true
-            local output = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            value(call("prepare", selected))
-            value(call("attach", {attempt_id = id, recipient = process.pid(), generation = 1}))
-            local ok, failure = pcall(function()
-                running(id)
-                local deadline = time.after("20s")
-                local stdout = ""
-                local eof = 0
-                while eof < 2 do
-                    local received = channel.select({output:case_receive(), deadline:case_receive()})
-                    assert(received.ok and received.channel == output, "Docker stdin EOF did not complete")
-                    local message = received.value
-                    local data = message:payload():data()
-                    assert(type(data) == "table" and data.attempt_id == id and data.generation == 1)
-                    if data.stream == "stdout" and type(data.data) == "string" then stdout = stdout .. data.data end
-                    if data.eof then eof = eof + 1 end
-                    process.send(message:from(), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence})
-                end
-                test.eq(stdout, selected.launch.stdin .. "\nEOF_OK")
+    end)
+end
+local function input_tests()
+    test.describe("Docker placement stdin", function()
+        configure()
+        for index, input in ipairs({"literal 'quotes' $(no-substitution)\n", ""}) do
+            local title = index == 1 and "delivers quoted initial input and EOF to a real Docker child"
+                or "gives an argv-based batch provider immediate EOF for empty input"
+            test.it(title, function()
+                local id = "docker-stdin-" .. tostring(index) .. "-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
+                local selected = request(id)
+                local expected = index == 1 and "\nEOF_OK" or "EMPTY_EOF_OK"
+                selected.launch.argv = {"-c", index == 1 and "cat; printf '\\nEOF_OK'" or "cat; printf EMPTY_EOF_OK"}
+                selected.launch.stdin = input
+                selected.launch.stdin_eof = true
+                local watch = completion.listen()
+                local ok, failure = pcall(function()
+                    value(call("prepare", selected))
+                    completion.attach(watch, placement_call, id)
+                    value(call("start", {attempt_id = id}))
+                    local stdout = ""
+                    completion.wait(watch, placement_call, id, true, function(output: protocol.Output)
+                        if output.stream == "stdout" then stdout = stdout .. (output.data or "") end
+                    end)
+                    test.eq(stdout, input .. expected)
+                end)
+                local cleaned, cleanup_error = pcall(function() completion.cleanup(placement_call, id) end)
+                completion.close(watch)
+                if not ok then error(tostring(failure)) end
+                if not cleaned then error(tostring(cleanup_error)) end
             end)
-            call("stop", {attempt_id = id, mode = "forced"})
-            call("cleanup", {attempt_id = id})
-            process.unlisten(output)
-            if not ok then error(tostring(failure)) end
-        end)
-        test.it("gives an argv-based batch provider immediate EOF for empty input", function()
-            local id = "docker-empty-stdin-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
-            local selected = request(id)
-            selected.launch.argv = {"-c", "cat; printf EMPTY_EOF_OK"}
-            selected.launch.stdin = ""
-            selected.launch.stdin_eof = true
-            local output = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
-            value(call("prepare", selected))
-            value(call("attach", {attempt_id = id, recipient = process.pid(), generation = 1}))
-            local ok, failure = pcall(function()
-                running(id)
-                local deadline = time.after("20s")
-                local stdout = ""
-                local eof = 0
-                while eof < 2 do
-                    local received = channel.select({output:case_receive(), deadline:case_receive()})
-                    assert(received.ok and received.channel == output, "empty Docker input did not reach EOF")
-                    local message = received.value
-                    local data = message:payload():data()
-                    assert(type(data) == "table" and data.attempt_id == id and data.generation == 1)
-                    if data.stream == "stdout" and type(data.data) == "string" then stdout = stdout .. data.data end
-                    if data.eof then eof = eof + 1 end
-                    process.send(message:from(), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence})
-                end
-                test.eq(stdout, "EMPTY_EOF_OK")
-            end)
-            call("stop", {attempt_id = id, mode = "forced"})
-            call("cleanup", {attempt_id = id})
-            process.unlisten(output)
-            if not ok then error(tostring(failure)) end
-        end)
+        end
+    end)
+end
+local function readiness_tests()
+    test.describe("Docker placement readiness", function()
+        configure()
         test.it("refuses changed profile admission before preparing an image", function()
             local selected = request("docker-stale-profile")
             selected.placement_profile_digest = string.rep("0", 64)
@@ -337,4 +331,4 @@ local function isolated_cases(definition: () -> ())
         return result
     end
 end
-return {run = isolated_cases(run), boundary = isolated_cases(boundary), creator = creator}
+return {run = isolated_cases(run), boundary = isolated_cases(boundary), input = isolated_cases(input_tests), readiness = isolated_cases(readiness_tests), creator = creator}

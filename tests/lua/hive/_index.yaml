@@ -50,6 +50,7 @@ entries:
   meta:
     type: test_support
     hive: open
+    hive_service: bee.hive
     hive_operation:
       revision: '1'
       title: Probe operation
@@ -67,6 +68,7 @@ entries:
   meta:
     type: test_support
     hive: open
+    hive_service: bee.hive
 - name: probe_policy_mode
   kind: function.lua
   source: file://probe_open.lua
@@ -74,6 +76,7 @@ entries:
   meta:
     type: test_support
     hive: policy
+    hive_service: bee.hive
     hive_operation:
       revision: '1'
       title: Policy probe
@@ -289,11 +292,29 @@ entries:
   source: file://desktop_viewer_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [process, channel, time]
+  modules: [process, channel, time, registry]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
     protocol: bee.hive.desktop:protocol
+    decode: bee.protocol:decode
+
+- name: viewer_fixture
+  kind: library.lua
+  source: file://viewer_fixture.lua
+  meta: {type: test_support}
+  imports:
+    display: bee.hive.desktop:display
+    remote: bee.hive.desktop:remote
+    delivery: bee.terminal.service:delivery
+
+- name: viewer_display_fixture
+  kind: library.lua
+  source: file://viewer_display_fixture.lua
+  meta: {type: test_support}
+  imports:
+    display: bee.hive.desktop:display
+    delivery: bee.terminal.service:delivery
 
 - name: inbox_discover_test_policy
   kind: security.policy

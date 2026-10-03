@@ -621,6 +621,14 @@ DROP TABLE bee_governance_lease_uses;
 ALTER TABLE bee_governance_lease_uses_next RENAME TO bee_governance_lease_uses;
 ]]
 
+local APPLICATION_ADMISSION_GENERATION_SQL = [[
+ALTER TABLE bee_governance_activation_intents ADD COLUMN application_admission_generation TEXT NOT NULL DEFAULT 'current' CHECK(application_admission_generation IN ('current', 'prior'));
+UPDATE bee_governance_activation_intents
+SET application_admission_generation = coalesce(json_extract(application_admission_bytes, '$.identity_generation'),
+  CASE WHEN substr(overlay_owner, 1, length('bee.governance.workspace_applications:')) = 'bee.governance.workspace_applications:' THEN 'prior' ELSE 'current' END)
+WHERE application_admission_bytes IS NOT NULL;
+]]
+
 function M.all(): {Migration}
     return {
         {id = 1, name = "governance_workspace_staging", sql = INITIAL, rebuild = false},
@@ -639,6 +647,7 @@ function M.all(): {Migration}
         {id = 14, name = "governance_capability_leases", historical_sql = {ORIGINAL_SQL_14}, sql = LEASES_SQL, rebuild = false},
         {id = 15, name = "governance_lease_receipt_result", sql = LEASE_RECEIPT_RESULT_SQL, rebuild = false},
         {id = 16, name = "governance_lease_use_admission_repair", sql = LEASE_USES_REPAIR_SQL, rebuild = true},
+        {id = 17, name = "governance_application_admission_generation", sql = APPLICATION_ADMISSION_GENERATION_SQL, rebuild = false},
     }
 end
 

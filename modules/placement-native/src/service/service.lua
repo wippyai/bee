@@ -759,6 +759,9 @@ function M.close_stdin(value: unknown): Reply
     if unknown_field then return fail("INVALID", unknown_field) end
     local attempt, denied = load(object.attempt_id)
     if not attempt then return assert(denied) end
+    if attempt.execution_state == "exited" then
+        return succeed({attempt = attempt, closed = false, reason = "the child has exited"})
+    end
     if not transitions.live(attempt.execution_state) then return fail("CONFLICT", "the attempt is not live") end
     local _, _, row = recorded_identity(attempt.attempt_id)
     local runner = row and row.runner_pid or nil

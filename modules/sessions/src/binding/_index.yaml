@@ -442,6 +442,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
+    operations: bee.hub.types:operations
 - name: threads_journal
   kind: library.lua
   source: file://threads_journal.lua

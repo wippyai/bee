@@ -10,12 +10,14 @@ An empty source directory exercises fresh state. The target never builds a Bee
 binary, pushes changes, changes the source state, or applies a public Hub update.
 It uses `NativeDesktop` and the existing synchronized-frame PTY decoder.
 
-State is copied under `.wippy/owner-journey-work/`: SQLite read-only backups
-include committed WAL data; other regular files use `cp -a`. Names matching
-`cred|secret|token|key`, provider `auth.json`, PEM files and links are excluded
-before opening them. SQLite sidecars are excluded. Copied runtime caches are
-archived outside the selected state so Bee can rematerialize excluded module
-artifacts from its binary, while all copied owner databases remain intact.
+State is copied under `.wippy/owner-journey-work/`: SQLite read-only backups for
+`*.db`, `*.db.*` and `*.sqlite` include committed WAL data; other files and links
+use `cp -a` without following links. Names matching `credentials.db*` or
+`secret|token|key` are excluded before opening them, case-insensitively. Logs,
+`lock`, `*.lock`, `*.pid` and SQLite sidecars are excluded; dependency manifests
+`wippy.lock` and `resolution.lock` are retained. Cache and deployment
+content stays in the copied state, including the public `bee/credentials`
+package, so recorded module evidence remains available for offline startup.
 Bee creates its fresh credential store. The work directory is removed after
 process cleanup; provider homes and credential projections are never evidence.
 

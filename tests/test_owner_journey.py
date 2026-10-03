@@ -37,17 +37,71 @@ class CopyTests(unittest.TestCase):
                 self.assertEqual(backup.execute('SELECT value FROM evidence').fetchone(), ('retained',))
             self.assertEqual(before, database.read_bytes())
 
-    def test_sensitive_names_and_links_are_excluded_before_open(self):
+    def test_copy_preserves_cache_deployments_and_other_state(self):
+        retained = ('cache/bee/credentials-0.1.0-dev.wapp',
+                    'deployments/current/.wippy/vendor/bee/credentials-0.1.0-dev.wapp',
+                    'deployments/current/wippy.lock', 'cache/resolution.lock',
+                    'node.identity', 'credits.txt')
+        excluded = ('credentials.db', 'credentials.db.client', 'Credentials.DB-wal',
+                    'API_SECRET', 'accessTOKEN', 'private.KEY', 'lock', '.lock',
+                    'owner.lock', 'node.identity.lock', '.read.lock',
+                    'owner.pid', 'owner.log', 'workspace.db-wal',
+                    'workspace.db-shm', 'workspace.db-journal', 'cache/secret-folder')
+        for name in retained:
+            path = self.source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('public state')
+        for name in excluded:
+            (self.source / name).mkdir()
+        destination = self.root / 'copied'
+        manifest = safe_copy(self.source, destination)
+        for name in retained:
+            self.assertEqual((destination / name).read_text(), 'public state')
+        for name in excluded:
+            self.assertFalse((destination / name).exists(), name)
+        self.assertEqual(set(manifest['copied']), set(retained))
+        self.assertEqual({item['path'] for item in manifest['excluded']}, set(excluded))
+
+    def test_backup_covers_all_state_database_names(self):
+        for name in ('workspace.db.client', 'workspace.db.catalog', 'catalog.sqlite'):
+            with sqlite3.connect(self.source / name) as owner:
+                owner.execute('PRAGMA journal_mode=WAL')
+                owner.execute('CREATE TABLE evidence(value TEXT)')
+                owner.execute("INSERT INTO evidence VALUES ('retained')")
+                owner.commit()
+                destination = self.root / name
+                safe_copy(self.source, destination)
+                self.assertFalse((destination / (name + '-wal')).exists())
+                with sqlite3.connect(destination / name) as backup:
+                    self.assertEqual(backup.execute('SELECT value FROM evidence').fetchone(), ('retained',))
+
+    def test_journey_keeps_copied_cache_and_deployments_at_startup(self):
+        for name in ('cache/bee/credentials-0.1.0-dev.wapp', 'deployments/current/wippy.lock'):
+            path = self.source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('public state')
+        journey = Journey(Path('/usr/bin/false'), self.source, self.root / 'evidence')
+        self.addCleanup(journey.cleanup)
+        def attach():
+            self.assertTrue((journey.state / 'cache/bee/credentials-0.1.0-dev.wapp').is_file())
+            self.assertTrue((journey.state / 'deployments/current/wippy.lock').is_file())
+            (journey.state / 'credentials.db').touch()
+        with patch.object(journey, 'attach', side_effect=attach), patch.object(journey, 'frame'):
+            journey.start()
+
+    def test_sensitive_names_are_excluded_before_open_and_links_are_not_followed(self):
         # No credential contents are read, including in this safety regression.
-        for name in ('credentials.db', 'secret', 'login-token', 'signing-key', 'auth.json'):
+        for name in ('credentials.db', 'secret', 'login-token', 'signing-key'):
             (self.source / name).mkdir()
         (self.source / 'linked').symlink_to(self.source / 'credentials.db')
         (self.source / 'ordinary').write_text('retained nonsecret state')
         (self.source / 'ordinary').chmod(0o600)
         destination = self.root / 'copied'
         manifest = safe_copy(self.source, destination)
-        self.assertEqual([item.name for item in destination.iterdir()], ['ordinary'])
-        self.assertEqual(len(manifest['excluded']), 6)
+        self.assertEqual({item.name for item in destination.iterdir()}, {'ordinary', 'linked'})
+        self.assertEqual(len(manifest['excluded']), 4)
+        self.assertTrue((destination / 'linked').is_symlink())
+        self.assertEqual((destination / 'linked').readlink(), self.source / 'credentials.db')
         self.assertEqual((destination / 'ordinary').stat().st_mode & 0o777, 0o600)
 
     def test_overlapping_source_is_refused(self):

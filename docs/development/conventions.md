@@ -274,6 +274,13 @@ independently within the existing test entry timeout. The bounded sweep regressi
 accounts for earlier cases' retained attempts in the same owner store and verifies
 every reconciliation outcome.
 
+`make docker-placement-unit-check` runs Docker admission, failure reporting,
+image, environment and real container lifecycle tests under the shared daemon
+lock. Docker and native placement checks observe startup acknowledgements,
+runner exit and both output EOFs through one fixture observer. Failed launches
+report their retained cause before waiting for output; the test entry timeout
+bounds a broken fixture.
+
 `make harness-drain-unit-check` covers carrier post-exit draining. Its silent
 consumer fixture holds descendant pipes behind a FIFO until the test releases
 them, so host load cannot close those pipes before the declared drain expires.

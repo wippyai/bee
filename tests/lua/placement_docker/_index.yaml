@@ -108,6 +108,7 @@ entries:
     materialization: bee.placement.native.service:materialization
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
+    completion: bee.placement.native:completion
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -185,6 +186,7 @@ entries:
     materialization: bee.placement.native.service:materialization
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
+    completion: bee.placement.native:completion
 - name: boundary_test
   kind: function.lua
   source: file://lifecycle_test.lua
@@ -215,6 +217,7 @@ entries:
     materialization: bee.placement.native.service:materialization
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
+    completion: bee.placement.native:completion
   security:
     policies:
     - bee.placement.native:apply_test_policy

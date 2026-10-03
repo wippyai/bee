@@ -44,7 +44,7 @@ local function status(call: Call, attempt_id: string): types.Attempt
 end
 
 -- The suite timeout bounds a broken test; admission is not a child-start deadline.
-function M.wait(watch: Watch, call: Call, attempt_id: string, require_success: boolean)
+local function observe(watch: Watch, call: Call, attempt_id: string, require_success: boolean, startup: boolean, output_received: ((protocol.Output) -> ())?): types.Attempt
     local runner_exit: string? = nil
     while true do
         local attempt = status(call, attempt_id)
@@ -65,14 +65,16 @@ function M.wait(watch: Watch, call: Call, attempt_id: string, require_success: b
                 local cause = assert(attempt.start_failure, "startup refusal omitted its cause")
                 error(cause)
             end
-            return
+            return attempt
+        elseif startup and attempt.execution_state == "running" then
+            return attempt
         elseif attempt.execution_state == "exited" then
-            if not require_success then return end
+            if startup or not require_success then return attempt end
             if watch.eof.stdout and watch.eof.stderr then
                 if not attempt.exit or attempt.exit.code ~= 0 then
                     error("child exited unsuccessfully: " .. tostring(attempt.exit and attempt.exit.code))
                 end
-                return
+                return attempt
             end
         elseif attempt.execution_state == "uncertain" then
             error("attempt execution is uncertain")
@@ -87,6 +89,7 @@ function M.wait(watch: Watch, call: Call, attempt_id: string, require_success: b
             local output = protocol.decode_output(message:payload():data())
             if output and output.attempt_id == attempt_id and output.generation == 1
                 and tostring(message:from()) == watch.runner then
+                if output_received then output_received(output) end
                 if output.eof then watch.eof[output.stream] = true end
                 watch.consumed = math.max(watch.consumed, output.sequence)
                 assert(process.send(watch.runner, protocol.TOPIC_ACK, {generation = 1, consumed_through = watch.consumed}))
@@ -100,6 +103,14 @@ function M.wait(watch: Watch, call: Call, attempt_id: string, require_success: b
             end
         end
     end
+end
+
+function M.started(watch: Watch, call: Call, attempt_id: string, require_success: boolean): types.Attempt
+    return observe(watch, call, attempt_id, require_success, true, nil)
+end
+
+function M.wait(watch: Watch, call: Call, attempt_id: string, require_success: boolean, output_received: ((protocol.Output) -> ())?)
+    observe(watch, call, attempt_id, require_success, false, output_received)
 end
 
 function M.cleanup(call: Call, attempt_id: string)

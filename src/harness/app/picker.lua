@@ -102,6 +102,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local status = "Loading sessions…"
     local loading = false
     local show_unavailable = false
+    local show_closed = false
     local conversation: agents.Conversation? = nil
     local draft = ""
     local confirming = ""
@@ -124,6 +125,18 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local announced = false
     local dirty = true
     local drawn: view.Frame = {rows = {}, hits = {}, capacity = 0, offset = 0}
+    -- directory_loaded reads the sessions and the workspaces they live in.
+    local function directory_loaded(serial: integer, workspace_filter: string?, closed_requested: boolean): Loaded
+        local rows, load_error = agents.directory(sessions.client(), workspace_filter, closed_requested)
+        local names: {[string]: agents.Workspace} = {}
+        local own = agents.workspace(launch.workspace_id, ask)
+        if own then names[launch.workspace_id] = own end
+        for _, row in ipairs(rows or {}) do
+            local id = agents.home(row.session)
+            if id and not names[id] then names[id] = agents.workspace(id, ask) end
+        end
+        return {serial = serial, directory = rows, workspaces = names, error = load_error}
+    end
     local function load()
         if loading then reload_pending = true; return end
         load_serial = load_serial + 1
@@ -135,6 +148,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         local catalog_requested = catalog_open
         local catalog_query, catalog_sort = query, sort
         local workspace_filter = filtered and launch.workspace_id or nil
+        local closed_requested = show_closed
         coroutine.spawn(function()
             if catalog_requested then
                 local found, load_error = agents.list(sessions.client(), include, catalog_query, catalog_sort)
@@ -143,19 +157,27 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     send_loads(sent)
                 end
             else
-                local rows, load_error = agents.directory(sessions.client(), workspace_filter)
-                local names: {[string]: agents.Workspace} = {}
-                local own = agents.workspace(launch.workspace_id, ask)
-                if own then names[launch.workspace_id] = own end
-                for _, row in ipairs(rows or {}) do
-                    local id = agents.home(row.session)
-                    if id and not names[id] then names[id] = agents.workspace(id, ask) end
-                end
-                if running and serial == load_serial then
-                    local sent: Loaded = {serial = serial, directory = rows, workspaces = names, error = load_error}
-                    send_loads(sent)
-                end
+                local sent = directory_loaded(serial, workspace_filter, closed_requested)
+                if running and serial == load_serial then send_loads(sent) end
             end
+        end)
+    end
+    -- close_listed closes the session at index, then lists the sessions again.
+    local function close_listed(index: integer)
+        local entry = directory[index]
+        if not entry or loading then return end
+        load_serial = load_serial + 1
+        local serial = load_serial
+        loading = true
+        status = "Closing session…"
+        dirty = true
+        local workspace_filter = filtered and launch.workspace_id or nil
+        local closed_requested = show_closed
+        coroutine.spawn(function()
+            local _, fault = sessions.client():close({session = entry.session, operation_key = assert(uuid.v7())})
+            local sent = directory_loaded(serial, workspace_filter, closed_requested)
+            if fault then sent.error = fault.message end
+            if running and serial == load_serial then send_loads(sent) end
         end)
     end
     local function idle(): boolean return not opening end
@@ -262,7 +284,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 rows = session_frame.rows
             elseif not catalog_open then
                 local own = workspace_names[launch.workspace_id]
-                drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, own and (own.label .. " · " .. own.folder))
+                drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, own and (own.label .. " · " .. own.folder), show_closed)
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             else
@@ -283,7 +305,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         if not event.ok then return finish(nil, nil) end
         local refresh = false
         local edit, duplicate = false, false
-        local open, attach = false, false
+        local open, headless = false, false
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then return finish(nil, nil) end
         elseif event.channel == closes then
@@ -436,10 +458,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     local kind = ""
                     if data.type == "key" and data.action == "press" then
                         local key = data.key:lower()
-                        if data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
+                        if confirming == "close_listed" then
+                            if data.key_type == "enter" then confirming = ""; close_listed(selected)
+                            elseif data.key_type == "esc" or data.key_type == "escape" then confirming = ""; status = ""; dirty = true end
+                        elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
                         elseif data.key_type == "down" then selected = math.floor(math.min(#directory, selected + 1)); dirty = true
                         elseif data.key_type == "enter" then open = true
                         elseif key == "n" then kind = "new_session"
+                        elseif key == "x" then kind = "close_listed"
+                        elseif key == "c" then kind = "closed"
                         elseif key == "w" then kind = "workspace"
                         elseif key == "r" then refresh = true
                         elseif data.key_type == "esc" or data.key_type == "escape" then return finish(nil, nil) end
@@ -451,6 +478,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "refresh" then refresh = true end
                     end
                     if kind == "new_session" then catalog_open = true; selected = 0; refresh = true
+                    elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle == "active" then
+                        confirming = "close_listed"
+                        status = "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it"
+                        dirty = true
+                    elseif kind == "closed" then show_closed = not show_closed; refresh = true
                     elseif kind == "workspace" then filtered = not filtered; refresh = true end
                 elseif data.type == "key" and data.action == "press" then
                     if searching then
@@ -466,7 +498,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         local entry = listed.items[selected]
                         if entry and not entry.ready then setup_agent() else open = true end
                     elseif data.ctrl or data.alt then
-                    elseif data.key:lower() == "m" and idle() then attach = true
+                    elseif data.key:lower() == "h" and idle() then headless = true
                     elseif data.key:lower() == "u" and idle() then show_unavailable = not show_unavailable; refresh = true
                     elseif data.key:lower() == "r" and idle() then refresh = true
                     elseif data.key:lower() == "s" and idle() then setup_agent()
@@ -486,7 +518,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "sort" then sort = sort == "name" and "driver" or "name"; refresh = true
                         elseif kind == "setup" then setup_agent()
                         elseif kind == "open" then open = true
-                        elseif kind == "attach" then attach = true
+                        elseif kind == "headless" then headless = true
                         elseif kind == "unavailable" and idle() then show_unavailable = not show_unavailable; refresh = true
                         elseif kind == "refresh" then refresh = true
                         elseif kind == "edit" then edit = true
@@ -511,15 +543,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             end
         end
-        if (open or attach) and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
+        if (open or headless) and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
             local entry = listed.items[selected]
             if entry and entry.ready then
-                local target = entry.kind .. ":" .. entry.ref .. ":" .. tostring(entry.revision) .. (attach and ":window" or ":headless")
+                local target = entry.kind .. ":" .. entry.ref .. ":" .. tostring(entry.revision) .. (headless and ":headless" or ":window")
                 if open_target ~= target then open_key, open_target = assert(uuid.v7()), target end
                 open_serial = open_serial + 1
                 local serial = open_serial
                 local key = open_key
-                local presentation: sessions_protocol.Presentation = attach and "window" or "headless"
+                local presentation: sessions_protocol.Presentation = headless and "headless" or "window"
                 opening = true
                 status = "Opening session…"
                 dirty = true

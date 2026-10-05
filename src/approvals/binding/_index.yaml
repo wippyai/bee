@@ -10,6 +10,7 @@ entries:
   security:
     policies: &id001
     - bee.security.approvals:approval_store_policy
+    - bee.security.approvals:approval_announce_policy
 - name: node_summary
   kind: function.lua
   source: file://node_summary_method.lua
@@ -221,6 +222,14 @@ entries:
     service: bee.approvals.binding:service
   security:
     policies: *id001
+- name: activation_effects
+  kind: function.lua
+  source: file://activation_effects_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
 - name: complete_installation_effect
   kind: function.lua
   source: file://complete_installation_effect_method.lua
@@ -362,6 +371,7 @@ entries:
       consume: bee.approvals.binding:consume
       installation_effects: bee.approvals.binding:installation_effects
       complete_installation_effect: bee.approvals.binding:complete_installation_effect
+      activation_effects: bee.approvals.binding:activation_effects
       publication_effects: bee.approvals.binding:publication_effects
       complete_publication_effect: bee.approvals.binding:complete_publication_effect
       revalidate: bee.approvals.binding:revalidate
@@ -382,6 +392,8 @@ entries:
   - security
   - system
   - process
+  - events
+  - logger
   - funcs
   imports:
     windows: bee.approvals.types:windows

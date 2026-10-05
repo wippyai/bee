@@ -5,6 +5,7 @@
 -- projecting onto a thread, and the outbox over its own store surviving a
 -- crash between the thread commit and its acknowledgement.
 local test = require("test")
+local events = require("events")
 local principals = require("principals")
 local bounds = require("bounds")
 local json = require("json")
@@ -300,6 +301,53 @@ local function define_tests()
             local selected = channel.select({wakes:case_receive(), deadline:case_receive()})
             test.eq(selected.ok, true)
             test.eq(selected.channel == wakes, true)
+        end)
+        test.it("wakes the activation worker and lists an approved activation until it is consumed", function()
+            local workspace = "ws-activation-" .. key()
+            local activation = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "r1", payload = {source_workspace = "todo"}}
+            local created = value(call(requester, "request", request_of(workspace, {proposal = activation})))
+            local unrelated = value(call(requester, "request", request_of(workspace)))
+            local registered, register_error = process.registry.register(service.ACTIVATION_WORKER_NAME)
+            if not registered then error("register activation worker: " .. tostring(register_error)) end
+            local wakes = assert(process.listen(service.TOPIC_WAKE, {message = true}))
+            local worker = caller("bee.test.activation_worker", {"bee.security.approvals:approval_activation_effects_policy"})
+            local function listed(): {[string]: boolean}
+                local found: {[string]: boolean} = {}
+                for _, item in ipairs(value(call(worker, "activation_effects", {limit = 64})).effects :: {unknown}) do
+                    found[tostring((item :: {[string]: unknown}).approval_id)] = true
+                end
+                return found
+            end
+            test.is_nil(listed()[tostring(created.approval_id)])
+            for _, request in ipairs({created, unrelated}) do
+                value(call(alice, "decide", {approval_id = request.approval_id, expected_revision = request.revision,
+                    proposal_digest = request.proposal_digest, decision = "approved"}))
+            end
+            local selected = channel.select({wakes:case_receive(), time.after("1s"):case_receive()})
+            test.eq(selected.channel == wakes, true)
+            local approved = listed()
+            test.is_true(approved[tostring(created.approval_id)])
+            test.is_nil(approved[tostring(unrelated.approval_id)])
+            value(call(requester, "consume", {approval_id = created.approval_id, proposal_digest = created.proposal_digest,
+                effect_key = "activation:" .. tostring(created.approval_id), owner_incarnation = created.owner_incarnation}))
+            test.is_nil(listed()[tostring(created.approval_id)])
+            test.eq(code(call(outsider, "activation_effects", {})), "DENIED")
+        end)
+        test.it("announces a request waiting for the person on the node attention events", function()
+            local workspace = "ws-attention-" .. key()
+            local subscription = assert(events.subscribe(service.ATTENTION, "approval.requested"))
+            local created = value(call(requester, "request", request_of(workspace)))
+            local announced: {[string]: unknown}? = nil
+            while not announced do
+                local selected = channel.select({subscription:channel():case_receive(), time.after("1s"):case_receive()})
+                if selected.channel ~= subscription:channel() then break end
+                local event = selected.value
+                if event.path == workspace then announced = event end
+            end
+            subscription:close()
+            local event = assert(announced)
+            test.eq(event.kind, "approval.requested")
+            test.eq((assert(bounds.object(event.data))).approval_id, created.approval_id)
         end)
         test.it("serves no request before the authority establishes its incarnation and advances it per start", function()
             local store = open_test_store()

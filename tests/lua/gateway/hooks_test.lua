@@ -84,9 +84,14 @@ local function define_tests()
             test.eq(tool_ambiguous, false)
             local _, no_tool_id = hooks.occurrence("PostToolUse", {session_id = "s1"})
             test.eq(no_tool_id, true)
-            local prompt, prompt_ambiguous = hooks.occurrence("UserPromptSubmit", {session_id = "s1", prompt_id = "p1"})
-            test.eq(prompt, "turn:p1")
+            local prompt, prompt_ambiguous = hooks.occurrence("UserPromptSubmit", {session_id = "s1", prompt_id = "p1", prompt = "first"})
             test.eq(prompt_ambiguous, false)
+            test.eq((hooks.occurrence("UserPromptSubmit", {session_id = "s1", prompt_id = "p1", prompt = "first"})), prompt)
+            -- A message queued during a running turn is submitted under that
+            -- turn's prompt_id, so the prompt itself tells the two apart.
+            local queued = hooks.occurrence("UserPromptSubmit", {session_id = "s1", prompt_id = "p1", prompt = "queued while busy"})
+            test.is_true(queued ~= prompt)
+            test.is_true(prompt:sub(1, 8) == "turn:p1:")
             -- A prompt may stop more than once; no captured field names the
             -- occurrence, so every Stop is ambiguous and kept per delivery.
             local claude_stop, claude_stop_ambiguous = hooks.occurrence("Stop", {session_id = "s1", prompt_id = "p1"})

@@ -714,6 +714,8 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             local instance = event.instance
             running[#running + 1] = instance
             if instance.desktop == desktop then attach(instance.id) end
+        elseif event.kind == "attention" and event.id then
+            if views[event.id] then focus(event.id) end
         elseif event.kind == "moved" and event.instance then
             local instance = event.instance
             for index, item in ipairs(running) do

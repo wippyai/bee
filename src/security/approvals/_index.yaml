@@ -31,6 +31,16 @@ entries:
     - bee.approvals.request
     resources: '*'
     effect: allow
+- name: approval_announce_policy
+  kind: security.policy
+  meta:
+    comment: The approval owner announces a request waiting for the person on the node attention events
+  policy:
+    actions:
+    - events.send
+    resources:
+    - bee.attention
+    effect: allow
 - name: approval_store_policy
   kind: security.policy
   meta:
@@ -85,6 +95,16 @@ entries:
     - bee.approvals.own
     resources:
     - installation_effects
+    effect: allow
+- name: approval_activation_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized activation worker lists approved governance activations; the activation owner consumes each approval and applies its exact intent
+  policy:
+    actions:
+    - bee.approvals.own
+    resources:
+    - activation_effects
     effect: allow
 - name: approval_publication_effects_policy
   kind: security.policy

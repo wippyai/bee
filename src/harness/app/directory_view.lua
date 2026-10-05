@@ -7,7 +7,8 @@ local agents = require("agents")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
-    rows: {protocol.SessionSnapshot}, selected: integer, status: string, filtered: boolean, workspaces: {[string]: agents.Workspace}?, filter_label: string?): Frame
+    rows: {protocol.SessionSnapshot}, selected: integer, status: string, filtered: boolean, workspaces: {[string]: agents.Workspace}?, filter_label: string?,
+    show_closed: boolean?): Frame
     local painter = frame.new(width, height, preferences)
     local layout = frame.layout(painter, false, true)
     frame.header(painter, "SESSIONS", tostring(#rows) .. (#rows == 1 and " session" or " sessions"))
@@ -40,12 +41,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local buttons: {frame.Button} = {{kind = "new_session", key = "N", label = "New session", enabled = true, primary = #rows == 0}}
         if #rows > 0 then
             table.insert(buttons, 1, {kind = "open", key = "Enter", label = "Open", enabled = rows[selected] ~= nil, primary = true})
+            local chosen = rows[selected]
+            buttons[#buttons + 1] = {kind = "close_listed", key = "X", label = "Close", enabled = chosen ~= nil and chosen.lifecycle == "active"}
             buttons[#buttons + 1] = {kind = "workspace", key = "W", label = filtered and "All workspaces" or "Workspace", enabled = true}
             buttons[#buttons + 1] = {kind = "refresh", key = "R", label = "Refresh", enabled = true}
         end
+        buttons[#buttons + 1] = {kind = "closed", key = "C", label = show_closed and "Hide closed" or "Show closed", enabled = true}
         frame.actions(painter, height - 1, buttons)
     end
-    frame.footer(painter, "", "↑↓ select · Enter open · N new · W workspace · R refresh · Esc close")
+    frame.footer(painter, "", "↑↓ select · Enter open · N new · X close session · C closed · W workspace · R refresh · Esc close")
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

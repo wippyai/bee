@@ -6,9 +6,9 @@ local text = require("text")
 local agents = require("agents")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
-local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "U", verb = "unavailable"},
+local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open a window"}, {key = "H", verb = "open headless"}, {key = "U", verb = "unavailable"},
     {key = "/", verb = "search"}, {key = "Ctrl+S", verb = "sort"}, {key = "R", verb = "refresh"}, {key = "Esc", verb = "back"}, {key = "E", verb = "customize copy or edit"},
-    {key = "N", verb = "new profile"}, {key = "S", verb = "setup"}, {key = "M", verb = "open a window"}})
+    {key = "N", verb = "new profile"}, {key = "S", verb = "setup"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?, query: string?, sort: string?, searching: boolean?): Frame
     local painter = frame.new(width, height, preferences)
@@ -42,6 +42,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local chosen = item ~= nil and window.capacity > 0
         frame.actions(painter, height - 1, {
             {kind = item and not item.ready and "setup" or "open", key = "Enter", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
+            {kind = "headless", key = "H", label = "Headless", enabled = not busy and chosen and item ~= nil and item.ready},
             {kind = "unavailable", key = "U", label = show_unavailable and "Hide unavailable" or "Show unavailable", enabled = not busy},
             {kind = "refresh", key = "R", label = "Refresh", enabled = not busy},
             {kind = "search", key = "/", label = "Search", enabled = not busy},

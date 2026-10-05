@@ -948,6 +948,25 @@ function M.get(store: Store, intent_raw: unknown): Result
         return transaction.success(view(store, row, current_slot), false)
     end)
 end
+-- The intent an approval was bound to, for the worker that applies an
+-- approved activation.
+function M.bound_to(store: Store, approval_raw: unknown): Result
+    if store.closed then return failure("CLOSED", "governance activation store is closed") end
+    local approval_id = id(approval_raw)
+    if not approval_id then return failure("INVALID", "approval_id is invalid") end
+    return transaction.read(store.db, "governance activation", function(tx): Result
+        local rows, query_error = tx:query("SELECT intent_id FROM bee_governance_activation_execution WHERE owner_node = ? AND workspace_id = ? AND approval_id = ?",
+            {store.node, store.workspace, approval_id})
+        if query_error or not rows then return failure("STORAGE", "read approved activation") end
+        local found = rows[1] and id((rows[1] :: {[string]: unknown}).intent_id) or nil
+        if not found then return failure("NOT_FOUND", "no activation is bound to approval " .. approval_id) end
+        local row, err = load(tx, store, found)
+        if err or not row then return err or failure("INTERNAL", "approved activation intent is missing") end
+        local current_slot, slot_error = slot(tx, store, row.overlay_owner, false)
+        if slot_error then return slot_error end
+        return transaction.success(view(store, row, current_slot), false)
+    end)
+end
 -- Recovery follows only the locally authorized desired pointer. Replicated
 -- versions and the current review selection are deliberately outside this
 -- read.

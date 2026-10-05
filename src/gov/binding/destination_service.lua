@@ -6,6 +6,8 @@ local security = require("security")
 local time = require("time")
 local system = require("system")
 local funcs = require("funcs")
+local events = require("events")
+local logger = require("logger")
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -38,6 +40,7 @@ M.BACKEND = "bee.gov.binding:destination_backend_call"
 M.EXECUTE = "bee.gov.delivery.execute"
 M.SCOPE = "bee.gov.security:destination_execution_scope"
 local ACTOR = "bee.gov.activation"
+local ATTENTION = "bee.attention"
 type Object = {[string]: unknown}
 type Set = {[string]: boolean}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
@@ -983,6 +986,52 @@ function M.call(raw: unknown): Result
                 result = owner.recover(composed, request.receipt_key)
             else
                 result = failure("INVALID", "unsupported destination operation")
+            end
+        end
+    end
+    close(plan_store, activation_store, lease_handle)
+    return result
+end
+
+-- Apply one approved activation: the approval names the workspace and the
+-- source it activates, the activation owner consumes it and carries the intent
+-- bound to it until it settles. The approval is the person's; this only
+-- executes it.
+function M.apply_approved(raw: unknown): Result
+    local effect = bounds.object(raw)
+    local approval_id = effect and bounds.id(effect.approval_id) or nil
+    local workspace_id = effect and bounds.id(effect.workspace_id) or nil
+    local proposal = effect and bounds.object(effect.proposal) or nil
+    local payload = proposal and bounds.object(proposal.payload) or nil
+    local source_node = payload and bounds.id(payload.source_node) or nil
+    local source_workspace = payload and bounds.id(payload.source_workspace) or nil
+    if not approval_id or not workspace_id or not source_node or not source_workspace then
+        return failure("INVALID", "approved activation is malformed")
+    end
+    local config, config_error = load()
+    if not config then return failure("BLOCKED", config_error or "activation configuration is unavailable") end
+    local plan_store, activation_store, lease_handle, open_error = stores(config.node_id, workspace_id)
+    if not plan_store or not activation_store or not lease_handle then return failure("UNAVAILABLE", open_error or "open destination stores") end
+    local result: Result
+    local bound = activations.bound_to(activation_store, approval_id)
+    local intent = bound.ok and bounds.object(bound.value) or nil
+    local intent_id = intent and bounds.id(intent.intent_id) or nil
+    if not intent_id then
+        result = bound.ok and failure("INTERNAL", "approved activation intent is malformed") or bound
+    else
+        local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
+        if not chosen then
+            result = failure("BLOCKED", profile_error or "activation profile is unavailable")
+        else
+            local configured = owner_config(config, chosen, plan_store, activation_store, lease_handle)
+            if not configured.ok then result = failure("BLOCKED", configured.error or "activation configuration is unavailable")
+            else
+                result = owner.advance(configured.config, intent_id, "approved-" .. approval_id)
+                local settled = result.ok and bounds.object(result.value) or nil
+                if settled and settled.outcome == "applied" then
+                    local sent, send_error = events.send(ATTENTION, "application.applied", workspace_id, {component = chosen.component})
+                    if not sent then logger:warn("Applied application not announced", {component = chosen.component, error = tostring(send_error)}) end
+                end
             end
         end
     end

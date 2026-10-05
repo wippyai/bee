@@ -223,10 +223,8 @@ function M.example_json(): (string?, string?)
     return json.encode(M.example())
 end
 
-local DELIVERY_STEPS = {"review the plan in Overlays", "select it there",
-    "prepare the activation there", "approve it in Approvals",
-    "let the activation owner apply the overlay",
-    "open it from the start menu"}
+local DELIVERY_STEPS = {"approve it in Needs you, which opens on the person's desktop",
+    "Bee applies it once approved", "open it from the start menu"}
 
 -- The steps a person takes after an agent requests delivery. Exposed so the
 -- delivery tool and the guide cannot disagree about who does what.
@@ -316,8 +314,8 @@ function M.driver_delivery(): string
         .. " It refuses private paths, foreign folders and workspaces without their own filesystem root."
         .. " Inspect the installed bee/driver package docs and built-in driver entries with components."
         .. " Author entries.json, freeze and request delivery with source_overlay_id driver.<name>."
-        .. " The existing Overlays review, selection, preparation and Approvals approval admits the exact"
-        .. " candidate; no application admission or automatic start is created."
+        .. " Delivery asks the person once in Needs you; approving it applies the exact candidate."
+        .. " No application admission or automatic start is created."
         .. " A custom external CLI binding uses bee.driver:driver prepare, dispatch, normalize and configure"
         .. " functions in .binding, and bee.driver:locate_facet locate. Its meta.type is harness.driver with"
         .. " driver_id, descriptor_ref and profiles_ref. Declare a harness.profile record whose driver_ref"

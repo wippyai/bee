@@ -585,6 +585,22 @@ function M.desired(raw_config: Config): Result
     return activations.desired(config.activations, config.overlay_owner)
 end
 
+-- Advance carries an intent through its remaining steps until it settles or
+-- a step refuses. Each step is one durable transition, so an interrupted
+-- advance resumes from the stored phase. An intent settled as applied answers
+-- at once.
+M.MAX_STEPS = 16
+function M.advance(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): Result
+    local result: Result = failure("INVALID", "activation advance identity is invalid")
+    for _ = 1, M.MAX_STEPS do
+        result = M.step(raw_config, intent_raw, receipt_raw)
+        if not result.ok then return result end
+        local intent = object(result.value)
+        if not intent or intent.phase == "settled" then return result end
+    end
+    return failure("INTERNAL", "activation did not settle within " .. tostring(M.MAX_STEPS) .. " steps")
+end
+
 function M.recover(raw_config: Config, receipt_raw: unknown): Result
     local config, config_error = configuration(raw_config)
     local prefix = bounds.id(receipt_raw)

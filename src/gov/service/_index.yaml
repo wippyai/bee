@@ -42,3 +42,33 @@ entries:
         id: bee.gov.activation
       policies:
       - bee.gov.security:destination_service_policy
+- name: activation_worker
+  kind: process.lua
+  source: file://activation_worker.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  - funcs
+  - logger
+  imports:
+    bounds: bee.values:bounds
+    service: bee.gov.binding:destination_service
+    approval_service: bee.approvals.binding:service
+- name: activation_service
+  kind: process.service
+  process: bee.gov.service:activation_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee.gov.service:recovery_service
+    security:
+      actor:
+        id: bee.gov.activation
+      policies:
+      - bee.gov.security:destination_service_policy
+      - bee.security.approvals:approval_activation_effects_policy
+      - bee.gov.security:activation_announce_policy

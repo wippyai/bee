@@ -56,7 +56,8 @@ local function sha(value: unknown): (string?, string?)
 end
 -- The occurrence identity an event carries, from the captures: a tool call
 -- by its tool_use_id, a prompt submission by prompt_id (Claude Code) or
--- turn_id (Codex), a session start by session_id and source, a session end
+-- turn_id (Codex) with its prompt's digest, since a message queued during a
+-- running turn is submitted under that turn's id, a session start by session_id and source, a session end
 -- by session_id. A stop carries no identifier of its own occurrence (a
 -- prompt may stop more than once), so it is always ambiguous. An event
 -- that carries none of its identifiers is ambiguous: it is recorded per
@@ -70,8 +71,9 @@ function M.occurrence(event: string, payload: Object): (string, boolean)
     end
     if event == "UserPromptSubmit" then
         local id = bounds.id(payload.prompt_id) or bounds.id(payload.turn_id)
-        if id then return "turn:" .. id, false end
-        return "turn:" .. session, true
+        local prompt = type(payload.prompt) == "string" and sha(payload.prompt) or nil
+        if id and prompt then return "turn:" .. id .. ":" .. prompt, false end
+        return "turn:" .. (id or session), true
     end
     if event == "Stop" or event == "StopFailure" then
         local id = bounds.id(payload.prompt_id) or bounds.id(payload.turn_id) or session

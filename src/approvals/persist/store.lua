@@ -109,6 +109,14 @@ function M.publication_effects(tx: sql.Transaction, now: integer, limit: integer
         ORDER BY approval_id LIMIT ?]], {now, limit})
 end
 
+-- Approved governance activations their owner has not yet consumed.
+function M.activation_effects(tx: sql.Transaction, now: integer, limit: integer): ({unknown}?, string?)
+    return query(tx, [[SELECT * FROM bee_approval_requests
+        WHERE state = 'decided' AND decision = 'approved' AND consumed_effect IS NULL AND expires_ms > ?
+        AND proposal_json LIKE '%"ref":"bee.gov:establish-overlay"%'
+        ORDER BY approval_id LIMIT ?]], {now, limit})
+end
+
 function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_at: string, result_json: string, updated_at: string): string?
     return execute(tx, "UPDATE bee_approval_requests SET effect_completed_at = ?, effect_result_json = ?, updated_at = ? WHERE approval_id = ? AND effect_completed_at IS NULL",
         {completed_at, result_json, updated_at, approval_id}, "complete installation effect")

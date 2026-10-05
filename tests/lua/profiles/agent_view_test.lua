@@ -46,12 +46,12 @@ local function define_tests()
                 local small = picker_view.draw(size[1], size[2], appearance.defaults(), hostile, 1, "", false, false)
                 test.eq(small.capacity, 0)
                 for _, hit in ipairs(small.hits) do
-                    test.is_true(hit.kind ~= "open" and hit.kind ~= "setup" and hit.kind ~= "edit")
+                    test.is_true(hit.kind ~= "open" and hit.kind ~= "headless" and hit.kind ~= "setup" and hit.kind ~= "edit")
                 end
             end
             local empty: agents.Listing = {items = {}, unavailable = 0, notes = {}}
             for _, hit in ipairs(picker_view.draw(80, 12, appearance.defaults(), empty, 0, "", false, false).hits) do
-                test.is_true(hit.kind ~= "open" and hit.kind ~= "setup" and hit.kind ~= "edit")
+                test.is_true(hit.kind ~= "open" and hit.kind ~= "headless" and hit.kind ~= "setup" and hit.kind ~= "edit")
             end
             local loading = table.concat(picker_view.draw(80, 12, appearance.defaults(), empty, 0, "Loading agents…", false, false).rows)
             test.is_true(loading:find("Loading agents", 1, true) ~= nil)
@@ -59,7 +59,7 @@ local function define_tests()
             local busy = picker_view.draw(80, 12, appearance.defaults(), hostile, 1, "Opening session…", true, false)
             test.is_true(table.concat(busy.rows):find("Opening session", 1, true) ~= nil)
             for _, hit in ipairs(busy.hits) do
-                test.is_true(hit.kind ~= "open" and hit.kind ~= "attach" and hit.kind ~= "new" and hit.kind ~= "edit" and hit.kind ~= "refresh")
+                test.is_true(hit.kind ~= "open" and hit.kind ~= "headless" and hit.kind ~= "new" and hit.kind ~= "edit" and hit.kind ~= "refresh")
             end
         end)
         test.it("keeps key hints in the footer and marks the chosen agent without color", function()
@@ -72,7 +72,7 @@ local function define_tests()
             test.is_true(rows[1]:find("NEW SESSION", 1, true) ~= nil and rows[1]:find("2 agents", 1, true) ~= nil)
             test.eq(rows[3]:sub(1, 7), " Alpha ")
             test.eq(rows[4]:sub(1, #"›"), "›")
-            test.is_true(rows[24]:find("Enter open · U unavailable", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Enter open a window · H open headless · U unavailable", 1, true) ~= nil)
             local chosen = 0
             for _, hit in ipairs(drawn.hits) do if hit.kind == "choice" and hit.y == 4 then chosen = hit.index end end
             test.eq(chosen, 2)
@@ -213,7 +213,7 @@ local function define_tests()
             end
             local hinted: {[string]: boolean} = {}
             for _, hint in ipairs(assert(screens[1].controls).hints) do hinted[hint.key] = true end
-            test.is_true(hinted.M and hinted.E and hinted.N and hinted.S)
+            test.is_true(hinted.H and hinted.E and hinted.N and hinted.S)
         end)
         test.it("labels blocked results", function()
             local lines = session_view.lines(conversation("blocked", {{input = "b", state = "blocked", text = "budget spent", work = fixtures.fixture_work("bw:1", {})}}), 40)

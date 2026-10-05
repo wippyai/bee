@@ -154,13 +154,15 @@ changes nothing. One file may contain up to 4 MiB; an overlay may contain up to 
 up to 16,384 bytes with `offset`, `chunk_bytes` and `eof`. Page with `offset`
 and `limit` to verify a file before freezing.
 
-The `delivery` tool can request delivery of a frozen artifact and read a
-staged version's review, selection and activation status. Its destination is
-the agent's own workspace unless it names that workspace explicitly. The `publish` tool
-can publish only an exact locally reviewed and applied version, and a host may
-place it behind an approved access trait. Neither tool can approve, activate or
-write an overlay. People review in Overlays and decide in Approvals; the
-activation owner performs the apply.
+The `delivery` tool requests delivery of a frozen artifact and reads a staged
+version's activation status. Its destination is the agent's own workspace
+unless it names that workspace explicitly. Once the destination's preflight is
+ready, the same request records the requester's review and selection and
+prepares the activation, which asks the person once: Needs you opens on the
+desktop with that approval, and approving it lets the activation worker apply
+the exact intent. The `publish` tool can publish only an exact applied version,
+and a host may place it behind an approved access trait. Neither tool can
+approve or write an overlay.
 
 Delivery requests retain `workspace_id` for the destination runtime target and
 `source_overlay_id` for the authoring identity. Internal services may use other

@@ -201,20 +201,21 @@ function M.activation_proposal(value: unknown, review_raw: unknown?): (Object?, 
         payload = payload}, nil
 end
 
--- activation_prompt names what the person approves. A driver may declare a
+-- activation_prompt names what the person approves: the exact version, the
+-- permissions it adds, and its scope and duration. A driver may declare a
 -- login format for its own provider; approving it lets that driver's sessions
 -- use the person's machine login for that provider.
-local function activation_prompt(item: Object): string
+local function activation_prompt(item: Object, changes: {string}?): string
     local subject = "Bee application " .. tostring(item.source_workspace)
     local login = ""
     if type(item.overlay_owner) == "string" and (item.overlay_owner :: string):sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then
         subject = "agent driver " .. tostring(item.source_workspace)
-        login = " If the driver declares a login format for its own provider, its sessions may use your machine login for that provider."
+        login = " Its sessions may use your machine login for its own provider."
     end
-    return "Allow Bee to apply and recover " .. subject .. " version " .. tostring(item.version)
-        .. " in workspace " .. tostring(item.workspace_id)
-        .. ". Scope: this exact reviewed activation in this workspace." .. login
-        .. " Duration: this exact version until replaced or removed; host admission remains required."
+    local permissions = " It adds no permissions."
+    if changes and #changes > 0 then permissions = " It adds: " .. table.concat(changes, "; ") .. "." end
+    return "Install " .. subject .. " " .. tostring(item.version) .. "." .. permissions .. login
+        .. " Applies to this exact version in this workspace until replaced or removed."
 end
 
 function M.request_activation(executor: Executor, value: unknown, policy_raw: unknown, key_raw: unknown,
@@ -225,9 +226,11 @@ function M.request_activation(executor: Executor, value: unknown, policy_raw: un
     if not policy or not key then return nil, "approval policy and idempotency key are required" end
     local proposal, proposal_error = M.activation_proposal(value, review_raw)
     if not proposal then return nil, proposal_error end
+    local payload = object(proposal.payload)
+    local changes = payload and payload.permission_changes
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,
-        prompt = {text = activation_prompt(item)}})
+        prompt = {text = activation_prompt(item, type(changes) == "table" and changes :: {string} or nil)}})
     local approved, approved_error = reply(raw, call_error)
     if not approved then return nil, approved_error end
     local approval_id, proposal_digest = bounds.id(approved.approval_id), hex(approved.proposal_digest)

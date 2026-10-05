@@ -166,6 +166,16 @@ entries:
     - bee.gov.security:workspace_execution_scope
     - bee.gov.binding:workspace_backend_call
     effect: allow
+- name: activation_announce_policy
+  kind: security.policy
+  meta:
+    comment: The activation worker announces an application the person approved once it is applied, so the desktops working in its workspace open it
+  policy:
+    actions:
+    - events.send
+    resources:
+    - bee.attention
+    effect: allow
 - name: destination_service_policy
   kind: security.policy
   groups:

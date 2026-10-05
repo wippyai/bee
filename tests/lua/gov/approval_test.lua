@@ -20,15 +20,11 @@ local function executor(change: boolean?, inspect_prompt: boolean?): approval.Ex
             local prompt = assert(bounds.object(value.prompt))
             local wording = assert(bounds.text(prompt.text))
             test.is_true(wording:find("Bee application", 1, true) ~= nil)
-            test.is_true(wording:find("workspace-a", 1, true) ~= nil)
-            test.is_true(wording:find("Duration:", 1, true) ~= nil)
             if inspect_prompt then
-                local prompt = assert(bounds.object(value.prompt))
-                assert(type(prompt.text) == "string")
-                test.is_true(prompt.text:find("Allow Bee to apply and recover Bee application application-a version v1", 1, true) ~= nil)
-                test.is_true(prompt.text:find("this workspace", 1, true) ~= nil)
-                test.is_true(prompt.text:find("Duration:", 1, true) ~= nil)
-                test.is_true(prompt.text:find("until replaced or removed", 1, true) ~= nil)
+                test.is_true(wording:find("Install Bee application application-a v1.", 1, true) ~= nil)
+                test.is_true(wording:find("permissions", 1, true) ~= nil or wording:find("It adds:", 1, true) ~= nil)
+                test.is_true(wording:find("this workspace", 1, true) ~= nil)
+                test.is_true(wording:find("until replaced or removed", 1, true) ~= nil)
             end
             local proposal = assert(bounds.object(value.proposal))
             if change then proposal = {kind = "operation", ref = "other", revision = "other", payload = {}} end

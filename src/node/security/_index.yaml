@@ -57,6 +57,14 @@ entries:
     actions: [events.subscribe]
     resources: [registry]
     effect: allow
+- name: owner_attention
+  kind: security.policy
+  meta:
+    comment: The node owner opens what needs the person when a component announces it
+  policy:
+    actions: [events.subscribe]
+    resources: [bee.attention]
+    effect: allow
 - name: owner_role
   kind: security.policy
   meta:

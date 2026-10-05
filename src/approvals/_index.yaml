@@ -32,6 +32,8 @@ entries:
     description: Host-authorized publication workers read a bounded queue of approved, uncompleted Hub publication effects
   - name: complete_publication_effect
     description: The consuming effect owner records the durable result for its exact approval and effect key; identical completion replays
+  - name: activation_effects
+    description: The host-authorized activation worker reads a bounded queue of approved governance activations their owner has not consumed
   - name: revalidate
     description: After an authority restart, the effect owner records that an approved decision still holds under the current incarnation
   - name: read

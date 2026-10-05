@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Generate the docs corpus reference driver pages from the drivers in src.
+"""Keep the docs corpus manifest true to its documents.
 
-Each page holds every file of one real driver verbatim, so an agent writing a
-driver copies a complete, working definition. With --check, exit non-zero
-when a page or its manifest record differs from what src produces.
+It generates the reference driver pages from the drivers in src, each holding
+every file of one real driver verbatim so an agent writing a driver copies a
+complete, working definition, and records every document's byte count and
+SHA-256. With --check, exit non-zero when a page or a manifest record differs
+from what src produces.
 """
 import hashlib
 import json
@@ -78,7 +80,7 @@ def main() -> int:
         content = page(driver, title)
         data = content.encode()
         record = {"bytes": len(data), "id": doc_id, "sha256": hashlib.sha256(data).hexdigest(),
-                  "source": f"generated: tools/reference_drivers.py from src/driver/{driver}", "title": f"Reference driver: {title}",
+                  "source": f"generated: tools/corpus.py from src/driver/{driver}", "title": f"Reference driver: {title}",
                   "topic": "reference_drivers"}
         if not target.exists() or target.read_bytes() != data:
             stale.append(str(target.relative_to(ROOT)))
@@ -92,6 +94,16 @@ def main() -> int:
         elif documents[index[doc_id]] != record:
             stale.append(f"manifest record {doc_id}")
             documents[index[doc_id]] = record
+    for record in documents:
+        path = CORPUS / f"{record['id']}.md"
+        if not path.exists():
+            stale.append(f"missing document {record['id']}")
+            continue
+        data = path.read_bytes()
+        measured = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        if any(record.get(name) != value for name, value in measured.items()):
+            stale.append(f"manifest record {record['id']}")
+            record.update(measured)
     manifest["totals"] = {"bytes": sum(d["bytes"] for d in documents), "documents": len(documents)}
     rendered = json.dumps(manifest, indent=2, sort_keys=True) + ("\n" if manifest_text.endswith("\n") else "")
     if rendered != manifest_text:
@@ -100,7 +112,7 @@ def main() -> int:
         if not check:
             MANIFEST.write_text(rendered)
     if check and stale:
-        print("reference drivers are stale; run tools/reference_drivers.py: " + ", ".join(stale), file=sys.stderr)
+        print("docs corpus is stale; run tools/corpus.py: " + ", ".join(stale), file=sys.stderr)
         return 1
     return 0
 

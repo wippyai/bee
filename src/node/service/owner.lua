@@ -65,6 +65,10 @@ type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: in
 type Definition = {process: string, title: string, terminal: boolean, revision: string, resume_schema: string, singleton: boolean}
 
 local NAME = "bee.node"
+-- Bee components announce what needs the person on this event system: a
+-- request waiting for a decision, or an application the person approved.
+local ATTENTION = "bee.attention"
+local APPROVALS_ROLE = "approvals"
 local APP_TYPE = "bee.app"
 local MENU_TYPE = "bee.menu"
 -- Every app runs inside one of these policy groups; its process entry and
@@ -85,6 +89,17 @@ local function app_definition(id: string): (Definition?, string?)
     if not declared then return nil, id .. " declares no valid application" end
     return {process = id, title = declared.title, terminal = declared.terminal, revision = declared.definition_revision,
         resume_schema = declared.resume_schema, singleton = declared.singleton}, nil
+end
+
+-- role_app is the installed app declaring role, the first by id.
+local function role_app(role: string): string?
+    local entries = registry.find({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
+    local found: string? = nil
+    for _, entry in ipairs(entries or {}) do
+        local declared = descriptor.decode(entry.id, entry.meta.application)
+        if declared and declared.role == role and (found == nil or entry.id < found) then found = entry.id end
+    end
+    return found
 end
 
 -- admission is the binding that admits definition_id in workspace_id: the
@@ -307,6 +322,7 @@ local function main(saved: unknown)
     local events = assert(process.events())
     -- The installed apps and themes, refreshed when a registry change commits.
     local registry_changes = assert(eventbus.subscribe("registry", "registry.commit")):channel()
+    local attention = assert(eventbus.subscribe(ATTENTION)):channel()
     local installed_apps = catalog()
     local installed_themes, default_theme = themes()
     local current = stored_appearance(installed_themes, default_theme)
@@ -937,6 +953,43 @@ local function main(saved: unknown)
         end
     end
 
+    -- present opens app on every desktop a display shows that works in
+    -- workspace_id and asks those displays to bring it forward.
+    local function present(workspace_id: string, app: string)
+        local seen: {[string]: boolean} = {}
+        for _, desktop_id in pairs(watchers) do
+            if desktop_id ~= "" and not seen[desktop_id] then
+                seen[desktop_id] = true
+                local desktop = workspaces.desktop(desktop_id)
+                if desktop and desktop.workspace_id == workspace_id then
+                    local opened = open(app, desktop_id, nil)
+                    local value = opened.value
+                    if opened.ok and value then broadcast({kind = "attention", id = value.id})
+                    else logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error}) end
+                end
+            end
+        end
+    end
+
+    -- A request waiting for the person opens Needs you; an application the
+    -- person approved opens once it is installed.
+    local function attend(event: {[string]: unknown})
+        local data = event.data
+        if type(event.path) ~= "string" or type(data) ~= "table" then return end
+        local workspace_id: string = event.path
+        if event.kind == "approval.requested" then
+            local inbox = role_app(APPROVALS_ROLE)
+            if inbox then present(workspace_id, inbox) else logger:warn("No installed app handles approvals") end
+        elseif event.kind == "application.applied" and type(data.component) == "string" then
+            refresh()
+            local prefix = tostring(data.component) .. ":"
+            for _, app in ipairs(installed_apps) do
+                local id = app.id
+                if type(id) == "string" and id:sub(1, #prefix) == prefix then present(workspace_id, id) end
+            end
+        end
+    end
+
     local function handle(request: protocol.Forwarded): protocol.Reply
         local op, args = request.op, request.args
         if op == "list" then return protocol.ok(state()) end
@@ -1008,7 +1061,7 @@ local function main(saved: unknown)
     if not announced then logger:warn("Hive supervisor not told the node is ready", {error = announce_error}) end
     logger:info("Node ready", {node = node, folder = folder, theme = current.theme.id})
     while true do
-        local cases = {requests:case_receive(), events:case_receive(), registry_changes:case_receive()}
+        local cases = {requests:case_receive(), events:case_receive(), registry_changes:case_receive(), attention:case_receive()}
         for _, inbox in ipairs(app_cases) do cases[#cases + 1] = (inbox :: channel.Channel):case_receive() end
         local selected = channel.select(cases)
         if not selected.ok then return end
@@ -1018,6 +1071,8 @@ local function main(saved: unknown)
             app_message(app_topic, tostring(message:from()), message:payload():data())
         elseif selected.channel == registry_changes then
             refresh()
+        elseif selected.channel == attention then
+            attend(selected.value)
         elseif selected.channel == events then
             local event = selected.value
             if event.kind == process.event.CANCEL then

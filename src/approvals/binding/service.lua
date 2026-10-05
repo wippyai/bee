@@ -12,6 +12,8 @@ local json = require("json")
 local security = require("security")
 local system = require("system")
 local process = require("process")
+local events = require("events")
+local logger = require("logger")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local values = require("values")
@@ -32,14 +34,17 @@ M.OWN = "bee.approvals.own"
 M.CONSUME = "bee.approvals.consume"
 M.INSTALLATION_EFFECTS = "installation_effects"
 M.PUBLICATION_EFFECTS = "publication_effects"
+M.ACTIVATION_EFFECTS = "activation_effects"
 M.WORKER_NAME = "bee.approvals.outbox"
 M.INSTALLATION_WORKER_NAME = "bee.approvals.installation_effect_worker"
 M.PUBLICATION_WORKER_NAME = "bee.approvals.publication_effect_worker"
+M.ACTIVATION_WORKER_NAME = "bee.gov.activation_worker"
 M.AUTHORITY_NAME = "bee.approvals.authority"
 M.THREAD_GET = "bee.threads.binding:get"
 M.THREAD_READ = "bee.threads.binding:read_after"
 M.BINDING_PAGES = 4
 M.TOPIC_WAKE = "bee.approvals.wake"
+M.ATTENTION = "bee.attention"
 M.DEFAULT_TTL_MS = 600000
 M.MAX_PENDING = 32
 M.MAX_INBOX = 64
@@ -157,6 +162,7 @@ local function wake()
     wake_worker(M.WORKER_NAME)
     wake_worker(M.INSTALLATION_WORKER_NAME)
     wake_worker(M.PUBLICATION_WORKER_NAME)
+    wake_worker(M.ACTIVATION_WORKER_NAME)
 end
 function M.reply(result: Result): Reply
     if result.ok then return {ok = true, error = nil, value = result.value, replayed = result.replayed} end
@@ -192,6 +198,15 @@ function M.execute(db: sql.DB, actor: string, name: string, request: unknown, no
         return operation(tx, actor, object, at, prepared)
     end)
 end
+-- A new request waiting for the person is announced on this node, so the
+-- desktops working in its workspace open Needs you.
+local function announce(value: unknown)
+    local view = bounds.object(value)
+    local workspace_id = view and bounds.id(view.workspace_id) or nil
+    if not view or not workspace_id or view.state ~= "pending" then return end
+    local sent, send_error = events.send(M.ATTENTION, "approval.requested", workspace_id, {approval_id = view.approval_id})
+    if not sent then logger:warn("Pending approval not announced", {approval_id = view.approval_id, error = tostring(send_error)}) end
+end
 -- Every method authenticates the caller, opens the linked owner store and
 -- executes; a committed mutation wakes the outbox worker.
 local function run(request: unknown, name: string): Reply
@@ -202,6 +217,7 @@ local function run(request: unknown, name: string): Reply
     local result = M.execute(db, actor, name, request, nil, nil)
     db:release()
     if mutating[name] and result.ok and not result.replayed then wake() end
+    if name == "request" and result.ok and not result.replayed then announce(result.value) end
     return M.reply(result)
 end
 function M.view(row: Row): ApprovalView
@@ -949,6 +965,26 @@ local function op_installation_effects(tx: sql.Transaction, actor: string, objec
     end
     return success({effects = effects}, false)
 end
+-- The activation worker carries each approved activation to its owner,
+-- which consumes the approval and applies the exact intent.
+local function op_activation_effects(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"limit"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
+    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
+    if not security.can(M.OWN, M.ACTIVATION_EFFECTS) then
+        return failure("DENIED", "caller may not enumerate approved activations")
+    end
+    local rows, err = store.activation_effects(tx, now, limit)
+    if err or not rows then return storage("read approved activations") end
+    local effects: {Object} = {}
+    for _, raw in ipairs(rows) do
+        local row, decode_error = decode_row(raw, tx)
+        if not row then return storage("decode approved activation: " .. tostring(decode_error)) end
+        effects[#effects + 1] = M.view(row)
+    end
+    return success({effects = effects}, false)
+end
 local function op_complete_installation_effect(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
     local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "result"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
@@ -1441,6 +1477,7 @@ operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
 operations.publication_effects, operations.complete_publication_effect = op_publication_effects, op_complete_publication_effect
+operations.activation_effects = op_activation_effects
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
@@ -1455,6 +1492,7 @@ function M.installation_effects(value: unknown): Reply return run(value, "instal
 function M.complete_installation_effect(value: unknown): Reply return run(value, "complete_installation_effect") end
 function M.publication_effects(value: unknown): Reply return run(value, "publication_effects") end
 function M.complete_publication_effect(value: unknown): Reply return run(value, "complete_publication_effect") end
+function M.activation_effects(value: unknown): Reply return run(value, "activation_effects") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.attention_count(value: unknown): Reply return run(value, "attention_count") end

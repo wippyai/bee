@@ -1,9 +1,10 @@
 -- MIT. Public delivery facade for an authoring agent. It authenticates the
 -- caller's exact delivery operation, then composes the existing owner facades
 -- (publication, destination and preflight) as that same actor. It writes no
--- overlay and creates no approval: publication prepare and destination stage
--- are the agent's acts, while review, selection, approval and apply remain
--- other owners' and the person's.
+-- overlay: the agent publishes, stages and, once the destination's preflight
+-- is clean, records its review and selection and prepares the activation.
+-- That raises the one approval the person gives; the activation worker
+-- applies the exact intent once the person approves it.
 local funcs = require("funcs")
 local security = require("security")
 local resources = require("resources")
@@ -27,7 +28,7 @@ local DESTINATION = "bee.gov.binding:destination_call"
 -- One delivery action per operation, checked against the caller's own actor
 -- before any owner facade runs.
 local ACTIONS: {[string]: string} = {
-    request = "bee.gov.delivery.manage",
+    request = "bee.gov.delivery.activate",
     status = "bee.gov.delivery.read",
     publish = "bee.gov.delivery.publish",
     preflight = "bee.gov.delivery.manage",
@@ -102,6 +103,39 @@ local function diagnostic_rows(report: Object): {unknown}
     return rows
 end
 
+-- A ready plan is reviewed and selected by its requester and its activation
+-- prepared under keys derived from the plan digest, so a repeated request
+-- replays each step. Preparing raises the person's approval; nothing reaches
+-- the registry before it.
+local function activate(workspace_id: string, source_node: string, source_workspace: string,
+    version: string, plan: Object): (Object?, Result?)
+    local digest = bounds.text(plan.plan_digest, 64)
+    if not digest or #digest ~= 64 then return nil, failure("INTERNAL", "staged plan has no digest") end
+    local function key(step: string): string return "deliver-" .. step .. "-" .. digest:sub(1, 32) end
+    local identity: Object = {workspace_id = workspace_id, source_node = source_node,
+        source_workspace = source_workspace, version = version}
+    local function with(fields: Object): Object
+        local request: Object = {}
+        for name, item in pairs(identity) do request[name] = item end
+        for name, item in pairs(fields) do request[name] = item end
+        return request
+    end
+    local current: Object = plan
+    if current.status == "staged" then
+        local reviewed, review_error = forward(DESTINATION, with({operation = "review", expected_revision = current.revision,
+            idempotency_key = key("review"), review_status = "accepted",
+            review_reason = "Preflight ready; the person's approval applies it"}))
+        if not reviewed then return nil, review_error end
+        current = reviewed
+    end
+    if current.selected ~= true then
+        local chosen, select_error = forward(DESTINATION, with({operation = "select", expected_revision = current.revision,
+            idempotency_key = key("select")}))
+        if not chosen then return nil, select_error end
+    end
+    return forward(DESTINATION, with({operation = "prepare", intent_id = key("intent"), receipt_key = key("receipt")}))
+end
+
 -- Publication prepare, then a destination stage, then the destination's own
 -- preflight verdict. The agent learns ready or the exact diagnostics, and the
 -- human steps that follow are stated here because the agent cannot take them.
@@ -140,12 +174,21 @@ local function request_operation(workspace_id: string, source_workspace: string,
     if not report then return failure("INTERNAL", "staged preflight report: " .. tostring(report_error)) end
     local ready = report.ready == true and #report.diagnostics == 0 and #report.pending_migrations == 0
     local steps, opening = guide.delivery_steps(source_workspace)
-    return transaction.success({ready = ready, plan_digest = plan.plan_digest,
+    local value: Object = {ready = ready, plan_digest = plan.plan_digest,
         artifact_digest = plan.artifact_digest, version = version, source_overlay_id = source_workspace,
         component = component, diagnostics = diagnostic_rows(report),
         pending_migrations = #report.pending_migrations,
         human_steps = steps,
-        human_steps_where = {review = "Overlays", approve = "Approvals", open = opening}}, false)
+        human_steps_where = {approve = "Needs you", open = opening}}
+    if ready then
+        local intent, refused = activate(workspace_id, tostring(descriptor.owner_id), source_workspace, version, plan)
+        if intent then
+            value.intent_id, value.approval_id, value.activation_phase = intent.intent_id, intent.approval_id, intent.phase
+        else
+            value.activation_refusal = refused and refused.message or "activation was not prepared"
+        end
+    end
+    return transaction.success(value, false)
 end
 
 -- Check a frozen candidate without staging a version: resolve the host

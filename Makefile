@@ -64,7 +64,7 @@ compose:
 	python3 tests/compose.py
 
 lint: $(WIPPY) compose
-	python3 tools/reference_drivers.py --check
+	python3 tools/corpus.py --check
 	$(WIPPY) lint
 	cd tests && $(abspath $(WIPPY)) install && $(abspath $(WIPPY)) lint
 
@@ -102,6 +102,7 @@ test: $(WIPPY) compose $(TEST_FIXTURES)/harness/bin/gateway-client
 		-o bee.threads.sessions.service:scheduler_service:lifecycle.auto_start=false \
 		-o bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false \
 		-o bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false \
+		-o bee.gov.service:activation_service:lifecycle.auto_start=false \
 		-o bee.threads.service:pump_service:lifecycle.auto_start=false \
 		$(if $(TESTS),test $(TESTS))
 

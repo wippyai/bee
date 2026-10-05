@@ -57,14 +57,15 @@ entries:
 - name: gateway_tool_delivery_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject may request delivery of its frozen artifact (publication prepare + destination stage/preflight) and read delivery status; the facade and the owner services enforce workspace,
-      profile and destination authority
+    comment: A bound MCP subject may request delivery of its frozen artifact (publication prepare, destination stage and preflight, and once ready the activation that asks the person) and read delivery
+      status; the facade and the owner services enforce workspace, profile and destination authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || ((action == "bee.gov.delivery.manage" || action == "bee.gov.delivery.read") && resource != "")
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || ((action == "bee.gov.delivery.manage" || action == "bee.gov.delivery.read" || action == "bee.gov.delivery.activate") && resource != "")
     actions:
     - funcs.call
     - bee.gov.delivery.manage
     - bee.gov.delivery.read
+    - bee.gov.delivery.activate
     resources:
     - bee.gov.binding:delivery_call
     - '*'

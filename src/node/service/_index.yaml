@@ -28,6 +28,6 @@ entries:
     requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service]
     security:
       actor: {id: bee.node}
-      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_role, bee.hive.security:messaging]
+      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.node.security:owner_role, bee.hive.security:messaging]
     restart:
       max_attempts: 10

@@ -597,6 +597,33 @@ local function admission_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+        test.it("advances an approved activation to applied in one call", function()
+            local plans = assert(plan_store.open("bee:db", "node-owner", "workspace-advance"))
+            local activations = assert(activation_store.open("bee:db", "node-owner", "workspace-advance"))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'advanced'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local applied = 0
+            local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
+                approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.gov:advance-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied > 0, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
+                    applied = applied + 1
+                    return {changed = true}, nil
+                end}
+            test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-advance", receipt_key = "advance-v1"})).phase, "approval_bound")
+            local settled = ok(owner.advance(config, "intent-advance", "advance-v1"))
+            test.eq(settled.phase, "settled")
+            test.eq(settled.outcome, "applied")
+            test.eq(applied, 1)
+            local again = ok(owner.advance(config, "intent-advance", "advance-v1"))
+            test.eq(again.outcome, "applied")
+            test.eq(applied, 1)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
         test.it("settles exact materialization after remeasurement even with an unchanged base revision", function()
             local workspace = "workspace-activation-yield"
             local plans = assert(plan_store.open("bee:db", "node-owner", workspace))

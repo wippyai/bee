@@ -42,14 +42,21 @@ entries:
     actions: [db.get]
     resources: [bee.approvals:test_db]
     effect: allow
+- name: attention_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [events.subscribe]
+    resources: [bee.attention]
+    effect: allow
 - name: service_test
   kind: function.lua
   source: file://service_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [funcs, security, registry, time, sql, process, channel, uuid, json]
+  modules: [funcs, security, registry, time, sql, process, channel, uuid, json, events]
   security:
-    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+    policies: [bee.approvals:attention_test_policy, bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   imports:
     principals: bee.tests.principals:bound
     bounds: bee.values:bounds

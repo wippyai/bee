@@ -326,7 +326,9 @@ function M.workspace(id: string, ask: Ask): Workspace?
     return {label = label ~= "" and label or names.label(id), folder = path ~= "" and path or "Workspace root"}
 end
 
-function M.directory(client: sessions.Client, workspace: string?): ({Snapshot}?, string?)
+-- directory lists the sessions in workspace (every permitted workspace when
+-- nil), open sessions first; closed sessions only when include_closed.
+function M.directory(client: sessions.Client, workspace: string?, include_closed: boolean?): ({Snapshot}?, string?)
     local rows: {Snapshot} = {}
     local cursor: string? = nil
     for _ = 1, M.MAX_PAGES do
@@ -334,7 +336,7 @@ function M.directory(client: sessions.Client, workspace: string?): ({Snapshot}?,
         if not page then return nil, describe(fault) end
         for _, item in ipairs(page.items) do
             local home = M.home(item.session)
-            if not workspace or home == workspace then rows[#rows + 1] = item end
+            if (not workspace or home == workspace) and (include_closed or item.lifecycle ~= "closed") then rows[#rows + 1] = item end
         end
         if not page.next then
             table.sort(rows, function(left: Snapshot, right: Snapshot): boolean

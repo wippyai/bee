@@ -99,33 +99,47 @@ function M.decode(raw: unknown): (Declaration?, string?)
     return {command = command, any_of = decoded}, nil
 end
 
+-- probe observes the alternatives in order until one proves the login; the
+-- alternatives after it are left unobserved, so a signed-in CLI starts no
+-- status command.
 function M.probe(declaration: Declaration, probe: Probe): {Check}
     local checks: {Check} = {}
+    local proven = false
     for index, evidence in ipairs(declaration.any_of) do
-        local present: boolean? = false
-        local code: integer? = nil
-        local reason: string? = nil
-        if evidence.kind == "auth_status" then
-            code = probe.status(evidence.argv, evidence.timeout_ms)
-            if code ~= nil then present = code == evidence.success_exit_code else present = nil end
+        if proven then
+            checks[index] = {present = nil, exit_code = nil, reason = nil}
         else
-            local uncertain = false
-            local values = evidence.kind == "file_exists" and evidence.paths or evidence.names
-            for _, value in ipairs(values) do
-                local found: boolean? = nil
-                if evidence.kind == "file_exists" then
-                    local refusal: string? = nil
-                    found, refusal = probe.file(value, evidence.variable, evidence.directory)
-                    if refusal and not reason then reason = refusal end
-                else found = probe.environment(value) end
-                if found == true then present = true; reason = nil; break end
-                if found == nil then uncertain = true end
-            end
-            if present ~= true and uncertain then present = nil end
+            checks[index] = M.observe(evidence, probe)
+            proven = checks[index].present == true
         end
-        checks[index] = {present = present, exit_code = code, reason = reason}
     end
     return checks
+end
+
+-- observe checks one alternative.
+function M.observe(evidence: Evidence, probe: Probe): Check
+    local present: boolean? = false
+    local code: integer? = nil
+    local reason: string? = nil
+    if evidence.kind == "auth_status" then
+        code = probe.status(evidence.argv, evidence.timeout_ms)
+        if code ~= nil then present = code == evidence.success_exit_code else present = nil end
+    else
+        local uncertain = false
+        local values = evidence.kind == "file_exists" and evidence.paths or evidence.names
+        for _, value in ipairs(values) do
+            local found: boolean? = nil
+            if evidence.kind == "file_exists" then
+                local refusal: string? = nil
+                found, refusal = probe.file(value, evidence.variable, evidence.directory)
+                if refusal and not reason then reason = refusal end
+            else found = probe.environment(value) end
+            if found == true then present = true; reason = nil; break end
+            if found == nil then uncertain = true end
+        end
+        if present ~= true and uncertain then present = nil end
+    end
+    return {present = present, exit_code = code, reason = reason}
 end
 
 function M.decode_checks(raw: unknown, declaration: Declaration): ({Check}?, string?)

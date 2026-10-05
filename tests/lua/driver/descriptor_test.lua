@@ -212,9 +212,22 @@ local function define_tests()
                 {kind = "env_present", names = {"MISSING_KEY", "FIXTURE_KEY"}},
                 {kind = "auth_status", argv = {"auth", "status"}, success_exit_code = 7, timeout_ms = 42},
             }}))
-            local checks = login_evidence.probe(declaration, {
+            local by_file = login_evidence.probe(declaration, {
                 file = function(path, _variable, _directory) return path == ".fixture/config.jsonc", nil end,
+                environment = function(_name) return false end,
+                status = function(_argv, _timeout) return nil end,
+            })
+            test.eq(by_file[1].present, true)
+            local by_environment = login_evidence.probe(declaration, {
+                file = function(_path, _variable, _directory) return false, nil end,
                 environment = function(name) return name == "FIXTURE_KEY" end,
+                status = function(_argv, _timeout) return nil end,
+            })
+            test.eq(by_environment[1].present, false)
+            test.eq(by_environment[2].present, true)
+            local by_status = login_evidence.probe(declaration, {
+                file = function(_path, _variable, _directory) return false, nil end,
+                environment = function(_name) return false end,
                 status = function(argv, timeout)
                     test.eq(argv[1], "auth")
                     test.eq(argv[2], "status")
@@ -222,15 +235,35 @@ local function define_tests()
                     return 7
                 end,
             })
-            test.eq(#checks, 3)
-            for _, check in ipairs(checks) do test.eq(check.present, true) end
-            test.eq(checks[3].exit_code, 7)
+            test.eq(#by_status, 3)
+            test.eq(by_status[3].present, true)
+            test.eq(by_status[3].exit_code, 7)
             local uncertain = login_evidence.probe(declaration, {
                 file = function(_path, _variable, _directory) return false, nil end,
                 environment = function(_name) return false end,
                 status = function(_argv, _timeout) return nil end,
             })
             test.is_nil(login_evidence.present(declaration, uncertain))
+        end)
+        test.it("stops at the first alternative that proves the login and runs no status command after it", function()
+            local declaration = assert(login_evidence.decode({command = "fixture login", any_of = {
+                {kind = "file_exists", paths = {".fixture/credentials.json"}},
+                {kind = "env_present", names = {"FIXTURE_KEY"}},
+                {kind = "auth_status", argv = {"auth", "status"}, success_exit_code = 0, timeout_ms = 42},
+            }}))
+            local statuses = 0
+            local checks = login_evidence.probe(declaration, {
+                file = function(_path, _variable, _directory) return true, nil end,
+                environment = function(_name) return true end,
+                status = function(_argv, _timeout) statuses = statuses + 1; return 0 end,
+            })
+            test.eq(statuses, 0)
+            test.eq(#checks, 3)
+            test.eq(checks[1].present, true)
+            test.is_nil(checks[2].present)
+            test.is_nil(checks[3].present)
+            test.eq(login_evidence.present(declaration, checks), true)
+            test.not_nil(login_evidence.decode_checks(checks, declaration))
         end)
 
         test.it("loads each harness descriptor and rejects unknown top-level and nested fields", function()

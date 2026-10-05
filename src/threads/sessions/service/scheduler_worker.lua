@@ -53,8 +53,8 @@ local function main()
     local drain_error: string? = nil
     local ticker = time.ticker(M.SCAN_INTERVAL)
     local active: {[string]: Pending} = {}
-    -- Work whose last pass changed nothing waits for a commit hint or the
-    -- periodic scan, so a turn still running is not passed over in a loop.
+    -- Work whose last pass changed nothing, or failed, waits for a commit
+    -- hint or the periodic scan instead of being passed over in a loop.
     local settled_until_wake: {[string]: boolean} = {}
     local function scan()
         if waiting or lifecycle.fenced() then return end
@@ -106,10 +106,13 @@ local function main()
             for session, pending in pairs(active) do
                 if selected.channel == pending.response then
                     local reply, completion_error = pending.future:result()
-                    local outcome = bounds.object(reply)
+                    local outcome = reply and bounds.object(reply:data()) or nil
                     if completion_error or not outcome or outcome.ok ~= true then drain_error = "accepted session work remains uncertain" end
                     if completion_error then logger:error("Session turn worker ended without a report", {session = session, cause = tostring(completion_error)}) end
-                    if outcome and outcome.ok == true and outcome.progressed ~= true then settled_until_wake[pending.work] = true end
+                    if outcome and outcome.ok ~= true then
+                        logger:warn("Session work pass failed", {work = pending.work, cause = tostring(outcome.error)})
+                    end
+                    if not outcome or outcome.ok ~= true or outcome.progressed ~= true then settled_until_wake[pending.work] = true end
                     active[session] = nil
                     break
                 end

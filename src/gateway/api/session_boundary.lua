@@ -15,6 +15,11 @@ function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Obje
         if not prompt then return nil, "native prompt exceeds its bound" end
         request.input = prompt
     end
+    if event == "Stop" and payload and payload.last_assistant_message ~= nil then
+        local answer = bounds.text(payload.last_assistant_message, 65536)
+        if not answer then return nil, "the agent's reply exceeds its bound" end
+        request.answer = answer
+    end
     if event == "PermissionRequest" then
         if not payload or not transport then return nil, "permission hook omitted its transport or input" end
         request.permission = {payload = payload, transport = transport, action_id = binding.action_id, binding_id = binding.binding_id}

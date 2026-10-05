@@ -71,6 +71,16 @@ local function define_tests()
             if not reply.ok then error(tostring(reply.error)) end
             test.is_true(reply.value.hookSpecificOutput.additionalContext:find("peer boundary message", 1, true) ~= nil)
             test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "accepted")
+            local stopped_raw, stop_err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(
+                "bee.tests.sessions:hook_boundary_probe", {binding = {binding_id = "binding-1", subject = opened.session,
+                    action_id = "action:" .. string.rep("a", 64), attempt_id = attempt, thread_id = "thread:" .. string.rep("a", 64),
+                    workspace_id = WORKSPACE}, outcome = {event = "Stop", event_id = harness.key()},
+                    payload = {last_assistant_message = "The boundary reply."}})
+            if stop_err then error(tostring(stop_err)) end
+            test.is_true((assert(bounds.object(stopped_raw))).ok == true)
+            local settled = harness.value(journal:call("work_describe", {work = work.work}))
+            test.eq(settled.phase, "settled")
+            test.eq((assert(bounds.object((assert(bounds.object(settled.result))).value))).text, "The boundary reply.")
         end)
         test.it("rejects an open key already used for the other presentation", function()
             for _, presentation in ipairs({"headless", "window"}) do
@@ -224,7 +234,7 @@ local function define_tests()
             harness.value(journal:call("session_attach", {session = unrecorded.session, attempt_id = "attempt:unrecorded", operation_key = harness.key()}))
             test.eq(assert(bounds.object(restore(granted, unrecorded.session).error)).code, "UNAVAILABLE")
         end)
-        test.it("delivers authenticated peer input once at a turn boundary and keeps busy input queued", function()
+        test.it("delivers authenticated peer input once at a turn boundary, keeps busy input queued and returns the agent's reply", function()
             local journal = harness.session_owner(WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "interactive-one", operation_key = harness.key()}))
@@ -232,10 +242,10 @@ local function define_tests()
             local peer = harness.principal("bs:node:" .. WORKSPACE .. ":peer", {"bee.threads.security:sessions_owner"}, WORKSPACE)
             local first = harness.value(peer:call("work_send", {session = opened.session, input = "reply to this peer", operation_key = harness.key()}))
             local policies = {assert(security.policy("bee.gateway.security:session_boundary_policy"))}
-            local function boundary(actor_id: string, event: string, operation_key: string, attempt: string?): {[string]: unknown}
+            local function boundary(actor_id: string, event: string, operation_key: string, attempt: string?, answer: string?): {[string]: unknown}
                 local actor = assert(security.new_actor(actor_id, {workspace_id = WORKSPACE}))
                 local raw, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.threads.sessions.binding:hook_boundary",
-                    {session = opened.session, event = event, operation_key = operation_key, attempt_id = attempt or "interactive-one"})
+                    {session = opened.session, event = event, operation_key = operation_key, attempt_id = attempt or "interactive-one", answer = answer})
                 if err then error(tostring(err)) end
                 return assert(bounds.object(raw))
             end
@@ -250,8 +260,13 @@ local function define_tests()
             local second = harness.value(peer:call("work_send", {session = opened.session, input = "next message", operation_key = harness.key()}))
             test.is_nil(boundary(session_ref, "UserPromptSubmit", harness.key()).value.additional_context)
             test.eq(harness.value(journal:call("work_describe", {work = second.work})).phase, "queued")
-            test.is_true(boundary(session_ref, "Stop", harness.key()).ok)
-            test.eq(harness.value(journal:call("work_describe", {work = first.work})).phase, "settled")
+            test.is_false(boundary(session_ref, "UserPromptSubmit", harness.key(), nil, "an answer belongs to Stop").ok)
+            test.is_true(boundary(session_ref, "Stop", harness.key(), nil, "Here is my reply to the peer.").ok)
+            local settled = harness.value(journal:call("work_describe", {work = first.work}))
+            test.eq(settled.phase, "settled")
+            local result = assert(bounds.object(settled.result))
+            test.eq(result.state, "succeeded")
+            test.eq((assert(bounds.object(result.value))).text, "Here is my reply to the peer.")
             test.is_nil(boundary(session_ref, "UserPromptSubmit", start).value.additional_context)
             test.is_true(boundary(session_ref, "UserPromptSubmit", harness.key()).value.additional_context:find("next message", 1, true) ~= nil)
         end)

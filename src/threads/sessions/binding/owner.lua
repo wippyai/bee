@@ -431,15 +431,23 @@ function M.detach(raw_request: unknown): Reply
     return succeed({session = session, attempt_id = attempt})
 end
 
+-- The turn's result is the agent's final message; a harness whose stop
+-- carries no message ended its turn with the reply only on its screen.
+local function reply_of(answer: unknown): string
+    if type(answer) == "string" then return answer end
+    return "The agent ended its turn; its reply is shown in its terminal"
+end
+
 function M.hook_boundary(raw_request: unknown): Reply
     local request, refused = request_input(raw_request, false)
     if not request then return assert(refused) end
     local caller = identity()
     local session, event, event_key = ref(request.session), request.event, key(request.operation_key)
     local attempt = bounds.id(request.attempt_id)
-    if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id", "permission", "input"})
+    if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id", "permission", "input", "answer"})
         or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
     if request.input ~= nil and (event ~= "UserPromptSubmit" or bounds.text(request.input, 65536) == nil) then return fail("INVALID", "native prompt is invalid", event_key) end
+    if request.answer ~= nil and (event ~= "Stop" or bounds.text(request.answer, 65536) == nil) then return fail("INVALID", "the agent's reply is invalid", event_key) end
     if not security.can("bee.sessions.hook_boundary", session) then return fail("DENIED", "hook boundary requires the authenticated gateway", event_key) end
     local raw, err = journal.invoke("session_describe", {session = session})
     local stored = object(raw)
@@ -481,7 +489,7 @@ function M.hook_boundary(raw_request: unknown): Reply
         if pull_error or not checkpoint then return unavailable(pull_error or "interactive checkpoint unavailable", event_key) end
         if checkpoint.attempt_id ~= attempt then return succeed({}) end
         local settled, settle_error = journal.invoke("work_settle", {turn = active.turn, claim = claim.claim,
-            operation_key = "hook-stop:" .. boundary_key, result = event == "Stop" and {state = "succeeded", schema = "bee:Text@1", value = {text = "Interactive turn completed"}}
+            operation_key = "hook-stop:" .. boundary_key, result = event == "Stop" and {state = "succeeded", schema = "bee:Text@1", value = {text = reply_of(request.answer)}}
                 or {state = "failed", error = {code = "INTERACTIVE_FAILED", message = "Interactive turn failed"}}})
         if settle_error or not settled then return unavailable(settle_error or "interactive turn settlement unavailable", event_key) end
         return succeed({})

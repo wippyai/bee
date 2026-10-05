@@ -211,7 +211,13 @@ local function define_tests()
             local unresumable, unresumable_error = continuation.resolve_window(call, request)
             test.is_nil(unresumable)
             test.eq(unresumable_error, continuation.NO_CONVERSATION)
+            -- A resumed window that ended before its agent reported a hook
+            -- still continued the conversation it was started with.
+            point.conversation_ref = "resumed-session"
+            test.eq(continuation.resolve_window(call, request), "resumed-session")
             rows = saved_rows
+            test.eq(continuation.resolve_window(call, request), "provider-session")
+            point.conversation_ref = nil
             local function missing_home(target: string, input: unknown): (unknown, string?)
                 if target == PLACEMENT_METHODS.status and saved_private_home then
                     return {ok = true, value = {attempt = attempt}}, nil

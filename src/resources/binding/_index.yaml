@@ -74,6 +74,15 @@ entries:
     policies:
     - bee.resources.security:resource_store_policy
     - bee.resources.security:resource_environment_policy
+- name: renew_attempt
+  kind: function.lua
+  source: file://renew_attempt_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
 - name: list
   kind: function.lua
   source: file://list_method.lua
@@ -120,6 +129,7 @@ entries:
       revoke: bee.resources.binding:revoke
       revoke_all: bee.resources.binding:revoke_all
       resolve: bee.resources.binding:resolve
+      renew_attempt: bee.resources.binding:renew_attempt
       list: bee.resources.binding:list
       describe: bee.resources.binding:describe
       search: bee.resources.binding:search

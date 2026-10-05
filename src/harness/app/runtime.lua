@@ -439,7 +439,6 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             completed:send(value.serial)
         end
         local phase: string = "initial"
-        local reviewed: admission.Plan? = nil
         local operation: integer = 0
 
         local function render()
@@ -447,8 +446,6 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             local frame
             if phase == "unresumable" then
                 frame = restore_view.unresumable(width, height, preferences, status)
-            elseif reviewed and (phase == "review" or phase == "resolving" or phase == "confirming") then
-                frame = restore_view.review(width, height, preferences, reviewed, restored.plan_digest, status)
             else
                 frame = restore_view.draw(width, height, preferences, status)
             end
@@ -463,7 +460,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local function start_admission(candidate: admission.Request)
             operation = operation + 1
             local serial = operation
-            phase = phase == "initial" and "initializing" or "confirming"
+            phase = phase == "initial" and "initializing" or "admitting"
             coroutine.spawn(function()
                 local choice: admission.Admitted? = nil
                 local refused: admission.Reply? = nil
@@ -483,7 +480,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             operation = operation + 1
             local serial = operation
             phase = "resolving"
-            status = refusal and "Checking the reviewed launch plan…" or "Checking the saved launch plan…"
+            status = refusal and "Checking the current launch plan…" or "Checking the saved launch plan…"
             dirty = true
             coroutine.spawn(function()
                 local plan: admission.Plan? = nil
@@ -545,13 +542,22 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                                 start_admission(request)
                             end
                         else
-                            reviewed = result.plan
-                            phase = "review"
-                            status = "Review the changed plan, then press Enter to continue"
-                            logger:warn("Agent terminal waits for the person to review its changed launch plan", {definition = request.definition_ref})
+                            -- A changed plan is the one a new session of this
+                            -- definition and saved profile is admitted under now;
+                            -- the conversation resumes under it.
+                            local reauthorized_id, id_error = uuid.v7()
+                            if not reauthorized_id then
+                                status = "Recovery admission refused: " .. tostring(id_error)
+                                phase = "refused"
+                            else
+                                logger:info("Agent terminal resumes under its definition's current launch plan", {definition = request.definition_ref})
+                                request = recovery_request(reauthorized_id, result.plan.plan_digest, true)
+                                status = "Resuming under the current launch plan…"
+                                start_admission(request)
+                            end
                         end
                     else
-                        status = "Changed launch plan could not be reviewed: " .. failure(result.refused)
+                        status = "Current launch plan is unavailable: " .. failure(result.refused)
                         phase = "refused"
                     end
                     dirty = true
@@ -564,8 +570,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                         phase = "unresumable"
                     elseif result.refused and result.refused.error
                         and result.refused.error.code == "CONFLICT" then
-                        -- A stale fence after Enter returns to review. Never
-                        -- silently retry a plan the user has not re-confirmed.
+                        -- A plan that changed again while admitting is
+                        -- resolved once more; an unchanged one is refused.
                         start_resolve(result.refused)
                     else
                         status = "Recovery admission refused: " .. failure(result.refused)
@@ -595,22 +601,6 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                         elseif data.key_type == "enter" or data.key == "enter" then
                             if phase == "unresumable" then
                                 cancel_restore()
-                            elseif phase == "review" and reviewed then
-                                if not restore_view.reviewable(width, height) then
-                                    status = "Resize to at least 32 × 13 before continuing"
-                                    dirty = true
-                                else
-                                    local confirmed_id, confirmed_error = uuid.v7()
-                                    if not confirmed_id then
-                                        status = "Recovery admission refused: " .. tostring(confirmed_error)
-                                        phase = "refused"
-                                    else
-                                        request = recovery_request(confirmed_id, reviewed.plan_digest, true)
-                                        status = "Authorizing reviewed launch plan…"
-                                        dirty = true
-                                        start_admission(request)
-                                    end
-                                end
                             end
                         end
                     end
@@ -745,6 +735,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         profile_digest = plan.binding.profile_digest.entry,
         plan_digest = plan.plan_digest,
         session_ref = plan.request.session_ref,
+        conversation_ref = plan.resume_ref,
         gateway_binding = prepared.gateway_binding,
         hooks_enabled = gateway ~= nil and #gateway.hooks > 0,
         drain_ms = plan.policy.drain_ms,

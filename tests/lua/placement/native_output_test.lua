@@ -340,6 +340,30 @@ local function output_tests()
             end
             native_fixture.resource_mode("host_configured")
         end)
+        test.it("keeps a running attempt past its grant's first term by renewing the lease while it supervises it", function()
+            local workspace = native_fixture.fresh("ws")
+            native_fixture.resource_call("associate", {workspace_id = workspace, name = "project", root_ref = native_fixture.ROOT, subpath = "", allowed_access = "write"})
+            native_fixture.resource_mode("granted")
+            local attempt_id = native_fixture.fresh("attempt")
+            local granted = native_fixture.resource_call("grant", {workspace_id = workspace, name = "project", access = "write", purpose = "project",
+                audience = native_fixture.OWNER, attempt_id = attempt_id, ttl_ms = 2000})
+            local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "direct_process")
+            request.attempt_id = attempt_id
+            local grant = (principals.objects(request.resources))[1]
+            grant.grant_ref = granted.grant_id
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
+            test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = attempt_id})).execution_state, "running")
+            for _ = 1, 2 do
+                time.sleep("1100ms")
+                local current = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = attempt_id}))
+                test.eq(current.execution_state, "running", table.concat(native_fixture.kinds(attempt_id), ","))
+            end
+            local recorded = native_fixture.kinds(attempt_id)
+            test.is_false(native_fixture.has(recorded, "grant.revoked"))
+            test.is_false(native_fixture.has(recorded, "lease.unrenewed"))
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = attempt_id, mode = "forced"}))
+            native_fixture.resource_mode("host_configured")
+        end)
         test.it("stops a running attempt reported by revoke_all", function()
             local workspace = native_fixture.fresh("epoch-stop")
             native_fixture.resource_call("associate", {workspace_id = workspace, name = "project", root_ref = native_fixture.ROOT,

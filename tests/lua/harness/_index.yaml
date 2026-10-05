@@ -574,6 +574,7 @@ entries:
     resources:
     - bee.gateway.binding:open
     - bee.gateway.binding:check
+    - bee.gateway.binding:renew_attempt
     - bee.gateway.binding:revoke
     - bee.gateway.binding:drain
     - bee.gateway.binding:ready

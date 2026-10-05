@@ -9,7 +9,6 @@ local env = require("env")
 local fs = require("fs")
 local json = require("json")
 local bounds = require("bounds")
-local clock = require("clock")
 local canonical = require("canonical")
 local credential_protocol = require("credential_protocol")
 local store = require("store")
@@ -301,11 +300,9 @@ local function same_issue(row: Row, request: Issue): (boolean?, string?)
         or row.launch_policy_digest ~= request.launch_policy_digest then
         return false, nil
     end
-    local created_at = clock.parse(row.created_at)
-    local expires_at = clock.parse(row.expires_at)
-    if not created_at or not expires_at then return nil, "projection timestamps are corrupt" end
-    if expires_at:unix_nano() - created_at:unix_nano() ~= request.ttl * 1000000 then return false, nil end
-    return true, nil
+    local lease = integer(row.lease_ms)
+    if not lease or lease < 1 then return nil, "projection lease length is corrupt" end
+    return lease == request.ttl, nil
 end
 
 local function decode_issue(value: unknown): (Issue?, string?)
@@ -411,7 +408,7 @@ function M.issue_projection(value: unknown): credential_protocol.Reply
         launch_policy_digest = request.launch_policy_digest, provider = definition.provider,
         projection_kind = definition.projection_kind, destination = definition.destination,
         format_json = format_json, materializer = materializer, idempotency_key = request.idempotency_key,
-        expires_at = stamp(created + request.ttl), authorization_epoch = epoch, created_at = stamp(created)})
+        expires_at = stamp(created + request.ttl), lease_ms = request.ttl, authorization_epoch = epoch, created_at = stamp(created)})
     if insert_error then
         db:release()
         return fail("STORAGE", "record projection")
@@ -696,6 +693,42 @@ function M.check(value: unknown): credential_protocol.Reply
     end
     result.source_present = source_present
     return succeed(result)
+end
+-- renew_attempt: the materializer supervising a live attempt extends the
+-- projections it holds for that attempt by their recorded term once less than
+-- half of the term remains. A revoked, expired or epoch-fenced projection
+-- stays ended.
+function M.renew_attempt(value: unknown): credential_protocol.Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"attempt_id", "subject", "audience"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local attempt_id, subject, audience = bounds.id(object.attempt_id), bounds.id(object.subject), bounds.id(object.audience)
+    if not attempt_id then return fail("INVALID", "attempt_id is not an identifier") end
+    if not subject then return fail("INVALID", "subject is not an identifier") end
+    if not audience then return fail("INVALID", "audience is not an identifier") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    local db, open_failure = open()
+    if not db then return open_failure end
+    local now = now_ms()
+    local rows, read_error = store.attempt_leases(db, attempt_id, subject, audience, stamp(now))
+    if not rows then db:release(); return fail("STORAGE", read_error or "read attempt projections") end
+    local renewed = 0
+    for _, row in ipairs(rows) do
+        local workspace_id = text(row.workspace_id) or ""
+        if not security.can(M.MATERIALIZE, workspace_id) then db:release(); return fail("DENIED", "caller is not a materializer admitted in workspace " .. workspace_id) end
+        local epoch, epoch_error = store.epoch(db, workspace_id)
+        if not epoch then db:release(); return fail("STORAGE", epoch_error or "epoch") end
+        local lease, projection_epoch = integer(row.lease_ms), integer(row.authorization_epoch)
+        if not lease or lease < 1 or not projection_epoch then db:release(); return fail("STORAGE", "projection lease is corrupt") end
+        if projection_epoch >= epoch and tostring(row.expires_at) <= stamp(now + lease // 2) then
+            local extend_error = store.extend(db, tostring(row.projection_id), stamp(now + lease))
+            if extend_error then db:release(); return fail("STORAGE", extend_error) end
+            renewed = renewed + 1
+        end
+    end
+    db:release()
+    return succeed({attempt_id = attempt_id, renewed = renewed})
 end
 function M.materialize(value: unknown): credential_protocol.Reply
     local object, decode_error = decode_use(value, {"generation_key", "provider_files"})

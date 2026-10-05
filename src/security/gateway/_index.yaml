@@ -27,6 +27,7 @@ entries:
     resources:
     - bindings
     - bee.gateway.binding:check
+    - bee.gateway.binding:renew_attempt
     - bee.gateway.binding:revoke_attempt
     - bee.gateway.binding:authorize_materialization
     effect: allow

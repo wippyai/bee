@@ -42,6 +42,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
+    hook_command_ref: bee.gateway.env:hook_executable
     profile_instructions: true
     prepare_options:
       permission_mode: default
@@ -105,6 +106,7 @@ entries:
     - PostToolUse
     - PermissionRequest
     - Stop
+    hook_command_ref: bee.gateway.env:hook_executable
     profile_instructions: true
     prepare_options: {}
     placement_profiles:

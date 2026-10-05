@@ -321,9 +321,9 @@ function M.grant(value: unknown): Reply
     end
     local created = now_ms()
     local _, insert_error = db:execute([[INSERT INTO bee_resource_grants (grant_id, workspace_id, name, association_id, association_revision, issuer_owner, subject, thread_id, audience,
-        root_ref, root_digest, subpath, access, purpose, attempt_id, expires_at, authorization_epoch, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]],
+        root_ref, root_digest, subpath, access, purpose, attempt_id, expires_at, lease_ms, authorization_epoch, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]],
         {grant_id, workspace_id, name, association.association_id, association.revision, issuer_node, subject, named_thread, audience, association.root_ref, association.root_digest,
-            grant_subpath, access, purpose, attempt_id, stamp(created + ttl), epoch, idempotency_key, request_digest, stamp(created)})
+            grant_subpath, access, purpose, attempt_id, stamp(created + ttl), ttl, epoch, idempotency_key, request_digest, stamp(created)})
     if insert_error then
         db:release()
         return fail("STORAGE", "record grant")
@@ -533,6 +533,42 @@ function M.resolve(value: unknown): Reply
     return succeed({grant_id = grant_id, workspace_id = workspace_id, name = grant.name, root_ref = grant.root_ref, root_digest = grant.root_digest, directory = directory,
         subpath = grant.subpath, access = grant.access, purpose = grant.purpose, association_id = grant.association_id, association_revision = grant.association_revision,
         expires_at = grant.expires_at, authorization_epoch = grant.authorization_epoch})
+end
+-- renew_attempt: the placement supervising a live attempt extends the leases
+-- it holds for that attempt by their recorded term once less than half of the
+-- term remains. A revoked, expired or epoch-fenced grant stays ended.
+function M.renew_attempt(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"attempt_id", "subject", "audience"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local attempt_id, subject, audience = bounds.id(object.attempt_id), bounds.id(object.subject), bounds.id(object.audience)
+    if not attempt_id then return fail("INVALID", "attempt_id is not an identifier") end
+    if not subject then return fail("INVALID", "subject is not an identifier") end
+    if not audience then return fail("INVALID", "audience is not an identifier") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    local db, open_failure = open()
+    if not db then return open_failure end
+    local now = now_ms()
+    local rows, read_error = db:query("SELECT grant_id, workspace_id, expires_at, lease_ms, authorization_epoch FROM bee_resource_grants " ..
+        "WHERE attempt_id = ? AND subject = ? AND audience = ? AND revoked_at IS NULL AND expires_at > ?", {attempt_id, subject, audience, stamp(now)})
+    if read_error or not rows then db:release(); return fail("STORAGE", "read attempt grants") end
+    local renewed = 0
+    for _, row in ipairs(rows) do
+        local workspace_id = text(row.workspace_id) or ""
+        if not security.can(M.RESOLVE, workspace_id) then db:release(); return fail("DENIED", "caller is not a placement admitted to renew in workspace " .. workspace_id) end
+        local epoch, epoch_error = epoch_of(db, workspace_id)
+        if not epoch then db:release(); return fail("STORAGE", epoch_error or "epoch") end
+        local lease, grant_epoch = integer(row.lease_ms), integer(row.authorization_epoch)
+        if not lease or lease < 1 or not grant_epoch then db:release(); return fail("STORAGE", "grant lease is corrupt") end
+        if grant_epoch >= epoch and tostring(row.expires_at) <= stamp(now + lease // 2) then
+            local _, update_error = db:execute("UPDATE bee_resource_grants SET expires_at = ? WHERE grant_id = ? AND revoked_at IS NULL", {stamp(now + lease), row.grant_id})
+            if update_error then db:release(); return fail("STORAGE", "renew grant") end
+            renewed = renewed + 1
+        end
+    end
+    db:release()
+    return succeed({attempt_id = attempt_id, renewed = renewed})
 end
 -- list: a manager's view of a workspace's associations and live grants.
 function M.list(value: unknown): Reply

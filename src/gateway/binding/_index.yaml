@@ -107,6 +107,18 @@ entries:
     - bee.gateway.security:store_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
+- name: renew_attempt
+  kind: function.lua
+  source: file://renew_attempt_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
 - name: revoke_attempt
   kind: function.lua
   source: file://revoke_attempt_method.lua

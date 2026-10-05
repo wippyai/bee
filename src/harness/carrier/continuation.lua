@@ -177,6 +177,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
         end
         cursor = through
         if not page.has_more then
+            conversation_session_id = conversation_session_id or previous.point.conversation_ref
             if not conversation_session_id then return nil, M.NO_CONVERSATION end
             -- Only an owned, ended attempt with a verified conversation can
             -- request cleanup. Placement still proves group absence and keeps

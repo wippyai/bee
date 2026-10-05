@@ -17,6 +17,8 @@ entries:
     description: Advance the workspace authorization epoch so every earlier grant stops resolving, then ask placement to recheck and stop the fenced live attempts
   - name: resolve
     description: Re-check a grant for the placement that admitted the subject and audience, and return the exact resource scope
+  - name: renew_attempt
+    description: Extend the leases a live attempt holds by their recorded term, for the placement that supervises the attempt
   - name: list
     description: A manager's view of associations and live grants
   - name: describe

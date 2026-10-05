@@ -21,6 +21,7 @@ entries:
     configure_protocol: bee.driver.binding:configuration
     canonical: bee.values:canonical
     universal: bee.driver.binding:universal
+    quote: bee.driver.binding:quote
   security:
     policies:
     - bee.driver.claude.binding:configuration_policy

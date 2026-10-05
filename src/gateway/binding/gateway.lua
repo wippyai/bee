@@ -613,7 +613,7 @@ function M.admit(value: unknown): Reply
     local origin_json = origin_view and json.encode(origin_view) or ""
     if origin_view and not origin_json then tx:rollback(); db:release(); return fail("INVALID", "origin_view is not JSON") end
     local _, insert_error = binding_store.insert(tx, binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch,
-        json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created),
+        json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), ttl, idempotency_key, request_digest, stamp(created),
         policy_ref or "", workspace_id or "", workspace_name, origin_json)
     if insert_error then tx:rollback(); db:release(); return fail("STORAGE", "record binding") end
     local initialized, initialize_error = surface_store.initialize(tx, binding_id, surface_json, json.encode(initial.active) or "[]", "{}")
@@ -919,6 +919,41 @@ function M.revoke_attempt(value: unknown): Reply
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
     return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch, revoked = revoked, revocation = revocation})
+end
+-- renew_attempt: placement's supervision extends the bindings a live attempt
+-- holds at or below its carrier epoch by their recorded term once less than
+-- half of the term remains. A revoked, sealed, expired or epoch-fenced
+-- binding stays ended.
+function M.renew_attempt(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"attempt_id", "carrier_epoch"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local attempt_id = bounds.id(object.attempt_id)
+    if not attempt_id then return fail("INVALID", "attempt_id is not an identifier") end
+    local carrier_epoch = integer(object.carrier_epoch)
+    if not carrier_epoch or carrier_epoch < 1 then return fail("INVALID", "carrier_epoch must be a positive integer") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(M.MANAGE, "bindings") then return fail("DENIED", "caller does not manage gateway bindings") end
+    local db, open_failure = open()
+    if not db then return open_failure end
+    local generation, generation_failure = M.generation(db)
+    if not generation then db:release(); return assert(generation_failure) end
+    local now = now_ms()
+    local rows, read_error = binding_store.attempt_leases(db, attempt_id, carrier_epoch, generation.epoch, stamp(now))
+    if read_error or not rows then db:release(); return fail("STORAGE", "read attempt bindings") end
+    local renewed = 0
+    for _, row in ipairs(rows) do
+        local lease = integer(row.lease_ms)
+        if not lease or lease < 1 then db:release(); return fail("STORAGE", "binding lease length is corrupt") end
+        if tostring(row.expires_at) <= stamp(now + lease // 2) then
+            local _, extend_error = binding_store.extend(db, tostring(row.binding_id), stamp(now + lease))
+            if extend_error then db:release(); return fail("STORAGE", "renew binding") end
+            renewed = renewed + 1
+        end
+    end
+    db:release()
+    return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch, renewed = renewed})
 end
 -- check: a binding as it stands now, named by id or by attempt and carrier
 -- epoch, for placement's recheck of what an attempt still holds. Bindings,

@@ -57,6 +57,7 @@ entries:
     resources:
     - '*'
     - bee.resources.binding:resolve
+    - bee.resources.binding:renew_attempt
     effect: allow
 - name: resource_revoke_stop_policy
   kind: security.policy

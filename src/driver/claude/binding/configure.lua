@@ -2,6 +2,7 @@
 local configure_protocol = require("configure_protocol")
 local canonical = require("canonical")
 local universal = require("universal")
+local quote = require("quote")
 local function gateway_delivery(gateway)
     if not gateway then return {arguments = {"--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'}, files = {}}, nil end
     local url = "http://" .. gateway.endpoint .. "/mcp/" .. gateway.action_id
@@ -17,8 +18,16 @@ local function gateway_delivery(gateway)
     local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. hook_token .. "}"}, allowedEnvVars = {gateway.hook_token_environment}, timeout = 2}
     local events = {}
     for _, event in ipairs(gateway.hooks) do
-        local event_handler = {type = handler.type, url = handler.url, headers = handler.headers,
-            allowedEnvVars = handler.allowedEnvVars, timeout = event == "PermissionRequest" and 650 or 2}
+        local event_handler: {[string]: unknown}
+        if event == "SessionStart" then
+            -- Claude runs only command and MCP tool hooks at session start; the
+            -- host hook command posts the event to the same gateway hook.
+            if not gateway.hook_command then return nil, "Claude session start hooks require the host-selected hook command" end
+            event_handler = {type = "command", command = quote.line({gateway.hook_command, "hook-post", gateway.endpoint, gateway.action_id, hook_token, event}), timeout = 3}
+        else
+            event_handler = {type = handler.type, url = handler.url, headers = handler.headers,
+                allowedEnvVars = handler.allowedEnvVars, timeout = event == "PermissionRequest" and 650 or 2}
+        end
         events[event] = {{matcher = "", hooks = {event_handler}}}
     end
     local settings, settings_error = canonical.encode({hooks = events, allowedHttpHookUrls = {hook_url},

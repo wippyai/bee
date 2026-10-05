@@ -343,6 +343,27 @@ local function define_tests()
                 test.is_nil(configuration.decode_request({fixture = false, instruction_builder = invalid}))
             end
         end)
+        test.it("reports Claude's session start through the host hook command, since Claude runs only command hooks there", function()
+            local selected = {endpoint = "127.0.0.1:4100", action_id = "action-claude", tools = {"thread_read"}, hooks = {"SessionStart", "UserPromptSubmit", "Stop"},
+                token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN", hook_command = "/opt/bee/bee"}
+            local delivered, err = configuration.call("bee.driver.claude.binding:binding", "bee.driver.claude.binding:configure", {fixture = false, gateway = selected})
+            if not delivered then error(tostring(err)) end
+            test.eq(delivered.arguments[4], "--settings")
+            local settings = assert(bounds.object(json.decode(delivered.arguments[5])))
+            local events = assert(bounds.object(settings.hooks))
+            local function handler(event: string): {[string]: unknown}
+                local groups = assert(bounds.array(events[event]))
+                return assert(bounds.object(assert(bounds.array(assert(bounds.object(groups[1])).hooks))[1]))
+            end
+            local start = handler("SessionStart")
+            test.eq(start.type, "command")
+            test.eq(start.command, "/opt/bee/bee hook-post 127.0.0.1:4100 action-claude BEE_GATEWAY_HOOK_TOKEN SessionStart")
+            test.eq(handler("UserPromptSubmit").type, "http")
+            test.eq(handler("Stop").type, "http")
+            selected.hook_command = nil
+            local refused = configuration.call("bee.driver.claude.binding:binding", "bee.driver.claude.binding:configure", {fixture = false, gateway = selected})
+            test.is_nil(refused)
+        end)
         test.it("loads only Bee MCP even when no tools are selected", function()
             local ordinary, err = configuration.call("bee.driver.claude.binding:binding", "bee.driver.claude.binding:configure", {fixture = false})
             if not ordinary then error(tostring(err)) end

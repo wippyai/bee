@@ -13,7 +13,7 @@ type Projection = {projection_id: string, workspace_id: string, name: string,
     audience: string, attempt_id: string, profile_id: string, profile_digest: string,
     binding_digest: string, launch_policy_digest: string, provider: unknown,
     projection_kind: unknown, destination: unknown, format_json: string, materializer: string,
-    idempotency_key: string, expires_at: string, authorization_epoch: integer, created_at: string}
+    idempotency_key: string, expires_at: string, lease_ms: integer, authorization_epoch: integer, created_at: string}
 
 function M.open(): (sql.DB?, string?)
     return node_database.open()
@@ -66,10 +66,10 @@ end
 function M.insert_projection(db: sql.DB, row: Projection): string?
     local _, err = db:execute([[INSERT INTO bee_credential_projections (projection_id, workspace_id, name, definition_id, definition_revision, issuer_owner, issuer_incarnation,
         subject, audience, attempt_id, profile_id, profile_digest, binding_digest, launch_policy_digest, provider, projection_kind, destination, format_json, materializer, idempotency_key,
-        materialization_generation, expires_at, authorization_epoch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)]],
+        materialization_generation, expires_at, lease_ms, authorization_epoch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)]],
         {row.projection_id, row.workspace_id, row.name, row.definition_id, row.definition_revision, row.issuer_owner, 1, row.subject, row.audience, row.attempt_id,
             row.profile_id, row.profile_digest, row.binding_digest, row.launch_policy_digest, row.provider, row.projection_kind, row.destination,
-            row.format_json, row.materializer, row.idempotency_key, row.expires_at, row.authorization_epoch, row.created_at})
+            row.format_json, row.materializer, row.idempotency_key, row.expires_at, row.lease_ms, row.authorization_epoch, row.created_at})
     if err then return "record projection" end
     return nil
 end
@@ -98,6 +98,21 @@ end
 function M.revoke(db: sql.DB, projection_id: string, at: string): string?
     local _, err = db:execute("UPDATE bee_credential_projections SET revoked_at = ? WHERE projection_id = ?", {at, projection_id})
     if err then return "revoke projection" end
+    return nil
+end
+
+-- attempt_leases lists an attempt's unrevoked, unexpired projections for its
+-- subject and audience.
+function M.attempt_leases(db: sql.DB, attempt_id: string, subject: string, audience: string, at: string): ({Row}?, string?)
+    local rows, err = db:query("SELECT projection_id, workspace_id, expires_at, lease_ms, authorization_epoch FROM bee_credential_projections " ..
+        "WHERE attempt_id = ? AND subject = ? AND audience = ? AND revoked_at IS NULL AND expires_at > ?", {attempt_id, subject, audience, at})
+    if err or not rows then return nil, "read attempt projections" end
+    return rows, nil
+end
+
+function M.extend(db: sql.DB, projection_id: string, expires_at: string): string?
+    local _, err = db:execute("UPDATE bee_credential_projections SET expires_at = ? WHERE projection_id = ? AND revoked_at IS NULL", {expires_at, projection_id})
+    if err then return "renew projection" end
     return nil
 end
 

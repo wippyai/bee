@@ -268,6 +268,30 @@ function M.check_grants(row: store.Row, request: types.LaunchRequest): (Reply?, 
     end
     return nil, nil
 end
+-- renew_leases extends the leases a live attempt holds: its resource grants,
+-- credential projections and gateway binding, each renewed by its authority
+-- for the term it was issued with. The first refusal is returned.
+function M.renew_leases(row: store.Row, request: types.LaunchRequest): Reply?
+    local renewals: {{target: string, input: {[string]: unknown}}} = {}
+    if #request.resources > 0 then
+        renewals[#renewals + 1] = {target = resources.RENEW, input = {attempt_id = request.attempt_id, subject = request.owner_id, audience = request.owner_id}}
+    end
+    if #request.projections > 0 then
+        renewals[#renewals + 1] = {target = resources.CREDENTIAL_RENEW, input = {attempt_id = request.attempt_id, subject = request.owner_id, audience = request.owner_id}}
+    end
+    local carrier_epoch = bounds.count(row.attachment_generation)
+    if request.gateway and carrier_epoch and carrier_epoch > 0 then
+        renewals[#renewals + 1] = {target = resources.GATEWAY_RENEW, input = {attempt_id = request.attempt_id, carrier_epoch = carrier_epoch}}
+    end
+    for _, renewal in ipairs(renewals) do
+        local raw, call_error = funcs.call(renewal.target, renewal.input)
+        if call_error then return fail("UNAVAILABLE", renewal.target .. " did not answer: " .. tostring(call_error)) end
+        local reply, reply_error = decode_reply(raw)
+        if not reply then return fail("UNAVAILABLE", renewal.target .. " returned an invalid reply: " .. tostring(reply_error)) end
+        if reply.ok == false then return fail(reply.error.code, renewal.target .. ": " .. reply.error.message) end
+    end
+    return nil
+end
 -- Host HOME is a policy decision, not a property of the caller's request.
 -- Check the pinned policy at every native authorization boundary so a policy
 -- update cannot turn an already-recorded request into an unapproved launch.
@@ -902,7 +926,7 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         db:release()
         if not monitors or monitor_error then return fail("STORAGE", "read startup supervision: " .. tostring(monitor_error)) end
         if #monitors > 0 then
-            local enforcement = M.enforce_grants(attempt)
+            local enforcement = M.supervise_grants(attempt)
             if enforcement then return enforcement end
             -- Only the acknowledgement or monitor decides supervised startup.
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "startup outcome belongs to the installed runner monitor"}})
@@ -917,7 +941,7 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         if attempt.execution_state == "uncertain" then return succeed(attempt) end
         local supervised, supervised_detail = runner_status(row, attempt)
         if supervised then
-            local enforcement = M.enforce_grants(attempt)
+            local enforcement = M.supervise_grants(attempt)
             if enforcement then return enforcement end
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; no execution identity recorded"}})
         end
@@ -936,7 +960,7 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         if attempt.execution_state == "uncertain" then return succeed(attempt) end
         local supervised, supervised_detail = runner_status(row, attempt)
         if supervised then
-            local enforcement = M.enforce_grants(attempt)
+            local enforcement = M.supervise_grants(attempt)
             if enforcement then return enforcement end
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; " .. observation.detail}})
         end
@@ -944,7 +968,7 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unobserved", detail = observation.detail}})
     end
     if observation.alive then
-        local enforcement = M.enforce_grants(attempt)
+        local enforcement = M.supervise_grants(attempt)
         if enforcement then return enforcement end
         return transition(attempt.attempt_id, {evidence = {kind = "reconcile.alive", detail = observation.detail}})
     end
@@ -1007,9 +1031,10 @@ local function scope_proven(attempt: types.Attempt, recorded: identity.Identity?
     if not absent then return false, "processes remain in group " .. tostring(recorded.pgid) end
     return true, "no process remains in group " .. tostring(recorded.pgid)
 end
--- A live attempt whose grant no longer resolves is stopped; enforcement
--- stays pending until the exit is proven.
-function M.enforce_grants(attempt: types.Attempt): Reply?
+-- A live attempt keeps the authority it still holds: its leases are renewed.
+-- One whose grant no longer resolves is stopped; enforcement stays pending
+-- until the exit is proven.
+function M.supervise_grants(attempt: types.Attempt): Reply?
     local db = store.open()
     if not db then return nil end
     local row = store.row(db, attempt.attempt_id)
@@ -1017,7 +1042,14 @@ function M.enforce_grants(attempt: types.Attempt): Reply?
     db:release()
     if not row or not request then return nil end
     local refused, subject = M.check_grants(row, request)
-    if not refused then return nil end
+    if not refused then
+        local unrenewed = M.renew_leases(row, request)
+        if unrenewed then
+            local noted = transition(attempt.attempt_id, {evidence = {kind = "lease.unrenewed", detail = tostring(unrenewed.error and unrenewed.error.code) .. ": " .. tostring(unrenewed.error and unrenewed.error.message)}})
+            if not noted.ok then return noted end
+        end
+        return nil
+    end
     local noted = transition(attempt.attempt_id, {evidence = {kind = tostring(subject) .. ".revoked", detail = tostring(refused.error and refused.error.code) .. ": " .. tostring(refused.error and refused.error.message) .. "; stopping, enforcement pending"}})
     if not noted.ok then return noted end
     return M.stop_attempt(attempt, "cooperative")
@@ -1034,7 +1066,7 @@ function M.stop_revoked(value: unknown): Reply
     db:release()
     if read_error then return fail("STORAGE", read_error) end
     if not attempt then return fail("NOT_FOUND", "attempt is not recorded") end
-    local stopped = M.enforce_grants(attempt)
+    local stopped = M.supervise_grants(attempt)
     if not stopped then return fail("CONFLICT", "attempt has no revoked resource grant") end
     return stopped
 end

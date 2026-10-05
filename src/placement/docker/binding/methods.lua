@@ -255,6 +255,11 @@ function M.reconcile_loaded(loaded: Loaded): Reply
         if not noted.ok then return noted end
         return M.stop_loaded(loaded, {mode = "forced"})
     end
+    local unrenewed = local_attempts.renew_leases(loaded.row, loaded.request)
+    if unrenewed then
+        local noted = M.change(loaded.attempt.attempt_id, {evidence = {kind = "lease.unrenewed", detail = tostring(unrenewed.error and unrenewed.error.code) .. ": " .. tostring(unrenewed.error and unrenewed.error.message)}})
+        if not noted.ok then return noted end
+    end
     -- A live realization is retained after owner restart; it is never invoked again.
     return M.change(loaded.attempt.attempt_id, {fields = fields, evidence = {kind = "docker.alive", detail = "container " .. found.backend_ref .. " remains " .. found.state}})
 end

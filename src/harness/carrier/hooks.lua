@@ -20,7 +20,7 @@ type InFlight = {identity: string, intent: Intent}
 type Config = {
     thread_id: string, attempt_id: string, epoch: integer,
     binding_ref: string, binding_digest: string, profile_id: string,
-    profile_digest: string, plan_digest: string, session_ref: string?,
+    profile_digest: string, plan_digest: string, session_ref: string?, conversation_ref: string?,
     gateway_binding: string?, hooks_enabled: boolean, drain_ms: integer, decoder: Decoder,
 }
 type State = {
@@ -70,6 +70,7 @@ function M.new(config: Config): State
         profile_id = config.profile_id, profile_digest = config.profile_digest,
         plan_digest = config.plan_digest, gateway_binding = config.gateway_binding}, config.epoch)
     point.retained_session_ref = config.session_ref
+    point.conversation_ref = config.conversation_ref
     return {
         thread_id = config.thread_id, attempt_id = config.attempt_id, epoch = config.epoch, revision = 0,
         binding_id = config.gateway_binding, checkpoint = point,

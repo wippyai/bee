@@ -4,6 +4,7 @@
 -- the terminal to that caller, so executor:terminal() runs in the actual app actor.
 -- Gateway hooks are claimed, committed and acknowledged one future at a time.
 local tty = require("tty")
+local logger = require("logger")
 local exec = require("exec")
 local process = require("process")
 local channel = require("channel")
@@ -223,6 +224,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     local admitted: admission.Admitted? = nil
     local ready_announced = false
     local function show_failure(status: string, settle: (() -> string)?)
+        logger:warn("Agent terminal did not start", {reason = status})
         local output = assert(tty.surface())
         local width, height = tty.screen_size()
         local preferences: appearance.Preferences = launch.appearance
@@ -546,6 +548,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                             reviewed = result.plan
                             phase = "review"
                             status = "Review the changed plan, then press Enter to continue"
+                            logger:warn("Agent terminal waits for the person to review its changed launch plan", {definition = request.definition_ref})
                         end
                     else
                         status = "Changed launch plan could not be reviewed: " .. failure(result.refused)
@@ -569,6 +572,9 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                         phase = "refused"
                     end
                     dirty = true
+                end
+                if phase == "refused" or phase == "unresumable" then
+                    logger:warn("Agent terminal cannot resume", {reason = status, definition = request.definition_ref})
                 end
             else
                 local data = input_event.decode(event.value)

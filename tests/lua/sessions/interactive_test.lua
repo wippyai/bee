@@ -4,6 +4,11 @@ local harness = require("harness")
 local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
+local admission = require("admission")
+local registry = require("registry")
+local process = require("process")
+local channel = require("channel")
+local time = require("time")
 local WORKSPACE = string.rep("a", 32)
 -- owner_text is the text Sessions types into the agent for a queued message.
 local function owner_text(input: string, sender: string): string
@@ -86,32 +91,93 @@ local function define_tests()
             test.eq(settled.phase, "settled")
             test.eq((assert(bounds.object((assert(bounds.object(settled.result))).value))).text, "The boundary reply.")
         end)
-        test.it("rejects an open key already used for the other presentation", function()
-            for _, presentation in ipairs({"headless", "window"}) do
-                local journal = harness.session_owner(WORKSPACE)
-                local operation_key = harness.key()
-                harness.value(journal:call("session_create", {operation_key = operation_key,
-                    route = {delivery = presentation == "headless" and "hook" or "pull"}}))
+        test.it("resumes the terminal of a session whose typed message waits after a restart", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "before-restart", operation_key = harness.key()}))
+            harness.value(journal:call("work_send", {session = opened.session, input = "typed before the restart", operation_key = harness.key()}))
+            harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            local original = assert(registry.get("bee.harness.binding:present_restore"))
+            local probe = assert(registry.get("bee.tests.sessions:resume_probe"))
+            probe.id = "bee.harness.binding:present_restore"
+            local swap = assert(registry.snapshot()):changes()
+            swap:update(probe)
+            assert(swap:apply())
+            local resumed = assert(process.listen("bee.test.resumed", {message = true}))
+            assert(process.registry.register("bee.test.resume_probe"))
+            local ok, failure = pcall(function()
                 local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
                 local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
                     assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
-                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:open", {spec = {
-                    definition = "bee.driver.claude.profiles:default_window", presentation = presentation}, operation_key = operation_key})
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:send",
+                    {session = opened.session, input = "sent after the restart", operation_key = harness.key()})
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
-                test.is_false(reply.ok)
-                test.eq(reply.error.code, "CONFLICT")
-            end
+                if reply.ok ~= true then error("send: " .. tostring((assert(bounds.object(reply.error))).message)) end
+                local event = channel.select({resumed:case_receive(), time.after("5s"):case_receive()})
+                if not (event.ok and event.channel == resumed) then error("no resume request reached the window facade") end
+                test.eq((assert(bounds.object(event.value:payload():data()))).session, opened.session)
+            end)
+            process.registry.unregister("bee.test.resume_probe", process.registry.LOCAL)
+            process.unlisten(resumed)
+            local restore = assert(registry.snapshot()):changes()
+            restore:update(original)
+            assert(restore:apply())
+            if not ok then error(tostring(failure)) end
         end)
-        test.it("rejects supplied non-presentation values before launch admission", function()
-            for _, presentation in ipairs({false, true, 42, "", "tab"}) do
-                local raw, err = funcs.call("bee.threads.sessions.binding:open", {spec = {
-                    definition = "bee.driver.claude.profiles:default_window", presentation = presentation}, operation_key = harness.key()})
+        test.it("keeps a message that waits for a gone terminal when the resumed terminal attaches", function()
+            local definition = "bee.driver.claude.profiles:default_window"
+            local resolved = admission.resolve(definition, "window", WORKSPACE)
+            local plan = assert(resolved)
+            local thread = harness.thread(harness.principal("sessions-owner", harness.ALL, WORKSPACE), "resumed terminal")
+            local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
+            local caller = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
+                assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}))
+            local open_key = harness.key()
+            local function attach(attempt: string): {[string]: unknown}
+                local raw, err = caller:call("bee.threads.sessions.binding:attach", {definition = definition, thread_id = thread,
+                    plan_digest = plan.plan_digest, attempt_id = attempt, origin_request_id = "origin-resumed", operation_key = open_key})
+                if err then error(tostring(err)) end
+                local reply = assert(bounds.object(raw))
+                test.is_true(reply.ok == true, tostring(reply.error and assert(bounds.object(reply.error)).message))
+                return assert(bounds.object(reply.value))
+            end
+            local session = attach("attempt:before-restart").session
+            local journal = harness.session_owner(WORKSPACE)
+            local work = harness.value(journal:call("work_send", {session = session, input = "typed before the restart", operation_key = harness.key()}))
+            local reserved = harness.value(journal:call("turn_reserve", {session = session, operation_key = harness.key()}))
+            attach("attempt:after-restart")
+            local stored = harness.value(journal:call("session_describe", {session = session}))
+            local active = assert(bounds.object(stored.active_turn))
+            test.eq(active.turn, reserved.turn)
+            test.eq(active.phase, "reserved")
+            test.is_nil(harness.value(journal:call("work_describe", {work = work.work})).uncertainty)
+        end)
+        test.it("rejects an open key already used for another operation", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            local used = harness.key()
+            harness.value(journal:call("work_send", {session = opened.session, input = "taken", operation_key = used}))
+            local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
+            local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
+                assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
+            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:open", {spec = {
+                definition = "bee.driver.claude.profiles:default_window"}, operation_key = used})
+            if err then error(tostring(err)) end
+            local reply = assert(bounds.object(raw))
+            test.is_false(reply.ok)
+            test.eq(reply.error.code, "CONFLICT")
+        end)
+        test.it("refuses an open that names a presentation, budgets, supervision or placement before launch admission", function()
+            for _, extra in ipairs({{presentation = "window"}, {budgets = {turn = {tokens = 10}}}, {supervision = {quiet_period_ms = 1000}},
+                {placement = {kind = "native", home = "private"}}}) do
+                local spec: {[string]: unknown} = {definition = "bee.driver.claude.profiles:default_window"}
+                for name, value in pairs(extra) do spec[name] = value end
+                local raw, err = funcs.call("bee.threads.sessions.binding:open", {spec = spec, operation_key = harness.key()})
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
                 test.is_false(reply.ok)
                 test.eq(reply.error.code, "INVALID")
-                test.eq(reply.error.message, "presentation must be headless or window")
             end
         end)
         test.it("keeps idle window close pending until placement proves exit", function()

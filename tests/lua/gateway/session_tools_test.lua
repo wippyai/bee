@@ -22,13 +22,9 @@ local READS = {"session_catalog", "session_await", "session_get", "session_list"
 local function valid(name: string): Object
     local spec = {definition = "def:research"}
     if name == "session_catalog" then return {kind = "definition", include_unavailable = true} end
-    if name == "session_open" then
-        spec.budgets = {turn = {provider_steps = 8, tokens = 12000}}
-        spec.supervision = {quiet_period_ms = 45000, on_stall = "report"}
-        return {spec = spec, operation_key = "k1"}
-    end
-    if name == "session_run" then return {spec = spec, input = "do it", budgets = {turn = {wall_time_ms = 120000}}, operation_key = "k1"} end
-    if name == "session_send" then return {session = SESSION, input = {schema = "bee:Text@1", value = {text = "go"}}, budgets = {turn = {tokens = 5000}}, operation_key = "k1"} end
+    if name == "session_open" then return {spec = spec, operation_key = "k1"} end
+    if name == "session_run" then return {spec = spec, input = "do it", operation_key = "k1"} end
+    if name == "session_send" then return {session = SESSION, input = {schema = "bee:Text@1", value = {text = "go"}}, operation_key = "k1"} end
     if name == "session_await" then return {subject = WORK, timeout_ms = 1000} end
     if name == "session_join" then return {works = {WORK, WORK2}, policy = "quorum", quorum = 2, operation_key = "k1"} end
     if name == "session_get" then return {work = WORK} end
@@ -121,7 +117,7 @@ local function define_tests()
         end)
         test.it("steers use in the descriptions", function()
             local send = (mcp.tool("session_send")).description
-            test.is_true(send:find("Submit work", 1, true) ~= nil)
+            test.is_true(send:find("typed into the agent's terminal", 1, true) ~= nil)
             test.is_true((mcp.tool("session_open")).description:find("session_send", 1, true) ~= nil)
             test.is_true((mcp.tool("session_run")).description:find("not the answer", 1, true) ~= nil)
             local await = (mcp.tool("session_await")).description
@@ -155,19 +151,19 @@ local function define_tests()
                 test.not_nil(request)
             end
         end)
-        test.it("admits headless and window presentation and rejects other values", function()
+        test.it("refuses a presentation, budgets, supervision or placement an agent session no longer takes", function()
             for _, name in ipairs({"session_open", "session_run"}) do
-                for _, mode in ipairs({"headless", "window"}) do
+                for _, extra in ipairs({{presentation = "window"}, {budgets = {turn = {tokens = 10}}}, {supervision = {quiet_period_ms = 1000}},
+                    {placement = {kind = "native", home = "private"}}}) do
                     local request = valid(name)
                     local spec = assert(bounds.object(request.spec))
-                    spec.presentation = mode
-                    test.not_nil(session_tools.decode(name, {arguments = request}))
+                    for field, value in pairs(extra) do spec[field] = value end
+                    test.is_nil(session_tools.decode(name, {arguments = request}))
                 end
-                local request = valid(name)
-                local spec = assert(bounds.object(request.spec))
-                spec.presentation = "screen"
-                test.is_nil(session_tools.decode(name, {arguments = request}))
             end
+            local send = valid("session_send")
+            send.budgets = {turn = {tokens = 5000}}
+            test.is_nil(session_tools.decode("session_send", {arguments = send}))
         end)
 
         test.it("refuses a mutation without its operation_key", function()

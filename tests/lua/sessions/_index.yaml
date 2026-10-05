@@ -17,21 +17,12 @@ entries:
   source: file://interactive_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs, security, sql, uuid]
+  modules: [funcs, security, sql, uuid, registry, process, channel, time]
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
-- name: executor_registry_test
-  kind: function.lua
-  source: file://executor_registry_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    principals: bee.tests.principals:bound
-    bounds: bee.values:bounds
-    test: wippy.test:test
-    registry: bee.threads.sessions.executor:executor_registry
+    admission: bee.harness.launch:admission
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua
@@ -64,17 +55,6 @@ entries:
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     materialization: bee.placement.native.service:materialization
-- name: scheduler_test
-  kind: function.lua
-  source: file://scheduler_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    scheduler: bee.threads.sessions.service:scheduler
-    threads: bee.tests.fixtures.sessions:threads_owner
-    executor: bee.tests.fixtures.sessions:fake_executor
-    bounds: bee.values:bounds
 - name: fake_owner
   kind: contract.binding
   meta: {type: test_support}
@@ -246,6 +226,21 @@ entries:
   modules: [security]
   method: running
   meta: {type: test_support}
+- name: resume_probe_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.registry.lookup, process.send]
+    resources: ['*']
+    effect: allow
+- name: resume_probe
+  kind: function.lua
+  source: file://resume_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [process]
+  security:
+    policies: [bee.tests.sessions:resume_probe_policy]
 - name: interactive_lifecycle_policy
   kind: security.policy
   meta: {type: test_support}
@@ -294,18 +289,6 @@ entries:
   meta: {type: test_support}
   imports: {bounds: bee.values:bounds, principals: bee.tests.principals:bound, sessions: bee.threads.sessions.client:sessions, protocol: bee.threads.sessions.types:protocol}
 
-- name: driver_route_test
-  kind: function.lua
-  source: file://driver_route_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    route: bee.threads.sessions.executor:driver_route
-    bounds: bee.values:bounds
-    materializer: bee.gov.binding:materializer
-  modules:
-  - registry
 - name: await_test_caller
   kind: security.policy
   meta:

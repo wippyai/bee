@@ -69,7 +69,7 @@ function M.open(request: unknown): Reply
     if definition == "malformed" then return ok({session = session}) end
     return ok({session = session, operation = "bo:n:w:" .. segment(key), snapshot = (function()
         local value = snapshot(session)
-        value.presentation = object(object(request).spec).presentation or "headless"
+        value.terminal = true
         return value
     end)()})
 end
@@ -80,7 +80,6 @@ function M.run(request: unknown): Reply
     local key = object(request).operation_key
     local spec = object(object(request).spec)
     local name = tail(spec.definition)
-    if name == "window" and spec.presentation ~= "window" then return refuse("INVALID", "presentation was lost", key) end
     return ok({work = "bw:n:w:" .. name, session = "bs:n:w:r" .. name, operation = "bo:n:w:" .. segment(key),
         committed_at = STAMP, sequence = 1, kind = "request", state = "queued",
         output_schema = object(request).output or "bee:Text@1", sender = {kind = "principal", id = "principal:test"}})

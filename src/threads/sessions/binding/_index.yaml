@@ -1,16 +1,6 @@
 version: '1.0'
 namespace: bee.threads.sessions.binding
 entries:
-- name: external_executor_binding
-  kind: contract.binding
-  meta:
-    type: bee.sessions.executor_binding
-    executor_id: external
-    version: stage1
-  contracts:
-  - contract: bee.threads.sessions:executor
-    methods:
-      run_turn: bee.executor.external.binding:run_turn
 - name: owner_binding
   kind: contract.binding
   meta:
@@ -52,12 +42,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -85,12 +72,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -110,12 +94,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -135,12 +116,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -152,7 +130,7 @@ entries:
     - bee.threads.sessions.security:owner_admission_policy
     - bee.threads.sessions.security:owner_setup_policy
     - bee.threads.sessions.security:owner_workspace_identity_policy
-    - bee.threads.sessions.security:scheduler_principal_policy
+    - bee.threads.sessions.security:owner_principal_policy
 - name: join
   kind: function.lua
   source: file://owner.lua
@@ -167,12 +145,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -192,12 +167,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -217,12 +189,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -242,12 +211,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -267,12 +233,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -292,12 +255,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -317,12 +277,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -336,12 +293,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -361,12 +315,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -386,12 +337,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -417,12 +365,9 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
@@ -442,55 +387,20 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    driver_route: bee.threads.sessions.executor:driver_route
     cancellation: bee.threads.sessions.binding:cancellation
-    lifecycle: bee.threads.sessions.binding:control
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    scheduler: bee.threads.sessions.service:scheduler
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
   security:
     policies: *id001
-- name: lifecycle
-  kind: function.lua
-  source: file://lifecycle.lua
-  method: handle
-  modules:
-  - process
-  - time
-  - channel
-  - security
-  - uuid
-  imports:
-    bounds: bee.values:bounds
-    lifecycle: bee.threads.sessions.binding:control
-    scheduler: bee.threads.sessions.service:scheduler
-    threads_journal: bee.threads.sessions.binding:threads_journal
-  security:
-    policies:
-    - bee.threads.sessions.security:lifecycle_policy
-    - bee.threads.sessions.security:lifecycle_journal_policy
-    - bee.threads.security:sessions_owner
-- name: control
-  kind: library.lua
-  source: file://control.lua
-  modules:
-  - registry
-  - hash
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    operations: bee.hub.types:operations
 - name: threads_journal
   kind: library.lua
   source: file://threads_journal.lua
   modules:
   - registry
   - funcs
-  imports:
-    scheduler: bee.threads.sessions.service:scheduler
 - name: locate
   kind: library.lua
   source: file://locate.lua

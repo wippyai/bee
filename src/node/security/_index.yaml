@@ -108,7 +108,7 @@ entries:
   policy:
     actions: [process.spawn, process.spawn.monitored, process.spawn.linked, process.exec, process.host]
     resources: [bee.node.service:owner, bee.hive.service:supervisor, bee.shell:main, bee.shell:client,
-      bee.threads.service:threads, bee.threads.service:pump_worker, bee.threads.sessions.service:scheduler_worker,
+      bee.threads.service:threads, bee.threads.service:pump_worker,
       bee.approvals.service:authority, bee.approvals.service:worker, bee.gateway.service:worker,
       bee.gateway.service:publication_worker, bee.gov.service:recovery, bee.sync.service:sync,
       bee.placement.native.service:sweeper, bee.placement.docker.service:sweeper, bee.placement.docker.service:image_owner]

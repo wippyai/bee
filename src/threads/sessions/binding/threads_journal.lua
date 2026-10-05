@@ -2,7 +2,6 @@
 -- Sessions never reaches into Threads storage or assumes a concrete table.
 local registry = require("registry")
 local funcs = require("funcs")
-local scheduler = require("scheduler")
 local M = {}
 M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.threads.sessions.env:threads_journal_ref"
@@ -89,56 +88,6 @@ function M.target(method: string): (string?, string?)
     local targets, resolve_error = resolve()
     if not targets then return nil, resolve_error end
     return (targets)[method], nil
-end
-
-function M.adapter(): scheduler.Journal
-    return {
-        enqueue = function(request: {[string]: unknown}): (scheduler.WorkReceipt?, string?)
-            local value, err = M.invoke("work_send", request)
-            if err then return nil, err end
-            return scheduler.work_receipt(value)
-        end,
-        scan_due = function(request: {limit: integer}): (scheduler.Page?, string?)
-            local value, err = M.invoke("work_scan", request)
-            if err then return nil, err end
-            return scheduler.page(value)
-        end,
-        reserve_turn = function(request: {session: string, operation_key: string}): (scheduler.Reservation?, string?)
-            local value, err = M.invoke("turn_reserve", request)
-            if err then return nil, err end
-            return scheduler.reservation(value)
-        end,
-        recover_turn = function(request: {turn: string, operation_key: string}): (scheduler.Reservation?, string?)
-            local value, err = M.invoke("turn_recover", request)
-            if err then return nil, err end
-            return scheduler.reservation(value)
-        end,
-        pull_turn = function(request: {turn: string, claim: string}): (scheduler.Turn?, string?)
-            local value, err = M.invoke("turn_pull", request)
-            if err then return nil, err end
-            return scheduler.turn(value)
-        end,
-        accept_turn = function(request: {[string]: unknown}): (unknown?, string?)
-            return M.invoke("turn_accept", request)
-        end,
-        settle = function(request: {[string]: unknown}): (unknown?, string?)
-            return M.invoke("work_settle", request)
-        end,
-        mark_uncertain = function(request: {[string]: unknown}): (unknown?, string?)
-            return M.invoke("work_uncertain", request)
-        end,
-        describe_session = function(request: {session: string}): (scheduler.Object?, string?)
-            local value, err = M.invoke("session_describe", request)
-            if err then return nil, err end
-            local decoded = object(value)
-            if not decoded then return nil, "Threads returned a malformed session" end
-            return decoded, nil
-        end,
-        transition_session = function(request: {[string]: unknown}): (unknown?, string?)
-            return M.invoke("session_transition", request)
-        end,
-        target = M.target,
-    }
 end
 
 return M

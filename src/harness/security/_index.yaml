@@ -176,7 +176,7 @@ entries:
     - process.context
     - bee.apps.session_present
     resources: '*'
-    expression: (action == "process.security" && resource == "security") || (action == "security.actor.create" && resource matches "^bee[.]application:[0-9a-f]{32}:[0-9a-f]{64}$")
+    expression: (action == "process.security" && resource == "security") || (action == "security.actor.create" && resource matches "^bee[.]application:[0-9a-f]{32}:([0-9a-f]{64}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
       || (action == "process.context" && resource == "bee.workspace_id") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner")
       || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$")
       || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:get",

@@ -351,7 +351,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if result.serial == open_serial then
                 opening = false
                 if result.conversation then
-                    if result.conversation.session.snapshot.presentation == "window" then
+                    if result.conversation.session.snapshot.terminal == true then
                         output:close()
                         local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes)
                         if closing then return finish(nil, view_error) end
@@ -554,7 +554,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 open_serial = open_serial + 1
                 local serial = open_serial
                 local key = open_key
-                local presentation: sessions_protocol.Presentation = "window"
                 opening = true
                 status = "Opening session…"
                 dirty = true
@@ -573,7 +572,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         end
                         definition, profile = saved.definition_ref, {id = entry.ref, revision = revision}
                     end
-                    local opened, open_error = agents.open(sessions.client(), definition, profile, key, presentation)
+                    local opened, open_error = agents.open(sessions.client(), definition, profile, key)
                     if running and serial == open_serial then
                         local reply: Opened = {serial = serial, conversation = opened, error = open_error}
                         opens:send(reply)

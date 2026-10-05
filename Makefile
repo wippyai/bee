@@ -75,8 +75,8 @@ lint: $(WIPPY) compose
 # environment: the harness and placement suites resolve the fixture
 # executables in tests/fixtures/harness/bin by name and never reach the
 # person's home, PATH or provider credentials. Provider variables a developer
-# shell carries are set to fixture values the drivers must not read. The sessions scheduler and the
-# gateway effect workers stay stopped, and so does the inbox forwarding pump:
+# shell carries are set to fixture values the drivers must not read. The gateway
+# and governance effect workers stay stopped, and so does the inbox forwarding pump:
 # the store suites queue, reserve, claim and drain that work themselves.
 # TESTS selects test entries by id.
 TEST_ROOT := $(abspath tests/.wippy/fixture)
@@ -99,7 +99,6 @@ test: $(WIPPY) compose $(TEST_FIXTURES)/harness/bin/gateway-client
 		CLAUDE_CONFIG_DIR=$(TEST_ROOT)/shell/claude CODEX_HOME=$(TEST_ROOT)/shell/codex \
 		ANTHROPIC_API_KEY=fixture-shell-value-not-a-key \
 		$(abspath $(WIPPY)) test --host bee:terminal \
-		-o bee.threads.sessions.service:scheduler_service:lifecycle.auto_start=false \
 		-o bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false \
 		-o bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false \
 		-o bee.gov.service:activation_service:lifecycle.auto_start=false \

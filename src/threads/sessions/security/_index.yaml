@@ -67,55 +67,10 @@ entries:
     - bee.harness.binding:present_type
     - bee.harness.binding:present_restore
     effect: allow
-- name: scheduler_policy
-  kind: security.policy
-  meta:
-    comment: The Sessions scheduler reads the selected journal and executor bindings and calls their exact operations
-  policy:
-    actions:
-    - process.registry.register
-    - process.listen
-    - channel.select
-    - time.ticker
-    - registry.get
-    - registry.snapshot
-    - funcs.call
-    resources:
-    - bee.sessions.scheduler
-    - bee.sessions.scheduler.wake
-    - bee.threads.sessions.service:turn_run
-    - bee.threads.sessions.env:threads_journal_ref
-    - bee.threads.sessions.executor:executor_selection
-    - bee.threads.sessions.binding:external_executor_binding
-    - bee.threads.binding:journal_local
-    - bee.executor.external.binding:run_turn
-    - bee.threads.binding:session_scan
-    - bee.threads.binding:session_create
-    - bee.threads.binding:session_attach
-    - bee.threads.binding:session_describe
-    - bee.threads.binding:session_transition
-    - bee.threads.binding:work_send
-    - bee.threads.binding:work_describe
-    - bee.threads.binding:work_history
-    - bee.threads.binding:work_scan
-    - bee.threads.binding:turn_reserve
-    - bee.threads.binding:turn_recover
-    - bee.threads.binding:turn_pull
-    - bee.threads.binding:turn_accept
-    - bee.threads.binding:turn_observation
-    - bee.threads.binding:work_settle
-    - bee.threads.binding:work_uncertain
-    - bee.threads.binding:work_cancel
-    - bee.threads.binding:operation_lookup
-    - bee.threads.binding:operation_describe
-    - bee.threads.binding:feed_read
-    - bee.placement.native.binding:stop
-    - bee.placement.native.binding:reconcile
-    effect: allow
-- name: scheduler_principal_policy
+- name: owner_principal_policy
   kind: security.policy.expr
   meta:
-    comment: The scheduler restores only the owner identity carried by the canonical workspace-homed turn
+    comment: The Sessions owner restores only the owner identity a session's route carries when it stops the session's process
   policy:
     actions:
     - security.actor.create
@@ -143,42 +98,4 @@ entries:
     - registry.snapshot
     resources:
     - '*'
-    effect: allow
-- name: lifecycle_policy
-  kind: security.policy
-  policy:
-    actions:
-    - bee.sessions.lifecycle
-    - registry.get
-    - registry.snapshot
-    - process.registry.lookup
-    - process.send
-    resources:
-    - bee.threads.sessions.service:scheduler_service
-    - bee.hub.operations:*
-    - bee.sessions.scheduler
-    - bee.threads.binding:work_scan
-    - '*'
-    effect: allow
-- name: lifecycle_worker_policy
-  kind: security.policy
-  policy:
-    actions:
-    - registry.get
-    - registry.snapshot
-    - process.listen
-    - process.send
-    resources:
-    - bee.hub.operations:*
-    - bee.threads.sessions.service:scheduler_worker
-    - bee.sessions.lifecycle
-    - '*'
-    effect: allow
-- name: lifecycle_journal_policy
-  kind: security.policy
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.threads.binding:work_scan
     effect: allow

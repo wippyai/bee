@@ -14,6 +14,8 @@ local function define_tests()
             local bridge = security.new_scope({assert(security.policy("bee.harness.security:presentation_bridge_policy"))})
             local window = "bee.application:" .. string.rep("a", 32) .. ":" .. string.rep("b", 64)
             test.eq(bridge:evaluate(actor, "security.actor.create", window), "allow")
+            local launched = "bee.application:" .. string.rep("a", 32) .. ":01a10deb-dab3-71ae-8c77-b3e2007b7773"
+            test.eq(bridge:evaluate(actor, "security.actor.create", launched), "allow")
             test.is_false(bridge:evaluate(actor, "security.actor.create", "bee.node:owner") == "allow")
             test.is_false(bridge:evaluate(actor, "security.actor.create", "bee.application:" .. string.rep("a", 32) .. ":short") == "allow")
         end)

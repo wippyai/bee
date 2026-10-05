@@ -29,11 +29,10 @@ type CatalogKind = "definition" | "profile"
 type AwaitOptions = {timeout_ms: integer?}
 type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
 type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string}
-type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, budgets: protocol.Budgets?, operation_key: string}
-type OpenOptions = {placement: protocol.Placement?, presentation: protocol.Presentation?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, budgets: protocol.Budgets?,
-    supervision: protocol.Supervision?, operation_key: string}
-type CallOptions = {placement: protocol.Placement?, presentation: protocol.Presentation?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, input: Input, output: string?,
-    budgets: protocol.Budgets?, supervision: protocol.Supervision?, timeout_ms: integer?, operation_key: string}
+type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
+type OpenOptions = {definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, operation_key: string}
+type CallOptions = {definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, input: Input, output: string?,
+    timeout_ms: integer?, operation_key: string}
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
     operation_key: string}
@@ -169,13 +168,10 @@ local function output_of(value: unknown): (string?, Fault?)
     return output, nil
 end
 
-local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown,
-    presentation: unknown, budget_value: unknown, progress_quiet_value: unknown, placement_value: unknown): ({[string]: unknown}?, Fault?)
-    local placement, placement_error = protocol.decode_placement(placement_value)
-    if placement_error then return nil, invalid(placement_error) end
+local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown): ({[string]: unknown}?, Fault?)
     local ref = protocol.any_ref(definition)
     if not ref then return nil, invalid("definition must be a ref") end
-    local spec: {[string]: unknown} = {definition = ref, placement = placement}
+    local spec: {[string]: unknown} = {definition = ref}
     if profile ~= nil then
         local object = bounds.object(profile)
         local id = object and protocol.any_ref(object.id)
@@ -194,16 +190,6 @@ local function spec_of(definition: unknown, profile: unknown, workdir: unknown, 
         if type(workspace) ~= "string" or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, invalid("workspace must be a canonical workspace ID") end
         spec.workspace = workspace
     end
-    if presentation ~= nil then
-        if presentation ~= "headless" and presentation ~= "window" then return nil, invalid("presentation must be headless or window") end
-        spec.presentation = presentation
-    end
-    local budgets, budget_error = protocol.decode_budgets(budget_value)
-    if budget_error then return nil, invalid(budget_error) end
-    if budgets then spec.budgets = budgets end
-    local supervision, supervision_error = protocol.decode_supervision(progress_quiet_value)
-    if supervision_error then return nil, invalid(supervision_error) end
-    if supervision then spec.supervision = supervision end
     return spec, nil
 end
 
@@ -277,7 +263,7 @@ local function new_client(): Client
         local handle_ref = function(_: Session): string return snapshot.session end
         local handle_send = function(_: Session, options: SendOptions): (Work?, Fault?)
             local request: SendOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
-                input = options.input, output = options.output, budgets = options.budgets, operation_key = options.operation_key}
+                input = options.input, output = options.output, operation_key = options.operation_key}
             return client:send(request)
         end
         local handle_await = function(_: Session, work: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
@@ -302,15 +288,13 @@ local function new_client(): Client
 
     -- Opens a session with its first work in one owner operation.
     local function run(options: CallOptions): (Work?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.presentation, nil, options.supervision, options.placement)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
         if not spec then return nil, spec_fault end
         local input, input_fault = input_of(options.input)
         if input == nil then return nil, input_fault end
         local output, output_fault = output_of(options.output)
         if output_fault then return nil, output_fault end
-        local budget, budget_error = protocol.decode_budgets(options.budgets)
-        if budget_error then return nil, invalid(budget_error) end
-        local request: {[string]: unknown} = {spec = spec, input = input, output = output, budgets = budget}
+        local request: {[string]: unknown} = {spec = spec, input = input, output = output}
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
@@ -322,7 +306,7 @@ local function new_client(): Client
     end
 
     local client_open = function(_: Client, options: OpenOptions): (Session?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.presentation, options.budgets, options.supervision, options.placement)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
         if not spec then return nil, spec_fault end
         local request: {[string]: unknown} = {spec = spec}
         local key, key_fault = operation_key(options.operation_key)
@@ -354,9 +338,7 @@ local function new_client(): Client
         if output_fault then return nil, output_fault end
         local incarnation, incarnation_fault = incarnation_of(options.incarnation, options.session)
         if incarnation_fault then return nil, incarnation_fault end
-        local budget, budget_error = protocol.decode_budgets(options.budgets)
-        if budget_error then return nil, invalid(budget_error) end
-        local request: {[string]: unknown} = {session = session, input = input, output = output, budgets = budget,
+        local request: {[string]: unknown} = {session = session, input = input, output = output,
             expected_incarnation = incarnation}
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end

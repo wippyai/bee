@@ -30,8 +30,3 @@ entries:
   methods:
   - name: list
     description: List admitted definitions and profiles with executor readiness
-- name: executor
-  kind: contract.definition
-  methods:
-  - name: run_turn
-    description: Execute one accepted work turn through the selected driver and placement

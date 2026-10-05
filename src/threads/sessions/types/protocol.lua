@@ -77,10 +77,9 @@ type LastOutcome = "succeeded" | "failed" | "cancelled" | "rejected" | "budget_e
 type LastResult = {work: string, outcome: LastOutcome, summary: string, at: string}
 type HistoryItem = {work: string, sequence: integer, input: unknown, created_at: string}
 type HistoryPage = {items: {HistoryItem}, next: integer?}
-type Presentation = "headless" | "window"
 type ProfileRef = {id: string, revision: integer}
 type SessionSnapshot = {saved_profile: ProfileRef?, effective_profile: profile_values.Profile?, profile_digest: string?,
-    budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, presentation: Presentation?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
+    budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, terminal: boolean?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, activity_evidence: ActivityEvidence?, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type OperationReceipt = OpenReceipt | WorkReceipt | ControlReceipt
@@ -565,11 +564,10 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation", "effective_profile", "profile_digest", "budget_consumption", "saved_profile"})
+        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "terminal", "effective_profile", "profile_digest", "budget_consumption", "saved_profile"})
     if not object then return nil, failure end
-    local presentation: Presentation = "headless"
-    if object.presentation == "window" then presentation = "window"
-    elseif object.presentation ~= nil and object.presentation ~= "headless" then return nil, "session presentation is invalid" end
+    if object.terminal ~= nil and type(object.terminal) ~= "boolean" then return nil, "session terminal is invalid" end
+    local terminal = object.terminal == true
     local extras: {[string]: string} = {}
     for _, name in ipairs({"thread_ref", "workspace", "driver", "provider", "definition"}) do
         if object[name] ~= nil then
@@ -669,7 +667,7 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
         if not steps or not tools or not tokens or not wall then return nil, "session consumption is malformed" end
         consumed = {provider_steps = steps, tool_calls = tools, tokens = tokens, wall_time_ms = wall}
     end
-    return {saved_profile = saved_profile, effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, presentation = presentation, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
+    return {saved_profile = saved_profile, effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, terminal = terminal, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
         definition = extras.definition, last_result = last_result,
         session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
         activity = decoded_activity, activity_evidence = activity_evidence,

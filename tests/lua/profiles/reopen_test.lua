@@ -5,13 +5,13 @@ local sessions = require("sessions")
 local protocol = require("protocol")
 local function snapshot(saved: protocol.ProfileRef?): protocol.SessionSnapshot
     return {session = "bs:n:w:s1", saved_profile = saved, workspace = "w", definition = "bee.driver.codex:definition",
-        presentation = "headless", revision = 1, incarnation = 1, title = "Saved conversation", lifecycle = "closed",
+        terminal = true, revision = 1, incarnation = 1, title = "Saved conversation", lifecycle = "closed",
         activity = "idle", queue_count = 0, execution = {state = "quiescent", evidence_at = "2026-10-01T00:00:00Z", stale = false},
         effective_limits = {}, continuity = {mode = "provider_resume"}, actions = {}}
 end
 local function define_tests()
     test.describe("New sessions from saved conversations", function()
-        test.it("passes the saved profile revision, workspace and presentation to admission", function()
+        test.it("passes the saved profile revision and workspace to admission", function()
             local calls: {sessions.OpenOptions} = {}
             local client: sessions.Client = {
                 open = function(_self: sessions.Client, options: sessions.OpenOptions): (sessions.Session?, protocol.Fault?)
@@ -34,7 +34,6 @@ local function define_tests()
             test.eq(request.profile and request.profile.revision, 3)
             test.eq(request.definition, "bee.driver.codex:definition")
             test.eq(request.workspace, "w")
-            test.eq(request.presentation, "headless")
             test.eq(request.operation_key, "new-1")
             agents.reopen(client, snapshot(nil), "new-2")
             test.eq(#calls, 2)

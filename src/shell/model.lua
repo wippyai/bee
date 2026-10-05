@@ -213,7 +213,9 @@ function M.new(width: integer, height: integer): Scene
     }
 end
 
-function M.add(scene: Scene, id: string, instance_id: string, title: string, icon: string?, workspace_id: string?): Scene
+-- add places a window on top; it takes focus unless focused is false, which
+-- keeps the keyboard where it is.
+function M.add(scene: Scene, id: string, instance_id: string, title: string, icon: string?, workspace_id: string?, focused: boolean?): Scene
     if find_index(scene.windows, id) ~= nil then return scene end
 
     local area = workspace(scene.width, scene.height)
@@ -231,7 +233,7 @@ function M.add(scene: Scene, id: string, instance_id: string, title: string, ico
     }
     local windows = copy_windows(scene.windows)
     windows[#windows + 1] = added
-    return commit(scene, scene.width, scene.height, id, windows)
+    return commit(scene, scene.width, scene.height, focused == false and scene.focus or id, windows)
 end
 
 function M.display_title(window: Window): string

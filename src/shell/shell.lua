@@ -99,6 +99,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     -- node; full holds the app instances to show full-pane when they come.
     local pending_launch = launch
     local full: {[string]: boolean} = {}
+    -- Windows this display opened, or that ask for the person, take the
+    -- keyboard once they arrive. While the person works in a full-pane
+    -- window, a window another display opened joins without it.
+    local focus_pending: {[string]: boolean} = {}
     -- app_dialogs holds the dialogs apps ask, by app instance; the display
     -- shows those of the apps on its desktop, one at a time.
     local app_dialogs: {[string]: client.Dialog} = {}
@@ -365,7 +369,13 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if win.id == id then found = true end
         end
         if not found then
-            set_scene(model.add(current, id, id, title, nil, nil))
+            local immersed = false
+            for _, win in ipairs(current.windows) do
+                if win.id == current.focus and win.mode == "fullscreen" then immersed = true end
+            end
+            local focused = focus_pending[id] == true or not immersed
+            focus_pending[id] = nil
+            set_scene(model.add(current, id, id, title, nil, nil, focused))
             local list = order()
             list[#list + 1] = id
         end
@@ -384,10 +394,9 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         run(function(): Result
             local value, err = client.call(target, "open", {app = app, desktop = shown})
             if err then return {kind = "failed", problem = err} end
-            if type(value) == "table" and value.existing == true and type(value.id) == "string" then
-                return {kind = "existing", id = value.id}
-            end
-            return {kind = "done"}
+            if type(value) ~= "table" or type(value.id) ~= "string" then return {kind = "failed", problem = "open returned no instance"} end
+            if value.existing == true then return {kind = "existing", id = value.id} end
+            return {kind = "launched", id = value.id, fullscreen = false}
         end)
     end
 
@@ -696,6 +705,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             status = "Waiting for " .. target .. "…"
             connect(result.desktop or "")
         elseif result.kind == "launched" and result.id then
+            if views[result.id] then focus(result.id) else focus_pending[result.id] = true end
             if result.fullscreen then
                 if views[result.id] then set_scene(model.toggle_fullscreen(scene(), result.id))
                 else full[result.id] = true end
@@ -703,7 +713,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         elseif result.kind == "unlaunched" then
             stopped = tostring(result.problem)
         elseif result.kind == "existing" and result.id then
-            if views[result.id] then focus(result.id) end
+            if views[result.id] then focus(result.id) else focus_pending[result.id] = true end
         elseif result.kind == "failed" then
             status = tostring(result.problem)
         end
@@ -715,7 +725,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             running[#running + 1] = instance
             if instance.desktop == desktop then attach(instance.id) end
         elseif event.kind == "attention" and event.id then
-            if views[event.id] then focus(event.id) end
+            if views[event.id] then focus(event.id) else focus_pending[event.id] = true end
         elseif event.kind == "moved" and event.instance then
             local instance = event.instance
             for index, item in ipairs(running) do

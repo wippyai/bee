@@ -72,3 +72,4 @@ entries:
       - bee.gov.security:destination_service_policy
       - bee.security.approvals:approval_activation_effects_policy
       - bee.gov.security:activation_announce_policy
+      - bee.gov.security:activation_worker_policy

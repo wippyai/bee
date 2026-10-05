@@ -885,3 +885,11 @@ entries:
     resources:
     - bee.tests.gov:admission_scope_probe
     effect: allow
+- name: activation_worker_test
+  kind: function.lua
+  source: file://activation_worker_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, security]
+  imports:
+    test: wippy.test:test

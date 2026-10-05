@@ -182,10 +182,17 @@ local function define_tests()
             end
             test.is_true(labelled, "the probe shows the command's arguments")
             test.is_true((snapshot.rows[2]:gsub("\27%[[0-9;]*m", "")):match("^theme ") ~= nil, "the probe fills the pane")
-            local opened = ""
+            local opened, shown_on = "", ""
             for _, instance in ipairs(assert(client.state(assert(client.call(assert(system.node.id()), "list", {})))).running) do
-                if instance.app == "bee.tests.node:probe_app" then opened = instance.id end
+                if instance.app == "bee.tests.node:probe_app" then opened, shown_on = instance.id, instance.desktop end
             end
+            -- An app another display opens on this desktop joins the bar; the
+            -- full-pane probe keeps the pane and the keyboard.
+            local other = assert(client.call(assert(system.node.id()), "open", {app = "bee.tests.node:probe_single", desktop = shown_on}))
+            expect(view, "the other app joins the bar", "Single probe", true)
+            local after = assert(view:snapshot())
+            test.is_true((after.rows[2]:gsub("\27%[[0-9;]*m", "")):match("^theme ") ~= nil, "the full-pane probe keeps the pane")
+            assert(client.call(assert(system.node.id()), "close", {id = other.id}))
             assert(client.call(assert(system.node.id()), "close", {id = opened}))
             key(view, "q", {ctrl = true})
             exits(lifecycle, {pid})

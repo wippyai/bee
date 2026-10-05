@@ -166,6 +166,16 @@ entries:
     - bee.gov.security:workspace_execution_scope
     - bee.gov.binding:workspace_backend_call
     effect: allow
+- name: activation_worker_policy
+  kind: security.policy
+  meta:
+    comment: The activation worker holds the node-local name approvals wakes it by
+  policy:
+    actions:
+    - process.registry.register
+    resources:
+    - bee.gov.activation_worker
+    effect: allow
 - name: activation_announce_policy
   kind: security.policy
   meta:

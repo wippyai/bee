@@ -15,23 +15,23 @@ M.WORKER = "bee.sessions.scheduler"
 M.TOPIC_WAKE = "bee.sessions.scheduler.wake"
 M.SCAN_INTERVAL = "5s"
 
-local function pass(only_work: string?): string?
+local function pass(only_work: string?): (string?, boolean)
     local runtime, runtime_error = executors.runtime()
-    if not runtime then return runtime_error or "executor registry is unavailable" end
+    if not runtime then return runtime_error or "executor registry is unavailable", false end
     local run_id = scheduler.run_identity()
-    if not run_id then return "scheduler identity unavailable" end
+    if not run_id then return "scheduler identity unavailable", false end
     local service, service_error = scheduler.create(threads_journal.adapter(), runtime, nil, run_id)
-    if not service then return service_error or "scheduler could not be initialized" end
+    if not service then return service_error or "scheduler could not be initialized", false end
     local report, pass_error = service.run_pass(only_work)
-    if not report then return pass_error or "scheduler scan failed" end
+    if not report then return pass_error or "scheduler scan failed", false end
     for _, issue in ipairs(report.issues) do
         logger:error("Session scheduler work pass failed", {work = issue.work or "", stage = issue.stage, cause = issue.reason})
     end
     if report.uncertain > 0 then
         logger:error("Session executor reconciliation is uncertain", {count = report.uncertain})
     end
-    if report.uncertain > 0 then return "Session executor reconciliation remains uncertain" end
-    return nil
+    if report.uncertain > 0 then return "Session executor reconciliation remains uncertain", true end
+    return nil, scheduler.progressed(report)
 end
 
 
@@ -39,11 +39,11 @@ local function turn_run(request: unknown): unknown
     local input = bounds.object(request)
     local work = input and bounds.id(input.work)
     if not work or bounds.fields(input, {"work"}) then return {ok = false, error = "invalid scheduled work"} end
-    local err = pass(work)
-    return {ok = err == nil, error = err}
+    local err, progressed = pass(work)
+    return {ok = err == nil, error = err, progressed = progressed}
 end
 
-type Pending = {future: funcs.Future, response: Channel<unknown>}
+type Pending = {work: string, future: funcs.Future, response: Channel<unknown>}
 local function main()
     local events = assert(process.events())
     local hints = assert(process.listen(M.TOPIC_WAKE, {message = true}))
@@ -53,6 +53,9 @@ local function main()
     local drain_error: string? = nil
     local ticker = time.ticker(M.SCAN_INTERVAL)
     local active: {[string]: Pending} = {}
+    -- Work whose last pass changed nothing waits for a commit hint or the
+    -- periodic scan, so a turn still running is not passed over in a loop.
+    local settled_until_wake: {[string]: boolean} = {}
     local function scan()
         if waiting or lifecycle.fenced() then return end
         local page, scan_error = threads_journal.invoke("work_scan", {limit = scheduler.MAX_SCAN})
@@ -62,9 +65,9 @@ local function main()
         for _, raw in ipairs(rows) do
             local due = bounds.object(raw)
             local session, work = due and bounds.id(due.session), due and bounds.id(due.work)
-            if session and work and not active[session] and scheduler.activates(due) then
+            if session and work and not active[session] and not settled_until_wake[work] and scheduler.activates(due) then
                 local future, start_error = funcs.async("bee.threads.sessions.service:turn_run", {work = work})
-                if future then active[session] = {future = future, response = future:response()}
+                if future then active[session] = {work = work, future = future, response = future:response()}
                 else logger:error("Session scheduler activation failed", {work = work, cause = tostring(start_error)}) end
             end
         end
@@ -99,12 +102,14 @@ local function main()
                 end
             end
         else
+            if selected.channel == hints or selected.channel == ticker:channel() then settled_until_wake = {} end
             for session, pending in pairs(active) do
                 if selected.channel == pending.response then
                     local reply, completion_error = pending.future:result()
                     local outcome = bounds.object(reply)
                     if completion_error or not outcome or outcome.ok ~= true then drain_error = "accepted session work remains uncertain" end
                     if completion_error then logger:error("Session turn worker ended without a report", {session = session, cause = tostring(completion_error)}) end
+                    if outcome and outcome.ok == true and outcome.progressed ~= true then settled_until_wake[pending.work] = true end
                     active[session] = nil
                     break
                 end

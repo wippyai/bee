@@ -279,28 +279,37 @@ local function define_tests()
     end)
 
     test.describe("attention", function()
-        -- presented waits for the opened event of an app on desktop and the
-        -- attention event that brings that same instance forward.
-        local function presented(events: unknown, desktop: string, app_prefix: string): string
+        -- presented waits until every app whose id starts with app_prefix is
+        -- opened on desktop and brought forward, and returns their instances.
+        local function presented(events: unknown, desktop: string, app_prefix: string, count: integer): {string}
             local inbox = events :: channel.Channel
             local deadline = time.after("5s")
-            local opened: string? = nil
-            while true do
+            local opened: {[string]: boolean} = {}
+            local forward: {string} = {}
+            while #forward < count do
                 local selected = channel.select({inbox:case_receive(), deadline:case_receive()})
-                if selected.channel == deadline then error("nothing presented for " .. app_prefix) end
+                if selected.channel == deadline then error("not every " .. app_prefix .. " app was presented") end
                 local event = client.event(selected.value:payload():data())
                 if event and event.kind == "opened" and event.instance and event.instance.desktop == desktop
-                    and event.instance.app:sub(1, #app_prefix) == app_prefix then opened = event.instance.id end
-                if event and event.kind == "attention" and opened and event.id == opened then return opened end
+                    and event.instance.app:sub(1, #app_prefix) == app_prefix then opened[event.instance.id] = true end
+                if event and event.kind == "attention" and event.id and opened[event.id] then forward[#forward + 1] = event.id end
             end
+            return forward
+        end
+        -- installed counts the installed apps whose id starts with prefix.
+        local function installed(state: client.State, prefix: string): integer
+            local count = 0
+            for _, app in ipairs(state.apps) do
+                if app.id:sub(1, #prefix) == prefix then count = count + 1 end
+            end
+            return count
         end
         test.it("opens the app declaring the approvals role on a watched desktop of the workspace and brings it forward", function()
             local events = assert(process.listen(client.EVENTS, {message = true}))
             local state = watched()
             local desktop = tostring(state.desktop)
             assert(events_bus.send("bee.attention", "approval.requested", home_workspace(state).id, {approval_id = "approval-probe"}))
-            local id = presented(events, desktop, "bee.approvals.inbox.app:")
-            close_all(events, {id})
+            close_all(events, presented(events, desktop, "bee.approvals.inbox.app:", 1))
             process.unlisten(events)
         end)
         test.it("opens an approved component's applications once it is applied", function()
@@ -308,8 +317,9 @@ local function define_tests()
             local state = watched()
             local desktop = tostring(state.desktop)
             assert(events_bus.send("bee.attention", "application.applied", home_workspace(state).id, {component = "bee.tests.node"}))
-            local id = presented(events, desktop, "bee.tests.node:")
-            close_all(events, {id})
+            local count = installed(state, "bee.tests.node:")
+            test.is_true(count > 0)
+            close_all(events, presented(events, desktop, "bee.tests.node:", count))
             process.unlisten(events)
         end)
     end)

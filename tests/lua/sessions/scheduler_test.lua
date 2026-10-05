@@ -31,6 +31,16 @@ local function define_tests()
             for index = 1, scheduler.MAX_SCAN do full[index] = queued end
             test.not_nil(scheduler.drain_problem({interactive_active = false, items = full}))
         end)
+        test.it("counts a pass as progress only when it changed a work's state", function()
+            local quiet = {scanned = 1, reserved = 0, activated = 0, recovered = 0, running = 1, uncertain = 0, skipped = 0, issues = {}}
+            test.is_false(scheduler.progressed(quiet))
+            test.is_false(scheduler.progressed({scanned = 1, reserved = 0, activated = 0, recovered = 0, running = 0, uncertain = 0, skipped = 1, issues = {}}))
+            for _, field in ipairs({"reserved", "activated", "recovered", "uncertain"}) do
+                local changed = {scanned = 1, reserved = 0, activated = 0, recovered = 0, running = 0, uncertain = 0, skipped = 0, issues = {}}
+                changed[field] = 1
+                test.is_true(scheduler.progressed(changed))
+            end
+        end)
         test.it("gives every pass its own run identity, so a later pass never replays an earlier pass's recovery", function()
             local first, second = scheduler.run_identity(), scheduler.run_identity()
             test.not_nil(first)

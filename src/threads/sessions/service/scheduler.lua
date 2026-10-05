@@ -398,6 +398,13 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     finish_close(journal, pass, turn.session, turn.work)
 end
 
+-- progressed is whether a pass changed any work's state. A pass that only
+-- found its work still running or skipped it changed nothing, so running it
+-- again before a new commit or the next periodic scan finds the same.
+function M.progressed(pass: Pass): boolean
+    return pass.reserved + pass.activated + pass.recovered + pass.uncertain > 0
+end
+
 -- run_identity names one scheduler pass. Recovery and cancellation keys carry
 -- it, so it is unique per pass: a pass after a restart must not replay an
 -- earlier pass's receipt, whose claim belongs to an earlier owner epoch.

@@ -43,6 +43,7 @@ entries:
   source: file://owner.lua
   method: open
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -69,11 +70,13 @@ entries:
     - bee.threads.sessions.security:owner_setup_policy
     - bee.threads.sessions.security:owner_workspace_identity_policy
     - bee.harness.security:profile_workspace_policy
+    - bee.threads.sessions.security:owner_delivery_policy
 - name: run
   kind: function.lua
   source: file://owner.lua
   method: run
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -98,6 +101,7 @@ entries:
   source: file://owner.lua
   method: send
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -122,6 +126,7 @@ entries:
   source: file://owner.lua
   method: await
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -153,6 +158,7 @@ entries:
   source: file://owner.lua
   method: join
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -177,6 +183,7 @@ entries:
   source: file://owner.lua
   method: get
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -201,6 +208,7 @@ entries:
   source: file://owner.lua
   method: list
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -225,6 +233,7 @@ entries:
   source: file://owner.lua
   method: history
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -249,6 +258,7 @@ entries:
   source: file://owner.lua
   method: cancel
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -273,6 +283,7 @@ entries:
   source: file://owner.lua
   method: close
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -297,6 +308,7 @@ entries:
   source: file://owner.lua
   method: catalog
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -336,6 +348,7 @@ entries:
   security:
     policies: *id001
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -360,6 +373,7 @@ entries:
   security:
     policies: *id001
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -384,6 +398,7 @@ entries:
   security:
     policies: *id001
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -393,6 +408,7 @@ entries:
   source: file://owner.lua
   method: detach
   modules:
+  - logger
   - security
   - hash
   - funcs
@@ -417,6 +433,7 @@ entries:
   source: file://owner.lua
   method: attention_count
   modules:
+  - logger
   - security
   - hash
   - funcs

@@ -70,6 +70,16 @@ function M.pad(value: string, room: integer, align: string?): string
     return fitted .. gap
 end
 
+-- tagged is a row's text with a tag aligned to the right edge of width cells;
+-- the text gives way when both do not fit.
+function M.tagged(width: integer, value: string, tag: string): string
+    local room = maximum(0, width - 3)
+    if tag == "" then return M.fit(value, room) end
+    local tag_text = M.fit(tag, room // 2)
+    local text_room = maximum(0, room - tty.text.width(tag_text) - 2)
+    return M.pad(value, text_room) .. "  " .. tag_text
+end
+
 -- A painter over a canvas cleared to the theme's surface, with no hits yet.
 function M.new(width: integer, height: integer, preferences: appearance.Preferences): Painter
     local theme = preferences.theme
@@ -1110,6 +1120,21 @@ function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEven
             ctrl = event.ctrl, alt = event.alt, shift = event.shift}, false
     end
     return event, false
+end
+
+
+-- A double click is a second press on the same target within
+-- DOUBLE_CLICK_MS of the first; the press that completes one starts over.
+M.DOUBLE_CLICK_MS = 400
+type Clicks = {kind: string, index: integer, at_ms: integer}
+function M.clicks(): Clicks
+    return {kind = "", index = 0, at_ms = 0}
+end
+function M.double_click(memory: Clicks, kind: string, index: integer, now_ms: integer): boolean
+    local double = memory.kind == kind and memory.index == index and now_ms - memory.at_ms <= M.DOUBLE_CLICK_MS
+    if double then memory.kind, memory.index, memory.at_ms = "", 0, 0
+    else memory.kind, memory.index, memory.at_ms = kind, index, now_ms end
+    return double
 end
 
 return M

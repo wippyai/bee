@@ -213,7 +213,7 @@ entries:
     - funcs.call
     - security.policy_group.get
     resources: '*'
-    expression: (action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource in ["bee.harness.service:open", "bee.harness.service:restore"]) || (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope")
+    expression: (action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource in ["bee.harness.service:open", "bee.harness.service:restore", "bee.harness.service:type"]) || (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope")
     effect: allow
 - name: presentation_viewer_policy
   kind: security.policy.expr

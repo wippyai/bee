@@ -93,12 +93,8 @@ function M.open(value: unknown): Object
         if not owner_window then return fail("window principal could not be created") end
         reply = rpc(nil, {op = "open", request = request, operation_key = operation_key}, request, name, operation_key, owner_window)
     end
-    local receipt = reply.ok == true and bounds.object(reply.value) or nil
-    if receipt and type(receipt.session) == "string" and meta.definition_id ~= "bee.harness.app:app" then
-        -- The existing host path chooses a live display and checks the caller's runtime grant.
-        funcs.call("bee.apps:open_call", {definition_id = "bee.harness.app:app",
-            arguments = {"--session", receipt.session}, presentation_session = receipt.session, idempotency_key = assert(uuid.v7())})
-    end
+    -- The session runs whether or not anyone watches it; the person opens its
+    -- terminal from Sessions.
     return reply
 end
 -- resume starts an owner for a window session whose terminal is gone. Sessions
@@ -132,6 +128,23 @@ function M.restore(value: unknown): Object
     local owner_window = window(workspace, saved.origin_request_id)
     if not owner_window then return fail("window principal could not be created") end
     return rpc(nil, {op = "resume"}, {resume = saved, session = session, workspace_id = workspace}, OWNER .. session, operation_key, owner_window)
+end
+
+-- type delivers a message into a session's terminal. A session whose terminal
+-- is gone is resumed instead; its agent takes the message once it reports
+-- that it started.
+function M.type(value: unknown): Object
+    local body = bounds.object(value)
+    local session = body and bounds.id(body.session)
+    local text = body and bounds.text(body.text, 65536)
+    if not body or not session or not text or bounds.fields(body, {"session", "text"}) then return fail("invalid window message") end
+    local owner = process.registry.lookup(OWNER .. session)
+    if not owner then
+        local restored = M.restore({session = session})
+        if restored.ok ~= true then return restored end
+        return {ok = true, value = {typed = false}}
+    end
+    return rpc(tostring(owner), {op = "type", text = text})
 end
 
 function M.attach(value: unknown): Object
@@ -227,7 +240,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
             local sender = tostring(event.value:from())
             local body = bounds.object(event.value:payload():data())
             local token = body and bounds.id(body.caller_token)
-            if not body or bounds.fields(body, {"op", "request", "caller_token", "operation_key"}) or not token or token:sub(1, #CALLER) ~= CALLER
+            if not body or bounds.fields(body, {"op", "request", "caller_token", "operation_key", "text"}) or not token or token:sub(1, #CALLER) ~= CALLER
                 or tostring(process.registry.lookup(token)) ~= sender then goto next_request end
             local reply: Object
             if body.op == "open" and request then
@@ -241,6 +254,14 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 mount = assert(view:mount(sender, {observe = true, input = true, resize = true}))
                 recipient = sender
                 reply = {ok = true, value = {mount = mount}}
+            elseif body.op == "type" and bounds.text(body.text, 65536) then
+                -- The message reaches the agent the way a person's typing does:
+                -- pasted into its prompt, then submitted.
+                local pasted, paste_error = view:send({type = "paste", text = tostring(body.text)})
+                local entered, enter_error = nil, nil
+                if pasted then entered, enter_error = view:send({type = "key", key = "enter", key_type = "enter", action = "press"}) end
+                if entered then reply = {ok = true, value = {typed = true}}
+                else reply = fail("the terminal did not take the message: " .. tostring(paste_error or enter_error)) end
             elseif body.op == "detach" and recipient == sender then
                 if mount then assert(view:revoke(mount)) end
                 mount, recipient = nil, nil

@@ -15,6 +15,7 @@ local scheduler = require("scheduler")
 local cancellation = require("cancellation")
 local lifecycle = require("lifecycle")
 local time = require("time")
+local logger = require("logger")
 local session_protocol = require("session_protocol")
 local M = {}
 
@@ -130,6 +131,9 @@ local function snapshot(value: unknown): (Object?, string?)
 end
 
 local finish_closing: (string, string) -> string?
+local deliver: (string, string, boolean) -> string?
+local TYPE = "bee.harness.binding:present_type"
+local RESUME = "bee.harness.binding:present_restore"
 
 local function describe(session: string): (Object?, string?)
     local value, err = journal.invoke("session_describe", {session = session})
@@ -147,7 +151,7 @@ function M.open(raw_request: unknown): Reply
     end
     local placement, placement_error = profile_values.placement(spec.placement)
     if placement_error then return fail("INVALID", placement_error, operation_key) end
-    local presentation = spec.presentation == nil and "headless" or spec.presentation
+    local presentation = spec.presentation == nil and "window" or spec.presentation
     if presentation ~= "headless" and presentation ~= "window" then return fail("INVALID", "presentation must be headless or window", operation_key) end
     local session_budgets, budget_error = budget_values.budgets(spec.budgets)
     if budget_error then return fail("INVALID", budget_error, operation_key) end
@@ -215,7 +219,7 @@ function M.open(raw_request: unknown): Reply
     end
     local effective_profile = object(plan_value.effective_profile)
     if spec.presentation == nil and effective_profile then
-        presentation = effective_profile.presentation or "headless"
+        presentation = effective_profile.presentation or "window"
     end
     if presentation ~= "headless" and presentation ~= "window" then return unavailable("Profile presentation is malformed", operation_key) end
     local profile_budgets, profile_budget_error = budget_values.budgets(effective_profile and effective_profile.budgets)
@@ -438,6 +442,87 @@ local function reply_of(answer: unknown): string
     return "The agent ended its turn; its reply is shown in its terminal"
 end
 
+-- message_text is what a queued message types into the agent's prompt; a
+-- message from another session or a person names its sender.
+function M.message_text(input: unknown, sender: Object?, session: string): string?
+    local prompt = scheduler.prompt(input)
+    if not prompt then return nil end
+    if sender and sender.id ~= session then return "[Bee message from " .. tostring(sender.id) .. "]\n" .. prompt end
+    return prompt
+end
+
+local function same_prompt(typed: string, expected: string): boolean
+    local function normal(value: string): string
+        local unified = value:gsub("\r\n?", "\n")
+        return (unified:gsub("%s+$", ""))
+    end
+    return normal(typed) == normal(expected)
+end
+
+-- claimed is the active turn's current claim, recovered after an owner restart.
+local function claimed(active: Object, operation_key: string): (string?, string?)
+    local recovered, recovery_error = journal.invoke("turn_recover", {turn = active.turn, operation_key = operation_key})
+    local claim = object(recovered)
+    local value = claim and bounds.text(claim.claim, 128)
+    if recovery_error or not value then return nil, recovery_error or "the turn's claim is unavailable" end
+    return value, nil
+end
+
+-- deliver types the session's next queued message into its terminal. A
+-- suspended session's terminal is resumed first; its agent takes the message
+-- when it starts. A turn already reserved is typed again only into a new
+-- terminal (retype); a turn in flight otherwise means nothing to deliver. A
+-- message the terminal cannot take settles as failed with the reason.
+deliver = function(session: string, key_seed: string, retype: boolean): string?
+    local raw, read_error = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    local route = stored and object(stored.route)
+    if read_error or not stored or not route then return read_error or "the session is unavailable" end
+    if route.delivery ~= "hook" then return nil end
+    if stored.state == "suspended" then
+        local resumed, resume_error = funcs.call(RESUME, {session = session})
+        local reply = object(resumed)
+        if resume_error or not reply or reply.ok ~= true then
+            local fault = reply and object(reply.error)
+            return tostring(resume_error or (fault and fault.message) or "the session's terminal could not resume")
+        end
+        return nil
+    end
+    if stored.state ~= "active" then return nil end
+    local active = object(stored.active_turn)
+    local turn: string? = nil
+    local claim: string? = nil
+    if active then
+        if not retype or active.phase ~= "reserved" then return nil end
+        local current, claim_error = claimed(active, "deliver-recover:" .. key_seed)
+        if not current then return claim_error end
+        turn, claim = tostring(active.turn), current
+    else
+        local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "deliver:" .. key_seed})
+        local next_turn = object(reserved)
+        if reserve_error or not next_turn then return reserve_error or "the next message could not be reserved" end
+        if not next_turn.turn then return nil end
+        turn, claim = tostring(next_turn.turn), tostring(next_turn.claim)
+    end
+    local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
+    local input = object(pulled)
+    local text = input and M.message_text(input.input, object(input.sender), session)
+    if pull_error or not input or not text then return pull_error or "the queued message is unreadable" end
+    local typed, type_error = funcs.call(TYPE, {session = session, text = text})
+    local reply = object(typed)
+    if not type_error and reply and reply.ok == true then return nil end
+    local fault = reply and object(reply.error)
+    local reason = tostring(type_error or (fault and fault.message) or "no reply")
+    -- Only accepted work settles, so the undelivered turn is accepted first,
+    -- as a cancellation before any executor started is.
+    local _, accept_error = journal.invoke("turn_accept", {turn = turn, claim = claim, input_digest = input.input_digest,
+        checkpoint = {attempt_id = tostring(route.native_attempt_id or turn)}, operation_key = "deliver-accept:" .. key_seed})
+    if accept_error then return accept_error end
+    local _, settle_error = journal.invoke("work_settle", {turn = turn, claim = claim, operation_key = "deliver-failed:" .. key_seed,
+        result = {state = "failed", error = {code = "UNDELIVERED", message = "The session's terminal could not take the message: " .. reason}}})
+    return settle_error
+end
+
 function M.hook_boundary(raw_request: unknown): Reply
     local request, refused = request_input(raw_request, false)
     if not request then return assert(refused) end
@@ -445,7 +530,7 @@ function M.hook_boundary(raw_request: unknown): Reply
     local session, event, event_key = ref(request.session), request.event, key(request.operation_key)
     local attempt = bounds.id(request.attempt_id)
     if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id", "permission", "input", "answer"})
-        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
+        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" and event ~= "SessionStart") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
     if request.input ~= nil and (event ~= "UserPromptSubmit" or bounds.text(request.input, 65536) == nil) then return fail("INVALID", "native prompt is invalid", event_key) end
     if request.answer ~= nil and (event ~= "Stop" or bounds.text(request.answer, 65536) == nil) then return fail("INVALID", "the agent's reply is invalid", event_key) end
     if not security.can("bee.sessions.hook_boundary", session) then return fail("DENIED", "hook boundary requires the authenticated gateway", event_key) end
@@ -476,50 +561,63 @@ function M.hook_boundary(raw_request: unknown): Reply
     local event_digest, digest_error = hash.sha256(event_key)
     if not event_digest then return unavailable(tostring(digest_error), event_key) end
     local boundary_key = event_digest
+    local active = object(stored.active_turn)
+    if event == "SessionStart" then
+        local problem = deliver(session, "start:" .. boundary_key, true)
+        if problem then return unavailable(problem, event_key) end
+        return succeed({})
+    end
     if event ~= "UserPromptSubmit" then
-        local active = stored and object(stored.active_turn)
-        if not active then return succeed({}) end
-        local recovered, recovery_error = journal.invoke("turn_recover", {turn = active.turn,
-            operation_key = "hook-recover:" .. boundary_key})
-        local claim = object(recovered)
-        if recovery_error or not claim then return unavailable(recovery_error or "interactive recovery unavailable", event_key) end
-        local pulled, pull_error = journal.invoke("turn_pull", {turn = active.turn, claim = claim.claim})
+        if not active or active.phase ~= "accepted" then return succeed({}) end
+        local claim, claim_error = claimed(active, "hook-recover:" .. boundary_key)
+        if not claim then return unavailable(claim_error or "interactive recovery unavailable", event_key) end
+        local pulled, pull_error = journal.invoke("turn_pull", {turn = active.turn, claim = claim})
         local turn = object(pulled)
         local checkpoint = turn and object(turn.checkpoint)
         if pull_error or not checkpoint then return unavailable(pull_error or "interactive checkpoint unavailable", event_key) end
         if checkpoint.attempt_id ~= attempt then return succeed({}) end
-        local settled, settle_error = journal.invoke("work_settle", {turn = active.turn, claim = claim.claim,
+        local settled, settle_error = journal.invoke("work_settle", {turn = active.turn, claim = claim,
             operation_key = "hook-stop:" .. boundary_key, result = event == "Stop" and {state = "succeeded", schema = "bee:Text@1", value = {text = reply_of(request.answer)}}
                 or {state = "failed", error = {code = "INTERACTIVE_FAILED", message = "Interactive turn failed"}}})
         if settle_error or not settled then return unavailable(settle_error or "interactive turn settlement unavailable", event_key) end
+        local problem = deliver(session, "after:" .. boundary_key, false)
+        if problem then return unavailable(problem, event_key) end
         return succeed({})
     end
-    local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-start:" .. boundary_key})
-    local turn = object(reserved)
-    if reserve_error or not turn then return unavailable(reserve_error or "interactive work reserve unavailable", event_key) end
-    local native_input = false
-    if not turn.turn and request.input ~= nil and not bounds.object(stored.active_turn) then
+    -- A prompt the agent submits is either the message Bee typed for the
+    -- reserved turn, which accepts that turn, or the person's own prompt,
+    -- which becomes the session's work when no turn is in flight.
+    local turn_ref: string? = nil
+    local claim: string? = nil
+    if active and active.phase == "reserved" then
+        local current, claim_error = claimed(active, "hook-recover:" .. boundary_key)
+        if not current then return unavailable(claim_error or "interactive recovery unavailable", event_key) end
+        local pulled, pull_error = journal.invoke("turn_pull", {turn = active.turn, claim = current})
+        local typed = object(pulled)
+        if pull_error or not typed then return unavailable(pull_error or "interactive turn input unavailable", event_key) end
+        local expected = M.message_text(typed.input, object(typed.sender), session)
+        if type(request.input) ~= "string" or not expected or not same_prompt(request.input, expected) then return succeed({}) end
+        turn_ref, claim = tostring(active.turn), current
+    elseif not active and request.input ~= nil then
         local sent, send_error = journal.invoke("work_send", {session = session, operation_key = "hook-native:" .. boundary_key,
             input = request.input, output_schema = "bee:Text@1"})
         if send_error or not sent then return unavailable(send_error or "native prompt journal unavailable", event_key) end
-        local reserved_native, reserve_native_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-native-start:" .. boundary_key})
-        turn = object(reserved_native)
-        if reserve_native_error or not turn then return unavailable(reserve_native_error or "native prompt turn unavailable", event_key) end
-        native_input = true
+        local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-native-start:" .. boundary_key})
+        local native = object(reserved)
+        if reserve_error or not native then return unavailable(reserve_error or "native prompt turn unavailable", event_key) end
+        if not native.turn then return succeed({}) end
+        turn_ref, claim = tostring(native.turn), tostring(native.claim)
+    else
+        return succeed({})
     end
-    if not turn.turn then return succeed({}) end
-    local pulled, pull_error = journal.invoke("turn_pull", {turn = turn.turn, claim = turn.claim})
+    local pulled, pull_error = journal.invoke("turn_pull", {turn = turn_ref, claim = claim})
     local input = object(pulled)
-    local sender = input and object(input.sender)
-    if pull_error or not input or not sender then return unavailable(pull_error or "interactive turn input unavailable", event_key) end
+    if pull_error or not input then return unavailable(pull_error or "interactive turn input unavailable", event_key) end
     if input.phase == "settled" then return succeed({}) end
-    local accepted, accept_error = journal.invoke("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = input.input_digest,
+    local accepted, accept_error = journal.invoke("turn_accept", {turn = turn_ref, claim = claim, input_digest = input.input_digest,
         checkpoint = {attempt_id = route.native_attempt_id, hook_event = event_key}, operation_key = "hook-accept:" .. boundary_key})
     if accept_error or not accepted then return unavailable(accept_error or "interactive turn accept unavailable", event_key) end
-    if native_input or (sender.id == session and request.input ~= nil) then return succeed({}) end
-    local prompt, prompt_error = scheduler.prompt(input.input)
-    if not prompt then return unavailable(prompt_error or "interactive input unavailable", event_key) end
-    return succeed({additional_context = "[Bee message from " .. tostring(sender.id) .. "]\n" .. prompt})
+    return succeed({})
 end
 
 function M.send(raw_request: unknown): Reply
@@ -540,7 +638,7 @@ function M.send(raw_request: unknown): Reply
     end
     local current, read_error = describe(session)
     if not current then return fail("NOT_FOUND", read_error or "session is unavailable", operation_key) end
-    if current.lifecycle ~= "active" then return fail("CONFLICT", "session is not accepting work", operation_key) end
+    if current.lifecycle ~= "active" and current.lifecycle ~= "suspended" then return fail("CONFLICT", "session is not accepting work", operation_key) end
     local output_schema = request.output == nil and "bee:Text@1" or ref(request.output)
     if not output_schema then return fail("INVALID", "output must be a schema ref", operation_key) end
     local stored, stored_error = journal.invoke("session_describe", {session = session})
@@ -560,6 +658,12 @@ function M.send(raw_request: unknown): Reply
     local receipt, send_error = journal.invoke("work_send", {session = session, operation_key = operation_key,
         input = request.input, output_schema = output_schema, budget = effective_budget})
     if send_error or not receipt then return unavailable(send_error or "Threads returned no work receipt", operation_key) end
+    -- The message is queued either way; delivery that cannot happen now
+    -- happens when the agent next starts or ends a turn.
+    if route.delivery == "hook" then
+        local problem = deliver(session, "send:" .. operation_key, false)
+        if problem then logger:warn("Session message not delivered yet", {session = session, cause = problem}) end
+    end
     return succeed(receipt)
 end
 

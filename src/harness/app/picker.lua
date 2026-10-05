@@ -103,6 +103,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local loading = false
     local show_unavailable = false
     local show_closed = false
+    local clicks = frame.clicks()
     local conversation: agents.Conversation? = nil
     local draft = ""
     local confirming = ""
@@ -283,8 +284,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 frame.render(session_frame, menu, preferences)
                 rows = session_frame.rows
             elseif not catalog_open then
-                local own = workspace_names[launch.workspace_id]
-                drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, own and (own.label .. " · " .. own.folder), show_closed)
+                drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, show_closed)
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             else
@@ -305,7 +305,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         if not event.ok then return finish(nil, nil) end
         local refresh = false
         local edit, duplicate = false, false
-        local open, headless = false, false
+        local open = false
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then return finish(nil, nil) end
         elseif event.channel == closes then
@@ -473,12 +473,14 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         kind = hit and hit.kind or ""
-                        if kind == "session" and hit then selected = hit.index; dirty = true
+                        if kind == "session" and hit then
+                            selected = hit.index; dirty = true
+                            if frame.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then open = true end
                         elseif kind == "open" then open = true
                         elseif kind == "refresh" then refresh = true end
                     end
                     if kind == "new_session" then catalog_open = true; selected = 0; refresh = true
-                    elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle == "active" then
+                    elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle ~= "closed" and directory[selected].lifecycle ~= "closing" then
                         confirming = "close_listed"
                         status = "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it"
                         dirty = true
@@ -498,7 +500,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         local entry = listed.items[selected]
                         if entry and not entry.ready then setup_agent() else open = true end
                     elseif data.ctrl or data.alt then
-                    elseif data.key:lower() == "h" and idle() then headless = true
                     elseif data.key:lower() == "u" and idle() then show_unavailable = not show_unavailable; refresh = true
                     elseif data.key:lower() == "r" and idle() then refresh = true
                     elseif data.key:lower() == "s" and idle() then setup_agent()
@@ -518,13 +519,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "sort" then sort = sort == "name" and "driver" or "name"; refresh = true
                         elseif kind == "setup" then setup_agent()
                         elseif kind == "open" then open = true
-                        elseif kind == "headless" then headless = true
                         elseif kind == "unavailable" and idle() then show_unavailable = not show_unavailable; refresh = true
                         elseif kind == "refresh" then refresh = true
                         elseif kind == "edit" then edit = true
                         elseif kind == "new" then edit = true; duplicate = true
                         elseif hit and kind == "choice" and idle() and listed.items[hit.index] then
                             selected = hit.index; dirty = true
+                            if frame.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then
+                                if listed.items[selected].ready then open = true else setup_agent() end
+                            end
                         end
                     end
                 end
@@ -543,15 +546,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             end
         end
-        if (open or headless) and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
+        if open and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
             local entry = listed.items[selected]
             if entry and entry.ready then
-                local target = entry.kind .. ":" .. entry.ref .. ":" .. tostring(entry.revision) .. (headless and ":headless" or ":window")
+                local target = entry.kind .. ":" .. entry.ref .. ":" .. tostring(entry.revision)
                 if open_target ~= target then open_key, open_target = assert(uuid.v7()), target end
                 open_serial = open_serial + 1
                 local serial = open_serial
                 local key = open_key
-                local presentation: sessions_protocol.Presentation = headless and "headless" or "window"
+                local presentation: sessions_protocol.Presentation = "window"
                 opening = true
                 status = "Opening session…"
                 dirty = true

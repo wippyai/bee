@@ -24,17 +24,23 @@ local function define_tests()
             {ref = "c:codex", kind = "definition", title = "Codex", status = "missing", ready = false, reason = "codex is not installed"},
         }, unavailable = 1, notes = {}}
         test.it("marks unavailable agents and states their reason when selected", function()
-            local text = screen(picker_view.draw(120, 20, appearance.defaults(), listing, 2, "", false, true).rows)
-            test.is_true(text:find("Codex · missing", 1, true) ~= nil)
+            local drawn = picker_view.draw(120, 20, appearance.defaults(), listing, 2, "", false, true)
+            local text = screen(drawn.rows)
+            test.is_true(text:find("Codex", 1, true) ~= nil)
+            test.is_true(text:find("missing", 1, true) ~= nil)
             test.is_true(text:find("codex is not installed", 1, true) ~= nil)
-            test.is_true(text:find("Hide unavailable", 1, true) ~= nil)
+            local keys: {[string]: boolean} = {}
+            for _, hint in ipairs(assert(drawn.controls).hints) do keys[hint.key] = true end
+            test.is_true(keys.U == true)
         end)
         test.it("offers the toggle and the unavailable count while they are hidden", function()
             local ready: agents.Listing = {items = {listing.items[1]}, unavailable = 1, notes = {}}
-            local text = screen(picker_view.draw(120, 20, appearance.defaults(), ready, 1, "", false, false).rows)
-            test.is_true(text:find("Show unavailable", 1, true) ~= nil)
-            test.is_true(text:find("1 unavailable", 1, true) ~= nil)
-            test.is_true(text:find("Refresh", 1, true) ~= nil)
+            local drawn = picker_view.draw(120, 20, appearance.defaults(), ready, 1, "", false, false)
+            local text = screen(drawn.rows)
+            test.is_true(text:find("1 unavailable · U to show", 1, true) ~= nil)
+            local keys: {[string]: boolean} = {}
+            for _, hint in ipairs(assert(drawn.controls).hints) do keys[hint.key] = true end
+            test.is_true(keys.U == true and keys.R == true)
         end)
         test.it("strips terminal controls and offers no launch where nothing can be chosen", function()
             local hostile: agents.Listing = {items = {{ref = "f:p", kind = "definition", title = "Profile\27]52;injected", status = "ready",
@@ -70,11 +76,11 @@ local function define_tests()
             local rows: {string} = {}
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
             test.is_true(rows[1]:find("NEW SESSION", 1, true) ~= nil and rows[1]:find("2 agents", 1, true) ~= nil)
-            test.eq(rows[3]:sub(1, 7), " Alpha ")
-            test.eq(rows[4]:sub(1, #"›"), "›")
-            test.is_true(rows[24]:find("Enter open a window · H open headless · U unavailable", 1, true) ~= nil)
+            test.eq(rows[2]:sub(1, 7), " Alpha ")
+            test.eq(rows[3]:sub(1, #"›"), "›")
+            test.is_true(rows[24]:find("Enter open · / search · Esc back", 1, true) ~= nil)
             local chosen = 0
-            for _, hit in ipairs(drawn.hits) do if hit.kind == "choice" and hit.y == 4 then chosen = hit.index end end
+            for _, hit in ipairs(drawn.hits) do if hit.kind == "choice" and hit.y == 3 then chosen = hit.index end end
             test.eq(chosen, 2)
         end)
         test.it("explains an empty catalog", function()
@@ -213,7 +219,8 @@ local function define_tests()
             end
             local hinted: {[string]: boolean} = {}
             for _, hint in ipairs(assert(screens[1].controls).hints) do hinted[hint.key] = true end
-            test.is_true(hinted.H and hinted.E and hinted.N and hinted.S)
+            test.is_true(hinted.E and hinted.N and hinted.S)
+            test.is_nil(hinted.H)
         end)
         test.it("labels blocked results", function()
             local lines = session_view.lines(conversation("blocked", {{input = "b", state = "blocked", text = "budget spent", work = fixtures.fixture_work("bw:1", {})}}), 40)

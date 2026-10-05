@@ -17,4 +17,7 @@ end
 function M.restore(value: unknown): {[string]: unknown}
     return execute("bee.harness.service:restore", value)
 end
+function M.type(value: unknown): {[string]: unknown}
+    return execute("bee.harness.service:type", value)
+end
 return M

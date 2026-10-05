@@ -131,6 +131,48 @@ entries:
     - bee.threads.security:sessions_owner
     - bee.harness.security:presentation_owner_policy
     - bee.harness.security:presentation_bridge_policy
+- name: type
+  kind: function.lua
+  source: file://presentation.lua
+  method: type
+  modules:
+  - process
+  - channel
+  - time
+  - uuid
+  - hash
+  - security
+  - funcs
+  - json
+  - tty
+  imports:
+    bounds: bee.values:bounds
+    admission: bee.harness.launch:admission
+    canonical: bee.values:canonical
+    recovery: bee.harness.app:recovery
+    principal: bee.node:principal
+  security:
+    policies:
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:interactive_session_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.threads.security:create
+    - bee.harness.security:harness_setup_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.node.security:workspace_folder_browse_policy
+    - bee.node.security:workspace_catalog_read_policy
+    - bee.threads.security:sessions_owner
+    - bee.harness.security:presentation_owner_policy
+    - bee.harness.security:presentation_bridge_policy
 - name: carrier
   kind: process.lua
   source: file://process.lua

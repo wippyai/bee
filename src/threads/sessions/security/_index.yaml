@@ -56,6 +56,17 @@ entries:
     resources: '*'
     expression: resource == actor.meta.workspace_id && resource != ""
     effect: allow
+- name: owner_delivery_policy
+  kind: security.policy
+  meta:
+    comment: The Sessions owner types each queued message into its session's terminal, resuming a terminal that is gone
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.harness.binding:present_type
+    - bee.harness.binding:present_restore
+    effect: allow
 - name: scheduler_policy
   kind: security.policy
   meta:

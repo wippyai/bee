@@ -1,0 +1,80 @@
+version: '1.0'
+namespace: bee.apps.processes
+entries:
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Process Manager
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu, bee.shell:desktop_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - system
+  - process
+  - channel
+  - time
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    probe: bee.apps.processes:probe
+    view: bee.apps.processes:view
+    client: bee.node:client
+    clock: bee.values:clock
+    history_values: bee.apps.processes:history
+    hive: bee.apps.processes:hive
+  security:
+    policies:
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.apps.processes:observe
+- name: observe
+  kind: security.policy
+  meta:
+    comment: Process Manager reads the runtime's hosts, processes, services and memory
+  policy:
+    actions:
+    - system.read
+    resources:
+    - hosts
+    - supervisor
+    - memory
+    - goroutines
+    - node
+    effect: allow
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    probe: bee.apps.processes:probe
+    text: bee.ui:text
+    viz: bee.ui.viz:viz
+    history_values: bee.apps.processes:history
+    hive: bee.apps.processes:hive
+- name: history
+  kind: library.lua
+  source: file://history.lua
+  imports:
+    probe: bee.apps.processes:probe
+    viz: bee.ui.viz:viz
+- name: probe
+  kind: library.lua
+  source: file://probe.lua
+  modules:
+  - system
+  imports:
+    bounds: bee.values:bounds
+- name: hive
+  kind: library.lua
+  source: file://hive.lua
+  imports:
+    viz: bee.ui.viz:viz
+    bounds: bee.values:bounds

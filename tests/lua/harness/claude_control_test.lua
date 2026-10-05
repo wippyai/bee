@@ -42,8 +42,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local carrier_scope = {"bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
-    "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
+local carrier_scope = {"bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do

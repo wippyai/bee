@@ -1,0 +1,94 @@
+-- MIT. Characterizes the current native policy-reference semantics. A fresh
+-- lookup observes an accepted policy replacement; an already-created scope
+-- retains the compiled policy object it was given. The gateway resolves
+-- references afresh for each tool call, so this is characterization, not a
+-- binding-level policy pinning test.
+local test = require("test")
+local bounds = require("bounds")
+local registry = require("registry")
+local security = require("security")
+local json = require("json")
+
+local POLICY = "bee.gateway:policy_reference_target"
+local RESOURCE = "bee.gateway.probe:policy_reference_sentinel"
+
+type Object = {[string]: unknown}
+
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
+local function entry(): Object
+    local value, err = registry.get(POLICY)
+    if err or not value then error("read policy reference fixture: " .. tostring(err)) end
+    return assert(bounds.object(value))
+end
+
+local function copy(value: unknown): Object
+    local encoded, encode_error = json.encode(value)
+    if not encoded then error(tostring(encode_error or "encode policy entry")) end
+    local decoded, decode_error = json.decode(encoded)
+    if type(decoded) ~= "table" then error(tostring(decode_error or "decode policy entry")) end
+    return assert(bounds.object(decoded))
+end
+
+local function replace(value: Object)
+    local changes = registry.snapshot():changes()
+    changes:update(registry_input(value))
+    local applied, err = changes:apply()
+    if not applied then error("replace policy reference fixture: " .. tostring(err)) end
+end
+
+local function resolved(decision: string, actor: security.Actor): security.Policy
+    local policy, err = security.policy(POLICY)
+    if err or not policy then error("resolve policy reference fixture: " .. tostring(err)) end
+    test.eq(policy:evaluate(actor, "funcs.call", RESOURCE), decision)
+    return policy
+end
+
+local function run()
+    test.describe("Live native policy references", function()
+        test.it("uses the current compiled definition on a fresh lookup", function()
+            local saved = copy(entry())
+            local ok, failure = pcall(function()
+                local actor = security.actor()
+                if not actor then error("test actor is unavailable") end
+                local old_policy, old_error = security.policy(POLICY)
+                if old_error or not old_policy then error("resolve original policy: " .. tostring(old_error)) end
+                local old_scope = security.new_scope({old_policy})
+                test.eq(old_scope:evaluate(actor, "funcs.call", RESOURCE), "undefined")
+
+                local replacement = copy(saved)
+                replacement.data = {policy = {actions = {"funcs.call"}, resources = {RESOURCE}, effect = "allow"}}
+                replace(replacement)
+
+                local current = resolved("allow", actor)
+                local current_scope = security.new_scope({current})
+                test.eq(current_scope:evaluate(actor, "funcs.call", RESOURCE), "allow")
+                test.eq(old_scope:evaluate(actor, "funcs.call", RESOURCE), "undefined")
+            end)
+            local restored, restore_error = pcall(function()
+                replace(saved)
+                local actor = security.actor()
+                if not actor then error("test actor is unavailable during restore") end
+                resolved("undefined", actor)
+            end)
+            if not restored then
+                error((not ok and (tostring(failure) .. "; ") or "") .. "restore policy fixture: " .. tostring(restore_error))
+            end
+            if not ok then error(tostring(failure)) end
+        end)
+    end)
+end
+
+return test.run_cases(run)

@@ -1,0 +1,356 @@
+version: '1.0'
+namespace: bee.threads.security
+entries:
+- name: store
+  kind: security.policy
+  meta:
+    comment: Threads keeps threads, records, deliveries and notices in the node database
+  policy:
+    actions:
+    - db.get
+    resources:
+    - bee:db
+    effect: allow
+- name: waits
+  kind: security.policy
+  meta:
+    comment: A wait hears the commits announced on the one thread it waits on
+  policy:
+    actions:
+    - events.subscribe
+    resources:
+    - bee.threads/*
+    effect: allow
+- name: changes
+  kind: security.policy
+  meta:
+    comment: The Threads service follows records committed to the store
+  policy:
+    actions:
+    - cdc.subscribe
+    resources:
+    - bee:changes
+    effect: allow
+- name: announce
+  kind: security.policy
+  meta:
+    comment: The Threads service announces each commit to the waits on its thread
+  policy:
+    actions:
+    - events.send
+    resources:
+    - bee.threads/*
+    effect: allow
+- name: names
+  kind: security.policy
+  meta:
+    comment: The Threads service holds its node-local name and checks requests come from the Hive supervisor
+  policy:
+    actions:
+    - process.registry.register
+    - process.registry.lookup
+    resources:
+    - bee.threads
+    - bee.hive.supervisor
+    effect: allow
+- name: admission
+  kind: security.policy
+  meta:
+    comment: The Threads service runs a forwarded operation as the calling node under the peer policy
+  policy:
+    actions:
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    resources: '*'
+    effect: allow
+- name: node
+  kind: security.policy
+  meta:
+    comment: The Threads service reads this node's identity and whether it is a client
+  policy:
+    actions:
+    - system.read
+    - env.get
+    resources:
+    - node
+    - cluster
+    - bee:role
+    effect: allow
+- name: peer
+  kind: security.policy
+  meta:
+    comment: A peer node reaches only the forwarded operations; thread membership decides the rest
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.binding:send
+    - bee.threads.binding:send_status
+    - bee.threads.binding:notify
+    - bee.threads.binding:watch
+    - bee.threads.binding:inbox_describe
+    - bee.threads.binding:inbox_resolve
+    - bee.threads.binding:inbox_send
+    - bee.threads.binding:inbox_reply
+    effect: allow
+- name: create
+  kind: security.policy
+  meta:
+    comment: Create threads
+  policy:
+    actions:
+    - bee.threads.create
+    resources: '*'
+    effect: allow
+- name: observe
+  kind: security.policy
+  meta:
+    comment: Submit observations as a producer
+  policy:
+    actions:
+    - bee.threads.observe
+    resources: '*'
+    effect: allow
+- name: lifecycle
+  kind: security.policy
+  meta:
+    comment: Admit actions and commit attempts, turns and receipts
+  policy:
+    actions:
+    - bee.threads.lifecycle
+    resources: '*'
+    effect: allow
+- name: carrier
+  kind: security.policy
+  meta:
+    comment: Claim a carrier epoch and commit checkpointed records for an attempt
+  policy:
+    actions:
+    - bee.threads.carrier
+    resources: '*'
+    effect: allow
+- name: approval
+  kind: security.policy
+  meta:
+    comment: Held by the approval authority only
+  policy:
+    actions:
+    - bee.threads.approval
+    resources: '*'
+    effect: allow
+- name: workspace_list
+  kind: security.policy
+  meta:
+    comment: List the threads any workspace owns without membership, for node-level workspace viewers
+  policy:
+    actions:
+    - bee.threads.workspace
+    resources: '*'
+    effect: allow
+- name: authority_client
+  kind: security.policy
+  meta:
+    comment: Call the thread authority operations
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads.binding:authority_local
+    - create
+    - get
+    - list
+    - list_workspace
+    - join
+    - leave
+    - close
+    - record
+    - read_after
+    - send
+    - send_status
+    - notify
+    - bee.threads.binding:create
+    - bee.threads.binding:get
+    - bee.threads.binding:list
+    - bee.threads.binding:list_workspace
+    - bee.threads.binding:join
+    - bee.threads.binding:leave
+    - bee.threads.binding:close
+    - bee.threads.binding:record
+    - bee.threads.binding:read_after
+    - bee.threads.binding:send
+    - bee.threads.binding:send_status
+    - bee.threads.binding:notify
+    effect: allow
+- name: lifecycle_client
+  kind: security.policy
+  meta:
+    comment: Call the work lifecycle operations
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads.binding:lifecycle_local
+    - admit_action
+    - prepare_attempt
+    - start_attempt
+    - request_turn
+    - end_turn
+    - receipt
+    - bee.threads.binding:admit_action
+    - bee.threads.binding:prepare_attempt
+    - bee.threads.binding:start_attempt
+    - bee.threads.binding:request_turn
+    - bee.threads.binding:end_turn
+    - bee.threads.binding:receipt
+    effect: allow
+- name: delivery_client
+  kind: security.policy
+  meta:
+    comment: Call the claim, subscription and wait operations
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads.binding:delivery_local
+    - claim
+    - dispatch
+    - ack
+    - release
+    - expire
+    - reconcile
+    - subscribe
+    - page
+    - ack_page
+    - unsubscribe
+    - resume
+    - close_subscription
+    - forget_subscription
+    - wait
+    - watch
+    - bee.threads.binding:delivery_claim
+    - bee.threads.binding:dispatch
+    - bee.threads.binding:ack
+    - bee.threads.binding:release
+    - bee.threads.binding:expire
+    - bee.threads.binding:reconcile
+    - bee.threads.binding:subscribe
+    - bee.threads.binding:page
+    - bee.threads.binding:ack_page
+    - bee.threads.binding:unsubscribe
+    - bee.threads.binding:resume
+    - bee.threads.binding:close_subscription
+    - bee.threads.binding:forget_subscription
+    - bee.threads.binding:wait
+    - bee.threads.binding:watch
+    effect: allow
+- name: projection_client
+  kind: security.policy
+  meta:
+    comment: Call the recap and status projection operations
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads.binding:projection_local
+    - recap_read
+    - recap_update
+    - recap_rebuild
+    - status_read
+    - status_update
+    - status_rebuild
+    - bee.threads.binding:recap_read
+    - bee.threads.binding:recap_update
+    - bee.threads.binding:recap_rebuild
+    - bee.threads.binding:status_read
+    - bee.threads.binding:status_update
+    - bee.threads.binding:status_rebuild
+    effect: allow
+- name: carrier_client
+  kind: security.policy
+  meta:
+    comment: Call the carrier operations
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads.binding:carrier_local
+    - claim
+    - commit
+    - checkpoint
+    - cancel_intent
+    - cancel_status
+    - bee.threads.binding:claim
+    - bee.threads.binding:commit
+    - bee.threads.binding:checkpoint
+    - bee.threads.binding:cancel_intent
+    - bee.threads.binding:cancel_status
+    effect: allow
+- name: approval_client
+  kind: security.policy
+  meta:
+    comment: Call the approval projection operation
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads.binding:approvals_local
+    - append
+    - bee.threads.binding:append
+    effect: allow
+- name: app_alias
+  kind: security.policy
+  meta:
+    comment: 'Held by the application broker: attest, retire and fence app instances on their threads'
+  policy:
+    actions:
+    - bee.threads.app_alias
+    resources:
+    - '*'
+    effect: allow
+- name: app_alias_client
+  kind: security.policy
+  meta:
+    comment: Call the app alias operations; held by the application broker
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.binding:register_app_alias
+    - bee.threads.binding:retire_app_alias
+    - bee.threads.binding:fence_app
+    effect: allow
+- name: sessions_owner
+  kind: security.policy
+  meta:
+    comment: 'Held by the Sessions owner only: canonical session, work and turn operations'
+  policy:
+    actions:
+    - bee.threads.sessions_owner
+    resources:
+    - '*'
+    effect: allow
+- name: node_identity
+  kind: security.policy
+  meta:
+    comment: Session, work and inbox operations check the runtime node identity they act on
+  policy:
+    actions:
+    - system.read
+    resources:
+    - node
+    effect: allow

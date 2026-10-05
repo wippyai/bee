@@ -1,0 +1,97 @@
+version: '1.0'
+namespace: bee.apps.settings
+entries:
+- name: live_updates
+  kind: library.lua
+  source: file://live_updates.lua
+  imports:
+    bounds: bee.values:bounds
+    semver: bee.hub.package:semver
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    live_updates: bee.apps.settings:live_updates
+- name: choice
+  kind: library.lua
+  source: file://choice.lua
+  imports:
+    appearance: bee.ui:appearance
+- name: hub_client
+  kind: security.policy
+  meta:
+    comment: About calls only the public Hub facade
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.hub.binding:call
+    effect: allow
+- name: hub_updates
+  kind: security.policy
+  meta:
+    comment: About reads which Bee packs are installed and which releases the Hub offers
+  policy:
+    actions:
+    - bee.hub.read
+    resources:
+    - updates
+    effect: allow
+- name: registry_commits
+  kind: security.policy
+  meta:
+    comment: About follows registry commits, which change installed packs
+  policy:
+    actions:
+    - events.subscribe
+    resources:
+    - registry
+    effect: allow
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Settings
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu, bee.shell:desktop_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - system
+  - process
+  - channel
+  - funcs
+  - events
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    client: bee.node:client
+    view: bee.apps.settings:view
+    choice: bee.apps.settings:choice
+    live_updates: bee.apps.settings:live_updates
+    app: bee.app:client
+  security:
+    policies:
+    - bee.apps.settings:edit_mode
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.apps.settings:hub_client
+    - bee.apps.settings:hub_updates
+    - bee.apps.settings:registry_commits
+- name: edit_mode
+  kind: security.policy
+  meta:
+    comment: Settings may ask governance to change this workspace's edit mode; governance checks the Settings actor and the person approves each change
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gov.binding:super_edit_call]
+    effect: allow

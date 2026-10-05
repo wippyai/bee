@@ -43,4 +43,5 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options: unknown) return cases(options) end}

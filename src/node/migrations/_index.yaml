@@ -1,0 +1,53 @@
+version: '1.0'
+namespace: bee.node.migrations
+entries:
+- name: workspaces
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-03T00:00:00Z'
+  source: file://workspaces.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: settings
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-03T00:01:00Z'
+  source: file://settings.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: desktops
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-04T00:00:00Z'
+  source: file://desktops.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: identities
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-04T00:01:00Z'
+  source: file://identities.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: instance_workspaces
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-04T00:02:00Z'
+  source: file://instance_workspaces.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

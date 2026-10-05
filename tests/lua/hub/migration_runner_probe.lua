@@ -2,12 +2,12 @@
 local sql = require("sql")
 local security = require("security")
 
-local DEFAULT = "bee.hub:test_default_migration"
-local CUSTOM = "bee.hub:test_custom_migration"
-local GOVERNANCE = "bee.hub:test_governance_migration"
-local BOUND = "bee.hub:test_bound_migration"
-local DB = "bee.hub:migration_runner_db"
-local BOUND_DB = "bee.hub:migration_binding_db"
+local DEFAULT = "bee.tests.hub:test_default_migration"
+local CUSTOM = "bee.tests.hub:test_custom_migration"
+local GOVERNANCE = "bee.tests.hub:test_governance_migration"
+local BOUND = "bee.tests.hub:test_bound_migration"
+local DB = "bee.tests.hub:migration_runner_db"
+local BOUND_DB = "bee.tests.hub:migration_binding_db"
 
 local function expect_policy(id: string, wanted: boolean)
     local scope = assert(security.scope(), "migration execution scope unavailable")
@@ -23,19 +23,19 @@ local function run(options: {[string]: unknown}): {[string]: unknown}
             "bee.hub.security:worker_policy", "bee.hub.security:worker_host_policy", "bee.hub.security:migration_context_policy"}) do
             expect_policy(policy, false)
         end
-        expect_policy("bee.gov.security:destination_service_policy", true)
-        expect_policy("bee.gov.security:destination_execution_policy", true)
+        expect_policy("bee.tests.hub:owner_service_policy", true)
+        expect_policy("bee.tests.hub:owner_execution_policy", true)
     elseif id == CUSTOM then
         expect_policy("bee.hub.security:execution_policy", true)
         expect_policy("bee.hub.security:publisher_policy", true)
-        expect_policy("bee.gov.security:destination_service_policy", false)
-        expect_policy("bee.gov.security:destination_execution_policy", false)
+        expect_policy("bee.tests.hub:owner_service_policy", false)
+        expect_policy("bee.tests.hub:owner_execution_policy", false)
     elseif id == GOVERNANCE then
         expect_policy("bee.hub.security:execution_policy", false)
         expect_policy("bee.hub.security:publisher_policy", false)
         expect_policy("bee.gov.security:destination_service_policy", false)
         expect_policy("bee.gov.security:destination_execution_policy", false)
-        expect_policy("bee.hub:governance_migration_grant_policy", true)
+        expect_policy("bee.tests.hub:governance_migration_grant_policy", true)
         assert(options.target_db == "governance:data")
         assert(options.database_id == DB)
         assert(options.table_prefix == "governance_")

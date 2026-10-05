@@ -5,7 +5,7 @@ local principals = require("principals")
 local bounds = require("bounds")
 local registry = require("registry")
 
-local CONTRACT = "bee.sessions:executor"
+local CONTRACT = "bee.threads.sessions:executor"
 local METHODS = {"run_turn"}
 
 local function binding(executor_id: string): {[string]: unknown}

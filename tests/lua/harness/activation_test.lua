@@ -3,6 +3,7 @@
 local test = require("test")
 local bounds = require("bounds")
 local activation = require("activation")
+local registry = require("registry")
 
 local function entry(data: {[string]: unknown}?): {[string]: unknown}
     return {id = "test:activation", kind = "registry.entry", meta = {type = "bee.harness_activation"}, data = data}
@@ -10,6 +11,13 @@ end
 
 local function define_tests()
     test.describe("Harness activation declaration", function()
+        test.it("ships an activation that also admits the drivers governance approved", function()
+            local shipped = assert(registry.get(activation.ACTIVATION))
+            local decoded, err = activation.decode_activation(activation.ACTIVATION, shipped)
+            if not decoded then error(tostring(err)) end
+            test.eq(decoded.admission, "bee.gov.binding:driver_bindings")
+            test.is_true(decoded.bindings["bee.driver.claude.binding:binding"])
+        end)
         test.it("decodes a bounded, distinct binding selection", function()
             local decoded, err = activation.decode_activation("test:activation", entry({schema_revision = "bee.harness-activation@1", bindings = {"bee.driver.claude.binding:binding", "bee.driver.codex.binding:binding"}}))
             if not decoded then error(tostring(err)) end

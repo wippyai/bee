@@ -65,7 +65,7 @@ local function define_tests()
         test.it("migrates once in the existing store, preserving CAS, tombstones, receipts and other owners", function()
             local id = uuid.v7()
             if not id then error("Fixture id unavailable") end
-            local store, err = sync.open({resource = "bee.sync:sync_test_db", owner = "profiles-" .. id})
+            local store, err = sync.open({owner = "profiles-" .. id})
             if not store then error(err or "Store unavailable") end
             local function append(feed: string, key: string, source: unknown, tombstone: boolean): sync.Result
                 return store:append({feed = feed, projection_key = key, event_id = key, idempotency_key = key,
@@ -77,7 +77,7 @@ local function define_tests()
             test.is_true(append("harness.profiles:test", "deleted", nil, true).ok)
             test.is_true(append("other:test", "unrelated", {unchanged = true}, false).ok)
             local before = value(store:snapshot("harness.profiles:test", 1))
-            local foreign, foreign_error = sync.open({resource = "bee.sync:sync_test_db", owner = "foreign-" .. id})
+            local foreign, foreign_error = sync.open({owner = "foreign-" .. id})
             if not foreign then error(foreign_error or "Foreign store unavailable") end
             test.is_true(foreign:append({feed = "harness.profiles:test", projection_key = "saved", event_id = "saved", idempotency_key = "saved", event_type = "profile", expected_revision = 0, projection_value = source, payload = {}}).ok)
             local calls = 0
@@ -102,7 +102,7 @@ local function define_tests()
         end)
         test.it("preserves oversized repair diagnostics and replaces them with one CAS", function()
             local id = assert(uuid.v7())
-            local store = assert(sync.open({resource = "bee.sync:sync_test_db", owner = "large-" .. id}))
+            local store = assert(sync.open({owner = "large-" .. id}))
             local source = {title = "Repair", definition_ref = "missing:definition", instructions = string.rep("x", 8000)}
             test.is_true(store:append({feed = "harness.profiles:large", projection_key = "repair", event_id = "create", idempotency_key = "create", event_type = "profile", expected_revision = 0, projection_value = source, payload = {}}).ok)
             test.is_true(store:migrate("harness.profiles:", migration.ID, function(raw: unknown): (unknown?, string?) return migration.convert(raw, binding), nil end).ok)
@@ -119,7 +119,7 @@ local function define_tests()
         test.it("rolls back the complete migration and its ledger when a transform fails", function()
             local id = uuid.v7()
             if not id then error("Fixture id unavailable") end
-            local store, err = sync.open({resource = "bee.sync:sync_test_db", owner = "rollback-" .. id})
+            local store, err = sync.open({owner = "rollback-" .. id})
             if not store then error(err or "Store unavailable") end
             for _, key in ipairs({"a", "b"}) do
                 test.is_true(store:append({feed = "profiles:test", projection_key = key, event_id = key, idempotency_key = key,

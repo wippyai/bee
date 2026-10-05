@@ -1,0 +1,64 @@
+version: '1.0'
+namespace: bee.driver.wippy.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    bounds: bee.values:bounds
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    bounds: bee.values:bounds
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    bounds: bee.values:bounds
+    configuration: bee.driver.binding:configuration
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    protocol: bee.driver.wippy:protocol
+    normalizer: bee.driver.codec:normalize
+- name: run
+  kind: function.lua
+  source: file://run_method.lua
+  method: handle
+  imports:
+    bounds: bee.values:bounds
+    runner: bee.driver.wippy.service:runner
+    managed_run: bee.harness.launch:managed_run
+    types: bee.driver.wippy:types
+    record_bounds: bee.threads.records:bounds
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules:
+  - http_client
+  - json
+  - env
+  - registry
+  imports:
+    types: bee.driver.wippy:types
+    bounds: bee.values:bounds
+    framing: bee.driver.transport:framing
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.wippy.binding:prepare
+      dispatch: bee.driver.wippy.binding:dispatch
+      normalize: bee.driver.wippy.binding:normalize
+      configure: bee.driver.wippy.binding:configure
+  meta:
+    type: harness.driver
+    driver_id: wippy
+    profiles_ref: bee.driver.wippy.profiles:profiles

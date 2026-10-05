@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.values
+entries:
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  modules: [time]
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+  imports:
+    clock: bee.values:clock
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+  modules: [json]
+- name: reply
+  kind: library.lua
+  source: file://reply.lua
+  imports:
+    bounds: bee.values:bounds

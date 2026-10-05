@@ -1,17 +1,42 @@
 version: '1.0'
 namespace: bee.gateway.service
 entries:
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  - logger
+  imports:
+    installation: bee.gateway.security:installation
+    approval_service: bee.approvals.binding:service
+- name: publication_worker
+  kind: process.lua
+  source: file://publication_worker.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  - logger
+  imports:
+    publish: bee.gateway.security:publish
+    approval_service: bee.approvals.binding:service
 - name: gateway_installation_service
   kind: process.service
   process: bee.gateway.service:worker
   host: bee:workers
   lifecycle:
     auto_start: true
+    requires: [wippy.bootloader:bootloader.service]
     security:
-      actor: {id: bee.gateway.worker}
+      actor:
+        id: bee.gateway.worker
       policies:
       - bee.gateway.security:store_policy
-      - bee.gateway.security:database_ref_policy
       - bee.gateway.security:execute_policy
       - bee.gateway.security:installation_policy
       - bee.gateway.security:installation_queue_policy
@@ -24,18 +49,19 @@ entries:
       - bee.security.approvals:approval_installation_effects_policy
       - bee.security.approvals:approval_request_policy
       - bee.security.approvals:approval_consume_policy
-      - bee.security.desktop:host_policy
+      - bee.gateway.security:worker_host_policy
 - name: gateway_publication_service
   kind: process.service
   process: bee.gateway.service:publication_worker
   host: bee:workers
   lifecycle:
     auto_start: true
+    requires: [wippy.bootloader:bootloader.service]
     security:
-      actor: {id: bee.gateway.worker}
+      actor:
+        id: bee.gateway.worker
       policies:
       - bee.gateway.security:store_policy
-      - bee.gateway.security:database_ref_policy
       - bee.gateway.security:execute_policy
       - bee.gateway.security:publication_policy
       - bee.gateway.security:publication_queue_policy
@@ -48,4 +74,4 @@ entries:
       - bee.security.approvals:approval_publication_effects_policy
       - bee.security.approvals:approval_request_policy
       - bee.security.approvals:approval_consume_policy
-      - bee.security.desktop:host_policy
+      - bee.gateway.security:worker_host_policy

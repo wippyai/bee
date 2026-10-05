@@ -1,17 +1,35 @@
 version: '1.0'
-namespace: bee.driver.opencode
+namespace: bee.tests.driver.opencode
 entries:
 - name: launch_test
   kind: function.lua
   source: file://launch_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
-    launch: bee.driver.opencode.binding:launch
+    launch: bee.tests.driver.support:opencode_launch
     prepare: bee.driver.opencode.binding:prepare
     dispatch: bee.driver.opencode.binding:dispatch
     quote: bee.driver.binding:quote
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - fs
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    protocol: bee.tests.driver.support:opencode_protocol
+    normalize: bee.driver.opencode.binding:normalize
+    stream_json: bee.driver.transport:stream_json
+    observation: bee.threads.records:observation
 - name: configuration_test
   kind: function.lua
   source: file://configuration_test.lua
@@ -19,7 +37,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     registry: registry
@@ -28,16 +46,3 @@ entries:
     configure: bee.driver.opencode.binding:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
-- name: protocol_test
-  kind: function.lua
-  source: file://protocol_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [fs]
-  imports:
-    bounds: bee.values:bounds
-    test: wippy.test:test
-    protocol: bee.driver.opencode.binding:protocol
-    normalize: bee.driver.opencode.binding:normalize
-    stream_json: bee.driver.transport:stream_json
-    observation: bee.threads.records:observation

@@ -1,26 +1,14 @@
 version: '1.0'
 namespace: bee.security.approvals
 entries:
-- name: approval_store_policy
-  kind: security.policy.expr
+- name: approval_consume_policy
+  kind: security.policy
   meta:
-    comment: The approval owner's store, linked references, node identity, exact migration source and worker wake
+    comment: Effect owners that consume approved decisions in a workspace before acting on them
   policy:
-    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.approvals.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
-    - env.set
-    - db.get
-    - registry.get
-    - system.read
-    - process.send
-    - env.get
-    resources:
-    - bee.approvals.env:db
-    - bee.approvals.env:database_ref
-    - bee.approvals.env:policies_ref
-    - bee.security.approvals:approver_policies
-    - node
-    - '*'
+    - bee.approvals.consume
+    resources: '*'
     effect: allow
 - name: approval_owner_policy
   kind: security.policy
@@ -43,48 +31,22 @@ entries:
     - bee.approvals.request
     resources: '*'
     effect: allow
-- name: approval_decide_policy
+- name: approval_store_policy
   kind: security.policy
   meta:
-    comment: Principals that may decide and read the inbox; the approver policy still has to list them
+    comment: The approval owner's store, linked references, node identity, exact migration source and worker wake
   policy:
     actions:
-    - bee.approvals.decide
-    resources: '*'
-    effect: allow
-- name: approval_consume_policy
-  kind: security.policy
-  meta:
-    comment: Effect owners that consume approved decisions in a workspace before acting on them
-  policy:
-    actions:
-    - bee.approvals.consume
-    resources: '*'
-    effect: allow
-- name: approval_installation_effects_policy
-  kind: security.policy
-  meta:
-    comment: Host-authorized installation worker lists approved Hub effects; the effect owner verifies each binding and approval before applying
-  policy:
-    actions: [bee.approvals.own]
-    resources: [installation_effects]
-    effect: allow
-- name: approval_publication_effects_policy
-  kind: security.policy
-  meta:
-    comment: Host-authorized publication worker lists approved Hub effects; the effect owner verifies each binding and approval before uploading
-  policy:
-    actions: [bee.approvals.own]
-    resources: [publication_effects]
-    effect: allow
-- name: approval_manage_policy
-  kind: security.policy
-  meta:
-    comment: Workspace managers read any request and return exhausted deliveries to the queue
-  policy:
-    actions:
-    - bee.approvals.manage
-    resources: '*'
+    - db.get
+    - registry.get
+    - system.read
+    - process.send
+    resources:
+    - bee:db
+    - bee.approvals.env:policies_ref
+    - bee.security.approvals:approver_policies
+    - node
+    - '*'
     effect: allow
 - name: approver_policies
   kind: registry.entry
@@ -114,3 +76,32 @@ entries:
     - definition_id: bee.approvals.inbox.app:app
     confirm: explicit
     max_ttl_ms: 86400000
+- name: approval_installation_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized installation worker lists approved Hub effects; the effect owner verifies each binding and approval before applying
+  policy:
+    actions:
+    - bee.approvals.own
+    resources:
+    - installation_effects
+    effect: allow
+- name: approval_publication_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized publication worker lists approved Hub effects; the effect owner verifies each binding and approval before uploading
+  policy:
+    actions:
+    - bee.approvals.own
+    resources:
+    - publication_effects
+    effect: allow
+- name: approval_decide_policy
+  kind: security.policy
+  meta:
+    comment: Principals that may decide and read the inbox; the approver policy still has to list them
+  policy:
+    actions:
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow

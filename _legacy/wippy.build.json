@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "name": "bee",
+  "runtime": {
+    "repository": "https://github.com/wippyai/runtime.git",
+    "commit": "5eb9901870e3a7ca72b608fc0f5e70b531d914b6",
+    "go": "1.27.0",
+    "tags": [
+      "fts5",
+      "sqlite_vec",
+      "treesitter",
+      "sqlite_preupdate_hook",
+      "meshclient",
+      "physicalclient"
+    ]
+  },
+  "application": {
+    "module": "bee/bee",
+    "command": "bee",
+    "packs": [
+      {
+        "module": "bee/bee",
+        "version": "0.1.0-dev",
+        "path": "dist/bee-native.wapp",
+        "sha256": "1fe0f2469d3c3f9e656c7e74aae9415c7240054d87fa85e677b84d778ab20f30"
+      }
+    ],
+    "data": {
+      "BEE_THREADS_DB": "threads.db",
+      "BEE_NODE_DB": "node.db",
+      "BEE_WORKSPACE_DB": "workspace.db",
+      "BEE_APPROVALS_DB": "approvals.db",
+      "BEE_RESOURCES_DB": "resources.db",
+      "BEE_CREDENTIALS_DB": "credentials.db",
+      "BEE_GATEWAY_DB": "gateway.db",
+      "BEE_PLACEMENT_DB": "placement.db",
+      "BEE_PLACEMENT_ROOT": "placement",
+      "BEE_APP_DATABASE_ROOT": "app-db",
+      "BEE_GOVERNANCE_DB": "governance.db",
+      "BEE_SYNC_DB": "sync.db"
+    }
+  },
+  "native": [
+    {
+      "module": "github.com/wippyai/bee/native",
+      "version": "v0.0.0-20261003135649-5b49bd9a84a2",
+      "package": "github.com/wippyai/bee/native/ioevents",
+      "factory": "Component",
+      "private": true
+    },
+    {
+      "module": "github.com/wippyai/bee/native",
+      "version": "v0.0.0-20261003135649-5b49bd9a84a2",
+      "package": "github.com/wippyai/bee/native/launch",
+      "factory": "Component",
+      "host": true,
+      "private": true
+    }
+  ]
+}

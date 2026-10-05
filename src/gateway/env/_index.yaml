@@ -1,6 +1,127 @@
 version: '1.0'
 namespace: bee.gateway.env
 entries:
+- name: listener_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked listener service; target_listener fills resource_ref
+  resource_ref: bee.gateway.api:gateway_listener
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: hook_executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: self
+  default: ''
+  readonly: true
+- name: endpoint_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host endpoint configuration; target_endpoint fills resource_ref
+  resource_ref: bee.gateway.api:gateway_endpoint
+- name: approval_request_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host approval request policy; an absent link fails closed
+  resource_ref: bee.security.approvals:approval_request_policy
+- name: approval_consume_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host approval consume policy; an absent link fails closed
+  resource_ref: bee.security.approvals:approval_consume_policy
+- name: tool_read_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in bound-thread read tools
+  resource_ref: bee.security.gateway:gateway_tool_read_policy
+- name: tool_message_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in bound-thread message tool
+  resource_ref: bee.security.gateway:gateway_tool_message_policy
+- name: tool_overlay_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in governed-overlay tool
+  resource_ref: bee.security.gateway:gateway_tool_overlay_policy
+- name: tool_docs_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in offline-documentation tool
+  resource_ref: bee.security.gateway:gateway_tool_docs_policy
+- name: tool_components_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in component-inspection tool
+  resource_ref: bee.security.gateway:gateway_tool_components_policy
+- name: tool_delivery_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in delivery tool
+  resource_ref: bee.security.gateway:gateway_tool_delivery_policy
+- name: tool_publish_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in publication tool
+  resource_ref: bee.security.gateway:gateway_tool_publish_policy
+- name: tool_application_open_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in admitted-application open tool
+  resource_ref: bee.security.gateway:gateway_tool_application_open_policy
+- name: tool_install_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in installation request tools
+  resource_ref: bee.security.gateway:gateway_tool_install_policy
+- name: tool_session_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the default session tools
+  resource_ref: bee.security.gateway:gateway_tool_session_policy
+- name: install_configuration_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host module installation configuration; target_install_configuration fills resource_ref
+  resource_ref: bee.gateway.env:module_installation
+- name: tool_hub_publish_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host policy for the built-in Hub publication tools
+  resource_ref: bee.security.gateway:gateway_tool_hub_publish_policy
+- name: publish_configuration_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host Hub publication configuration; target_publish_configuration fills resource_ref
+  resource_ref: bee.gateway.env:module_publication
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules:
+  - registry
+  - funcs
+  - env
+  imports:
+    address_value: bee.gateway.api:address_value
 - name: module_installation
   kind: registry.entry
   meta:

@@ -1,0 +1,177 @@
+version: '1.0'
+namespace: bee.shell
+entries:
+- name: model
+  kind: library.lua
+  source: file://model.lua
+- name: watch
+  kind: library.lua
+  source: file://watch.lua
+- name: layout
+  kind: library.lua
+  source: file://layout.lua
+  imports:
+    model: bee.shell:model
+- name: chrome
+  kind: library.lua
+  source: file://chrome.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+- name: window_chrome
+  kind: library.lua
+  source: file://window_chrome.lua
+  modules: [tty]
+  imports:
+    model: bee.shell:model
+    layout: bee.shell:layout
+    appearance: bee.ui:appearance
+- name: bar
+  kind: library.lua
+  source: file://bar.lua
+  modules: [tty]
+  imports:
+    model: bee.shell:model
+    appearance: bee.ui:appearance
+- name: menu
+  kind: library.lua
+  source: file://menu.lua
+  modules: [tty]
+  imports:
+    model: bee.shell:model
+    appearance: bee.ui:appearance
+- name: dialog
+  kind: library.lua
+  source: file://dialog.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+- name: title_editor
+  kind: library.lua
+  source: file://title_editor.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+- name: selection
+  kind: library.lua
+  source: file://selection.lua
+  modules: [tty]
+- name: workspace_menu
+  kind: library.lua
+  source: file://workspace_menu.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+- name: render
+  kind: library.lua
+  source: file://render.lua
+  modules: [tty]
+  imports:
+    frame: bee.ui:frame
+    title_editor: bee.shell:title_editor
+    watch: bee.shell:watch
+    dialog: bee.shell:dialog
+    model: bee.shell:model
+    layout: bee.shell:layout
+    appearance: bee.ui:appearance
+    workspace_menu: bee.shell:workspace_menu
+    chrome: bee.shell:chrome
+    menu: bee.shell:menu
+    selection: bee.shell:selection
+    bar: bee.shell:bar
+    window_chrome: bee.shell:window_chrome
+- name: main
+  kind: process.lua
+  source: file://shell.lua
+  method: main
+  modules: [tty, channel, io, system, process, events]
+  imports:
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    chrome: bee.shell:chrome
+    model: bee.shell:model
+    layout: bee.shell:layout
+    menu: bee.shell:menu
+    dialog: bee.shell:dialog
+    title_editor: bee.shell:title_editor
+    watch: bee.shell:watch
+    selection: bee.shell:selection
+    workspace_menu: bee.shell:workspace_menu
+    render: bee.shell:render
+  meta:
+    command:
+      name: bee
+      host: bee:terminal
+      short: Open the shell of this folder's node, or with an app command name (bee claude) that app full-pane
+      security:
+        actor: {id: bee.shell}
+        policies: [bee.hive.security:caller, bee.hive.security:messaging, bee.shell:display]
+- name: client
+  kind: process.lua
+  source: file://shell.lua
+  method: client
+  modules: [tty, channel, io, system, process, events]
+  imports:
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    chrome: bee.shell:chrome
+    model: bee.shell:model
+    layout: bee.shell:layout
+    menu: bee.shell:menu
+    dialog: bee.shell:dialog
+    title_editor: bee.shell:title_editor
+    watch: bee.shell:watch
+    selection: bee.shell:selection
+    workspace_menu: bee.shell:workspace_menu
+    render: bee.shell:render
+  meta:
+    command:
+      name: client
+      host: bee:terminal
+      short: Display a node's apps from an in-memory client node
+      security:
+        actor: {id: bee.shell}
+        policies: [bee.hive.security:caller, bee.hive.security:messaging, bee.shell:display, bee.shell:hive]
+- name: display
+  kind: security.policy
+  meta:
+    comment: A display reads its node identity and monitors the owner of the node it shows
+  policy:
+    actions: [system.read, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: hive
+  kind: security.policy
+  meta:
+    comment: A client display follows nodes joining the hive to find one to show
+  policy:
+    actions: [events.subscribe]
+    resources: [cluster]
+    effect: allow
+- name: apps_menu
+  kind: registry.entry
+  meta:
+    type: bee.menu
+    comment: The Start panel's Apps menu; an app lists bee.shell:apps_menu in data.menus to appear in it
+  data:
+    title: Apps
+    location: start
+    order: 10
+- name: system_menu
+  kind: registry.entry
+  meta:
+    type: bee.menu
+    comment: The Start panel's System menu, for the apps that inspect and manage this node
+  data:
+    title: System
+    location: start
+    order: 20
+- name: desktop_menu
+  kind: registry.entry
+  meta:
+    type: bee.menu
+    comment: Apps offered on the desktop's context menu
+  data:
+    title: Desktop
+    location: desktop
+    order: 10

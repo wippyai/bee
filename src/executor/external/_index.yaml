@@ -1,0 +1,3 @@
+version: '1.0'
+namespace: bee.executor.external
+entries: []

@@ -1,0 +1,212 @@
+version: '1.0'
+namespace: bee.env
+entries:
+- name: binary_identity
+  kind: registry.entry
+  meta:
+    type: bee.binary_identity
+    comment: Build metadata and native requirements for this Bee root pack; the executable identity comes from the native launch host
+  data:
+    version: development (unknown)
+    build: development (unknown)
+    source: development source (unknown)
+    source_revision: development source (unknown)
+    runtime: https://github.com/wippyai/runtime
+    runtime_commit: c0d6585b5fd1afae7f7cf0b378dc156bcd0e683d
+    native: github.com/wippyai/bee/native
+    native_version: v0.0.0-20260930012307-d85fcc6635ac
+    website: https://bee.wippy.ai
+    native_components:
+    - package: github.com/wippyai/bee/native/ioevents
+      version: v0.0.0-20260930012307-d85fcc6635ac
+    - package: github.com/wippyai/bee/native/launch
+      version: v0.0.0-20260930012307-d85fcc6635ac
+- name: workspace_environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: binary_native_module
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_native_module
+  readonly: true
+- name: binary_native_version
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_native_version
+  readonly: true
+- name: binary_native_modules
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_native_modules
+  readonly: true
+- name: binary_runtime_commit
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_runtime_commit
+  readonly: true
+- name: workspace_db_path
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_WORKSPACE_DB
+  default: .wippy/workspace.db
+  readonly: true
+- name: workspace_db
+  kind: db.sql.sqlite
+  file: ${env:bee.env:workspace_db_path}
+  lifecycle:
+    auto_start: true
+- name: client_db
+  kind: db.sql.sqlite
+  file: ${env:bee.env:workspace_db_path}.client
+  lifecycle:
+    auto_start: true
+- name: workspace_root
+  kind: fs.directory
+  directory: .
+  base: project
+  auto_init: false
+- name: app_database_root
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_APP_DATABASE_ROOT
+  default: .wippy/app-db
+  readonly: true
+- name: files_root
+  kind: fs.directory
+  directory: .
+  base: project
+  auto_init: false
+  readonly: true
+- name: app_databases
+  kind: fs.directory
+  meta:
+    comment: Host-provisioned directory holding isolated application databases; it lies under Bee state, outside every approved readable tree
+  directory: ${env:bee.env:app_database_root}
+  base: project
+  auto_init: true
+  mode: '0700'
+- name: machine_home
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: HOME
+  readonly: true
+- name: no_color
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: NO_COLOR
+  default: ""
+  readonly: true
+- name: machine_login_source
+  kind: fs.directory
+  link_policy: owner_safe
+  directory: ${env:bee.env:machine_home}
+  base: project
+  mode: '0500'
+  auto_init: false
+- name: gov_publication_profiles
+  kind: registry.entry
+  meta:
+    type: bee.gov.publication_profiles
+    comment: Host-selected source workspaces and overlay owners available for immutable publication; workspace_applications publishes the overlays a workspace's own agents author under the app.<overlay_id> naming rule
+  data:
+    profiles: []
+    workspace_applications: true
+    workspace_drivers: true
+- name: gov_activation_profiles
+  kind: registry.entry
+  meta:
+    type: bee.gov.activation_profiles
+    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications a workspace's agents author for it, and with hive for the same applications received from another node, with permission approval at first install or widening; remote artifacts cannot edit this entry
+  data:
+    profiles: []
+    workspace_drivers:
+      approval_policy: workspace-application-delivery
+      kinds: [function.lua, library.lua, registry.entry, contract.binding, ns.requirement, security.policy, security.policy.expr]
+      modules: [json, hash, registry, time]
+      policies: []
+      thread_access: none
+      hive: false
+    workspace_applications:
+      approval_policy: workspace-application-delivery
+      kinds: [process.lua, library.lua, ns.requirement]
+      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, fs, sql]
+      policies: [bee.security:ordinary_app_subsystem_boundary]
+      thread_access: none
+      hive: true
+    packages:
+      approval_policy: workspace-application-delivery
+      kinds: [process.lua, library.lua, ns.requirement, security.policy, registry.entry, contract.binding, env.variable]
+      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, registry, system]
+      policies: [bee.security:ordinary_app_subsystem_boundary]
+      thread_access: none
+      applications:
+      - component: bee.hive.manager
+        definition_id: bee.hive.manager.app:app
+        capabilities: [hive.view, hive.remote_view]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hive.manager.security:client_policy, bee.hive.manager.security:viewer_policy]
+        thread_access: none
+      - component: bee.threads.timeline
+        definition_id: bee.threads.timeline.app:app
+        capabilities: [threads.read]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline.security:client_policy,
+          bee.security.threads:thread_workspace_list_policy]
+        thread_access: none
+      - component: bee.workspace.manager
+        definition_id: bee.workspace.manager.app:app
+        capabilities: [workspace.catalog.read, workspace.catalog.manage, workspace.host.lease]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.workspace.manager.security:client_policy,
+          bee.security.storage:workspace_catalog_read_policy, bee.security.storage:workspace_catalog_manage_policy,
+          bee.security.threads:thread_workspace_list_policy, bee.security.desktop:workspace_host_lease_policy]
+        thread_access: none
+      - component: bee.host.processes
+        definition_id: bee.host.processes.app:app
+        capabilities: [desktop.application_stop]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.desktop:processes_policy]
+        application_stop: true
+        thread_access: none
+      - component: bee.hub.modules
+        definition_id: bee.hub.modules.app:app
+        capabilities: [hub.manage, hub.self_update]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hub.modules.security:client_policy,
+          bee.hub.modules.security:hub_policy, bee.hub.modules.security:self_update_policy, bee.hub.modules.security:publication_policy]
+        thread_access: none
+      - component: bee.gov.overlays
+        definition_id: bee.gov.overlays.app:app
+        capabilities: [gov.delivery.manage, gov.delivery.activate]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.gov.overlays.security:client_policy,
+          bee.security.gov:governance_delivery_read_policy, bee.security.gov:governance_delivery_manage_policy,
+          bee.security.gov:governance_delivery_activate_policy]
+        thread_access: none
+      - component: bee.files.app
+        definition_id: bee.files.app:app
+        capabilities: [workspace.files.read]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.files:read_policy]
+        thread_access: observe_post
+- name: docs_corpus
+  kind: fs.directory
+  directory: ./src/corpus
+  mode: '0500'
+  auto_init: false
+  meta:
+    title: Bee agent documentation corpus
+    comment: The offline platform documentation a bound agent reads through the gateway docs tool; wippy.yaml embed freezes it read-only into the pack. Rebuilt by build/agent_corpus.py.
+
+- name: startup_sequence
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: startup_sequence
+  default: '0'
+  readonly: true
+- name: startup_phase
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: startup_phase
+  default: starting
+- name: approved_driver_admission
+  kind: ns.requirement
+  meta: {value_kind: function.lua, comment: The host selects Gov's existing consumed driver admission for every launch resolver}
+  default: bee.gov.binding:driver_bindings
+  targets:
+  - entry: bee.harness.launch:harness_activation
+    path: .admission

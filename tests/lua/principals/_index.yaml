@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.test.principals
+namespace: bee.tests.principals
 entries:
 - name: bound
   kind: library.lua
@@ -7,3 +7,16 @@ entries:
   meta: {type: test_support}
   modules: [security]
   imports: {caller: bee.app:caller, bounds: bee.values:bounds}
+- name: application
+  kind: library.lua
+  source: file://application.lua
+  meta: {type: test_support}
+  modules: [security, registry]
+  imports: {bounds: bee.values:bounds}
+- name: application_scope_policy
+  kind: security.policy
+  meta: {comment: A test may build the scope an app runs in}
+  policy:
+    actions: [security.policy_group.get, security.policy.get, security.scope.create]
+    resources: '*'
+    effect: allow

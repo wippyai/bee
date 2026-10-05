@@ -137,7 +137,7 @@ entries:
     type: test
     suite: bee
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     request: bee.placement:request
@@ -254,7 +254,6 @@ entries:
     workdir_preparers: bee.placement.native.service:workdir_preparers
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
-    migrations: bee.placement.native.migrations:migrations
     request_codec: bee.placement:request
     quote: bee.driver.binding:quote
     types: bee.placement:types
@@ -408,15 +407,15 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     configuration: bee.driver.codex.binding:configuration
     grok_configuration: bee.driver.grok.binding:configuration
-    grok_launch: bee.driver.grok.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
+    grok_launch: bee.tests.driver.support:grok_launch
+    claude_launch: bee.tests.driver.support:claude_launch
+    codex_launch: bee.tests.driver.support:codex_launch
+    agy_launch: bee.tests.driver.support:agy_launch
+    muse_launch: bee.tests.driver.support:muse_launch
+    opencode_launch: bee.tests.driver.support:opencode_launch
     configuration_protocol: bee.driver.binding:configuration
     test: wippy.test:test
     service: bee.placement.native.service:service
@@ -453,8 +452,8 @@ entries:
     - bee.credentials.security:credential_materialize_policy
   imports:
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
-    claude_launch: bee.driver.claude.binding:launch
+    principals: bee.tests.principals:bound
+    claude_launch: bee.tests.driver.support:claude_launch
     test: wippy.test:test
     service: bee.placement.native.service:service
     identity: bee.placement.native.service:identity
@@ -492,7 +491,7 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     test: wippy.test:test
     protocol: bee.placement.native:protocol
     exits: bee.harness.catalog:exits
@@ -556,7 +555,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
   imports:
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     configuration: bee.driver.codex.binding:configuration
     configuration_protocol: bee.driver.binding:configuration
     preferences: bee.driver.profiles:preferences
@@ -590,7 +589,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
   imports:
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
@@ -626,7 +625,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
   imports:
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     grok_configuration: bee.driver.grok.binding:configuration
     test: wippy.test:test
     runner_fixture: bee.placement.native:materialization_runner
@@ -663,7 +662,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
   imports:
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
@@ -688,7 +687,7 @@ entries:
   imports:
     completion: bee.placement.native:completion
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
@@ -728,9 +727,9 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     quote: bee.driver.binding:quote
-    grok_launch: bee.driver.grok.binding:launch
+    grok_launch: bee.tests.driver.support:grok_launch
     grok_configuration: bee.driver.grok.binding:configuration
     placement_service: bee.placement.native.service:service
     runner_fixture: bee.placement.native:materialization_runner
@@ -857,7 +856,7 @@ entries:
   imports:
     completion: bee.placement.native:completion
     bounds: bee.values:bounds
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
@@ -936,41 +935,4 @@ entries:
     store: bee.placement.native.persist:store
     request: bee.placement:request
     decode: bee.placement:decode
-    principals: bee.test.principals:bound
-- name: startup_legacy_db
-  kind: db.sql.sqlite
-  meta:
-    type: test_support
-  file: .wippy/startup-legacy.db
-  lifecycle:
-    auto_start: true
-- name: startup_legacy_policy
-  kind: security.policy
-  meta:
-    type: test_support
-  policy:
-    actions:
-    - db.get
-    resources:
-    - bee.placement.native:startup_legacy_db
-    effect: allow
-- name: startup_migration_test
-  kind: function.lua
-  source: file://startup_migration_test.lua
-  method: run
-  meta:
-    type: test
-    suite: bee
-  modules:
-  - json
-  security:
-    policies:
-    - bee.placement.native:startup_legacy_policy
-  imports:
-    test: wippy.test:test
-    database: bee.persist.persist:database
-    ledger: bee.persist.persist:ledger
-    migrations: bee.placement.native.migrations:migrations
-    request: bee.placement:request
-    store: bee.placement.native.persist:store
-    bounds: bee.values:bounds
+    principals: bee.tests.principals:bound

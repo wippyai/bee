@@ -1,0 +1,87 @@
+version: '1.0'
+namespace: bee.tests.driver.support
+entries:
+- name: claude_launch
+  kind: library.lua
+  source: file://claude_launch.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: claude_protocol
+  kind: library.lua
+  source: file://claude_protocol.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: codex_launch
+  kind: library.lua
+  source: file://codex_launch.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: codex_protocol
+  kind: library.lua
+  source: file://codex_protocol.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: agy_launch
+  kind: library.lua
+  source: file://agy_launch.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: agy_protocol
+  kind: library.lua
+  source: file://agy_protocol.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: grok_launch
+  kind: library.lua
+  source: file://grok_launch.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: grok_protocol
+  kind: library.lua
+  source: file://grok_protocol.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: muse_launch
+  kind: library.lua
+  source: file://muse_launch.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: muse_protocol
+  kind: library.lua
+  source: file://muse_protocol.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: opencode_launch
+  kind: library.lua
+  source: file://opencode_launch.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
+- name: opencode_protocol
+  kind: library.lua
+  source: file://opencode_protocol.lua
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal

@@ -1,0 +1,177 @@
+version: '1.0'
+namespace: bee.driver.codex.security
+entries:
+- name: launch_policy_codex_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected Codex batch policy for bounded research actions on a caller-owned thread; private home with no
+      host inheritance, workspace-write CLI sandbox
+  data:
+    schema_revision: bee.launch-policy@3
+    allowed_overrides:
+    - thread
+    - workdir
+    required_cleanup: process_group
+    required_exit_observation: independent
+
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      codex: bee.driver.codex.env:executable
+    environment: {}
+    environment_refs: {}
+    allow_host_home: false
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_instructions: true
+    prepare_options:
+      sandbox: workspace-write
+    placement_profiles:
+    - bee.placement.profiles:native
+    - bee.placement.docker.profiles:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+      provider.options.config_profile:
+        kind: text
+        max_bytes: 64
+- name: launch_policy_codex_named_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected structured Codex route that projects one admitted named Codex profile into its private home; read-only,
+      one bounded turn on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@3
+    allowed_overrides:
+    - thread
+    - workdir
+    required_cleanup: process_group
+    required_exit_observation: independent
+
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      codex: bee.driver.codex.env:executable
+    environment: {}
+    environment_refs: {}
+    allow_host_home: false
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_instructions: true
+    prepare_options:
+      sandbox: workspace-write
+    placement_profiles:
+    - bee.placement.profiles:native
+    - bee.placement.docker.profiles:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+      provider.options.config_profile:
+        kind: text
+        max_bytes: 64
+- name: launch_policy_codex_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Codex window; missing host executable leaves the declaration
+      unavailable
+  data:
+    schema_revision: bee.launch-policy@3
+    allowed_overrides:
+    - thread
+    - workdir
+    required_cleanup: process_group
+    required_exit_observation: independent
+
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      codex: bee.driver.codex.env:executable
+    environment: {}
+    environment_refs:
+      CODEX_HOME: bee.driver.codex.env:config_home
+    allow_host_home: true
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    - capabilities
+    - overlay
+    - docs
+    - components
+    - delivery
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - PermissionRequest
+    - Stop
+    profile_instructions: true
+    prepare_options: {}
+    placement_profiles:
+    - bee.placement.profiles:native
+    - bee.placement.docker.profiles:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+      provider.options.config_profile:
+        kind: text
+        max_bytes: 64

@@ -55,14 +55,14 @@ local function define_tests()
     test.describe("Lease grant flow", function()
         test.it("grants a lease from one decided approval and bounds its later use", function()
             install_policy()
-            local vocabulary = assert(capability_model.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
+            local vocabulary = assert(capability_model.decode(assert(registry.get("bee.capability:catalog"))))
             local installed = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "alpha"}))
             local narrow = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "alpha/child"}))
             local widened = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "beta/child"}))
             local outside = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "gamma"}))
             local workspace = "ws-lease-flow-" .. assert(uuid.v4())
             local profile = {overlay_owner = "bee.gov:lease-flow", approval_policy = POLICY, source_workspace = "app-a"}
-            local db = assert(lease_store.open("bee.gov:activation_test_db", "node-lease-flow", workspace))
+            local db = assert(lease_store.open("bee:db", "node-lease-flow", workspace))
 
             local proposed = ok(lease_grants.propose(executor, vocabulary, installed, profile, workspace,
                 {extras = {{capability = "workspace.files.write", parameters = {subpath = "beta"}}}, max_applies = 1}, "propose-1"))

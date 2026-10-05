@@ -9,6 +9,7 @@
 -- application is.
 local test = require("test")
 local principals = require("principals")
+local application = require("application")
 local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
@@ -20,7 +21,6 @@ local uuid = require("uuid")
 local REQUESTER, ALICE, STRANGER = "bee.test.inbox_requester", "bee.test.inbox_alice", "bee.test.inbox_stranger"
 local POLICY = "inbox-test"
 local SELECTOR_POLICY = "inbox-selector-test"
-local BASE = {"bee.security:base_app_policy", "bee.security:app_boundary_policy", "bee.security:core_spawn_boundary", "bee.security.storage:workspace_storage_boundary"}
 type Object = {[string]: unknown}
 local function key(): string
     local id, err = uuid.v4()
@@ -36,21 +36,9 @@ local function policies_of(names: {string}): {security.Policy}
     end
     return list
 end
--- The admitted scope, from the admission entry the broker reads.
+-- The admitted scope: the node's application group and the inbox entry's policies.
 local function admitted_scope(): security.Scope
-    local entry = registry.get("bee.security:application_admission")
-    if not entry then error("admission entry") end
-    local names: {string} = {}
-    for _, item in ipairs(BASE) do names[#names + 1] = item end
-    local found = false
-    for _, binding in ipairs(principals.objects((assert(bounds.object(entry.data))).bindings)) do
-        if binding.definition_id == "bee.approvals.inbox.app:app" then
-            found = true
-            for _, name in ipairs(principals.strings(binding.policies)) do names[#names + 1] = name end
-        end
-    end
-    if not found then error("the inbox application is not admitted") end
-    return security.new_scope(policies_of(names))
+    return application.scope("bee.approvals.inbox.app:app")
 end
 local function install_policy()
     local entry = registry.get("bee.security.approvals:approver_policies")

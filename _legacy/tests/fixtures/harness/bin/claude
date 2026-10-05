@@ -1,0 +1,200 @@
+#!/bin/bash
+# Claude protocol fixture: replays a captured stream-json-2 file in place of
+# the Claude executable. This is protocol evidence, not the real harness.
+if [[ "${1:-}" == "--version" ]]; then
+  printf '%s\n' 'Claude Code 2.1.265'
+  exit 0
+fi
+# The permission mode answers a control_request from stdin with a timeout,
+# which is why this fixture runs under bash.
+stream="${BEE_FIXTURE_STREAM:?BEE_FIXTURE_STREAM names the captured stream}"
+# Under stream-json input the harness takes its brief as the first user
+# line on stdin, as the real executable does; the fixture consumes it.
+previous=""
+stream_json=""
+for argument in "$@"; do
+  if [ "$previous" = "--input-format" ] && [ "$argument" = "stream-json" ]; then
+    stream_json=1
+    read -r brief
+    printf '%s\n' "brief:$brief" >&2
+  fi
+  previous="$argument"
+done
+if [ -n "${BEE_FIXTURE_READ:-}" ]; then
+  # The line read is reported on stdout, ahead of the replayed stream: the
+  # carrier consumes stdout in order and settles at the result frame, while
+  # stderr is a separate pipe whose chunks may reach it after that frame.
+  read -r line
+  escaped="${line//\\/\\\\}"
+  escaped="${escaped//\"/\\\"}"
+  printf '{"type":"system","subtype":"informational","level":"info","content":"read:%s"}\n' "$escaped"
+fi
+settings_json=""
+mcp_config_json=""
+previous=""
+for argument in "$@"; do
+  case "$previous" in
+    --settings)
+      if [ -z "$settings_json" ]; then settings_json="$argument"; fi ;;
+    --mcp-config)
+      if [ -z "$mcp_config_json" ]; then mcp_config_json="$argument"; fi ;;
+  esac
+  previous="$argument"
+done
+if [ -n "${BEE_FIXTURE_HOOKS:-}" ]; then
+  # Hook reporter: the child posts hook events the way Claude Code's http
+  # hook handler would, to the URL in the --settings literal, with the hook
+  # credential from the environment destination, and reports status codes
+  # only. BEE_FIXTURE_HOOKS_FLOOD posts that many extra tool events back to
+  # back so the queue bound is reached.
+  "$(dirname "$0")/gateway-client" hooks "$settings_json" >&2
+fi
+if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
+  # Gateway client: the child reads the host-approved MCP configuration from
+  # the --mcp-config literal and the bearer token from the environment
+  # destination the configuration names, walks initialization, discovery and
+  # a call, optionally waits and holds, and reports status codes only. The
+  # ordered-report fixture writes a Claude informational frame on stdout.
+  # A revoked gateway can make placement request cooperative shutdown while
+  # this client is holding. Flush its last real HTTP check before exiting;
+  # the runner's normal forced-stop deadline remains authoritative. Ordered
+  # reports share stdout with the terminal frame so carrier settlement cannot
+  # overtake the report on stderr.
+  gateway_stopping=""
+  trap 'gateway_stopping=1' TERM
+  gateway_status=0
+  if [ "${BEE_FIXTURE_REPORT_STREAM:-}" = "1" ]; then
+    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" || gateway_status=$?
+  else
+    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" >&2 || gateway_status=$?
+  fi
+  trap - TERM
+  if [ -n "$gateway_stopping" ] || [ "$gateway_status" -eq 143 ]; then exit 143; fi
+fi
+if [ -n "${BEE_FIXTURE_RESULT_DELAY:-}" ]; then
+  sleep "$BEE_FIXTURE_RESULT_DELAY"
+fi
+if [ -n "${BEE_FIXTURE_HUGE:-}" ]; then
+  # One frame of BEE_FIXTURE_HUGE times 32 bytes of padding; 1 means 700.
+  repeat=700
+  if [ "$BEE_FIXTURE_HUGE" -gt 1 ]; then repeat=$BEE_FIXTURE_HUGE; fi
+  printf '{"type":"system","subtype":"status","padding":"'
+  i=0
+  while [ "$i" -lt "$repeat" ]; do printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; i=$((i + 1)); done
+  printf '"}\n'
+fi
+if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
+  # Interactive permission exchange: the control_request frame is printed,
+  # then the fixture waits for a correlated control_response line on stdin.
+  # allow continues the captured stream; deny reports the denial and ends;
+  # an uncorrelated or malformed line is ignored and the wait continues;
+  # An explicitly requested protocol bound ends with a permission_timeout result.
+  id="$BEE_FIXTURE_PERMISSION"
+  timeout="${BEE_FIXTURE_PERMISSION_TIMEOUT:-}"
+  # The stream comes in on descriptor 3 so the response is read from stdin.
+  while IFS= read -r frame <&3 || [ -n "$frame" ]; do
+    printf '%s\n' "$frame"
+    case "$frame" in
+      *'"type":"control_request"'*)
+        decision=""
+        while [ -z "$decision" ]; do
+          read_options=()
+          if [ -n "$timeout" ]; then read_options=(-t "$timeout"); fi
+          if read "${read_options[@]}" -r line; then
+            case "$line" in
+              *"\"request_id\":\"$id\""*)
+                case "$line" in
+                  *'"behavior":"allow"'*) decision=allow ;;
+                  *'"behavior":"deny"'*) decision=deny ;;
+                  *) printf '%s\n' "malformed:$line" >&2 ;;
+                esac ;;
+              *) printf '%s\n' "uncorrelated:$line" >&2 ;;
+            esac
+          else
+            if [ -n "$timeout" ]; then decision=timeout; else decision=eof; fi
+          fi
+        done
+        case "$decision" in
+          deny)
+            printf '{"type":"system","subtype":"permission_denied","tool_name":"Bash","message":"denied by the owner","session_id":"fixture"}\n'
+            printf '{"type":"result","subtype":"error_permission","is_error":true,"result":"permission denied","permission_denials":[{"tool_name":"Bash","tool_use_id":"%s"}],"session_id":"fixture"}\n' "$id"
+            exit 0 ;;
+          eof)
+            printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_eof","result":"stdin ended before permission response","session_id":"fixture"}\n'
+            exit 2 ;;
+          timeout)
+            printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"permission_timeout","result":"no permission response within %s seconds (fixture permission protocol bound)","session_id":"fixture"}\n' "$timeout"
+            exit 2 ;;
+        esac ;;
+    esac
+  done 3< "$stream"
+elif [ -n "${BEE_FIXTURE_FLOOD:-}" ]; then
+  if [ -n "${BEE_FIXTURE_STDERR_EOF:-}" ]; then exec 2>&-; fi
+  count="$BEE_FIXTURE_FLOOD"
+  pace="${BEE_FIXTURE_FLOOD_PACE:-0.01}"
+  flood_text="${BEE_FIXTURE_FLOOD_TEXT:-80}"
+  flood_pad=""
+  j=0
+  while [ "$j" -lt "$flood_text" ]; do flood_pad="${flood_pad}x"; j=$((j + 1)); done
+  i=0
+  while [ "$i" -lt "$count" ]; do
+    printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"%s"}}}\n' "$flood_pad"
+    if [ "$pace" != "0" ]; then sleep "$pace"; fi
+    i=$((i + 1))
+  done
+  printf '{"type":"result","subtype":"success","is_error":false,"result":"flood-complete","session_id":"fixture","num_turns":1}\n'
+elif [ -n "${BEE_FIXTURE_PACE:-}" ]; then
+  # One frame at a time with a pause, so a carrier can be replaced mid-stream.
+  while IFS= read -r frame || [ -n "$frame" ]; do
+    printf '%s\n' "$frame"
+    sleep "$BEE_FIXTURE_PACE"
+  done < "$stream"
+elif [ -n "${BEE_FIXTURE_SPLIT:-}" ]; then
+  # Every frame leaves in two writes with a pause between, so the runner
+  # reads a partial frame as its own chunk.
+  while IFS= read -r frame || [ -n "$frame" ]; do
+    printf '%s' "$(printf '%s' "$frame" | cut -c1-20)"
+    sleep 0.05
+    printf '%s\n' "$(printf '%s' "$frame" | cut -c21-)"
+  done < "$stream"
+elif [ -n "${BEE_FIXTURE_TRUNCATE:-}" ]; then
+  head -n -1 "$stream"
+else
+  cat "$stream"
+fi
+if [ -n "${BEE_FIXTURE_FLOOD_EXIT:-}" ]; then exit 0; fi
+if [ -n "${BEE_FIXTURE_LATE_STDERR:-}" ]; then
+  # Stdout ends first; the last stderr line and the exit follow the pause.
+  exec 1>&-
+  sleep "$BEE_FIXTURE_LATE_STDERR"
+  printf '%s\n' "late:stderr" >&2
+fi
+if [ -n "$stream_json" ]; then
+  if [ -n "${BEE_FIXTURE_PUSH:-}" ]; then
+    if IFS= read -r -t 20 line; then
+      escaped="${line//\\/\\\\}"
+      escaped="${escaped//\"/\\\"}"
+      printf '{"type":"system","subtype":"informational","level":"info","content":"push:%s"}\n' "$escaped"
+      printf '{"type":"result","subtype":"success","is_error":false,"result":"pushed","session_id":"fixture","num_turns":1}\n'
+      if [ -n "${BEE_FIXTURE_PUSH_EXIT:-}" ]; then exit 0; fi
+    else
+      printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"push_timeout","result":"no push input","session_id":"fixture"}\n'
+      exit 2
+    fi
+  fi
+  # A stream-json session ends when stdin closes, as the real executable's does.
+  while IFS= read -r _; do :; done
+fi
+if [ -n "${BEE_FIXTURE_AFTER_CLOSE:-}" ]; then printf '%s\n' "after:terminal" >&2; fi
+if [ -n "${BEE_FIXTURE_ORPHAN_FIFO:-}" ]; then
+  exec 3<>"$BEE_FIXTURE_ORPHAN_FIFO"
+  (IFS= read -r _ <&3) &
+  exec 3>&-
+elif [ -n "${BEE_FIXTURE_ORPHAN:-}" ]; then
+  # A descendant that outlives the fixture while holding its pipes.
+  (sleep "$BEE_FIXTURE_ORPHAN" &)
+fi
+if [ -n "${BEE_FIXTURE_LINGER:-}" ]; then
+  sleep "$BEE_FIXTURE_LINGER"
+fi
+exit "${BEE_FIXTURE_EXIT:-0}"

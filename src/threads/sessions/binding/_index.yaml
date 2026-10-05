@@ -1,0 +1,503 @@
+version: '1.0'
+namespace: bee.threads.sessions.binding
+entries:
+- name: external_executor_binding
+  kind: contract.binding
+  meta:
+    type: bee.sessions.executor_binding
+    executor_id: external
+    version: stage1
+  contracts:
+  - contract: bee.threads.sessions:executor
+    methods:
+      run_turn: bee.executor.external.binding:run_turn
+- name: owner_binding
+  kind: contract.binding
+  meta:
+    type: bee.sessions.owner_binding
+  contracts:
+  - contract: bee.threads.sessions:contract
+    default: true
+    methods:
+      open: bee.threads.sessions.binding:open
+      run: bee.threads.sessions.binding:run
+      send: bee.threads.sessions.binding:send
+      await: bee.threads.sessions.binding:await
+      join: bee.threads.sessions.binding:join
+      get: bee.threads.sessions.binding:get
+      list: bee.threads.sessions.binding:list
+      history: bee.threads.sessions.binding:history
+      cancel: bee.threads.sessions.binding:cancel
+      close: bee.threads.sessions.binding:close
+- name: catalog_binding
+  kind: contract.binding
+  meta:
+    type: bee.sessions.catalog_binding
+  contracts:
+  - contract: bee.threads.sessions:catalog
+    default: true
+    methods:
+      list: bee.threads.sessions.binding:catalog
+- name: open
+  kind: function.lua
+  source: file://owner.lua
+  method: open
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: &id001
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.harness.security:profile_workspace_policy
+- name: run
+  kind: function.lua
+  source: file://owner.lua
+  method: run
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: send
+  kind: function.lua
+  source: file://owner.lua
+  method: send
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: await
+  kind: function.lua
+  source: file://owner.lua
+  method: await
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: &id002
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.threads.sessions.security:scheduler_principal_policy
+- name: join
+  kind: function.lua
+  source: file://owner.lua
+  method: join
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: get
+  kind: function.lua
+  source: file://owner.lua
+  method: get
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id002
+- name: list
+  kind: function.lua
+  source: file://owner.lua
+  method: list
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: history
+  kind: function.lua
+  source: file://owner.lua
+  method: history
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: cancel
+  kind: function.lua
+  source: file://owner.lua
+  method: cancel
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id002
+- name: close
+  kind: function.lua
+  source: file://owner.lua
+  method: close
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id002
+- name: catalog
+  kind: function.lua
+  source: file://owner.lua
+  method: catalog
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: attach
+  kind: function.lua
+  source: file://owner.lua
+  method: attach
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+- name: restore
+  kind: function.lua
+  source: file://owner.lua
+  method: restore
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+- name: hook_boundary
+  kind: function.lua
+  source: file://owner.lua
+  method: hook_boundary
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+- name: detach
+  kind: function.lua
+  source: file://owner.lua
+  method: detach
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: attention_count
+  kind: function.lua
+  source: file://owner.lua
+  method: attention_count
+  modules:
+  - security
+  - hash
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    driver_route: bee.threads.sessions.executor:driver_route
+    cancellation: bee.threads.sessions.binding:cancellation
+    lifecycle: bee.threads.sessions.binding:control
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    scheduler: bee.threads.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+- name: lifecycle
+  kind: function.lua
+  source: file://lifecycle.lua
+  method: handle
+  modules:
+  - process
+  - time
+  - channel
+  - security
+  - uuid
+  imports:
+    bounds: bee.values:bounds
+    lifecycle: bee.threads.sessions.binding:control
+    scheduler: bee.threads.sessions.service:scheduler
+    threads_journal: bee.threads.sessions.binding:threads_journal
+  security:
+    policies:
+    - bee.threads.sessions.security:lifecycle_policy
+    - bee.threads.sessions.security:lifecycle_journal_policy
+    - bee.threads.security:sessions_owner
+- name: control
+  kind: library.lua
+  source: file://control.lua
+  modules:
+  - registry
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    operations: bee.hub.types:operations
+- name: threads_journal
+  kind: library.lua
+  source: file://threads_journal.lua
+  modules:
+  - registry
+  - funcs
+  imports:
+    scheduler: bee.threads.sessions.service:scheduler
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  modules:
+  - time
+- name: catalog_service
+  kind: library.lua
+  source: file://catalog.lua
+  modules:
+  - funcs
+  - time
+  imports:
+    bounds: bee.values:bounds
+    harness_catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    admission: bee.harness.launch:admission
+    profile_protocol: bee.harness.profiles:protocol
+    locate: bee.threads.sessions.binding:locate
+    readiness: bee.harness.launch:readiness
+- name: cancellation
+  kind: library.lua
+  source: file://cancellation.lua
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds

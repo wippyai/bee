@@ -1,0 +1,133 @@
+version: '1.0'
+namespace: bee.tests.node
+entries:
+- name: node_test
+  kind: function.lua
+  source: file://node_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, sql, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    client: bee.node:client
+- name: upgrade_test
+  kind: function.lua
+  source: file://upgrade_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    client: bee.node:client
+- name: display_stub
+  kind: process.lua
+  source: file://display_stub.lua
+  method: main
+  modules: [process, channel, system]
+  meta: {type: test_support}
+  imports:
+    client: bee.node:client
+- name: probe_app
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [tty, process, channel, security, ctx]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Probe, lifetime: view, revision: '1', instance_policy: multiple, menus: [bee.shell:apps_menu]}
+  imports:
+    appearance: bee.ui:appearance
+    app: bee.app:client
+- name: probe_single
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [tty, process, channel, security, ctx]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Single probe, lifetime: view, revision: '1', instance_policy: singleton}
+  imports:
+    appearance: bee.ui:appearance
+    app: bee.app:client
+- name: workspace_catalog_test
+  kind: function.lua
+  source: file://workspace_catalog_test.lua
+  method: run
+  modules: [funcs, security, system, process]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+    app_scope: bee.tests.principals:application
+  security:
+    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+- name: catalog_test_policy
+  kind: security.policy
+  meta: {comment: The catalog test makes app actors and asks the node owner for its state}
+  policy:
+    actions: [security.actor.create, funcs.security]
+    resources: '*'
+    effect: allow
+- name: admission
+  kind: registry.entry
+  meta:
+    type: bee.node.application_admission
+    comment: The single probe manages scopes and holds the probe grant through its admission
+  data:
+    bindings:
+    - definition_id: bee.tests.node:probe_single
+      policies: [bee.tests.node:probe_grant]
+      scope_management: true
+- name: probe_grant
+  kind: security.policy
+  meta: {comment: The grant the probe's admission adds; building call scopes holds only under the scope-managing boundary}
+  policy:
+    actions: [bee.tests.probe, security.scope.create]
+    resources: [admitted, with]
+    effect: allow
+- name: broker_probe
+  kind: process.lua
+  source: file://broker_probe.lua
+  method: main
+  modules: [tty, process, channel, uuid]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Broker probe, lifetime: view, revision: '1', instance_policy: singleton,
+      resume_schema: probe.v1, restart_policy: manual}
+  imports:
+    app: bee.app:client
+- name: broker_test
+  kind: function.lua
+  source: file://broker_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+- name: probe_command
+  kind: registry.entry
+  meta:
+    type: bee.app_command
+    comment: bee probe opens the probe full-pane, labelled from the command
+  data:
+    name: probe
+    definition_id: bee.tests.node:probe_app
+    arguments: [from-command]
+    fullscreen: true
+- name: app_scope_test
+  kind: function.lua
+  source: file://app_scope_test.lua
+  method: run
+  modules: [funcs, security, system, process]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+    app_scope: bee.tests.principals:application
+  security:
+    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]

@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.sync
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    limits: bee.sync.values:limits
+    bounds: bee.values:bounds
+- name: replica_protocol
+  kind: library.lua
+  source: file://replica_protocol.lua
+  imports:
+    bounds: bee.values:bounds
+    version: bee.sync.values:version
+- name: route
+  kind: registry.entry
+  meta:
+    type: bee.hive.route
+    sync: receiver
+    comment: Hive operations sync.* go to this node's replica receiver
+  data:
+    prefix: sync
+    name: bee.sync

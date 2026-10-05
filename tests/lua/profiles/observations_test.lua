@@ -37,7 +37,7 @@ function M.probe(request: unknown): Object
     local work: sessions.Work = {session = session_ref, incarnation = 1, ref = function(): string return work_ref end,
         cancel = function(): (nil, nil) return nil, nil end, state = function(): (nil, nil) return nil, nil end,
         await = function(): (protocol.WorkAwait?, nil)
-            local raw, err = funcs.call("bee.sessions.binding:await", {subject = work_ref, timeout_ms = 0})
+            local raw, err = funcs.call("bee.threads.sessions.binding:await", {subject = work_ref, timeout_ms = 0})
             if err then error(tostring(err)) end
             local reply = object(raw)
             if reply.ok ~= true then error("await failed") end
@@ -78,8 +78,8 @@ local function define_tests()
             harness.value(journal:call("work_settle", {turn = turn, claim = claim, operation_key = harness.key(),
                 result = {state = "succeeded", schema = "bee:Text@1", value = {text = "Final answer\nSecond paragraph"}}}))
             local policies: {security.Policy} = {}
-            for _, name in ipairs({"bee.tests.sessions:interactive_lifecycle_policy", "bee.threads:session_owner_test_policy",
-                "bee.harness.security:harness_setup_policy", "bee.security.threads:thread_observe_policy"}) do
+            for _, name in ipairs({"bee.tests.sessions:interactive_lifecycle_policy", "bee.threads.security:sessions_owner",
+                "bee.harness.security:harness_setup_policy", "bee.threads.security:observe"}) do
                 policies[#policies + 1] = assert(security.policy(name))
             end
             local actor = assert(security.new_actor("sessions-owner", {workspace_id = workspace}))

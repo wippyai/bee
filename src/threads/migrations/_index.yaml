@@ -1,0 +1,93 @@
+version: '1.0'
+namespace: bee.threads.migrations
+entries:
+- name: threads
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:00:00Z'
+  source: file://threads.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: delivery
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:01:00Z'
+  source: file://delivery.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: carrier
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:02:00Z'
+  source: file://carrier.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: notices
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:03:00Z'
+  source: file://notices.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: action_inbox
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:05:00Z'
+  source: file://action_inbox.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: app_alias
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:06:00Z'
+  source: file://app_alias.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: sessions
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:04:00Z'
+  source: file://sessions.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: cancel_intent_index
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:07:00Z'
+  source: file://cancel_intent_index.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: sessions_complete
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:08:00Z'
+  source: file://sessions_complete.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

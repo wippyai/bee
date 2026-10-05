@@ -1,0 +1,708 @@
+-- MIT. Pure decoder for host-selected activation policy profiles.
+local hash = require("hash")
+local time = require("time")
+local bounds = require("bounds")
+local canonical = require("canonical")
+local application_admission = require("application_admission")
+local workspace_applications = require("workspace_applications")
+local drivers = require("drivers")
+local capability_grants = require("capability_grants")
+local capability_model = require("capability_model")
+
+local M = {}
+local MAX_PROFILES = 64
+local MAX_DATABASE_BINDINGS = 256
+type Object = {[string]: unknown}
+type Set = {[string]: boolean}
+type DatabaseBinding = {database_id: string, table_prefix: string?}
+type DatabaseBindings = {[string]: DatabaseBinding}
+type PolicyIds = {string}
+type DecodedProfile = {workspace_id: string, source_node: string, source_workspace: string,
+    component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
+    packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
+    database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
+    auto_start: boolean, super_edit: boolean, expires_at: string}
+-- The host's rule for applications a workspace's own agents deliver to it:
+-- one profile per eligible local overlay, derived by workspace_applications.
+-- With hive admission the same rule covers a Hive-received overlay from
+-- another node: the destination instantiates its own profile, asks its own
+-- person and installs its own grants, which never travel with the artifact.
+-- The packages rule is the wider ceiling for installed package delivery; it
+-- carries one application entry per host-composed package beside the shared
+-- base admission, and selection instantiates it for package sources.
+type PackageApplication = {component: string, definition_id: string, capabilities: {string},
+    policies: {string}, appearance_write: boolean, application_stop: boolean,
+    scope_management: boolean, close_grace_ms: integer, thread_access: string}
+type Template = {approval_policy: string, kinds: {string}, modules: {string}, policies: {string},
+    thread_access: string, hive: boolean, applications: {PackageApplication}?}
+type DecodedConfiguration = {profiles: {DecodedProfile}, workspace_applications: Template?,
+    packages: Template?, workspace_drivers: Template?}
+type Profile = {workspace_id: string, source_node: string, source_workspace: string,
+    component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
+    packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
+    database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
+    auto_start: boolean, super_edit: boolean, expires_at: string, policy_digest: string}
+type Configuration = {node_id: string, profiles: {Profile}, workspace_applications: Template?,
+    packages: Template?, workspace_drivers: Template?}
+
+local function list(raw: unknown, label: string): ({unknown}?, string?)
+    if type(raw) ~= "table" then return nil, label .. " must be a list" end
+    local source = raw
+    local count = 0
+    for key in pairs(source) do
+        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, label .. " must be a dense list" end
+        count = count + 1
+    end
+    if count > 256 then return nil, label .. " exceeds its bound" end
+    local result: {unknown} = {}
+    for index = 1, count do
+        if source[index] == nil then return nil, label .. " must be a dense list" end
+        result[index] = source[index]
+    end
+    return result, nil
+end
+
+local function set(raw: unknown, label: string): (Set?, string?)
+    local rows, rows_error = list(raw, label)
+    if not rows then return nil, rows_error end
+    local result: Set = {}
+    for _, raw_value in ipairs(rows) do
+        local value = bounds.id(raw_value)
+        if not value or result[value] then return nil, label .. " contains an invalid or duplicate value" end
+        result[value] = true
+    end
+    return result, nil
+end
+
+local function database_bindings(raw: unknown, databases: Set): (DatabaseBindings?, {unknown}?, string?)
+    if raw == nil then return nil, nil, nil end
+    local rows, rows_error = list(raw, "database bindings")
+    if not rows then return nil, nil, rows_error end
+    if #rows > MAX_DATABASE_BINDINGS then return nil, nil, "database bindings exceed their bound" end
+    local result: DatabaseBindings = {}
+    local measured: {unknown} = {}
+    for index, raw_binding in ipairs(rows) do
+        local value = bounds.object(raw_binding)
+        local extra = value and bounds.fields(value, {"target_db", "database_id", "table_prefix"}) or nil
+        local target_db = value and bounds.id(value.target_db) or nil
+        local database_id = value and bounds.id(value.database_id) or nil
+        local table_prefix: string? = nil
+        if value and value.table_prefix ~= nil then
+            table_prefix = bounds.text(value.table_prefix, 64)
+            if not table_prefix or not table_prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
+                return nil, nil, "database binding table_prefix is invalid"
+            end
+        end
+        if not value or extra or not target_db or not database_id or not databases[target_db]
+            or result[target_db] then
+            return nil, nil, extra and "database binding: " .. extra
+                or "database binding is invalid or duplicated"
+        end
+        result[target_db] = {database_id = database_id, table_prefix = table_prefix}
+        local item: Object = {target_db = target_db, database_id = database_id}
+        if table_prefix then item.table_prefix = table_prefix end
+        measured[index] = item
+    end
+    table.sort(measured, function(left: unknown, right: unknown): boolean
+        local a, b = bounds.object(left), bounds.object(right)
+        return tostring(a and a.target_db or "") < tostring(b and b.target_db or "")
+    end)
+    return result, measured, nil
+end
+
+local function policy_ids(raw: unknown): (PolicyIds?, string?)
+    if raw == nil then return nil, nil end
+    local rows, rows_error = list(raw, "migration policies")
+    if not rows then return nil, rows_error end
+    if #rows > 64 then return nil, "migration policies exceed their bound" end
+    local result: PolicyIds = {}
+    local seen: Set = {}
+    for index, raw_id in ipairs(rows) do
+        local id = bounds.id(raw_id)
+        if not id or seen[id] then return nil, "migration policies contain an invalid or duplicate value" end
+        seen[id] = true
+        result[index] = id
+    end
+    table.sort(result)
+    return result, nil
+end
+
+-- Actions a super-edit row may never carry. The host names its grants as
+-- security policy ids; a row that could grant, create or apply security
+-- authority would let the profile widen itself, so it is refused here before
+-- the policy is measured or an approval is requested.
+local FORBIDDEN_GRANT_PREFIXES = {"security", "funcs.security", "process.security",
+    "registry.apply", "registry.overlay.apply"}
+local function forbidden_grant(grant: string): boolean
+    for _, prefix in ipairs(FORBIDDEN_GRANT_PREFIXES) do
+        if grant == prefix or grant:sub(1, #prefix + 1) == prefix .. "." then return true end
+    end
+    return false
+end
+-- A host row is a super-edit row when it carries expires_at: the instant it
+-- stops being usable. The value is a UTC timestamp the destination compares
+-- against its own clock; an expired row is refused before any effect.
+local FORMAT = "2006-01-02T15:04:05.000Z07:00"
+local function super_edit_expiry(raw: unknown): (string?, boolean, string?)
+    if raw == nil then return "", false, nil end
+    local text = bounds.text(raw, 40)
+    local parsed = text and time.parse(FORMAT, text) or nil
+    if not text or not parsed then return nil, false, "activation profile expires_at must be a UTC timestamp" end
+    return text, true, nil
+end
+
+local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
+    local value = bounds.object(raw)
+    if not value then return nil, nil, "activation profile must be an object" end
+    local extra = bounds.fields(value, {"workspace_id", "source_node", "source_workspace", "component",
+        "overlay_owner", "approval_policy", "resolver", "parameters", "allow", "database_bindings",
+        "migration_policies", "applications", "expires_at"})
+    if extra then return nil, nil, "activation profile: " .. extra end
+    local workspace_id, source_node = bounds.id(value.workspace_id), bounds.id(value.source_node)
+    local source_workspace, component = bounds.id(value.source_workspace), bounds.text(value.component, 160)
+    local overlay_owner, approval_policy = bounds.id(value.overlay_owner), bounds.id(value.approval_policy)
+    local resolver_kind = value.resolver == nil and "hub" or value.resolver
+    local parameters, parameters_error = list(value.parameters or {}, "activation parameters")
+    local allow = bounds.object(value.allow)
+    if not workspace_id or not source_node or not source_workspace or not component or component == ""
+        or not overlay_owner or not approval_policy or (resolver_kind ~= "hub" and resolver_kind ~= "overlay")
+        or not parameters or not allow then
+        return nil, nil, parameters_error or "activation profile identity is invalid"
+    end
+    local expires_at, super_edit, expiry_error = super_edit_expiry(value.expires_at)
+    if expiry_error then return nil, nil, expiry_error end
+    local allow_extra = bounds.fields(allow, {"packages", "namespaces", "kinds", "databases", "grants", "modules", "auto_start"})
+    if allow_extra then return nil, nil, "activation allowlist: " .. allow_extra end
+    -- A host row admits entries that start themselves unless it withholds it.
+    if allow.auto_start ~= nil and type(allow.auto_start) ~= "boolean" then
+        return nil, nil, "activation allowlist auto_start must be a boolean"
+    end
+    local auto_start = allow.auto_start ~= false
+    -- A super-edit row is a person-confirmed, time-bounded, deliberately
+    -- narrow grant: it must withhold auto start and carry no security-granting
+    -- action. The destination separately checks its approver policy is the
+    -- dedicated explicit-confirmation one and that the row has not expired.
+    if super_edit and auto_start then
+        return nil, nil, "a super-edit activation profile must set allow.auto_start false"
+    end
+    local packages, packages_error = set(allow.packages or {}, "allowed packages")
+    local namespaces, namespaces_error = set(allow.namespaces or {}, "allowed namespaces")
+    local kinds, kinds_error = set(allow.kinds or {}, "allowed kinds")
+    local databases, databases_error = set(allow.databases or {}, "allowed databases")
+    local grants, grants_error = set(allow.grants or {}, "allowed grants")
+    local modules, modules_error = set(allow.modules or {}, "allowed modules")
+    if not packages or not namespaces or not kinds or not databases or not grants or not modules then
+        return nil, nil, packages_error or namespaces_error or kinds_error or databases_error or grants_error or modules_error
+    end
+    if super_edit then
+        for grant in pairs(grants) do
+            if forbidden_grant(grant) then
+                return nil, nil, "a super-edit activation profile may not grant " .. grant
+            end
+        end
+    end
+    local bindings, measured_bindings, bindings_error = database_bindings(value.database_bindings, databases)
+    if bindings_error then return nil, nil, bindings_error end
+    local migration_policies, migration_policies_error = policy_ids(value.migration_policies)
+    if migration_policies_error then return nil, nil, migration_policies_error end
+    local applications: {Object}? = nil
+    if value.applications ~= nil then
+        local decoded, applications_error = application_admission.bindings(value.applications)
+        if not decoded then return nil, nil, applications_error end
+        if #decoded > 0 then applications = decoded end
+    end
+    local policy: Object = {schema_revision = "bee.governance-activation-policy@1",
+        workspace_id = workspace_id, source_node = source_node,
+        source_workspace = source_workspace, component = component, overlay_owner = overlay_owner,
+        approval_policy = approval_policy, resolver = resolver_kind, parameters = parameters, allow = allow}
+    if super_edit then policy.expires_at = expires_at end
+    if measured_bindings then policy.database_bindings = measured_bindings end
+    if migration_policies then policy.migration_policies = migration_policies end
+    if applications then policy.applications = applications end
+    return {workspace_id = workspace_id, source_node = source_node, source_workspace = source_workspace,
+        component = component, overlay_owner = overlay_owner, approval_policy = approval_policy,
+        resolver = resolver_kind,
+        parameters = parameters, packages = packages, namespaces = namespaces, kinds = kinds,
+        databases = databases, grants = grants, modules = modules,
+        database_bindings = bindings, migration_policies = migration_policies,
+        applications = applications, auto_start = auto_start, super_edit = super_edit,
+        expires_at = expires_at}, policy, nil
+end
+
+local function sorted_set(raw: unknown, label: string): ({string}?, string?)
+    local values, values_error = set(raw, label)
+    if not values then return nil, values_error end
+    local result: {string} = {}
+    for value in pairs(values) do result[#result + 1] = value end
+    table.sort(result)
+    return result, nil
+end
+
+local function capability_id(raw: unknown): string?
+    if type(raw) ~= "string" or #raw == 0 or #raw > 80
+        or not raw:match("^[a-z][a-z0-9_.-]*$") then return nil end
+    return raw
+end
+
+local function package_application(raw: unknown): (PackageApplication?, string?)
+    local value = bounds.object(raw)
+    if not value then return nil, "package application must be an object" end
+    local extra = bounds.fields(value, {"component", "definition_id", "capabilities", "policies",
+        "appearance_write", "application_stop", "scope_management", "close_grace_ms", "thread_access"})
+    if extra then return nil, "package application: " .. extra end
+    local component = bounds.id(value.component)
+    if not component or not component:find(".", 1, true) then
+        return nil, "package application component is invalid"
+    end
+    local bindings, bindings_error = application_admission.bindings({{definition_id = value.definition_id,
+        policies = value.policies, thread_access = value.thread_access,
+        appearance_write = value.appearance_write, application_stop = value.application_stop,
+        scope_management = value.scope_management, close_grace_ms = value.close_grace_ms}})
+    if not bindings then return nil, bindings_error end
+    local capabilities, capabilities_error = list(value.capabilities or {}, "package application capabilities")
+    if not capabilities then return nil, capabilities_error end
+    if #capabilities > 8 then return nil, "package application capabilities exceed their bound" end
+    local named: {string} = {}
+    local seen: Set = {}
+    for _, raw_capability in ipairs(capabilities) do
+        local id = capability_id(raw_capability)
+        if not id or seen[id] then return nil, "package application capabilities contain an invalid or duplicate value" end
+        seen[id] = true
+        named[#named + 1] = id
+    end
+    table.sort(named)
+    local binding = bindings[1]
+    return {component = component, definition_id = binding.definition_id, capabilities = named,
+        policies = binding.policies, appearance_write = binding.appearance_write,
+        application_stop = binding.application_stop, scope_management = binding.scope_management,
+        close_grace_ms = binding.close_grace_ms, thread_access = binding.thread_access}, nil
+end
+
+local function template(raw: unknown): (Template?, string?)
+    if raw == nil then return nil, nil end
+    local value = bounds.object(raw)
+    if not value then return nil, "workspace applications profile must be an object" end
+    local extra = bounds.fields(value, {"approval_policy", "kinds", "modules", "policies", "thread_access",
+        "hive", "applications"})
+    if extra then return nil, "workspace applications profile: " .. extra end
+    local approval_policy = bounds.id(value.approval_policy)
+    if not approval_policy then return nil, "workspace applications profile names no approval policy" end
+    if value.hive ~= nil and type(value.hive) ~= "boolean" then
+        return nil, "workspace applications profile hive admission must be a boolean"
+    end
+    local kinds, kinds_error = sorted_set(value.kinds, "workspace application kinds")
+    local modules, modules_error = sorted_set(value.modules, "workspace application modules")
+    if not kinds or not modules then return nil, kinds_error or modules_error end
+    if #kinds == 0 then return nil, "workspace applications profile admits no entry kind" end
+    local granted, grant_error = application_admission.grant(value.policies, value.thread_access)
+    if not granted then return nil, "workspace application admission: " .. tostring(grant_error) end
+    local applications: {PackageApplication}? = nil
+    if value.applications ~= nil then
+        local rows, rows_error = list(value.applications, "package applications")
+        if not rows then return nil, rows_error end
+        if #rows > 32 then return nil, "package applications exceed their bound" end
+        applications = {}
+        local seen: Set = {}
+        for _, raw_application in ipairs(rows) do
+            local entry, entry_error = package_application(raw_application)
+            if not entry then return nil, entry_error end
+            if seen[entry.component] or seen[entry.definition_id] then
+                return nil, "package application component or definition is duplicated"
+            end
+            seen[entry.component] = true
+            seen[entry.definition_id] = true
+            applications[#applications + 1] = entry
+        end
+    end
+    return {approval_policy = approval_policy, kinds = kinds, modules = modules,
+        policies = granted.policies, thread_access = granted.thread_access,
+        hive = value.hive ~= false, applications = applications}, nil
+end
+
+local function empty_list(): {unknown}
+    return table.create(1, 0)
+end
+
+local function driver_profile(rule: Template?, workspace_id: string, source_node: string,
+    source_workspace: string, node_id: string): (DecodedProfile?, Object?, string?)
+    local identity = drivers.identity(workspace_id, source_workspace)
+    if not identity then return nil, nil, nil end
+    if not rule or source_node ~= node_id then
+        return nil, nil, "this host does not admit local workspace drivers: " .. drivers.RULE
+    end
+    return profile({workspace_id = workspace_id, source_node = source_node,
+        source_workspace = identity.name, component = identity.component,
+        overlay_owner = identity.overlay_owner, approval_policy = rule.approval_policy,
+        resolver = "overlay", parameters = empty_list(), allow = {
+            packages = {identity.component}, namespaces = identity.namespaces, kinds = rule.kinds,
+            databases = empty_list(), grants = {identity.component .. ".security:descriptor_read"},
+            modules = rule.modules, auto_start = false}})
+end
+
+local function missing(workspace_id: string, source_node: string, source_workspace: string): string
+    return "this workspace has no activation profile for overlay " .. source_workspace .. " from node "
+        .. source_node .. "; a host adds one to bee.gov:activation_profiles"
+        .. " (workspace " .. workspace_id .. ")"
+end
+
+-- One eligible overlay's profile, built as host configuration and
+-- decoded by the same rules as an explicit row.
+local function instantiate(rule: Template, workspace_id: string, source_node: string,
+    source_workspace: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
+    owner_hint: string?): (DecodedProfile?, Object?, string?)
+    local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
+    if not identity then
+        return nil, nil, tostring(identity_error) .. "; " .. missing(workspace_id, source_node, source_workspace)
+    end
+    if owner_hint and owner_hint == workspace_applications.prior_owner(workspace_id, source_workspace) then
+        identity.overlay_owner = owner_hint
+    end
+    local policies: {unknown} = empty_list()
+    for index, policy in ipairs(rule.policies) do policies[index] = policy end
+    local allowed: {unknown} = empty_list()
+    local access = rule.thread_access
+    if installed_raw ~= nil then
+        if not vocabulary then return nil, nil, "host capability catalog is unavailable" end
+        local declared = bounds.object(installed_raw)
+        local data = declared and bounds.object(declared.data)
+        local installed, installed_error = capability_grants.decode(installed_raw,
+            identity.overlay_owner, workspace_id, data and data.application, vocabulary)
+        if not installed then return nil, nil, installed_error end
+        for _, raw_policy in ipairs(installed.policies) do
+            local entry = bounds.object(raw_policy)
+            local id = entry and bounds.id(entry.id) or nil
+            if not id then return nil, nil, "installed grant policy is invalid" end
+            allowed[#allowed + 1] = id
+            policies[#policies + 1] = id
+        end
+        access = installed.thread_access
+    end
+    local selected, policy, profile_error = profile({workspace_id = workspace_id, source_node = source_node, source_workspace = identity.name,
+        component = identity.component, overlay_owner = identity.overlay_owner,
+        approval_policy = rule.approval_policy, resolver = "overlay", parameters = empty_list(),
+        allow = {packages = {identity.component}, namespaces = {identity.namespace}, kinds = rule.kinds,
+            databases = empty_list(), grants = allowed, modules = rule.modules, auto_start = false},
+        applications = nil})
+    if not selected or not policy then return nil, nil, profile_error end
+    local granted, grant_error = application_admission.grant(policies, access)
+    if not granted then return nil, nil, grant_error end
+    selected.applications = {{policies = granted.policies, thread_access = granted.thread_access}}
+    policy.applications = selected.applications
+    return selected, policy, nil
+end
+
+M.PACKAGE_OWNER_PREFIX = "bee.packages:"
+
+-- The owner a host-composed package admits under in one workspace. Package
+-- components carry a dot, so they never name a workspace application.
+function M.package_owner(workspace_raw: unknown, component_raw: unknown): string?
+    local workspace = bounds.id(workspace_raw)
+    local component = bounds.id(component_raw)
+    if not workspace or not component or not component:find(".", 1, true) then return nil end
+    return M.PACKAGE_OWNER_PREFIX .. workspace .. "." .. component
+end
+
+-- The one package application entry a source selects, if any.
+function M.find_package(rule: Template, source_raw: unknown): PackageApplication?
+    if type(source_raw) ~= "string" or not rule.applications then return nil end
+    for _, entry in ipairs(rule.applications) do
+        if entry.component == source_raw then return entry end
+    end
+    return nil
+end
+
+-- One host-composed package's profile, built as host configuration and
+-- decoded by the same rules as an explicit row. A live host grant record
+-- adds its capability-derived policy IDs beside the entry's base admission.
+local function instantiate_package(rule: Template, entry: PackageApplication, workspace_id: string,
+    source_node: string, installed_raw: unknown?,
+    vocabulary: capability_model.Vocabulary?): (DecodedProfile?, Object?, string?)
+    local owner = M.package_owner(workspace_id, entry.component)
+    if not owner then return nil, nil, "package application owner is invalid" end
+    local policies: {unknown} = empty_list()
+    local seen_policy: {[string]: boolean} = {}
+    local function admit_policy(raw: unknown): boolean
+        local id = bounds.id(raw)
+        if not id or seen_policy[id] then return false end
+        seen_policy[id] = true
+        policies[#policies + 1] = id
+        return true
+    end
+    for _, policy in ipairs(rule.policies) do admit_policy(policy) end
+    for _, policy in ipairs(entry.policies) do admit_policy(policy) end
+    local allowed: {unknown} = empty_list()
+    local access = entry.thread_access
+    if installed_raw ~= nil then
+        if not vocabulary then return nil, nil, "host capability catalog is unavailable" end
+        local installed, installed_error = capability_grants.decode(installed_raw,
+            owner, workspace_id, entry.definition_id, vocabulary)
+        if not installed then return nil, nil, installed_error end
+        for _, raw_policy in ipairs(installed.policies) do
+            local item = bounds.object(raw_policy)
+            local id = item and bounds.id(item.id) or nil
+            if not id then return nil, nil, "installed grant policy is invalid" end
+            allowed[#allowed + 1] = id
+            admit_policy(id)
+        end
+        access = installed.thread_access
+    end
+    return profile({workspace_id = workspace_id, source_node = source_node,
+        source_workspace = entry.component, component = entry.component, overlay_owner = owner,
+        approval_policy = rule.approval_policy, resolver = "overlay", parameters = empty_list(),
+        allow = {packages = {entry.component}, namespaces = {entry.component}, kinds = rule.kinds,
+            databases = empty_list(), grants = allowed, modules = rule.modules, auto_start = false},
+        applications = {{definition_id = entry.definition_id, policies = policies,
+            thread_access = access, appearance_write = entry.appearance_write,
+            application_stop = entry.application_stop, scope_management = entry.scope_management,
+            close_grace_ms = entry.close_grace_ms}}})
+end
+
+local function decoded(raw: unknown): (DecodedConfiguration?, {Object}?, string?)
+    local value = bounds.object(raw)
+    local extra = value and bounds.fields(value, {"profiles", "workspace_applications", "packages", "workspace_drivers"}) or nil
+    if extra then return nil, nil, "activation configuration: " .. extra end
+    local rows, rows_error = list(value and value.profiles or nil, "activation profiles")
+    if not rows then return nil, nil, rows_error or "activation configuration is invalid" end
+    if #rows > MAX_PROFILES then return nil, nil, "activation profile capacity is exceeded" end
+    local rule, rule_error = template(value and value.workspace_applications or nil)
+    if rule_error then return nil, nil, rule_error end
+    local packages, packages_error = template(value and value.packages or nil)
+    if packages_error then return nil, nil, packages_error end
+    local workspace_drivers, driver_error = template(value and value.workspace_drivers or nil)
+    if driver_error then return nil, nil, driver_error end
+    if workspace_drivers and (workspace_drivers.hive or workspace_drivers.applications ~= nil
+        or #workspace_drivers.policies ~= 0 or workspace_drivers.thread_access ~= "none") then
+        return nil, nil, "workspace drivers are local, have no application grants and require explicit approval"
+    end
+    local result: {DecodedProfile} = {}
+    local policies: {Object} = {}
+    local keys: Set = {}
+    for _, raw_profile in ipairs(rows) do
+        local item, policy, item_error = profile(raw_profile)
+        if not item or not policy then return nil, nil, item_error end
+        local key = item.workspace_id .. "\n" .. item.source_node .. "\n" .. item.source_workspace
+        if keys[key] then return nil, nil, "activation profile identity is duplicated" end
+        keys[key] = true
+        result[#result + 1] = item
+        policies[#policies + 1] = policy
+    end
+    return {profiles = result, workspace_applications = rule, packages = packages, workspace_drivers = workspace_drivers}, policies, nil
+end
+
+local function measure(decoded_profile: DecodedProfile, policy: Object, node_id: string): (Profile?, string?)
+    policy.node_id = node_id
+    local policy_bytes, encode_error = canonical.encode(policy)
+    local policy_digest, digest_error = policy_bytes and hash.sha256(policy_bytes) or nil
+    if not policy_digest then return nil, tostring(encode_error or digest_error or "measure activation policy") end
+    return {workspace_id = decoded_profile.workspace_id, source_node = decoded_profile.source_node,
+        source_workspace = decoded_profile.source_workspace, component = decoded_profile.component,
+        overlay_owner = decoded_profile.overlay_owner, approval_policy = decoded_profile.approval_policy,
+        resolver = decoded_profile.resolver, parameters = decoded_profile.parameters,
+        packages = decoded_profile.packages, namespaces = decoded_profile.namespaces, kinds = decoded_profile.kinds,
+        databases = decoded_profile.databases, grants = decoded_profile.grants, modules = decoded_profile.modules,
+        database_bindings = decoded_profile.database_bindings,
+        migration_policies = decoded_profile.migration_policies, applications = decoded_profile.applications,
+        auto_start = decoded_profile.auto_start, super_edit = decoded_profile.super_edit,
+        expires_at = decoded_profile.expires_at, policy_digest = policy_digest}, nil
+end
+
+-- Decode the complete host configuration without requiring a local node
+-- identity. The result is suitable for consumers that need the configured
+-- selection and ceilings but do not measure a destination authorization policy.
+function M.decode(raw: unknown): (DecodedConfiguration?, string?)
+    local configuration, _, decode_error = decoded(raw)
+    return configuration, decode_error
+end
+
+-- Bind a normalized configuration to a destination node for the exact policy
+-- digest consumed by activation.
+function M.configuration(raw: unknown, node_raw: unknown): (Configuration?, string?)
+    local node_id = bounds.id(node_raw)
+    if not node_id then return nil, "activation configuration is invalid" end
+    local configuration, policies, decode_error = decoded(raw)
+    if not configuration or not policies then return nil, decode_error end
+    local result: {Profile} = {}
+    for index, decoded_profile in ipairs(configuration.profiles) do
+        local policy = policies[index]
+        if not policy then return nil, "activation policy is unavailable" end
+        local measured, measure_error = measure(decoded_profile, policy, node_id)
+        if not measured then return nil, measure_error end
+        result[index] = measured
+    end
+    return {node_id = node_id, profiles = result, workspace_applications = configuration.workspace_applications,
+        packages = configuration.packages, workspace_drivers = configuration.workspace_drivers}, nil
+end
+
+type Identity = {workspace_id: string, source_node: string, source_workspace: string}
+
+-- The index of the one explicit row for a source at a destination workspace.
+local function explicit(rows: {Identity}, workspace_id: string, source_node: string,
+    source_workspace: string): (integer?, string?)
+    local found: integer? = nil
+    for index, item in ipairs(rows) do
+        if item.workspace_id == workspace_id and item.source_node == source_node
+            and item.source_workspace == source_workspace then
+            if found then return nil, "activation profile identity is ambiguous" end
+            found = index
+        end
+    end
+    return found, nil
+end
+
+-- The one host profile for a source at a destination workspace: an explicit
+-- row, the workspace-applications rule for an overlay this node authored
+-- or, with hive admission, a Hive-received overlay from another node, or
+-- else the packages rule for a host-composed package source. Either way the
+-- destination selects its own profile and its own installed grant record;
+-- nothing a source sends selects authority. One workspace application name
+-- belongs to the source node that holds its activation slot, so another
+-- source cannot replace it as an upgrade. The refusal names what a host
+-- configures.
+local function derived(rule: Template?, workspace_id: string, source_node: string, source_workspace: string,
+    node_id: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
+    owner_hint: string?, slot_source: string?): (DecodedProfile?, Object?, string?)
+    if not rule or (source_node ~= node_id and not rule.hive) then
+        return nil, nil, missing(workspace_id, source_node, source_workspace)
+    end
+    if slot_source ~= nil and slot_source ~= source_node then
+        return nil, nil, "workspace application " .. source_workspace .. " is installed from node " .. slot_source
+            .. "; an overlay from node " .. source_node .. " cannot replace it (workspace " .. workspace_id .. ")"
+    end
+    return instantiate(rule, workspace_id, source_node, source_workspace, installed_raw, vocabulary, owner_hint)
+end
+
+function M.select_decoded(configuration: DecodedConfiguration, workspace_id: string, source_node: string,
+    source_workspace: string, node_id: string, installed_raw: unknown?,
+    vocabulary: capability_model.Vocabulary?, owner_hint: string?): (DecodedProfile?, string?)
+    local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
+    if ambiguous then return nil, ambiguous end
+    if index then return configuration.profiles[index], nil end
+    if drivers.name(source_workspace) then
+        local item, _, driver_error = driver_profile(configuration.workspace_drivers, workspace_id,
+            source_node, source_workspace, node_id)
+        return item, driver_error
+    end
+    local packages_rule = configuration.packages
+    if packages_rule and source_node == node_id then
+        local entry = M.find_package(packages_rule, source_workspace)
+        if entry then
+            local item, _, package_error = instantiate_package(packages_rule, entry, workspace_id,
+                source_node, installed_raw, vocabulary)
+            return item, package_error
+        end
+    end
+    local item, _, derive_error = derived(configuration.workspace_applications, workspace_id, source_node,
+        source_workspace, node_id, installed_raw, vocabulary, owner_hint, nil)
+    return item, derive_error
+end
+
+-- The measured form of select_decoded, for the destination owner. slot_source
+-- is the source node of the desired activation the derived owner already
+-- holds, when one exists.
+function M.select(configuration: Configuration, workspace_id: string, source_node: string,
+    source_workspace: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
+    owner_hint: string?, slot_source: string?): (Profile?, string?)
+    local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
+    if ambiguous then return nil, ambiguous end
+    if index then return configuration.profiles[index], nil end
+    if drivers.name(source_workspace) then
+        local item, policy, driver_error = driver_profile(configuration.workspace_drivers, workspace_id,
+            source_node, source_workspace, configuration.node_id)
+        if not item or not policy then return nil, driver_error end
+        return measure(item, policy, configuration.node_id)
+    end
+    local packages_rule = configuration.packages
+    if packages_rule and source_node == configuration.node_id then
+        local entry = M.find_package(packages_rule, source_workspace)
+        if entry then
+            local item, policy, package_error = instantiate_package(packages_rule, entry, workspace_id,
+                source_node, installed_raw, vocabulary)
+            if not item or not policy then return nil, package_error end
+            return measure(item, policy, configuration.node_id)
+        end
+    end
+    local item, policy, derive_error = derived(configuration.workspace_applications, workspace_id, source_node,
+        source_workspace, configuration.node_id, installed_raw, vocabulary, owner_hint, slot_source)
+    if not item or not policy then return nil, derive_error end
+    return measure(item, policy, configuration.node_id)
+end
+
+-- Publish the same measured admission records for host-composed packages as
+-- activation publishes for governed overlays. Capability policy IDs are
+-- derived from a live grant before each record is measured.
+function M.package_admissions(configuration: DecodedConfiguration, workspace_id: string, node_id: string,
+    lookup: (string) -> unknown): ({application_admission.Measurement}?, string?)
+    local admissions: {application_admission.Measurement} = {}
+    local rule = configuration.packages
+    if not rule or not rule.applications or #rule.applications == 0 then
+        return admissions, nil
+    end
+    local vocabulary: capability_model.Vocabulary? = nil
+    for _, entry in ipairs(rule.applications) do
+        local owner = M.package_owner(workspace_id, entry.component)
+        if not owner then return nil, "package application owner is invalid" end
+        -- An entry whose application definition is not composed names a
+        -- package this host has not installed: it admits nothing, and its
+        -- absence is not an error.
+        if lookup(entry.definition_id) == nil then goto continue end
+        local grant_id = capability_grants.record_id(owner)
+        local installed_raw = grant_id and lookup(grant_id) or nil
+        local generated: {Object}? = nil
+        local overlay_ids: {[string]: boolean} = {}
+        if installed_raw ~= nil then
+            if not vocabulary then
+                local raw_catalog = lookup("bee.capability:catalog")
+                local decoded_catalog = raw_catalog and capability_model.decode(raw_catalog) or nil
+                if not decoded_catalog then return nil, "host capability catalog is unavailable" end
+                vocabulary = decoded_catalog
+            end
+            local installed, installed_error = capability_grants.decode(installed_raw,
+                owner, workspace_id, entry.definition_id, vocabulary)
+            if not installed then return nil, installed_error end
+            generated = {}
+            for _, raw_policy in ipairs(installed.policies) do
+                local item = bounds.object(raw_policy)
+                if not item then return nil, "installed grant policy is invalid" end
+                generated[#generated + 1] = item
+                local id = bounds.id(item.id)
+                if id then overlay_ids[id] = true end
+            end
+        end
+        local item, _, profile_error = instantiate_package(rule, entry, workspace_id, node_id,
+            installed_raw, vocabulary)
+        if not item or not item.applications then return nil, profile_error end
+        local definition = bounds.object(lookup(entry.definition_id))
+        if not definition then return nil, "package application definition is unavailable: " .. entry.definition_id end
+        local artifact_bytes, artifact_error = canonical.encode({id = definition.id, kind = definition.kind,
+            meta = definition.meta, data = definition.data}, 1048576)
+        if not artifact_bytes then return nil, tostring(artifact_error or "measure package application") end
+        local artifact_digest, digest_error = hash.sha256(artifact_bytes)
+        if not artifact_digest then return nil, tostring(digest_error or "measure package application") end
+        local policy_entries: {Object} = {}
+        for _, raw_binding in ipairs(item.applications) do
+            local candidate = bounds.object(raw_binding)
+            local policy_ids = candidate and candidate.policies or nil
+            if not candidate or type(policy_ids) ~= "table" then
+                return nil, "package application admission is invalid"
+            end
+            for _, policy_id in ipairs(policy_ids) do
+                local policy_entry = bounds.object(lookup(policy_id))
+                if not policy_entry then
+                    return nil, "package application policy is unavailable: " .. tostring(policy_id)
+                end
+                policy_entries[#policy_entries + 1] = policy_entry
+            end
+        end
+        local projected, project_error = application_admission.project({identity_generation = "current", workspace_id = workspace_id,
+            overlay_owner = owner, source_node = node_id, source_workspace = entry.component,
+            artifact_digest = artifact_digest, bindings = item.applications,
+            artifact_entries = {definition}, registry_entries = policy_entries,
+            overlay_ids = overlay_ids, generated_policies = generated})
+        if not projected then return nil, project_error end
+        admissions[#admissions + 1] = projected
+        ::continue::
+    end
+    return admissions, nil
+end
+
+return M

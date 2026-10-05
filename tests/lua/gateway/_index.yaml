@@ -15,47 +15,14 @@ entries:
   method: run
   modules: [sql]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.gateway:surface_test_policy]}
-  imports: {test: wippy.test:test, persist: bee.persist.persist:database, migrations: bee.gateway.migrations:migrations, store: bee.gateway.persist:surface_store}
+  security: {policies: [bee.gateway:surface_test_policy, bee.tests.support:schema_policy]}
+  imports: {test: wippy.test:test, schema: bee.tests.support:schema, store: bee.gateway.persist:surface_store}
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports: {test: wippy.test:test, catalog: bee.gateway.catalog:catalog, surface: bee.gateway.catalog:surface, mcp: bee.gateway.api:mcp, access: bee.gateway.security:access}
-- name: upgrade_db_path
-  kind: env.variable
-  meta: {type: test_support}
-  storage: bee.placement.native.env:environment
-  variable: BEE_GATEWAY_UPGRADE_DB
-  default: .wippy/gateway-upgrade.db
-  readonly: true
-- name: upgrade_db
-  kind: db.sql.sqlite
-  meta: {type: test_support}
-  file: ${env:bee.gateway:upgrade_db_path}
-  lifecycle:
-    auto_start: true
-- name: upgrade_test_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [db.get]
-    resources: [bee.gateway:upgrade_db]
-    effect: allow
-- name: upgrade_test
-  kind: function.lua
-  source: file://upgrade_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [sql, hash]
-  security:
-    policies: [bee.gateway:upgrade_test_policy]
-  imports:
-    test: wippy.test:test
-    persist: bee.persist.persist:database
-    migrations: bee.gateway.migrations:migrations
-    gateway: bee.gateway.binding:gateway
 - name: hooks_test
   kind: function.lua
   source: file://hooks_test.lua
@@ -63,7 +30,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json, funcs]
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     hooks: bee.gateway.hooks:hooks
@@ -77,7 +44,7 @@ entries:
   modules: [registry, json]
   security: {policies: [bee.gateway:mcp_test_policy]}
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
@@ -99,7 +66,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     context: bee.gateway.catalog:context
@@ -136,44 +103,6 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     configuration: bee.gateway.env:configuration
-- name: native_admission_db_path
-  kind: env.variable
-  meta: {type: test_support}
-  storage: bee.placement.native.env:environment
-  variable: BEE_GATEWAY_NATIVE_ADMISSION_DB
-  default: .wippy/gateway-native-admission.db
-  readonly: true
-- name: native_admission_db
-  kind: db.sql.sqlite
-  meta: {type: test_support}
-  file: ${env:bee.gateway:native_admission_db_path}
-  lifecycle:
-    auto_start: true
-- name: native_admission_endpoint
-  kind: registry.entry
-  meta: {type: test_support}
-  data: {address: 127.0.0.1:0}
-- name: native_admission_test_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [db.get, registry.apply, registry.update.registry.entry, registry.get, funcs.call]
-    resources: ['*']
-    effect: allow
-- name: native_admission_test
-  kind: function.lua
-  source: file://native_admission_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [registry, funcs, security, sql, json, time]
-  security:
-    policies: [bee.gateway:native_admission_test_policy]
-  imports:
-    app_caller: bee.app:caller
-    bounds: bee.values:bounds
-    test: wippy.test:test
-    configuration: bee.gateway.env:configuration
-    protocol: bee.gateway:protocol
 - name: policy_reference_admin
   kind: security.policy
   meta: {type: test_support}
@@ -211,7 +140,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
@@ -239,7 +168,7 @@ entries:
   modules: [funcs, security, registry]
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     bounds: bee.values:bounds
 - name: profile_scope_test
   kind: function.lua

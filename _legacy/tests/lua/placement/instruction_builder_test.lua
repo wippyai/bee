@@ -1,0 +1,527 @@
+-- MIT. Native placement acceptance for instruction builders.
+local test = require("test")
+local bounds = require("bounds")
+local principals = require("principals")
+local funcs = require("funcs")
+local security = require("security")
+local registry = require("registry")
+local json = require("json")
+local canonical = require("canonical")
+local service = require("service")
+local store = require("store")
+local homes = require("homes")
+local hash = require("hash")
+local time = require("time")
+local completion = require("completion")
+local process = require("process")
+local exec = require("exec")
+local quote = require("quote")
+local configuration_protocol = require("configuration_protocol")
+
+local OWNER = "bee.test.instruction_builder"
+local DIGEST = string.rep("b", 64)
+local ROOT = "bee.placement.native:project_fixture"
+local POLICY = "bee.placement.native:instruction_builder_policy"
+local PROVIDER = "bee.placement.native:fixture_agent_provider"
+local BINDING = "bee.placement.native:fixture_agent_binding"
+local BUILDER = "bee.placement.native:fixture_builder_build"
+local ACTIVATION = "bee.harness.launch:harness_activation"
+local MODE = "bee.placement.native.env:placement_resource_mode"
+local ROOTS = "bee.placement.native.env:placement_admitted_roots"
+local TEST_MARKER = "ctx_marker_unique_42"
+local FAILING_BUILDER_SOURCE = [[
+local M = {}
+function M.build(_: unknown): string
+    error("builder deliberately fails after commit")
+end
+return M
+]]
+
+local counter = 0
+type RegistryState = {activation: {[string]: unknown}, roots: {[string]: unknown}, mode: {[string]: unknown}, builder: {[string]: unknown}}
+
+local function fresh(prefix: string): string
+    counter = counter + 1
+    return prefix .. "-ib-" .. tostring(counter) .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000))
+end
+
+-- A caller is bound to the workspace it acts in, as host-issued principals are.
+local function caller(actor: string, workspace_id: unknown)
+    local policies: {security.Policy} = {}
+    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.placement.native:builder_test_caller_policy"}) do
+        local policy, err = security.policy(name)
+        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
+        policies[index] = policy
+    end
+    return funcs.new():with_actor(principals.actor(actor, workspace_id)):with_scope(security.new_scope(policies)):with_context({["instruction_builder_test_marker"] = TEST_MARKER})
+end
+
+local function call(actor: string, method: string, value: unknown): service.Reply
+    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native.binding:" .. method, value)
+    if err then error(method .. ": " .. tostring(err)) end
+    return principals.reply(reply)
+end
+
+local function admit_root()
+    local mode = registry.get(MODE)
+    if not mode then error("resource mode entry") end
+    mode.data = {mode = "host_configured"}
+    local modes = registry.snapshot():changes()
+    modes:update(mode)
+    local mode_ok, mode_error = modes:apply()
+    if not mode_ok then error(tostring(mode_error)) end
+    local entry = registry.get(ROOTS)
+    if not entry then error("admitted roots entry") end
+    local data = assert(bounds.object(entry.data))
+    local roots = principals.objects(data.roots)
+    data.roots = roots
+    for _, root in ipairs(roots) do
+        if root.root_ref == ROOT then return end
+    end
+    roots[#roots + 1] = {root_ref = ROOT, access = "write"}
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    local applied, err = changes:apply()
+    if not applied then error("admit root: " .. tostring(err)) end
+end
+
+local function clone_object(value: unknown): {[string]: unknown}
+    local encoded, encode_error = json.encode(value)
+    if not encoded then error(tostring(encode_error or "encode registry state")) end
+    local copied, decode_error = json.decode(encoded)
+    if type(copied) ~= "table" then error(tostring(decode_error or "decode registry state")) end
+    return assert(bounds.object(copied))
+end
+
+local function registry_state(): RegistryState
+    local activation = registry.get(ACTIVATION)
+    local roots = registry.get(ROOTS)
+    local mode = registry.get(MODE)
+    local builder = registry.get(BUILDER)
+    if not activation or not roots or not mode or not builder then error("registry state entries") end
+    return {activation = clone_object(activation.data), roots = clone_object(roots.data), mode = clone_object(mode.data), builder = clone_object(builder.data)}
+end
+
+local function restore_registry_state(state: RegistryState)
+    local activation = registry.get(ACTIVATION)
+    local roots = registry.get(ROOTS)
+    local mode = registry.get(MODE)
+    local builder = registry.get(BUILDER)
+    if not activation or not roots or not mode or not builder then error("registry state entries disappeared") end
+    mode.data = clone_object(state.mode)
+    activation.data = clone_object(state.activation)
+    roots.data = clone_object(state.roots)
+    builder.data = clone_object(state.builder)
+    local changes = registry.snapshot():changes()
+    changes:update(mode)
+    changes:update(activation)
+    changes:update(roots)
+    changes:update(builder)
+    local applied, err = changes:apply()
+    if not applied then error("restore registry state: " .. tostring(err)) end
+end
+
+local function set_activation(enabled: boolean)
+    local entry = registry.get(ACTIVATION)
+    if not entry then error("activation entry") end
+    local data = assert(bounds.object(entry.data))
+    local current = principals.items(data.bindings)
+    local bindings: {string} = {}
+    for _, item in ipairs(current) do
+        local binding = tostring(item)
+        if binding ~= BINDING then bindings[#bindings + 1] = binding end
+    end
+    if enabled then bindings[#bindings + 1] = BINDING end
+    data.bindings = bindings
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    local applied, err = changes:apply()
+    if not applied then error("set activation: " .. tostring(err)) end
+end
+
+local function apply_changes(changes: registry.Changes, label: string)
+    local applied, apply_error = changes:apply()
+    if not applied then error(label .. ": " .. tostring(apply_error)) end
+end
+
+local function measure_policy_digest(policy_ref: string): string
+    local policy_entry = registry.get(policy_ref)
+    if not policy_entry then error("policy entry not found: " .. policy_ref) end
+    local data = assert(bounds.object(policy_entry.data))
+    local provider = registry.get(PROVIDER)
+    if not provider then error("provider entry") end
+    local request_input = {
+        provider_ref = PROVIDER,
+        provider = provider,
+        instructions = data.instructions,
+        instruction_builder = data.instruction_builder,
+        fixture = true,
+    }
+    local digest, digest_error = configuration_protocol.digest(nil, request_input, "bee.placement.native:fixture_agent_configure")
+    if not digest then error(tostring(digest_error)) end
+    return digest
+end
+
+local function launch_request(attempt_id: string, configuration_digest: string?): {[string]: unknown}
+    local digest = configuration_digest or measure_policy_digest(POLICY)
+    return {
+        idempotency_key = fresh("key"),
+        owner_id = OWNER,
+        owner_incarnation = 1,
+        action_id = fresh("action"),
+        attempt_id = attempt_id,
+        binding_ref = BINDING,
+        policy_ref = POLICY,
+        profile_id = "batch",
+        binding_digest = DIGEST,
+        profile_digest = DIGEST,
+        launch = {
+            executable = "sh",
+            argv = {"-c", "test -s \"$HOME/.fixture-agent/provider.json\" && test -s \"$HOME/.fixture-agent/instructions.txt\""},
+            environment = {},
+            working_directory_ref = "project",
+            readiness = "none",
+        },
+        configuration_digest = digest,
+        resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
+        environment = {},
+        required_cleanup = "direct_process",
+        required_exit_observation = "eof_gated",
+        timeouts = {stop_grace_ms = 500},
+    }
+end
+
+local function shell(command: string): string
+    local executor, executor_error = exec.get("bee.placement.native.env:placement_executor")
+    if not executor then error("executor: " .. tostring(executor_error)) end
+    local proc, proc_error = executor:exec(command)
+    if not proc then executor:release(); error("exec: " .. tostring(proc_error)) end
+    local stdout, stdout_error = proc:stdout_stream()
+    if not stdout then proc:wait(); executor:release(); error("stdout: " .. tostring(stdout_error)) end
+    local started, start_error = proc:start()
+    if not started then stdout:close(); proc:wait(); executor:release(); error("start: " .. tostring(start_error)) end
+    local output = ""
+    while true do
+        local chunk: unknown = stdout:read(4096)
+        if type(chunk) ~= "string" or chunk == "" then break end
+        output = output .. (chunk)
+    end
+    proc:wait()
+    stdout:close()
+    executor:release()
+    return output
+end
+
+local function run_command(argv: {string}): string
+    return shell(quote.line(argv))
+end
+
+local function placement_call(method: string, value: unknown): service.Reply
+    return call(OWNER, method, value)
+end
+
+local function cleanup_attempt(attempt_id: string)
+    completion.cleanup(placement_call, attempt_id)
+end
+
+local function define_tests()
+    test.describe("Native placement instruction builder", function()
+        local original = registry_state()
+        admit_root()
+
+        test.it("evaluates builder with inherited actor and ctx, verifies store/exec denial, and materializes append", function()
+            local prepared_attempt_id: string? = nil
+            local watch = completion.listen()
+            local body_ok, body_error = pcall(function()
+                set_activation(true)
+                local request = launch_request(fresh("attempt-1"))
+                local prepared_reply = call(OWNER, "prepare", request)
+                test.is_true(prepared_reply.ok)
+                local prepared_value = prepared_reply.value
+                if type(prepared_value) ~= "table" then error("prepare did not return an attempt") end
+                local prepared = assert(bounds.object(prepared_value))
+                prepared_attempt_id = prepared.attempt_id
+                test.eq(prepared.execution_state, "intended")
+
+                assert(type(prepared_attempt_id) == "string")
+                completion.attach(watch, placement_call, prepared_attempt_id)
+                local started_reply = call(OWNER, "start", {attempt_id = prepared_attempt_id})
+                test.is_true(started_reply.ok)
+                local started = assert(bounds.object(started_reply.value))
+                test.eq(started.execution_state, "starting")
+                assert(type(prepared_attempt_id) == "string")
+                completion.wait(watch, placement_call, prepared_attempt_id, true)
+
+                -- Inspect generated instructions file in child home
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
+                local key, key_error = homes.attempt_key(OWNER, prepared_attempt_id)
+                if not key then error(tostring(key_error or "attempt home key")) end
+                local path, path_error = homes.os_path("/attempts/" .. key .. "/home/.fixture-agent/instructions.txt")
+                if not path then error(tostring(path_error or "instructions path")) end
+                local content = run_command({"cat", path})
+                test.is_true(content:find("Base static instructions.", 1, true) ~= nil)
+                test.is_true(content:find("Dynamic guidance: actor=" .. OWNER, 1, true) ~= nil)
+                test.is_true(content:find("marker=" .. TEST_MARKER, 1, true) ~= nil)
+                test.is_true(content:find("sentinel=placement-sentinel-4e5f6a", 1, true) ~= nil)
+                test.is_true(content:find("tag=integration", 1, true) ~= nil)
+
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
+                completion.wait(watch, placement_call, prepared_attempt_id, true)
+                local cleaned = call(OWNER, "cleanup", {attempt_id = prepared_attempt_id})
+                test.is_true(cleaned.ok)
+                prepared_attempt_id = nil
+            end)
+            completion.close(watch)
+            if prepared_attempt_id then cleanup_attempt(prepared_attempt_id) end
+            if not body_ok then error(tostring(body_error)) end
+        end)
+
+        test.it("rejects an observed nonzero child exit and still proves cleanup", function()
+            local prepared_attempt_id: string? = nil
+            local watch = completion.listen()
+            local body_ok, body_error = pcall(function()
+                set_activation(true)
+                local request = launch_request(fresh("attempt-nonzero"))
+                request.launch = {
+                    executable = "sh", argv = {"-c", "exit 23"}, environment = {},
+                    working_directory_ref = "project", readiness = "none",
+                }
+                local prepared = call(OWNER, "prepare", request)
+                test.is_true(prepared.ok)
+                prepared_attempt_id = assert(bounds.id(assert(bounds.object(prepared.value)).attempt_id))
+                completion.attach(watch, placement_call, prepared_attempt_id)
+                local started = call(OWNER, "start", {attempt_id = prepared_attempt_id})
+                test.is_true(started.ok)
+                local ok, cause = pcall(completion.wait, watch, placement_call, prepared_attempt_id, true)
+                test.is_false(ok)
+                test.is_true(tostring(cause):find("child exited unsuccessfully: 23", 1, true) ~= nil, tostring(cause))
+                local status = call(OWNER, "status", {attempt_id = prepared_attempt_id})
+                test.is_true(status.ok)
+                local attempt = assert(bounds.object(assert(bounds.object(status.value)).attempt))
+                test.eq(attempt.execution_state, "exited")
+                test.eq(assert(bounds.object(attempt.exit)).code, 23)
+            end)
+            completion.close(watch)
+            local cleanup_ok, cleanup_error = pcall(function()
+                if prepared_attempt_id then cleanup_attempt(prepared_attempt_id) end
+            end)
+            if not body_ok then error(tostring(body_error)) end
+            if not cleanup_ok then error(tostring(cleanup_error)) end
+        end)
+
+        test.it("reports a supervised startup refusal with its recorded cause", function()
+            set_activation(true)
+            local request = launch_request(fresh("attempt-refusal"))
+            request.launch = {
+                executable = "sh", argv = {"refuse"}, environment = {},
+                working_directory_ref = "project", readiness = "none",
+            }
+            local prepared = call(OWNER, "prepare", request)
+            test.is_true(prepared.ok)
+            local attempt = assert(bounds.object(prepared.value))
+            local attempt_id = assert(bounds.id(attempt.attempt_id))
+            local watch = completion.listen()
+            local pending = assert(process.listen("bee.test.startup.pending", {message = true}))
+            local attached = call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1})
+            test.is_true(attached.ok)
+            local raw, start_error = caller(OWNER):call("bee.placement.native:fixture_start_unacknowledged", {attempt_id = attempt_id})
+            assert(not start_error, tostring(start_error))
+            local started = principals.reply(raw)
+            test.is_true(started.ok)
+            local starting = assert(bounds.object(started.value))
+            test.eq(starting.execution_state, "starting")
+            local runner = assert(bounds.id(starting.runner))
+            local message = pending:receive()
+            assert(message, "startup fixture notification channel closed")
+            test.eq(tostring(message:from()), runner)
+            test.eq(assert(bounds.object(message:payload():data())).attempt_id, attempt_id)
+            process.unlisten(pending)
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            local ok, cause = pcall(completion.wait, watch, placement_call, attempt_id, true)
+            completion.close(watch)
+            test.is_false(ok)
+            test.is_true(tostring(cause):find("fixture daemon refused containers/create", 1, true) ~= nil,
+                tostring(cause))
+            local status = call(OWNER, "status", {attempt_id = attempt_id})
+            test.is_true(status.ok)
+            local final = assert(bounds.object(assert(bounds.object(status.value)).attempt))
+            test.eq(final.execution_state, "start_failed")
+            test.eq(final.start_failure, "fixture daemon refused containers/create")
+        end)
+
+        test.it("replays committed placement intent with its frozen delivery", function()
+            local prepared_attempt_id: string? = nil
+            local body_ok, body_error = pcall(function()
+                set_activation(true)
+                local request = launch_request(fresh("attempt-replay"))
+                local prepared_reply = call(OWNER, "prepare", request)
+                test.is_true(prepared_reply.ok)
+                local prepared_value = prepared_reply.value
+                if type(prepared_value) ~= "table" then error("prepare did not return an attempt") end
+                local prepared = assert(bounds.object(prepared_value))
+                prepared_attempt_id = prepared.attempt_id
+
+                local db = store.open()
+                if not db then error("open placement store for frozen delivery") end
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
+                local initial_row, initial_row_error = store.row(db, prepared_attempt_id)
+                if not initial_row then db:release(); error(tostring(initial_row_error or "read committed attempt")) end
+                local initial_request, initial_request_error = store.request(initial_row)
+                if not initial_request or not initial_request.delivery then db:release(); error(tostring(initial_request_error or "read frozen delivery")) end
+                local initial_delivery, initial_delivery_error = canonical.encode(initial_request.delivery)
+                db:release()
+                if not initial_delivery then error(tostring(initial_delivery_error or "encode frozen delivery")) end
+
+                -- Change the registered implementation. A direct call proves the replacement is live.
+                local builder_entry = registry.get(BUILDER)
+                if not builder_entry then error("builder entry missing") end
+                local builder_data = clone_object(builder_entry.data)
+                builder_data.source = FAILING_BUILDER_SOURCE
+                builder_entry.data = builder_data
+                local builder_changes = registry.snapshot():changes()
+                builder_changes:update(builder_entry)
+                apply_changes(builder_changes, "replace registered builder")
+                local direct_value, direct_error = caller(OWNER):call(BUILDER, {tag = "integration"})
+                test.is_nil(direct_value)
+                test.is_true(direct_error ~= nil and tostring(direct_error):find("builder deliberately fails after commit", 1, true) ~= nil)
+
+                -- Identical prepare replays without calling the replaced builder.
+                local replay_reply = call(OWNER, "prepare", request)
+                test.is_true(replay_reply.ok)
+                local replayed = assert(bounds.object(replay_reply.value))
+                test.eq(replayed.attempt_id, prepared.attempt_id)
+
+                local replay_db = store.open()
+                if not replay_db then error("open placement store after replay") end
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
+                local replay_row, replay_row_error = store.row(replay_db, prepared_attempt_id)
+                if not replay_row then replay_db:release(); error(tostring(replay_row_error or "read replayed attempt")) end
+                local replay_request, replay_request_error = store.request(replay_row)
+                if not replay_request or not replay_request.delivery then replay_db:release(); error(tostring(replay_request_error or "read replayed delivery")) end
+                local replay_delivery, replay_delivery_error = canonical.encode(replay_request.delivery)
+                replay_db:release()
+                if not replay_delivery then error(tostring(replay_delivery_error or "encode replayed delivery")) end
+                test.eq(replay_delivery, initial_delivery)
+
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
+                cleanup_attempt(prepared_attempt_id)
+                prepared_attempt_id = nil
+            end)
+            if prepared_attempt_id then cleanup_attempt(prepared_attempt_id) end
+            if not body_ok then error(tostring(body_error)) end
+        end)
+
+        test.it("refuses launch when builder selection changes or digest is omitted", function()
+            local body_ok, body_error = pcall(function()
+                set_activation(true)
+                local host_policy = registry.get(POLICY)
+                if not host_policy then error("policy entry missing") end
+                local saved_policy_data = clone_object(host_policy.data)
+
+                -- 1. Create plan digest with original selection
+                local original_digest = measure_policy_digest(POLICY)
+                local request = launch_request(fresh("attempt-conflict"), original_digest)
+
+                -- 2. Modify builder selection (change args) in policy
+                local modified_data = clone_object(saved_policy_data)
+                modified_data.instruction_builder = {
+                    func_id = "bee.placement.native:fixture_builder_build",
+                    args = {tag = "changed_selection"},
+                }
+                host_policy.data = modified_data
+                local edits = registry.snapshot():changes()
+                edits:update(host_policy)
+                apply_changes(edits, "apply changed builder selection")
+
+                -- Prepare with stale plan digest should fail with CONFLICT
+                local conflict_reply = call(OWNER, "prepare", request)
+                test.is_false(conflict_reply.ok)
+                test.eq(conflict_reply.error and conflict_reply.error.code, "CONFLICT")
+
+                -- Verify no attempt was recorded in store
+                local db, db_error = store.open()
+                if not db then error(tostring(db_error or "open placement store")) end
+                if type(request.attempt_id) ~= "string" then error("invalid fixture request.attempt_id") end
+                local recorded = store.attempt(db, request.attempt_id)
+                db:release()
+                test.is_nil(recorded)
+
+                -- Restore policy
+                host_policy.data = saved_policy_data
+                local restore = registry.snapshot():changes()
+                restore:update(host_policy)
+                apply_changes(restore, "restore builder selection")
+
+                -- 3. Launch without configuration_digest must fail with DENIED
+                local no_digest_req = launch_request(fresh("attempt-no-digest"), original_digest)
+                no_digest_req.configuration_digest = nil
+                local denied_reply = call(OWNER, "prepare", no_digest_req)
+                test.is_false(denied_reply.ok)
+                test.eq(denied_reply.error and denied_reply.error.code, "DENIED")
+
+                local db2 = assert(store.open())
+                if type(no_digest_req.attempt_id) ~= "string" then error("invalid fixture no_digest_req.attempt_id") end
+                local recorded2 = store.attempt(db2, no_digest_req.attempt_id)
+                db2:release()
+                test.is_nil(recorded2)
+            end)
+            if not body_ok then error(tostring(body_error)) end
+        end)
+
+        test.it("refuses launch before intent when builder fails or returns malformed output", function()
+            local body_ok, body_error = pcall(function()
+                set_activation(true)
+                local host_policy = registry.get(POLICY)
+                if not host_policy then error("policy entry missing") end
+                local saved_policy_data = clone_object(host_policy.data)
+
+                local function test_refusal_before_intent(builder_func: string, builder_args: {[string]: unknown}?)
+                    local modified_data = clone_object(saved_policy_data)
+                    modified_data.instruction_builder = {
+                        func_id = builder_func,
+                        args = builder_args or {},
+                    }
+                    host_policy.data = modified_data
+                    local edits = registry.snapshot():changes()
+                    edits:update(host_policy)
+                    apply_changes(edits, "apply failing builder")
+
+                    local digest = measure_policy_digest(POLICY)
+                    local attempt_id = fresh("attempt-fail")
+                    local request = launch_request(attempt_id, digest)
+                    local reply = call(OWNER, "prepare", request)
+                    test.is_false(reply.ok)
+                    test.eq(reply.error and reply.error.code, "DENIED")
+
+                    local db, db_error = store.open()
+                    if not db then error(tostring(db_error or "open placement store")) end
+                    local recorded = store.attempt(db, attempt_id)
+                    db:release()
+                    test.is_nil(recorded)
+                end
+
+                -- Builder errors
+                test_refusal_before_intent("bee.driver:fixture_builder_error")
+
+                -- Builder returns table instead of string
+                test_refusal_before_intent("bee.driver:fixture_builder_bad_output")
+
+                -- Builder returns control characters
+                test_refusal_before_intent("bee.driver:fixture_builder_control_chars")
+
+                -- Builder returns oversized output (> 4096 bytes)
+                test_refusal_before_intent("bee.driver:fixture_builder_oversized")
+
+                -- Restore original policy
+                host_policy.data = saved_policy_data
+                local restore = registry.snapshot():changes()
+                restore:update(host_policy)
+                apply_changes(restore, "restore failing builder")
+            end)
+            restore_registry_state(original)
+            if not body_ok then error(tostring(body_error)) end
+        end)
+    end)
+end
+
+return test.run_cases(define_tests)

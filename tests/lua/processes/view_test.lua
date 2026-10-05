@@ -64,8 +64,8 @@ local function define_tests()
         test.it("names the app, its live state and keys, and tells same-source processes apart by PID suffix", function()
             local sample: probe.Snapshot = {
                 processes = {
-                    {pid = "{node@bee:workers|0x00017}", source = "bee.settings.app:app", host = "main", state = "idle", steps = 12},
-                    {pid = "{node@bee:workers|0x00018}", source = "bee.settings.app:app", host = "main", state = "idle", steps = 14},
+                    {pid = "{node@bee:workers|0x00017}", source = "bee.apps.settings:app", host = "main", state = "idle", steps = 12},
+                    {pid = "{node@bee:workers|0x00018}", source = "bee.apps.settings:app", host = "main", state = "idle", steps = 14},
                     {pid = "{node@bee:workers|0x00002}", source = "bee.host:main", host = "main", state = "idle", steps = 96}},
                 services = {}, heap = 1048576, heap_objects = 1, reserved = 2097152, gc_cycles = 1, goroutines = 2,
                 queue = 0, executed = 9, host_executed = {main = 9}, error = "",
@@ -79,8 +79,8 @@ local function define_tests()
             local text = table.concat(plain, "\n")
             test.is_true(plain[1]:find("PROCESS MANAGER", 1, true) ~= nil)
             test.is_true(plain[1]:find("Live · 1s · 3 processes", 1, true) ~= nil)
-            test.is_true(text:find("bee.settings.app:app · 0x00017 ", 1, true) ~= nil)
-            test.is_true(text:find("bee.settings.app:app · 0x00018 ", 1, true) ~= nil)
+            test.is_true(text:find("bee.apps.settings:app · 0x00017 ", 1, true) ~= nil)
+            test.is_true(text:find("bee.apps.settings:app · 0x00018 ", 1, true) ~= nil)
             test.is_nil(text:find("0x00017}", 1, true) and text:find("· 0x00017}", 1, true))
             test.is_true(plain[24]:find("↑↓ select · Tab switch · S sort · P pause · Del stop · Esc close", 1, true) ~= nil)
             test.is_true(plain[23]:find("Pause", 1, true) ~= nil and plain[23]:find("Stop app", 1, true) ~= nil)

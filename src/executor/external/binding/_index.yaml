@@ -1,0 +1,75 @@
+version: '1.0'
+namespace: bee.executor.external.binding
+entries:
+- name: run_turn
+  kind: function.lua
+  source: file://run_turn.lua
+  method: handle
+  modules:
+  - funcs
+  - process
+  - channel
+  - hash
+  - time
+  - security
+  security:
+    policies: &id001
+    - bee.executor.external.security:driver_placement_calls
+    - bee.executor.external.security:placement_stream
+    - bee.executor.external.security:runner_observation
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+    - bee.threads.security:sessions_owner
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.node.security:workspace_folder_browse_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
+  imports:
+    admission: bee.harness.launch:admission
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    clock: bee.values:clock
+    machine: bee.harness.carrier:machine
+    exchange: bee.harness.permission:exchange
+    checkpoint: bee.harness.carrier:checkpoint
+    placement_decode: bee.placement:decode
+    stream: bee.executor.external.service:stream
+    placement_protocol: bee.placement.native:protocol
+    driver_types: bee.driver:types
+    budget: bee.executor.external.service:budget
+    turn: bee.executor.external.service:turn
+- name: answer_hook
+  kind: function.lua
+  source: file://answer_hook.lua
+  method: handle
+  modules:
+  - funcs
+  - security
+  - time
+  - hash
+  security:
+    policies: *id001
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    exchange: bee.harness.permission:exchange
+    checkpoint: bee.harness.carrier:checkpoint
+    admission: bee.harness.launch:admission
+    catalog: bee.harness.catalog:catalog
+    profiles: bee.harness.profiles:protocol
+    classify: bee.harness.catalog:classify
+    policy: bee.harness.carrier:policy
+    machine: bee.harness.carrier:machine
+    descriptor: bee.driver.descriptor:descriptor

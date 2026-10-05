@@ -6,7 +6,7 @@ local test = require("test")
 local bounds = require("bounds")
 local harness = require("harness")
 local app_identity = require("app_identity")
-local ALIAS_POLICY = "bee.security.threads:application_thread_alias_policy"
+local ALIAS_POLICY = "bee.threads.security:app_alias"
 local WORKSPACE = string.rep("a", 32)
 local OTHER_WORKSPACE = string.rep("b", 32)
 

@@ -4,8 +4,7 @@ local service = require("service")
 local bounds = require("bounds")
 local registry = require("registry")
 local uuid = require("uuid")
-local persist = require("persist")
-local migrations = require("migrations")
+local schema = require("schema")
 local sql = require("sql")
 type Object = {[string]: unknown}
 local SUBJECT, PERSON, POLICY = "window-subject", "window-person", "window-policy"
@@ -25,7 +24,7 @@ local function install_policy()
     assert(change:update(entry)); assert(change:apply())
 end
 local function open(): sql.DB
-    local db = assert(persist.open({resource = "bee.approvals:test_db", ledger = service.LEDGER, migrations = migrations.all()}))
+    local db = schema.open("bee.approvals:test_db", "bee.approvals.migrations")
     assert(service.establish(db))
     return db
 end
@@ -46,18 +45,6 @@ end
 local function define_tests()
     test.describe("Person approval windows", function()
         install_policy()
-        test.it("appends the window schema to an existing main ledger without changing prior checksums", function()
-            local prior: {migrations.Migration} = {}
-            for _, migration in ipairs(migrations.all()) do if migration.id < 6 then prior[#prior + 1] = migration end end
-            local legacy = assert(persist.open({resource = "bee.approvals:window_upgrade_test_db", ledger = service.LEDGER, migrations = prior}))
-            local before = assert(legacy:query("SELECT id, checksum FROM bee_approval_schema_migrations ORDER BY id"))
-            legacy:release()
-            local current = assert(persist.open({resource = "bee.approvals:window_upgrade_test_db", ledger = service.LEDGER, migrations = migrations.all()}))
-            local after = assert(current:query("SELECT id, checksum FROM bee_approval_schema_migrations ORDER BY id"))
-            test.eq(#after, #before + 1)
-            for index, row in ipairs(before) do test.eq(after[index].id, row.id); test.eq(after[index].checksum, row.checksum) end
-            current:release()
-        end)
         test.it("auto settles only the exact subject capability and scope and records every use", function()
             local db, workspace = open(), key()
             local first = request(db, workspace)

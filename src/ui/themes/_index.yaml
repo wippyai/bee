@@ -1,0 +1,263 @@
+version: '1.0'
+namespace: bee.ui.themes
+entries:
+- name: honey
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+    default: true
+  data:
+    title: Honey
+    ground: '#0c1119'
+    surface: '#17202c'
+    text: '#d8e2ef'
+    muted: '#8999ad'
+    border: '#6f89a5'
+    accent: '#ffc963'
+    pattern: '#1c2937'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: ocean
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Ocean
+    ground: '#071720'
+    surface: '#102b39'
+    text: '#d6f0f4'
+    muted: '#88adb9'
+    border: '#4b8599'
+    accent: '#67dce5'
+    pattern: '#1a3542'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: forest
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Forest
+    ground: '#101a16'
+    surface: '#1c2b23'
+    text: '#e0ecdf'
+    muted: '#96af9e'
+    border: '#628773'
+    accent: '#b6d884'
+    pattern: '#283c30'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: plum
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Plum
+    ground: '#19121f'
+    surface: '#2b2034'
+    text: '#eee0f2'
+    muted: '#b2a0bd'
+    border: '#9478a6'
+    accent: '#e4acf1'
+    pattern: '#34243e'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: ember
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Ember
+    ground: '#1c1311'
+    surface: '#30201c'
+    text: '#f4e4d8'
+    muted: '#bda598'
+    border: '#a87964'
+    accent: '#ffa879'
+    pattern: '#3a2820'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: graphite
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Graphite
+    ground: '#111315'
+    surface: '#222629'
+    text: '#e8edef'
+    muted: '#a0a9ae'
+    border: '#76828a'
+    accent: '#c3d8e6'
+    pattern: '#2b3034'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: paper
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Paper
+    ground: '#e9e6dd'
+    surface: '#f5f2ea'
+    text: '#303b3e'
+    muted: '#58666b'
+    border: '#7d8785'
+    accent: '#87560c'
+    pattern: '#cfcec6'
+    ok: '#1a7f37'
+    warn: '#9a6700'
+    error: '#cf222e'
+- name: aurora
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Aurora
+    ground: '#0b1720'
+    surface: '#152b35'
+    text: '#def7ed'
+    muted: '#91b8ad'
+    border: '#578f89'
+    accent: '#82f0ba'
+    pattern: '#203a43'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: rose
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Rose
+    ground: '#21131c'
+    surface: '#38212e'
+    text: '#f8e5ed'
+    muted: '#c9a1b4'
+    border: '#a7748d'
+    accent: '#ffa5c5'
+    pattern: '#422839'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: cobalt
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Cobalt
+    ground: '#0c142b'
+    surface: '#192749'
+    text: '#e0eaff'
+    muted: '#9cadcf'
+    border: '#667fae'
+    accent: '#87b6ff'
+    pattern: '#24365b'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: sand
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Sand
+    ground: '#e8dcc8'
+    surface: '#f4ead9'
+    text: '#493e30'
+    muted: '#72634e'
+    border: '#9e8b6e'
+    accent: '#9e4e28'
+    pattern: '#cec1a9'
+    ok: '#1a7f37'
+    warn: '#9a6700'
+    error: '#cf222e'
+- name: midnight
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Midnight
+    ground: '#07090e'
+    surface: '#141822'
+    text: '#e0e5f0'
+    muted: '#929db5'
+    border: '#5d6c89'
+    accent: '#c1b5ff'
+    pattern: '#202638'
+    ok: '#7ee787'
+    warn: '#ffa657'
+    error: '#ff7b72'
+- name: lavender
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Lavender
+    ground: '#e8e2f0'
+    surface: '#f5effb'
+    text: '#42394f'
+    muted: '#75677f'
+    border: '#9b8eaa'
+    accent: '#75509d'
+    pattern: '#d0c5dc'
+    ok: '#1a7f37'
+    warn: '#9a6700'
+    error: '#cf222e'
+- name: mono
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Mono
+    ground: '#0d0d0d'
+    surface: '#242424'
+    text: '#ededed'
+    muted: '#aaaaaa'
+    border: '#777777'
+    accent: '#ffffff'
+    pattern: '#2b2b2b'
+    ok: '#cfcfcf'
+    warn: '#e6e6e6'
+    error: '#ffffff'
+- name: dos
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: DOS Blue
+    ground: '#000080'
+    surface: '#0000aa'
+    text: '#ffffff'
+    muted: '#aaaaaa'
+    border: '#55ffff'
+    accent: '#ffff55'
+    pattern: '#0000aa'
+    ok: '#55ff55'
+    warn: '#ffaa00'
+    error: '#ff5555'
+- name: classic
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Windows Classic
+    ground: '#008080'
+    surface: '#c0c0c0'
+    text: '#000000'
+    muted: '#505050'
+    border: '#606060'
+    accent: '#000080'
+    pattern: '#006b6b'
+    ok: '#005a00'
+    warn: '#6b4400'
+    error: '#8b0000'
+    on_accent: '#ffffff'
+    terminal_text: '#cccccc'
+    terminal_surface: '#0c0c0c'

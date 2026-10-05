@@ -1,13 +1,17 @@
 version: '1.0'
 namespace: bee.hub.publication
 entries:
-- name: hub_publication
-  kind: registry.entry
-  meta:
-    type: bee.hub_publication
-    comment: Host-selected Hub publication uploader; the person fills the publishing organization, uploader executable and admitted source roots once, and every publication must belong to that organization
-  data:
-    organization: ""
-    cli: ""
-    source_roots: []
-    staging_root: ""
+- name: publish_executor
+  kind: exec.native
+  meta: {comment: Native executor for the Hub uploader command only}
+  default_env:
+    PATH: /usr/local/bin:/usr/bin:/bin
+- name: publishing
+  kind: library.lua
+  source: file://publishing.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    semver: bee.hub.package:semver

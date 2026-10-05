@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.gateway
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    bounds: bee.values:bounds
+    service_reply: bee.values:reply

@@ -1,0 +1,37 @@
+version: '1.0'
+namespace: bee.gateway.migrations
+entries:
+- name: gateway
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-09T00:00:00Z'
+  source: file://gateway.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+    schema: bee.gateway.migrations:schema
+- name: hooks
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-09T00:01:00Z'
+  source: file://hooks.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: schema
+  kind: library.lua
+  source: file://schema.lua
+- name: complete
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-10T00:01:00Z'
+  source: file://complete.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

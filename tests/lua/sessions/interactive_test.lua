@@ -8,7 +8,7 @@ local WORKSPACE = string.rep("a", 32)
 local function define_tests()
     test.describe("Sessions owner control boundary", function()
         test.it("restores the admitted placement owner only after journal cancellation authorization", function()
-            local journal = harness.principal("bee.application:" .. WORKSPACE .. ":execution-owner", {"bee.threads:session_owner_test_policy"}, WORKSPACE)
+            local journal = harness.principal("bee.application:" .. WORKSPACE .. ":execution-owner", {"bee.threads.security:sessions_owner"}, WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {
                 owner_id = "bee.application:" .. WORKSPACE .. ":execution-owner", workspace_id = WORKSPACE,
                 placement_methods = {reconcile = "bee.tests.sessions:cancellation_owner_running", stop = "bee.tests.sessions:cancellation_owner_stop"}}}))
@@ -18,9 +18,9 @@ local function define_tests()
             harness.value(journal:call("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = pulled.input_digest,
                 checkpoint = {attempt_id = "owner-fixture"}, operation_key = harness.key()}))
             local actor = assert(security.new_actor("person", {workspace_id = WORKSPACE}))
-            local scope = security.new_scope({assert(security.policy("bee.threads:session_owner_test_policy")),
+            local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
                 assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
-            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:cancel", {work = work.work, operation_key = harness.key()})
+            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:cancel", {work = work.work, operation_key = harness.key()})
             if err then error(tostring(err)) end
             test.is_true(assert(bounds.object(raw)).ok)
             local current = harness.value(journal:call("work_describe", {work = work.work}))
@@ -32,10 +32,10 @@ local function define_tests()
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}}))
             local work = harness.value(journal:call("work_send", {session = opened.session, input = "queued", operation_key = harness.key()}))
             local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
-            local scope = security.new_scope({assert(security.policy("bee.threads:session_owner_test_policy")),
+            local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
                 assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
             local function call(method: string, request: unknown): {[string]: unknown}
-                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:" .. method, request)
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:" .. method, request)
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
                 if not reply.ok then error(tostring(reply.error and reply.error.message)) end
@@ -79,9 +79,9 @@ local function define_tests()
                 harness.value(journal:call("session_create", {operation_key = operation_key,
                     route = {delivery = presentation == "headless" and "hook" or "pull"}}))
                 local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
-                local scope = security.new_scope({assert(security.policy("bee.threads:session_owner_test_policy")),
+                local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
                     assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
-                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:open", {spec = {
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:open", {spec = {
                     definition = "bee.driver.claude.profiles:default_window", presentation = presentation}, operation_key = operation_key})
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
@@ -91,7 +91,7 @@ local function define_tests()
         end)
         test.it("rejects supplied non-presentation values before launch admission", function()
             for _, presentation in ipairs({false, true, 42, "", "tab"}) do
-                local raw, err = funcs.call("bee.sessions.binding:open", {spec = {
+                local raw, err = funcs.call("bee.threads.sessions.binding:open", {spec = {
                     definition = "bee.driver.claude.profiles:default_window", presentation = presentation}, operation_key = harness.key()})
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
@@ -106,8 +106,8 @@ local function define_tests()
                 delivery = "hook", placement_methods = {reconcile = "bee.tests.sessions:interactive_running", stop = "bee.tests.sessions:interactive_running"}}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "idle-live", operation_key = harness.key()}))
             local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
-            local scope = security.new_scope({assert(security.policy("bee.threads:session_owner_test_policy")), assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
-            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:close", {session = opened.session, operation_key = harness.key()})
+            local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")), assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
+            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:close", {session = opened.session, operation_key = harness.key()})
             if err then error(tostring(err)) end
             test.is_true(assert(bounds.object(raw)).ok)
             test.eq(harness.value(journal:call("session_describe", {session = opened.session})).state, "closing")
@@ -128,8 +128,8 @@ local function define_tests()
                     end
                 end
                 local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
-                local scope = security.new_scope({assert(security.policy("bee.threads:session_owner_test_policy")), assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
-                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:close", {session = opened.session, operation_key = harness.key()})
+                local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")), assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:close", {session = opened.session, operation_key = harness.key()})
                 if err then error(tostring(err)) end
                 test.is_true(assert(bounds.object(raw)).ok)
                 test.eq(harness.value(journal:call("session_describe", {session = opened.session})).state, "closed")
@@ -146,7 +146,7 @@ local function define_tests()
             local scope = security.new_scope({assert(security.policy("bee.gateway.security:session_boundary_policy"))})
             local operation = harness.key()
             local function submit(): {[string]: unknown}
-                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:hook_boundary",
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:hook_boundary",
                     {session = session, event = "UserPromptSubmit", operation_key = operation, attempt_id = "native-prompt", input = "Run a shell command"})
                 if err then error(tostring(err)) end
                 return assert(bounds.object(raw))
@@ -174,8 +174,8 @@ local function define_tests()
                 harness.value(journal:call("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = pulled.input_digest,
                     checkpoint = {attempt_id = "interactive-lifecycle"}, operation_key = harness.key()}))
                 local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
-                local policies = {assert(security.policy("bee.threads:session_owner_test_policy")), assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}
-                local raw, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.sessions.binding:detach",
+                local policies = {assert(security.policy("bee.threads.security:sessions_owner")), assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}
+                local raw, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.threads.sessions.binding:detach",
                     {session = opened.session, attempt_id = "interactive-lifecycle", operation_key = harness.key()})
                 if err then error(tostring(err)) end
                 local reply = assert(bounds.object(raw))
@@ -186,17 +186,55 @@ local function define_tests()
                 if state == "exited" then test.not_nil(pending.uncertainty) else test.is_nil(pending.uncertainty) end
             end
         end)
+        test.it("reports a suspended window's restore facts only to a host-granted caller", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+                definition = "interactive-fixture", plan_digest = "plan-1", origin_request_id = "origin-1", operation_key = "window-open-1",
+                saved_profile_id = "profile-1", saved_profile_revision = 2,
+                placement_methods = {reconcile = "bee.tests.sessions:interactive_exited"}}}))
+            harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "attempt:origin-1", operation_key = harness.key()}))
+            local actor = assert(security.new_actor("window-viewer", {workspace_id = WORKSPACE}))
+            local granted = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}))
+            local function restore(executor: funcs.Executor, session: unknown): {[string]: unknown}
+                local raw, err = executor:call("bee.threads.sessions.binding:restore", {session = session})
+                if err then error(tostring(err)) end
+                return assert(bounds.object(raw))
+            end
+            local facts = restore(granted, opened.session)
+            test.is_true(facts.ok == true, tostring(facts.error and assert(bounds.object(facts.error)).message))
+            local value = assert(bounds.object(facts.value))
+            local described = harness.value(journal:call("session_describe", {session = opened.session}))
+            test.eq(value.session, opened.session)
+            test.eq(value.definition_ref, "interactive-fixture")
+            test.eq(value.plan_digest, "plan-1")
+            test.eq(value.origin_request_id, "origin-1")
+            test.eq(value.operation_key, "window-open-1")
+            test.eq(value.previous_attempt_id, "attempt:origin-1")
+            test.eq(value.thread_id, described.thread_ref)
+            test.eq(value.saved_profile_id, "profile-1")
+            test.eq(value.saved_profile_revision, 2)
+
+            local denied = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.tests.sessions:await_test_caller"))}))
+            test.eq(assert(bounds.object(restore(denied, opened.session).error)).code, "DENIED")
+
+            local headless = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {definition = "interactive-fixture"}}))
+            test.eq(assert(bounds.object(restore(granted, headless.session).error)).code, "INVALID")
+            local unrecorded = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+                definition = "interactive-fixture", plan_digest = "plan-1"}}))
+            harness.value(journal:call("session_attach", {session = unrecorded.session, attempt_id = "attempt:unrecorded", operation_key = harness.key()}))
+            test.eq(assert(bounds.object(restore(granted, unrecorded.session).error)).code, "UNAVAILABLE")
+        end)
         test.it("delivers authenticated peer input once at a turn boundary and keeps busy input queued", function()
             local journal = harness.session_owner(WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "interactive-one", operation_key = harness.key()}))
             local session_ref = assert(bounds.id(opened.session))
-            local peer = harness.principal("bs:node:" .. WORKSPACE .. ":peer", {"bee.threads:session_owner_test_policy"}, WORKSPACE)
+            local peer = harness.principal("bs:node:" .. WORKSPACE .. ":peer", {"bee.threads.security:sessions_owner"}, WORKSPACE)
             local first = harness.value(peer:call("work_send", {session = opened.session, input = "reply to this peer", operation_key = harness.key()}))
             local policies = {assert(security.policy("bee.gateway.security:session_boundary_policy"))}
             local function boundary(actor_id: string, event: string, operation_key: string, attempt: string?): {[string]: unknown}
                 local actor = assert(security.new_actor(actor_id, {workspace_id = WORKSPACE}))
-                local raw, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.sessions.binding:hook_boundary",
+                local raw, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.threads.sessions.binding:hook_boundary",
                     {session = opened.session, event = event, operation_key = operation_key, attempt_id = attempt or "interactive-one"})
                 if err then error(tostring(err)) end
                 return assert(bounds.object(raw))

@@ -1,0 +1,33 @@
+version: '1.0'
+namespace: bee.node.service
+entries:
+- name: owner
+  kind: process.lua
+  source: file://owner.lua
+  method: main
+  modules: [process, channel, system, registry, tty, uuid, logger, events, env, security]
+  imports:
+    protocol: bee.hive:protocol
+    principal: bee.node:principal
+    descriptor: bee.app:descriptor
+    governed_admission: bee.gov.types:governed_application_admission
+    application_admissions: bee.gov.binding:application_admissions
+    broker: bee.node:broker
+    command: bee.node:command
+    arguments: bee.app:arguments
+    workspaces: bee.node:workspaces
+    settings: bee.node:settings
+    appearance: bee.ui:appearance
+    client: bee.node:client
+- name: owner_service
+  kind: process.service
+  process: bee.node.service:owner
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service]
+    security:
+      actor: {id: bee.node}
+      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_role, bee.hive.security:messaging]
+    restart:
+      max_attempts: 10

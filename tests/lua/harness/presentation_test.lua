@@ -24,7 +24,7 @@ local function define_tests()
                 local workspace = string.rep("a", 32)
                 local actor = assert(security.new_actor("presentation-caller", {workspace_id = workspace}))
                 local scope = security.new_scope({assert(security.policy("bee.harness.security:carrier_policy")),
-                    assert(security.policy("bee.security:scope_managing_app_boundary")),
+                    assert(security.policy("bee.node.security:application_scope_boundary")),
                     assert(security.policy("bee.harness.security:profile_context_boundary"))})
                 test.eq(scope:evaluate(actor, "process.context", "context"), "deny")
                 local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.harness.binding:present", {})
@@ -39,9 +39,9 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("waits for the first frame and reattaches after the viewer closes", function()
-            local original = assert(registry.get("bee.sessions.binding:get"))
+            local original = assert(registry.get("bee.threads.sessions.binding:get"))
             local fixture = assert(registry.get("bee.harness.catalog:presentation_view_get"))
-            fixture.id = "bee.sessions.binding:get"
+            fixture.id = "bee.threads.sessions.binding:get"
             apply(fixture)
             local requests = assert(process.listen("bee.session.window.request", {message = true}))
             assert(process.registry.register("bee.session.window/fixture-session"))
@@ -53,7 +53,7 @@ local function define_tests()
                 local finished = assert(process.listen("bee.test.viewer_finished", {message = true}))
                 local resized = assert(process.listen("bee.test.viewer_resized", {message = true}))
                 local scope = security.new_scope({assert(security.policy("bee.harness.security:carrier_policy")),
-                    assert(security.policy("bee.security:scope_managing_app_boundary")),
+                    assert(security.policy("bee.node.security:application_scope_boundary")),
                     assert(security.policy("bee.harness.security:profile_context_boundary")),
                     assert(security.policy("bee.harness.security:presentation_viewer_policy"))})
                 for index = 1, 2 do

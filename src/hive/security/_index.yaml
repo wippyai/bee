@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.hive.security
+entries:
+- name: supervisor
+  kind: security.policy
+  meta:
+    comment: The node supervisor reads its node identity and holds its mesh-wide name
+  policy:
+    actions: [system.read, process.registry.register, process.registry.register.eventual]
+    resources: ['node', 'cluster', 'bee.hive.supervisor', 'bee.hive.supervisor/*']
+    effect: allow
+- name: routing
+  kind: security.policy
+  meta:
+    comment: The node supervisor reads route entries, resolves the services they name and monitors the processes serving them
+  policy:
+    actions: [registry.get, process.registry.lookup, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: routing_changes
+  kind: security.policy
+  meta:
+    comment: The node supervisor follows registry changes to keep its routes current
+  policy:
+    actions: [events.subscribe]
+    resources: [registry]
+    effect: allow
+- name: caller
+  kind: security.policy
+  meta:
+    comment: A caller checks this node's cluster membership and resolves a supervisor
+  policy:
+    actions: [system.read]
+    resources: [cluster, node]
+    effect: allow
+- name: messaging
+  kind: security.policy
+  meta:
+    comment: Hive calls and replies are messages between processes the registry resolved
+  policy:
+    actions: [process.send]
+    resources: '*'
+    effect: allow

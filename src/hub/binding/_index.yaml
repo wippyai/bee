@@ -1,0 +1,103 @@
+version: '1.0'
+namespace: bee.hub.binding
+entries:
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [hub, registry]
+  imports:
+    bounds: bee.values:bounds
+- name: updates
+  kind: library.lua
+  source: file://updates.lua
+  modules: [registry]
+  imports:
+    catalog: bee.hub.binding:catalog
+    inventory: bee.hub.package:inventory
+    publication: bee.hub.binding:publication
+    semver: bee.hub.package:semver
+- name: inspect
+  kind: library.lua
+  source: file://inspect.lua
+  modules: [hub]
+  imports:
+    bounds: bee.values:bounds
+    requirements: bee.hub.package:requirements
+    inspection: bee.hub.package:inspection
+- name: preview
+  kind: library.lua
+  source: file://preview.lua
+  modules: [hub, fs, base64]
+  imports:
+    bounds: bee.values:bounds
+    inspection: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
+- name: migration_runner
+  kind: library.lua
+  source: file://migration_runner.lua
+  modules: [sql, funcs, security]
+  imports:
+    migrations: bee.hub.activation:migrations
+- name: publication
+  kind: library.lua
+  source: file://publication.lua
+  modules: [registry, security, hash]
+  imports:
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+    plan: bee.hub.package:plan
+    catalog: bee.hub.binding:catalog
+    inspect: bee.hub.binding:inspect
+    inspection: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
+    hub_result: bee.hub.package:result
+    inventory: bee.hub.package:inventory
+    inventory_reader: bee.hub.package:inventory_reader
+    migration_runner: bee.hub.binding:migration_runner
+    migrations: bee.hub.activation:migrations
+    migration_work: bee.hub.activation:migration_work
+    lifecycle: bee.hub.types:lifecycle
+    operations: bee.hub.types:operations
+    service_lifecycle: bee.hub.binding:lifecycle
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  modules: [registry, events, system, funcs, security]
+  imports:
+    bounds: bee.values:bounds
+    lifecycle: bee.hub.types:lifecycle
+- name: backend
+  kind: function.lua
+  source: file://backend.lua
+  method: handle
+  modules: [security, process]
+  meta: {type: internal}
+  imports:
+    bounds: bee.values:bounds
+    catalog: bee.hub.binding:catalog
+    updates: bee.hub.binding:updates
+    inventory_reader: bee.hub.package:inventory_reader
+    inspect: bee.hub.binding:inspect
+    preview: bee.hub.binding:preview
+    publication: bee.hub.binding:publication
+    hub_result: bee.hub.package:result
+- name: call
+  kind: function.lua
+  source: file://facade.lua
+  method: handle
+  modules: [security, funcs]
+  imports:
+    bounds: bee.values:bounds
+    catalog: bee.hub.binding:catalog
+    inspection: bee.hub.package:inspection
+    plan: bee.hub.package:plan
+    preview: bee.hub.binding:preview
+    hub_result: bee.hub.package:result
+  security:
+    policies: [bee.hub.security:facade_policy]
+  meta:
+    type: tool
+    title: Component explorer
+    llm_alias: BeeComponents
+    llm_description: Inspect effective installed component state and exact Hub packages without applying them
+    input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","updates","plan"]},"request":{"type":"object"}}}'

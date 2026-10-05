@@ -1,0 +1,20 @@
+version: '1.0'
+namespace: bee.resources.persist
+entries:
+- name: authority
+  kind: library.lua
+  source: file://authority.lua
+  modules:
+  - sql
+  - hash
+  - time
+  - uuid
+  - security
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    capability_model: bee.capability:model
+    node_database: bee.persist:database
+    transaction: bee.persist:transaction
+    resources: bee.resources.env:resources

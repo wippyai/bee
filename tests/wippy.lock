@@ -1,0 +1,21 @@
+directories:
+    modules: .wippy
+    src: ./lua
+modules:
+    - name: bee/bee
+      version: 0.1.0-dev
+    - name: wippy/bootloader
+      version: 0.3.17
+      hash: d4506b7733ba079fb05f5e055c0e58b3f89905f7d627ac2244a819164a0507a0
+    - name: wippy/migration
+      version: 0.3.21
+      hash: 215445ba5e9c79a36af1dcf59277946c8b7a7f20d372a296f295fa99ddc4b430
+    - name: wippy/security
+      version: 0.4.3
+      hash: f636859979e88b23647a78fb9aa8a553799de18750b0fb5fb085cbe21542c86c
+    - name: wippy/terminal
+      version: 0.4.6
+      hash: aa0c92b85c0dc2c96f00119a7eaa1ced569a2ac8899514d432aef0c910e73e63
+    - name: wippy/test
+      version: 0.4.19
+      hash: db07fbfc350bdcaa3e62f8b0bf1f101781f9fb3ad08a9e3ed37e64bc40812602

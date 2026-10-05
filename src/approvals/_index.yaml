@@ -1,0 +1,48 @@
+version: '1.0'
+namespace: bee.approvals
+entries:
+- name: contract
+  kind: contract.definition
+  meta:
+    comment: Approval requests for one node's workspaces; decisions belong to eligible approvers, consumption to the requester
+  methods:
+  - name: feed_snapshot
+    description: Snapshot authorized inbox projections with an owner cursor and visibility revision
+  - name: feed_read_after
+    description: Catch up authorized approval changes using the shared sync envelope
+  - name: grant_window
+    description: List the caller's active approval windows or revoke one immediately on its authoritative node
+  - name: runtime_lease
+    description: Grant an approved exact runtime lease, check references, consume one effect idempotently, list or revoke
+  - name: request
+    description: Ask for a decision on one exact proposal under a host approver policy; the same key replays and a different request under it conflicts
+  - name: decide
+    description: Settle the pending revision for the recorded proposal digest; an identical retry replays and any other decision conflicts
+  - name: decide_batch
+    description: Settle several pending requests of one requester in one workspace in one transaction; each item is a full decide and one failing item rolls the batch back
+  - name: withdraw
+    description: End the caller's own pending request, or learn the outcome that already committed
+  - name: consume
+    description: The effect owner binds an approved decision to one effect identity under the authority incarnation it observed; it revalidates policy, attempt state and authority itself before acting
+  - name: installation_effects
+    description: Host-authorized installation workers read a bounded queue of approved, uncompleted Hub installation effects
+  - name: complete_installation_effect
+    description: The consuming effect owner records the durable result for its exact approval and effect key; identical completion replays
+  - name: publication_effects
+    description: Host-authorized publication workers read a bounded queue of approved, uncompleted Hub publication effects
+  - name: complete_publication_effect
+    description: The consuming effect owner records the durable result for its exact approval and effect key; identical completion replays
+  - name: revalidate
+    description: After an authority restart, the effect owner records that an approved decision still holds under the current incarnation
+  - name: read
+    description: One request, for its requester, an eligible approver or a workspace manager
+  - name: inbox
+    description: An approver's bounded catch-up over one workspace's changes
+  - name: list
+    description: The caller's own requests
+  - name: deliveries
+    description: Thread projection deliveries for one request; a manager may return an exhausted one to the queue
+  - name: reconcile
+    description: The owner expires due requests and forgets settled ones past retention
+  - name: capabilities
+    description: States, bounds and delivery guarantees of this owner

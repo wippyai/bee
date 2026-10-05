@@ -7,8 +7,16 @@ local uuid = require("uuid")
 local database = require("database")
 local bounds = require("bounds")
 local service_types = require("service_types")
-local principals = require("principals")
+local events = require("events")
+local channel = require("channel")
+local time = require("time")
+local commits = require("commits")
 type Reply = service_types.Reply
+type Feed = {
+    subscription: events.Subscription,
+    reach: (Feed, integer) -> (),
+    close: (Feed) -> (),
+}
 type Client = {
     id: string,
     call: (Client, string, {[string]: unknown}) -> Reply,
@@ -16,19 +24,29 @@ type Client = {
 }
 local M = {}
 function M.decode_reply(raw: unknown): Reply
-    local reply = principals.replayed_reply(raw)
+    local reply = bounds.object(raw)
+    if not reply or type(reply.ok) ~= "boolean" or type(reply.replayed) ~= "boolean" then error("invalid thread reply") end
     local fault: service_types.Fault? = nil
-    if reply.error then
-        local value = reply.error
-        if type(value.retryable) ~= "boolean" then error("invalid thread reply fault") end
+    if reply.error ~= nil then
+        local value = bounds.object(reply.error)
+        if not value or type(value.code) ~= "string" or type(value.message) ~= "string" or type(value.retryable) ~= "boolean" then
+            error("invalid thread reply fault")
+        end
         fault = {code = value.code, message = value.message, retryable = value.retryable}
     end
     return {ok = reply.ok, error = fault, value = reply.value, replayed = reply.replayed}
 end
-M.RESOURCE = "bee.threads.env:db"
+-- A list of objects, bounded.
+function M.objects(raw: unknown, maximum: integer): {{[string]: unknown}}
+    local rows = assert(bounds.array(raw, maximum))
+    local objects: {{[string]: unknown}} = {}
+    for index, row in ipairs(rows) do objects[index] = assert(bounds.object(row)) end
+    return objects
+end
+M.RESOURCE = database.RESOURCE
 local SERVICE = "bee.threads.binding:"
 local DELIVERY = {claim = true, dispatch = true, ack = true, release = true, expire = true, reconcile = true, subscribe = true, page = true, ack_page = true, unsubscribe = true, resume = true, close_subscription = true, forget_subscription = true, wait = true, watch = true}
-local CLIENT_POLICY = "bee.threads:client_test_policy"
+local CLIENT_POLICY = "bee.tests.threads:client_policy"
 local function scope_for(grants: {string}): security.Scope
     local policies: {security.Policy} = {}
     local names: {string} = {CLIENT_POLICY}
@@ -40,7 +58,7 @@ local function scope_for(grants: {string}): security.Scope
     end
     return security.new_scope(policies)
 end
--- grants name host policies such as bee.security.threads:thread_create_policy; the client
+-- grants name policies such as bee.threads.security:create; the client
 -- policy only permits calling the service functions.
 function M.principal(id: string, grants: {string}, workspace_id: string?): Client
     local actor = security.new_actor(id, workspace_id and {workspace_id = workspace_id} or {})
@@ -76,14 +94,37 @@ function M.await(future: funcs.Future): Reply
     if type(data) ~= "table" then error("async call returned " .. type(data)) end
     return M.decode_reply(data)
 end
-M.ALL = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy"}
+-- The commits the Threads service announces on one thread. Subscribe before
+-- the commits under test; reach blocks until the announcement of a record at
+-- or past the sequence arrives. The service settles the notices a record
+-- ends before it announces that record, so reaching it observes them.
+function M.committed(thread_id: string): Feed
+    local subscription, err = events.subscribe(commits.system(thread_id), commits.KIND)
+    if not subscription then error("subscribe: " .. tostring(err)) end
+    local function reach(_: Feed, sequence: integer)
+        local source = subscription:channel()
+        local deadline = time.after("20s")
+        while true do
+            local selected = channel.select({source:case_receive(), deadline:case_receive()})
+            if selected.channel == deadline then error("no commit announced through sequence " .. tostring(sequence)) end
+            if not selected.ok then error("commit subscription closed") end
+            local data: unknown = selected.value.data
+            if type(data) == "table" and type(data.sequence) == "number" and data.sequence >= sequence then return end
+        end
+    end
+    local function close(_: Feed)
+        subscription:close()
+    end
+    return {subscription = subscription, reach = reach, close = close}
+end
+M.ALL = {"bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle"}
+function M.session_owner(workspace_id: string?): Client
+    return M.principal("sessions-owner", {"bee.threads.security:sessions_owner"}, workspace_id)
+end
 function M.key(): string
     local id, err = uuid.v4()
     if err or not id then error("uuid: " .. tostring(err)) end
     return id
-end
-function M.session_owner(workspace_id: string?): Client
-    return M.principal("sessions-owner", {"bee.threads:session_owner_test_policy"}, workspace_id)
 end
 function M.value(reply: Reply): {[string]: unknown}
     if not reply.ok then error("expected success, got " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
@@ -114,15 +155,9 @@ function M.admitted(): {[string]: unknown}
     return {request_id = "q", principal_id = "alice", binding_ref = "b", binding_digest = "d", grant_refs = {}, budget_ref = "budget", input = {text = "go"}}
 end
 -- Direct storage access for assertions about rows the authority never exposes.
-function M.open(resource: string?): sql.DB
-    local db, err = database.open(resource or M.RESOURCE)
+function M.open(): sql.DB
+    local db, err = database.open()
     if not db then error("open: " .. tostring(err)) end
-    return db
-end
--- The bare resource without the ledger check, for tests that alter the ledger.
-function M.raw(resource: string): sql.DB
-    local db, err = sql.get(resource)
-    if not db then error("sql.get: " .. tostring(err)) end
     return db
 end
 function M.query(db: sql.DB, statement: string, params: {unknown}?): {{[string]: unknown}}

@@ -1,0 +1,91 @@
+version: '1.0'
+namespace: bee.apps.modules
+entries:
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules:
+  - json
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    text: bee.ui:text
+- name: contents
+  kind: library.lua
+  source: file://contents.lua
+  modules:
+  - json
+  - base64
+  imports:
+    text: bee.ui:text
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules:
+  - tty
+  - json
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    model: bee.apps.modules:model
+    contents: bee.apps.modules:contents
+- name: hub_client
+  kind: security.policy
+  meta:
+    comment: Modules calls only the public Hub facade, which authorizes each package operation before entering its private execution scope
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.hub.binding:call
+    effect: allow
+- name: hub_operations
+  kind: security.policy
+  meta:
+    comment: The person operating Modules reads, plans and applies Hub package operations; no registry or Hub credential scope is granted to the app
+  policy:
+    actions:
+    - bee.hub.read
+    - bee.hub.manage
+    resources: '*'
+    effect: allow
+- name: self_update
+  kind: security.policy
+  meta:
+    comment: Only the person-operated Modules app may update the Bee deployment root; agents receive no self-update authority
+  policy:
+    actions:
+    - bee.hub.self_update
+    resources:
+    - bee/bee
+    effect: allow
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Modules
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - funcs
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    model: bee.apps.modules:model
+    view: bee.apps.modules:view
+    contents: bee.apps.modules:contents
+  security:
+    policies:
+    - bee.apps.modules:hub_client
+    - bee.apps.modules:hub_operations
+    - bee.apps.modules:self_update

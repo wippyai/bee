@@ -1,18 +1,25 @@
 version: '1.0'
-namespace: bee.driver.agy
+namespace: bee.tests.driver.agy
 entries:
 - name: agy_test
   kind: function.lua
   source: file://agy_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [json, hash, registry, funcs]
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  modules:
+  - json
+  - hash
+  - registry
+  - funcs
   imports:
-    principals: bee.test.principals:bound
+    fixtures: bee.tests.support:fixtures
     test: wippy.test:test
     profile: bee.driver.profiles:profile
-    launch: bee.driver.agy.binding:launch
-    protocol: bee.driver.agy.binding:protocol
+    launch: bee.tests.driver.support:agy_launch
+    protocol: bee.tests.driver.support:agy_protocol
     configuration: bee.driver.agy.binding:configuration
     configure_protocol: bee.driver.binding:configuration
     observation: bee.threads.records:observation

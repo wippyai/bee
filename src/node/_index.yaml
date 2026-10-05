@@ -1,0 +1,80 @@
+version: '1.0'
+namespace: bee.node
+entries:
+- name: workspaces
+  kind: library.lua
+  source: file://workspaces.lua
+  modules: [sql, uuid, time, json]
+- name: settings
+  kind: library.lua
+  source: file://settings.lua
+  modules: [sql]
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules: [system, process]
+  imports:
+    protocol: bee.hive:protocol
+    appearance: bee.ui:appearance
+- name: route
+  kind: registry.entry
+  meta:
+    type: bee.hive.route
+    comment: Hive operations node.* go to this node's owner
+  data:
+    prefix: node
+    name: bee.node
+- name: headless
+  kind: process.lua
+  source: file://headless.lua
+  method: main
+  modules: [io, system, process, channel]
+  meta:
+    command:
+      name: node
+      host: bee:terminal
+      short: Run this folder's node without a display
+      security:
+        actor: {id: bee.node.headless}
+        policies: [bee.node.security:identity]
+- name: principal
+  kind: library.lua
+  source: file://principal.lua
+  imports:
+    bounds: bee.values:bounds
+- name: machine
+  kind: fs.directory
+  directory: /
+  auto_init: false
+- name: roots
+  kind: registry.entry
+  meta:
+    type: bee.node.roots
+    comment: The roots the node admits for workspace folders; a workspace is listed under the root its folder lies in
+  data:
+    roots:
+    - {root_ref: bee.node:machine, access: write}
+- name: application_admission
+  kind: registry.entry
+  meta:
+    type: bee.node.application_admission
+    comment: The node's admissions for its own apps; Sessions builds call scopes for the agents it runs and takes a minute to close them
+  data:
+    bindings:
+    - definition_id: bee.harness.app:app
+      policies: []
+      scope_management: true
+      close_grace_ms: 60000
+- name: broker
+  kind: library.lua
+  source: file://broker.lua
+  imports:
+    interaction: bee.app:interaction
+    arguments: bee.app:arguments
+    bounds: bee.values:bounds
+- name: command
+  kind: library.lua
+  source: file://command.lua
+  modules: [registry]
+  imports:
+    arguments: bee.app:arguments

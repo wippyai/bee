@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.hive
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules: [process, channel, time, uuid, system]

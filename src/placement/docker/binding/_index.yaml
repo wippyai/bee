@@ -1,0 +1,168 @@
+version: '1.0'
+namespace: bee.placement.docker.binding
+entries:
+- name: binding
+  kind: contract.binding
+  meta:
+    type: placement
+    placement_kind: docker
+  contracts:
+  - contract: bee.placement:placement
+    methods:
+      prepare: bee.placement.docker.binding:prepare
+      start: bee.placement.docker.binding:start
+      status: bee.placement.docker.binding:status
+      stop: bee.placement.docker.binding:stop
+      reconcile: bee.placement.docker.binding:reconcile
+      cleanup: bee.placement.docker.binding:cleanup
+      evidence: bee.placement.docker.binding:evidence
+      attach: bee.placement.docker.binding:attach
+      capabilities: bee.placement.docker.binding:capabilities
+      measure_executable: bee.placement.docker.binding:measure_executable
+      close_stdin: bee.placement.docker.binding:close_stdin
+- name: prepare
+  kind: function.lua
+  source: file://methods.lua
+  method: prepare
+  imports: &id001
+    bounds: bee.values:bounds
+    request_codec: bee.placement:request
+    profiles: bee.placement.profiles:profiles
+    spec: bee.placement.docker.binding:spec
+    store: bee.placement.native.persist:store
+    local_attempts: bee.placement.native.service:service
+    homes: bee.placement.native.service:homes
+    types: bee.placement:types
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    daemon: bee.placement.docker.service:daemon
+    paths: bee.placement.profiles:paths
+    resources: bee.placement.native.env:resources
+    image: bee.placement.docker.service:image
+    runtime_probe: bee.placement.docker.service:runtime_probe
+    environment: bee.placement.docker.service:environment
+  security:
+    policies: &id004
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
+  modules: &id002
+  - process
+  - security
+  - registry
+  - funcs
+  - json
+- name: start
+  kind: function.lua
+  source: file://methods.lua
+  method: start
+  imports: *id001
+  security:
+    policies: &id003
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+  modules: *id002
+- name: status
+  kind: function.lua
+  source: file://methods.lua
+  method: status
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: stop
+  kind: function.lua
+  source: file://methods.lua
+  method: stop
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: reconcile
+  kind: function.lua
+  source: file://methods.lua
+  method: reconcile
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: cleanup
+  kind: function.lua
+  source: file://methods.lua
+  method: cleanup
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: evidence
+  kind: function.lua
+  source: file://methods.lua
+  method: evidence
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: attach
+  kind: function.lua
+  source: file://methods.lua
+  method: attach
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: capabilities
+  kind: function.lua
+  source: file://methods.lua
+  method: capabilities
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: measure_executable
+  kind: function.lua
+  source: file://methods.lua
+  method: measure_executable
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: close_stdin
+  kind: function.lua
+  source: file://methods.lua
+  method: close_stdin
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: prepare_environment
+  kind: function.lua
+  source: file://methods.lua
+  method: prepare_environment
+  imports: *id001
+  security:
+    policies: *id004
+  modules: *id002
+- name: spec
+  kind: library.lua
+  source: file://spec.lua
+  imports:
+    request_codec: bee.placement:request
+    profiles: bee.placement.profiles:profiles
+    types: bee.placement:types
+    bounds: bee.values:bounds
+- name: methods
+  kind: library.lua
+  source: file://methods.lua
+  modules: *id002
+  imports: *id001

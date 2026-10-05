@@ -1,0 +1,362 @@
+-- MIT. The frame scales down without allowing catalog text to escape the canvas.
+local test = require("test")
+local tty = require("tty")
+local appearance = require("appearance")
+local model = require("model")
+local view = require("view")
+local contents = require("contents")
+local function define_tests()
+    test.describe("Modules frame", function()
+        test.it("keeps the phase title whole when the selected package name is long and marks the selected package", function()
+            local state = model.new()
+            local long = "acme/" .. string.rep("very-long-package-name-", 4)
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {
+                {component = "acme/app", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+                {component = long, version = "2.0.0", source = "hub", direct = true, used_by = {}},
+            }, roots = {}}})
+            model.select(state, long)
+            model.show(state, "installed")
+            local drawn = view.draw(60, 18, appearance.defaults(), state, 0, "")
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.eq(rows[1]:sub(1, 20), " MODULES  INSTALLED ")
+            test.is_true(rows[1]:find("…", 1, true) ~= nil)
+            local marked = 0
+            for _, row in ipairs(rows) do
+                if row:sub(1, #"›") == "›" then marked = marked + 1; test.is_true(row:find("very-long", 1, true) ~= nil) end
+            end
+            test.eq(marked, 1)
+            test.is_true(rows[18]:find("↑↓ select · Enter details", 1, true) ~= nil)
+        end)
+        test.it("offers no publication from installed Hub packages", function()
+            local state = model.new()
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {
+                {component = "acme/app", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+                {component = "acme/lib", version = "1.0.0", source = "hub", direct = false, used_by = {"acme/app"}},
+            }, roots = {}}})
+            model.select(state, "acme/app")
+            model.show(state, "installed")
+            local installed = view.draw(80, 18, appearance.defaults(), state, 0, "")
+            for _, hit in ipairs(installed.hits) do test.is_true(hit.kind ~= "publish") end
+        end)
+        test.it("keeps configuration dialogs inside the canvas and captures clicks", function()
+            for _, width in ipairs({28, 40, 100}) do
+                local frame = view.draw(width, 18, appearance.defaults(), model.new(), 0, "", false,
+                    {field = "parameter_value", name = "example:enabled", buffer = "false"})
+                local rendered = table.concat(frame.rows, "\n")
+                test.is_true(rendered:find("Configure package", 1, true) ~= nil)
+                test.is_true(rendered:find("false", 1, true) ~= nil)
+                for _, hit in ipairs(frame.hits) do
+                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor")
+                    test.is_true(hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= 18)
+                end
+            end
+        end)
+        test.it("keeps an active editor visible and modal after a compact resize", function()
+            for _, size in ipairs({{1, 1}, {12, 8}, {27, 13}}) do
+                local frame = view.draw(size[1], size[2], appearance.defaults(), model.new(), 0, "", false,
+                    {field = "parameter_value", name = "example:enabled", buffer = "false"})
+                test.eq(#frame.rows, size[2])
+                for _, row in ipairs(frame.rows) do test.eq(tty.text.width(row), size[1]) end
+                local rendered = table.concat(frame.rows, "\n")
+                if size[1] >= 12 then
+                    test.is_true(rendered:find("EDIT", 1, true) ~= nil)
+                    test.is_true(rendered:find("false", 1, true) ~= nil)
+                end
+                for _, hit in ipairs(frame.hits) do
+                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor")
+                    test.is_true(hit.x >= 1 and hit.y >= 1)
+                    test.is_true(hit.x + hit.width - 1 <= size[1] and hit.y + hit.height - 1 <= size[2])
+                end
+            end
+        end)
+        test.it("keeps installed dependencies readable and reachable after scrolling", function()
+            local state = model.new()
+            local modules: {{[string]: unknown}} = {}
+            for index = 1, 20 do
+                modules[index] = {component = "bee/package" .. tostring(index), version = "1.0.0", source = "hub", direct = index == 1,
+                    used_by = index == 1 and {} or {"bee/package1"}}
+            end
+            model.apply_installed(state, {ok = true, code = nil, message = nil, replayed = false, value = {modules = modules, roots = {}}})
+            for _, width in ipairs({24, 48, 80}) do
+                local frame = view.draw(width, 18, appearance.defaults(), state, 999, "")
+                local found = false
+                for _, hit in ipairs(frame.hits) do
+                    if hit.kind == "component" and hit.key == "bee/package20" then found = true end
+                    test.is_true(hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= 18)
+                end
+                test.is_true(found)
+                if width >= 48 then
+                    local rendered = table.concat(frame.rows, "\n")
+                    test.is_true(rendered:find("Dependency", 1, true) ~= nil)
+                    test.is_true(rendered:find("Required by", 1, true) ~= nil)
+                end
+            end
+        end)
+        test.it("keeps package browsing within narrow and short canvases", function()
+            local state, content = model.new(), contents.new()
+            model.select(state, "bee/example")
+            model.apply_details(state, {ok = true, replayed = false, value = {component = "bee/example", title = "Example", description = "Package",
+                readme = "Guide", versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1}})
+            contents.start(content, "bee/example", "1.0.0")
+            contents.apply(content, "state", {ok = true, replayed = false, value = {component = "bee/example", version = "1.0.0", digest = string.rep("a", 64),
+                entries = {{id = "example:main", kind = "function.lua"}}, resources = {}}})
+            for _, width in ipairs({1, 12, 40, 100}) do
+                for _, height in ipairs({1, 8, 18}) do
+                    local frame = view.draw(width, height, appearance.defaults(), state, 0, "", false, nil, content)
+                    test.eq(#frame.rows, height)
+                    for _, row in ipairs(frame.rows) do test.eq(tty.text.width(row), width) end
+                    for _, hit in ipairs(frame.hits) do test.is_true(hit.x >= 1 and hit.y >= 1 and hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= height) end
+                end
+            end
+        end)
+        test.it("renders multiline package documentation", function()
+            local state = model.new()
+            model.select(state, "bee/example")
+            model.apply_details(state, {ok = true, code = nil, message = nil, replayed = false, value = {
+                component = "bee/example", title = "Example", description = "Package", readme = "# Guide\nUsage instructions\n```lua\n    enabled = false\n```",
+                versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1,
+            }})
+            local frame = view.draw(80, 24, appearance.defaults(), state, 0, "", true)
+            test.is_true(table.concat(frame.rows, "\n"):find("Usage instructions", 1, true) ~= nil)
+            test.is_true(table.concat(frame.rows, "\n"):find("    enabled = false", 1, true) ~= nil)
+        end)
+        test.it("shows why Update Bee retains a selected component", function()
+            local state = model.new()
+            model.select(state, "bee/bee")
+            model.select_version(state, "2.0.0")
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {}, roots = {}}})
+            model.set_action(state, "update")
+            model.apply_plan(state, {ok = true, replayed = false, value = {
+                digest = string.rep("a", 64), ready = true, base_revision = 1,
+                modules = {{component = "bee/bee", version = "2.0.0", change = "update"},
+                    {component = "bee/settings", version = "1.0.0", change = "keep", reason = "pinned by acme/app"}},
+                missing = {}, migrations = {}, starts = {}, capabilities = {},
+                request = {action = "update", component = "bee/bee", version = "2.0.0", parameters = {}, migration_policy = "none"},
+            }})
+            local drawn = view.draw(120, 28, appearance.defaults(), state, 0, "")
+            local shown = table.concat(drawn.rows, "\n")
+            test.is_true(shown:find("bee/settings", 1, true) ~= nil)
+            test.is_true(shown:find("pinned by acme/app", 1, true) ~= nil)
+            test.is_nil(model.confirm(state))
+            local intent = model.confirm_intent(state)
+            test.not_nil(intent)
+            if intent then test.eq(intent.expected_digest, string.rep("a", 64)) end
+        end)
+        test.it("scrolls every plan effect without changing confirmation", function()
+            local state = model.new()
+            model.select(state, "bee/example")
+            model.select_version(state, "1.0.0")
+            local modules: {{[string]: unknown}} = {}
+            for index = 1, 30 do modules[index] = {change = "install", component = "acme/package" .. tostring(index), version = "1.0.0"} end
+            model.apply_plan(state, {ok = true, code = nil, message = nil, replayed = false, value = {
+                digest = string.rep("a", 64), ready = true, base_revision = 1, modules = modules, missing = {},
+                migrations = {{id = "acme:migrate", target_db = "acme:db"}}, starts = {"acme:service"}, capabilities = {"acme:capability"},
+                request = {action = "install", component = "bee/example", version = "1.0.0", parameters = {}, migration_policy = "none"},
+            }})
+            local first = view.draw(70, 18, appearance.defaults(), state, 0, "")
+            test.is_true(table.concat(first.rows, "\n"):find("acme/package1", 1, true) ~= nil)
+            test.is_true(table.concat(first.rows, "\n"):find("acme:capability", 1, true) == nil)
+            test.is_nil(model.confirm(state))
+            local last = view.draw(70, 18, appearance.defaults(), state, 999, "")
+            test.is_true(table.concat(last.rows, "\n"):find("Duration: once", 1, true) ~= nil)
+            test.is_true(table.concat(last.rows, "\n"):find("acme:capability", 1, true) ~= nil)
+            test.is_true(table.concat(last.rows, "\n"):find("acme:migrate", 1, true) ~= nil)
+            test.eq(state.phase, "confirm")
+            test.not_nil(model.confirm_intent(state))
+        end)
+        test.it("keeps rows and hits within every compact canvas", function()
+            local state = model.new()
+            model.apply_catalog(state, {ok = true, code = nil, message = nil, replayed = false, value = {total = 1, items = {
+                {component = "userspace/docker", title = "Docker \27[31m", description = "container \7b", latest_version = "0.5.12"},
+            }}})
+            for _, width in ipairs({1, 12, 40, 100}) do
+                for _, height in ipairs({1, 3, 8, 24}) do
+                    local frame = view.draw(width, height, appearance.defaults(), state, 0, "")
+                    test.eq(#frame.rows, height)
+                    for _, row in ipairs(frame.rows) do
+                        test.eq(tty.text.width(row), width)
+                        test.is_nil((row:find("\27[31m", 1, true)))
+                        test.is_nil((row:find("\7", 1, true)))
+                    end
+                    for _, hit in ipairs(frame.hits) do test.is_true(hit.x >= 1 and hit.y >= 1 and hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= height) end
+                end
+            end
+        end)
+        test.it("renders paged operation history, selected migration rows, and recovery review hit", function()
+            local state = model.new()
+            model.apply_history(state, {ok = true, code = nil, message = nil, replayed = false, value = {
+                page = 1, total = 26, page_size = 25, operations = {{digest = string.rep("f", 64), component = "bee/recover", action = "update",
+                    state = "recovery_required", message = "migration paused", baseline_revision = 8,
+                    request = {action = "update", component = "bee/recover", version = "2.0.0", parameters = {}, migration_policy = "up"},
+                    migration_work = {rows = {{id = "bee.recover:01", target_db = "app:db", module = "bee/recover", status = "applied"}}}}},
+            }})
+            local selected, problem = model.select_operation(state, string.rep("f", 64))
+            test.not_nil(selected)
+            test.is_nil(problem)
+            local frame = view.draw(100, 24, appearance.defaults(), state, 0, "")
+            local rendered = table.concat(frame.rows, "\n")
+            test.is_true(rendered:find("Actor%-owned operation history") ~= nil)
+            test.is_true(rendered:find("bee.recover:01", 1, true) ~= nil)
+            local has_recover = false
+            for _, hit in ipairs(frame.hits) do if hit.kind == "recover" then has_recover = true end end
+            test.is_true(has_recover)
+            test.is_nil(model.recover(state))
+            local review = view.draw(100, 24, appearance.defaults(), state, 0, "")
+            local review_text = table.concat(review.rows, "\n")
+            test.is_true(review_text:find("Review recovery", 1, true) ~= nil)
+            test.is_true(review_text:find("exact stored request", 1, true) ~= nil)
+        end)
+        test.it("scrolls through every receipt on a full history page", function()
+            local state = model.new()
+            local operations: {{[string]: unknown}} = {}
+            for index = 1, 25 do
+                operations[index] = {digest = string.format("%064x", index), component = "bee/package" .. tostring(index),
+                    action = "install", state = "complete", message = "done", baseline_revision = index}
+            end
+            model.apply_history(state, {ok = true, code = nil, message = nil, replayed = false, value = {page = 1, total = 25, page_size = 25, operations = operations}})
+            local first = view.draw(100, 12, appearance.defaults(), state, 0, "")
+            local last = view.draw(100, 12, appearance.defaults(), state, 24, "")
+            test.is_true(table.concat(first.rows, "\n"):find("bee/package1 ", 1, true) == nil)
+            test.is_true(table.concat(last.rows, "\n"):find("bee/package25", 1, true) == nil)
+            test.is_true(table.concat(last.rows, "\n"):find("bee/package1", 1, true) ~= nil)
+        end)
+        test.it("shows a failed operation's whole reason above its receipt state", function()
+            local state = model.new()
+            local reason = "failed to expand changeset: dependency resolution failed: bee/application@0.1.0-dev: module not found"
+            model.apply_result(state, {ok = false, code = "FAILED", message = reason, replayed = false, value = {state = "failed"}})
+            local frame = view.draw(64, 22, appearance.defaults(), state, 0, "")
+            local body = ""
+            for _, row in ipairs(frame.rows) do
+                local plain = row:gsub("\27%[[0-9;]*m", "")
+                body = body .. plain:sub(2, 63)
+            end
+            local status_at = body:find("Not completed: FAILED", 1, true)
+            local reason_at = body:find(reason, 1, true)
+            local receipt_at = body:find("Receipt state: failed", 1, true)
+            test.not_nil(status_at)
+            test.not_nil(reason_at)
+            test.not_nil(receipt_at)
+            test.is_true(status_at < reason_at and reason_at < receipt_at)
+        end)
+        test.it("filters rendered packages by declared application metadata across arbitrary names", function()
+            local state = model.new()
+            model.apply_catalog(state, {ok = true, replayed = false, value = {total = 4, items = {
+                {component = "wippy/arbitrary", title = "Library", description = "Framework utilities", latest_version = "1.0.0", application = true},
+                {component = "bee/console", title = "App", description = "Application", latest_version = "1.0.0", application = false},
+                {component = "acme/editor", title = "Editor", description = "Editor", latest_version = "1.0.0", application = false},
+                {component = "wippy/test", title = "Test Framework", description = "Testing library", latest_version = "1.0.0"},
+            }}})
+            for _, dimensions in ipairs({{120, 36}, {80, 24}}) do
+                local rendered = table.concat(view.draw(dimensions[1], dimensions[2], appearance.defaults(), state, 0, "").rows, "\n")
+                test.is_true(rendered:find("wippy/arbitrary", 1, true) ~= nil)
+                test.is_true(rendered:find("wippy/test", 1, true) ~= nil)
+                test.is_true(rendered:find("bee/console", 1, true) == nil)
+                test.is_true(rendered:find("acme/editor", 1, true) == nil)
+            end
+            model.set_developer_packages(state, true)
+            for _, dimensions in ipairs({{120, 36}, {80, 24}}) do
+                local rendered = table.concat(view.draw(dimensions[1], dimensions[2], appearance.defaults(), state, 0, "").rows, "\n")
+                for _, name in ipairs({"wippy/arbitrary", "bee/console", "acme/editor", "wippy/test"}) do
+                    test.is_true(rendered:find(name, 1, true) ~= nil)
+                end
+            end
+        end)
+        test.it("renders usable apps first with installed indicators and developer package filter at 120x36 and 80x24", function()
+            local state = model.new()
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {
+                {component = "bee/terminal", version = "0.4.6", source = "builtin", direct = true, used_by = {}},
+                {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+            }, roots = {}}})
+            model.show(state, "catalog")
+            model.apply_catalog(state, {ok = true, replayed = false, value = {total = 5, items = {
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false},
+                {component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6", application = false},
+                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
+                {component = "bee/terminal", title = "Terminal", description = "Workspace terminal console", latest_version = "0.4.6"},
+                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
+            }}})
+
+            for _, dims in ipairs({{120, 36}, {80, 24}}) do
+                local w, h = dims[1], dims[2]
+                local drawn = view.draw(w, h, appearance.defaults(), state, 0, "")
+                test.eq(#drawn.rows, h)
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), w) end
+                local text = table.concat(drawn.rows, "\n")
+
+                -- Usable apps are shown on landing
+                test.is_true(text:find("bee/terminal", 1, true) ~= nil, "missing bee/terminal in " .. tostring(w))
+                test.is_true(text:find("userspace/calc", 1, true) ~= nil, "missing userspace/calc in " .. tostring(w))
+                test.is_true(text:find("userspace/editor", 1, true) ~= nil, "missing userspace/editor in " .. tostring(w))
+
+                -- Developer packages / libraries are hidden by default
+                test.is_true(text:find("wippy/test", 1, true) == nil, "wippy/test should be hidden in " .. tostring(w))
+                test.is_true(text:find("wippy/terminal", 1, true) == nil, "wippy/terminal should be hidden in " .. tostring(w))
+
+                -- Indicators and actions: Built-in and Installed show Open, uninstalled shows Install
+                test.is_true(text:find("Built-in · Open", 1, true) ~= nil, "missing Built-in · Open in " .. tostring(w))
+                test.is_true(text:find("Installed · Open", 1, true) ~= nil, "missing Installed · Open in " .. tostring(w))
+                test.is_true(text:find("Install 2.0.0", 1, true) ~= nil, "missing Install 2.0.0 in " .. tostring(w))
+
+                -- Header has Developer packages filter button
+                test.is_true(text:find("Developer packages", 1, true) ~= nil, "missing Developer packages button in " .. tostring(w))
+                local has_dev_filter_hit = false
+                for _, hit in ipairs(drawn.hits) do
+                    if hit.kind == "developer_packages" then has_dev_filter_hit = true end
+                    test.is_true(hit.x >= 1 and hit.y >= 1 and hit.x + hit.width - 1 <= w and hit.y + hit.height - 1 <= h, "hit bounds")
+                end
+                test.is_true(has_dev_filter_hit, "missing dev filter hit in " .. tostring(w))
+
+                -- Bottom action bar has Open button for selected built-in app
+                test.eq(state.selected, "bee/terminal")
+                local has_open_hit = false
+                for _, hit in ipairs(drawn.hits) do
+                    if hit.kind == "details" and hit.y == h - 1 then has_open_hit = true end
+                end
+                test.is_true(has_open_hit, "missing details Open hit in " .. tostring(w))
+                test.is_true(drawn.rows[h]:find("Enter open", 1, true) ~= nil, "missing Enter open hint in " .. tostring(w))
+
+                -- When an uninstalled package is selected, action shows Install and footer shows Enter install
+                model.select(state, "userspace/editor")
+                model.show(state, "catalog")
+                local drawn_uninstalled = view.draw(w, h, appearance.defaults(), state, 0, "")
+                test.is_true(drawn_uninstalled.rows[h]:find("Enter install", 1, true) ~= nil, "missing Enter install hint in " .. tostring(w))
+                model.select(state, "bee/terminal")
+                model.show(state, "catalog")
+            end
+
+            -- Enable developer packages filter and assert rendered frames
+            model.set_developer_packages(state, true)
+            for _, dims in ipairs({{120, 36}, {80, 24}}) do
+                local w, h = dims[1], dims[2]
+                local drawn = view.draw(w, h, appearance.defaults(), state, 0, "")
+                test.eq(#drawn.rows, h)
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), w) end
+                local text = table.concat(drawn.rows, "\n")
+
+                -- Filter button is marked active [x]
+                test.is_true(text:find("Developer packages [x]", 1, true) ~= nil, "missing active filter in " .. tostring(w))
+
+                -- Libraries are now visible
+                test.is_true(text:find("wippy/test", 1, true) ~= nil, "missing wippy/test after filter on in " .. tostring(w))
+                test.is_true(text:find("wippy/terminal", 1, true) ~= nil, "missing wippy/terminal after filter on in " .. tostring(w))
+            end
+
+            -- When only developer packages are in the catalog and filter is off, empty state explains
+            local empty_state = model.new()
+            model.apply_catalog(empty_state, {ok = true, replayed = false, value = {total = 1, items = {
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false},
+            }}})
+            for _, dims in ipairs({{120, 36}, {80, 24}}) do
+                local w, h = dims[1], dims[2]
+                local drawn = view.draw(w, h, appearance.defaults(), empty_state, 0, "")
+                test.eq(#drawn.rows, h)
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), w) end
+                local text = table.concat(drawn.rows, "\n")
+                test.is_true(text:find("No packages on this page", 1, true) ~= nil, "missing empty state line 1 in " .. tostring(w))
+                test.is_true(text:find("Developer packages are hidden", 1, true) ~= nil, "missing empty state line 2 in " .. tostring(w))
+            end
+        end)
+    end)
+end
+return test.run_cases(define_tests)

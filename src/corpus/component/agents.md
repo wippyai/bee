@@ -25,6 +25,8 @@ binding through `bee.harness.launch:harness_activation`, together with the
 existing host-selected launch policy, executable, placement, resources,
 credentials and gateway permissions. Metadata and package installation grant
 none of these permissions. See the [driver contract](../../driver/src/README.md).
+`reference_drivers/opencode` holds a complete working CLI driver, every file
+verbatim, to copy into an overlay under its own namespace.
 
 An admitted target or descriptor change is resolved for new sessions; running
 executions retain their existing route. Agents author overlay candidates through

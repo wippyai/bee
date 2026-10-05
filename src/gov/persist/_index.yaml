@@ -1,0 +1,52 @@
+version: '1.0'
+namespace: bee.gov.persist
+entries:
+- name: plan_store
+  kind: library.lua
+  source: file://plan_store.lua
+  modules:
+  - sql
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist:transaction
+    plan_protocol: bee.gov.types:plan_protocol
+- name: activation_store
+  kind: library.lua
+  source: file://activation_store.lua
+  modules:
+  - sql
+  - hash
+  - json
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist:transaction
+    lease_store: bee.gov.persist:lease_store
+    migration_work: bee.gov.types:migration_work
+- name: lease_store
+  kind: library.lua
+  source: file://lease_store.lua
+  modules:
+  - sql
+  - hash
+  - json
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist:transaction
+    capability_model: bee.capability:model
+    lease_model: bee.gov.types:lease_model
+- name: staging
+  kind: library.lua
+  source: file://staging.lua
+  modules:
+  - sql
+  - hash
+  - base64
+  imports:
+    transaction: bee.persist:transaction
+    protocol: bee.gov.types:workspace_protocol
+    workspace: bee.gov.types:workspace
+    bounds: bee.values:bounds

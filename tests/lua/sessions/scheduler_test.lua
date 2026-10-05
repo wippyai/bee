@@ -31,6 +31,13 @@ local function define_tests()
             for index = 1, scheduler.MAX_SCAN do full[index] = queued end
             test.not_nil(scheduler.drain_problem({interactive_active = false, items = full}))
         end)
+        test.it("activates due work but leaves uncertain work to the person unless its cancellation is pending", function()
+            test.is_true(scheduler.activates({work = "w", session = "s", state = "queued"}))
+            test.is_true(scheduler.activates({work = "w", session = "s", state = "accepted", turn = "t", claim = "c", owner_epoch = 1}))
+            test.is_false(scheduler.activates({work = "w", session = "s", state = "accepted", uncertainty = {summary = "lost"}}))
+            test.is_true(scheduler.activates({work = "w", session = "s", state = "accepted", uncertainty = {summary = "lost"}, cancel_requested = true}))
+            test.is_false(scheduler.activates({work = "w"}))
+        end)
         test.it("persists an executor failure as uncertainty without repeating the invocation", function()
             local owner = threads.new()
             local calls = 0

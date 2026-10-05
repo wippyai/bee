@@ -8,7 +8,7 @@ local sql = require("sql")
 local funcs = require("funcs")
 type Object = {[string]: unknown}
 local function attempt_store(): string
-    local db, err = sql.get("bee.approvals.env:db")
+    local db, err = sql.get("bee:db")
     if db then
         db:release()
         return "opened"

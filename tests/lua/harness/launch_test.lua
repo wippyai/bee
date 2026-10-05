@@ -27,6 +27,8 @@ local capability_catalog = require("capability_catalog")
 local sends = require("sends")
 local bounds = require("bounds")
 local json = require("json")
+local system = require("system")
+local node_client = require("node_client")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local SHIPPED_SHAPE_DEFINITION = "bee.harness.catalog:shipped_shape_definition"
@@ -50,8 +52,8 @@ end
 local function workspace_id(prefix: string): string
     return assert(hash.sha256(fresh(prefix))):sub(1, 32)
 end
-local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
-    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
+local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe",
+    "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
     "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.security:interactive_session_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(extra: {string}?): security.Scope
     local policies: {security.Policy} = {}
@@ -105,7 +107,7 @@ local function open_gateway()
     local endpoint = registry.get("bee.gateway.api:gateway_endpoint")
     if not endpoint then error("gateway endpoint entry") end
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.harness.catalog:gateway_client_policy", "bee.security.gateway:gateway_manage_policy"}) do
+    for index, name in ipairs({"bee.harness.catalog:gateway_client_policy", "bee.tests.support:gateway_manage_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
@@ -347,14 +349,16 @@ end
 local function define_tests()
     test.describe("Launch admission", function()
         local roots_entry = assert(registry.get("bee.resources.env:resource_roots"))
-        roots_entry.data.roots[#roots_entry.data.roots + 1] = {root_ref = ROOT, access = "write"}
-        apply(roots_entry)
-        local catalog_scope = security.new_scope({assert(security.policy("bee.workspace.catalog:call_test_policy")),
-            assert(security.policy("bee.security.storage:workspace_catalog_manage_policy"))})
-        local catalog_reply, catalog_error = funcs.new():with_actor(assert(security.new_actor(REQUESTER))):with_scope(catalog_scope)
-            :call("bee.workspace.binding:create", {label = fresh("launch"), root_ref = "bee.harness.catalog:project_fixture", subpath = fresh("launch-home"), create_directory = true})
-        if catalog_error then error(tostring(catalog_error)) end
-        local workspace = tostring(value(principals.reply(catalog_reply)).workspace_id)
+        local roots_present = false
+        for _, root in ipairs(principals.objects(roots_entry.data.roots)) do if root.root_ref == ROOT then roots_present = true end end
+        if not roots_present then
+            roots_entry.data.roots[#roots_entry.data.roots + 1] = {root_ref = ROOT, access = "write"}
+            apply(roots_entry)
+        end
+        local home = assert(env.get("bee.env:machine_home"))
+        local added, add_error = node_client.call(assert(system.node.id()), "workspace_add", {path = home .. "/" .. fresh("launch-home"), label = fresh("launch")})
+        if not added then error(tostring(add_error)) end
+        local workspace = tostring(added.workspace)
         prepare_host(workspace)
         test.it("decodes dedicated worktrees without mutable or untyped definition options", function()
             local entry = assert(registry.get(DEFINITION))
@@ -965,8 +969,8 @@ local function define_tests()
                 local reopened_app = "bee.application:" .. alias_workspace .. ":" .. fresh("reopened-app")
                 local unattested_app = "bee.application:" .. alias_workspace .. ":" .. fresh("unattested-app")
                 local broker = "bee.test.alias-broker"
-                local alias_policies = {"bee.security.threads:application_thread_alias_call_policy",
-                    "bee.security.threads:application_thread_alias_policy"}
+                local alias_policies = {"bee.threads.security:app_alias_client",
+                    "bee.threads.security:app_alias"}
                 local function attest(instance: string)
                     value(call_as_with_policies(broker, "bee.threads.binding:register_app_alias", {
                         stable = stable, instance = instance, workspace_id = alias_workspace, definition_id = definition_id,
@@ -1680,6 +1684,29 @@ local function define_tests()
                         expected_plan_digest = allowed.plan_digest, workdir = bad})
                     test.eq(denied.ok, false)
                 end
+            end)
+        end)
+        test.it("sets up a saved profile's folder as the working directory unless the request chooses another", function()
+            with_overrides({"brief", "workdir"}, {"workdir"}, function()
+                local saved_id = fresh("folder-profile")
+                value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Profiled folder",
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}},
+                        workdir = {root_ref = ROOT, path = "profiled"}}}))
+                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                    saved_profile_id = saved_id, saved_profile_revision = 1}))
+                local function subpath_of(reply: {[string]: unknown}): unknown
+                    if reply.ok ~= true then error(tostring(reply.error)) end
+                    local name = reply.workdir
+                    for _, association in ipairs(associations(workspace)) do
+                        if association.name == name then return association.subpath end
+                    end
+                    error("folder association " .. tostring(name) .. " is missing")
+                end
+                test.eq(subpath_of(call_setup({workspace_id = workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest,
+                    saved_profile_id = saved_id, saved_profile_revision = 1})), "profiled")
+                test.eq(subpath_of(call_setup({workspace_id = workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest,
+                    saved_profile_id = saved_id, saved_profile_revision = 1, workdir = {root_ref = ROOT, path = "chosen"}})), "chosen")
             end)
         end)
         test.it("reconciles a prepared and claimed attempt after its carrier disappears", function()

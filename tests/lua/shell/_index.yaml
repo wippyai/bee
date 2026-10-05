@@ -1,0 +1,73 @@
+version: '1.0'
+namespace: bee.tests.shell
+entries:
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.shell:model
+- name: selection_test
+  kind: function.lua
+  source: file://selection_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    selection: bee.shell:selection
+- name: dialog_test
+  kind: function.lua
+  source: file://dialog_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    dialog: bee.shell:dialog
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+- name: title_editor_test
+  kind: function.lua
+  source: file://title_editor_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    editor: bee.shell:title_editor
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+- name: render_test
+  kind: function.lua
+  source: file://render_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.shell:model
+    layout: bee.shell:layout
+    menu: bee.shell:menu
+    render: bee.shell:render
+    workspace_menu: bee.shell:workspace_menu
+    appearance: bee.ui:appearance
+- name: display_test
+  kind: function.lua
+  source: file://display_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, registry, events]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+- name: watch_test
+  kind: function.lua
+  source: file://watch_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    watch: bee.shell:watch

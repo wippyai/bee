@@ -1,0 +1,208 @@
+-- SPDX-License-Identifier: MIT
+local test = require("test")
+local process = require("process")
+local channel = require("channel")
+local time = require("time")
+local funcs = require("funcs")
+local security = require("security")
+local store = require("store")
+local request = require("request")
+local json = require("json")
+local principals = require("principals")
+local decode = require("decode")
+local registry = require("registry")
+local protocol = require("protocol")
+local counter = 0
+local OWNER = "bee.test.startup"
+local function state(id: string)
+    local db = assert(store.open())
+    local attempt = assert(store.attempt(db, id))
+    db:release()
+    return attempt
+end
+local function begin(mode: string)
+    counter = counter + 1
+    local id = "startup-" .. tostring(time.now():unix_nano()) .. "-" .. tostring(counter)
+    local launch = assert(request.decode({idempotency_key = id, owner_id = OWNER, owner_incarnation = 1,
+        action_id = id, attempt_id = id, binding_ref = "bee.placement.native:fixture_agent_binding",
+        policy_ref = "bee.placement.native:test_launch_policy_without_provider", profile_id = "batch",
+        binding_digest = string.rep("a", 64), profile_digest = string.rep("a", 64),
+        launch = {executable = "sh", argv = {mode}, environment = {}, working_directory_ref = "project", readiness = "none"},
+        resources = {{name = "project", grant_ref = "grant-1", root_ref = "bee.placement.native:project_fixture", subpath = "", access = "write", purpose = "project"}},
+        environment = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated"}))
+    launch.delivery = {arguments = {}, files = {}}
+    local db = assert(store.open())
+    assert(store.intend(db, launch, assert(request.digest(launch)), assert(json.encode(launch)),
+        {capability = "direct_process", exit_observation = "eof_gated"}, nil, nil).ok)
+    assert(store.transition(db, id, {fields = {recipient = process.pid(), attachment_generation = 1}, evidence = {kind = "test.attached", detail = "controllable runner"}}).ok)
+    db:release()
+    local client = funcs.new():with_actor(principals.actor(OWNER)):with_scope(security.new_scope({assert(security.policy("bee.placement.native:client_test_policy"))}))
+    local future = assert(client:async("bee.placement.native:fixture_start_unacknowledged", {attempt_id = id}))
+    assert(future:response():receive(), "startup admission response channel closed")
+    local payload, err = future:result()
+    assert(not err, tostring(err))
+    local reply = principals.reply(assert(payload):data())
+    assert(reply.ok, tostring(reply.error and reply.error.message))
+    local attempt = assert(decode.attempt(reply.value))
+    test.eq(attempt.execution_state, "starting")
+    local runner = assert(attempt.runner)
+    assert(process.monitor(runner))
+    return id, runner
+end
+local function await_state(id: string, runner: string, expected: string)
+    local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
+    local fixture = assert(process.listen("bee.test.startup.state", {message = true}))
+    local events = assert(process.events())
+    while true do
+        local attempt = state(id)
+        if attempt.execution_state == expected then
+            process.unlisten(states)
+            process.unlisten(fixture)
+            return attempt
+        end
+        assert(not attempt.start_failure, "startup failed before " .. expected .. ": " .. tostring(attempt.start_failure))
+        local selected = channel.select({states:case_receive(), fixture:case_receive(), events:case_receive()})
+        assert(selected.ok, "startup state observation channel closed")
+        if selected.channel == events then
+            assert(selected.value.kind ~= process.event.CANCEL, "startup state observer cancelled")
+            -- The startup owner publishes its final state after observing EXIT.
+        elseif selected.channel == fixture then
+            local message = selected.value
+            local data: unknown = message:payload():data()
+            if type(data) == "table" and data.attempt_id == id then
+                assert(tostring(message:from()) == runner, "fixture state sender")
+            end
+        end
+    end
+end
+local function run()
+    test.describe("Monitored asynchronous startup", function()
+        test.it("reads attempt state and failure evidence from the same committed snapshot", function()
+            local snapshots = assert(process.listen("bee.test.attempt.snapshot", {message = true}))
+            local id, runner = begin("slow")
+            local client = funcs.new():with_actor(principals.actor(OWNER)):with_scope(security.new_scope({assert(security.policy("bee.placement.native:client_test_policy"))}))
+            local reading = assert(client:with_context({["bee.test.attempt.snapshot"] = process.pid()}):async("bee.placement.native:fixture_read_attempt", id))
+            local selected = channel.select({snapshots:case_receive(), reading:response():case_receive()})
+            if selected.channel ~= snapshots then
+                local result, err = reading:result()
+                error("snapshot reader finished before its barrier: " .. tostring(err) .. ": " .. tostring(result and result:data()))
+            end
+            local captured = selected.value
+            local data: unknown = captured:payload():data()
+            assert(type(data) == "table" and data.attempt_id == id, "attempt snapshot identity")
+            local db = assert(store.open())
+            local cause = "fixture failure committed after the snapshot"
+            assert(store.transition(db, id, {execution = "start_failed", evidence = {kind = "child.start_failed", detail = cause}}).ok)
+            db:release()
+            assert(process.send(tostring(captured:from()), "bee.test.attempt.release", {}))
+            assert(reading:response():receive(), "attempt snapshot response closed")
+            local payload, err = reading:result()
+            assert(not err, tostring(err))
+            local before = assert(decode.attempt(assert(payload):data()))
+            test.eq(before.execution_state, "starting")
+            test.is_nil(before.start_failure)
+            local after = state(id)
+            test.eq(after.execution_state, "start_failed")
+            test.eq(after.start_failure, cause)
+            process.unlisten(snapshots)
+            process.terminate(runner)
+        end)
+        test.it("decodes bounded preparation progress without flattening build output", function()
+            local detail = "Building image\nStep 3/6 : COPY bin/ /usr/local/bin/"
+            local value = assert(decode.preparation_progress({version = 1, profile_ref = "bee.placement.docker.profiles:coding", detail = detail}))
+            test.eq(value.detail, detail)
+            test.is_nil(decode.preparation_progress({version = 2, profile_ref = value.profile_ref, detail = detail}))
+            test.is_nil(decode.preparation_progress({version = 1, profile_ref = value.profile_ref, detail = string.rep("x", 4097)}))
+            test.is_nil(decode.preparation_progress({version = 1, profile_ref = value.profile_ref, detail = detail, extra = true}))
+        end)
+        test.it("returns starting while a controllable runner waits and later acknowledges", function()
+            local id, runner = begin("slow")
+            test.eq(state(id).execution_state, "starting")
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            test.eq(await_state(id, runner, "running").start_failure, nil)
+            process.terminate(runner)
+        end)
+        test.it("waits for the stdin closure acknowledgement while the live runner holds it", function()
+            local held = assert(process.listen("bee.test.closure.held", {message = true}))
+            local id, runner = begin("closure")
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            await_state(id, runner, "running")
+            local client = funcs.new():with_actor(principals.actor(OWNER)):with_scope(security.new_scope({assert(security.policy("bee.placement.native:client_test_policy"))}))
+            local closing = assert(client:with_context({["bee.test.stdin.expired"] = true}):async("bee.placement.native.binding:close_stdin", {attempt_id = id}))
+            local selected = channel.select({held:case_receive(), closing:response():case_receive()})
+            if selected.channel == held then
+                assert(tostring(selected.value:from()) == runner)
+                assert(process.send(runner, "bee.test.startup.advance", {}))
+                assert(closing:response():receive())
+            end
+            local payload, err = closing:result()
+            assert(not err, tostring(err))
+            local reply = principals.reply(assert(payload):data())
+            assert(reply.ok, tostring(reply.error and reply.error.message))
+            test.eq(assert(decode.stdin_closure(reply.value, id)).closed, true)
+            process.unlisten(held)
+            process.terminate(runner)
+        end)
+        test.it("cancels during starting and records a late acknowledgement without reviving the attempt", function()
+            local id, runner = begin("cancel")
+            local client = funcs.new():with_actor(principals.actor(OWNER)):with_scope(security.new_scope({assert(security.policy("bee.placement.native:client_test_policy"))}))
+            local raw, err = client:call("bee.placement.native.binding:stop", {attempt_id = id})
+            assert(not err, tostring(err))
+            assert(principals.reply(raw).ok)
+            await_state(id, runner, "exited")
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            local states = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
+            while true do
+                local db = assert(store.open())
+                local page = assert(store.evidence(db, id, 0, 64))
+                db:release()
+                local found = false
+                for _, event in ipairs(page.evidence) do if event.kind == "runner.ack_late" then found = true end end
+                if found then break end
+                assert((states:receive()), "startup publication channel closed before late acknowledgement")
+            end
+            process.unlisten(states)
+            test.eq(state(id).execution_state, "exited")
+            test.is_true(state(id).start_cancelled)
+            test.is_nil(state(id).start_failure)
+            process.terminate(runner)
+        end)
+        test.it("observes cancellation committed after the runner reads its initial state", function()
+            local claiming = assert(process.listen("bee.test.startup.claim", {message = true}))
+            local id, runner = begin("cancel_before_claim")
+            local message = assert((claiming:receive()))
+            test.eq(tostring(message:from()), runner)
+            local client = funcs.new():with_actor(principals.actor(OWNER)):with_scope(security.new_scope({assert(security.policy("bee.placement.native:client_test_policy"))}))
+            local raw, err = client:call("bee.placement.native.binding:stop", {attempt_id = id})
+            assert(not err, tostring(err))
+            assert(principals.reply(raw).ok)
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            test.is_true(await_state(id, runner, "exited").start_cancelled)
+            process.unlisten(claiming)
+            process.terminate(runner)
+        end)
+        test.it("records a runner exit before acknowledgement with its exact cause", function()
+            local id, runner = begin("exit")
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            local failed = await_state(id, runner, "start_failed")
+            test.is_true(assert(failed.start_failure):find("fixture runner crashed before acknowledgement", 1, true) ~= nil)
+        end)
+        test.it("records a runner refusal without replacing its cause", function()
+            local id, runner = begin("refuse")
+            assert(process.send(runner, "bee.test.startup.advance", {}))
+            test.eq(await_state(id, runner, "start_failed").start_failure, "fixture daemon refused containers/create")
+        end)
+    end)
+end
+local cases = test.run_cases(run)
+return {run = function(options)
+    local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
+    local original = mode.data
+    mode.data = {mode = "host_configured"}
+    local changes = registry.snapshot():changes(); changes:update(mode); assert(changes:apply())
+    local ok, result = pcall(cases, options)
+    mode.data = original
+    local restore = registry.snapshot():changes(); restore:update(mode); assert(restore:apply())
+    if not ok then error(result) end
+    return result
+end}

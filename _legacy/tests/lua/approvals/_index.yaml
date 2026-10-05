@@ -1,0 +1,129 @@
+version: '1.0'
+namespace: bee.approvals
+entries:
+- name: apply_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: '*'
+    effect: allow
+- name: client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:grant_window, bee.approvals.binding:node_summary, bee.approvals.binding:runtime_lease, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:list, bee.approvals.binding:deliveries, bee.approvals.binding:reconcile, bee.approvals.binding:capabilities, bee.threads.binding:append, bee.threads.binding:create, bee.threads.binding:get, bee.threads.binding:read_after, bee.threads.binding:watch]
+    effect: allow
+- name: test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-test.db
+  lifecycle:
+    auto_start: true
+- name: summary_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, bee.approvals.summary]
+    resources: [bee.approvals.binding:node_summary, node]
+    effect: allow
+- name: identity_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-identity-test.db
+  lifecycle:
+    auto_start: true
+- name: store_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.approvals:test_db, bee.approvals:identity_test_db, bee.approvals:window_upgrade_test_db]
+    effect: allow
+- name: service_test
+  kind: function.lua
+  source: file://service_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, time, sql, process, channel, uuid, json]
+  security:
+    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
+    worker: bee.approvals.service:worker
+    resources: bee.approvals.env:resources
+    outbox: bee.approvals.persist:outbox
+    migrations: bee.approvals.migrations:migrations
+    persist: bee.persist.persist:database
+    identity_migration: bee.approvals.persist:identity_migration
+    thread_harness: bee.threads:harness
+- name: lease_flow_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get, registry.apply, funcs.call]
+    resources: '*'
+    effect: allow
+- name: lease_flow_test
+  kind: function.lua
+  source: file://lease_flow_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, uuid]
+  security:
+    policies: [bee.approvals:lease_flow_test_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+  imports:
+    principals: bee.test.principals:bound
+    test: wippy.test:test
+    capability_model: bee.capability:model
+    bounds: bee.values:bounds
+    lease_grants: bee.gov.binding:lease_grants
+    lease_store: bee.gov.persist:lease_store
+    service: bee.approvals.binding:service
+- name: attention_client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:attention_count, bee.approvals.binding:inbox]
+    effect: allow
+- name: attention_test
+  kind: function.lua
+  source: file://attention_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports: {test: wippy.test:test}
+- name: runtime_lease_test
+  kind: function.lua
+  source: file://runtime_lease_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, uuid, time]
+  security: {policies: [bee.approvals:apply_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]}
+  imports: {test: wippy.test:test, service: bee.approvals.binding:service, lease: bee.approvals.types:runtime_lease, bounds: bee.values:bounds}
+
+- name: window_test
+  kind: function.lua
+  source: file://window_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [sql, registry, uuid]
+  security:
+    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_owner_policy]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    service: bee.approvals.binding:service
+    persist: bee.persist.persist:database
+    migrations: bee.approvals.migrations:migrations
+
+- name: window_upgrade_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-window-upgrade-test.db
+  lifecycle: {auto_start: true}

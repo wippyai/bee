@@ -1,13 +1,11 @@
 version: '1.0'
-namespace: bee.values
+namespace: bee.tests.values
 entries:
 - name: bounds_test
   kind: function.lua
   source: file://bounds_test.lua
   method: run
-  meta:
-    type: test
-    suite: bee
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
@@ -15,9 +13,7 @@ entries:
   kind: function.lua
   source: file://canonical_test.lua
   method: run
-  meta:
-    type: test
-    suite: bee
+  meta: {type: test, suite: bee}
   modules: [hash]
   imports:
     test: wippy.test:test

@@ -1,0 +1,82 @@
+name: Bee release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  check:
+    name: Lint and Lua suites
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: native/go.mod
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Validate release tag
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+        printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
+    - name: Pinned toolchain
+      run: make tools
+    - name: Lint
+      run: make lint
+    - name: Lua suites
+      run: make test
+  build:
+    name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: check
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+        - {goos: linux, goarch: amd64, runner: ubuntu-24.04}
+        - {goos: linux, goarch: arm64, runner: ubuntu-24.04-arm}
+        - {goos: darwin, goarch: amd64, runner: macos-26-intel}
+        - {goos: darwin, goarch: arm64, runner: macos-26}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: native/go.mod
+    - name: Pinned toolchain
+      run: make tools
+    - name: Build
+      run: make build VERSION="${GITHUB_REF_NAME#v}"
+    - name: Package with checksum
+      env:
+        TARGET: ${{ matrix.goos }}-${{ matrix.goarch }}
+      run: |
+        .wippy/bin/wippy-builder package dist/bee -o "dist/bee-$TARGET.tar.gz"
+        cd dist
+        if command -v sha256sum >/dev/null 2>&1; then sha256sum "bee-$TARGET.tar.gz" > "bee-$TARGET.tar.gz.sha256"
+        else shasum -a 256 "bee-$TARGET.tar.gz" > "bee-$TARGET.tar.gz.sha256"; fi
+    - uses: actions/upload-artifact@v4
+      with:
+        name: bee-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: |
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+  release:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        path: dist
+        merge-multiple: true
+    - name: Create the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        prerelease=""
+        case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+        gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Bee ${GITHUB_REF_NAME#v}" \
+          --generate-notes $prerelease dist/*.tar.gz dist/*.tar.gz.sha256

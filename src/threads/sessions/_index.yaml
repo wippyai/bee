@@ -1,0 +1,37 @@
+version: '1.0'
+namespace: bee.threads.sessions
+entries:
+- name: contract
+  kind: contract.definition
+  methods:
+  - name: open
+    description: Open a reusable managed session
+  - name: run
+    description: Open a session and queue its first work item
+  - name: send
+    description: Durably queue work for a session
+  - name: await
+    description: Observe work or operation state
+  - name: join
+    description: Join an exact ordered set of work items
+  - name: get
+    description: Read an exact session
+    work or operation: null
+  - name: list
+    description: List durable sessions independently of executor readiness
+  - name: history
+    description: Page immutable work inputs for a session
+  - name: cancel
+    description: Request evidence-backed work cancellation
+  - name: close
+    description: Seal a session and reconcile its cleanup
+- name: catalog
+  kind: contract.definition
+  methods:
+  - name: list
+    description: List admitted definitions and profiles with executor readiness
+- name: executor
+  kind: contract.definition
+  methods:
+  - name: run_turn
+    description: Execute one accepted work turn through the selected driver and placement

@@ -20,7 +20,7 @@ local driver_types = require("driver_types")
 type Terminal = {outcome: string, answer: string?, resume_ref: string?, usage: {[string]: unknown}?, error: {code: string, message: string, retryable: boolean}?}
 type Run = {types: {string}, observations: {{[string]: unknown}}, terminal: Terminal?, problems: integer}
 local function fixture(path: string): string
-    local volume, err = fs.get("bee.driver:fixtures")
+    local volume, err = fs.get("bee.tests.driver:fixtures")
     if not volume then error("fixtures: " .. tostring(err)) end
     local content, read_error = volume:readfile(path)
     if not content then error(path .. ": " .. tostring(read_error)) end

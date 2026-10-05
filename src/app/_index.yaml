@@ -1,0 +1,33 @@
+version: '1.0'
+namespace: bee.app
+entries:
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules:
+  - process
+  - uuid
+  imports:
+    appearance: bee.ui:appearance
+    arguments: bee.app:arguments
+    interaction: bee.app:interaction
+    bounds: bee.values:bounds
+- name: arguments
+  kind: library.lua
+  source: file://arguments.lua
+- name: caller
+  kind: library.lua
+  source: file://caller.lua
+  imports:
+    reply: bee.values:reply
+- name: interaction
+  kind: library.lua
+  source: file://interaction.lua
+  imports:
+    bounds: bee.values:bounds
+- name: names
+  kind: library.lua
+  source: file://names.lua
+- name: descriptor
+  kind: library.lua
+  source: file://descriptor.lua

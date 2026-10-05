@@ -1,0 +1,78 @@
+version: '1.0'
+namespace: bee.driver.grok.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    configuration: bee.driver.grok.binding:configuration
+    configure_protocol: bee.driver.binding:configuration
+    universal: bee.driver.binding:universal
+  security:
+    policies:
+    - bee.driver.grok.binding:configuration_policy
+- name: locate
+  kind: function.lua
+  source: file://locate.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: configuration_policy
+  kind: security.policy.expr
+  meta:
+    comment: Read only the descriptor that declares this configuration renderer
+  policy:
+    effect: allow
+    actions:
+    - registry.get
+    - registry.snapshot
+    resources:
+    - '*'
+    expression: (action == "registry.get" && resource == "bee.driver.grok.descriptor:cli") || action == "registry.snapshot"
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules:
+  - hash
+  imports:
+    canonical: bee.values:canonical
+    quote: bee.driver.binding:quote
+    toml: bee.driver.binding:toml
+    configure_protocol: bee.driver.binding:configuration
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.grok.binding:prepare
+      dispatch: bee.driver.grok.binding:dispatch
+      normalize: bee.driver.grok.binding:normalize
+      configure: bee.driver.grok.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.grok.binding:locate
+  meta:
+    type: harness.driver
+    driver_id: grok
+    descriptor_ref: bee.driver.grok.descriptor:cli
+    accepts_model: true
+    profiles_ref: bee.driver.grok.profiles:profiles

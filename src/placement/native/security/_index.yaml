@@ -1,0 +1,90 @@
+version: '1.0'
+namespace: bee.placement.native.security
+entries:
+- name: placement_store_policy
+  kind: security.policy.expr
+  meta:
+    comment: The receipts store, the linked references, the placement root and the executor, for the runner and the service
+  policy:
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || action != "funcs.call"
+    actions:
+    - funcs.call
+    - db.get
+    - registry.get
+    - fs.get
+    - exec.get
+    - system.read
+    - security.scope.create
+    - funcs.security
+    resources:
+    - bee.gov.binding:driver_bindings
+    - bee:db
+    - bee.placement.native.env:root_ref
+    - bee.placement.native.env:runner_host_ref
+    - bee.placement.native.env:executor_ref
+    - bee.placement.native.env:host_files_ref
+    - bee.placement.native.env:admitted_roots_ref
+    - bee.placement.native.env:resource_mode_ref
+    - bee.placement.native.service:workdir_preparers_ref
+    - bee.placement.native.env:placement_workdir_preparers
+    - custom
+    - security
+    - hosts
+    - bee.placement.native.env:placement_admitted_roots
+    - bee.placement.native.env:root
+    - bee.placement.native.env:placement_host_files
+    - bee.placement.native.env:placement_executor
+    - cwd
+    effect: allow
+- name: placement_exec_policy
+  kind: security.policy
+  meta:
+    comment: Commands and host environment values resolve at launch; the request names them, the host admits them
+  policy:
+    actions:
+    - exec.run
+    - env.get
+    - registry.get
+    resources: '*'
+    effect: allow
+- name: placement_service_policy
+  kind: security.policy
+  meta:
+    comment: The service spawns runners on the workers host and talks to them
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    - process.host
+    - process.monitor
+    - process.unmonitor
+    - process.send
+    - funcs.call
+    - bee.placement.workdir_preparer.cleanup
+    resources:
+    - bee.placement.native.service:runner
+    - bee:workers
+    - '*'
+    effect: allow
+- name: placement_sweeper_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.registry.register
+    - funcs.call
+    resources: '*'
+    effect: allow
+- name: placement_runner_policy
+  kind: security.policy
+  meta:
+    comment: A runner answers its starter and its bound recipient, watches the recipient so a lost carrier retires the gateway binding, and invokes the plan, setup and cleanup methods of host-authorized
+      workdir preparers
+  policy:
+    actions:
+    - process.send
+    - process.monitor
+    - process.unmonitor
+    - bee.placement.workdir_preparer.setup
+    - bee.placement.workdir_preparer.cleanup
+    resources: '*'
+    effect: allow

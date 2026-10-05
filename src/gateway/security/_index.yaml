@@ -1,0 +1,414 @@
+version: '1.0'
+namespace: bee.gateway.security
+entries:
+- name: store_policy
+  kind: security.policy
+  meta:
+    comment: Gateway private store; target_db injects only the selected database resource
+  policy:
+    actions:
+    - db.get
+    resources:
+    - bee:db
+    effect: allow
+- name: readiness_policy
+  kind: security.policy.expr
+  meta:
+    comment: Internal readiness only; it pins the selected loopback address and authenticates the nonce response
+  policy:
+    actions:
+    - http_client.request
+    - http_client.private_ip
+    resources: '*'
+    expression: (action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$")
+    effect: allow
+- name: address_policy
+  kind: security.policy
+  meta:
+    comment: Gateway address lookup reads only its listener link
+    endpoint reference: null
+    and selected endpoint configuration: null
+  policy:
+    actions:
+    - registry.get
+    resources:
+    - bee.gateway.env:listener_ref
+    - bee.gateway.env:endpoint_ref
+    - bee.gateway.api:gateway_endpoint
+    effect: allow
+- name: supervisor_policy
+  kind: security.policy
+  meta:
+    comment: Gateway address lookup reads only supervisor state
+  policy:
+    actions:
+    - system.read
+    resources:
+    - supervisor
+    effect: allow
+- name: address_call_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.gateway.binding:address
+    effect: allow
+- name: execute_policy
+  kind: security.policy.expr
+  meta:
+    comment: The HTTP MCP adapter constructs a bound subject and scope; host-selected tool policies still define every operation it may invoke
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "funcs.context" && resource == "context") || (action == "security.scope.create" && resource == "custom") || (action ==
+      "security.actor.create" && resource != "")
+    actions:
+    - funcs.security
+    - funcs.context
+    - security.scope.create
+    - security.actor.create
+    resources:
+    - security
+    - context
+    - custom
+    - '*'
+    effect: allow
+- name: tool_policy_read_policy
+  kind: security.policy
+  meta:
+    comment: target_tool_* requirements inject exactly the host-selected policies that the MCP adapter may resolve
+  policy:
+    actions:
+    - security.policy.get
+    resources:
+    - bee.security.gateway:gateway_tool_read_policy
+    - bee.security.gateway:gateway_tool_message_policy
+    - bee.security.gateway:gateway_tool_overlay_policy
+    - bee.security.gateway:gateway_tool_docs_policy
+    - bee.security.gateway:gateway_tool_components_policy
+    - bee.security.gateway:gateway_tool_delivery_policy
+    - bee.security.gateway:gateway_tool_publish_policy
+    - bee.security.gateway:gateway_tool_application_open_policy
+    - bee.security.gateway:gateway_tool_install_policy
+    - bee.security.gateway:gateway_tool_session_policy
+    - bee.security.gateway:gateway_tool_hub_publish_policy
+    effect: allow
+- name: tool_policy_reference_policy
+  kind: security.policy
+  meta:
+    comment: The MCP adapter reads only its component-owned links to the selected built-in tool policies
+  policy:
+    actions:
+    - registry.get
+    resources:
+    - bee.gateway.env:tool_read_policy_ref
+    - bee.gateway.env:tool_message_policy_ref
+    - bee.gateway.env:tool_overlay_policy_ref
+    - bee.gateway.env:tool_docs_policy_ref
+    - bee.gateway.env:tool_components_policy_ref
+    - bee.gateway.env:tool_delivery_policy_ref
+    - bee.gateway.env:tool_publish_policy_ref
+    - bee.gateway.env:tool_application_open_policy_ref
+    - bee.gateway.env:tool_install_policy_ref
+    - bee.gateway.env:tool_session_policy_ref
+    effect: allow
+- name: session_contract_policy
+  kind: security.policy
+  meta:
+    comment: The MCP adapter resolves the bee.sessions owner contracts it projects; the subject's own scope decides which bindings and methods open
+  policy:
+    actions:
+    - contract.get
+    resources:
+    - bee.threads.sessions:contract
+    - bee.threads.sessions:catalog
+    effect: allow
+- name: access_call_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding approval access calls only the approval and thread operations required for the effect
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.approvals.binding:request
+    - bee.approvals.binding:read
+    - bee.approvals.binding:consume
+    - bee.approvals.binding:revalidate
+    - bee.threads.binding:get
+    - bee.threads.binding:read_after
+    effect: allow
+- name: access_reference_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding approval access reads only its component-owned policy links
+  policy:
+    actions:
+    - registry.get
+    resources:
+    - bee.gateway.env:approval_request_policy_ref
+    - bee.gateway.env:approval_consume_policy_ref
+    effect: allow
+- name: access_policy_read_policy
+  kind: security.policy
+  meta:
+    comment: target_approval_* requirements inject exactly the host-selected approval policies that a binding may resolve; elevation and installation load their own call policies the same way
+  policy:
+    actions:
+    - security.policy.get
+    resources:
+    - bee.gateway.security:access_call_policy
+    - bee.gateway.security:elevation_policy
+    - bee.resources.security:resource_grant_thread_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:installation_read_policy
+    - bee.gateway.security:installation_apply_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:publication_read_policy
+    - bee.gateway.security:publication_apply_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+    effect: allow
+- name: subject_call
+  kind: library.lua
+  source: file://subject_call.lua
+  modules:
+  - funcs
+  - security
+  - registry
+  - contract
+  imports:
+    bounds: bee.values:bounds
+    context: bee.gateway.catalog:context
+- name: access
+  kind: library.lua
+  source: file://access.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    capability_model: bee.capability:model
+    surface: bee.gateway.catalog:surface
+    subject_call: bee.gateway.security:subject_call
+- name: elevation_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding capability elevation calls the approval operations and the resource grant write the consumed decision effects; the thread-bound approval is the authority for every write
+  policy:
+    actions:
+    - funcs.call
+    - registry.get
+    resources:
+    - bee.approvals.binding:request
+    - bee.approvals.binding:read
+    - bee.approvals.binding:consume
+    - bee.approvals.binding:revalidate
+    - bee.resources.binding:check_grant
+    - bee.resources.binding:grant
+    - bee.capability:catalog
+    - bee.threads.binding:get
+    - bee.threads.binding:read_after
+    effect: allow
+- name: elevation
+  kind: library.lua
+  source: file://elevation.lua
+  modules:
+  - hash
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    capability: bee.gov.types:capability_request
+    subject_call: bee.gateway.security:subject_call
+- name: installation_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding installation requests call the approval operations and the Hub facade and read the host installation link; the thread-bound approval is the authority for the apply
+  policy:
+    actions:
+    - funcs.call
+    - registry.get
+    resources:
+    - bee.approvals.binding:request
+    - bee.approvals.binding:read
+    - bee.approvals.binding:consume
+    - bee.approvals.binding:revalidate
+    - bee.approvals.binding:complete_installation_effect
+    - bee.hub.binding:call
+    - bee.gateway.env:install_configuration_ref
+    - bee.threads.binding:get
+    - bee.threads.binding:read_after
+    - bee.gateway.env:module_installation
+    effect: allow
+- name: installation_queue_policy
+  kind: security.policy
+  meta:
+    comment: The installation owner worker reads only the approvals owner's bounded installation effect queue
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.approvals.binding:installation_effects
+    effect: allow
+- name: installation_resolver_policy
+  kind: security.policy
+  meta:
+    comment: An effect owner worker resolves an approved installation or publication request through the gateway binding owner
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.gateway.binding:effect_binding
+    effect: allow
+- name: installation_worker_policy
+  kind: security.policy
+  meta:
+    comment: The installation owner worker resolves only gateway-owned attempt bindings for an approved effect
+  policy:
+    actions:
+    - bee.gateway.installation_work
+    resources:
+    - resolve_binding
+    effect: allow
+- name: installation_read_policy
+  kind: security.policy
+  meta:
+    comment: Installation requests read the installed inventory, package details and the exact plan through the Hub facade
+  policy:
+    actions:
+    - bee.hub.read
+    resources: '*'
+    effect: allow
+- name: installation_apply_policy
+  kind: security.policy
+  meta:
+    comment: Joins the Hub read policy only after the person's thread-bound approval is consumed; the facade still applies only the approved plan digest
+  policy:
+    actions:
+    - bee.hub.manage
+    resources: '*'
+    effect: allow
+- name: installation
+  kind: library.lua
+  source: file://installation.lua
+  modules:
+  - registry
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    installation: bee.hub.activation:installation
+    subject_call: bee.gateway.security:subject_call
+- name: session_boundary_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - funcs.call
+    - bee.sessions.hook_boundary
+    resources: '*'
+    expression: (action == "funcs.call" && resource == "bee.threads.sessions.binding:hook_boundary") || (action == "bee.sessions.hook_boundary" && resource == actor.id)
+    effect: allow
+- name: session_boundary_resolver_policy
+  kind: security.policy
+  policy:
+    actions:
+    - security.policy.get
+    resources:
+    - bee.gateway.security:session_boundary_policy
+    effect: allow
+- name: directory_projection_policy
+  kind: security.policy.expr
+  meta:
+    comment: Workspace catalog projections read only the public Sessions list after reauthorizing the selected workspace
+  policy:
+    actions:
+    - contract.get
+    - contract.open
+    - contract.call
+    - contract.security
+    - security.actor.create
+    - funcs.security
+    resources: '*'
+    expression: (action == "contract.get" && resource == "bee.threads.sessions:contract") || (action == "contract.security" && resource == "security") || action == "contract.open" || (action == "contract.call"
+      && resource == "list") || (action == "security.actor.create" && resource == actor.id) || action == "funcs.security"
+    effect: allow
+- name: publication_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding publication requests call the approval operations and the Hub facade and read the host publication link; the thread-bound approval is the authority for the upload
+  policy:
+    actions:
+    - funcs.call
+    - registry.get
+    resources:
+    - bee.approvals.binding:request
+    - bee.approvals.binding:read
+    - bee.approvals.binding:consume
+    - bee.approvals.binding:revalidate
+    - bee.approvals.binding:complete_publication_effect
+    - bee.hub.binding:call
+    - bee.gateway.env:publish_configuration_ref
+    - bee.threads.binding:get
+    - bee.threads.binding:read_after
+    - bee.gateway.env:module_publication
+    effect: allow
+- name: publication_queue_policy
+  kind: security.policy
+  meta:
+    comment: The publication owner worker reads only the approvals owner's bounded publication effect queue
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.approvals.binding:publication_effects
+    effect: allow
+- name: publication_read_policy
+  kind: security.policy
+  meta:
+    comment: Publication requests pack, measure and read the exact upload plan through the Hub facade
+  policy:
+    actions:
+    - bee.hub.read
+    resources: '*'
+    effect: allow
+- name: publication_apply_policy
+  kind: security.policy
+  meta:
+    comment: Joins the Hub read policy only after the person's thread-bound approval is consumed; the facade still uploads only the approved plan digest
+  policy:
+    actions:
+    - bee.hub.manage
+    resources: '*'
+    effect: allow
+- name: publish
+  kind: library.lua
+  source: file://publish.lua
+  modules:
+  - registry
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    publishing: bee.hub.publication:publishing
+    subject_call: bee.gateway.security:subject_call
+- name: worker_host_policy
+  kind: security.policy.expr
+  policy:
+    expression: (action == "funcs.call" && resource == "bee.hub.binding:receipt_metadata") || (action != "funcs.call" && (action != "process.host" || resource == "bee:workers"))
+    actions:
+    - funcs.call
+    - process.send
+    - process.monitor
+    - process.unmonitor
+    - process.registry.register
+    - process.registry.unregister
+    - process.terminate
+    - process.cancel
+    - process.host
+    - process.context
+    - process.security
+    - security.policy.get
+    - funcs.security
+    - security.scope.create
+    resources: '*'
+    effect: allow
+  meta:
+    comment: The gateway installation and publication workers run on the workers host, message and monitor their processes, hold their names and read Hub receipt metadata

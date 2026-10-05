@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.persist
+entries:
+- name: database
+  kind: library.lua
+  source: file://database.lua
+  modules: [sql]
+- name: transaction
+  kind: library.lua
+  source: file://transaction.lua
+  modules: [sql]

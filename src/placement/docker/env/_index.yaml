@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.placement.docker.env
+entries:
+- name: boot_environment
+  kind: env.storage.memory
+- name: environment
+  kind: library.lua
+  source: file://environment.lua
+- name: environment_configuration
+  kind: registry.entry
+  meta:
+    type: bee.docker_environment
+  data:
+    value:
+      network: bee-coding
+      endpoint: bee.gateway.api:gateway_endpoint
+      listener: bee.gateway.api:gateway_listener
+      approval_policy: docker-environment
+      readiness_policy: bee.gateway.security:readiness_policy

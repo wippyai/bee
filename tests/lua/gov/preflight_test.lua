@@ -1,0 +1,478 @@
+-- MIT. Preflight has no runtime-write route; host evidence remains separate.
+local test = require("test")
+local bounds = require("bounds")
+local preflight = require("preflight")
+local protected_kernel = require("protected_kernel")
+local registry = require("registry")
+local canonical = require("canonical")
+local artifact = require("artifact")
+local hash = require("hash")
+local SHA = string.rep("a", 64)
+local EMPTY_STRINGS: {string} = {}
+type Manifest = {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}}
+local KERNEL: Manifest = {revision = 1, namespaces = {"bee.gov", "bee.security"}, super_edit = {},
+    entries = {"bee.security.approvals:approver_policies", "bee.gov:protected_kernel"}}
+local function candidate_entry(id: string, kind: string, package: string, digest: string,
+    references: {string}): preflight.Entry
+    return {id = id, kind = kind, package = package, digest = digest, references = references,
+        auto_start = false, grants = EMPTY_STRINGS, modules = EMPTY_STRINGS,
+        config_objects = EMPTY_STRINGS, config_lists = EMPTY_STRINGS, config_empty = EMPTY_STRINGS}
+end
+local function fixture(): (preflight.Candidate, preflight.Context)
+    local references: {string} = {}
+    local database = candidate_entry("host:db", "db.sql.sqlite", "host", SHA, references)
+    database.auto_start = true
+    local entries: {[string]: preflight.Entry} = {["host:db"] = database}
+    local candidate_entries: {preflight.Entry} = {
+        candidate_entry("demo:run", "function.lua", "wolfy-j/demo", SHA, {"host:db"})}
+    local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7, base_digest = SHA,
+        artifacts = {{component = "wolfy-j/demo", version = "1.0.0", digest = SHA, dependencies = {}, namespaces = {"demo"}}},
+        entries = candidate_entries,
+        requirements = {{id = "demo:target_db", package = "wolfy-j/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
+        migrations = {{id = "demo:001", target_db = "host:db", checksum = SHA, ordinal = 1}}}
+    local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
+        packages = {["wolfy-j/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
+        entries = entries, installed_entries = nil,
+        applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false, auto_start = true,
+        protected = KERNEL, host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
+    return candidate, context
+end
+-- The same host context under another trust map, or none.
+local function with_kernel(context: preflight.Context, kernel: Manifest?): preflight.Context
+    return {node_id = context.node_id, registry_revision = context.registry_revision,
+        registry_digest = context.registry_digest, policy_digest = context.policy_digest,
+        packages = context.packages, namespaces = context.namespaces, kinds = context.kinds,
+        databases = context.databases, grants = context.grants, modules = context.modules,
+        database_bindings = context.database_bindings, entries = context.entries,
+        installed_entries = context.installed_entries, applied = context.applied,
+        exact_expansion = context.exact_expansion, migration_barrier = context.migration_barrier,
+        auto_start = context.auto_start, protected = kernel, host_evidence = context.host_evidence}
+end
+local function entry_of(id: string): preflight.Entry
+    return candidate_entry(id, "library.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+end
+local function checked(candidate: preflight.Candidate, context: preflight.Context): preflight.Report
+    local result, err = preflight.check(candidate, context)
+    if not result then error(tostring(err)) end
+    return result
+end
+local function has(report: preflight.Report, code: string): boolean
+    for _, diagnostic in ipairs(report.diagnostics) do if diagnostic.code == code then return true end end
+    return false
+end
+local function define_tests()
+    test.describe("Governance preflight", function()
+        test.it("blocks an application restart policy without a checkpoint schema", function()
+            local candidate, context = fixture()
+            candidate.entries[1].application_checkpoint_invalid = true
+            local report = checked(candidate, context)
+            test.is_false(report.ready)
+            test.is_true(has(report, "APPLICATION_CHECKPOINT"))
+            candidate.entries[1].application_checkpoint_invalid = false
+            test.is_true(checked(candidate, context).ready)
+        end)
+        test.it("requires explicit child namespace ownership and host admission", function()
+            local candidate, context = fixture()
+            candidate.entries[1].id = "demo.child:run"
+            candidate.requirements[1].targets = {"demo.child:run"}
+            context.namespaces["demo.child"] = true
+            test.is_true(has(checked(candidate, context), "NAMESPACE_OWNER"))
+            candidate.artifacts[1].namespaces = {"demo", "demo.child"}
+            test.is_true(checked(candidate, context).ready)
+            context.namespaces["demo.child"] = false
+            test.is_true(has(checked(candidate, context), "NAMESPACE_DENIED"))
+            context.namespaces["demo.child"] = true
+            context.entries["demo.child:foreign"] = candidate_entry("demo.child:foreign", "function.lua",
+                "other/owner", SHA, EMPTY_STRINGS)
+            test.is_true(has(checked(candidate, context), "NAMESPACE_COLLISION"))
+        end)
+        test.it("refuses a configuration shape the runtime's typed config rejects", function()
+            local candidate, context = fixture()
+            local function shaped(config: {[string]: unknown})
+                local objects, lists, empty = artifact.config_shapes(config)
+                if not objects or not lists or not empty then error("measure configuration shapes") end
+                candidate.entries[1].config_objects = objects
+                candidate.entries[1].config_lists = lists
+                candidate.entries[1].config_empty = empty
+            end
+            shaped({source = "file://run.lua", method = "handle", modules = {json = true}})
+            local blocked = checked(candidate, context)
+            test.is_false(blocked.ready)
+            test.is_true(has(blocked, "CONFIG_SHAPE"))
+            -- An empty declared field crosses as neither shape, whichever
+            -- allocation it carries.
+            shaped({source = "file://run.lua", method = "handle", modules = table.create(1, 0)})
+            test.is_true(has(checked(candidate, context), "CONFIG_SHAPE"))
+            shaped({source = "file://run.lua", method = "handle", imports = table.create(0, 1)})
+            test.is_true(has(checked(candidate, context), "CONFIG_SHAPE"))
+            shaped({source = "file://run.lua", method = "handle", modules = {"json"}, imports = {demo = "bee.demo:library"}})
+            test.is_true(checked(candidate, context).ready)
+            shaped({source = "file://run.lua", method = "handle", modules = {"json"}, imports = {"bee.demo:library"}})
+            test.is_true(has(checked(candidate, context), "CONFIG_SHAPE"))
+        end)
+        test.it("refuses an entry that starts itself where the host admits no auto start", function()
+            local candidate, context = fixture()
+            context.migration_barrier = true
+            candidate.entries[1].auto_start = true
+            test.is_true(checked(candidate, context).ready)
+            context.auto_start = false
+            local refused = checked(candidate, context)
+            test.is_false(refused.ready)
+            test.is_true(has(refused, "AUTO_START_DENIED"))
+            candidate.entries[1].auto_start = false
+            test.is_true(checked(candidate, context).ready)
+        end)
+        test.it("refuses protected kernel edits even under a permissive profile", function()
+            local function entry(id: string, package: string, references: {string}): preflight.Entry
+                return candidate_entry(id, "library.lua", package, SHA, references)
+            end
+            local candidate, context = fixture()
+            context.entries["bee.gov.binding:preflight"] = entry("bee.gov.binding:preflight", "bee/gov", {"shared.util:bounds"})
+            context.entries["shared.util:bounds"] = entry("shared.util:bounds", "bee/shared", {})
+            local policies = entry("bee.security.approvals:approver_policies", "bee", {"demo:run"})
+            policies.kind = "registry.entry"
+            context.entries["bee.security.approvals:approver_policies"] = policies
+            local owned = entry("demo:run", "wolfy-j/demo", {})
+            owned.kind = "function.lua"
+            context.entries["demo:run"] = owned
+            -- A host record naming an application does not make it kernel code.
+            test.is_true(checked(candidate, context).ready)
+            -- A permissive explicit profile admits every package, namespace and kind.
+            context.packages["bee/gov"], context.packages["bee/shared"] = true, true
+            context.namespaces["bee.gov"], context.namespaces["bee.gov.extra"] = true, true
+            context.namespaces["shared.util"], context.namespaces["bee"] = true, true
+            context.kinds["library.lua"], context.kinds["registry.entry"] = true, true
+            local direct, _ = fixture()
+            direct.artifacts[1].namespaces = {"demo", "bee.gov.extra"}
+            direct.entries[#direct.entries + 1] = entry("bee.gov.extra:shadow", "wolfy-j/demo", {})
+            local refused = checked(direct, context)
+            test.is_false(refused.ready)
+            test.is_true(has(refused, "PROTECTED_KERNEL"))
+            local transitive, _ = fixture()
+            transitive.artifacts[1] = {component = "bee/shared", version = "2.0.0", digest = SHA,
+                dependencies = {}, namespaces = {"shared.util"}}
+            transitive.entries = {entry("shared.util:bounds", "bee/shared", {})}
+            transitive.requirements, transitive.migrations = {}, {}
+            test.is_true(has(checked(transitive, context), "PROTECTED_KERNEL"))
+            -- A host record composed into the application's own overlay.
+            context.installed_entries = {["bee.gov:admission.demo"] = {id = "bee.gov:admission.demo",
+                kind = "registry.entry", package = "wolfy-j/demo", digest = SHA, references = {"demo:run"},
+                auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {},
+                config_empty = {}}}
+            test.is_true(checked(candidate, context).ready)
+            context.installed_entries = nil
+            local selector, _ = fixture()
+            selector.requirements[1].targets = {"bee.security.approvals:approver_policies"}
+            test.is_true(has(checked(selector, context), "PROTECTED_KERNEL"))
+            local exact, _ = fixture()
+            exact.artifacts[1].namespaces = {"demo", "bee"}
+            exact.entries[#exact.entries + 1] = entry("bee.gov:protected_kernel", "wolfy-j/demo", {})
+            test.is_true(has(checked(exact, context), "PROTECTED_KERNEL"))
+            local missing, missing_error = preflight.check(candidate, with_kernel(context, nil))
+            test.is_nil(missing)
+            test.not_nil(missing_error)
+            local open_map, open_error = preflight.check(candidate, with_kernel(context,
+                {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.approvals:approver_policies"}}))
+            test.is_nil(open_map)
+            test.not_nil((string.find(tostring(open_error), "protect itself", 1, true)))
+        end)
+        test.it("protects every shipped namespace the host has not opened for super edit", function()
+            -- The shipped trust map itself, not a fixture: each namespace a
+            -- host-selected scope lives in is refused, and only the explicit
+            -- super-edit set can open one.
+            local entry = assert(registry.get("bee.gov:protected_kernel"))
+            local manifest = assert(protected_kernel.decode(entry))
+            for _, namespace in ipairs(manifest.namespaces) do
+                local shadowed: preflight.Candidate, shadow_context: preflight.Context = fixture()
+                shadow_context.protected = manifest
+                shadowed.artifacts[1].namespaces = {"demo", namespace}
+                shadow_context.namespaces[namespace] = true
+                shadow_context.packages["wolfy-j/demo"] = true
+                shadow_context.kinds["library.lua"] = true
+                shadowed.requirements = {}
+                shadowed.migrations = {}
+                shadowed.entries = {entry_of(namespace .. ":shadow")}
+                local report = checked(shadowed, shadow_context)
+                if protected_kernel.namespace(manifest, namespace) then
+                    test.is_false(report.ready)
+                    test.is_true(has(report, "PROTECTED_KERNEL"), "namespace " .. namespace .. " was not protected")
+                else test.is_true(report.ready) end
+            end
+            -- Every kernel namespace is a prefix-free root; a namespace the
+            -- host did not name stays open to an ordinary profile.
+            test.is_false(protected_kernel.namespace(manifest, "bee.settings.app"))
+            test.is_false(protected_kernel.namespace(manifest, "bee.desktop"))
+            test.is_true(protected_kernel.namespace(manifest, "bee.security"))
+            test.is_true(protected_kernel.namespace(manifest, "bee.gateway.api"))
+            test.is_false(protected_kernel.namespace(manifest, "app.tally"))
+            local opened = {revision = manifest.revision, namespaces = manifest.namespaces,
+                super_edit = {"bee.gateway"}, entries = manifest.entries}
+            test.is_false(protected_kernel.namespace(opened, "bee.gateway"))
+            test.is_false(protected_kernel.namespace(opened, "bee.gateway.api"))
+            test.is_true(protected_kernel.namespace(opened, "bee.harness"))
+            local open_candidate: preflight.Candidate, open_context: preflight.Context = fixture()
+            open_context.protected = opened
+            open_candidate.artifacts[1].namespaces = {"demo", "bee.gateway"}
+            open_context.namespaces["bee.gateway"] = true
+            open_context.kinds["library.lua"] = true
+            open_candidate.requirements = {}
+            open_candidate.migrations = {}
+            open_candidate.entries = {entry_of("bee.gateway:shadow")}
+            test.is_true(checked(open_candidate, open_context).ready)
+        end)
+        test.it("honors an exact host carve-out for a transitive kernel dependency", function()
+            local candidate, context = fixture()
+            local opened = {revision = 1, namespaces = {"host.kernel", "demo"},
+                super_edit = {"demo"}, entries = {"bee.gov:protected_kernel"}}
+            context.protected = opened
+            context.super_edit = true
+            context.kinds["library.lua"] = true
+            candidate.requirements, candidate.migrations = {}, {}
+            candidate.entries = {entry_of("demo:layout")}
+            context.entries["demo:layout"] = entry_of("demo:layout")
+            context.entries["host.kernel:presenter"] = candidate_entry("host.kernel:presenter",
+                "function.lua", "host/kernel", SHA, {"demo:layout"})
+            test.is_true(checked(candidate, context).ready)
+            context.super_edit = false
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            context.super_edit = true
+            context.namespaces.demo = false
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            context.namespaces.demo = true
+            opened.entries[#opened.entries + 1] = "demo:layout"
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+            opened.entries[#opened.entries] = nil
+            opened.super_edit = {}
+            test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
+        end)
+        test.it("decodes the super-edit set as an optional exact list", function()
+            local base = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+            test.eq(#assert(protected_kernel.decode(base)).super_edit, 0)
+            local empty = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+            test.eq(#assert(protected_kernel.decode(empty)).super_edit, 0)
+            local opened = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"bee.gov"},
+                entries = {"bee.gov:protected_kernel"}}
+            test.eq(assert(protected_kernel.decode(opened)).super_edit[1], "bee.gov")
+            local bad = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"bee.gov", "bee.gov"},
+                entries = {"bee.gov:protected_kernel"}}
+            test.is_nil(protected_kernel.decode(bad))
+            local unknown = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"Bee"}, entries = {"bee.gov:protected_kernel"}}
+            test.is_nil(protected_kernel.decode(unknown))
+            local extra = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}, note = "x"}
+            test.is_nil(protected_kernel.decode(extra))
+        end)
+        test.it("refuses app-shipped actor and group selectors on every entry kind", function()
+            local candidate, context = fixture()
+            local entry = assert(bounds.object(candidate.entries[1]))
+            for _, kind in ipairs({"process.lua", "function.lua", "library.lua"}) do
+                candidate.entries[1].kind = kind
+                context.kinds[kind] = true
+                entry.security_actor = true
+                entry.security_groups = false
+                test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
+                entry.security_actor = false
+                entry.security_groups = true
+                test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
+            end
+        end)
+        test.it("preserves capability requests in exact candidate bytes and rejects forged targets", function()
+            local candidate, context = fixture()
+            candidate.entries[1].kind = "process.lua"
+            context.kinds["process.lua"] = true
+            candidate.requirements[1].value = nil
+            candidate.requirements[1].expected_kind = "security.policy"
+            candidate.requirements[1].capability_request = {capability = "workspace.files.read",
+                parameters = {subpath = "docs"}, reason = "Show docs", target = "demo:run",
+                path = ".security.policies +=", catalog_revision = 1, template_revision = 1}
+            local bytes = assert(canonical.encode(candidate, 1048576))
+            local decoded = assert(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
+            test.eq((decoded.requirements[1].capability_request).reason, "Show docs")
+            test.is_true(checked(decoded, context).ready)
+            candidate.requirements[1].capability_request.target = "other:run"
+            test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
+            bytes = assert(canonical.encode(candidate, 1048576))
+            test.is_nil(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
+        end)
+        test.it("measures an exact destination plan without executing it", function()
+            local candidate, context = fixture()
+            local report = checked(candidate, context)
+            test.is_true(report.ready)
+            test.eq(#report.pending_migrations, 1)
+            test.eq(report.pending_migrations[1], "host:db\ndemo:001")
+            test.eq(report.plan_digest, checked(candidate, context).plan_digest)
+            candidate.destination_node = "node-b"
+            local other = checked(candidate, context)
+            test.is_false(other.ready)
+            test.is_true(has(other, "WRONG_DESTINATION"))
+            test.is_false(other.plan_digest == report.plan_digest)
+        end)
+        test.it("resolves a logical migration target only through the host database binding", function()
+            local function logical(binding: preflight.DatabaseBinding?): (preflight.Candidate, preflight.Context)
+                local candidate, context = fixture()
+                candidate.migrations[1].target_db = "demo:data"
+                local bindings: {[string]: preflight.DatabaseBinding} = {}
+                if binding then bindings["demo:data"] = binding end
+                local mapped: preflight.Context = {node_id = context.node_id,
+                    registry_revision = context.registry_revision, registry_digest = context.registry_digest,
+                    policy_digest = context.policy_digest, packages = context.packages,
+                    namespaces = context.namespaces, kinds = context.kinds, databases = {["demo:data"] = true},
+                    grants = context.grants, modules = context.modules, database_bindings = bindings,
+                    entries = context.entries, installed_entries = context.installed_entries,
+                    applied = context.applied, exact_expansion = context.exact_expansion,
+                    migration_barrier = context.migration_barrier, auto_start = context.auto_start,
+                    protected = context.protected, host_evidence = context.host_evidence}
+                return candidate, mapped
+            end
+            local candidate, context = logical({database_id = "host:db", table_prefix = "demo_"})
+            local report = checked(candidate, context)
+            test.is_true(report.ready)
+            test.eq(report.pending_migrations[1], "demo:data\ndemo:001")
+            local missing_candidate, missing_context = logical(nil)
+            test.is_true(has(checked(missing_candidate, missing_context), "MISSING_DATABASE_BINDING"))
+            local wrong_candidate, wrong_context = logical({database_id = "demo:run"})
+            test.is_true(has(checked(wrong_candidate, wrong_context), "MISSING_DATABASE"))
+            candidate, context = logical({database_id = "host:db"})
+            candidate.entries[#candidate.entries + 1] = candidate_entry("host:db", "db.sql.sqlite",
+                "wolfy-j/demo", string.rep("b", 64), EMPTY_STRINGS)
+            test.is_true(has(checked(candidate, context), "DATABASE_REPLACEMENT"))
+        end)
+        test.it("fails closed on missing runtime gates and changed destination base", function()
+            local candidate, context = fixture()
+            context.exact_expansion = false
+            context.registry_revision = 8
+            local report = checked(candidate, context)
+            test.is_false(report.ready)
+            test.is_true(has(report, "RUNTIME_GATE"))
+            test.is_true(has(report, "STALE_BASE"))
+            context.exact_expansion = true
+            context.registry_revision = 7
+            context.registry_digest = string.rep("b", 64)
+            test.is_true(has(checked(candidate, context), "STALE_BASE"))
+        end)
+        test.it("reports missing graph members and bindings without guessing fixes", function()
+            local candidate, context = fixture()
+            candidate.artifacts[1].dependencies = {"other/dependency"}
+            candidate.requirements[1].value = nil
+            local report = checked(candidate, context)
+            test.is_true(has(report, "UNRESOLVED_DEPENDENCY"))
+            test.is_true(has(report, "MISSING_BINDING"))
+            test.is_nil(candidate.requirements[1].value)
+        end)
+        test.it("checks final-state references and refuses cross-owner replacement", function()
+            local candidate, context = fixture()
+            context.entries["demo:run"] = candidate_entry("demo:run", "function.lua", "other/owner", SHA, EMPTY_STRINGS)
+            candidate.entries[1].references = {"demo:missing"}
+            local report = checked(candidate, context)
+            test.is_true(has(report, "ENTRY_COLLISION"))
+            test.is_true(has(report, "DANGLING_REFERENCE"))
+            context.entries["demo:removed"] = candidate_entry("demo:removed", "function.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+            candidate.entries[1].references = {"demo:removed"}
+            test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
+        end)
+        test.it("attributes only the references this plan is answerable for", function()
+            local candidate, context = fixture()
+            -- The destination host supplies part of its own composition out of
+            -- band. An entry already pointing at an absent target is the host's
+            -- standing state, not a fault this candidate introduces.
+            context.entries["host:option"] = candidate_entry("host:option", "function.lua", "host", SHA, {"host:supplied"})
+            local report = checked(candidate, context)
+            test.is_true(report.ready)
+            test.is_false(has(report, "DANGLING_REFERENCE"))
+            -- Removing a target that a retained entry still references is a
+            -- fault this candidate does introduce.
+            context.entries["host:option"].references = {"demo:retired"}
+            context.entries["demo:retired"] = candidate_entry("demo:retired", "function.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+            test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
+        end)
+        test.it("validates removals against the separately installed private overlay", function()
+            local candidate, context = fixture()
+            local retained = candidate_entry("host:option", "function.lua", "host", SHA, {"demo:retired"})
+            local retired = candidate_entry("demo:retired", "function.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+            context.entries[retained.id] = retained
+            context.installed_entries = {[retired.id] = retired}
+            local report = checked(candidate, context)
+            test.is_false(report.ready)
+            test.is_true(has(report, "DANGLING_REFERENCE"))
+            candidate.entries[#candidate.entries + 1] = retired
+            test.is_true(checked(candidate, context).ready)
+        end)
+        test.it("preserves applied migrations and binds their baseline into the measurement", function()
+            local candidate, context = fixture()
+            local before = checked(candidate, context)
+            context.applied["host:db\ndemo:001"] = candidate.migrations[1]
+            local applied = checked(candidate, context)
+            test.is_true(applied.ready)
+            test.eq(#applied.pending_migrations, 0)
+            test.is_false(applied.plan_digest == before.plan_digest)
+            candidate.migrations = {{id = "demo:001", target_db = "host:db", checksum = string.rep("b", 64), ordinal = 1}}
+            test.is_true(has(checked(candidate, context), "APPLIED_MIGRATION_CHANGED"))
+            candidate.migrations = {}
+            test.is_true(has(checked(candidate, context), "APPLIED_MIGRATION_REMOVED"))
+        end)
+        test.it("refuses changed physical evidence for an applied migration chain", function()
+            local candidate, context = fixture()
+            context.applied["host:db\ndemo:001"] = candidate.migrations[1]
+            context.applied_databases = {["host:db"] = {database_id = "host:db", kind = "db.sql.sqlite",
+                package = "host", digest = string.rep("b", 64)}}
+            local changed = checked(candidate, context)
+            test.is_true(has(changed, "APPLIED_DATABASE_CHANGED"))
+            context.applied_databases["host:db"].digest = SHA
+            local stable = checked(candidate, context)
+            test.is_true(stable.ready)
+            test.is_false(stable.plan_digest == changed.plan_digest)
+        end)
+        test.it("rejects activation before migrations and unauthorized resource targets", function()
+            local candidate, context = fixture()
+            candidate.entries[1].auto_start = true
+            candidate.entries[1].grants = {"bee.security.approvals:approval_owner_policy"}
+            candidate.entries[1].modules = {"os"}
+            context.databases["host:db"] = false
+            context.packages["wolfy-j/demo"] = false
+            context.namespaces.demo = false
+            local report = checked(candidate, context)
+            test.is_true(has(report, "MIGRATION_BARRIER_REQUIRED"))
+            test.is_true(has(report, "DATABASE_DENIED"))
+            test.is_true(has(report, "PACKAGE_DENIED"))
+            test.is_true(has(report, "NAMESPACE_DENIED"))
+            test.is_true(has(report, "GRANT_DENIED"))
+            test.is_true(has(report, "MODULE_DENIED"))
+        end)
+        test.it("round trips canonical source evidence without granting readiness", function()
+            local candidate, context = fixture()
+            local report = checked(candidate, context)
+            local bytes, digest = preflight.encode_report(report)
+            test.is_true(bytes ~= nil and digest ~= nil)
+            local decoded = assert(preflight.decode_report(bytes, digest))
+            test.eq(decoded.plan_digest, report.plan_digest)
+            test.is_nil(preflight.decode_report((bytes) .. " ", digest))
+            local forged = {schema_revision = report.schema_revision, plan_digest = report.plan_digest,
+                destination_node = report.destination_node, base_revision = report.base_revision,
+                policy_digest = report.policy_digest, ready = true,
+                diagnostics = {{code = "DENIED", target = "x", message = "x", remedy = "x"}},
+                pending_migrations = report.pending_migrations}
+            test.is_nil(preflight.encode_report(forged))
+        end)
+        test.it("decodes the reviewed candidate only from its exact measured bytes", function()
+            local candidate = fixture()
+            local bytes = assert(canonical.encode(candidate, 1048576))
+            local digest = assert(hash.sha256(bytes))
+            local decoded = assert(preflight.decode_candidate(bytes, digest))
+            test.eq(decoded.base_digest, candidate.base_digest)
+            test.eq(decoded.base_revision, candidate.base_revision)
+            test.eq(#decoded.entries, 1)
+            test.eq(decoded.entries[1].id, "demo:run")
+            test.eq(decoded.entries[1].kind, "function.lua")
+            test.eq(decoded.requirements[1].value, "host:db")
+            test.eq(decoded.migrations[1].ordinal, 1)
+            test.is_nil(preflight.decode_candidate(bytes .. " ", digest))
+            test.is_nil(preflight.decode_candidate(bytes, string.rep("b", 64)))
+            local widened = assert(canonical.encode({destination_node = candidate.destination_node,
+                source_node = candidate.source_node, base_revision = candidate.base_revision,
+                base_digest = candidate.base_digest, artifacts = candidate.artifacts,
+                entries = candidate.entries, requirements = candidate.requirements,
+                migrations = candidate.migrations, resolver = "overlay"}, 1048576))
+            test.is_nil(preflight.decode_candidate(widened, assert(hash.sha256(widened))))
+        end)
+    end)
+end
+return test.run_cases(define_tests)

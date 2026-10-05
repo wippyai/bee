@@ -5,8 +5,8 @@ local harness = require("harness")
 local function define_tests()
     test.describe("Thread lifecycle", function()
         local alice = harness.principal("alice", harness.ALL)
-        local owner_only = harness.principal("owner-only", {"bee.security.threads:thread_create_policy"})
-        local runner = harness.principal("runner", {"bee.security.threads:thread_lifecycle_policy"})
+        local owner_only = harness.principal("owner-only", {"bee.threads.security:create"})
+        local runner = harness.principal("runner", {"bee.threads.security:lifecycle"})
         local function started(epoch: integer): {[string]: unknown}
             return {execution_kind = "process", execution_ref = "pid-" .. tostring(epoch), owner_epoch = epoch}
         end

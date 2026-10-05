@@ -61,6 +61,10 @@ function M.open(request: unknown): Reply
     local definition = tail(object(object(request).spec).definition)
     if definition == "lost" then error("owner unreachable") end
     if definition == "deny" then return refuse("DENIED", "not admitted", key) end
+    if definition == "folder" then
+        local folder = object(object(object(request).spec).workdir)
+        if folder.root_ref ~= "bee.node:machine" or folder.path ~= "home/project" then return refuse("INVALID", "workdir was lost", key) end
+    end
     local session = definition == "two" and "bs:n:w:s2" or "bs:n:w:s1"
     if definition == "malformed" then return ok({session = session}) end
     return ok({session = session, operation = "bo:n:w:" .. segment(key), snapshot = (function()

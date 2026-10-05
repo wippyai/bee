@@ -3,7 +3,7 @@ local registry = require("registry")
 local bounds = require("bounds")
 function handle(raw: unknown): {[string]: unknown}
     local request = assert(bounds.object(raw))
-    local entry = assert(registry.get("bee.driver:docker_probe_facts"))
+    local entry = assert(registry.get("bee.tests.driver:docker_probe_facts"))
     local facts = assert(bounds.object(entry.data))
     local calls = assert(bounds.count(facts.calls))
     facts.calls = calls + 1

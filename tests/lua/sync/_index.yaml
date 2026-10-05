@@ -1,50 +1,12 @@
 version: '1.0'
-namespace: bee.sync
+namespace: bee.tests.sync
 entries:
-- name: migration_test_db
-  kind: db.sql.sqlite
-  meta: {type: test_support}
-  file: .wippy/sync-migration-test.db
-  lifecycle: {auto_start: true}
-- name: migration_test_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [db.get]
-    resources: [bee.sync:migration_test_db]
-    effect: allow
-- name: migration_test
-  kind: function.lua
-  source: file://migration_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    migrations: bee.sync.migrations:migrations
-    ledger: bee.persist.persist:ledger
-    persist: bee.persist.persist:database
-    database: bee.sync.persist:database
-  security: {policies: [bee.sync:migration_test_policy]}
-- name: sync_test_db
-  kind: db.sql.sqlite
-  meta: {type: test_support}
-  file: .wippy/sync-ledger-test.db
-  lifecycle: {auto_start: true}
-- name: sync_test_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [db.get]
-    resources: [bee.sync:sync_test_db]
-    effect: allow
 - name: store_test
   kind: function.lua
   source: file://store_test.lua
   method: run
   meta: {type: test, suite: bee}
   modules: [uuid, hash, base64]
-  security:
-    policies: [bee.sync:sync_test_policy]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -56,11 +18,10 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
+    limits: bee.sync.values:limits
     test: wippy.test:test
-    canonical: bee.sync.values:canonical
-    encoder: bee.values:canonical
-    bounds: bee.sync.values:bounds
-    scalar: bee.values:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua
@@ -84,8 +45,6 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [uuid, hash, base64, json]
-  security:
-    policies: [bee.sync:sync_test_policy]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -97,7 +56,6 @@ entries:
   method: run
   modules: [uuid]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.sync:sync_test_policy]}
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -144,3 +102,49 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     version: bee.sync.values:version
+- name: distribution_test
+  kind: function.lua
+  source: file://distribution_test.lua
+  method: run
+  modules: [system, process, channel, events, time, uuid, hash, base64]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    hive: bee.hive:protocol
+    sync: bee.sync.persist:store
+    replicas: bee.sync.persist:replicas
+    cursors: bee.sync.persist:distribution_store
+    version: bee.sync.values:version
+    distributor: bee.sync.service:distributor
+- name: exports
+  kind: registry.entry
+  meta:
+    type: bee.sync.exports
+  data:
+    exports:
+    - feed: tests.sync.versions
+      content_kinds: [tests.sync.blob]
+- name: peer_route
+  kind: registry.entry
+  meta:
+    type: bee.hive.route
+    sync: receiver
+  data:
+    prefix: syncpeer
+    name: bee.tests.sync.peer
+- name: second_peer_route
+  kind: registry.entry
+  meta:
+    type: bee.hive.route
+    sync: receiver
+  data:
+    prefix: syncsecond
+    name: bee.tests.sync.second
+- name: peer
+  kind: process.lua
+  source: file://peer.lua
+  method: main
+  modules: [process, channel, events, hash, base64]
+  meta: {type: test_support}
+  imports:
+    protocol: bee.hive:protocol

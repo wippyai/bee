@@ -34,7 +34,7 @@ local function descriptor(key: string, content: string): version.Descriptor
     return descriptor_for("node-a", "apps", key, content)
 end
 local function opened(): replicas.Store
-    local store, err = replicas.open("bee.sync:sync_test_db")
+    local store, err = replicas.open()
     if not store then error(tostring(err)) end
     return store
 end
@@ -261,4 +261,5 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options: unknown) return cases(options) end}

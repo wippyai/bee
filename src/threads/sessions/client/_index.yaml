@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.threads.sessions.client
+entries:
+- name: sessions
+  kind: library.lua
+  source: file://sessions.lua
+  modules:
+  - contract
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.threads.sessions.types:protocol

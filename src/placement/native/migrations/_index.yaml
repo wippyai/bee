@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.placement.native.migrations
+entries:
+- name: attempts
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-07T00:00:00Z'
+  source: file://attempts.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: complete
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-10T00:04:00Z'
+  source: file://complete.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

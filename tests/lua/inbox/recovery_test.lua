@@ -42,7 +42,7 @@ local function caller(id: string, grants: {string}): funcs.Executor
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
 end
-local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
+local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:store", "bee.threads.security:store"})
 local unconsuming = caller(REQUESTER, {"bee.security.approvals:approval_request_policy"})
 local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
 local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)

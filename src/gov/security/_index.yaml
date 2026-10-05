@@ -1,0 +1,353 @@
+version: '1.0'
+namespace: bee.gov.security
+entries:
+- name: destination_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The facade may enter the private destination scope and call its backend; it holds no store, registry or overlay grant of its own
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.gov.security:destination_execution_scope") || (action == "funcs.call"
+      && resource == "bee.gov.binding:destination_backend_call")
+    actions:
+    - funcs.security
+    - security.policy_group.get
+    - funcs.call
+    resources:
+    - security
+    - bee.gov.security:destination_execution_scope
+    - bee.gov.binding:destination_backend_call
+    effect: allow
+- name: super_edit_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: Settings may enter the private host profile writer; the facade checks its broker-minted application identity
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "bee.gov.super_edit") ||
+      (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")
+    actions:
+    - funcs.security
+    - security.actor.get
+    - security.actor.create
+    - security.policy_group.get
+    - funcs.call
+    resources:
+    - security
+    - '*'
+    - bee.gov.security:super_edit_execution_scope
+    - bee.gov.binding:super_edit_backend_call
+    effect: allow
+- name: super_edit_execution_policy
+  kind: security.policy
+  groups:
+  - super_edit_execution_scope
+  meta:
+    comment: Private host access used only by the Settings activation profile writer
+  policy:
+    actions:
+    - bee.gov.super_edit.execute
+    - registry.get
+    - registry.snapshot
+    - registry.apply
+    - registry.overlay.get
+    - registry.overlay.apply
+    - registry.overlay.create.*
+    - registry.overlay.update.*
+    - registry.overlay.delete.*
+    - system.read
+    resources: '*'
+    effect: allow
+- name: super_edit_recovery_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The native local startup path may enter the recovery scope and call the private profile writer
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "*") || (action == "security.scope.create"
+      && resource == "*") || (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_recovery_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")
+    actions:
+    - funcs.security
+    - security.actor.get
+    - security.actor.create
+    - security.scope.create
+    - security.policy_group.get
+    - funcs.call
+    resources:
+    - security
+    - '*'
+    - bee.gov.security:super_edit_recovery_execution_scope
+    - bee.gov.binding:super_edit_backend_call
+    effect: allow
+- name: super_edit_recovery_execution_policy
+  kind: security.policy
+  groups:
+  - super_edit_recovery_execution_scope
+  meta:
+    comment: Private host access used only to disable super-edit overlays after local startup readiness fails
+  policy:
+    actions:
+    - bee.gov.super_edit.recover
+    - registry.get
+    - registry.snapshot
+    - registry.apply
+    - registry.overlay.get
+    - registry.overlay.apply
+    - registry.overlay.create.*
+    - registry.overlay.update.*
+    - registry.overlay.delete.*
+    - system.read
+    resources: '*'
+    effect: allow
+- name: recovery_command_policy
+  kind: security.policy
+  meta:
+    comment: Headless native governance recovery reads activation facts and restores one retained baseline
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - registry.snapshot
+    - registry.preview
+    - registry.apply
+    - system.read
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    - registry.overlay.get
+    - registry.overlay.apply
+    - registry.overlay.shadow
+    - registry.overlay.create.*
+    - registry.overlay.update.*
+    - registry.overlay.delete.*
+    resources: '*'
+    effect: allow
+- name: staging_policy
+  kind: security.policy
+  groups:
+  - workspace_execution_scope
+  policy:
+    actions:
+    - registry.get
+    - system.read
+    resources:
+    - bee.gov.env:database_ref
+    - node
+    effect: allow
+- name: staging_database_policy
+  kind: security.policy
+  groups:
+  - workspace_execution_scope
+  policy:
+    actions:
+    - db.get
+    resources: bee:db
+    effect: allow
+- name: workspace_execution_policy
+  kind: security.policy
+  groups:
+  - workspace_execution_scope
+  policy:
+    actions:
+    - bee.gov.workspace.execute
+    resources:
+    - bee.gov.binding:workspace_backend_call
+    effect: allow
+- name: overlay_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.gov.security:workspace_execution_scope") || (action == "funcs.call" &&
+      resource == "bee.gov.binding:workspace_backend_call")
+    actions:
+    - funcs.security
+    - security.policy_group.get
+    - funcs.call
+    resources:
+    - security
+    - bee.gov.security:workspace_execution_scope
+    - bee.gov.binding:workspace_backend_call
+    effect: allow
+- name: destination_service_policy
+  kind: security.policy
+  groups:
+  - destination_execution_scope
+  meta:
+    comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - registry.preview
+    - system.read
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    - registry.overlay.get
+    - registry.overlay.apply
+    - registry.overlay.shadow
+    - registry.overlay.create.*
+    - registry.overlay.update.*
+    - registry.overlay.delete.*
+    resources: '*'
+    effect: allow
+- name: destination_execution_policy
+  kind: security.policy
+  groups:
+  - destination_execution_scope
+  meta:
+    comment: Proof that a caller entered the private destination scope; nothing else grants this action
+  policy:
+    actions:
+    - bee.gov.delivery.execute
+    resources:
+    - bee.gov.binding:destination_backend_call
+    effect: allow
+- name: publication_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.gov.security:publication_execution_scope") || (action == "funcs.call"
+      && resource == "bee.gov.binding:publication_backend_call")
+    actions:
+    - funcs.security
+    - security.policy_group.get
+    - funcs.call
+    resources:
+    - security
+    - bee.gov.security:publication_execution_scope
+    - bee.gov.binding:publication_backend_call
+    effect: allow
+- name: publication_execution_policy
+  kind: security.policy
+  groups:
+  - publication_execution_scope
+  policy:
+    actions:
+    - bee.gov.publication.execute
+    - funcs.call
+    resources:
+    - bee.gov.binding:publication_backend_call
+    effect: allow
+- name: publication_service_policy
+  kind: security.policy
+  groups:
+  - publication_execution_scope
+  meta:
+    comment: Private host resources for publishing one configured local overlay as immutable Sync content
+  policy:
+    actions:
+    - registry.get
+    - registry.overlay.get
+    - db.get
+    - system.read
+    resources: '*'
+    effect: allow
+- name: publication_profiles_read_policy
+  kind: security.policy
+  meta:
+    comment: The selected publication-profile entry readable by the delivery facade; target_publication_profiles fills the resource
+  policy:
+    actions:
+    - registry.get
+    resources:
+    - bee.gov:publication_profiles
+    - bee.gov:activation_profiles
+    effect: allow
+- name: delivery_node_read_policy
+  kind: security.policy
+  meta:
+    comment: The delivery facade reads this node's identity
+    the source of every version it publishes: null
+  policy:
+    actions:
+    - system.read
+    resources:
+    - node
+    effect: allow
+- name: delivery_facade_policy
+  kind: security.policy
+  meta:
+    comment: Public delivery facade dependencies; profile access is injected as one exact host-selected entry
+  policy:
+    actions:
+    - funcs.call
+    - security.actor.get
+    - registry.get
+    resources:
+    - bee.gov.binding:publication_call
+    - bee.gov.binding:destination_call
+    - bee.gov.env:publication_profiles_ref
+    - bee.gov.env:activation_profiles_ref
+    effect: allow
+- name: gateway_policy
+  kind: security.policy.expr
+  meta:
+    comment: The capability gateway reads grant records and performs only calls it has checked against the caller's own live grant; applications never hold these actions
+  policy:
+    expression: action != "security.policy_group.get" || resource == "bee.gov.security:gateway_callee_scope"
+    actions:
+    - registry.get
+    - contract.get
+    - contract.open
+    - contract.call
+    - contract.security
+    - security.policy_group.get
+    - http_client.request
+    resources: '*'
+    effect: allow
+- name: gateway_callee_policy
+  kind: security.policy.expr
+  groups:
+  - gateway_callee_scope
+  meta:
+    comment: The gateway passes no caller or gateway authority to an approved contract callee; only its own declared policies apply
+  policy:
+    expression: 'false'
+    actions: '*'
+    resources: '*'
+    effect: allow
+- name: source_policy
+  kind: security.policy
+  groups:
+  - workspace_execution_scope
+  meta:
+    comment: The private backend resolves the authenticated workspace before reading bounded source bytes
+  policy:
+    actions:
+    - registry.get
+    - funcs.call
+    - funcs.security
+    - security.policy.get
+    - security.actor.create
+    - security.scope.create
+    - fs.get
+    resources: '*'
+    effect: allow
+- name: driver_bindings_policy
+  kind: security.policy.expr
+  meta:
+    comment: Read consumed driver admission from the existing owner store and exact installed overlays
+  policy:
+    expression: (action == "db.get" && resource == "bee:db") || (action in ["registry.get", "registry.overlay.get", "registry.snapshot"] && resource != "") || (action == "system.read" && resource == "node")
+    actions:
+    - db.get
+    - registry.get
+    - registry.overlay.get
+    - registry.snapshot
+    - system.read
+    resources: '*'
+    effect: allow
+- name: super_edit
+  kind: library.lua
+  source: file://super_edit.lua
+  modules:
+  - hash
+  imports:
+    protected_kernel: bee.gov.types:protected_kernel
+- name: governance_delivery_lease_policy
+  kind: security.policy
+  meta: {comment: Propose, grant, list and revoke approval leases; separate from activation so an inbox can manage leases without preparing overlays}
+  policy:
+    actions: [bee.gov.delivery.lease]
+    resources: '*'
+    effect: allow

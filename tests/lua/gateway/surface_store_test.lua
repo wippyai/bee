@@ -1,13 +1,9 @@
 -- MIT. Durable surface selection belongs to a binding and uses revision CAS.
 local test = require("test")
-local persist = require("persist")
-local migrations = require("migrations")
+local schema = require("schema")
 local store = require("store")
 local function open(): sql.DB
-    local db, err = persist.open({resource = "bee.gateway:surface_test_db",
-        ledger = {table = "surface_test_migrations", label = "surface test"}, migrations = migrations.all()})
-    if not db then error(tostring(err)) end
-    return db
+    return schema.open("bee.gateway:surface_test_db", "bee.gateway.migrations")
 end
 local function begin(db: sql.DB): sql.Transaction
     local tx, err = db:begin()

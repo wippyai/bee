@@ -1,0 +1,33 @@
+version: '1.0'
+namespace: bee.git.worktree.test
+entries:
+- name: git_roots_test
+  kind: function.lua
+  source: file://git_roots_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '30s'}
+  imports:
+    test: wippy.test:test
+    git_roots: bee.git.worktree.binding:git_roots
+- name: worktree_test
+  kind: function.lua
+  source: file://worktree_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '60s'}
+  modules: [time, funcs, security]
+  security:
+    policies: [bee.git.worktree.security:worktree_policy, bee.placement.native.security:placement_runner_policy, bee.placement.native.security:placement_service_policy, bee.git.worktree.test:caller_policy]
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    worktree: bee.git.worktree.binding:worktree
+    setup_method: bee.git.worktree.binding:setup
+    cleanup_method: bee.git.worktree.binding:cleanup
+- name: caller_policy
+  kind: security.policy
+  meta:
+    comment: Permits calling the preparer methods without any placement authority
+  policy:
+    effect: allow
+    actions: [funcs.call]
+    resources: '*'

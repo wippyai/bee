@@ -1,0 +1,66 @@
+-- SPDX-License-Identifier: MIT
+local test = require("test")
+local fs = require("fs")
+local source = require("source")
+local protocol = require("protocol")
+local bounds = require("bounds")
+local ROOT = {root_ref = "bee.env:workspace_root", directory = "/proof/work", subpath = ""}
+local function define_tests()
+    test.describe("Authenticated workspace source", function()
+        test.it("reads and closes real filesystem windows including EOF", function()
+            local volume = assert(fs.get("bee.tests.gov:source_test_dir"))
+            assert(volume:writefile("cli", "abcdef"))
+            local folder = {root_ref = "bee.tests.gov:source_test_dir", directory = ".wippy/source-fixture", subpath = ""}
+            local reply = source.read(folder, assert(protocol.decode_overlay({operation = "source", path = "cli", offset = 2, limit = 3})))
+            test.is_true(reply.ok)
+            local value = assert(bounds.object(reply.value))
+            test.eq(value.content_base64, "Y2Rl")
+            test.is_false(value.eof)
+            local ending = source.read(folder, assert(protocol.decode_overlay({operation = "source", path = "cli", offset = 6})))
+            test.is_true(ending.ok)
+            test.is_true(assert(bounds.object(ending.value)).eof)
+            assert(volume:remove("cli"))
+        end)
+        test.it("normalizes only absolute paths within the admitted folder", function()
+            local root, path = source.path(ROOT, "/proof/work/bin/cli")
+            test.eq(root, "bee.env:workspace_root")
+            test.eq(path, "bin/cli")
+            test.is_nil(source.path(ROOT, "/proof/work-other/bin/cli"))
+            test.is_nil(source.path(ROOT, "../other/cli"))
+            test.is_nil(source.path(ROOT, "bin/../../other/cli"))
+        end)
+        test.it("refuses private files and shared-root workspace folders", function()
+            for _, path in ipairs({".claude/login", "bin/.env", "credentials.json", "auth.json", "key.pem", "secrets"}) do
+                test.is_nil(source.path(ROOT, path))
+            end
+            test.is_nil(source.path({root_ref = "bee.env:workspace_root", directory = "/proof", subpath = "work"}, "bin/cli"))
+        end)
+        test.it("reads one bounded window without acquiring another resource", function()
+            local calls = 0
+            local reply = source.read_with(function(root: string, path: string, offset: integer, limit: integer): (string?, string?)
+                calls = calls + 1
+                test.eq(root, "bee.env:workspace_root")
+                test.eq(path, "bin/cli")
+                test.eq(offset, 3)
+                test.eq(limit, 5)
+                return "hello", nil
+            end, ROOT, assert(protocol.decode_overlay({operation = "source", path = "bin/cli", offset = 3, limit = 4})))
+            test.is_true(reply.ok)
+            local value = assert(bounds.object(reply.value))
+            test.eq(value.content_base64, "aGVsbA==")
+            test.eq(value.next_offset, 7)
+            test.is_false(value.eof)
+            test.eq(calls, 1)
+        end)
+        test.it("denies an escaping path before opening a filesystem", function()
+            local calls = 0
+            local reply = source.read_with(function(_: string, _: string, _: integer, _: integer): (string?, string?)
+                calls = calls + 1
+                return "unreachable", nil
+            end, ROOT, assert(protocol.decode_overlay({operation = "source", path = "/other/cli"})))
+            test.eq(reply.code, "DENIED")
+            test.eq(calls, 0)
+        end)
+    end)
+end
+return test.run_cases(define_tests)

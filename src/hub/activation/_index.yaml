@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.hub.activation
+entries:
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: migration_work
+  kind: library.lua
+  source: file://migration_work.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    plan: bee.hub.package:plan
+    migrations: bee.hub.activation:migrations
+- name: installation
+  kind: library.lua
+  source: file://installation.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    semver: bee.hub.package:semver

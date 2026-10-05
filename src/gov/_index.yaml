@@ -1,0 +1,136 @@
+version: '1.0'
+namespace: bee.gov
+entries:
+- name: delivery_contract
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Discover, stage, review, select and locally activate overlay versions for one destination workspace
+- name: overlay_contract
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Author a caller-owned overlay with revision checks; freeze content without executing or approving it
+- name: activation_profiles
+  kind: registry.entry
+  meta:
+    type: bee.gov.activation_profiles
+    comment: Host-selected destination mappings and capability ceilings. workspace_applications is the ceiling for applications a workspace's agents author for it and, with hive, for the same applications
+      received from another node; workspace_drivers is the ceiling for drivers those agents author; packages is the ceiling for Bee packages this node composes. Their policies are the security policies such content may name beyond the application policy group every app runs in. Remote artifacts cannot edit this entry
+  data:
+    profiles: []
+    workspace_applications:
+      approval_policy: workspace-application-delivery
+      kinds:
+      - process.lua
+      - library.lua
+      - ns.requirement
+      - registry.entry
+      modules:
+      - tty
+      - process
+      - channel
+      - json
+      - time
+      - uuid
+      - base64
+      - hash
+      - funcs
+      - fs
+      - sql
+      policies: []
+      thread_access: none
+      hive: true
+    workspace_drivers:
+      approval_policy: workspace-application-delivery
+      kinds: [function.lua, library.lua, registry.entry, contract.binding, ns.requirement, security.policy, security.policy.expr]
+      modules: [json, hash, registry, time]
+      policies: []
+      thread_access: none
+      hive: false
+    packages:
+      approval_policy: workspace-application-delivery
+      kinds: [process.lua, library.lua, ns.requirement, security.policy, registry.entry, contract.binding, env.variable]
+      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, registry, system]
+      policies: []
+      thread_access: none
+- name: publication_profiles
+  kind: registry.entry
+  meta:
+    type: bee.gov.publication_profiles
+    comment: Host-selected source workspaces and overlay owners available for immutable publication; workspace_applications publishes the overlays a workspace's own agents author under the app.<overlay_id>
+      naming rule, workspace_drivers those under the driver.<name> rule
+  data:
+    profiles: []
+    workspace_applications: true
+    workspace_drivers: true
+- name: protected_kernel
+  kind: registry.entry
+  meta:
+    type: bee.protected_kernel
+    comment: Host trust map no overlay profile can open; preflight refuses edits to these definitions, their transitive code dependencies and requirement selectors aimed at them. super_edit names the namespaces
+      a person may open to a time-bounded edit. The shared driver core is protected; each driver's own bee.driver.<name> namespaces stay under governance, so workspace drivers can be delivered
+  data:
+    revision: 1
+    namespaces:
+    - bee.app
+    - bee.approvals
+    - bee.apps
+    - bee.capability
+    - bee.credentials
+    - bee.deps
+    - bee.docs
+    - bee.driver.binding
+    - bee.driver.codec
+    - bee.driver.descriptor
+    - bee.driver.locate
+    - bee.driver.permission
+    - bee.driver.profiles
+    - bee.driver.transport
+    - bee.env
+    - bee.executor
+    - bee.gateway
+    - bee.git
+    - bee.gov
+    - bee.harness
+    - bee.hive
+    - bee.hub
+    - bee.node
+    - bee.persist
+    - bee.placement
+    - bee.resources
+    - bee.security
+    - bee.shell
+    - bee.sync
+    - bee.threads
+    - bee.ui
+    - bee.values
+    super_edit:
+    - bee.apps.settings
+    - bee.shell
+    entries:
+    - bee.gov:protected_kernel
+    - bee.driver:types
+    - bee.driver:driver
+    - bee.driver:locate_facet
+    - bee.gov:activation_profiles
+    - bee.gov:publication_profiles
+    - bee:definition
+    - bee:workers
+    - bee:terminal
+    - bee:os
+    - bee:env_path
+    - bee:env
+    - bee:role
+    - bee:db_path
+    - bee:db
+- name: exports
+  kind: registry.entry
+  meta:
+    type: bee.sync.exports
+    comment: Published application versions distribute to every node of the hive
+  data:
+    exports:
+    - feed: governance.application_versions
+      content_kinds:
+      - bee.governance-application-version@2

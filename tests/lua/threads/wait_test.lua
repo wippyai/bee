@@ -2,7 +2,7 @@
 -- while blocked, time out with a cursor, and remember only final outcomes.
 local test = require("test")
 local harness = require("harness")
-local waits = require("waits")
+local commits = require("commits")
 local function define_tests()
     test.describe("Thread waits", function()
         local alice = harness.principal("alice", harness.ALL)
@@ -13,10 +13,10 @@ local function define_tests()
             return thread_id
         end
         test.it("bounds the effective wait by the ceiling and the transport budget", function()
-            test.eq(waits.effective_wait(5000, nil), 5000)
-            test.eq(waits.effective_wait(90000, nil), 60000)
-            test.eq(waits.effective_wait(60000, 5000), 4000)
-            test.eq(waits.effective_wait(60000, 500), 0)
+            test.eq(commits.effective_wait(5000, nil), 5000)
+            test.eq(commits.effective_wait(90000, nil), 60000)
+            test.eq(commits.effective_wait(60000, 5000), 4000)
+            test.eq(commits.effective_wait(60000, 500), 0)
         end)
         test.it("returns at once with claims and records when the thread already moved", function()
             local thread_id = shared()

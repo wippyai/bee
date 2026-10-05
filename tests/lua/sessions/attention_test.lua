@@ -18,10 +18,10 @@ local function define_tests()
             local workspace = string.rep("d", 32)
             local journal = harness.session_owner(workspace)
             local actor = assert(security.new_actor("person", {workspace_id = workspace}))
-            local scope = security.new_scope({assert(security.policy("bee.threads:client_test_policy")),
+            local scope = security.new_scope({assert(security.policy("bee.tests.threads:client_policy")),
                 assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
             local function summary(home: string): {[string]: unknown}
-                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:attention_count", {workspace_id = home})
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:attention_count", {workspace_id = home})
                 if err then error(tostring(err)) end
                 return object(raw)
             end

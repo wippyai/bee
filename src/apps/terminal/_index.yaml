@@ -1,0 +1,87 @@
+version: '1.0'
+namespace: bee.apps.terminal
+entries:
+- name: command
+  kind: library.lua
+  source: file://command.lua
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Terminal
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      terminal: true
+      menus: [bee.shell:apps_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - exec
+  - process
+  - channel
+  imports:
+    command: bee.apps.terminal:command
+  security:
+    policies:
+    - bee.apps.terminal:acquire
+    - bee.apps.terminal:run
+- name: acquire
+  kind: security.policy
+  meta:
+    comment: Terminal acquires its own executor
+  policy:
+    actions:
+    - exec.get
+    resources:
+    - bee.apps.terminal:executor
+    effect: allow
+- name: run
+  kind: security.policy.expr
+  meta:
+    comment: Terminal runs the user's shell, and the commands it is opened with, through its own executor only
+  policy:
+    expression: meta.executor == "bee.apps.terminal:executor"
+    actions:
+    - exec.run
+    resources: '*'
+    effect: allow
+- name: executor
+  kind: exec.native
+  default_env:
+    PATH: ${env:bee.apps.terminal:path}
+    HOME: ${env:bee.apps.terminal:home}
+    USER: ${env:bee.apps.terminal:user|}
+    LANG: ${env:bee.apps.terminal:lang}
+    TERM: xterm-256color
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: path
+  kind: env.variable
+  storage: bee.apps.terminal:environment
+  variable: PATH
+  default: /usr/local/bin:/usr/bin:/bin
+  readonly: true
+- name: home
+  kind: env.variable
+  storage: bee.apps.terminal:environment
+  variable: HOME
+  default: /
+  readonly: true
+- name: user
+  kind: env.variable
+  storage: bee.apps.terminal:environment
+  variable: USER
+  default: ''
+  readonly: true
+- name: lang
+  kind: env.variable
+  storage: bee.apps.terminal:environment
+  variable: LANG
+  default: C.UTF-8
+  readonly: true

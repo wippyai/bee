@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.tests.apps.overlays
+entries:
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.apps.overlays:model
+    preflight: bee.gov.binding:preflight
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [tty]
+  imports:
+    test: wippy.test:test
+    model: bee.apps.overlays:model
+    view: bee.apps.overlays:view
+    appearance: bee.ui:appearance
+    preflight: bee.gov.binding:preflight

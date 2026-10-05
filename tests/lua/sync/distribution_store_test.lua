@@ -9,7 +9,7 @@ local function define_tests()
     test.describe("Sync distribution cursors", function()
         test.it("advances destinations independently with expected-value fencing", function()
             local suffix = assert(uuid.v7())
-            local opened = assert(store.open("bee.sync:sync_test_db"))
+            local opened = assert(store.open())
             local source, feed = "source-" .. suffix, "application-versions"
             local left = store.cursor(opened, source, feed, "node-left")
             local right = store.cursor(opened, source, feed, "node-right")
@@ -24,4 +24,5 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options: unknown) return cases(options) end}

@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.ui
+entries:
+- name: text
+  kind: library.lua
+  source: file://text.lua
+- name: appearance
+  kind: library.lua
+  source: file://appearance.lua
+- name: frame
+  kind: library.lua
+  source: file://frame.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance

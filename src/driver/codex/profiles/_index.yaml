@@ -1,0 +1,223 @@
+version: '1.0'
+namespace: bee.driver.codex.profiles
+entries:
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.codex.binding:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Codex CLI
+      implementation_version: 0.154.0
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PermissionRequest
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.codex.descriptor:cli
+        inbound:
+        - next_turn
+        protocol: stream-json
+        protocol_revision: exec-json-1
+        answer_path:
+          strategy: accumulate
+          adapter_ref: bee.driver.codex.descriptor:cli
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CODEX_HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.codex.descriptor:cli
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+        sandbox:
+          providers:
+          - codex-sandbox
+          required_placement_features: []
+          git_writable_roots_adapter: codex_workspace_write
+      - id: named_batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: exec-json-1
+        answer_path:
+          strategy: accumulate
+          adapter_ref: bee.driver.codex.descriptor:cli
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CODEX_HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.codex.descriptor:cli
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+        sandbox:
+          providers:
+          - codex-sandbox
+          required_placement_features: []
+          git_writable_roots_adapter: codex_workspace_write
+      - id: window
+        mode: window
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PermissionRequest
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.codex.descriptor:cli
+        protocol: pty
+        protocol_revision: native-window-1
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CODEX_HOME
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: none
+        sandbox:
+          providers:
+          - codex-sandbox
+          required_placement_features: []
+          git_writable_roots_adapter: codex_workspace_write
+        permission_exchange:
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Codex window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-window
+    title: Codex CLI
+    binding_ref: bee.driver.codex.binding:binding
+    profile_id: window
+    session_profile_id: batch
+    session_credentials:
+    - codex_login
+    session_mode: batch
+    policy_ref: bee.driver.codex.security:launch_policy_codex_window
+    default_mode: window
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
+    session_resource: session
+    credentials: []
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned bounded Codex batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-research-batch
+    title: Codex researcher
+    binding_ref: bee.driver.codex.binding:binding
+    profile_id: batch
+    policy_ref: bee.driver.codex.security:launch_policy_codex_batch
+    default_mode: batch
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
+    session_resource: session
+    credentials:
+    - codex_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
+- name: named_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned structured Codex route that projects its selected named profile, login and required configuration into a private home
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-named-batch
+    title: Codex named profile
+    binding_ref: bee.driver.codex.binding:binding
+    profile_id: named_batch
+    policy_ref: bee.driver.codex.security:launch_policy_codex_named_batch
+    default_mode: batch
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
+    session_resource: session
+    credentials:
+    - codex_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never

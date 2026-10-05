@@ -1,6 +1,6 @@
 -- MIT. Focused tests for the Bee Antigravity CLI (agy) harness child component.
 local test = require("test")
-local principals = require("principals")
+local fixtures = require("fixtures")
 local json = require("json")
 local hash = require("hash")
 local registry = require("registry")
@@ -25,7 +25,7 @@ end
 
 local function quoted_arguments(value: unknown): string?
     if type(value) ~= "table" then return nil end
-    local raw = principals.items(value)
+    local raw = fixtures.items(value)
     local arguments: {string} = {}
     for index, argument in ipairs(raw) do
         if type(argument) ~= "string" then return nil end
@@ -59,7 +59,7 @@ local function define_tests()
             test.eq(session_p.protocol, "stream-json")
             test.eq(session_p.protocol_revision, "agy-stream-json-1")
             test.eq(session_p.answer_path.strategy, "terminal_field")
-            test.eq(session_p.answer_path.adapter_ref, "bee.driver.agy.binding:protocol")
+            test.eq(session_p.answer_path.adapter_ref, "bee.driver.agy.descriptor:cli")
             test.eq(session_p.resume.strategy, "per-process")
             test.eq(session_p.input_ready.strategy, "protocol")
             test.eq(session_p.permission_exchange.mode, "none")

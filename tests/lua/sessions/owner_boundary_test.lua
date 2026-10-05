@@ -8,7 +8,7 @@ local function define_tests()
         test.it("rejects non-object requests through every registered method", function()
             for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "history",
                 "cancel", "close", "catalog", "attach", "detach", "hook_boundary", "attention_count"}) do
-                local raw, problem = funcs.call("bee.sessions.binding:" .. method, "invalid")
+                local raw, problem = funcs.call("bee.threads.sessions.binding:" .. method, "invalid")
                 test.is_nil(problem, method)
                 local reply = assert(bounds.object(raw))
                 test.eq(reply.ok, false, method)

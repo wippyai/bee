@@ -1,20 +1,26 @@
 version: '1.0'
-namespace: bee.hub
+namespace: bee.tests.hub
 entries:
 - name: migration_runner_db
   kind: db.sql.sqlite
   file: .wippy/hub-migration-runner.db
   meta: {type: test_support}
+  lifecycle:
+    auto_start: true
 - name: migration_binding_db
   kind: db.sql.sqlite
   file: .wippy/hub-migration-binding.db
   meta: {type: test_support}
+  lifecycle:
+    auto_start: true
 - name: migration_runner_test_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [db.get, funcs.call, funcs.security, security.scope.create, security.policy.get]
-    resources: [bee.hub:migration_runner_db, bee.hub:migration_binding_db, bee.hub:test_default_migration, bee.hub:test_custom_migration, bee.hub:test_governance_migration, bee.hub:test_bound_migration, bee.hub:governance_migration_grant_policy, security, without]
+    resources: [bee.tests.hub:migration_runner_db, bee.tests.hub:migration_binding_db, bee.tests.hub:test_default_migration,
+      bee.tests.hub:test_custom_migration, bee.tests.hub:test_bound_migration, bee.tests.hub:test_governance_migration,
+      bee.tests.hub:governance_migration_grant_policy, security, without]
     effect: allow
 - name: migration_binding_deny_policy
   kind: security.policy
@@ -23,71 +29,67 @@ entries:
     actions: [db.get]
     resources: [demo:ungranted]
     effect: deny
-- name: governance_migration_grant_policy
+- name: owner_service_policy
   kind: security.policy
-  meta: {type: test_support}
+  meta: {type: test_support, comment: A private policy of another owner that reuses the migration runner}
   policy:
-    actions: [db.get, funcs.call]
-    resources: [bee.hub:migration_runner_db, bee.hub:test_governance_migration]
+    actions: [bee.tests.hub.owner.service]
+    resources: [bee.tests.hub]
+    effect: allow
+- name: owner_execution_policy
+  kind: security.policy
+  meta: {type: test_support, comment: A private policy of another owner that reuses the migration runner}
+  policy:
+    actions: [bee.tests.hub.owner.execute]
+    resources: [bee.tests.hub]
     effect: allow
 - name: test_default_migration
   kind: function.lua
   source: file://migration_runner_probe.lua
   method: run
   modules: [sql, security]
-  meta: {type: migration, target_db: bee.hub:migration_runner_db, timestamp: '2026-09-19T10:00:00Z'}
+  meta: {type: test_support, comment: Runs only through the migration runner under test}
 - name: test_custom_migration
   kind: function.lua
   source: file://migration_runner_probe.lua
   method: run
   modules: [sql, security]
-  meta: {type: migration, target_db: bee.hub:migration_runner_db, timestamp: '2026-09-19T11:00:00Z'}
+  meta: {type: test_support, comment: Runs only through the migration runner under test}
+- name: governance_migration_grant_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The grant a governed migration runs under}
+  policy:
+    actions: [db.get, funcs.call]
+    resources: [bee.tests.hub:migration_runner_db, bee.tests.hub:test_governance_migration]
+    effect: allow
 - name: test_governance_migration
   kind: function.lua
   source: file://migration_runner_probe.lua
   method: run
   modules: [sql, security]
-  meta: {type: migration, target_db: bee.hub:migration_runner_db, timestamp: '2026-09-19T12:00:00Z'}
+  meta: {type: test_support, comment: Runs only through the governance migration effect under test}
 - name: test_bound_migration
   kind: function.lua
   source: file://migration_runner_probe.lua
   method: run
   modules: [sql, security]
-  meta: {type: migration, target_db: 'demo:data', timestamp: '2026-09-19T13:00:00Z'}
-- name: governance_migration_effect_test
-  kind: function.lua
-  source: file://governance_migration_effect_test.lua
-  method: run
-  modules: [hash, json]
-  meta: {type: test, suite: bee}
-  security:
-    policies:
-    - bee.hub:migration_runner_test_policy
-    - bee.gov.security:destination_service_policy
-    - bee.gov.security:destination_execution_policy
-  imports:
-    test: wippy.test:test
-    effect: bee.gov.binding:migration_effect
-    migration_runner: bee.hub.binding:migration_runner
-    migration_work: bee.gov.types:migration_work
-    canonical: bee.values:canonical
+  meta: {type: test_support, comment: Runs only through the migration runner under test}
 - name: migration_runner_test
   kind: function.lua
   source: file://migration_runner_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [security]
   security:
     policies:
-    - bee.hub:migration_runner_test_policy
-    - bee.hub:migration_binding_deny_policy
+    - bee.tests.hub:migration_runner_test_policy
+    - bee.tests.hub:migration_binding_deny_policy
     - bee.hub.security:execution_policy
     - bee.hub.security:publisher_policy
     - bee.hub.security:worker_policy
     - bee.hub.security:worker_host_policy
     - bee.hub.security:migration_context_policy
-    - bee.gov.security:destination_service_policy
-    - bee.gov.security:destination_execution_policy
+    - bee.tests.hub:owner_service_policy
+    - bee.tests.hub:owner_execution_policy
   imports:
     test: wippy.test:test
     migration_runner: bee.hub.binding:migration_runner
@@ -100,14 +102,6 @@ entries:
   imports:
     test: wippy.test:test
     requirements: bee.hub.package:requirements
-- name: host_resources_test
-  kind: function.lua
-  source: file://host_resources_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    host_resources: bee.hub.activation:host_resources
 - name: inspect_test
   kind: function.lua
   source: file://inspect_test.lua
@@ -129,4 +123,117 @@ entries:
   imports:
     test: wippy.test:test
     hub_result: bee.hub.package:result
-    installation: bee.hub.activation:installation
+- name: lifecycle_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    lifecycle: bee.hub.types:lifecycle
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    catalog: bee.hub.binding:catalog
+- name: graph_test
+  kind: function.lua
+  source: file://graph_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    graph: bee.hub.package:graph
+    inspect: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
+- name: inventory_test
+  kind: function.lua
+  source: file://inventory_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    inventory: bee.hub.package:inventory
+- name: migration_work_test
+  kind: function.lua
+  source: file://migration_work_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    migration_work: bee.hub.activation:migration_work
+    plan: bee.hub.package:plan
+- name: migrations_test
+  kind: function.lua
+  source: file://migrations_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    migrations: bee.hub.activation:migrations
+- name: plan_test
+  kind: function.lua
+  source: file://plan_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    plan: bee.hub.package:plan
+    graph: bee.hub.package:graph
+    inspect: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
+- name: preview_test
+  kind: function.lua
+  source: file://preview_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    preview: bee.hub.binding:preview
+- name: semver_test
+  kind: function.lua
+  source: file://semver_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    semver: bee.hub.package:semver
+- name: facade_test
+  kind: function.lua
+  source: file://facade_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+- name: lifecycle_process
+  kind: process.lua
+  source: file://lifecycle_process.lua
+  method: main
+  modules: [process]
+  meta: {type: test_support}
+- name: lifecycle_owner
+  kind: function.lua
+  source: file://lifecycle_owner.lua
+  method: handle
+  meta: {type: test_support}
+- name: lifecycle_service
+  kind: process.service
+  process: bee.tests.hub:lifecycle_process
+  host: bee:workers
+  meta: {type: test_support, component_lifecycle: bee.tests.hub:lifecycle_owner}
+  lifecycle:
+    auto_start: true
+- name: lifecycle_service_test
+  kind: function.lua
+  source: file://lifecycle_service_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, system]
+  imports:
+    test: wippy.test:test
+    lifecycle: bee.hub.types:lifecycle
+    service_lifecycle: bee.hub.binding:lifecycle

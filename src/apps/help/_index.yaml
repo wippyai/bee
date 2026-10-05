@@ -1,0 +1,32 @@
+version: '1.0'
+namespace: bee.apps.help
+entries:
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Keyboard help
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    view: bee.apps.help:view

@@ -1,10 +1,6 @@
 version: '1.0'
-namespace: bee.driver
+namespace: bee.tests.driver
 entries:
-- name: fixtures
-  kind: fs.directory
-  meta: {type: test_support}
-  directory: ./fixtures/drivers
 - name: profile_test
   kind: function.lua
   source: file://profile_test.lua
@@ -18,7 +14,9 @@ entries:
   kind: function.lua
   source: file://kit_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     framing: bee.driver.transport:framing
@@ -26,26 +24,51 @@ entries:
     events: bee.driver.codec:events
     observation: bee.threads.records:observation
     stream_json: bee.driver.transport:stream_json
+- name: option_render_test
+  kind: function.lua
+  source: file://option_render_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, toml, hash, registry]
+  security: {policies: [bee.harness.profiles:repair_policy]}
+  imports:
+    universal: bee.driver.binding:universal
+    test: wippy.test:test
+    render: bee.driver.binding:option_render
+    descriptor: bee.driver.descriptor:descriptor
+    configuration: bee.driver.binding:configuration
+    materializer: bee.placement.native.env:configuration
+    bounds: bee.values:bounds
 - name: providers_test
   kind: function.lua
   source: file://providers_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [fs, json, funcs]
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  modules:
+  - fs
+  - json
+  - funcs
   imports:
     driver_types: bee.driver:types
     universal: bee.driver.binding:universal
     bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
-    claude: bee.driver.claude.binding:protocol
-    codex: bee.driver.codex.binding:protocol
-    muse: bee.driver.muse.binding:protocol
-    claude_launch: bee.driver.claude.binding:launch
-    codex_launch: bee.driver.codex.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
+    claude: bee.tests.driver.support:claude_protocol
+    codex: bee.tests.driver.support:codex_protocol
+    muse: bee.tests.driver.support:muse_protocol
+    claude_launch: bee.tests.driver.support:claude_launch
+    codex_launch: bee.tests.driver.support:codex_launch
+    muse_launch: bee.tests.driver.support:muse_launch
     observation: bee.threads.records:observation
     quote: bee.driver.binding:quote
+- name: fixtures
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: ./fixtures/drivers
 - name: login_evidence_test
   kind: function.lua
   source: file://login_evidence_test.lua
@@ -53,15 +76,15 @@ entries:
   modules: [registry]
   meta: {type: test, suite: bee}
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    codex_launch: bee.driver.codex.binding:launch
-    claude_launch: bee.driver.claude.binding:launch
-    agy_launch: bee.driver.agy.binding:launch
-    grok_launch: bee.driver.grok.binding:launch
-    muse_launch: bee.driver.muse.binding:launch
-    opencode_launch: bee.driver.opencode.binding:launch
+    codex_launch: bee.tests.driver.support:codex_launch
+    claude_launch: bee.tests.driver.support:claude_launch
+    agy_launch: bee.tests.driver.support:agy_launch
+    grok_launch: bee.tests.driver.support:grok_launch
+    muse_launch: bee.tests.driver.support:muse_launch
+    opencode_launch: bee.tests.driver.support:opencode_launch
     universal: bee.driver.binding:universal
     materialization: bee.placement.native.service:materialization
     placement_types: bee.placement:types
@@ -88,12 +111,12 @@ entries:
 - name: descriptor_test
   kind: function.lua
   source: file://descriptor_test.lua
-  security: {policies: [bee.driver:descriptor_discovery_policy]}
+  security: {policies: [bee.tests.driver:descriptor_discovery_policy]}
   method: run
   meta: {type: test, suite: bee}
   modules: [registry]
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     test: wippy.test:test
     descriptor: bee.driver.descriptor:descriptor
     resolver: bee.driver.binding:resolver
@@ -111,23 +134,6 @@ entries:
     codec_registry: bee.driver.codec:codec_registry
     descriptor: bee.driver.descriptor:descriptor
     configuration: bee.driver.binding:configuration
-- name: codex_config_test
-  kind: function.lua
-  source: file://codex_config_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    configuration: bee.driver.codex.binding:configuration
-- name: codex_launch_test
-  kind: function.lua
-  source: file://codex_launch_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    launch: bee.driver.codex.binding:launch
-    quote: bee.driver.binding:quote
 - name: muse_config_test
   kind: function.lua
   source: file://muse_config_test.lua
@@ -135,7 +141,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     registry: registry
@@ -145,21 +151,6 @@ entries:
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
 
-- name: option_render_test
-  kind: function.lua
-  source: file://option_render_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [json, toml, hash, registry]
-  security: {policies: [bee.harness.profiles:repair_policy]}
-  imports:
-    universal: bee.driver.binding:universal
-    test: wippy.test:test
-    render: bee.driver.binding:option_render
-    descriptor: bee.driver.descriptor:descriptor
-    configuration: bee.driver.binding:configuration
-    materializer: bee.placement.native.env:configuration
-    bounds: bee.values:bounds
 - name: budget_accounting_test
   kind: function.lua
   source: file://budget_accounting_test.lua
@@ -172,7 +163,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [registry, json]
-  security: {policies: [bee.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy]}
+  security: {policies: [bee.tests.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy]}
   imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.values:bounds, locate: bee.harness.launch:locate}
 - name: docker_probe_policy
   kind: security.policy
@@ -188,5 +179,22 @@ entries:
   method: handle
   meta: {type: test_support}
   modules: [registry]
-  security: {policies: [bee.driver:docker_probe_policy]}
+  security: {policies: [bee.tests.driver:docker_probe_policy]}
   imports: {bounds: bee.values:bounds}
+- name: host_values_test
+  kind: function.lua
+  source: file://host_values_test.lua
+  method: run
+  modules: [env]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+  security:
+    policies: [bee.tests.driver:host_values_policy]
+- name: host_values_policy
+  kind: security.policy
+  meta: {comment: The host values test reads the driver override variables}
+  policy:
+    actions: [env.get]
+    resources: [bee.driver.claude.env:config_home, bee.driver.claude.env:api_key, bee.driver.codex.env:config_home]
+    effect: allow

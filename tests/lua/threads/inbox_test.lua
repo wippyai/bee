@@ -13,9 +13,9 @@ end
 local function define_tests()
     test.describe("Action inbox", function()
         test.it("checks the send grant and owner acceptance, deduplicates, acknowledges and correlates a cross-thread reply", function()
-            local a = harness.principal("agent-a", {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.threads:inbox_send_test_policy"}, WORKSPACE)
-            local b = harness.principal("agent-b", {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.threads:inbox_send_test_policy"}, WORKSPACE)
-            local no_grant = harness.principal("agent-a", {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy"}, WORKSPACE)
+            local a = harness.principal("agent-a", {"bee.threads.security:create", "bee.threads.security:lifecycle", "bee.tests.threads:inbox_send_policy"}, WORKSPACE)
+            local b = harness.principal("agent-b", {"bee.threads.security:create", "bee.threads.security:lifecycle", "bee.tests.threads:inbox_send_policy"}, WORKSPACE)
+            local no_grant = harness.principal("agent-a", {"bee.threads.security:create", "bee.threads.security:lifecycle"}, WORKSPACE)
             local a_thread = harness.thread(a, "A")
             local b_thread = harness.thread(b, "B")
             local native = system.node.id()
@@ -86,7 +86,7 @@ local function define_tests()
             test.eq(terminated.items[1].delivery_status, "undeliverable")
             test.eq(harness.value(b:call("inbox_list", {thread_id = b_thread, action_id = "action-b", after_sequence = 0})).items[1].delivery_status, "replied")
             local c_id = "bee.application:" .. WORKSPACE .. ":window-c"
-            local c = harness.principal(c_id, {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.threads:inbox_send_test_policy"}, WORKSPACE)
+            local c = harness.principal(c_id, {"bee.threads.security:create", "bee.threads.security:lifecycle", "bee.tests.threads:inbox_send_policy"}, WORKSPACE)
             local c_thread = harness.thread(c, "C")
             harness.value(c:call("admit_action", {thread_id = c_thread, idempotency_key = harness.key(), action_id = "action-c", admitted = admitted(c_id)}))
             local class_content = {text = "from class"}
@@ -101,7 +101,7 @@ local function define_tests()
         test.it("refuses to lease a forwarding row with corrupt durable content", function()
             local sender_id = "corrupt-sender-" .. harness.key()
             local sender = harness.principal(sender_id,
-                {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.threads:inbox_send_test_policy"}, WORKSPACE)
+                {"bee.threads.security:create", "bee.threads.security:lifecycle", "bee.tests.threads:inbox_send_policy"}, WORKSPACE)
             local sender_thread = harness.thread(sender, "corrupt forwarding source")
             harness.value(sender:call("admit_action", {thread_id = sender_thread, idempotency_key = harness.key(),
                 action_id = "sender-action", admitted = admitted(sender_id)}))
@@ -129,7 +129,7 @@ local function define_tests()
             cleanup:release()
         end)
         test.it("offers one ordered item under a carrier epoch and redelivers its identity after a crash", function()
-            local grants = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
+            local grants = {"bee.threads.security:create", "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.tests.threads:inbox_send_policy"}
             local sender = harness.principal("push-sender", grants, WORKSPACE)
             local target = harness.principal("push-target", grants, WORKSPACE)
             local sender_thread = harness.thread(sender, "sender")
@@ -151,7 +151,7 @@ local function define_tests()
                     content = content, payload_digest = assert(sends.payload_digest({message_id = id, content = content}))}))
             end
             local offer = {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt", carrier_epoch = first_epoch}
-            local no_carrier = harness.principal("push-target", {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy"}, WORKSPACE)
+            local no_carrier = harness.principal("push-target", {"bee.threads.security:create", "bee.threads.security:lifecycle"}, WORKSPACE)
             test.eq(harness.code(no_carrier:call("inbox_offer", offer)), "DENIED")
             test.eq(harness.code(sender:call("inbox_offer", offer)), "DENIED")
             local first = harness.value(target:call("inbox_offer", offer))
@@ -190,7 +190,7 @@ local function define_tests()
             test.eq(harness.value(target:call("inbox_offer", offer)).empty, true)
         end)
         test.it("records restart status when a live attempt settles with an unacknowledged item", function()
-            local grants = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
+            local grants = {"bee.threads.security:create", "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.tests.threads:inbox_send_policy"}
             local sender = harness.principal("restart-sender", grants, WORKSPACE)
             local target = harness.principal("restart-target", grants, WORKSPACE)
             local sender_thread = harness.thread(sender, "sender")

@@ -1,13 +1,368 @@
 version: '1.0'
 namespace: bee.gateway.binding
 entries:
-- name: gateway_workspace_extension
-  kind: contract.binding
-  meta:
-    title: Agent sessions
-    comment: The host attaches each workspace's running agent sessions to the workspace catalog and its viewer
-  contracts:
-  - contract: bee.workspace.catalog:extension
-    methods:
-      describe: bee.gateway.binding:describe
-      search: bee.gateway.binding:search
+- name: gateway
+  kind: library.lua
+  source: file://gateway.lua
+  modules:
+  - sql
+  - hash
+  - time
+  - uuid
+  - json
+  - security
+  - contract
+  - system
+  - crypto
+  - base64
+  - http_client
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    capability_model: bee.capability:model
+    node_database: bee.persist:database
+    configuration: bee.gateway.env:configuration
+    hooks: bee.gateway.hooks:hooks
+    mcp: bee.gateway.api:mcp
+    sessions: bee.gateway.catalog:sessions
+    surface: bee.gateway.catalog:surface
+    surface_store: bee.gateway.persist:surface_store
+    binding_store: bee.gateway.persist:binding_store
+    credential_store: bee.gateway.persist:credential_store
+    hook_store: bee.gateway.persist:hook_store
+    listener_store: bee.gateway.persist:listener_store
+    access: bee.gateway.security:access
+    elevation: bee.gateway.security:elevation
+    installation: bee.gateway.security:installation
+- name: open
+  kind: function.lua
+  source: file://open_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: admit
+  kind: function.lua
+  source: file://admit_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: revoke
+  kind: function.lua
+  source: file://revoke_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: materialize
+  kind: function.lua
+  source: file://materialize_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: authorize_materialization
+  kind: function.lua
+  source: file://authorize_materialization_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: reissue
+  kind: function.lua
+  source: file://reissue_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: revoke_attempt
+  kind: function.lua
+  source: file://revoke_attempt_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: check
+  kind: function.lua
+  source: file://check_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: request_capability
+  kind: function.lua
+  source: file://request_capability_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:elevation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.resources.security:resource_grant_thread_policy
+- name: capability_status
+  kind: function.lua
+  source: file://capability_status_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:elevation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.resources.security:resource_grant_thread_policy
+- name: install_request
+  kind: function.lua
+  source: file://install_request_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: uninstall_request
+  kind: function.lua
+  source: file://uninstall_request_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: install_status
+  kind: function.lua
+  source: file://install_status_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: publication
+  kind: library.lua
+  source: file://publication.lua
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+    hubpublish: bee.gateway.security:publish
+- name: publish_request
+  kind: function.lua
+  source: file://publish_request_method.lua
+  method: handle
+  imports:
+    publication: bee.gateway.binding:publication
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: publish_status
+  kind: function.lua
+  source: file://publish_status_method.lua
+  method: handle
+  imports:
+    publication: bee.gateway.binding:publication
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: effect_binding
+  kind: function.lua
+  source: file://effect_binding_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:installation_worker_policy
+- name: drain
+  kind: function.lua
+  source: file://drain_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: ready
+  kind: function.lua
+  source: file://ready_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:readiness_policy
+- name: seal
+  kind: function.lua
+  source: file://seal_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_claim
+  kind: function.lua
+  source: file://hook_claim_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_ack
+  kind: function.lua
+  source: file://hook_ack_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_reject
+  kind: function.lua
+  source: file://hook_reject_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_queue
+  kind: function.lua
+  source: file://hook_queue_method.lua
+  method: handle
+  modules:
+  - security
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:supervisor_policy
+- name: describe
+  kind: function.lua
+  source: file://describe_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:directory_projection_policy
+- name: search
+  kind: function.lua
+  source: file://search_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:directory_projection_policy
+- name: address
+  kind: function.lua
+  source: file://address_method.lua
+  method: handle
+  modules:
+  - registry
+  - system
+  imports:
+    configuration: bee.gateway.env:configuration
+  security:
+    policies:
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy

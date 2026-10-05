@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.harness.profiles
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules:
+  - json
+  imports:
+    access: bee.driver.profiles:profile_access
+    bounds: bee.values:bounds
+    budgets: bee.threads.records:budgets
+    canonical: bee.values:canonical

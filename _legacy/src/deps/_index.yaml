@@ -1,0 +1,660 @@
+version: '1.0'
+namespace: bee.deps
+entries:
+- name: terminal
+  kind: ns.dependency
+  component: bee/terminal
+  version: 0.1.0-dev
+  parameters:
+  - name: target_application_protocol
+    value: bee.protocol:application
+  - name: target_protocol_decode
+    value: bee.protocol:decode
+  - name: target_display_transfer
+    value: bee.protocol:display_transfer
+- name: client
+  kind: ns.dependency
+  component: bee/client
+  version: 0.1.0-dev
+  parameters:
+  - name: target_protocol_application
+    value: bee.protocol:application
+  - name: target_apps_attachment
+    value: bee.apps:attachment
+  - name: target_launch_retained_protocol
+    value: bee.launch:retained_protocol
+  - name: target_launch_bootstrap
+    value: bee.launch:bootstrap
+  - name: target_apps_command
+    value: bee.apps:command
+  - name: target_protocol_decode
+    value: bee.protocol:decode
+  - name: target_terminal_input
+    value: bee.terminal.types:input
+  - name: target_host_inventory
+    value: bee.host:inventory
+  - name: target_host_protocol
+    value: bee.host:protocol
+  - name: target_host_transfer
+    value: bee.host:transfer
+  - name: target_protocol_display_transfer
+    value: bee.protocol:display_transfer
+  - name: target_launch_display
+    value: bee.launch:display
+  - name: target_interaction_protocol
+    value: bee.interaction:protocol
+  - name: command_host
+    value: bee:terminal
+  - name: command_actor
+    value:
+      id: bee.local
+  - name: command_policies
+    value:
+    - bee.security.desktop:desktop_policy
+    - bee.security.desktop:client_spawn_policy
+    - bee.security.desktop:presenter_actor_policy
+    - bee.security.storage:client_storage_policy
+    - bee.security.desktop:local_launcher_spawn_policy
+    - bee.security.desktop:local_super_edit_recovery_call_policy
+  - name: catalog_policies
+    value:
+    - bee.security.storage:client_storage_policy
+- name: desktop
+  meta:
+    type: bee.component_selection
+  kind: ns.dependency
+  component: bee/desktop
+  version: 0.1.0-dev
+  parameters:
+  - name: target_application_protocol
+    value: bee.protocol:application
+  - name: session_policies
+    value:
+    - bee.security.desktop:session_policy
+    - bee.security.desktop:session_status_policy
+- name: persist
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/persist
+  version: 0.1.0-dev
+- name: workspace
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/workspace
+  version: 0.1.0-dev
+  parameters:
+  - name: target_decode
+    value: bee.desktop.types:projection
+  - name: target_model
+    value: bee.desktop:model
+  - name: target_application_protocol
+    value: bee.protocol:application
+  - name: target_db
+    value: bee.env:workspace_db
+  - name: target_roots
+    value: bee.resources.env:resource_roots
+  - name: target_scope
+    value: bee.security.storage:workspace_catalog_scope
+  - name: target_facade_policy
+    value: bee.security.storage:workspace_catalog_facade_policy
+- name: sync
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee.hive.binding:replica_sender
+  - name: target_exports
+    value: bee.sync.env:sync_exports
+  - name: target_admit_policies
+    value:
+    - bee.security.hive:hive_replica_admission_policy
+- name: threads
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/threads
+  version: 0.1.0-dev
+  parameters:
+  - name: bee.threads.hive:target_admit_policies
+    value:
+    - bee.threads.hive:admission_policy
+    - bee.threads.hive:identity_policy
+    - bee.security.hive:hive_thread_exposure_policy
+  - name: process_host
+    value: bee:workers
+  - name: waiter_policies
+    value:
+    - bee.security.threads:thread_waiter_policy
+  - name: sender
+    value: bee.hive.binding:inbox_sender
+  - name: owner_policies
+    value:
+    - bee.security.threads:thread_storage_policy
+    - bee.security.threads:thread_resource_policy
+  - name: target_append_policies
+    value:
+    - bee.security.threads:thread_storage_policy
+    - bee.security.threads:thread_resource_policy
+  - name: target_session_create_policies
+    value:
+    - bee.security.threads:thread_storage_policy
+    - bee.security.threads:thread_resource_policy
+    - bee.security.threads:thread_node_policy
+- name: hub
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/hub
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
+  - name: target_publish_configuration
+    value: bee.hub.publication:hub_publication
+  - name: bee.hub.binding:target_lifecycle_owners
+    value: [bee.sessions.binding:lifecycle]
+- name: gov
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/gov
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.gov.env:db
+  - name: target_publication_profiles
+    value: bee.env:gov_publication_profiles
+  - name: target_activation_profiles
+    value: bee.env:gov_activation_profiles
+  - name: target_approval_request_policy
+    value: bee.security.approvals:approval_request_policy
+  - name: target_approval_consume_policy
+    value: bee.security.approvals:approval_consume_policy
+  - name: target_workspace_folder_read
+    value: bee.workspace.binding:read
+  - name: target_workspace_folder_policy
+    value: bee.security.gov:workspace_folder_read_policy
+- name: gateway
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/gateway
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.gateway.env:db
+  - name: target_listener
+    value: bee.gateway.api:gateway_listener
+  - name: target_endpoint
+    value: bee.gateway.api:gateway_endpoint
+  - name: target_approval_request_policy
+    value: bee.security.approvals:approval_request_policy
+  - name: target_approval_consume_policy
+    value: bee.security.approvals:approval_consume_policy
+  - name: target_tool_read_policy
+    value: bee.security.gateway:gateway_tool_read_policy
+  - name: target_tool_message_policy
+    value: bee.security.gateway:gateway_tool_message_policy
+  - name: target_tool_overlay_policy
+    value: bee.security.gateway:gateway_tool_overlay_policy
+  - name: target_tool_docs_policy
+    value: bee.security.gateway:gateway_tool_docs_policy
+  - name: target_tool_components_policy
+    value: bee.security.gateway:gateway_tool_components_policy
+  - name: target_tool_delivery_policy
+    value: bee.security.gateway:gateway_tool_delivery_policy
+  - name: target_tool_publish_policy
+    value: bee.security.gateway:gateway_tool_publish_policy
+  - name: target_tool_application_open_policy
+    value: bee.security.gateway:gateway_tool_application_open_policy
+  - name: target_tool_install_policy
+    value: bee.security.gateway:gateway_tool_install_policy
+  - name: target_tool_session_policy
+    value: bee.security.gateway:gateway_tool_session_policy
+  - name: target_install_configuration
+    value: bee.gateway.env:module_installation
+  - name: target_tool_hub_publish_policy
+    value: bee.security.gateway:gateway_tool_hub_publish_policy
+  - name: target_publish_configuration
+    value: bee.gateway.env:module_publication
+- name: hive
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/hive
+  version: 0.1.0-dev
+  parameters:
+  - name: bee.hive.service:supervisor_policies
+    value:
+    - bee.security.hive:hive_policy_exposure_policy
+    - bee.security.hive:hive_readiness_policy
+  - name: bee.hive.binding:workspace_command_policies
+    value:
+    - bee.security.storage:workspace_catalog_read_policy
+    - bee.security.storage:workspace_catalog_manage_policy
+    - bee.security.hive:workspace_command_catalog_policy
+  - name: bee.hive.binding:advertise_policies
+    value:
+    - bee.security.hive:hive_names_policy
+    - bee.security.hive:hive_advertise_policy
+  - name: bee.hive.binding:admit_policy_policies
+    value:
+    - bee.hive.supervisor:policy_identity_policy
+    - bee.hive.supervisor:policy_actor_policy
+    - bee.security.hive:policy_admission_policy
+    - bee.security.hive:hive_policy_exposure_policy
+    - bee.security.hive:hive_exposure_facade_policy
+  - name: bee.hive.binding:workspaces_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+    - bee.security.storage:workspace_catalog_read_policy
+    - bee.hive.security:workspaces_policy
+  - name: bee.hive:target_application
+    value: bee.protocol:application
+  - name: bee.hive:target_retained_protocol
+    value: bee.launch:retained_protocol
+  - name: bee.hive:target_delivery
+    value: bee.terminal.service:delivery
+  - name: bee.hive:target_input
+    value: bee.terminal.types:input
+  - name: bee.hive:target_version
+    value: bee.sync.values:version
+- name: hive_telemetry
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/hive-telemetry
+  version: 0.1.0-dev
+  parameters:
+  - name: target_exposure
+    value: bee.security.hive:hive_exposure_policy
+  - name: target_peers
+    value: bee.hive.host:enrollment
+  - name: target_presence_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+  - name: target_catalog_list_policies
+    value:
+    - bee.security.hive:hive_catalog_policy
+    - bee.security.hive:hive_exposure_policy
+    - bee.security.hive:hive_exposure_facade_policy
+  - name: target_holdings_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+    - bee.hive.telemetry.security:holdings_policy
+  - name: target_cluster_policies
+    value:
+    - bee.hive.telemetry.security:cluster_policy
+    - bee.security.hive:hive_telemetry_policy
+  - name: target_status_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+    - bee.hive.telemetry.security:status_policy
+    - bee.hive.telemetry.security:peer_source_policy
+    - bee.hive.telemetry.security:status_grant_policy
+  - name: target_summary_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+    - bee.hive.telemetry.security:summary_owner_policy
+    - bee.hive.telemetry.security:summary_node_name_policy
+- name: hive_manager
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/hive-manager
+  version: 0.1.0-dev
+- name: threads_timeline
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/threads-timeline
+  version: 0.1.0-dev
+- name: workspace_manager
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/workspace-manager
+  version: 0.1.0-dev
+- name: host_processes
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/host-processes
+  version: 0.1.0-dev
+- name: hub_modules
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/hub-modules
+  version: 0.1.0-dev
+- name: gov_overlays
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/gov-overlays
+  version: 0.1.0-dev
+- name: approvals_inbox
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/approvals-inbox
+  version: 0.1.0-dev
+- name: files
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/files
+  version: 0.1.0-dev
+  parameters:
+  - name: target_workspace_root
+    value: bee.env:files_root
+- name: application_threads
+  kind: ns.dependency
+  component: bee/application-threads
+  version: 0.1.0-dev
+- name: application
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/application
+  version: 0.1.0-dev
+- name: node
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/node
+  version: 0.1.0-dev
+- name: docs
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/docs
+  version: 0.1.0-dev
+  parameters:
+  - name: target_corpus
+    value: bee.env:docs_corpus
+  - name: target_call_policies
+    value:
+    - bee.security.docs:docs_policy
+- name: approvals
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/approvals
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.approvals.env:db
+  - name: target_policies
+    value: bee.security.approvals:approver_policies
+  - name: bee.approvals.service:process_host
+    value: bee:workers
+  - name: bee.approvals.service:authority_policies
+    value:
+    - bee.security.approvals:approval_store_policy
+    - bee.security.approvals:approval_owner_policy
+  - name: bee.approvals.service:worker_policies
+    value:
+    - bee.security.approvals:approval_store_policy
+    - bee.security.approvals:approval_owner_policy
+    - bee.security.threads:thread_approval_policy
+    - bee.security.threads:thread_approval_client_policy
+  - name: target_request_policies
+    value:
+    - bee.security.approvals:approval_store_policy
+- name: capability
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/capability
+  version: 0.1.0-dev
+- name: agents
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/agents
+  version: 0.1.0-dev
+- name: placement_native
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/placement-native
+  version: 0.1.0-dev
+  parameters:
+  - name: target_workdir_preparers
+    value: bee.placement.native.env:workdir_preparers
+  - name: bee.placement.native:process_host
+    value: bee:workers
+  - name: bee.placement.native:sweeper_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.placement.native.security:placement_sweeper_policy
+    - bee.security.gateway:gateway_supervision_policy
+  - name: target_prepare_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+  - name: target_stop_revoked_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.resources.security:resource_revoke_stop_policy
+  - name: target_runner_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_materialize_policy
+- name: placement_docker
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/placement-docker
+  version: '*'
+  parameters:
+  - name: process_host
+    value: bee:workers
+  - name: environment_provisioning
+    value:
+      network: bee-coding
+      endpoint: bee.gateway.api:gateway_endpoint
+      listener: bee.gateway.api:gateway_listener
+      approval_policy: docker-environment
+      readiness_policy: bee.gateway.security:readiness_policy
+  - name: image_owner_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_policy
+    - bee.placement.docker.security:image_client_policy
+    - bee.placement.docker.security:environment_owner_policy
+    - bee.placement.docker.security:environment_listener_policy
+  - name: bee.placement.docker:sweeper_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.placement.native.security:placement_sweeper_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+  - name: target_prepare_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
+  - name: target_start_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+  - name: target_runner_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: settings
+  kind: ns.dependency
+  meta: {type: bee.component_selection, independent: true}
+  component: bee/settings
+  version: 0.1.0-dev
+- name: console
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/console
+  version: 0.1.0-dev
+- name: executor_external
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/executor-external
+  version: 0.1.0-dev
+  parameters:
+  - name: bee.executor.external.binding:executor_policies
+    value:
+    - bee.executor.external.security:driver_placement_calls
+    - bee.executor.external.security:placement_stream
+    - bee.executor.external.security:runner_observation
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+    - bee.security.threads:thread_sessions_owner_policy
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.security.storage:workspace_folder_browse_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
+- name: harness
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/harness
+  version: 0.1.0-dev
+  parameters:
+  - name: bee.harness:process_host
+    value: bee:workers
+  - name: bee.harness:target_agent_application_admission
+    value:
+      definition_id: bee.harness.app:app
+      scope_management: true
+      close_grace_ms: 60000
+      policies:
+      - bee.harness.security:carrier_policy
+      - bee.harness.security:interactive_session_policy
+      - bee.harness.security:presentation_viewer_policy
+      - bee.harness.security:carrier_environment_policy
+      - bee.harness.security:profile_workspace_policy
+      - bee.harness.security:profile_context_boundary
+      - bee.security.threads:thread_create_policy
+      - bee.harness.security:harness_setup_policy
+      - bee.placement.native.security:placement_store_policy
+      - bee.placement.native.security:placement_exec_policy
+      - bee.placement.native.security:placement_runner_policy
+      - bee.resources.security:resource_grant_policy
+      - bee.resources.security:resource_resolve_policy
+      - bee.credentials.security:credential_issue_policy
+      - bee.credentials.security:credential_materialize_workspace_policy
+      - bee.security.gateway:gateway_materialize_policy
+      - bee.security.gateway:gateway_supervision_policy
+      - bee.security.storage:workspace_folder_browse_policy
+      - bee.placement.docker.security:docker_policy
+      - bee.placement.docker.security:docker_socket_policy
+      - bee.placement.docker.security:image_client_policy
+      - bee.security.storage:workspace_catalog_read_policy
+      - bee.placement.docker.security:environment_revoke_policy
+  - name: bee.harness.service:target_presentation_policies
+    value:
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:interactive_session_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.security.threads:thread_create_policy
+    - bee.harness.security:harness_setup_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.security.storage:workspace_folder_browse_policy
+    - bee.security.storage:workspace_catalog_read_policy
+    - bee.security.threads:thread_sessions_owner_policy
+    - bee.harness.security:presentation_owner_policy
+    - bee.harness.security:presentation_bridge_policy
+  - name: target_carrier_policies
+    value:
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:carrier_process_registry_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.security.desktop:workspace_host_lease_policy
+- name: sessions
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/sessions
+  version: 0.1.0-dev
+  parameters:
+  - name: bee.sessions.service:process_host
+    value: bee:workers
+  - name: bee.sessions.service:scheduler_policies
+    value:
+    - bee.security.threads:thread_storage_policy
+    - bee.security.threads:thread_resource_policy
+    - bee.security.threads:thread_node_policy
+    - bee.security.threads:thread_sessions_owner_policy
+    - bee.sessions.security:scheduler_policy
+    - bee.sessions.security:lifecycle_worker_policy
+    - bee.sessions.security:scheduler_principal_policy
+  - name: bee.sessions.binding:target_lifecycle_policies
+    value: [bee.sessions.security:lifecycle_policy, bee.sessions.security:lifecycle_journal_policy, bee.security.threads:thread_sessions_owner_policy]
+  - name: bee.sessions.binding:target_owner_policies
+    value:
+    - bee.security.threads:thread_sessions_owner_policy
+    - bee.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.sessions.security:owner_admission_policy
+    - bee.sessions.security:owner_setup_policy
+    - bee.sessions.security:owner_workspace_identity_policy
+    - bee.harness.security:profile_workspace_policy
+  - name: bee.sessions.binding:target_control_policies
+    value:
+    - bee.security.threads:thread_sessions_owner_policy
+    - bee.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.sessions.security:owner_admission_policy
+    - bee.sessions.security:owner_setup_policy
+    - bee.sessions.security:owner_workspace_identity_policy
+    - bee.sessions.security:scheduler_principal_policy
+- name: values
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/values
+  version: 0.1.0-dev
+- name: ui
+  kind: ns.dependency
+  meta: {type: bee.component_selection}
+  component: bee/ui
+  version: 0.1.0-dev

@@ -1,0 +1,165 @@
+version: '1.0'
+namespace: bee.placement.docker.service
+entries:
+- name: execution
+  kind: library.lua
+  source: file://execution.lua
+  modules:
+  - exec
+  - registry
+  - json
+  - sql
+  imports:
+    bounds: bee.values:bounds
+    types: bee.placement:types
+    materialization: bee.placement.native.service:materialization
+    process_backend: bee.placement.native.binding:process_backend
+    resources: bee.placement.native.env:resources
+    homes: bee.placement.native.service:homes
+    service: bee.placement.docker.binding:methods
+    spec: bee.placement.docker.binding:spec
+    paths: bee.placement.profiles:paths
+    quote: bee.driver.binding:quote
+- name: runner
+  kind: process.lua
+  source: file://runner.lua
+  method: main
+  imports:
+    runner: bee.placement.native.service:process_runner
+    execution: bee.placement.docker.service:execution
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: window
+  kind: library.lua
+  source: file://window.lua
+  imports:
+    window: bee.placement.native.service:window
+    execution: bee.placement.docker.service:execution
+- name: sweeper
+  kind: process.lua
+  source: file://sweeper.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  imports:
+    service: bee.placement.docker.binding:methods
+- name: sweeper_service
+  kind: process.service
+  process: bee.placement.docker.service:sweeper
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service]
+    security:
+      actor:
+        id: bee.placement.docker.sweeper
+      policies:
+      - bee.placement.native.security:placement_store_policy
+      - bee.placement.native.security:placement_exec_policy
+      - bee.placement.native.security:placement_service_policy
+      - bee.resources.security:resource_resolve_policy
+      - bee.credentials.security:credential_materialize_policy
+      - bee.placement.native.security:placement_sweeper_policy
+      - bee.security.gateway:gateway_supervision_policy
+      - bee.placement.docker.security:docker_policy
+      - bee.placement.docker.security:docker_socket_policy
+  host: bee:workers
+- name: image
+  kind: library.lua
+  source: file://image.lua
+  modules:
+  - env
+  - fs
+  - json
+  - hash
+  - registry
+  - process
+  - channel
+  - uuid
+  - security
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    profiles: bee.placement.profiles:profiles
+    resources: bee.placement.native.env:resources
+    homes: bee.placement.native.service:homes
+    daemon: bee.placement.docker.service:daemon
+- name: image_owner
+  kind: process.lua
+  source: file://image_owner.lua
+  method: main
+  modules:
+  - process
+  - channel
+  imports:
+    bounds: bee.values:bounds
+    image: bee.placement.docker.service:image
+    environment: bee.placement.docker.service:environment
+- name: image_owner_service
+  kind: process.service
+  process: bee.placement.docker.service:image_owner
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service]
+    security:
+      actor:
+        id: bee.placement.docker.image
+      policies:
+      - bee.placement.native.security:placement_store_policy
+      - bee.placement.native.security:placement_exec_policy
+      - bee.placement.native.security:placement_runner_policy
+      - bee.placement.docker.security:docker_policy
+      - bee.placement.docker.security:docker_socket_policy
+      - bee.placement.docker.security:image_policy
+      - bee.placement.docker.security:image_client_policy
+      - bee.placement.docker.security:environment_owner_policy
+      - bee.placement.docker.security:environment_listener_policy
+  host: bee:workers
+- name: environment
+  kind: library.lua
+  source: file://environment.lua
+  modules:
+  - registry
+  - hash
+  - funcs
+  - fs
+  - json
+  - process
+  - channel
+  - time
+  - system
+  - events
+  imports:
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+    environment: bee.placement.docker.env:environment
+    resources: bee.placement.native.env:resources
+    image: bee.placement.docker.service:image
+    daemon: bee.placement.docker.service:daemon
+- name: runtime_probe
+  kind: library.lua
+  source: file://runtime_probe.lua
+  modules:
+  - uuid
+  imports:
+    bounds: bee.values:bounds
+    daemon: bee.placement.docker.service:daemon
+- name: daemon
+  kind: library.lua
+  source: file://daemon.lua
+  modules:
+  - exec
+  - channel
+  - json
+  imports:
+    bounds: bee.values:bounds
+    resources: bee.placement.native.env:resources
+    quote: bee.driver.binding:quote

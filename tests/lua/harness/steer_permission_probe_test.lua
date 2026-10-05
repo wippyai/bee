@@ -40,7 +40,7 @@ local function define_tests()
             local application = "bee.application:" .. workspace .. ":research"
             local app_id = "app.steer_probe:app"
             local owner = "bee.gov.apps:" .. workspace .. ".steer_probe"
-            local catalog = assert(capability_catalog.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
+            local catalog = assert(capability_catalog.decode(assert(registry.get("bee.capability:catalog"))))
             local grant = {id = "app.steer_probe:message", expected_kind = "security.policy", value = nil,
                 targets = {app_id}, capability_request = {capability = "threads.message",
                     parameters = {scope = "children"}, catalog_revision = catalog.revision,
@@ -64,7 +64,7 @@ local function define_tests()
             test.is_true(methods["bee.threads.binding:notify"] == true)
             test.is_nil(methods["bee.threads.binding:record"])
 
-            local create_policy = assert(security.policy("bee.security.threads:thread_create_policy"))
+            local create_policy = assert(security.policy("bee.threads.security:create"))
             local message_policy = assert(security.policy(policy_id))
             local actor = principals.actor(application, workspace)
             local creator_policies: {security.Policy} = {create_policy, message_policy}

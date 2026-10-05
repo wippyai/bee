@@ -1,0 +1,80 @@
+version: '1.0'
+namespace: bee.resources.security
+entries:
+- name: resource_store_policy
+  kind: security.policy
+  meta:
+    comment: The resource authority's store, its linked references and node identity
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - system.read
+    resources:
+    - bee:db
+    - bee.resources.env:roots_ref
+    - bee.placement.native.env:placement_admitted_roots
+    - node
+    - '*'
+    effect: allow
+- name: resource_manage_policy
+  kind: security.policy
+  meta:
+    comment: Workspace managers associate roots, list, revoke any grant and advance the authorization epoch
+  policy:
+    actions:
+    - bee.resources.manage
+    resources: '*'
+    effect: allow
+- name: resource_grant_policy
+  kind: security.policy.expr
+  meta:
+    comment: A principal takes grants for itself, only in the workspace its host-issued identity is bound to
+  policy:
+    actions:
+    - bee.resources.grant
+    resources: '*'
+    expression: resource != "" && resource == actor.meta.workspace_id
+    effect: allow
+- name: resource_grant_thread_policy
+  kind: security.policy.expr
+  meta:
+    comment: An admitted capability consumer writes thread-bound grants for a thread actor, only in the workspace its host-issued identity is bound to
+  policy:
+    actions:
+    - bee.resources.grant_thread
+    resources: '*'
+    expression: resource != "" && resource == actor.meta.workspace_id
+    effect: allow
+- name: resource_resolve_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement service entries only; a caller cannot resolve grants on its own
+  policy:
+    actions:
+    - bee.resources.resolve
+    - funcs.call
+    resources:
+    - '*'
+    - bee.resources.binding:resolve
+    effect: allow
+- name: resource_revoke_stop_policy
+  kind: security.policy
+  meta:
+    comment: The resource revocation owner may stop only placement attempts its epoch advance fenced
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.placement.native.binding:stop_revoked
+    effect: allow
+- name: resource_environment_policy
+  kind: security.policy
+  meta:
+    comment: Resource roots resolve only host-selected path variables
+  policy:
+    actions:
+    - env.get
+    resources:
+    - bee.placement.native.env:root_path
+    effect: allow

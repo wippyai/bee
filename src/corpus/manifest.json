@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 25789,
+      "bytes": 26399,
       "id": "docs/application_contracts",
-      "sha256": "6b5054d748f32af897976db8a2afcbc7de64e67e21f321638dde450bbbde33f6",
+      "sha256": "c58f5d1f7ef32d0f67d0ed4c31e9d0e88bfd76c8d47a80514de728c0d072d9a9",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -275,9 +275,9 @@
       "topic": "storage"
     },
     {
-      "bytes": 2172,
+      "bytes": 2308,
       "id": "component/agents",
-      "sha256": "361f47a0cd15f60678dabe5b29a242ac5c37e1645daaa102c78adc75bc8435fb",
+      "sha256": "5c36fabc39948c222a42d6e387e9ea8cd2ae3ba951a581bc7ca754fd5bcc937f",
       "source": "modules/agents/src/README.md",
       "title": "Bee agents",
       "topic": "component"
@@ -531,9 +531,9 @@
       "topic": "component"
     },
     {
-      "bytes": 14036,
+      "bytes": 14276,
       "id": "component/sessions",
-      "sha256": "0e84077f9e84fcdd278724fef4d89c166572f6b1eedf6b302855710f7f69dffa",
+      "sha256": "221822262015bd121736f7561834ca4156fffbf74c71d69ceab8c31caefb1865",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -673,12 +673,20 @@
       "source": "generated: modules/ui/src, modules/application/src, module app views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
+    },
+    {
+      "bytes": 24296,
+      "id": "reference_drivers/opencode",
+      "sha256": "fa056b900b45375f7ac195f35fd2f9f968ab4209188121dbec1f8624363bb440",
+      "source": "generated: tools/reference_drivers.py from src/driver/opencode",
+      "title": "Reference driver: OpenCode CLI",
+      "topic": "reference_drivers"
     }
   ],
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 812079,
-    "documents": 84
+    "bytes": 837361,
+    "documents": 85
   }
 }

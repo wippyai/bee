@@ -1,0 +1,186 @@
+-- MIT. Host-selected roots are associated once, after a selected definition,
+-- and a caller-chosen folder under an admitted root becomes a named workspace
+-- resource when the launch allows a workdir override.
+local hash = require("hash")
+local funcs = require("funcs")
+local registry = require("registry")
+local security = require("security")
+local bounds = require("bounds")
+local definition = require("definition")
+local SETUP = "bee.harness.launch:harness_setup"
+local MACHINE_LOGIN = "bee.env:machine_login_source"
+local function fail(message: string): {[string]: unknown} return {ok = false, error = message} end
+local function same(value: unknown, root: string, access: string): boolean
+    local object = bounds.object(value)
+    return object ~= nil and object.root_ref == root and object.subpath == "" and object.allowed_access == access
+end
+local function ensure(workspace: string, name: string, root: string): (boolean, string?)
+    local reply, call_error = funcs.call("bee.resources.binding:associate", {workspace_id = workspace, name = name, root_ref = root, subpath = "", allowed_access = "write", expected_revision = 0})
+    local value = bounds.object(reply)
+    if call_error or not value then return false, tostring(call_error or "associate") end
+    if value.ok == true and same(value.value, root, "write") then return true, nil end
+    if value.ok ~= false then return false, "associate reply" end
+    local error = bounds.object(value.error)
+    if not error or error.code ~= "CONFLICT" then return false, tostring(error and error.message or "associate") end
+    local listed, list_error = funcs.call("bee.resources.binding:list", {workspace_id = workspace})
+    local listed_value = bounds.object(listed)
+    local data = listed_value and bounds.object(listed_value.value)
+    local associations = data and data.associations
+    if list_error or not listed_value or listed_value.ok ~= true or type(associations) ~= "table" then return false, "read existing association" end
+    for _, item in ipairs(associations) do
+        local association = bounds.object(item)
+        if association and association.name == name then
+            if association.subpath ~= "" or association.allowed_access ~= "write" then
+                return false, "existing association " .. name .. " differs from host setup"
+            end
+            local revision = bounds.count(association.revision)
+            if not revision or revision < 1 then return false, "existing association " .. name .. " has an invalid revision" end
+            local refreshed, refresh_error = funcs.call("bee.resources.binding:associate", {workspace_id = workspace, name = name,
+                root_ref = root, subpath = "", allowed_access = "write", expected_revision = revision})
+            local refreshed_value = bounds.object(refreshed)
+            if refresh_error or not refreshed_value or refreshed_value.ok ~= true or not same(refreshed_value.value, root, "write") then
+                local refresh_fault = refreshed_value and bounds.object(refreshed_value.error)
+                return false, tostring(refresh_error or (refresh_fault and refresh_fault.message) or "refresh association")
+            end
+            return true, nil
+        end
+    end
+    return false, "association conflict was not readable"
+end
+-- The folder's association name is derived from its root and path, so the
+-- same folder is one resource however often it is chosen.
+local function folder_name(root: string, path: string): string?
+    local digest, hash_error = hash.sha256(root .. "\n" .. path)
+    if hash_error or not digest then return nil end
+    return "folder-" .. digest:sub(1, 32)
+end
+local function associate_folder(workspace: string, value: unknown): (string?, string?)
+    local folder = bounds.object(value)
+    if not folder or bounds.fields(folder, {"root_ref", "path"}) then return nil, "workdir must name only root_ref and path" end
+    local root = bounds.id(folder.root_ref)
+    local path, path_error = bounds.subpath(folder.path == nil and "" or folder.path)
+    if not root then return nil, "workdir.root_ref is not an identifier" end
+    if not path then return nil, "workdir.path: " .. tostring(path_error) end
+    local name = folder_name(root, path)
+    if not name then return nil, "workdir name digest failed" end
+    local reply, call_error = funcs.call("bee.resources.binding:associate", {workspace_id = workspace, name = name, root_ref = root, subpath = path, allowed_access = "write"})
+    local value_reply = bounds.object(reply)
+    if call_error or not value_reply then return nil, tostring(call_error or "associate workdir") end
+    if value_reply.ok ~= true then
+        local fault = bounds.object(value_reply.error)
+        return nil, tostring(fault and fault.message or "associate workdir")
+    end
+    local association = bounds.object(value_reply.value)
+    if not association or association.root_ref ~= root or association.subpath ~= path or association.allowed_access ~= "write" then
+        return nil, "existing association " .. name .. " differs from the chosen folder"
+    end
+    return name, nil
+end
+type Credential = {provider: string, source: {kind: string, ref: string}, projection_kind: string, optional: boolean}
+local function credential(value: unknown): Credential?
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"provider", "source", "projection_kind", "optional"}) then return nil end
+    local provider = bounds.id(object.provider)
+    local source = bounds.object(object.source)
+    if not provider or not source or bounds.fields(source, {"kind", "ref"}) then return nil end
+    local kind = bounds.member(source.kind, {"env_variable", "fs_directory"})
+    local ref = bounds.id(source.ref)
+    if not kind or not ref then return nil end
+    local projection = kind == "fs_directory" and "file" or "environment"
+    if object.projection_kind ~= nil and object.projection_kind ~= projection then return nil end
+    if object.optional ~= nil and type(object.optional) ~= "boolean" then return nil end
+    return {provider = provider, source = {kind = kind, ref = ref}, projection_kind = projection, optional = object.optional == true}
+end
+local function same_credential(value: unknown, chosen: Credential): boolean
+    local object = bounds.object(value)
+    return object ~= nil and object.provider == chosen.provider and object.source_kind == chosen.source.kind
+        and object.source_ref == chosen.source.ref and object.projection_kind == chosen.projection_kind
+        and object.optional == chosen.optional
+end
+local function ensure_credential(workspace: string, name: string, chosen: Credential): (boolean, string?)
+    local reply, call_error = funcs.call("bee.credentials.binding:define", {workspace_id = workspace, name = name,
+        provider = chosen.provider, source = chosen.source, projection_kind = chosen.projection_kind, optional = chosen.optional, expected_revision = 0})
+    local value = bounds.object(reply)
+    if call_error or not value then return false, tostring(call_error or "define credential") end
+    if value.ok == true and same_credential(value.value, chosen) then return true, nil end
+    local error = bounds.object(value.error)
+    if value.ok ~= false or not error or error.code ~= "CONFLICT" then return false, tostring(error and error.message or "define credential") end
+    local listed, list_error = funcs.call("bee.credentials.binding:list", {workspace_id = workspace})
+    local result = bounds.object(listed)
+    local data = result and bounds.object(result.value)
+    if list_error or not result or result.ok ~= true or not data or type(data.definitions) ~= "table" then return false, "read existing credential" end
+    for _, item in ipairs(data.definitions) do
+        local definition = bounds.object(item)
+        if definition and definition.name == name then
+            if same_credential(definition, chosen) then return true, nil end
+            return false, "existing credential " .. name .. " differs from host setup"
+        end
+    end
+    return false, "credential conflict was not readable"
+end
+-- admitted_login selects the person's machine login for a <provider>_login
+-- credential the host map does not name, when the credential broker admits a
+-- login file for that provider: a host provider, or a driver a person
+-- approved through an overlay. The broker checks the source again at define.
+local function admitted_login(name: string): Credential?
+    local provider = name:match("^([a-z][a-z0-9]*)_login$")
+    if not provider then return nil end
+    local raw, call_error = funcs.call("bee.credentials.binding:capabilities")
+    local reply = bounds.object(raw)
+    local value = reply and reply.ok == true and bounds.object(reply.value) or nil
+    local files = value and bounds.object(value.file_destinations) or nil
+    if call_error or not files or type(files[provider]) ~= "string" then return nil end
+    return {provider = provider, source = {kind = "fs_directory", ref = MACHINE_LOGIN}, projection_kind = "file", optional = true}
+end
+local function handle(raw: unknown): {[string]: unknown}
+    local request = bounds.object(raw)
+    if not request then return fail("request must be an object") end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "workdir", "session_turn"}) then return fail("unknown field") end
+    if request.session_turn ~= nil and type(request.session_turn) ~= "boolean" then return fail("session_turn must be boolean") end
+    local workspace, ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
+    if not workspace or not ref then return fail("workspace_id and definition_ref are required") end
+    if not security.can("bee.resources.manage", workspace) then return fail("resource management is not authorized") end
+    local expected = bounds.text(request.expected_definition_digest, 64)
+    if not expected or #expected ~= 64 or not expected:match("^[0-9a-f]+$") then return fail("expected_definition_digest must be a lowercase SHA-256 hex digest") end
+    local launch, launch_error = definition.load(ref)
+    if not launch then return fail(tostring(launch_error)) end
+    if launch.digest ~= expected then return fail("launch definition changed") end
+    if request.session_turn == true and launch.session_credentials then launch.credentials = launch.session_credentials end
+    local names: {string} = {}
+    if launch.workdir_policy.kind == "declared_resource" and launch.workdir_policy.resource_ref then names[#names + 1] = launch.workdir_policy.resource_ref end
+    if launch.session_resource then names[#names + 1] = launch.session_resource end
+    local workdir: string? = nil
+    if request.workdir ~= nil then
+        if not definition.allows(launch, "workdir") then return fail("the launch definition does not allow a workdir override") end
+        local chosen, folder_error = associate_folder(workspace, request.workdir)
+        if not chosen then return fail(folder_error or "associate workdir") end
+        workdir = chosen
+    end
+    if #names == 0 and #launch.credentials == 0 then return {ok = true, resources = {}, credentials = {}, workdir = workdir} end
+    local entry = registry.get(SETUP)
+    local data = entry and bounds.object(entry.data)
+    local roots = data and bounds.object(data.roots)
+    if #names > 0 and not roots then return fail("host setup roots unavailable") end
+    local configured = data and bounds.object(data.credentials)
+    local selected: {[string]: Credential} = {}
+    if #launch.credentials > 0 and not security.can("bee.credentials.manage", workspace) then return fail("credential management is not authorized") end
+    for _, name in ipairs(launch.credentials) do
+        local chosen = configured and credential(configured[name]) or admitted_login(name)
+        if not chosen then return fail("host setup has no valid credential for " .. name) end
+        selected[name] = chosen
+    end
+    for _, name in ipairs(names) do
+        local root = roots and bounds.id(roots[name])
+        if not root then return fail("host setup has no root for " .. name) end
+        local ok, setup_error = ensure(workspace, name, root)
+        if not ok then return fail(setup_error or "associate") end
+    end
+    for _, name in ipairs(launch.credentials) do
+        local chosen = selected[name]
+        if not chosen then return fail("host setup credential is missing") end
+        local ok, setup_error = ensure_credential(workspace, name, chosen)
+        if not ok then return fail(setup_error or "define credential") end
+    end
+    return {ok = true, resources = names, credentials = launch.credentials, workdir = workdir}
+end
+return {handle = handle}

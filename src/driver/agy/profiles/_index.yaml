@@ -1,0 +1,168 @@
+version: '1.0'
+namespace: bee.driver.agy.profiles
+entries:
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.agy.binding:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Antigravity CLI
+      implementation_version: 1.2.2
+      default_profile: session
+      profiles:
+      - id: session
+        mode: session
+        protocol: stream-json
+        protocol_revision: agy-stream-json-1
+        answer_path:
+          strategy: terminal_field
+          adapter_ref: bee.driver.agy.descriptor:cli
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.agy.descriptor:cli
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
+        inbound:
+        - next_turn
+        sandbox:
+          providers: []
+          required_placement_features: []
+          git_writable_roots_adapter: agy_add_dir
+        permission_exchange:
+          mode: none
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: agy-stream-json-1
+        answer_path:
+          strategy: terminal_field
+          adapter_ref: bee.driver.agy.descriptor:cli
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.agy.descriptor:cli
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - streamable_http
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
+        sandbox:
+          providers: []
+          required_placement_features: []
+          git_writable_roots_adapter: agy_add_dir
+        permission_exchange:
+          mode: none
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        hooks:
+          transports:
+          - command
+          events:
+          - PreToolUse
+          - PostToolUse
+          - Stop
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: none
+        permission_exchange:
+          mode: none
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Antigravity window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agy-window
+    title: Antigravity CLI
+    binding_ref: bee.driver.agy.binding:binding
+    profile_id: window
+    session_profile_id: session
+    session_credentials:
+    - agy_login
+    policy_ref: bee.driver.agy.security:launch_policy_agy_window
+    default_mode: window
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
+    session_resource: session
+    credentials: []
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Agy batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agy-research-batch
+    title: Gemini researcher
+    binding_ref: bee.driver.agy.binding:binding
+    profile_id: batch
+    policy_ref: bee.driver.agy.security:launch_policy_agy_batch
+    default_mode: batch
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
+    session_resource: session
+    credentials:
+    - agy_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never

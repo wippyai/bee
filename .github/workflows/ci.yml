@@ -1,0 +1,25 @@
+name: Bee CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    name: Lint and Lua suites
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: native/go.mod
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Pinned toolchain
+      run: make tools
+    - name: Lint
+      run: make lint
+    - name: Lua suites
+      run: make test

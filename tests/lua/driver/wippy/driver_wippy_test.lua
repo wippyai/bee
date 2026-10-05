@@ -23,11 +23,11 @@ type InboxInvoker = (string, Object) -> (unknown, string?)
 local WORKSPACE_ID = string.rep("a", 32)
 
 local THREAD_POLICIES = {
-    "bee.threads:client_test_policy",
-    "bee.security.threads:thread_create_policy",
-    "bee.security.threads:thread_observe_policy",
-    "bee.security.threads:thread_lifecycle_policy",
-    "bee.security.threads:thread_carrier_policy",
+    "bee.tests.threads:client_policy",
+    "bee.threads.security:create",
+    "bee.threads.security:observe",
+    "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier",
     "bee.harness.security:carrier_policy",
     "bee.driver.wippy.test:test_http_policy",
 }

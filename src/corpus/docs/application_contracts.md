@@ -19,9 +19,29 @@ memory; it is not durable exactly-once execution.
 An application definition uses `meta.type = bee.app` and
 `meta.application` with `api_version: 1`, `lifetime: view`, a nonempty
 `revision` and `title`, and `instance_policy: singleton|multiple`. It may
-declare an icon, slash-separated menu group, role and bounded
-`application.commands`. Roles and metadata affect discovery and presentation;
-they never grant authority. Executable or configuration changes require a new
+declare an icon, a role and bounded `application.commands`.
+
+`menus` lists the ids of the `bee.menu` entries the app is placed in, at most
+16. The desktop's Start panel shows an app only in the menus it names:
+`bee.shell:apps_menu` (Apps), `bee.shell:system_menu` (System, for apps that
+inspect and manage the node) and `bee.shell:desktop_menu` (the desktop's
+context menu). An app that names no menu is installed and runnable but
+appears in no menu. `terminal: true` runs the app as a terminal page.
+
+```yaml
+meta:
+  type: bee.app
+  application:
+    api_version: 1
+    title: Hello
+    lifetime: view
+    revision: "1"
+    instance_policy: singleton
+    menus: [bee.shell:apps_menu]
+```
+
+Roles, menus and metadata affect discovery and presentation; they never grant
+authority. Executable or configuration changes require a new
 revision, and one revision identifies one exact runnable definition.
 Use `restart_policy: never` (the default) when the app does not checkpoint.
 `automatic` and `manual` require a nonempty `resume_schema` of at most 80

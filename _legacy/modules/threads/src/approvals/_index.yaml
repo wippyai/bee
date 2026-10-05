@@ -1,0 +1,16 @@
+version: '1.0'
+namespace: bee.threads.approvals
+entries:
+- name: ingress
+  kind: library.lua
+  source: file://ingress.lua
+  modules: [sql]
+  imports:
+    bounds: bee.values:bounds
+    types: bee.threads:record_types
+    approval: bee.threads.records:approval
+    message: bee.threads.records:message
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    access: bee.threads.service:access

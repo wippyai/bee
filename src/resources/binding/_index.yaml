@@ -1,0 +1,125 @@
+version: '1.0'
+namespace: bee.resources.binding
+entries:
+- name: revocation_stops
+  kind: library.lua
+  source: file://revocation_stops.lua
+  modules:
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+- name: associate
+  kind: function.lua
+  source: file://associate_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+    - bee.resources.security:resource_environment_policy
+- name: grant
+  kind: function.lua
+  source: file://grant_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+    - bee.resources.security:resource_environment_policy
+- name: check_grant
+  kind: function.lua
+  source: file://check_grant_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+    - bee.resources.security:resource_environment_policy
+- name: revoke
+  kind: function.lua
+  source: file://revoke_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+    revocation_stops: bee.resources.binding:revocation_stops
+  modules:
+  - funcs
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+    - bee.resources.security:resource_revoke_stop_policy
+- name: revoke_all
+  kind: function.lua
+  source: file://revoke_all_method.lua
+  method: handle
+  modules:
+  - funcs
+  imports:
+    authority: bee.resources.persist:authority
+    revocation_stops: bee.resources.binding:revocation_stops
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+    - bee.resources.security:resource_revoke_stop_policy
+- name: resolve
+  kind: function.lua
+  source: file://resolve_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+    - bee.resources.security:resource_environment_policy
+- name: list
+  kind: function.lua
+  source: file://list_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+- name: describe
+  kind: function.lua
+  source: file://describe_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+- name: search
+  kind: function.lua
+  source: file://search_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
+- name: local
+  kind: contract.binding
+  contracts:
+  - contract: bee.resources:contract
+    methods:
+      associate: bee.resources.binding:associate
+      grant: bee.resources.binding:grant
+      revoke: bee.resources.binding:revoke
+      revoke_all: bee.resources.binding:revoke_all
+      resolve: bee.resources.binding:resolve
+      list: bee.resources.binding:list
+      describe: bee.resources.binding:describe
+      search: bee.resources.binding:search

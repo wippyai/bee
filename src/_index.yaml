@@ -4,11 +4,11 @@ entries:
 - name: definition
   kind: ns.definition
   meta:
-    title: Bee desktop foundation
+    title: Bee
 - name: workers
   kind: process.host
   host:
-    max_processes: 24
+    max_processes: 64
     workers: 4
   lifecycle:
     auto_start: true
@@ -17,3 +17,46 @@ entries:
   hide_logs: true
   lifecycle:
     auto_start: true
+- name: os
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: env_path
+  kind: env.variable
+  storage: bee:os
+  variable: BEE_ENV
+  default: .wippy/bee.env
+  readonly: true
+- name: env
+  kind: env.storage.file
+  file_path: ${env:bee:env_path}
+  auto_create: true
+  file_mode: 384
+  lifecycle:
+    auto_start: true
+- name: role
+  kind: env.variable
+  storage: bee:os
+  variable: BEE_ROLE
+  default: node
+  readonly: true
+- name: db_path
+  kind: env.variable
+  storage: bee:os
+  variable: BEE_DB
+  default: .wippy/bee.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee:db_path}
+  foreign_keys: true
+  lifecycle:
+    auto_start: true
+- name: changes
+  kind: db.cdc.sqlite
+  meta:
+    comment: Change capture of the node database; each module streams only its own tables
+  db_resource: bee:db
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service]

@@ -11,7 +11,7 @@ local function identifier(): string
     return value
 end
 local function opened(events: integer?, receipts: integer?): sync.Store
-    local store, err = sync.open({resource = "bee.sync:sync_test_db", owner = "node-test-" .. identifier(),
+    local store, err = sync.open({owner = "node-test-" .. identifier(),
         event_capacity = events, receipt_capacity = receipts})
     if not store then error(tostring(err)) end
     return store
@@ -114,4 +114,5 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options: unknown) return cases(options) end}

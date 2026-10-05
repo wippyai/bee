@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.tests.capability
+entries:
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  modules: [registry]
+  meta: {type: test, suite: bee}
+  imports:
+    fixtures: bee.tests.support:fixtures
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    capability_catalog: bee.capability:model
+- name: containment_test
+  kind: function.lua
+  source: file://containment_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    fixtures: bee.tests.support:fixtures
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    capability_containment: bee.capability:model

@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.hub.service
+entries:
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules: [process, security]
+  meta: {type: internal}
+  imports:
+    publication: bee.hub.binding:publication
+    bounds: bee.values:bounds
+    hub_result: bee.hub.package:result

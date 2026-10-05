@@ -2,58 +2,78 @@
   "schema": 1,
   "name": "bee",
   "runtime": {
-    "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "5eb9901870e3a7ca72b608fc0f5e70b531d914b6",
+    "module": "github.com/wippyai/runtime",
+    "version": "2ec1a16458ca68ab2ea4ad7588ceb1b1b88a3f36",
     "go": "1.27.0",
     "tags": [
       "fts5",
       "sqlite_vec",
       "treesitter",
-      "sqlite_preupdate_hook",
-      "meshclient",
-      "physicalclient"
+      "sqlite_preupdate_hook"
     ]
   },
   "application": {
     "module": "bee/bee",
     "command": "bee",
+    "state": ".bee",
+    "data": {
+      "BEE_APP_DATABASE_ROOT": "app-db",
+      "BEE_DB": "bee.db",
+      "BEE_ENV": "bee.env"
+    },
     "packs": [
       {
         "module": "bee/bee",
         "version": "0.1.0-dev",
-        "path": "dist/bee-native.wapp",
-        "sha256": "1fe0f2469d3c3f9e656c7e74aae9415c7240054d87fa85e677b84d778ab20f30"
+        "path": "dist/bee.wapp",
+        "sha256": "8ab533312d9a4abdc480ae37da46baca76d1ed79dae13a10f186827ea0d41001"
+      },
+      {
+        "module": "wippy/bootloader",
+        "version": "0.3.17",
+        "path": ".wippy/vendor/wippy/bootloader-0.3.17.wapp",
+        "sha256": "d4506b7733ba079fb05f5e055c0e58b3f89905f7d627ac2244a819164a0507a0"
+      },
+      {
+        "module": "wippy/migration",
+        "version": "0.3.21",
+        "path": ".wippy/vendor/wippy/migration-0.3.21.wapp",
+        "sha256": "215445ba5e9c79a36af1dcf59277946c8b7a7f20d372a296f295fa99ddc4b430"
+      },
+      {
+        "module": "wippy/security",
+        "version": "0.4.3",
+        "path": ".wippy/vendor/wippy/security-0.4.3.wapp",
+        "sha256": "f636859979e88b23647a78fb9aa8a553799de18750b0fb5fb085cbe21542c86c"
+      },
+      {
+        "module": "wippy/terminal",
+        "version": "0.4.6",
+        "path": ".wippy/vendor/wippy/terminal-0.4.6.wapp",
+        "sha256": "aa0c92b85c0dc2c96f00119a7eaa1ced569a2ac8899514d432aef0c910e73e63"
+      },
+      {
+        "module": "wippy/test",
+        "version": "0.4.19",
+        "path": ".wippy/vendor/wippy/test-0.4.19.wapp",
+        "sha256": "db07fbfc350bdcaa3e62f8b0bf1f101781f9fb3ad08a9e3ed37e64bc40812602"
       }
-    ],
-    "data": {
-      "BEE_THREADS_DB": "threads.db",
-      "BEE_NODE_DB": "node.db",
-      "BEE_WORKSPACE_DB": "workspace.db",
-      "BEE_APPROVALS_DB": "approvals.db",
-      "BEE_RESOURCES_DB": "resources.db",
-      "BEE_CREDENTIALS_DB": "credentials.db",
-      "BEE_GATEWAY_DB": "gateway.db",
-      "BEE_PLACEMENT_DB": "placement.db",
-      "BEE_PLACEMENT_ROOT": "placement",
-      "BEE_APP_DATABASE_ROOT": "app-db",
-      "BEE_GOVERNANCE_DB": "governance.db",
-      "BEE_SYNC_DB": "sync.db"
-    }
+    ]
   },
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261003135649-5b49bd9a84a2",
-      "package": "github.com/wippyai/bee/native/ioevents",
+      "version": "v0.0.0-20261004132545-33ea81cd1b27",
+      "package": "github.com/wippyai/bee/native/hive",
       "factory": "Component",
-      "private": true
+      "private": true,
+      "host": true
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261003135649-5b49bd9a84a2",
-      "package": "github.com/wippyai/bee/native/launch",
-      "factory": "Component",
-      "host": true,
+      "version": "v0.0.0-20261004132545-33ea81cd1b27",
+      "package": "github.com/wippyai/bee/native/host",
+      "factory": "New",
       "private": true
     }
   ]

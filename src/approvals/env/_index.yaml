@@ -1,0 +1,20 @@
+version: '1.0'
+namespace: bee.approvals.env
+entries:
+- name: policies_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked approver policies entry; target_policies fills resource_ref
+  resource_ref: bee.security.approvals:approver_policies
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules:
+  - registry
+  imports:
+    bounds: bee.values:bounds

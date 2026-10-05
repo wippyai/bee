@@ -1,0 +1,275 @@
+-- MIT. A workspace's own agents deliver applications to it under one host
+-- rule: an eligible local overlay gets exactly the ceilings the host names,
+-- a Hive-received overlay gets its own destination profile, one name stays
+-- with the source node that holds it, an ineligible name gets none, and
+-- explicit rows win.
+local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
+local profiles = require("activation_profiles")
+local naming = require("workspace_applications")
+local grants = require("capability_grants")
+local capability_model = require("capability_model")
+local registry = require("registry")
+
+local WORKSPACE = string.rep("a", 32)
+local NODE = "node-local"
+
+type Object = {[string]: unknown}
+
+local function rule(): Object
+    return {approval_policy = "workspace-application-delivery", kinds = {"process.lua", "library.lua"},
+        modules = {"tty", "process", "channel", "json"}, policies = {"bee.security:ordinary_app_subsystem_boundary"},
+        thread_access = "none"}
+end
+
+local function configured(): Object
+    return {profiles = {}, workspace_applications = rule()}
+end
+
+local function define_tests()
+    test.describe("workspace application naming", function()
+        test.it("derives the namespace and owner while resolving the application declaration", function()
+            local identity = assert(naming.identity(WORKSPACE, "tally_2"))
+            test.eq(identity.namespace, "app.tally_2")
+            test.eq(identity.component, "app.tally_2")
+            test.eq(naming.application({{id = "app.tally_2:window", kind = "process.lua", meta = {type = "bee.app"}}}), "app.tally_2:window")
+            test.is_nil(naming.application({{id = "app.tally_2:app", kind = "process.lua", meta = {type = "helper"}}}))
+            test.is_nil(naming.application({{id = "app.tally_2:first", kind = "process.lua", meta = {type = "bee.app"}},
+                {id = "app.tally_2:second", kind = "process.lua", meta = {type = "bee.app"}}}))
+            test.eq(identity.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".tally_2")
+            test.eq(naming.prior_owner(WORKSPACE, "tally_2"),
+                "bee.governance.workspace_applications:" .. WORKSPACE .. ".tally_2")
+            test.eq(assert(naming.identity(WORKSPACE, "tally_2")).component, "app.tally_2")
+            test.is_nil(naming.name("vendor.tally"))
+        end)
+        test.it("refuses names that cannot be a namespace segment and states the rule", function()
+            for _, name in ipairs({"Tally", "2tally", "tally-app", "tally.app", "", string.rep("a", 49)}) do
+                local identity, refused = naming.identity(WORKSPACE, name)
+                test.is_nil(identity)
+                test.not_nil((string.find(refused, "meta.type bee.app", 1, true)))
+            end
+        end)
+    end)
+
+    test.describe("workspace application activation profile", function()
+        test.it("makes the granted function call module available to workspace apps", function()
+            local entry = assert(registry.get("bee.gov:activation_profiles"))
+            local data = assert(bounds.object(entry.data))
+            local shipped = assert(bounds.object(data.workspace_applications))
+            local found = false
+            for _, module in ipairs(principals.strings(shipped.modules)) do
+                if module == "funcs" then found = true end
+            end
+            test.is_true(found)
+        end)
+        test.it("selects the host ceilings for an eligible overlay this node authored", function()
+            local config = assert(profiles.configuration(configured(), NODE))
+            local profile, refused = profiles.select(config, WORKSPACE, NODE, "tally")
+            if not profile then error(tostring(refused)) end
+            test.eq(profile.component, "app.tally")
+            test.eq(profile.resolver, "overlay")
+            test.eq(profile.approval_policy, "workspace-application-delivery")
+            test.eq(profile.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".tally")
+            test.is_true(profile.packages["app.tally"])
+            test.is_true(profile.namespaces["app.tally"])
+            test.is_nil(profile.namespaces["app"])
+            test.is_true(profile.kinds["process.lua"] and profile.kinds["library.lua"])
+            test.is_nil(profile.kinds["security.policy"])
+            test.is_true(profile.modules.tty)
+            test.is_nil((next(profile.grants)))
+            -- An application under the default rule runs only when the app
+            -- broker launches it; nothing in it starts on its own.
+            test.is_false(profile.auto_start)
+            test.is_nil((next(profile.databases)))
+            local applications = principals.objects(profile.applications)
+            test.eq(#applications, 1)
+            test.is_nil(applications[1].definition_id)
+            test.eq((principals.strings(applications[1].policies))[1], "bee.security:ordinary_app_subsystem_boundary")
+            test.eq(applications[1].thread_access, "none")
+            test.eq(#profile.policy_digest, 64)
+            local again = assert(profiles.select(assert(profiles.configuration(configured(), NODE)), WORKSPACE, NODE, "tally"))
+            test.eq(again.policy_digest, profile.policy_digest)
+            local other = assert(profiles.select(config, WORKSPACE, NODE, "notes"))
+            test.is_true(other.policy_digest ~= profile.policy_digest)
+        end)
+        test.it("resumes an old activation under its measured owner", function()
+            local config = assert(profiles.configuration(configured(), NODE))
+            local prior = assert(naming.prior_owner(WORKSPACE, "tally"))
+            local restored = assert(profiles.select(config, WORKSPACE, NODE, "tally", nil, nil, prior))
+            test.eq(restored.overlay_owner, prior)
+            local current = assert(profiles.select(config, WORKSPACE, NODE, "tally"))
+            test.is_true(restored.policy_digest ~= current.policy_digest)
+        end)
+        test.it("derives the installed application allowance from its host grant record", function()
+            local identity = assert(naming.identity(WORKSPACE, "tally"))
+            local decoded_vocabulary, vocabulary_error = capability_model.decode(assert(registry.get("bee.capability:catalog")))
+            if not decoded_vocabulary then error(tostring(vocabulary_error)) end
+            local vocabulary = decoded_vocabulary
+            local catalog_revision, template_revision = capability_model.revisions(vocabulary, "threads.read")
+            if not catalog_revision or not template_revision then error("threads.read is absent from the host catalog") end
+            local requested = assert(grants.propose(vocabulary, identity.overlay_owner, "app.tally:app", {{
+                id = "app.tally:threads", expected_kind = "security.policy", targets = {"app.tally:app"},
+                capability_request = {capability = "threads.read", parameters = {scope = "owned"},
+                    catalog_revision = catalog_revision, template_revision = template_revision,
+                    target = "app.tally:app", path = ".security.policies +="}}}))
+            local installed = assert(grants.record(identity.overlay_owner, WORKSPACE,
+                "app.tally:app", requested, "approved-1", 1))
+            local configuration = assert(profiles.configuration(configured(), NODE))
+            local selected = assert(profiles.select(configuration, WORKSPACE, NODE, "tally", installed, vocabulary))
+            test.is_true(selected.grants[requested.policies[1].id])
+            local binding = (principals.objects(selected.applications))[1]
+            test.eq(#(principals.strings(binding.policies)), 2)
+            test.eq((principals.strings(binding.policies))[1], requested.policies[1].id)
+            test.eq((principals.strings(binding.policies))[2], "bee.security:ordinary_app_subsystem_boundary")
+            test.eq(binding.thread_access, requested.thread_access)
+            local remote = assert(profiles.select(configuration, WORKSPACE, "node-remote", "tally", installed,
+                vocabulary, nil, "node-remote"))
+            test.is_true(remote.grants[requested.policies[1].id])
+            local denied = profiles.select(configuration, WORKSPACE, NODE, "tally",
+                {id = installed.id, kind = installed.kind, meta = installed.meta, data = {digest = "bad"}},
+                vocabulary)
+            test.is_nil(denied)
+        end)
+        test.it("admits a Hive-received overlay under its own destination profile", function()
+            local config = assert(profiles.configuration(configured(), NODE))
+            local remote = assert(profiles.select(config, WORKSPACE, "node-remote", "tally"))
+            test.eq(remote.source_node, "node-remote")
+            test.eq(remote.component, "app.tally")
+            test.eq(remote.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".tally")
+            test.is_true(next(remote.grants) == nil)
+            local held = assert(profiles.select(config, WORKSPACE, "node-remote", "tally", nil, nil, nil,
+                "node-remote"))
+            test.eq(held.policy_digest, remote.policy_digest)
+            local hijack, hijack_refusal = profiles.select(config, WORKSPACE, "node-remote", "tally", nil, nil,
+                nil, NODE)
+            test.is_nil(hijack)
+            test.not_nil((string.find(hijack_refusal, "cannot replace it", 1, true)))
+            local displaced, displaced_refusal = profiles.select(config, WORKSPACE, NODE, "tally", nil, nil, nil,
+                "node-remote")
+            test.is_nil(displaced)
+            test.not_nil((string.find(displaced_refusal, "installed from node node-remote", 1, true)))
+            local closed = configured()
+            local closed_rule = assert(bounds.object(closed.workspace_applications))
+            closed_rule.hive = false
+            local refused, refusal = profiles.select(
+                assert(profiles.configuration(closed, NODE)), WORKSPACE, "node-remote", "tally")
+            test.is_nil(refused)
+            test.not_nil((string.find(refusal, "bee.gov:activation_profiles", 1, true)))
+        end)
+        test.it("grants nothing to an ineligible name or a missing rule", function()
+            local config = assert(profiles.configuration(configured(), NODE))
+            local invalid, invalid_refusal = profiles.select(config, WORKSPACE, NODE, "Tally App")
+            test.is_nil(invalid)
+            test.not_nil((string.find(invalid_refusal, "app.<overlay_id>", 1, true)))
+            local disabled = assert(profiles.configuration({profiles = {}}, NODE))
+            local none, none_refusal = profiles.select(disabled, WORKSPACE, NODE, "tally")
+            test.is_nil(none)
+            test.not_nil((string.find(none_refusal, "no activation profile for overlay tally", 1, true)))
+        end)
+        test.it("keeps an explicit host row ahead of the rule", function()
+            local config = configured()
+            config.profiles = {{workspace_id = WORKSPACE, source_node = NODE, source_workspace = "tally",
+                component = "vendor/tally", overlay_owner = "bee.vendor:tally", approval_policy = "vendor-install",
+                parameters = {}, allow = {packages = {"vendor/tally"}, namespaces = {"vendor.tally"},
+                    kinds = {"process.lua"}, databases = {}, grants = {}, modules = {}}}}
+            local explicit = assert(profiles.select(assert(profiles.configuration(config, NODE)), WORKSPACE, NODE, "tally"))
+            test.eq(explicit.component, "vendor/tally")
+            -- An explicit row keeps the host's authority to admit auto start
+            -- and may withhold it.
+            test.is_true(explicit.auto_start)
+            local rows = principals.objects(config.profiles)
+            local allow = assert(bounds.object(rows[1].allow))
+            allow.auto_start = false
+            test.is_false(assert(profiles.select(assert(profiles.configuration(config, NODE)), WORKSPACE, NODE, "tally")).auto_start)
+            allow.auto_start = "yes"
+            test.is_nil(profiles.configuration(config, NODE))
+            allow.auto_start = nil
+            local decoded = assert(profiles.decode(config))
+            local chosen = assert(profiles.select_decoded(decoded, WORKSPACE, NODE, "tally", NODE))
+            test.eq(chosen.overlay_owner, "bee.vendor:tally")
+            local derived = assert(profiles.select_decoded(decoded, WORKSPACE, NODE, "notes", NODE))
+            test.eq(derived.component, "app.notes")
+            local remote = assert(profiles.select_decoded(decoded, WORKSPACE, "node-remote", "notes", NODE))
+            test.eq(remote.source_node, "node-remote")
+            test.eq(remote.component, "app.notes")
+        end)
+        test.it("hardens a super-edit profile and leaves an ordinary row unchanged", function()
+            local function super_row(overrides: Object): Object
+                local row: Object = {workspace_id = WORKSPACE, source_node = NODE, source_workspace = "vendor",
+                    component = "vendor/app", overlay_owner = "bee.vendor:vendor",
+                    approval_policy = "super-edit-host", parameters = {}, expires_at = "2999-01-01T00:00:00.000Z",
+                    allow = {packages = {"vendor/app"}, namespaces = {"vendor.app"}, kinds = {"process.lua"},
+                        databases = {}, grants = {}, modules = {}, auto_start = false}}
+                for name, value in pairs(overrides) do row[name] = value end
+                return row
+            end
+            local config: Object = {profiles = {super_row({})}}
+            local decoded = assert(profiles.configuration(config, NODE))
+            test.is_true(decoded.profiles[1].super_edit)
+            test.eq(decoded.profiles[1].expires_at, "2999-01-01T00:00:00.000Z")
+            test.is_false(decoded.profiles[1].auto_start)
+            -- An ordinary row carries no expiry and is not a super-edit row.
+            local plain = assert(profiles.configuration({profiles = {}}, NODE))
+            test.is_nil(plain.profiles[1])
+            local ordinary: Object = {profiles = {{workspace_id = WORKSPACE, source_node = NODE,
+                source_workspace = "vendor", component = "vendor/app", overlay_owner = "bee.vendor:vendor",
+                approval_policy = "vendor-install", parameters = {},
+                allow = {packages = {"vendor/app"}, namespaces = {"vendor.app"}, kinds = {"process.lua"},
+                    databases = {}, grants = {}, modules = {}}}}}
+            local plain_row = assert(profiles.configuration(ordinary, NODE))
+            test.is_false(plain_row.profiles[1].super_edit)
+            test.is_true(plain_row.profiles[1].auto_start)
+            -- A super-edit row must withhold auto start.
+            test.is_nil(profiles.configuration({profiles = {super_row({allow = {packages = {"vendor/app"},
+                namespaces = {"vendor.app"}, kinds = {"process.lua"}, databases = {}, grants = {}, modules = {},
+                auto_start = true}})}}, NODE))
+            test.is_nil(profiles.configuration({profiles = {super_row({allow = {packages = {"vendor/app"},
+                namespaces = {"vendor.app"}, kinds = {"process.lua"}, databases = {}, grants = {}, modules = {}}})}}, NODE))
+            -- It may not carry a security-granting action.
+            for _, grant in ipairs({"security.actor.create", "funcs.security", "process.security",
+                    "registry.apply", "registry.overlay.apply"}) do
+                local refused, refusal = profiles.configuration({profiles = {super_row({allow = {packages = {"vendor/app"},
+                    namespaces = {"vendor.app"}, kinds = {"process.lua"}, databases = {}, grants = {grant}, modules = {},
+                    auto_start = false}})}}, NODE)
+                test.is_nil(refused)
+                test.not_nil((string.find(refusal, "may not grant", 1, true)))
+            end
+            -- An ordinary row may still carry what a super-edit row may not.
+            local allowed = assert(profiles.configuration({profiles = {{workspace_id = WORKSPACE, source_node = NODE,
+                source_workspace = "vendor", component = "vendor/app", overlay_owner = "bee.vendor:vendor",
+                approval_policy = "vendor-install", parameters = {},
+                allow = {packages = {"vendor/app"}, namespaces = {"vendor.app"}, kinds = {"process.lua"},
+                    databases = {}, grants = {"registry.apply"}, modules = {}}}}}, NODE))
+            test.is_true(allowed.profiles[1].grants["registry.apply"])
+            -- An unparsable expiry is refused.
+            test.is_nil(profiles.configuration({profiles = {super_row({expires_at = "tomorrow"})}}, NODE))
+            test.is_nil(profiles.configuration({profiles = {super_row({expires_at = 7})}}, NODE))
+            -- The measured policy carries the expiry so its digest binds it.
+            local measured = assert(profiles.select(decoded, WORKSPACE, NODE, "vendor"))
+            local moved = assert(profiles.configuration({profiles = {super_row({expires_at = "2999-06-01T00:00:00.000Z"})}}, NODE))
+            local moved_profile = assert(profiles.select(moved, WORKSPACE, NODE, "vendor"))
+            test.is_true(measured.policy_digest ~= moved_profile.policy_digest)
+        end)
+        test.it("rejects a rule that widens authority by shape", function()
+            local unknown_field = configured()
+            local widened = rule()
+            widened.grants = {"db.get"}
+            unknown_field.workspace_applications = widened
+            test.is_nil(profiles.configuration(unknown_field, NODE))
+            local no_kinds = configured()
+            local empty = rule()
+            empty.kinds = {}
+            no_kinds.workspace_applications = empty
+            test.is_nil(profiles.configuration(no_kinds, NODE))
+            local bad_access = configured()
+            local access = rule()
+            access.thread_access = "own"
+            bad_access.workspace_applications = access
+            test.is_nil(profiles.configuration(bad_access, NODE))
+            test.is_nil(profiles.configuration({profiles = {}, extra = true}, NODE))
+        end)
+    end)
+end
+
+return test.run_cases(define_tests)

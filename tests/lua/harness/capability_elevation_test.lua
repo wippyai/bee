@@ -22,9 +22,9 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:elevation_client_policy", "bee.security.gateway:gateway_manage_policy",
-    "bee.security.gateway:gateway_admit_policy", "bee.security.threads:thread_create_policy",
-    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_observe_policy",
+local scope_names = {"bee.harness.catalog:elevation_client_policy", "bee.tests.support:gateway_manage_policy",
+    "bee.tests.support:gateway_admit_policy", "bee.threads.security:create",
+    "bee.threads.security:lifecycle", "bee.threads.security:observe",
     "bee.harness.catalog:approver_client_policy",
     "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy",
     "bee.resources.security:resource_resolve_policy", "bee.security.approvals:approval_decide_policy"}
@@ -93,7 +93,7 @@ end
 -- Temporarily map the installable database capability to a workspace
 -- association so the runtime approval effect can be exercised end to end.
 local function set_database_source(source: string): string
-    local entry = registry.get("bee.security.capability:capability_catalog")
+    local entry = registry.get("bee.capability:catalog")
     if not entry then error("capability catalog entry") end
     local rows = principals.objects((assert(bounds.object(entry.data))).capabilities)
     for _, row in ipairs(rows) do
@@ -108,7 +108,7 @@ local function set_database_source(source: string): string
     error("application database capability missing")
 end
 local function restore_database_source(source: string)
-    local entry = registry.get("bee.security.capability:capability_catalog")
+    local entry = registry.get("bee.capability:catalog")
     if not entry then error("capability catalog entry") end
     local rows = principals.objects((assert(bounds.object(entry.data))).capabilities)
     for _, row in ipairs(rows) do

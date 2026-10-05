@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.app.threads
+entries:
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules:
+  - process
+  - uuid
+  imports:
+    client: bee.app:client
+    thread_protocol: bee.app.threads.types:protocol

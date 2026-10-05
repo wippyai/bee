@@ -61,6 +61,12 @@ local function define_tests()
             local called = assert((client():call({definition = "research:window", presentation = "window", input = "go", operation_key = "present/call"})))
             test.eq(called.work:ref(), "bw:n:w:window")
         end)
+        test.it("forwards a chosen folder on open", function()
+            local opened, fault = client():open({definition = "research:folder", workdir = {root_ref = "bee.node:machine", path = "home/project"},
+                operation_key = "folder/open"})
+            test.is_nil(fault)
+            test.not_nil(opened)
+        end)
         test.it("rejects unknown presentation before contacting the owner", function()
             local api = assert((bounds.object(sessions)))
             local open = api.open
@@ -206,6 +212,9 @@ local function define_tests()
                 if not fault or fault.code ~= "INVALID" then error(name .. " returned " .. tostring(value)) end
             end
             refused("open definition", select(2, client:open({definition = 7, operation_key = "bad"})))
+            refused("folder name", select(2, client:open({definition = "d:ready", workdir = "folder-1", operation_key = "bad-folder"})))
+            refused("escaping folder", select(2, client:open({definition = "d:ready", workdir = {root_ref = "bee.node:machine", path = "../etc"}, operation_key = "bad-folder"})))
+            refused("folder field", select(2, client:open({definition = "d:ready", workdir = {root_ref = "bee.node:machine", path = "x", access = "write"}, operation_key = "bad-folder"})))
             refused("large input", select(2, client:call({definition = "d:ready", input = string.rep("x", protocol.MAX_TEXT_BYTES + 1), operation_key = "large"})))
             refused("nil structured value", select(2, client:call({definition = "d:ready", input = {schema = "s", value = nil}, operation_key = "nil"})))
             refused("work ref in session position", select(2, client:send({session = "bw:n:w:w1", input = "go", operation_key = "bad-session"})))

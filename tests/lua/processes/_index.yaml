@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.host.processes
+namespace: bee.tests.processes
 entries:
 - name: view_test
   kind: function.lua
@@ -13,9 +13,9 @@ entries:
   imports:
     test: wippy.test:test
     appearance: bee.ui:appearance
-    probe: bee.host.processes.app:probe
-    view: bee.host.processes.app:view
-    history_values: bee.host.processes.app:history
+    probe: bee.apps.processes:probe
+    view: bee.apps.processes:view
+    history_values: bee.apps.processes:history
 - name: probe_test
   kind: function.lua
   source: file://probe_test.lua
@@ -25,6 +25,18 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    probe: bee.host.processes.app:probe
+    probe: bee.apps.processes:probe
     viz: bee.ui.viz:viz
-    history_values: bee.host.processes.app:history
+    history_values: bee.apps.processes:history
+- name: hive_test
+  kind: function.lua
+  source: file://hive_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    viz: bee.ui.viz:viz
+    hive: bee.apps.processes:hive
+    view: bee.apps.processes:view

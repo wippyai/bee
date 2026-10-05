@@ -1,14 +1,212 @@
 version: '1.0'
 namespace: bee.threads.service
 entries:
-- name: thread_outbox_pump_service
+- name: access
+  kind: library.lua
+  source: file://access.lua
+  modules: [security]
+  imports:
+    bounds: bee.values:bounds
+- name: boundary
+  kind: library.lua
+  source: file://boundary.lua
+  imports:
+    database: bee.threads.persist:database
+    transaction: bee.threads.persist:transaction
+    types: bee.threads:types
+    access: bee.threads.service:access
+    notices: bee.threads.service:notices
+  modules: [sql]
+- name: notices
+  kind: library.lua
+  source: file://notices.lua
+  modules: [sql, uuid]
+  imports:
+    bounds: bee.values:bounds
+    record: bee.threads.records:record
+    message: bee.threads.records:message
+    record_types: bee.threads:record_types
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    access: bee.threads.service:access
+- name: authority
+  kind: library.lua
+  source: file://authority.lua
+  modules: [sql, json]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    values: bee.threads.records:values
+    record: bee.threads.records:record
+    message: bee.threads.records:message
+    observation: bee.threads.records:observation
+    record_types: bee.threads:record_types
+    types: bee.threads:types
+    access: bee.threads.service:access
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    record_bounds: bee.threads.records:bounds
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  modules: [sql]
+  imports:
+    bounds: bee.values:bounds
+    values: bee.threads.records:values
+    lifecycle: bee.threads.records:lifecycle
+    record_types: bee.threads:record_types
+    access: bee.threads.service:access
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    record_bounds: bee.threads.records:bounds
+    inbox: bee.threads.service:inbox
+- name: sends
+  kind: library.lua
+  source: file://send.lua
+  modules: [sql, hash, json]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+- name: threads
+  kind: process.lua
+  source: file://service.lua
+  method: main
+  modules:
+  - process
+  - sql
+  - channel
+  - system
+  - env
+  - funcs
+  - security
+  - logger
+  - events
+  - cdc
+  imports:
+    protocol: bee.hive:protocol
+    database: bee.threads.persist:database
+    owner: bee.threads.persist:owner
+    notices: bee.threads.service:notices
+    commits: bee.threads.delivery:commits
+- name: service
+  kind: process.service
+  process: bee.threads.service:threads
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires: ['wippy.bootloader:bootloader.service', 'bee:changes']
+    security:
+      actor:
+        id: bee.threads
+      policies: ['bee.threads.security:store', 'bee.threads.security:changes', 'bee.threads.security:announce', 'bee.threads.security:names',
+        'bee.threads.security:admission', 'bee.threads.security:node', 'bee.hive.security:messaging']
+    restart:
+      max_attempts: 10
+- name: app_alias
+  kind: library.lua
+  source: file://app_alias.lua
+  modules:
+  - sql
+  imports:
+    bounds: bee.values:bounds
+    access: bee.threads.service:access
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+- name: inbox
+  kind: library.lua
+  source: file://inbox.lua
+  modules:
+  - sql
+  - system
+  - json
+  imports:
+    bounds: bee.values:bounds
+    access: bee.threads.service:access
+    message: bee.threads.records:message
+    record: bee.threads.records:record
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    sends: bee.threads.service:sends
+    outbox: bee.threads.persist:outbox
+- name: outbox
+  kind: library.lua
+  source: file://outbox.lua
+  modules:
+  - sql
+  - json
+  imports:
+    bounds: bee.values:bounds
+    transaction: bee.threads.persist:transaction
+    repository: bee.threads.persist:outbox
+- name: pump
+  kind: library.lua
+  source: file://pump.lua
+  imports:
+    bounds: bee.values:bounds
+- name: work_store
+  kind: library.lua
+  source: file://work_store.lua
+  modules:
+  - sql
+  - json
+  - hash
+  - uuid
+  - system
+  - time
+  imports:
+    journal: bee.threads.persist:journal
+    budget_values: bee.threads.records:budgets
+    access: bee.threads.service:access
+    transaction: bee.threads.persist:transaction
+    thread_owner: bee.threads.persist:owner
+    reader: bee.threads.persist:reader
+    record: bee.threads.records:record
+    observation: bee.threads.records:observation
+    record_types: bee.threads:record_types
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    record_bounds: bee.threads.records:bounds
+    commits: bee.threads.delivery:commits
+- name: pump_sender
+  kind: library.lua
+  source: file://pump_sender.lua
+  imports:
+    protocol: bee.hive:protocol
+- name: pump_worker
+  kind: process.lua
+  source: file://pump_worker.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  - logger
+  imports:
+    database: bee.threads.persist:database
+    outbox: bee.threads.service:outbox
+    pump: bee.threads.service:pump
+    bounds: bee.values:bounds
+    sender: bee.threads.service:pump_sender
+- name: pump_service
   kind: process.service
   process: bee.threads.service:pump_worker
   host: bee:workers
   lifecycle:
     auto_start: true
+    requires:
+    - wippy.bootloader:bootloader.service
     security:
-      actor: {id: bee.threads.pump}
-      policies: [bee.security.threads:thread_outbox_pump_policy]
+      actor:
+        id: bee.threads.pump
+      policies:
+      - bee.threads.security:store
+      - bee.hive.security:caller
+      - bee.hive.security:messaging
     restart:
       max_attempts: 10

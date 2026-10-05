@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.tests
+entries:
+- name: dependency
+  kind: ns.dependency
+  component: bee/bee
+  version: '*'

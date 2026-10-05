@@ -94,8 +94,8 @@ local function define_tests()
                 test.eq(tool.schema.additionalProperties, false)
                 test.eq(tool.schema.type, "object")
             end
-            test.eq((seen.session_catalog).operation, "bee.sessions:catalog.list")
-            test.eq((seen.session_send).operation, "bee.sessions:contract.send")
+            test.eq((seen.session_catalog).operation, "bee.threads.sessions:catalog.list")
+            test.eq((seen.session_send).operation, "bee.threads.sessions:contract.send")
             for _, name in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "thread_sessions",
                 "session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply",
                 "launch_definitions"}) do
@@ -127,6 +127,8 @@ local function define_tests()
             local await = (mcp.tool("session_await")).description
             test.is_true(await:find("work or operation", 1, true) ~= nil)
             test.is_true(await:find("timeout never cancels", 1, true) ~= nil)
+            test.is_true(await:find("Wait up to timeout_ms", 1, true) ~= nil)
+            test.is_true((mcp.tool("session_join")).description:find("waiting up to timeout_ms", 1, true) ~= nil)
         end)
         test.it("admits every tool through the strict catalog and keeps the no-shadow rule", function()
             local list: {Object} = {}
@@ -282,6 +284,26 @@ local function define_tests()
             test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = stalled}}))
             test.not_nil(session_tools.decode("session_list", {arguments = {filter = {activity = "blocked"}}}))
             test.is_nil(session_tools.decode("session_list", {arguments = {filter = {activity = "queued"}}}))
+        end)
+        test.it("publishes a session's saved profile as the owner reports it", function()
+            local profiled = snapshot()
+            profiled.saved_profile = {id = "agy:research_batch", revision = 3}
+            local checked, failure = session_tools.result("session_get", {ok = true, value = {kind = "session", value = profiled}})
+            if not checked then error(tostring(failure)) end
+            profiled.saved_profile = {id = "agy:research_batch"}
+            test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = profiled}}))
+            profiled.saved_profile = {id = "agy:research_batch", revision = 0}
+            test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = profiled}}))
+        end)
+        test.it("checks published patterns as regular expressions", function()
+            local digested = snapshot()
+            digested.profile_digest = string.rep("ab", 32)
+            local checked, failure = session_tools.result("session_get", {ok = true, value = {kind = "session", value = digested}})
+            if not checked then error(tostring(failure)) end
+            digested.profile_digest = string.rep("ab", 31)
+            test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = digested}}))
+            digested.profile_digest = string.rep("AB", 32)
+            test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = digested}}))
         end)
         test.it("refuses owner replies that break the published schema", function()
             local no_key = {ok = false, error = {code = "CONFLICT", message = "key reused", retry = "never"}}

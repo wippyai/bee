@@ -96,7 +96,7 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     profiles: bee.placement.profiles:profiles
     request_codec: bee.placement:request
     store: bee.placement.native.persist:store
@@ -132,7 +132,7 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     profiles: bee.placement.profiles:profiles
     request_codec: bee.placement:request
     store: bee.placement.native.persist:store
@@ -168,7 +168,7 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     profiles: bee.placement.profiles:profiles
     request_codec: bee.placement:request
     store: bee.placement.native.persist:store
@@ -246,7 +246,7 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     profiles: bee.placement.profiles:profiles
     request_codec: bee.placement:request
     store: bee.placement.native.persist:store
@@ -277,7 +277,7 @@ entries:
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
-    principals: bee.test.principals:bound
+    principals: bee.tests.principals:bound
     profiles: bee.placement.profiles:profiles
     request_codec: bee.placement:request
     store: bee.placement.native.persist:store

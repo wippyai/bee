@@ -1,0 +1,50 @@
+version: '1.0'
+namespace: bee.node.binding
+entries:
+- name: catalog_types
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [registry, fs]
+  imports:
+    bounds: bee.values:bounds
+    workspaces: bee.node:workspaces
+- name: catalog
+  kind: function.lua
+  source: file://catalog.lua
+  method: handle
+  modules: [registry, fs, sql, uuid, time, json]
+  imports:
+    bounds: bee.values:bounds
+    workspaces: bee.node:workspaces
+- name: read
+  kind: function.lua
+  meta:
+    comment: One workspace's row, its folder under the admitted root it lies in; needs bee.node.workspace.read on the workspace
+  source: file://operations.lua
+  method: read
+  modules: [funcs, security]
+  imports: &operation_imports
+    bounds: bee.values:bounds
+    catalog: bee.node.binding:catalog_types
+  security:
+    policies: [bee.node.security:workspace_catalog_facade]
+- name: roots
+  kind: function.lua
+  meta:
+    comment: The roots the node admits for workspaces, in name order, each with its access (read or write); needs bee.node.workspace.read on catalog
+  source: file://operations.lua
+  method: roots
+  modules: [funcs, security]
+  imports: *operation_imports
+  security:
+    policies: [bee.node.security:workspace_catalog_facade]
+- name: folders
+  kind: function.lua
+  meta:
+    comment: One page of the folders inside a folder of an admitted root, each with the workspace that holds it; needs bee.node.workspace.browse on the root
+  source: file://operations.lua
+  method: folders
+  modules: [funcs, security]
+  imports: *operation_imports
+  security:
+    policies: [bee.node.security:workspace_catalog_facade]

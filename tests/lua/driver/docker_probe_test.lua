@@ -33,7 +33,7 @@ local function define_tests()
             local saved_descriptor = assert(json.encode(declaration.data))
             local contracts = assert(bounds.array(assert(bounds.object(binding.data)).contracts, 16))
             local methods = assert(bounds.object(assert(bounds.object(contracts[1])).methods))
-            methods.capabilities = "bee.driver:docker_capabilities_fixture"
+            methods.capabilities = "bee.tests.driver:docker_capabilities_fixture"
             assert(bounds.object(declaration.data)).login_evidence = {command = "fixture login", any_of = {{kind = "env_present", names = {"PATH"}}}}
             local changes = registry.snapshot():changes()
             assert(changes:update(binding)); assert(changes:update(declaration)); assert(changes:apply())
@@ -42,22 +42,22 @@ local function define_tests()
             local function check(): unknown return locate.locate(registry.snapshot(), "bee.driver.claude.binding:binding", "batch", cache, profile) end
             local first = check()
             local second = check()
-            local facts = assert(registry.get("bee.driver:docker_probe_facts"))
+            local facts = assert(registry.get("bee.tests.driver:docker_probe_facts"))
             local data = assert(bounds.object(facts.data))
             local prior = data.calls
             data.digest = string.rep("b", 64); data.help = "no option flags"
             changes = registry.snapshot():changes(); assert(changes:update(facts)); assert(changes:apply())
             local changed = check()
-            facts = assert(registry.get("bee.driver:docker_probe_facts")); data = assert(bounds.object(facts.data))
+            facts = assert(registry.get("bee.tests.driver:docker_probe_facts")); data = assert(bounds.object(facts.data))
             local after = data.calls
             data.present = false
             changes = registry.snapshot():changes(); assert(changes:update(facts)); assert(changes:apply())
             local missing = check()
-            facts = assert(registry.get("bee.driver:docker_probe_facts")); data = assert(bounds.object(facts.data))
+            facts = assert(registry.get("bee.tests.driver:docker_probe_facts")); data = assert(bounds.object(facts.data))
             data.buildable = true
             changes = registry.snapshot():changes(); assert(changes:update(facts)); assert(changes:apply())
             local buildable = check()
-            facts = assert(registry.get("bee.driver:docker_probe_facts")); data = assert(bounds.object(facts.data))
+            facts = assert(registry.get("bee.tests.driver:docker_probe_facts")); data = assert(bounds.object(facts.data))
             data.failure = "connection failed: permission denied opening Docker socket"
             changes = registry.snapshot():changes(); assert(changes:update(facts)); assert(changes:apply())
             local failed = check()

@@ -12,8 +12,8 @@ end
 local calls: {string} = {}
 local function ask(target: string, request: Object): caller.Reply
     calls[#calls + 1] = target
-    if target == "bee.workspace.binding:roots" then return ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}}}) end
-    if target == "bee.workspace.binding:folders" then
+    if target == "bee.node.binding:roots" then return ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}}}) end
+    if target == "bee.node.binding:folders" then
         local path = tostring(request.path)
         local folders = path == "" and {{name = "legacy"}} or {}
         return ok({root_ref = request.root_ref, path = path, access = "write", folders = folders})

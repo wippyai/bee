@@ -1,0 +1,78 @@
+version: '1.0'
+namespace: bee.driver.codex.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    configuration: bee.driver.codex.binding:configuration
+    configure_protocol: bee.driver.binding:configuration
+    universal: bee.driver.binding:universal
+  security:
+    policies:
+    - bee.driver.codex.binding:configuration_policy
+- name: locate
+  kind: function.lua
+  source: file://locate.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    universal: bee.driver.binding:universal
+- name: configuration_policy
+  kind: security.policy.expr
+  meta:
+    comment: Read only the descriptor that declares this configuration renderer
+  policy:
+    effect: allow
+    actions:
+    - registry.get
+    - registry.snapshot
+    resources:
+    - '*'
+    expression: (action == "registry.get" && resource == "bee.driver.codex.descriptor:cli") || action == "registry.snapshot"
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    shared_configuration: bee.driver.binding:configuration
+    toml: bee.driver.binding:toml
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.codex.binding:prepare
+      dispatch: bee.driver.codex.binding:dispatch
+      normalize: bee.driver.codex.binding:normalize
+      configure: bee.driver.codex.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.codex.binding:locate
+  meta:
+    type: harness.driver
+    driver_id: codex
+    descriptor_ref: bee.driver.codex.descriptor:cli
+    accepts_model: false
+    profiles_ref: bee.driver.codex.profiles:profiles

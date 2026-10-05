@@ -1,0 +1,176 @@
+version: '1.0'
+namespace: bee.threads
+entries:
+- name: authority
+  kind: contract.definition
+  methods:
+  - name: create
+    description: Create a rich thread owned by the caller
+  - name: get
+    description: Read a thread summary and the caller's membership
+  - name: list
+    description: List threads the caller can read
+  - name: list_workspace
+    description: List the threads a workspace owns, for a caller the host lets read that workspace's threads
+  - name: join
+    description: Add or reactivate a member at an expected revision
+  - name: leave
+    description: Deactivate a member at an expected revision
+  - name: close
+    description: Close a thread that has no unsettled actions
+  - name: record
+    description: Commit a message or observation the caller produced
+  - name: read_after
+    description: Read committed records after a cursor with a bounded filter
+  - name: send
+    description: Commit a message forwarded from another node under its caller node and idempotency key with the payload digest the sender computed; the same identity replays, a different payload conflicts
+  - name: send_status
+    description: What the owner committed under a send identity, for a sender that lost the reply
+  - name: notify
+    description: Register a one-shot notice on the caller's own thread, delivered once when an action of a thread the caller reads ends a turn or an attempt
+  - name: register_app_alias
+    description: Attest the stable app an application instance was opened for; only the application broker holds this
+  - name: retire_app_alias
+    description: Retire family inheritance when the broker-managed application instance closes
+  - name: fence_app
+    description: Deactivate every active member row of a stable app after admission loss; only the application broker holds this
+- name: journal
+  kind: contract.definition
+  methods:
+  - name: session_create
+    description: Create a durable session in the canonical thread journal
+  - name: session_attach
+    description: Attach the admitted native attempt to its durable interactive session
+  - name: session_describe
+    description: Read a session and its current work summary
+  - name: session_scan
+    description: Scan durable session references in a workspace
+  - name: session_transition
+    description: Change session lifecycle at a durable revision
+  - name: work_send
+    description: Commit immutable work with owner-set sender identity
+  - name: work_describe
+    description: Read a work phase and its result when settled
+  - name: work_await
+    description: Wait until any listed work holds a result or uncertainty, or the bounded wait ends
+  - name: work_history
+    description: Page immutable work inputs for a session
+  - name: work_scan
+    description: Scan the next queued work and unsettled turn for the Sessions scheduler
+  - name: turn_reserve
+    description: Reserve the FIFO eligible work under a fenced owner epoch
+  - name: turn_recover
+    description: Re-fence one unsettled turn under the current owner epoch
+  - name: turn_pull
+    description: Pull the exact immutable envelope for a reserved turn
+  - name: turn_accept
+    description: Commit acceptance of the reserved input checkpoint
+  - name: turn_observation
+    description: Append one normalized event from the current fenced turn
+  - name: work_settle
+    description: Settle one accepted turn with its per-work result
+  - name: work_uncertain
+    description: Persist uncertainty without retrying a turn whose outcome cannot be proven
+  - name: work_cancel
+    description: Cancel queued work or request a placement stop for an unsettled turn
+  - name: operation_lookup
+    description: Recover a caller-scoped operation receipt by key
+  - name: operation_describe
+    description: Read an exact caller-scoped operation receipt
+  - name: feed_read
+    description: Read canonical session events after an owner-local sequence
+- name: delivery
+  kind: contract.definition
+  methods:
+  - name: claim
+    description: Claim the caller's pending messages as one batch
+  - name: dispatch
+    description: Record dispatch intent and any transport acceptance for a claim
+  - name: ack
+    description: Acknowledge a claimed delivery
+  - name: release
+    description: Release a claim that was never dispatched
+  - name: expire
+    description: Mark an expired claim uncertain
+  - name: reconcile
+    description: Decide an uncertain delivery
+  - name: subscribe
+    description: Open a consumer cursor on the thread
+  - name: page
+    description: Return the outstanding page or open the next one
+  - name: ack_page
+    description: Acknowledge the outstanding page by identity and extent
+  - name: unsubscribe
+    description: Stop delivery on a subscription
+  - name: resume
+    description: Rebind a retained durable subscription under a new lease
+  - name: close_subscription
+    description: The thread owner stops delivery on any subscription, preserving its durable cursor
+  - name: forget_subscription
+    description: The thread owner forgets a closed subscription, reclaiming retained metadata
+  - name: wait
+    description: Claim what is pending or wait, bounded, for the thread to move
+  - name: watch
+    description: Wait, bounded and read-only, for the thread to move past a cursor; claims nothing
+- name: projection
+  kind: contract.definition
+  methods:
+  - name: recap_read
+    description: Read the stored recap checkpoint
+  - name: recap_update
+    description: Fold new records into the recap
+  - name: recap_rebuild
+    description: Drop the recap and fold it again from the first record
+  - name: status_read
+    description: Read the status projection with the caller's waiting relationship derived
+  - name: status_update
+    description: Fold new records into the status projection
+  - name: status_rebuild
+    description: Drop the status projection and fold it again from the first record
+- name: lifecycle
+  kind: contract.definition
+  methods:
+  - name: admit_action
+    description: Commit an admitted action
+  - name: prepare_attempt
+    description: Commit a prepared attempt with its pinned execution plan before anything external exists
+  - name: start_attempt
+    description: Commit the start of a prepared attempt under a new owner epoch
+  - name: request_turn
+    description: Commit a turn request on a running attempt
+  - name: end_turn
+    description: Commit the end of an open turn
+  - name: receipt
+    description: Commit the single terminal receipt of an attempt or action
+- name: carrier
+  kind: contract.definition
+  methods:
+  - name: claim
+    description: Acquire a new carrier epoch on a live attempt; earlier carriers are fenced out
+  - name: commit
+    description: Commit derived records and the next checkpoint in one transaction under the current epoch and revision
+  - name: checkpoint
+    description: Read the stored carrier checkpoint, revision and epoch of an attempt
+  - name: cancel_intent
+    description: Record the durable, idempotent cancel intent of an attempt, reconciled against its terminal carrier record
+  - name: cancel_status
+    description: Read the durable cancel intent of an attempt, for a caller reconciling a cancel across restart
+- name: approvals
+  kind: contract.definition
+  methods:
+  - name: append
+    description: Append one approval projection record under the approval owner's event id; the authority alone holds this
+- name: record_types
+  kind: library.lua
+  source: file://record_types.lua
+- name: types
+  kind: library.lua
+  source: file://types.lua
+- name: route
+  kind: registry.entry
+  meta:
+    type: bee.hive.route
+    comment: Hive operations threads.* go to this node's Threads service
+  data:
+    prefix: threads
+    name: bee.threads

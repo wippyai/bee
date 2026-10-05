@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: definition
+  kind: ns.definition
+  meta:
+    title: Bee desktop foundation
+- name: workers
+  kind: process.host
+  host:
+    max_processes: 24
+    workers: 4
+  lifecycle:
+    auto_start: true
+- name: terminal
+  kind: terminal.host
+  hide_logs: true
+  lifecycle:
+    auto_start: true

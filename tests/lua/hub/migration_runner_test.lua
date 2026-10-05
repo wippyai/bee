@@ -3,11 +3,11 @@ local test = require("test")
 local migration_runner = require("migration_runner")
 local migrations = require("migrations")
 
-local DB = "bee.hub:migration_runner_db"
-local DEFAULT = "bee.hub:test_default_migration"
-local CUSTOM = "bee.hub:test_custom_migration"
-local BOUND = "bee.hub:test_bound_migration"
-local BOUND_DB = "bee.hub:migration_binding_db"
+local DB = "bee.tests.hub:migration_runner_db"
+local DEFAULT = "bee.tests.hub:test_default_migration"
+local CUSTOM = "bee.tests.hub:test_custom_migration"
+local BOUND = "bee.tests.hub:test_bound_migration"
+local BOUND_DB = "bee.tests.hub:migration_binding_db"
 
 local entries = {
     {id = DEFAULT, meta = {type = "migration", target_db = DB, timestamp = "2026-09-19T10:00:00Z"}, registry = {owner = "bee/hub"}},
@@ -30,7 +30,7 @@ local function define_tests()
             test.not_nil(default_result.migrations)
             if default_result.migrations then test.eq(default_result.migrations[1].status, "applied") end
             local custom_result = run_next(migration_runner.source(entries, {
-                "bee.gov.security:destination_service_policy", "bee.gov.security:destination_execution_policy",
+                "bee.tests.hub:owner_service_policy", "bee.tests.hub:owner_execution_policy",
             }), CUSTOM)
             test.not_nil(custom_result.migrations)
             if custom_result.migrations then test.eq(custom_result.migrations[1].status, "applied") end

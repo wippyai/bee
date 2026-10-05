@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.threads
+namespace: bee.tests.threads
 entries:
 - name: canonical_test
   kind: function.lua
@@ -29,30 +29,7 @@ entries:
     delivery: bee.threads.records:delivery
     bounds: bee.values:bounds
     types: bee.threads:record_types
-- name: app_identity_test
-  kind: function.lua
-  source: file://app_identity_test.lua
-  method: run
-  meta:
-    type: test
-    suite: bee
-  imports:
-    test: wippy.test:test
-    app_identity: bee.threads.records:app_identity
-- name: app_alias_test
-  kind: function.lua
-  source: file://app_alias_test.lua
-  method: run
-  meta:
-    type: test
-    suite: bee
-    timeout: 120s
-  imports:
-    bounds: bee.values:bounds
-    test: wippy.test:test
-    harness: bee.threads:harness
-    app_identity: bee.threads.records:app_identity
-- name: client_test_policy
+- name: client_policy
   kind: security.policy
   meta:
     type: test_support
@@ -72,25 +49,12 @@ entries:
     - bee.threads.binding:send
     - bee.threads.binding:send_status
     - bee.threads.binding:notify
-    - bee.threads.binding:inbox_accept
-    - bee.threads.binding:inbox_send
-    - bee.threads.binding:inbox_list
-    - bee.threads.binding:inbox_ack
-    - bee.threads.binding:inbox_reply
-    - bee.threads.binding:inbox_describe
-    - bee.threads.binding:inbox_offer
-    - bee.threads.binding:inbox_transport
-    - bee.threads.binding:inbox_outbox_claim
-    - bee.threads.binding:inbox_outbox_settle
     - bee.threads.binding:admit_action
     - bee.threads.binding:prepare_attempt
     - bee.threads.binding:start_attempt
     - bee.threads.binding:request_turn
     - bee.threads.binding:end_turn
     - bee.threads.binding:receipt
-    - bee.threads.binding:register_app_alias
-    - bee.threads.binding:retire_app_alias
-    - bee.threads.binding:fence_app
     - bee.threads.binding:delivery_claim
     - bee.threads.binding:dispatch
     - bee.threads.binding:ack
@@ -117,6 +81,19 @@ entries:
     - bee.threads.binding:commit
     - bee.threads.binding:checkpoint
     - bee.threads.binding:append
+    - bee.threads.binding:inbox_accept
+    - bee.threads.binding:inbox_send
+    - bee.threads.binding:inbox_list
+    - bee.threads.binding:inbox_ack
+    - bee.threads.binding:inbox_reply
+    - bee.threads.binding:inbox_describe
+    - bee.threads.binding:inbox_offer
+    - bee.threads.binding:inbox_transport
+    - bee.threads.binding:inbox_outbox_claim
+    - bee.threads.binding:inbox_outbox_settle
+    - bee.threads.binding:register_app_alias
+    - bee.threads.binding:retire_app_alias
+    - bee.threads.binding:fence_app
     - bee.threads.binding:session_create
     - bee.threads.binding:session_describe
     - bee.threads.binding:session_scan
@@ -135,78 +112,6 @@ entries:
     - bee.threads.binding:feed_read
     - bee.threads.binding:node_summary
     effect: allow
-- name: session_owner_test_policy
-  kind: security.policy
-  meta:
-    type: test_support
-  policy:
-    actions:
-    - bee.threads.sessions_owner
-    resources: '*'
-    effect: allow
-- name: summary_test_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [bee.threads.sessions.summary]
-    resources: [node]
-    effect: allow
-- name: sessions_other_workspace_test_policy
-  kind: security.policy
-  meta:
-    type: test_support
-  policy:
-    actions:
-    - bee.sessions.workspace.send
-    - bee.sessions.workspace.cancel
-    - bee.sessions.workspace.close
-    resources:
-    - cccccccccccccccccccccccccccccccc
-    effect: allow
-- name: inbox_send_test_policy
-  kind: security.policy
-  meta:
-    type: test_support
-  policy:
-    actions:
-    - bee.sessions.send
-    resources: '*'
-    effect: allow
-- name: upgrade_test_db
-  kind: db.sql.sqlite
-  meta:
-    type: test_support
-  file: .wippy/threads-upgrade-test.db
-  lifecycle:
-    auto_start: true
-- name: alias_live_test_db
-  kind: db.sql.sqlite
-  meta:
-    type: test_support
-  file: .wippy/threads-alias-live-test.db
-  lifecycle:
-    auto_start: true
-- name: tamper_test_db
-  kind: db.sql.sqlite
-  meta:
-    type: test_support
-  file: .wippy/threads-tamper-test.db
-  lifecycle:
-    auto_start: true
-- name: rebuild_test_db
-  kind: db.sql.sqlite
-  meta:
-    type: test_support
-  file: .wippy/threads-rebuild-test.db
-  lifecycle:
-    auto_start: true
-- name: broken_rebuild_test_db
-  kind: db.sql.sqlite
-  meta:
-    type: test_support
-  file: .wippy/threads-broken-rebuild-test.db
-  lifecycle:
-    auto_start: true
 - name: harness
   kind: library.lua
   source: file://harness.lua
@@ -217,11 +122,14 @@ entries:
   - security
   - sql
   - uuid
+  - events
+  - channel
+  - time
   imports:
-    principals: bee.test.principals:bound
     bounds: bee.values:bounds
     service_types: bee.threads:types
     database: bee.threads.persist:database
+    commits: bee.threads.delivery:commits
 - name: authority_test
   kind: function.lua
   source: file://authority_test.lua
@@ -233,7 +141,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     record_bounds: bee.threads.records:bounds
 - name: lifecycle_test
   kind: function.lua
@@ -245,24 +153,7 @@ entries:
     timeout: 120s
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
-- name: ledger_test
-  kind: function.lua
-  source: file://ledger_test.lua
-  method: run
-  meta:
-    type: test
-    suite: bee
-  modules:
-  - sql
-  imports:
-    test: wippy.test:test
-    harness: bee.threads:harness
-    database: bee.threads.persist:database
-    ledger: bee.persist.persist:ledger
-    migrations: bee.threads.migrations:migrations
-    owner: bee.threads.persist:owner
-    identity: bee.threads.records:app_identity
+    harness: bee.tests.threads:harness
 - name: delivery_test
   kind: function.lua
   source: file://delivery_test.lua
@@ -276,7 +167,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     owner: bee.threads.persist:owner
 - name: subscription_test
   kind: function.lua
@@ -288,7 +179,7 @@ entries:
     timeout: 120s
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     owner: bee.threads.persist:owner
 - name: wait_test
   kind: function.lua
@@ -302,8 +193,8 @@ entries:
   - time
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
-    waits: bee.threads.delivery:waits
+    harness: bee.tests.threads:harness
+    commits: bee.threads.delivery:commits
 - name: subscription_lifecycle_test
   kind: function.lua
   source: file://subscription_lifecycle_test.lua
@@ -319,7 +210,7 @@ entries:
   - uuid
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     subscriptions: bee.threads.delivery:subscriptions
 - name: status_test
   kind: function.lua
@@ -335,7 +226,7 @@ entries:
   - uuid
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     status: bee.threads.projection:status
 - name: recap_test
   kind: function.lua
@@ -347,7 +238,7 @@ entries:
     timeout: 120s
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     recap: bee.threads.projection:recap
 - name: capabilities_test
   kind: function.lua
@@ -364,8 +255,7 @@ entries:
     test: wippy.test:test
     capabilities: bee.threads.binding:capabilities_report
     bounds: bee.values:bounds
-    migrations: bee.threads.migrations:migrations
-    waits: bee.threads.delivery:waits
+    commits: bee.threads.delivery:commits
     record_bounds: bee.threads.records:bounds
 - name: carrier_test
   kind: function.lua
@@ -375,10 +265,9 @@ entries:
     type: test
     suite: bee
   imports:
-    principals: bee.test.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
 - name: approvals_test
   kind: function.lua
   source: file://approvals_test.lua
@@ -389,7 +278,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
 - name: send_test
   kind: function.lua
   source: file://send_test.lua
@@ -399,7 +288,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     sends: bee.threads.service:sends
 - name: session_test
   kind: function.lua
@@ -412,6 +301,122 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     session: bee.threads.delivery:session
+- name: addressing_test
+  kind: function.lua
+  source: file://addressing_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+- name: notice_test
+  kind: function.lua
+  source: file://notice_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+- name: workspace_test
+  kind: function.lua
+  source: file://workspace_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    reader: bee.threads.persist:reader
+- name: service_test
+  kind: function.lua
+  source: file://service_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  modules:
+  - system
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    harness: bee.tests.threads:harness
+    sends: bee.threads.service:sends
+    owner: bee.threads.persist:owner
+    transaction: bee.threads.persist:transaction
+    protocol: bee.hive:protocol
+- name: schema_test
+  kind: function.lua
+  source: file://schema_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - sql
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+- name: app_alias_test
+  kind: function.lua
+  source: file://app_alias_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    app_identity: bee.threads.records:app_identity
+- name: app_identity_test
+  kind: function.lua
+  source: file://app_identity_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    app_identity: bee.threads.records:app_identity
+- name: inbox_test
+  kind: function.lua
+  source: file://inbox_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - system
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    sends: bee.threads.service:sends
+- name: pump_test
+  kind: function.lua
+  source: file://pump_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    pump: bee.threads.service:pump
 - name: work_store_test
   kind: function.lua
   source: file://work_store_test.lua
@@ -428,91 +433,58 @@ entries:
   imports:
     events: bee.driver.codec:events
     test: wippy.test:test
-    harness: bee.threads:harness
+    harness: bee.tests.threads:harness
     owner: bee.threads.persist:owner
-- name: inbox_test
-  kind: function.lua
-  source: file://inbox_test.lua
-  method: run
-  meta:
-    type: test
-    suite: bee
-  modules:
-  - system
-  imports:
     bounds: bee.values:bounds
-    test: wippy.test:test
-    harness: bee.threads:harness
-    sends: bee.threads.service:sends
-- name: addressing_test
-  kind: function.lua
-  source: file://addressing_test.lua
-  method: run
+- name: summary_policy
+  kind: security.policy
   meta:
-    type: test
-    suite: bee
-  imports:
-    bounds: bee.values:bounds
-    test: wippy.test:test
-    harness: bee.threads:harness
-- name: notice_test
-  kind: function.lua
-  source: file://notice_test.lua
-  method: run
+    type: test_support
+  policy:
+    actions:
+    - bee.threads.sessions.summary
+    resources:
+    - node
+    effect: allow
+- name: inbox_send_policy
+  kind: security.policy
   meta:
-    type: test
-    suite: bee
-    timeout: 120s
-  imports:
-    principals: bee.test.principals:bound
-    bounds: bee.values:bounds
-    test: wippy.test:test
-    harness: bee.threads:harness
-- name: workspace_test_db
+    type: test_support
+  policy:
+    actions:
+    - bee.sessions.send
+    resources: '*'
+    effect: allow
+- name: sessions_other_workspace_policy
+  kind: security.policy
+  meta:
+    type: test_support
+  policy:
+    actions:
+    - bee.sessions.workspace.send
+    - bee.sessions.workspace.cancel
+    - bee.sessions.workspace.close
+    resources:
+    - cccccccccccccccccccccccccccccccc
+    effect: allow
+- name: upgrade_test_db
   kind: db.sql.sqlite
   meta:
     type: test_support
-  file: .wippy/threads-workspace-test.db
+  file: .wippy/threads-upgrade-test.db
   lifecycle:
     auto_start: true
-- name: workspace_test
+- name: ledger_test
   kind: function.lua
-  source: file://workspace_test.lua
+  source: file://ledger_test.lua
   method: run
   meta:
     type: test
     suite: bee
   modules:
   - sql
-  - funcs
-  - security
   imports:
-    principals: bee.test.principals:bound
-    bounds: bee.values:bounds
     test: wippy.test:test
-    harness: bee.threads:harness
-    database: bee.threads.persist:database
-    reader: bee.threads.persist:reader
-- name: pump_test
-  kind: function.lua
-  source: file://pump_test.lua
-  method: run
-  meta:
-    type: test
-    suite: bee
-  imports:
-    bounds: bee.values:bounds
-    test: wippy.test:test
-    pump: bee.threads.service:pump
-- name: definition_upgrade_test_db
-  kind: db.sql.sqlite
-  meta:
-    type: test_support
-  file: .wippy/threads-definition-upgrade.db
-  lifecycle:
-    auto_start: true
-
-- name: retained_definition_test_db
-  kind: db.sql.sqlite
-  meta: {type: test_support}
-  file: .wippy/threads-retained-definition-test.db
+    harness: bee.tests.threads:harness
+    schema: bee.tests.support:schema
+    owner: bee.threads.persist:owner

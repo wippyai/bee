@@ -54,6 +54,7 @@ local function define_tests()
             local list = canonical.empty_like(table.create(1, 0))
             test.eq(canonical.encode(object), "{}")
             test.eq(canonical.encode(list), "[]")
+            test.eq(canonical.encode(canonical.empty_like({value = 1})), "[]")
         end)
     end)
 end

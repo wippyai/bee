@@ -1,0 +1,130 @@
+version: '1.0'
+namespace: bee.hub.security
+entries:
+- name: facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The public facade enters only the fixed Hub execution scope and calls only the private backend
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.hub.security:execution_scope") || (action == "funcs.call" && resource == "bee.hub.binding:backend")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.hub.security:execution_scope, bee.hub.binding:backend]
+    effect: allow
+- name: execution_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Marks the private backend and publication worker as running inside the Hub execution scope
+  policy:
+    actions: [bee.hub.execute]
+    resources: [bee.hub.binding:backend, bee.hub.service:worker]
+    effect: allow
+- name: read_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Hub reads the registry and the Hub catalog, releases and artifacts
+  policy:
+    actions: [registry.get, hub.modules.list, hub.modules.search, hub.modules.get, hub.modules.readme, hub.versions.open, hub.versions.list]
+    resources: '*'
+    effect: allow
+- name: resolution_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Hub reads the registry's dependency resolution and deployment lock
+  policy:
+    actions: [registry.resolution.get]
+    resources: ['']
+    effect: allow
+- name: publisher_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Hub publishes dependency-root changes and restores a baseline registry version
+  policy:
+    actions: [registry.apply, registry.apply_version]
+    resources: '*'
+    effect: allow
+- name: dependency_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Hub writes only Hub-owned dependency roots, the deployment root and host-selected Bee component roots
+  policy:
+    actions: [registry.create.ns.dependency, registry.update.ns.dependency, registry.delete.ns.dependency]
+    resources: ['bee.hub.deps:*', 'bee:deployment', 'bee.deps:*']
+    effect: allow
+- name: receipt_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Hub records operation receipts in the registry
+  policy:
+    actions: [registry.create.registry.entry, registry.update.registry.entry]
+    resources: ['bee.hub.operations:*']
+    effect: allow
+- name: worker_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: The backend runs apply in a monitored publication worker
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.hub.service:worker]
+    effect: allow
+- name: worker_host_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: The publication worker runs on the workers host
+  policy:
+    actions: [process.host]
+    resources: [bee:workers]
+    effect: allow
+- name: worker_name_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: One publication worker at a time holds the publisher name
+  policy:
+    actions: [process.registry.register, process.registry.register.local, process.registry.unregister]
+    resources: [bee.hub.publisher]
+    effect: allow
+- name: migration_context_policy
+  kind: security.policy.expr
+  groups: [execution_scope]
+  meta:
+    comment: The migration runner removes Hub's private policies from the scope package migrations run in
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.scope.create" && resource == "without")'
+    actions: [funcs.security, security.scope.create]
+    resources: [security, without]
+    effect: allow
+- name: lifecycle_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Service transitions go through the runtime supervisor, whose status updates Hub follows, and check running component processes
+  policy:
+    actions: [events.send, events.subscribe, system.read]
+    resources: [supervisor, hosts]
+    effect: allow
+- name: lifecycle_owner_policy
+  kind: security.policy
+  groups: [execution_scope, lifecycle_scope]
+  meta:
+    comment: Owner lifecycle functions Hub may call to drain and verify a changed service; none is admitted yet, so changes to service-bearing components are refused
+  policy:
+    actions: [funcs.call]
+    resources: ['']
+    effect: allow
+- name: lifecycle_scope_policy
+  kind: security.policy
+  groups: [execution_scope]
+  meta:
+    comment: Hub calls owner lifecycle functions in the lifecycle scope only
+  policy:
+    actions: [security.policy_group.get]
+    resources: [bee.hub.security:lifecycle_scope]
+    effect: allow

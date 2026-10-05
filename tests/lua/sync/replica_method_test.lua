@@ -48,7 +48,7 @@ local function scope(names: {string}): security.Scope
 end
 
 local function caller(actor: string, source_policy: string?): funcs.Executor
-    local policies = {"bee.sync:replica_method_client_policy"}
+    local policies = {"bee.tests.sync:replica_method_client_policy"}
     if source_policy then policies[#policies + 1] = source_policy end
     return funcs.new():with_scope(scope(policies)):with_actor(security.new_actor(actor))
 end
@@ -77,15 +77,24 @@ local function define_tests()
     test.describe("Public replica receiver", function()
         test.it("requires an exact source-owner permission", function()
             local item = descriptor("node-b", "source-bound")
-            local denied = call(caller("bee.test.replica.sender", "bee.sync:replica_source_node_a_policy"),
+            local denied = call(caller("bee.test.replica.sender", "bee.tests.sync:replica_source_node_a_policy"),
                 {action = "begin", descriptor = item, source_cursor = 1})
             test.eq(code(denied), "DENIED")
+        end)
+
+        test.it("lets a peer node deliver only replicas its own node owns", function()
+            local peer = funcs.new():with_scope(scope({"bee.tests.sync:replica_method_client_policy", "bee.sync.security:replica_peer"}))
+                :with_actor(security.new_actor("bee.sync.peer.node-a", {node = "node-a"}))
+            local foreign = call(peer, {action = "begin", descriptor = descriptor("node-b", "foreign"), source_cursor = 1})
+            test.eq(code(foreign), "DENIED")
+            local own = call(peer, {action = "begin", descriptor = descriptor("node-a", "own"), source_cursor = 1})
+            test.is_true(own.ok)
         end)
 
         test.it("accepts a bounded begin, status, put and finish lifecycle", function()
             local content = "replica-method-content"
             local item = descriptor("node-a", content)
-            local executor = caller("bee.test.replica.sender", "bee.sync:replica_source_node_a_policy")
+            local executor = caller("bee.test.replica.sender", "bee.tests.sync:replica_source_node_a_policy")
             local begun = call(executor, {action = "begin", descriptor = item, source_cursor = 4})
             test.is_true(begun.ok)
             test.is_false(begun.replayed)
@@ -110,4 +119,5 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options: unknown) return cases(options) end}

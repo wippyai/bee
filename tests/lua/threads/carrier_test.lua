@@ -2,11 +2,10 @@
 -- lands records and checkpoint together or not at all, replayed records
 -- deduplicate by key while the checkpoint still advances, and nothing
 -- moves on an ended attempt or without carrier authority.
-local principals = require("principals")
 local test = require("test")
 local bounds = require("bounds")
 local harness = require("harness")
-local CARRIER = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy"}
+local CARRIER = {"bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle", "bee.threads.security:carrier"}
 local function checkpoint(consumed: integer): {[string]: unknown}
     return {schema_revision = "bee.carrier.checkpoint@1", consumed = {stdout = consumed, stderr = 0}, carry = {stdout = "", stderr = ""}, envelope_index = consumed,
         normalizer_state = {answer = "partial"}, binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", attachment_generation = 1}
@@ -232,7 +231,7 @@ local function define_tests()
                 expected_revision = 0, checkpoint = checkpoint(1), records = {stopped}}))
             test.eq(#committed.records, 1)
             local page = harness.value(carrier:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"observation"}}}))
-            local records = principals.objects(page.records, 64)
+            local records = harness.objects(page.records, 64)
             local observed = assert(records[#records])
             test.eq(observed.source, "hook")
             test.eq(observed.action_id, "a1")
@@ -256,7 +255,7 @@ local function define_tests()
             test.eq(#committed.records, 1)
             test.is_false(committed.records[1].replayed)
             local page = harness.value(carrier:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"observation"}}}))
-            local records = principals.objects(page.records, 64)
+            local records = harness.objects(page.records, 64)
             local observed = assert(records[#records])
             test.eq(observed.source, "bee")
             test.eq(observed.body.data.event_name, "bee.carrier.memory")

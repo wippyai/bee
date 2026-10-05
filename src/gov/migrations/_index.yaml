@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.gov.migrations
+entries:
+- name: staging
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:00:00Z'
+  source: file://staging.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: plans
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:01:00Z'
+  source: file://plans.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: activations
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:02:00Z'
+  source: file://activations.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: complete
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-07T01:00:00Z'
+  source: file://complete.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

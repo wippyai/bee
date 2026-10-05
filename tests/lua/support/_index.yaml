@@ -1,0 +1,35 @@
+version: '1.0'
+namespace: bee.tests.support
+entries:
+- name: fixtures
+  kind: library.lua
+  source: file://fixtures.lua
+  meta: {type: test_support}
+  imports:
+    bounds: bee.values:bounds
+- name: schema
+  kind: library.lua
+  source: file://schema.lua
+  meta: {type: test_support}
+  modules: [sql, funcs, registry]
+- name: schema_policy
+  kind: security.policy
+  meta: {type: test_support, comment: A suite may run node migrations against its own database}
+  policy:
+    actions: [funcs.call, registry.find]
+    resources: '*'
+    effect: allow
+- name: gateway_admit_policy
+  kind: security.policy
+  meta: {type: test_support, comment: A carrier admits and revokes gateway bindings for the actions it runs}
+  policy:
+    actions: [bee.gateway.admit]
+    resources: '*'
+    effect: allow
+- name: gateway_manage_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The managed host opens and drains the listener and may revoke any binding}
+  policy:
+    actions: [bee.gateway.manage]
+    resources: [listener, bindings]
+    effect: allow

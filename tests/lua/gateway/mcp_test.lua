@@ -75,7 +75,6 @@ local function define_tests()
                 {id = "bee.gov.traits:authoring_trait", tools = {"bee.gov.binding:overlay_call"}},
                 {id = "bee.gov.traits:application_delivery_trait", tools = {"bee.gov.binding:delivery_call"}},
                 {id = "bee.gov.traits:application_publish_trait", tools = {"bee.gov.binding:delivery_call"}},
-                {id = "bee.node.traits:metadata_trait", tools = {"bee.node.binding:describe", "bee.node.binding:update_metadata"}},
             }) do
                 local trait = entry(expected.id)
                 test.eq(trait.kind, "registry.entry")

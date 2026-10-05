@@ -1,0 +1,218 @@
+-- MIT. Pure derivation for workspace file and application database grants.
+-- A grant names a verified workspace subroot or an isolated database; this
+-- module derives the host-created volume, database and policy entries that
+-- activation installs. It authorizes nothing on its own.
+local hash = require("hash")
+local bounds = require("bounds")
+local gateway = require("capability_gateway")
+
+local M = {}
+type Object = {[string]: unknown}
+M.VOLUME_PREFIX = "bee.gov.grants:volume."
+M.DATABASE_PREFIX = "bee.gov.grants:database."
+-- Bee state and credentials live under this subtree; no approved readable
+-- tree may contain it, so an ancestor subroot is refused as well.
+local PRIVATE_ROOT = ".wippy"
+local PRIVATE_PREFIX = ".wippy/"
+-- Application databases live outside every approved readable tree, under the
+-- host-selected application database root binding.
+M.DATABASE_ROOT = "${env:bee.env:app_database_root}"
+
+local function segments(value: string): ({string}?, string?)
+    if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c") then
+        return nil, "workspace subpath is malformed"
+    end
+    if value == "." then return nil, "workspace subpath exposes private state" end
+    local normalized = bounds.subpath(value, 160)
+    if not normalized or normalized == "" then return nil, "workspace subpath is malformed" end
+    local result: {string} = {}
+    for segment in normalized:gmatch("[^/]+") do
+        if not segment:match("^[A-Za-z0-9_.-]+$") then
+            return nil, "workspace subpath is malformed"
+        end
+        result[#result + 1] = segment
+    end
+    if #result == 0 then return nil, "workspace subpath is malformed" end
+    return result, nil
+end
+
+-- A verified workspace subroot: a narrow relative path that neither is nor
+-- contains a private path, and is not an ancestor of one. The pinned runtime
+-- confines traversal and symlinks below the installed volume root.
+function M.verify_subpath(raw: unknown): (string?, string?)
+    local parts, parts_error = segments(raw)
+    if not parts then return nil, parts_error end
+    local path = table.concat(parts, "/")
+    if path == PRIVATE_ROOT or path:sub(1, #PRIVATE_PREFIX) == PRIVATE_PREFIX then
+        return nil, "workspace subpath is private"
+    end
+    return path, nil
+end
+
+local function name(raw: unknown): (string?, string?)
+    if type(raw) ~= "string" or not raw:match("^[A-Za-z][A-Za-z0-9_]*$") or #raw > 64 then
+        return nil, "application database name is invalid"
+    end
+    return raw, nil
+end
+
+local function hex(value: string): (string?, string?)
+    local digest, digest_error = hash.sha256(value)
+    if not digest then return nil, tostring(digest_error or "measure grant identity") end
+    return digest, nil
+end
+
+-- The workspace folder a host resolved from the node workspace catalog: the
+-- admitted root's registry identity, that root's literal directory and base,
+-- and the workspace's subpath under it. A file grant is rooted here, never at
+-- the node folder, so one workspace's grant never reads another's tree.
+type Folder = {root_ref: string, directory: string, base: string?, subpath: string}
+
+local function folder(raw: unknown): (Folder?, string?)
+    local value = bounds.object(raw)
+    if not value then return nil, "workspace folder is unavailable" end
+    local root_ref, directory, base, subpath = value.root_ref, value.directory, value.base, value.subpath
+    if type(root_ref) ~= "string" or type(directory) ~= "string" then return nil, "workspace folder is malformed" end
+    if not root_ref:match("^[a-z][a-z0-9_.]*:[A-Za-z0-9_.-]+$") or #root_ref > 160
+        or #directory == 0 or #directory > 512 or directory:find("%c")
+        or directory:find("${", 1, true) or directory:find("\\", 1, true)
+        or (base ~= nil and base ~= "project") or type(subpath) ~= "string" then
+        return nil, "workspace folder is malformed"
+    end
+    for segment in directory:gmatch("[^/]+") do
+        if segment == ".." or segment == PRIVATE_ROOT then return nil, "workspace folder is malformed" end
+    end
+    if subpath ~= "" then
+        local parts = segments(subpath)
+        if not parts then return nil, "workspace folder is malformed" end
+        for _, segment in ipairs(parts) do
+            if segment == PRIVATE_ROOT then return nil, "workspace folder is private" end
+        end
+    end
+    local selected_base: string? = nil
+    if base == "project" then selected_base = "project" end
+    return {root_ref = root_ref, directory = directory, base = selected_base, subpath = subpath}, nil
+end
+
+-- The grant's directory under the workspace folder's root.
+local function located(root: Folder, subpath: string): string
+    local relative = root.subpath == "" and subpath or root.subpath .. "/" .. subpath
+    if root.directory == "." then return relative end
+    if root.directory:sub(-1) == "/" then return root.directory .. relative end
+    return root.directory .. "/" .. relative
+end
+
+-- Whether measured capability requirements ask for workspace files, whose
+-- grants root in the destination workspace's folder.
+function M.rooted(requirements: {unknown}): boolean
+    for _, raw in ipairs(requirements) do
+        local item = bounds.object(raw)
+        local request = item and bounds.object(item.capability_request) or nil
+        local capability = request and request.capability or nil
+        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
+    end
+    return false
+end
+
+function M.volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (string?, string?)
+    if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
+        return nil, "file grant owner is invalid"
+    end
+    local root, root_error = folder(folder_raw)
+    if not root then return nil, root_error end
+    local subpath, subpath_error = M.verify_subpath(subpath_raw)
+    if not subpath then return nil, subpath_error end
+    local relative = root.subpath == "" and subpath or root.subpath .. "/" .. subpath
+    local suffix, suffix_error = hex(owner_raw .. "\n" .. root.root_ref .. "\n" .. relative)
+    if not suffix then return nil, suffix_error end
+    return M.VOLUME_PREFIX .. suffix, nil
+end
+
+-- The host-created directory at the verified subroot of the workspace folder.
+-- It carries no auto-init for reads and refuses every mutation for read
+-- grants at the filesystem boundary; the pinned runtime confines traversal
+-- and symlinks below it.
+type VolumeConfig = {directory: string, base: string?, auto_init: boolean, readonly: boolean, mode: "0700" | "0500"}
+type Volume = {id: string, kind: "fs.directory", meta: {comment: string}, data: VolumeConfig}
+type Database = {id: string, kind: "db.sql.sqlite", meta: {comment: string}, data: {file: string}}
+type Policy = {id: string, kind: "security.policy", meta: {comment: string},
+    data: {policy: {actions: {string}, resources: {string}, effect: "allow"}}}
+
+function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
+    writable_raw: unknown): (Volume?, string?)
+    local id, id_error = M.volume_id(owner_raw, folder_raw, subpath_raw)
+    if not id then return nil, id_error end
+    local root = assert(folder(folder_raw))
+    local subpath = assert(M.verify_subpath(subpath_raw))
+    if writable_raw ~= nil and type(writable_raw) ~= "boolean" then
+        return nil, "file grant mode is invalid"
+    end
+    local mode: "0700" | "0500" = writable_raw == true and "0700" or "0500"
+    local config: VolumeConfig = {directory = located(root, subpath), base = root.base,
+        auto_init = writable_raw == true, readonly = writable_raw ~= true, mode = mode}
+    return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace file grant volume"},
+        data = config}, nil
+end
+
+local DATABASE_FILE_PATTERN = "^" .. (M.DATABASE_ROOT:gsub("%p", "%%%0")) .. "/[0-9a-f]+%.db$"
+
+function M.database_file(file: unknown): boolean
+    return type(file) == "string" and file:find(DATABASE_FILE_PATTERN) ~= nil
+end
+
+function M.database_id(owner_raw: unknown, name_raw: unknown): (string?, string?)
+    if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
+        return nil, "database grant owner is invalid"
+    end
+    local valid, valid_error = name(name_raw)
+    if not valid then return nil, valid_error end
+    local suffix, suffix_error = hex(owner_raw .. "\n" .. valid)
+    if not suffix then return nil, suffix_error end
+    return M.DATABASE_PREFIX .. suffix, nil
+end
+
+-- The host-provisioned dedicated database. Its file sits under Bee state,
+-- outside every approved readable tree, and the runtime creates it on first
+-- open before any migration or query runs.
+function M.database(owner_raw: unknown, name_raw: unknown): (Database?, string?)
+    local id, id_error = M.database_id(owner_raw, name_raw)
+    local valid, valid_error = name(name_raw)
+    if not id or not valid then return nil, id_error or valid_error end
+    local suffix, suffix_error = hex(owner_raw .. "\n" .. valid)
+    if not suffix then return nil, suffix_error end
+    return {id = id, kind = "db.sql.sqlite", meta = {comment = "Host-provisioned application database"},
+        data = {file = M.DATABASE_ROOT .. "/" .. suffix .. ".db"}}, nil
+end
+
+local function policy(id: string, actions: {string}, resources: {string}, comment: string): Policy
+    return {id = id, kind = "security.policy", meta = {comment = comment},
+        data = {policy = {actions = actions, resources = resources, effect = "allow"}}}
+end
+
+-- Acquisition is the policy boundary; the installed volume's readonly flag
+-- enforces the read-only mode below it. The same grant lets the application
+-- read its own granted identities from the gateway.
+function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
+    policy_id_raw: unknown): (Policy?, string?)
+    local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, writable_raw)
+    local id = bounds.id(policy_id_raw)
+    if not volume or not id then
+        return nil, volume_error or "file grant policy identity is invalid"
+    end
+    return policy(id, {"fs.get", "funcs.call"}, {volume.id, gateway.GRANTED_RESOURCES},
+        "Host-generated workspace file grant"), nil
+end
+
+-- The application reaches only its own database through this policy; every
+-- other store stays denied by the application boundary.
+function M.database_policy(owner_raw: unknown, name_raw: unknown, policy_id_raw: unknown): (Policy?, string?)
+    local database, database_error = M.database(owner_raw, name_raw)
+    local id = bounds.id(policy_id_raw)
+    if not database or not id then
+        return nil, database_error or "database grant policy identity is invalid"
+    end
+    return policy(id, {"db.get", "funcs.call"}, {database.id, gateway.GRANTED_RESOURCES},
+        "Host-generated isolated application database grant"), nil
+end
+
+return M

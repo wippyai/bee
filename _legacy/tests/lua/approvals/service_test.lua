@@ -1,0 +1,757 @@
+-- MIT. The approval owner: requests bound to a proposal digest under a host
+-- policy, two approvers settling one decision, owner-enforced expiry, a
+-- withdrawal racing a decision, unauthorized readers and approvers, a
+-- changed proposal, consumption bound to one effect, the live worker
+-- projecting onto a thread, and the outbox over its own store surviving a
+-- crash between the thread commit and its acknowledgement.
+local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
+local json = require("json")
+local funcs = require("funcs")
+local security = require("security")
+local registry = require("registry")
+local time = require("time")
+local process = require("process")
+local channel = require("channel")
+local sql = require("sql")
+local uuid = require("uuid")
+local service = require("service")
+local worker = require("worker")
+local resources = require("resources")
+local outbox = require("outbox")
+local migrations = require("migrations")
+local persist = require("persist")
+local identity_migration = require("identity_migration")
+local thread_harness = require("thread_harness")
+local TEST_STORE = "bee.approvals:test_db"
+local REQUESTER, OTHER_REQUESTER, ALICE, BOB, OUTSIDER, MANAGER = "bee.test.launcher", "bee.test.other_launcher", "bee.test.alice", "bee.test.bob", "bee.test.outsider", "bee.test.manager"
+local OUTBOX = "bee.test.outbox"
+local POLICY = "test-owner"
+local function key(): string
+    local id, err = uuid.v4()
+    if err or not id then error("uuid: " .. tostring(err)) end
+    return id
+end
+local function scope(names: {string}): security.Scope
+    local policies: {security.Policy} = {}
+    for index, name in ipairs(names) do
+        local policy, err = security.policy(name)
+        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
+        policies[index] = policy
+    end
+    return security.new_scope(policies)
+end
+local function caller(id: string, grants: {string}, metadata: {[string]: string | integer}?): funcs.Executor
+    local names: {string} = {"bee.approvals:client_test_policy"}
+    for _, grant in ipairs(grants) do names[#names + 1] = grant end
+    return funcs.new():with_actor(security.new_actor(id, metadata)):with_scope(scope(names))
+end
+local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
+local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)
+local stranger = thread_harness.principal("bee.test.stranger", thread_harness.ALL)
+local other_requester = caller(OTHER_REQUESTER, {"bee.security.approvals:approval_request_policy"})
+local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
+local bob = caller(BOB, {"bee.security.approvals:approval_decide_policy"})
+local carol = caller("bee.test.carol", {"bee.security.approvals:approval_decide_policy"})
+local outsider = caller(OUTSIDER, {})
+local manager = caller(MANAGER, {"bee.security.approvals:approval_manage_policy"})
+local INBOX_ACTOR = "bee.application:0123456789abcdef0123456789abcdef:inbox-instance"
+local inbox_app = caller(INBOX_ACTOR, {"bee.security.approvals:approval_decide_policy"},
+    {definition_id = "bee.approvals.inbox.app:app", workspace_id = "0123456789abcdef0123456789abcdef"})
+local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other-instance",
+    {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.settings.app:app"})
+local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.security.threads:thread_approval_policy", "bee.security.threads:thread_approval_client_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
+local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
+    local reply, err = client:call("bee.approvals.binding:" .. method, value)
+    if err then error(method .. ": " .. tostring(err)) end
+    return principals.replayed_reply(reply)
+end
+local function value(reply: service.Reply): {[string]: unknown}
+    if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
+    return assert(bounds.object(reply.value))
+end
+local function code(reply: service.Reply): string
+    if reply.ok then error("expected a failure, got success") end
+    return reply.error and reply.error.code or ""
+end
+local function await(future: funcs.Future): service.Reply
+    local channel = future:response()
+    local payload, open = channel:receive()
+    local result, err = future:result()
+    if err then error("async call: " .. tostring(err)) end
+    if not open or not payload then error("async call closed without a reply") end
+    local data: unknown = result:data()
+    if type(data) ~= "table" then error("async call returned " .. type(data)) end
+    return principals.replayed_reply(data)
+end
+local function open_test_store(): sql.DB
+    local db, err = persist.open({resource = TEST_STORE, ledger = service.LEDGER, migrations = migrations.all()})
+    if not db then error("open test store: " .. tostring(err)) end
+    return db
+end
+local function executed(result: {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}): {[string]: unknown}
+    if not result.ok then error(tostring(result.code) .. ": " .. tostring(result.message)) end
+    return assert(bounds.object(result.value))
+end
+local function fault_value(reply: service.Reply): {[string]: unknown}
+    if reply.ok then error("expected a failure, got success") end
+    return assert(bounds.object(reply.value))
+end
+local function install_policy()
+    local entry = registry.get("bee.security.approvals:approver_policies")
+    if not entry then error("approver policies entry") end
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
+    data.policies = policies
+    for _, policy in ipairs(policies) do
+        if policy.name == POLICY then return end
+    end
+    policies[#policies + 1] = {name = POLICY,
+        approvers = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 60000}
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    local applied, err = changes:apply()
+    if not applied then error("install approver policy: " .. tostring(err)) end
+end
+local function replace_approvers(value: {unknown})
+    local entry = assert(registry.get("bee.security.approvals:approver_policies"))
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
+    local selected: {[string]: unknown}? = nil
+    for _, policy in ipairs(policies) do
+        if policy.name == POLICY then selected = policy; break end
+    end
+    assert(selected, "test approver policy is missing")
+    selected.approvers = value
+    local changes = registry.snapshot():changes()
+    assert(changes:update(entry))
+    local applied, apply_error = changes:apply()
+    if not applied then error("replace test approvers: " .. tostring(apply_error)) end
+end
+local function proposal(payload: {[string]: unknown}?): {[string]: unknown}
+    return {kind = "operation", ref = "bee.harness.binding:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
+end
+local function attempt_proposal(action_id: string?, attempt_id: string): {[string]: unknown}
+    return {kind = "attempt", ref = attempt_id, revision = "r1", action_id = action_id, payload = {tool = "Bash", correlation_id = "c-1"}}
+end
+local function request_of(workspace: string, extra: {[string]: unknown}?): {[string]: unknown}
+    local request: {[string]: unknown} = {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY, proposal = proposal(),
+        prompt = {text = "Launch claude in " .. workspace .. "?"}}
+    if extra then
+        for name, item in pairs(extra) do request[name] = item end
+    end
+    return request
+end
+local function thread(): string
+    local thread_id = "thread-" .. key()
+    local reply, err = requester:call("bee.threads.binding:create", {thread_id = thread_id, idempotency_key = key(), title = "Approvals"})
+    if err then error("create thread: " .. tostring(err)) end
+    local typed = principals.replayed_reply(reply)
+    if not typed.ok then error("create thread: " .. tostring(typed.error and typed.error.message)) end
+    return thread_id
+end
+local function records_of(thread_id: string, kinds: {string}): {{[string]: unknown}}
+    local reply, err = requester:call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = kinds}})
+    if err then error("read thread: " .. tostring(err)) end
+    local typed = principals.replayed_reply(reply)
+    if not typed.ok then error("read thread: " .. tostring(typed.error and typed.error.message)) end
+    local page = assert(bounds.object(typed.value))
+    return principals.objects(page.records)
+end
+local function thread_records(thread_id: string): {{[string]: unknown}}
+    return records_of(thread_id, {"approval.request", "approval.transition"})
+end
+local function thread_notices(thread_id: string): {{[string]: unknown}}
+    return records_of(thread_id, {"message"})
+end
+local function await_records(thread_id: string, kinds: {string}, count: integer): {{[string]: unknown}}
+    local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
+    local records: {{[string]: unknown}} = {}
+    local cursor = 0
+    while #records < count do
+        local reply, err = requester:call("bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor,
+            limit = 64, filter = {kinds = kinds}})
+        if err then error("read thread: " .. tostring(err)) end
+        local page = value(principals.replayed_reply(reply))
+        for _, item in ipairs(principals.objects(page.records)) do records[#records + 1] = item end
+        cursor = math.floor(tonumber(page.scanned_through) or cursor)
+        if #records >= count then break end
+        if page.has_more ~= true then
+            local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then error("thread " .. thread_id .. " retained only " .. tostring(#records) .. " of " .. tostring(count) .. " records") end
+            local watched, watch_error = requester:call("bee.threads.binding:watch", {thread_id = thread_id,
+                after_sequence = cursor, wait_ms = remaining})
+            if watch_error then error("watch thread: " .. tostring(watch_error)) end
+            value(principals.replayed_reply(watched))
+        end
+    end
+    return records
+end
+local function until_records(thread_id: string, count: integer): {{[string]: unknown}}
+    return await_records(thread_id, {"approval.request", "approval.transition"}, count)
+end
+local function until_notices(thread_id: string, count: integer): {{[string]: unknown}}
+    return await_records(thread_id, {"message"}, count)
+end
+local function define_tests()
+    test.describe("Approval owner", function()
+        install_policy()
+        test.it("migrates the authority and outstanding requests to the persisted node identity once", function()
+            local db, open_error = persist.open({resource = "bee.approvals:identity_test_db",
+                ledger = service.LEDGER, migrations = migrations.all()})
+            if not db then error("open approval identity migration store: " .. tostring(open_error)) end
+            local destination, node_error = service.node()
+            if not destination then error("read persisted node identity: " .. tostring(node_error)) end
+            assert(service.establish(db))
+            local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
+            local legacy = "legacy-" .. key()
+            local _, authority_error = db:execute(
+                "UPDATE bee_approval_authority SET owner_node = ? WHERE owner_node = ?", {legacy, destination})
+            local _, request_error = db:execute(
+                "UPDATE bee_approval_requests SET owner_node = ? WHERE approval_id = ?", {legacy, created.approval_id})
+            if authority_error or request_error then error(tostring(authority_error or request_error)) end
+
+            local migrated, migration_error = identity_migration.apply(db, destination, legacy)
+            if not migrated then error(tostring(migration_error)) end
+            local repeated, repeated_error = identity_migration.apply(db, destination, legacy)
+            if not repeated then error(tostring(repeated_error)) end
+            local restored = executed(service.execute(db, REQUESTER, "read", {approval_id = created.approval_id}, nil, requester))
+            test.eq(restored.owner_node, destination)
+            local ledger, ledger_error = db:query(
+                "SELECT authority_count, request_count FROM bee_approval_node_identity_migrations WHERE source_node = ? AND destination_node = ?",
+                {legacy, destination})
+            if ledger_error or not ledger then error("read approval identity migration record") end
+            test.eq(#ledger, 1)
+            test.eq(ledger[1].authority_count, 1)
+            test.eq(ledger[1].request_count, 1)
+            db:release()
+        end)
+        test.it("exports pinned snapshots and scoped catch-up from the existing approval ledger", function()
+            local workspace = "ws-feed-" .. key()
+            local created = value(call(requester, "request", request_of(workspace)))
+            value(call(requester, "request", request_of(workspace)))
+            test.eq(code(call(outsider, "feed_snapshot", {workspace_id = workspace})), "DENIED")
+            local first = value(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1}))
+            test.eq(first.schema, "bee.sync-snapshot@1")
+            test.eq(first.complete, false)
+            test.eq(first.reset_required, false)
+            local tail = value(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1,
+                after_key = first.next_key, expected_cursor = first.cursor, expected_scope_revision = first.scope_revision}))
+            test.eq(tail.complete, true)
+            test.eq(tail.reset_required, false)
+            local empty = value(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = first.scope_revision}))
+            test.eq(#(principals.items(empty.events)), 0)
+            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                proposal_digest = created.proposal_digest, decision = "approved"}))
+            test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1,
+                after_key = first.next_key, expected_cursor = first.cursor, expected_scope_revision = first.scope_revision})), "RESET_REQUIRED")
+            local changed = value(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = first.scope_revision}))
+            local events = principals.objects(changed.events)
+            test.eq(#events, 1)
+            test.eq(events[1].event_type, "approval.changed")
+            test.eq(events[1].projection_key, created.approval_id)
+            test.eq(code(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = string.rep("0", 64)})), "RESET_REQUIRED")
+            test.eq(code(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = {}})), "INVALID_ARGUMENT")
+            test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, expected_scope_revision = 7})), "INVALID_ARGUMENT")
+        end)
+        test.it("serves request, read and consume to an executor scoped like the activation owner", function()
+            local activation = funcs.new():with_actor(security.new_actor("bee.gov.activation"))
+                :with_scope(scope({"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}))
+            local workspace = "ws-activation-scope-" .. key()
+            local created = value(call(activation, "request", request_of(workspace)))
+            test.eq(value(call(activation, "read", {approval_id = created.approval_id})).state, "pending")
+        end)
+        test.it("admits grant administration only for the issuer with workspace decision authority", function()
+            local workspace = "ws-window-admission-" .. key()
+            local created = value(call(requester, "request", request_of(workspace)))
+            local granted = value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                proposal_digest = created.proposal_digest, decision = "approved", window_ttl_ms = 60000}))
+            local grant = assert(bounds.object(granted.window_grant))
+            test.eq(code(call(outsider, "grant_window", {operation = "list", workspace_id = workspace})), "DENIED")
+            local owned = value(call(alice, "grant_window", {operation = "list", workspace_id = workspace}))
+            test.eq(#principals.items(owned.grants), 1)
+            test.eq(#principals.items(value(call(bob, "grant_window", {operation = "list", workspace_id = workspace})).grants), 0)
+            test.eq(code(call(bob, "grant_window", {operation = "revoke", grant_id = grant.grant_id})), "DENIED")
+            test.eq(code(call(alice, "grant_window", {operation = "revoke", grant_id = grant.grant_id, workspace_id = "another-workspace"})), "DENIED")
+            value(call(alice, "grant_window", {operation = "revoke", grant_id = grant.grant_id}))
+            test.eq(value(call(requester, "request", request_of(workspace))).state, "pending")
+        end)
+        test.it("decides several requests of one requester as one batch", function()
+            local workspace = "ws-batch-" .. key()
+            local first = value(call(requester, "request", request_of(workspace)))
+            local second = value(call(requester, "request", request_of(workspace)))
+            local settled = value(call(alice, "decide_batch", {decisions = {
+                {approval_id = first.approval_id, expected_revision = first.revision, proposal_digest = first.proposal_digest, decision = "approved"},
+                {approval_id = second.approval_id, expected_revision = second.revision, proposal_digest = second.proposal_digest, decision = "denied"}}}))
+            local views = principals.objects(settled.decisions)
+            test.eq(#views, 2)
+            test.eq(views[1].decision, "approved")
+            test.eq(views[2].decision, "denied")
+            test.eq(value(call(alice, "read", {approval_id = first.approval_id})).state, "decided")
+        end)
+        test.it("refuses a batch across requesters or with a stale item without deciding any", function()
+            local workspace = "ws-batch-mixed-" .. key()
+            local mine = value(call(requester, "request", request_of(workspace)))
+            local theirs = value(call(other_requester, "request", request_of(workspace)))
+            local item = function(view: {[string]: unknown}, revision: integer?): {[string]: unknown}
+                return {approval_id = view.approval_id, expected_revision = revision or view.revision,
+                    proposal_digest = view.proposal_digest, decision = "approved"}
+            end
+            test.eq(code(call(alice, "decide_batch", {decisions = {item(mine), item(theirs)}})), "INVALID_ARGUMENT")
+            test.eq(code(call(alice, "decide_batch", {decisions = {item(mine), item(mine)}})), "INVALID_ARGUMENT")
+            local sibling = value(call(requester, "request", request_of(workspace)))
+            test.eq(code(call(alice, "decide_batch", {decisions = {item(mine), item(sibling, 9)}})), "CONFLICT")
+            test.eq(value(call(alice, "read", {approval_id = mine.approval_id})).state, "pending")
+            test.eq(code(call(outsider, "decide_batch", {decisions = {item(mine)}})), "DENIED")
+        end)
+        test.it("wakes installation effect workers when an approval decision commits", function()
+            local workspace = "ws-effect-wake-" .. key()
+            local created = value(call(requester, "request", request_of(workspace)))
+            local registered, register_error = process.registry.register(service.INSTALLATION_WORKER_NAME)
+            if not registered then error("register installation effect worker: " .. tostring(register_error)) end
+            local wakes = assert(process.listen(service.TOPIC_WAKE, {message = true}))
+            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                proposal_digest = created.proposal_digest, decision = "approved"}))
+            local deadline = time.after("1s")
+            local selected = channel.select({wakes:case_receive(), deadline:case_receive()})
+            test.eq(selected.ok, true)
+            test.eq(selected.channel == wakes, true)
+        end)
+        test.it("wakes publication effect workers when an approval decision commits", function()
+            local workspace = "ws-publish-wake-" .. key()
+            local created = value(call(requester, "request", request_of(workspace)))
+            local registered, register_error = process.registry.register(service.PUBLICATION_WORKER_NAME)
+            if not registered then error("register publication effect worker: " .. tostring(register_error)) end
+            local wakes = assert(process.listen(service.TOPIC_WAKE, {message = true}))
+            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                proposal_digest = created.proposal_digest, decision = "approved"}))
+            local deadline = time.after("1s")
+            local selected = channel.select({wakes:case_receive(), deadline:case_receive()})
+            test.eq(selected.ok, true)
+            test.eq(selected.channel == wakes, true)
+        end)
+        test.it("serves no request before the authority establishes its incarnation and advances it per start", function()
+            local store = open_test_store()
+            local before = service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester)
+            test.eq(before.ok, false)
+            test.eq(before.code, "UNAVAILABLE")
+            test.eq(assert(service.establish(store)), 1)
+            test.eq(assert(service.establish(store)), 2)
+            local created = executed(service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
+            test.eq(created.owner_incarnation, 2)
+            store:release()
+            local pid = process.registry.lookup(service.AUTHORITY_NAME)
+            test.eq(pid ~= nil, true)
+        end)
+        test.it("fails closed on a corrupt authority incarnation for requests and restart", function()
+            local store = open_test_store()
+            local owner_node, node_error = service.node()
+            if not owner_node then error("read native node identity: " .. tostring(node_error)) end
+            local rows, read_error = store:query("SELECT incarnation FROM bee_approval_authority WHERE owner_node = ?", {owner_node})
+            if read_error or not rows or #rows == 0 then error("read authority incarnation: " .. tostring(read_error)) end
+            local previous = rows[1].incarnation
+            local _, corrupt_error = store:execute("UPDATE bee_approval_authority SET incarnation = 'broken' WHERE owner_node = ?", {owner_node})
+            test.eq(corrupt_error, nil)
+            local request = service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester)
+            test.eq(request.ok, false)
+            test.eq(request.code, "STORAGE")
+            local established, establish_error = service.establish(store)
+            test.eq(established, nil)
+            test.is_true((establish_error or ""):find("corrupt", 1, true) ~= nil)
+            local _, restore_error = store:execute("UPDATE bee_approval_authority SET incarnation = ? WHERE owner_node = ?", {previous, owner_node})
+            test.eq(restore_error, nil)
+            store:release()
+        end)
+        test.it("rejects corrupt persisted approval effect metadata", function()
+            local store = open_test_store()
+            local created = executed(service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
+            local _, corrupt_error = store:execute("UPDATE bee_approval_requests SET validated_incarnation = 'broken' WHERE approval_id = ?", {created.approval_id})
+            test.eq(corrupt_error, nil)
+            local result = service.execute(store, REQUESTER, "read", {approval_id = created.approval_id}, nil, nil)
+            test.eq(result.ok, false)
+            test.eq(result.code, "STORAGE")
+            local _, restore_error = store:execute("UPDATE bee_approval_requests SET validated_incarnation = NULL WHERE approval_id = ?", {created.approval_id})
+            test.eq(restore_error, nil)
+            store:release()
+        end)
+        test.it("fences stale authority: consumption after a restart needs revalidation under the current incarnation", function()
+            local store = open_test_store()
+            local before = assert(service.establish(store))
+            local created = executed(service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
+            local approval_id, digest = created.approval_id, created.proposal_digest
+            executed(service.execute(store, ALICE, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = digest}, nil, nil))
+            local after = assert(service.establish(store))
+            test.eq(after, before + 1)
+            local stale = service.execute(store, REQUESTER, "consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = before}, nil, nil)
+            test.eq(stale.code, "REVALIDATE")
+            test.eq((assert(bounds.object(stale.value))).current_incarnation, after)
+            local unvalidated = service.execute(store, REQUESTER, "consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = after}, nil, nil)
+            test.eq(unvalidated.code, "REVALIDATE")
+            test.eq(service.execute(store, REQUESTER, "revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = before}, nil, nil).code, "REVALIDATE")
+            local validated = executed(service.execute(store, REQUESTER, "revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = after}, nil, nil))
+            test.eq(validated.validated_incarnation, after)
+            test.eq(validated.validated_by, REQUESTER)
+            test.eq(service.execute(store, REQUESTER, "revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = after}, nil, nil).replayed, true)
+            local consumed = executed(service.execute(store, REQUESTER, "consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = after}, nil, nil))
+            test.eq(consumed.consumed_effect, "e1")
+            local again = assert(service.establish(store))
+            local fenced = service.execute(store, REQUESTER, "consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = again}, nil, nil)
+            test.eq(fenced.code, "REVALIDATE")
+            store:release()
+        end)
+        test.it("binds a request to its proposal digest under the host policy and replays or conflicts on its key", function()
+            local workspace = "ws-" .. key()
+            test.eq(code(call(outsider, "request", request_of(workspace))), "DENIED")
+            test.eq(code(call(requester, "request", request_of(workspace, {policy = "nope"}))), "NOT_FOUND")
+            test.eq(code(call(requester, "request", request_of(workspace, {ttl_ms = 60001}))), "FORBIDDEN")
+            test.eq(code(call(requester, "request", request_of(workspace, {proposal = {kind = "attempt", ref = "x", revision = "r1", payload = {big = string.rep("x", 9000)}}}))), "INVALID_ARGUMENT")
+            local first_request = request_of(workspace)
+            local created = value(call(requester, "request", first_request))
+            test.eq(created.state, "pending")
+            test.eq(created.revision, 1)
+            test.eq(created.requester_id, REQUESTER)
+            test.eq(#(created.proposal_digest), 64)
+            test.eq(created.owner_incarnation ~= nil, true)
+            local replayed = call(requester, "request", first_request)
+            test.eq(value(replayed).approval_id, created.approval_id)
+            test.eq(replayed.replayed, true)
+            first_request.prompt = {text = "changed"}
+            test.eq(code(call(requester, "request", first_request)), "CONFLICT")
+            local listed = value(call(requester, "list", {workspace_id = workspace}))
+            test.eq(#(principals.items(listed.requests)), 1)
+            test.eq(#(principals.items(value(call(other_requester, "list", {workspace_id = workspace})).requests)), 0)
+        end)
+        test.it("lets two eligible approvers race to one decision and reports every other outcome honestly", function()
+            local workspace = "ws-" .. key()
+            local created = value(call(requester, "request", request_of(workspace)))
+            local approval_id, digest = created.approval_id, created.proposal_digest
+            test.eq(code(call(outsider, "read", {approval_id = approval_id})), "DENIED")
+            test.eq(value(call(alice, "read", {approval_id = approval_id})).approval_id, approval_id)
+            test.eq(value(call(manager, "read", {approval_id = approval_id})).approval_id, approval_id)
+            test.eq(code(call(outsider, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = digest})), "DENIED")
+            test.eq(code(call(alice, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = string.rep("0", 64)})), "CONFLICT")
+            local a = alice:async("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = digest})
+            local b = bob:async("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = 1, decision = "denied", proposal_digest = digest})
+            local wins = 0
+            for _, future in ipairs({a, b}) do
+                if await(future).ok then wins = wins + 1 end
+            end
+            test.eq(wins, 1)
+            local decided = value(call(alice, "read", {approval_id = approval_id}))
+            test.eq(decided.state, "decided")
+            test.eq(decided.revision, 2)
+            local winner, decision = decided.decider_id, decided.decision
+            local winner_client = alice
+            local loser_client = bob
+            local loser_decision = "denied"
+            if winner == BOB then
+                winner_client, loser_client, loser_decision = bob, alice, "approved"
+            end
+            local retry = call(winner_client, "decide", {approval_id = approval_id, expected_revision = 1, decision = decision, proposal_digest = digest})
+            test.eq(retry.replayed, true)
+            local conflict = call(loser_client, "decide", {approval_id = approval_id, expected_revision = 1, decision = loser_decision, proposal_digest = digest})
+            test.eq(code(conflict), "CONFLICT")
+            test.eq(fault_value(conflict).decision, decision)
+            local withdrawn = value(call(requester, "withdraw", {approval_id = approval_id}))
+            test.eq(withdrawn.withdrawn, false)
+            test.eq((assert(bounds.object(withdrawn.request))).state, "decided")
+        end)
+        test.it("admits a host-selected application definition while retaining its private actor", function()
+            local workspace = "ws-" .. key()
+            local created = value(call(requester, "request", request_of(workspace, {
+                proposal = proposal({definition_id = "bee.approvals.inbox.app:app"})})))
+            local approval_id, digest = created.approval_id, created.proposal_digest
+            test.eq(code(call(other_app, "read", {approval_id = approval_id})), "DENIED")
+            test.eq(value(call(inbox_app, "read", {approval_id = approval_id})).approval_id, approval_id)
+            local decided = value(call(inbox_app, "decide", {approval_id = approval_id,
+                expected_revision = 1, decision = "approved", proposal_digest = digest}))
+            test.eq(decided.decider_id, INBOX_ACTOR)
+            test.eq(decided.state, "decided")
+        end)
+        test.it("rejects malformed application definition selectors", function()
+            local valid: {unknown} = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.approvals.inbox.app:app"}}
+            for _, invalid in ipairs({{{}}, {{definition_id = ""}},
+                    {{definition_id = "bee.approvals.inbox.app:app", extra = true}}}) do
+                replace_approvers(principals.items(invalid))
+                local decoded, decode_error = resources.policies()
+                test.eq(decoded, nil)
+                test.eq(type(decode_error), "string")
+            end
+            replace_approvers(valid)
+            local decoded, decode_error = resources.policies()
+            test.eq(decode_error, nil)
+            test.eq(decoded ~= nil, true)
+        end)
+        test.it("rejects malformed policy envelopes, sparse lists, duplicate names and fractional TTLs", function()
+            local entry = assert(registry.get("bee.security.approvals:approver_policies"))
+            local original, encode_error = json.encode(entry.data)
+            if not original then error("encode approver policy fixture: " .. tostring(encode_error)) end
+            local function write(data: {[string]: unknown})
+                local current = assert(registry.get("bee.security.approvals:approver_policies"))
+                current.data = data
+                local changes = registry.snapshot():changes()
+                assert(changes:update(current))
+                local applied, apply_error = changes:apply()
+                if not applied then error("write approver policy fixture: " .. tostring(apply_error)) end
+            end
+            local function mutated(change: ({[string]: unknown}) -> ())
+                local data = assert(bounds.object(json.decode(original)))
+                change(data)
+                write(data)
+                local policies, decode_error = resources.policies()
+                test.eq(policies, nil)
+                test.eq(type(decode_error), "string")
+            end
+            mutated(function(data)
+                data.unexpected = true
+            end)
+            mutated(function(data)
+                local policies = principals.objects(data.policies)
+                data.policies = policies
+                local selected: {[string]: unknown}? = nil
+                for _, policy in ipairs(policies) do
+                    if policy.name == POLICY then selected = policy; break end
+                end
+                assert(selected)
+                local invalid: unknown = {[1] = ALICE, [3] = BOB}
+                selected.approvers = invalid
+            end)
+            mutated(function(data)
+                local policies = principals.objects(data.policies)
+                data.policies = policies
+                local selected: {[string]: unknown}? = nil
+                for _, policy in ipairs(policies) do
+                    if policy.name == POLICY then selected = policy; break end
+                end
+                assert(selected)
+                local duplicate: {[string]: unknown} = {}
+                for name, value in pairs(selected) do duplicate[name] = value end
+                policies[#policies + 1] = duplicate
+            end)
+            mutated(function(data)
+                local policies = principals.objects(data.policies)
+                for _, policy in ipairs(policies) do
+                    if policy.name == POLICY then policy.max_ttl_ms = 1.5; break end
+                end
+            end)
+            write(assert(bounds.object(json.decode(original))))
+            local decoded, decode_error = resources.policies()
+            test.eq(decode_error, nil)
+            test.eq(decoded ~= nil, true)
+        end)
+        test.it("enforces expiry at the owner, lets only the requester withdraw and binds consumption to one effect", function()
+            local workspace = "ws-" .. key()
+            local short = value(call(requester, "request", request_of(workspace, {ttl_ms = 1})))
+            time.sleep("5ms")
+            local late = call(alice, "decide", {approval_id = short.approval_id, expected_revision = 1, decision = "approved", proposal_digest = short.proposal_digest})
+            test.eq(code(late), "INVALID_STATE")
+            test.eq(fault_value(late).state, "expired")
+            local pending = value(call(requester, "request", request_of(workspace)))
+            test.eq(code(call(other_requester, "withdraw", {approval_id = pending.approval_id})), "DENIED")
+            local withdrawn = value(call(requester, "withdraw", {approval_id = pending.approval_id}))
+            test.eq(withdrawn.withdrawn, true)
+            test.eq((assert(bounds.object(withdrawn.request))).state, "withdrawn")
+            test.eq(code(call(bob, "decide", {approval_id = pending.approval_id, expected_revision = 1, decision = "approved", proposal_digest = pending.proposal_digest})), "INVALID_STATE")
+            test.eq(code(call(outsider, "reconcile", {})), "DENIED")
+            local store = open_test_store()
+            local due = executed(service.execute(store, REQUESTER, "request", request_of(workspace, {ttl_ms = 1}), nil, requester))
+            time.sleep("5ms")
+            local reconciled = executed(service.execute(store, OUTBOX, "reconcile", {}, nil, nil))
+            test.eq(reconciled.expired, 1)
+            test.eq(executed(service.execute(store, REQUESTER, "read", {approval_id = due.approval_id}, nil, nil)).state, "expired")
+            test.eq(executed(service.execute(store, OUTBOX, "reconcile", {}, nil, nil)).expired, 0)
+            store:release()
+            local approved = value(call(requester, "request", request_of(workspace)))
+            local incarnation = approved.owner_incarnation
+            test.eq(code(call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = incarnation})), "INVALID_STATE")
+            value(call(bob, "decide", {approval_id = approved.approval_id, expected_revision = 1, decision = "approved", proposal_digest = approved.proposal_digest}))
+            test.eq(code(call(other_requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = incarnation})), "DENIED")
+            test.eq(code(call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = string.rep("1", 64), effect_key = "launch-1", owner_incarnation = incarnation})), "CONFLICT")
+            local stale = call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = assert(bounds.integer(incarnation)) + 1})
+            test.eq(code(stale), "REVALIDATE")
+            test.eq(fault_value(stale).consumed_effect, nil)
+            local consumed = value(call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = incarnation}))
+            test.eq(consumed.consumed_effect, "launch-1")
+            test.eq(consumed.consumer_id, REQUESTER)
+            test.eq(call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = incarnation}).replayed, true)
+            test.eq(code(call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-2", owner_incarnation = incarnation})), "CONFLICT")
+            local denied = value(call(requester, "request", request_of(workspace)))
+            value(call(bob, "decide", {approval_id = denied.approval_id, expected_revision = 1, decision = "denied", proposal_digest = denied.proposal_digest}))
+            test.eq(code(call(requester, "consume", {approval_id = denied.approval_id, proposal_digest = denied.proposal_digest, effect_key = "launch-3", owner_incarnation = incarnation})), "INVALID_STATE")
+        end)
+        test.it("shows approvers a bounded inbox of the requests their policy covers and nothing to anyone else", function()
+            local workspace = "ws-" .. key()
+            local created = value(call(requester, "request", request_of(workspace)))
+            test.eq(code(call(outsider, "inbox", {workspace_id = workspace})), "DENIED")
+            test.eq(code(call(alice, "inbox", {workspace_id = workspace, limit = 65})), "INVALID_ARGUMENT")
+            local page = value(call(alice, "inbox", {workspace_id = workspace, limit = 1}))
+            local changes = principals.objects(page.changes)
+            test.eq(#changes, 1)
+            test.eq(changes[1].approval_id, created.approval_id)
+            test.eq(changes[1].revision, 1)
+            value(call(carol, "decide", {approval_id = created.approval_id, expected_revision = 1, decision = "denied", proposal_digest = created.proposal_digest}))
+            local rest = value(call(bob, "inbox", {workspace_id = workspace, after_seq = page.next_seq}))
+            local later = principals.objects(rest.changes)
+            test.eq(#later, 1)
+            test.eq(later[1].revision, 2)
+            test.eq((assert(bounds.object(later[1].request))).decision, "denied")
+        end)
+        test.it("counts node pending approvals through the public binding without granting request access", function()
+            local reader = caller("node-summary-reader", {"bee.approvals:summary_test_policy"})
+            test.eq(code(call(outsider, "node_summary", {})), "DENIED")
+            local before = value(call(reader, "node_summary", {}))
+            local baseline = before.pending_approvals
+            if type(baseline) ~= "number" then error("invalid pending approval count") end
+            local created = value(call(requester, "request", request_of("summary-" .. key())))
+            test.eq(code(call(reader, "read", {approval_id = created.approval_id})), "DENIED")
+            local pending = value(call(reader, "node_summary", {}))
+            test.eq(pending.pending_approvals, baseline + 1)
+            test.eq(pending.items, nil)
+            test.eq(pending.requests, nil)
+            test.eq(code(call(reader, "node_summary", {workspace_id = "not-admitted"})), "INVALID_ARGUMENT")
+            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = 1,
+                decision = "denied", proposal_digest = created.proposal_digest}))
+            test.eq(value(call(reader, "node_summary", {})).pending_approvals, before.pending_approvals)
+            value(call(requester, "request", request_of("summary-expiry-" .. key(), {ttl_ms = 1})))
+            time.sleep("5ms")
+            test.eq(value(call(reader, "node_summary", {})).pending_approvals, before.pending_approvals)
+        end)
+        test.it("projects requests and decisions onto the thread through the worker exactly once", function()
+            local workspace = "ws-" .. key()
+            local thread_id = thread_harness.thread(launcher, "Approvals")
+            thread_harness.value(launcher:call("admit_action", {thread_id = thread_id, idempotency_key = key(), action_id = "a1", admitted = thread_harness.admitted()}))
+            thread_harness.value(launcher:call("prepare_attempt", {thread_id = thread_id, idempotency_key = key(), action_id = "a1", attempt_id = "t1", prepared = thread_harness.prepared()}))
+            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal(nil, "t1")}))), "INVALID_ARGUMENT")
+            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a1", "t9")}))), "INVALID_ARGUMENT")
+            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a9", "t1")}))), "INVALID_ARGUMENT")
+            local created = value(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a1", "t1")})))
+            local binding = assert(bounds.object(created.binding))
+            test.eq(binding.attempt_id, "t1")
+            test.eq(binding.record_id ~= nil, true)
+            local approval_id = created.approval_id
+            local rows = principals.objects(value(call(requester, "deliveries", {approval_id = approval_id})).deliveries)
+            test.eq(#rows, 1)
+            test.eq(rows[1].event_id, approval_id .. ":1")
+            local records = until_records(thread_id, 1)
+            test.eq(#records, 1)
+            test.eq(records[1].kind, "approval.request")
+            test.eq(records[1].attempt_id, "t1")
+            test.eq((assert(bounds.object(records[1].body))).requester_id, REQUESTER)
+            value(call(alice, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = created.proposal_digest, response = {text = "go"}}))
+            records = until_records(thread_id, 2)
+            if #records ~= 2 then
+                local pendings = principals.objects(value(call(requester, "deliveries", {approval_id = approval_id})).deliveries)
+                error("transition not delivered: " .. tostring(pendings[2] and pendings[2].last_error) .. " attempts " .. tostring(pendings[2] and pendings[2].attempts))
+            end
+            local body = assert(bounds.object(records[2].body))
+            test.eq(body.state, "approved")
+            test.eq(body.decider_id, ALICE)
+            test.eq(body.expected_revision, 1)
+            test.eq((assert(bounds.object(body.response))).text, "go")
+            -- The transition record owes nobody anything, so the outcome is
+            -- also addressed to the requester: the obligation it creates is
+            -- what the delivery layer carries to the waiting agent.
+            local notices = until_notices(thread_id, 1)
+            test.eq(#notices, 1)
+            local acked = principals.objects(value(call(requester, "deliveries", {approval_id = approval_id})).deliveries)
+            test.eq(#acked, 3)
+            test.eq(acked[2].acknowledged_at ~= nil, true)
+            test.eq(acked[3].event_id, approval_id .. ":2:notice")
+            test.eq(acked[3].kind, "message")
+            test.eq(code(call(requester, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "DENIED")
+            test.eq(code(call(manager, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "INVALID_STATE")
+            test.eq(#thread_records(thread_id), 2)
+            local notice = assert(bounds.object(notices[1].body))
+            test.eq(notice.message_kind, "notification")
+            test.eq(notice.sender_id, service.WORKER_NAME)
+            test.eq((principals.strings(notice.recipient_ids))[1], REQUESTER)
+            test.eq((assert(bounds.object(notice.content))).text, "Approval " .. approval_id .. " is approved.")
+            local claimed = thread_harness.value(launcher:call("claim", {thread_id = thread_id, idempotency_key = key(), consumer_id = "inbox", limit = 4}))
+            local pending = principals.objects(claimed.deliveries)
+            test.eq(#pending, 1)
+            test.eq(pending[1].message_id, notice.message_id)
+            -- A refusal is announced on the same path: what leaves an agent
+            -- waiting is the silence, not the answer.
+            local refused = value(call(requester, "request", request_of(workspace, {thread_id = thread_id})))
+            local refused_id = refused.approval_id
+            value(call(alice, "decide", {approval_id = refused_id, expected_revision = 1, decision = "denied", proposal_digest = refused.proposal_digest}))
+            local both = until_notices(thread_id, 2)
+            test.eq(#both, 2)
+            local denial = assert(bounds.object(both[2].body))
+            test.eq((assert(bounds.object(denial.content))).text, "Approval " .. refused_id .. " is denied.")
+        end)
+        test.it("survives a crash between the thread commit and the outbox acknowledgement without a duplicate record", function()
+            local workspace = "ws-" .. key()
+            local thread_id = thread()
+            local db = open_test_store()
+            local created = executed(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = thread_id}), nil, requester))
+            test.eq((assert(bounds.object(created.binding))).role, "owner")
+            local approval_id = created.approval_id
+            local honest = outbox.thread_sender(owner)
+            local sent = 0
+            local report = assert(outbox.drain(db, "holder", function(delivery): (boolean, string?)
+                sent = sent + 1
+                local ok, err = honest(delivery)
+                if not ok then return false, err end
+                return false, "transport lost before acknowledgement"
+            end))
+            test.eq(report.claimed, 1)
+            test.eq(report.failed, 1)
+            test.eq(sent, 1)
+            test.eq(#thread_records(thread_id), 1)
+            local unacked = assert(outbox.deliveries(db, approval_id))[1]
+            test.eq(unacked.attempts, 1)
+            test.eq(unacked.acknowledged_at, nil)
+            test.eq(unacked.last_error, "transport lost before acknowledgement")
+            local idle = assert(outbox.drain(db, "holder", honest))
+            test.eq(idle.claimed, 0)
+            local _, reset_error = db:execute("UPDATE bee_approval_outbox SET next_attempt_ms = 0 WHERE event_id = ?", {approval_id .. ":1"})
+            test.eq(reset_error, nil)
+            local again = assert(outbox.drain(db, "holder", honest))
+            test.eq(again.delivered, 1)
+            local records = thread_records(thread_id)
+            test.eq(#records, 1)
+            test.eq(records[1].kind, "approval.request")
+            local acked = assert(outbox.deliveries(db, approval_id))[1]
+            test.eq(acked.acknowledged_at ~= nil, true)
+            local repeated = assert(outbox.drain(db, "holder", honest))
+            test.eq(repeated.claimed, 0)
+            test.eq(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = "thread-missing"}), nil, requester).code, "NOT_FOUND")
+            local foreign = thread_harness.thread(stranger, "Foreign")
+            test.eq(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = foreign}), nil, requester).code, "DENIED")
+            local later = executed(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = thread_id}), nil, requester))
+            local delivered_later = assert(outbox.drain(db, "holder", honest))
+            test.eq(delivered_later.delivered, 1)
+            test.eq(#thread_records(thread_id), 2)
+            db:release()
+        end)
+        test.it("runs the owner worker under its own actor", function()
+            local pid = process.registry.lookup(service.WORKER_NAME)
+            test.eq(pid ~= nil, true)
+            local capabilities = value(call(outsider, "capabilities", {}))
+            test.eq(capabilities.projection, "thread_outbox_at_least_once")
+            test.eq(capabilities.expiry, "owner_reconcile")
+            test.eq(capabilities.dedupe_horizon, "retention_after_expiry")
+        end)
+        test.it("keeps reconciliation and outbox drain failures diagnosable", function()
+            local reconcile_error = worker.run_pass(function(): service.Reply
+                return {ok = false, error = {code = "STORAGE", message = "authority store is corrupt"}, value = nil, replayed = false}
+            end, function(): string?
+                error("drain must not run after reconciliation fails")
+            end)
+            test.eq(reconcile_error, "STORAGE: authority store is corrupt")
+            local drain_error = worker.run_pass(function(): service.Reply
+                return {ok = true, error = nil, value = nil, replayed = false}
+            end, function(): string?
+                return "database busy"
+            end)
+            test.eq(drain_error, "drain approval outbox: database busy")
+        end)
+    end)
+end
+return test.run_cases(define_tests)

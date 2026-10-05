@@ -10,7 +10,7 @@ local protocol = require("protocol")
 local normalize = require("normalize")
 local observation = require("observation")
 local function fixture(path: string): string
-    local volume, err = fs.get("bee.driver:fixtures")
+    local volume, err = fs.get("bee.tests.driver:fixtures")
     if not volume then error("fixtures: " .. tostring(err)) end
     local content, read_error = volume:readfile(path)
     if not content then error(path .. ": " .. tostring(read_error)) end

@@ -3,15 +3,8 @@ module github.com/wippyai/bee/native
 go 1.27.0
 
 require (
-	github.com/creack/pty v1.1.24
-	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.12.1
-	github.com/syncthing/notify v0.0.0-20250528144937-c7027d4f7465
-	github.com/wippyai/go-lua v1.6.2
-	github.com/wippyai/runtime v0.1.14-0.20261002182300-5eb9901870e3
-	go.uber.org/zap v1.28.0
-	golang.org/x/sys v0.48.0
-	golang.org/x/term v0.46.0
+	github.com/wippyai/runtime v0.1.14-0.20261003180813-2ec1a16458ca
 )
 
 require (
@@ -75,6 +68,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/coreos/pkg v0.0.0-20220810130054-c7d1c02cb6cf // indirect
 	github.com/creachadair/msync v0.8.1 // indirect
+	github.com/creack/pty v1.1.24 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
@@ -97,6 +91,7 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
@@ -184,6 +179,7 @@ require (
 	github.com/tree-sitter/tree-sitter-php v0.25.0 // indirect
 	github.com/tree-sitter/tree-sitter-python v0.25.0 // indirect
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2 // indirect
+	github.com/wippyai/go-lua v1.6.2 // indirect
 	github.com/wippyai/module-registry-proto-go v0.0.2-0.20260908140534-f6e2910c835f // indirect
 	github.com/wippyai/tree-sitter-markdown v0.0.3 // indirect
 	github.com/wippyai/tree-sitter-sql v0.0.4 // indirect
@@ -219,6 +215,7 @@ require (
 	go.temporal.io/sdk v1.49.0 // indirect
 	go.temporal.io/sdk/contrib/opentelemetry v0.8.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
@@ -228,6 +225,8 @@ require (
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
@@ -235,11 +234,9 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
-	google.golang.org/grpc v1.85.0-dev.0.20260825072537-93e31b48545e // indirect
+	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gvisor.dev/gvisor v0.0.0-20260224225140-573d5e7127a8 // indirect
 	tailscale.com v1.102.5 // indirect
 )
-
-replace github.com/mattn/go-sqlite3 => github.com/rqlite/go-sqlite3 v1.50.0

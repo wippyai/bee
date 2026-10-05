@@ -1,0 +1,30 @@
+version: '1.0'
+namespace: bee.sync.persist
+entries:
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql, json, time]
+  imports:
+    limits: bee.sync.values:limits
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+- name: replicas
+  kind: library.lua
+  source: file://replicas.lua
+  modules: [json, sql, hash, base64]
+  imports:
+    bounds: bee.values:bounds
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    version: bee.sync.values:version
+- name: distribution_store
+  kind: library.lua
+  source: file://distribution_store.lua
+  modules: [sql]
+  imports:
+    bounds: bee.values:bounds
+    database: bee.persist:database
+    transaction: bee.persist:transaction

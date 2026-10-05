@@ -54,23 +54,46 @@ local function define_tests()
             test.is_nil(inventory.sources(state, 8, {component = "bee/ui", version = "0.1.0-dev",
                 entry_id = "bee.ui:frame", expected_revision = 7}))
         end)
+        test.it("pages an installed source manifest larger than one page", function()
+            local entries: {{[string]: unknown}} = {}
+            for index = 1, 300 do
+                entries[index] = {id = string.format("bee.big:entry%03d", index), kind = "library.lua", registry = {owner = "bee/big"}, data = {source = "s"}}
+            end
+            local state = {resolution = {modules = {{name = "bee/big", version = "1.0.0", source = "local"}}}, entries = entries}
+            local first = assert(inventory.sources(state, 3, {component = "bee/big", version = "1.0.0"}))
+            test.eq(#first.entries, inventory.MAX_MANIFEST_PAGE)
+            test.eq(first.next_offset, inventory.MAX_MANIFEST_PAGE)
+            test.eq(first.eof, false)
+            local rest = assert(inventory.sources(state, 3, {component = "bee/big", version = "1.0.0",
+                entry_offset = first.next_offset, expected_revision = 3}))
+            test.eq(#rest.entries, 300 - inventory.MAX_MANIFEST_PAGE)
+            test.is_nil(rest.next_offset)
+            test.eq(rest.eof, true)
+            test.eq(rest.entries[#rest.entries].id, "bee.big:entry300")
+            test.is_nil(inventory.sources(state, 4, {component = "bee/big", version = "1.0.0",
+                entry_offset = first.next_offset, expected_revision = 3}))
+        end)
         test.it("reads the frame implementation from the installed development component", function()
             local current = assert(installed.read())
             local version: string? = nil
             for _, item in ipairs(current.modules) do
-                if item.component == "bee/ui" then version = item.version end
+                if item.component == "bee/bee" then version = item.version end
             end
             test.not_nil(version)
             if not version then return end
-            local manifest = assert(installed.sources({component = "bee/ui", version = version}))
+            local manifest = assert(installed.sources({component = "bee/bee", version = version}))
             local revision = manifest.revision
-            local entries = manifest.entries
             local found = false
-            for _, entry in ipairs(entries) do
-                if entry.id == "bee.ui:frame" then found = true end
+            while true do
+                for _, entry in ipairs(manifest.entries) do
+                    if entry.id == "bee.ui:frame" then found = true end
+                end
+                if manifest.eof then break end
+                manifest = assert(installed.sources({component = "bee/bee", version = version,
+                    entry_offset = manifest.next_offset, expected_revision = revision}))
             end
             test.is_true(found)
-            local page = assert(installed.sources({component = "bee/ui", version = version,
+            local page = assert(installed.sources({component = "bee/bee", version = version,
                 entry_id = "bee.ui:frame", expected_revision = revision, offset = 0, limit = 4096}))
             test.is_true((page.content):find("function M.", 1, true) ~= nil)
         end)

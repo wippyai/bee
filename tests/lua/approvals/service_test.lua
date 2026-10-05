@@ -20,9 +20,7 @@ local service = require("service")
 local worker = require("worker")
 local resources = require("resources")
 local outbox = require("outbox")
-local migrations = require("migrations")
-local persist = require("persist")
-local identity_migration = require("identity_migration")
+local schema = require("schema")
 local thread_harness = require("thread_harness")
 local TEST_STORE = "bee.approvals:test_db"
 local REQUESTER, OTHER_REQUESTER, ALICE, BOB, OUTSIDER, MANAGER = "bee.test.launcher", "bee.test.other_launcher", "bee.test.alice", "bee.test.bob", "bee.test.outsider", "bee.test.manager"
@@ -47,7 +45,7 @@ local function caller(id: string, grants: {string}, metadata: {[string]: string 
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id, metadata)):with_scope(scope(names))
 end
-local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
+local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:store", "bee.threads.security:store"})
 local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)
 local stranger = thread_harness.principal("bee.test.stranger", thread_harness.ALL)
 local other_requester = caller(OTHER_REQUESTER, {"bee.security.approvals:approval_request_policy"})
@@ -55,13 +53,13 @@ local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
 local bob = caller(BOB, {"bee.security.approvals:approval_decide_policy"})
 local carol = caller("bee.test.carol", {"bee.security.approvals:approval_decide_policy"})
 local outsider = caller(OUTSIDER, {})
-local manager = caller(MANAGER, {"bee.security.approvals:approval_manage_policy"})
+local manager = caller(MANAGER, {"bee.approvals:manage_test_policy"})
 local INBOX_ACTOR = "bee.application:0123456789abcdef0123456789abcdef:inbox-instance"
 local inbox_app = caller(INBOX_ACTOR, {"bee.security.approvals:approval_decide_policy"},
     {definition_id = "bee.approvals.inbox.app:app", workspace_id = "0123456789abcdef0123456789abcdef"})
 local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other-instance",
     {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.settings.app:app"})
-local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.security.threads:thread_approval_policy", "bee.security.threads:thread_approval_client_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
+local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.threads.security:approval", "bee.threads.security:approval_client", "bee.threads.security:store", "bee.threads.security:store"})
 local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
     local reply, err = client:call("bee.approvals.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
@@ -86,9 +84,7 @@ local function await(future: funcs.Future): service.Reply
     return principals.replayed_reply(data)
 end
 local function open_test_store(): sql.DB
-    local db, err = persist.open({resource = TEST_STORE, ledger = service.LEDGER, migrations = migrations.all()})
-    if not db then error("open test store: " .. tostring(err)) end
-    return db
+    return schema.open(TEST_STORE, "bee.approvals.migrations")
 end
 local function executed(result: {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}): {[string]: unknown}
     if not result.ok then error(tostring(result.code) .. ": " .. tostring(result.message)) end
@@ -197,36 +193,6 @@ end
 local function define_tests()
     test.describe("Approval owner", function()
         install_policy()
-        test.it("migrates the authority and outstanding requests to the persisted node identity once", function()
-            local db, open_error = persist.open({resource = "bee.approvals:identity_test_db",
-                ledger = service.LEDGER, migrations = migrations.all()})
-            if not db then error("open approval identity migration store: " .. tostring(open_error)) end
-            local destination, node_error = service.node()
-            if not destination then error("read persisted node identity: " .. tostring(node_error)) end
-            assert(service.establish(db))
-            local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
-            local legacy = "legacy-" .. key()
-            local _, authority_error = db:execute(
-                "UPDATE bee_approval_authority SET owner_node = ? WHERE owner_node = ?", {legacy, destination})
-            local _, request_error = db:execute(
-                "UPDATE bee_approval_requests SET owner_node = ? WHERE approval_id = ?", {legacy, created.approval_id})
-            if authority_error or request_error then error(tostring(authority_error or request_error)) end
-
-            local migrated, migration_error = identity_migration.apply(db, destination, legacy)
-            if not migrated then error(tostring(migration_error)) end
-            local repeated, repeated_error = identity_migration.apply(db, destination, legacy)
-            if not repeated then error(tostring(repeated_error)) end
-            local restored = executed(service.execute(db, REQUESTER, "read", {approval_id = created.approval_id}, nil, requester))
-            test.eq(restored.owner_node, destination)
-            local ledger, ledger_error = db:query(
-                "SELECT authority_count, request_count FROM bee_approval_node_identity_migrations WHERE source_node = ? AND destination_node = ?",
-                {legacy, destination})
-            if ledger_error or not ledger then error("read approval identity migration record") end
-            test.eq(#ledger, 1)
-            test.eq(ledger[1].authority_count, 1)
-            test.eq(ledger[1].request_count, 1)
-            db:release()
-        end)
         test.it("exports pinned snapshots and scoped catch-up from the existing approval ledger", function()
             local workspace = "ws-feed-" .. key()
             local created = value(call(requester, "request", request_of(workspace)))

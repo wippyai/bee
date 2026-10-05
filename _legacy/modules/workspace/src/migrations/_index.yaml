@@ -1,8 +1,0 @@
-version: '1.0'
-namespace: bee.workspace.migrations
-entries:
-- name: migrations
-  kind: library.lua
-  source: file://migrations.lua
-  imports:
-    ledger: bee.persist.persist:ledger

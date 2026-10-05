@@ -1,9 +1,0 @@
-organization: bee
-module: sessions
-type: library
-version: 0.1.0-dev
-description: Durable session contracts, executor selection, location and scheduling
-license: MIT
-directories:
-  modules: .wippy
-  src: ./src

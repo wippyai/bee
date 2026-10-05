@@ -1,5 +1,0 @@
-organization: bee
-module: placement-docker
-type: library
-description: Docker placement with admitted PTY windows and per-process session turns
-license: MIT

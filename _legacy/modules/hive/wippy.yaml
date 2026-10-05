@@ -1,9 +1,0 @@
-organization: bee
-module: hive
-type: library
-version: 0.1.0-dev
-description: Hive protocol, routing, admission and desktop bridge for Bee
-license: MIT
-directories:
-  modules: .wippy
-  src: ./src

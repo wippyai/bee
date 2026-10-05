@@ -1,9 +1,0 @@
-organization: bee
-module: capability
-type: library
-version: 0.1.0-dev
-description: Shared capability interpretation, scope comparison, and revocation values
-license: MIT
-directories:
-  modules: .wippy
-  src: ./src

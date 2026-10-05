@@ -6,6 +6,7 @@ entries:
   source: file://scheduler.lua
   modules:
   - funcs
+  - uuid
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -19,7 +20,6 @@ entries:
   - time
   - channel
   - logger
-  - hash
   - funcs
   imports:
     bounds: bee.values:bounds

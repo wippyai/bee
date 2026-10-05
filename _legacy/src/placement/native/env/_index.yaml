@@ -1,9 +1,0 @@
-version: '1.0'
-namespace: bee.placement.native.env
-entries:
-- name: workdir_preparers
-  kind: registry.entry
-  meta:
-    type: bee.placement_workdir_preparers
-  data:
-    preparers: [bee.git.worktree.binding:binding]

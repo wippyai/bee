@@ -2,6 +2,7 @@
 -- chunking; checkpoints decode exactly and only move forward; settlement
 -- follows the terminal envelope and never process exit alone.
 local test = require("test")
+local hash = require("hash")
 local bounds = require("bounds")
 local provenance = require("provenance")
 local checkpoint = require("checkpoint")
@@ -37,7 +38,7 @@ end
 local function reference_hook_record(binding_id: string, turn_id: string?, item: Object): {[string]: unknown}
     local key = "hook:" .. tostring(item.event_id)
     if item.ambiguous ~= true then
-        key = "hook:" .. binding_id .. ":" .. tostring(item.event) .. ":" .. tostring(item.occurrence)
+        key = "hook:" .. binding_id .. ":" .. tostring(item.event) .. ":" .. assert(hash.sha256(tostring(item.occurrence)))
     end
     local payload = canonical.encode({
         event_id = item.event_id,
@@ -293,7 +294,8 @@ local function define_tests()
             local ref1 = reference_hook_record(binding_id, turn_id, item)
             test.eq(batch1.records[1].source, ref1.source)
             test.eq(batch1.records[1].turn_id, ref1.turn_id)
-            test.eq((assert(bounds.object(batch1.records[1].body))).event_key, "hook:" .. binding_id .. ":UserPromptSubmit:turn:prompt-1")
+            test.eq((assert(bounds.object(batch1.records[1].body))).event_key,
+                "hook:" .. binding_id .. ":UserPromptSubmit:" .. assert(hash.sha256("turn:prompt-1")))
             test.eq((assert(bounds.object(batch1.records[1].body))).event_key, (assert(bounds.object(ref1.body))).event_key)
 
             local data1 = assert(bounds.object((assert(bounds.object(batch1.records[1].body))).data))
@@ -416,6 +418,16 @@ local function define_tests()
             if not batch_norm then error("batch_norm is nil") end
             local ref_norm = reference_hook_record(binding_id, turn_id, norm_item)
             test.eq((assert(bounds.object((assert(bounds.object(batch_norm.records[1].body))).data))).payload_json, (assert(bounds.object((assert(bounds.object(ref_norm.body))).data))).payload_json)
+        end)
+        test.it("keys a record for the longest occurrence a claim carries within the observation key bound", function()
+            local binding_id = "01a10ce8-c9a6-7000-8000-000000000000"
+            local item = make_valid_item("evt-long", "PostToolUseFailure", false)
+            item.occurrence = "turn:" .. string.rep("x", 507)
+            local first = assert(hook_records.batch(binding_id, "turn-action-456", {item}))
+            local key = tostring((assert(bounds.object(first.records[1].body))).event_key)
+            test.is_true(#key <= bounds.MAX_ID_BYTES)
+            local again = assert(hook_records.batch(binding_id, "turn-action-456", {item}))
+            test.eq((assert(bounds.object(again.records[1].body))).event_key, key)
         end)
         test.it("rejects malformed hook claims at the unknown boundary without silent skip or fallback", function()
             local binding_id = "bind-gateway-123"

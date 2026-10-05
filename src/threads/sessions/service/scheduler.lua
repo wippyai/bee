@@ -2,6 +2,7 @@
 -- queue state: boot and periodic scans recover every unsettled turn.
 local canonical = require("canonical")
 local cancellation = require("cancellation")
+local uuid = require("uuid")
 local bounds = require("bounds")
 local M = {}
 M.MAX_SCAN = 64
@@ -395,6 +396,15 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     if settle_error or not settled then add_issue(pass, due.work, "work_settle", settle_error or "Threads did not settle the work"); return end
     pass.activated = pass.activated + 1
     finish_close(journal, pass, turn.session, turn.work)
+end
+
+-- run_identity names one scheduler pass. Recovery and cancellation keys carry
+-- it, so it is unique per pass: a pass after a restart must not replay an
+-- earlier pass's receipt, whose claim belongs to an earlier owner epoch.
+function M.run_identity(): string?
+    local id, id_error = uuid.v7()
+    if id_error then return nil end
+    return id
 end
 
 function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: string): (Service?, string?)

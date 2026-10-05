@@ -1,9 +1,0 @@
-organization: bee
-module: console
-type: library
-version: 0.1.0-dev
-description: Bee console application
-license: MIT
-directories:
-  modules: .wippy
-  src: ./src

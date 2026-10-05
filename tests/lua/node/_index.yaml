@@ -5,7 +5,7 @@ entries:
   kind: function.lua
   source: file://node_test.lua
   method: run
-  modules: [process, channel, system, time, tty, sql, registry]
+  modules: [process, channel, system, time, tty, sql, registry, events]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test

@@ -21,8 +21,9 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- carries the node's appearance and "workspaces" its workspaces and desktops.
 -- revision orders events after the snapshot a display applied.
 -- "catalog" carries the installed apps, "title" an app's new title with its
--- id, "dialog" a dialog an app asks and "dialog_closed" the id of the app
--- whose dialog is gone.
+-- id, "dialog" a dialog an app asks, "dialog_closed" the id of the app
+-- whose dialog is gone and "attention" the id of an app that needs the
+-- person, which a display brings forward.
 type Event = {kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
     workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?}
 -- What a node reports to list and watch; owner is the PID of the node's
@@ -175,7 +176,7 @@ function M.event(data: unknown): Event?
         event.instance = instance(data.instance)
         if not event.instance then return nil end
         event.id = event.instance.id
-    elseif data.kind == "closed" or data.kind == "dialog_closed" then
+    elseif data.kind == "closed" or data.kind == "dialog_closed" or data.kind == "attention" then
         if type(data.id) ~= "string" then return nil end
         event.id = data.id
     elseif data.kind == "title" then

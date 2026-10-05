@@ -29,8 +29,14 @@ local function drain(): boolean
         local effect = bounds.object(item)
         local approval_id = effect and bounds.id(effect.approval_id) or nil
         if approval_id then
-            local applied = service.apply_approved(effect)
-            if not applied.ok then
+            local called, applied = pcall(service.apply_approved, effect)
+            if not called then
+                logger:error("Approved activation failed", {approval_id = approval_id, cause = tostring(applied)})
+            elseif applied.ok then
+                local intent = bounds.object(applied.value)
+                logger:info("Approved activation applied", {approval_id = approval_id,
+                    phase = intent and intent.phase, outcome = intent and intent.outcome})
+            else
                 logger:warn("Approved activation was not applied", {approval_id = approval_id,
                     code = applied.code, reason = applied.message})
             end

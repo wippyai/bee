@@ -1,9 +1,0 @@
-organization: bee
-module: git-worktree
-type: library
-version: 0.1.0-dev
-description: Git worktree and repository metadata preparation plugin for Bee placement
-license: MIT
-directories:
-  modules: .wippy
-  src: ./src

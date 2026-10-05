@@ -1,9 +1,0 @@
-organization: bee
-module: values
-type: library
-version: 0.1.0-dev
-description: Shared bounded values, canonical JSON, and time helpers for Bee
-license: MIT
-directories:
-  modules: .wippy
-  src: ./src

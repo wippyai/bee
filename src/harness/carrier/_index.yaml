@@ -70,6 +70,8 @@ entries:
 - name: hook_records
   kind: library.lua
   source: file://hook_records.lua
+  modules:
+  - hash
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical

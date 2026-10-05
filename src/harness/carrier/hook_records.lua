@@ -2,6 +2,7 @@
 -- validates top-level boundaries, uniqueness, dense lists, and event keys,
 -- producing extension observation records for thread commit.
 local bounds = require("bounds")
+local hash = require("hash")
 local canonical = require("canonical")
 local gateway_hooks = require("gateway_hooks")
 
@@ -129,9 +130,14 @@ function M.batch(binding_id: string, turn_id: string?, items: unknown): (Batch?,
             return nil, "hook record " .. tostring(index) .. ": event mismatch between record and fields"
         end
 
+        -- A known occurrence keys its record by the occurrence's digest, so the
+        -- key stays within the observation key bound for any valid occurrence
+        -- and the same occurrence always yields the same record.
         local key = "hook:" .. event_id
         if item.ambiguous ~= true then
-            key = "hook:" .. binding_id .. ":" .. tostring(item.event) .. ":" .. tostring(item.occurrence)
+            local occurrence_digest = hash.sha256(tostring(item.occurrence))
+            if not occurrence_digest then return nil, "hook record " .. tostring(index) .. ": occurrence digest failed" end
+            key = "hook:" .. binding_id .. ":" .. tostring(item.event) .. ":" .. occurrence_digest
         end
 
         local payload_obj = {

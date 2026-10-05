@@ -1,8 +1,0 @@
-version: '1.0'
-namespace: bee.hive.telemetry.env
-entries:
-- name: peer_source
-  kind: registry.entry
-- name: empty_peers
-  kind: registry.entry
-  peers: []

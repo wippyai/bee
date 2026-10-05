@@ -1,9 +1,0 @@
-version: '1.0'
-namespace: bee.driver.muse.env
-entries:
-- name: executable
-  kind: env.variable
-  storage: bee.harness.host:environment
-  variable: muse
-  default: ''
-  readonly: true

@@ -11,6 +11,7 @@ local time = require("time")
 local tty = require("tty")
 local sql = require("sql")
 local registry = require("registry")
+local events_bus = require("events")
 local appearance = require("appearance")
 local client = require("client")
 
@@ -273,6 +274,42 @@ local function define_tests()
             test.eq(next_event(events, "closed").id, id)
             test.is_false(kept(id))
             view:close()
+            process.unlisten(events)
+        end)
+    end)
+
+    test.describe("attention", function()
+        -- presented waits for the opened event of an app on desktop and the
+        -- attention event that brings that same instance forward.
+        local function presented(events: unknown, desktop: string, app_prefix: string): string
+            local inbox = events :: channel.Channel
+            local deadline = time.after("5s")
+            local opened: string? = nil
+            while true do
+                local selected = channel.select({inbox:case_receive(), deadline:case_receive()})
+                if selected.channel == deadline then error("nothing presented for " .. app_prefix) end
+                local event = client.event(selected.value:payload():data())
+                if event and event.kind == "opened" and event.instance and event.instance.desktop == desktop
+                    and event.instance.app:sub(1, #app_prefix) == app_prefix then opened = event.instance.id end
+                if event and event.kind == "attention" and opened and event.id == opened then return opened end
+            end
+        end
+        test.it("opens the app declaring the approvals role on a watched desktop of the workspace and brings it forward", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local state = watched()
+            local desktop = tostring(state.desktop)
+            assert(events_bus.send("bee.attention", "approval.requested", home_workspace(state).id, {approval_id = "approval-probe"}))
+            local id = presented(events, desktop, "bee.approvals.inbox.app:")
+            close_all(events, {id})
+            process.unlisten(events)
+        end)
+        test.it("opens an approved component's applications once it is applied", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local state = watched()
+            local desktop = tostring(state.desktop)
+            assert(events_bus.send("bee.attention", "application.applied", home_workspace(state).id, {component = "bee.tests.node"}))
+            local id = presented(events, desktop, "bee.tests.node:")
+            close_all(events, {id})
             process.unlisten(events)
         end)
     end)

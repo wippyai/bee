@@ -1,6 +1,0 @@
-organization: bee
-module: threads-timeline
-type: library
-version: 0.1.0-dev
-description: Thread timeline viewer app
-license: MIT

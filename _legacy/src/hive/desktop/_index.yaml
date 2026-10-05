@@ -1,7 +1,0 @@
-version: '1.0'
-namespace: bee.hive.desktop
-entries:
-- name: display_host
-  kind: process.host
-  host: {max_processes: 8, workers: 2}
-  lifecycle: {auto_start: true}

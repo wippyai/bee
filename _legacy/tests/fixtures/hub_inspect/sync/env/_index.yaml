@@ -1,7 +1,0 @@
-version: '1.0'
-namespace: bee.sync.env
-entries:
-- name: sync_exports
-  kind: registry.entry
-  data:
-    exports: []

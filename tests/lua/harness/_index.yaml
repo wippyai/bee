@@ -116,6 +116,8 @@ entries:
   kind: function.lua
   source: file://carrier_pure_test.lua
   method: run
+  modules:
+  - hash
   meta:
     type: test
     suite: bee

@@ -1,9 +1,0 @@
-version: '1.0'
-namespace: bee.security.hub
-entries:
-- name: receipt_metadata_policy
-  kind: security.policy
-  policy:
-    actions: [funcs.call, bee.hub.migrate_receipts]
-    resources: [bee.hub.binding:receipt_metadata]
-    effect: allow

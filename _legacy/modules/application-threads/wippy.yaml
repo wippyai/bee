@@ -1,9 +1,0 @@
-organization: bee
-module: application-threads
-type: library
-version: 0.1.0-dev
-description: Opt-in authenticated application Threads client for Bee
-license: MIT
-directories:
-  modules: .wippy
-  src: ./src

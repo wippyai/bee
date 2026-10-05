@@ -1,6 +1,0 @@
-organization: bee
-module: hive-manager
-type: library
-version: 0.1.0-dev
-description: Hive cluster management app with remote workspace views
-license: MIT

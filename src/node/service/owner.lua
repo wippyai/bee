@@ -953,16 +953,16 @@ local function main(saved: unknown)
         end
     end
 
-    -- present opens app on every desktop a display shows that works in
-    -- workspace_id and asks those displays to bring it forward.
-    local function present(workspace_id: string, app: string)
+    -- present opens app with arguments on every desktop a display shows that
+    -- works in workspace_id and asks those displays to bring it forward.
+    local function present(workspace_id: string, app: string, arguments: {string})
         local seen: {[string]: boolean} = {}
         for _, desktop_id in pairs(watchers) do
             if desktop_id ~= "" and not seen[desktop_id] then
                 seen[desktop_id] = true
                 local desktop = workspaces.desktop(desktop_id)
                 if desktop and desktop.workspace_id == workspace_id then
-                    local opened = open(app, desktop_id, nil)
+                    local opened = open(app, desktop_id, {arguments = arguments})
                     local value = opened.value
                     if opened.ok and value then broadcast({kind = "attention", id = value.id})
                     else logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error}) end
@@ -979,13 +979,16 @@ local function main(saved: unknown)
         local workspace_id: string = event.path
         if event.kind == "approval.requested" then
             local inbox = role_app(APPROVALS_ROLE)
-            if inbox then present(workspace_id, inbox) else logger:warn("No installed app handles approvals") end
+            local approval_id = type(data.approval_id) == "string" and data.approval_id or nil
+            if not inbox then logger:warn("No installed app handles approvals")
+            elseif approval_id then present(workspace_id, inbox, {"--approval", approval_id})
+            else present(workspace_id, inbox, {}) end
         elseif event.kind == "application.applied" and type(data.component) == "string" then
             refresh()
             local prefix = tostring(data.component) .. ":"
             for _, app in ipairs(installed_apps) do
                 local id = app.id
-                if type(id) == "string" and id:sub(1, #prefix) == prefix then present(workspace_id, id) end
+                if type(id) == "string" and id:sub(1, #prefix) == prefix then present(workspace_id, id, {}) end
             end
         end
     end

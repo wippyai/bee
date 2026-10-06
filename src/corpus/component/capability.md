@@ -43,6 +43,17 @@ For an agent attempt, the approval itself is the grant: `process_run` runs the
 command through `bee.gateway.env:process_executor` in the approved folder of
 the bound workspace.
 
+## Agent tools
+
+`agent.tools` (confirm `explicit`) takes `tools` (kind `own_functions`): the
+application's own tool function ids. The person reads `Let agents you enable
+call {tools} as this application, with this application's grants`. Each id must
+be a `function.lua` of the same pack whose meta decodes as a tool
+(`bee.values:agent_tool`), with schemas in the advertised subset and no
+`security` block; aliases must be distinct. Approval generates a
+`security.policy` letting the application scope `funcs.call` exactly those
+functions. The node offers them to agents through the gateway's `app_tools`.
+
 The pure `bee.capability:model` library decodes the catalog (`decode`), normalizes
 and resolves capability requests (`normalize`, `resolve`, `render`), compares
 grant scopes (`scope_contains`, `contains`) and installed against proposed

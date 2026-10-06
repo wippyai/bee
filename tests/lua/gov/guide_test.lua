@@ -127,6 +127,15 @@ local function define_tests()
             test.eq(entry.definition_id, assert(naming.application(guide.example())))
             test.not_nil((string.find(entry.entries_json, "process.lua", 1, true)))
         end)
+        test.it("teaches offering application tools to agents on the application's own state", function()
+            local text = assert(guide.section_text("agent_tools"))
+            for _, needle in ipairs({"meta.type tool", "llm_alias", "llm_description", "input_schema", "output_schema",
+                "agent.tools", "{ok, value, error}", "no security", "granted_resources", "app_tools", "profile",
+                "Needs you", "as the application", "TOOLS_CHANGED"}) do
+                test.not_nil((string.find(text, needle, 1, true)), needle)
+            end
+            test.not_nil((string.find(guide.index(), "agent_tools:", 1, true)))
+        end)
         test.it("teaches shipping tests and running them with the tests tool", function()
             local text = assert(guide.section_text("tests"))
             for _, needle in ipairs({"function.lua", "meta.type test", "meta.suite", "meta.timeout", "wippy.test:test",

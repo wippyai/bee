@@ -99,3 +99,18 @@ once, and a run is readable only by the actor that started it.
 Migrations in `bee.node.migrations` create `bee_node_workspaces`,
 `bee_node_settings`, `bee_node_desktops`, identities and instance workspace
 columns.
+
+## Application tools for agents
+
+`bee.node:app_tools` discovers the tools a workspace's applications offer
+agents: the definitions admitted in the workspace (host admissions, governed
+overlays and packages), each application's live grant record holding
+`agent.tools`, and each named tool entry decoded as an application tool.
+Discovery reads registry metadata and grants, never namespaces; two
+applications offering one alias offer neither (`ALIAS_COLLISION`).
+`bee.node.binding:app_tools` lists them for the authenticated caller's
+workspace, and `bee.node.binding:app_tool_call {tool, arguments}` re-reads
+discovery and runs the tool as the application: actor
+`bee.application:<workspace>:agent-<binding>` and the exact scope the
+application's own instances run in, so the tool reaches the same granted
+state the application's UI shows the person.

@@ -12,7 +12,7 @@ local drivers = require("drivers")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@14"
+M.REVISION = "bee.governance-component-guide@15"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -396,6 +396,29 @@ function M.tests(): string
         .. " version has tests to run: change, freeze and deliver again to test new code."
 end
 
+-- How an application offers tools agents call on the same state its
+-- terminal UI shows the person.
+function M.agent_tools(): string
+    return "An application can offer agents tools that work on the same state its terminal UI shows the person."
+        .. " Each tool is a function.lua entry in the application's namespace with meta.type tool, meta.llm_alias (the"
+        .. " tool name agents call: letters, digits, _, . and -), meta.llm_description, meta.input_schema as a JSON"
+        .. " object string, an optional meta.output_schema and optional meta.mcp.annotations (readOnlyHint,"
+        .. " destructiveHint, idempotentHint, openWorldHint). It declares no security of its own: it runs as the"
+        .. " application with exactly the grants the person approved for it, and returns {ok, value, error} where"
+        .. " error is {code, message}. Read and write the application's state through its grants, for example the"
+        .. " database bee.gov.binding:granted_resources names, so the UI and the agent see the same data. Request"
+        .. " capability agent.tools with an ns.requirement whose meta.parameters is {tools = {<each tool function id>}},"
+        .. " targeting the application at .security.policies +=; the person approves it in Needs you with the"
+        .. " application's other grants. Schemas must stay in the subset Bee advertises (object schemas with typed"
+        .. " properties, required, enum, const, bounds, formats, nested objects and arrays, oneOf/allOf/if/then/else/not);"
+        .. " preflight refuses a tool that is not this pack's own, uses another schema, declares security or shares an"
+        .. " alias. An agent reaches the tools through app_tools once the person enabled it in the agent's profile or"
+        .. " approved bee.app:tools as session access: app_tools lists the offered tools and why any is not offered,"
+        .. " and each offered tool is called by its alias like any other tool. Arguments and replies are checked"
+        .. " against the declared schemas. A tool disappears when its application or grant does; calling it then"
+        .. " answers TOOLS_CHANGED, and two applications offering one alias offer neither."
+end
+
 type Section = {id: string, title: string, body: fun(): string}
 local SECTIONS: {Section} = {
     {id = "pack", title = "Component pack shape", body = function(): string return M.pack_shape() end},
@@ -407,6 +430,7 @@ local SECTIONS: {Section} = {
     {id = "transport", title = "Overlay transport, freeze", body = function(): string return M.transport() end},
     {id = "delivery", title = "Delivery after freeze", body = function(): string return M.after_freeze() end},
     {id = "tests", title = "Testing your application", body = function(): string return M.tests() end},
+    {id = "agent_tools", title = "Tools agents call", body = function(): string return M.agent_tools() end},
     {id = "workspace", title = "Delivering to your own workspace", body = function(): string return M.workspace_delivery() end},
     {id = "drivers", title = "Custom CLI drivers and source inspection", body = function(): string return M.driver_delivery() end},
     {id = "docs", title = "Platform documentation", body = function(): string return M.platform_documentation() end},

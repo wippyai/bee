@@ -4,15 +4,14 @@
 -- admits the closure only through check_route, which refuses every required
 -- capability the driver cannot prove instead of reducing a trait to its prompt.
 local hash = require("hash")
-local json = require("json")
 local registry = require("registry")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local driver_resolver = require("driver_resolver")
+local agent_tool = require("agent_tool")
 local M = {}
 M.AGENT_TYPE = "agent.gen1"
 M.TRAIT_TYPE = "agent.trait"
-M.TOOL_TYPE = "tool"
 -- A CLI harness route is any driver contract.binding the host activates
 -- (bee.harness.launch:harness_activation, the same list the harness catalog reads)
 -- whose meta declares whether it accepts a model. No driver id is listed
@@ -25,13 +24,9 @@ M.MAX_CONTEXT_KEYS = 16
 M.MAX_CONTEXT_VALUE_BYTES = 2048
 M.MAX_TUNING_KEYS = 8
 M.MAX_DELEGATES = 16
--- An agent tool without owner-declared annotations is presented as
--- side-effecting, non-idempotent and open-world: the conservative reading
--- until its owner says otherwise.
-M.DEFAULT_ANNOTATIONS = {readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = true}
 type Pinned = registry.Snapshot
 type Scalar = string | number | boolean
-type Tool = {ref: string, digest: string, alias: string, description: string, input_schema: {[string]: unknown}, output_schema: {[string]: unknown}?, scopes: {string}, annotations: {[string]: boolean}}
+type Tool = agent_tool.Tool
 type Trait = {ref: string, digest: string, title: string, prompt: string, tool_refs: {string}, context: {[string]: string},
     behavior: boolean, contracts: boolean, wrappers: boolean, hooks: boolean, options: boolean, delegates: boolean}
 type Agent = {ref: string, digest: string, prompt: string, trait_refs: {string}, tool_refs: {string}, delegate_refs: {string},
@@ -91,51 +86,6 @@ local function required(value: unknown): boolean
     if value == nil then return false end
     if type(value) == "table" then return next(value) ~= nil end
     return true
-end
-local function decode_tool(ref: string, entry: {[string]: unknown}): (Tool?, string?)
-    if entry.kind ~= "function.lua" then return nil, ref .. " is not a function tool" end
-    local meta = bounds.object(entry.meta)
-    if not meta or meta.type ~= M.TOOL_TYPE then return nil, ref .. " is not a function tool" end
-    local alias = bounds.line(meta.llm_alias, 64)
-    if not alias or alias == "" or not alias:match("^[%w_.%-]+$") or alias == "session" or alias == "call_tool" then
-        return nil, ref .. ": llm_alias is not an MCP name Bee admits"
-    end
-    local alias_name: string = alias or ""
-    local description = bounds.text(meta.llm_description, 4096)
-    if not description then return nil, ref .. ": llm_description must be bounded text" end
-    if type(meta.input_schema) ~= "string" then return nil, ref .. ": input_schema must be a JSON object" end
-    local input_schema, schema_error = json.decode(meta.input_schema)
-    if schema_error or type(input_schema) ~= "table" then return nil, ref .. ": input_schema must be a JSON object" end
-    local output_schema: {[string]: unknown}? = nil
-    if meta.output_schema ~= nil then
-        if type(meta.output_schema) ~= "string" then return nil, ref .. ": output_schema must be a JSON object" end
-        local decoded, output_error = json.decode(meta.output_schema)
-        if output_error or type(decoded) ~= "table" then return nil, ref .. ": output_schema must be a JSON object" end
-        output_schema = decoded
-    end
-    local mcp = bounds.object(meta.mcp == nil and {} or meta.mcp)
-    if not mcp then return nil, ref .. ": mcp must be an object" end
-    local mcp_field = bounds.fields(mcp, {"required_scopes", "annotations"})
-    if mcp_field then return nil, ref .. ": mcp: " .. mcp_field end
-    local scopes, scopes_error = refs(mcp.required_scopes, ref .. ": mcp.required_scopes")
-    if not scopes then return nil, scopes_error end
-    local annotations: {[string]: boolean} = {}
-    if mcp.annotations ~= nil then
-        local declared = bounds.object(mcp.annotations)
-        if not declared then return nil, ref .. ": mcp.annotations must be an object" end
-        for key, item in pairs(declared) do
-            if M.DEFAULT_ANNOTATIONS[key] == nil or type(item) ~= "boolean" then
-                return nil, ref .. ": mcp.annotations must be booleans from the MCP annotation set"
-            end
-            annotations[key] = item
-        end
-    else
-        for key, item in pairs(M.DEFAULT_ANNOTATIONS) do annotations[key] = item end
-    end
-    local digest, digest_error = entry_digest(ref, entry)
-    if not digest then return nil, ref .. ": " .. tostring(digest_error) end
-    return {ref = ref, digest = digest, alias = alias_name, description = description, input_schema = input_schema,
-        output_schema = output_schema, scopes = scopes, annotations = annotations}, nil
 end
 local function decode_trait(ref: string, entry: {[string]: unknown}): (Trait?, string?)
     if entry.kind ~= "registry.entry" then return nil, ref .. " is not an agent trait" end
@@ -269,7 +219,7 @@ function M.resolve(pinned: Pinned, agent_ref: string): (Closure?, string?, strin
                 if tool_lookup == "INVALID" then return nil, "INVALID", agent_ref .. ": tool reference is not an identifier" end
                 return nil, "NOT_FOUND", "agent tool " .. ref .. " is not in the registry"
             end
-            local tool, tool_error = decode_tool(ref, tool_entry)
+            local tool, tool_error = agent_tool.decode(ref, tool_entry)
             if not tool then return nil, "INVALID", tool_error or "invalid agent tool" end
             tools[#tools + 1] = tool
         end

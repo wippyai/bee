@@ -44,12 +44,12 @@ entries:
   source: file://agent_resolver.lua
   modules:
   - hash
-  - json
   - registry
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     driver_resolver: bee.driver.binding:resolver
+    agent_tool: bee.values:agent_tool
 - name: selection
   kind: library.lua
   source: file://selection.lua

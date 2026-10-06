@@ -2,6 +2,7 @@
 -- neither a tool declaration nor trait activation grants permissions.
 local bounds = require("bounds")
 local json = require("json")
+local agent_tool = require("agent_tool")
 local M = {}
 type Object = {[string]: unknown}
 type Tool = {name: string, operation: string, description: string, policies: {string}, schema: Object, annotations: Object}
@@ -11,97 +12,6 @@ local function reference(value: unknown): string?
     local id = bounds.id(value)
     if not id or not id:match("^[%w_.%-]+:[%w_.%-]+$") then return nil end
     return id
-end
--- The supported JSON Schema subset a configured tool may advertise: object
--- schemas with typed properties, required names, enums and constants, string,
--- integer and array bounds, formats, nested objects and arrays, and the
--- oneOf/allOf/if/then/else/not applicators over the same subset. Anything else
--- is refused at admission so a malformed component tool cannot be advertised.
-local SCHEMA_KEYS: {[string]: boolean} = {type = true, properties = true, required = true, items = true,
-    enum = true, const = true, default = true, format = true, minimum = true, maximum = true, exclusiveMinimum = true, exclusiveMaximum = true, minProperties = true, maxProperties = true, minLength = true,
-    maxLength = true, minItems = true, maxItems = true, uniqueItems = true, pattern = true, description = true,
-    additionalProperties = true, examples = true, oneOf = true, allOf = true, ["if"] = true, ["then"] = true,
-    ["else"] = true, ["not"] = true}
-local SCHEMA_TYPES: {[string]: boolean} = {object = true, array = true, string = true, integer = true,
-    number = true, boolean = true}
-local SCHEMA_SCHEMAS = {"if", "then", "else", "not"}
-local SCHEMA_LISTS = {"oneOf", "allOf"}
-local SCHEMA_DEPTH = 8
-local function valid_schema(value: unknown, depth: integer, applicator: boolean): boolean
-    if depth > SCHEMA_DEPTH then return false end
-    local schema = bounds.object(value)
-    if not schema then return false end
-    for key in pairs(schema) do if type(key) ~= "string" or not SCHEMA_KEYS[key] then return false end end
-    local kind = schema.type
-    if kind ~= nil and (type(kind) ~= "string" or not SCHEMA_TYPES[kind]) then return false end
-    if schema.properties ~= nil then
-        local properties = bounds.object(schema.properties)
-        if not properties then return false end
-        for _, child in pairs(properties) do if not valid_schema(child, depth + 1, false) then return false end end
-    end
-    if schema.required ~= nil then
-        local required, required_error = bounds.ids(schema.required, true)
-        if not required or required_error then return false end
-        -- An applicator branch may require names its parent declares.
-        if not applicator then
-            local properties = schema.properties ~= nil and bounds.object(schema.properties) or nil
-            for _, name in ipairs(required) do
-                if not properties or properties[name] == nil then return false end
-            end
-        end
-    end
-    if schema.items ~= nil and not valid_schema(schema.items, depth + 1, false) then return false end
-    for _, key in ipairs(SCHEMA_SCHEMAS) do
-        if schema[key] ~= nil and not valid_schema(schema[key], depth + 1, true) then return false end
-    end
-    for _, key in ipairs(SCHEMA_LISTS) do
-        if schema[key] ~= nil then
-            local branches = schema[key]
-            if type(branches) ~= "table" or #(branches) == 0 then return false end
-            local count = 0
-            for _ in pairs(branches) do count = count + 1 end
-            if count ~= #(branches) then return false end
-            for _, branch in ipairs(branches) do
-                if not valid_schema(branch, depth + 1, true) then return false end
-            end
-        end
-    end
-    if schema.enum ~= nil then
-        if type(schema.enum) ~= "table" or #schema.enum == 0 then return false end
-        local count = 0
-        for key in pairs(schema.enum) do
-            if type(key) ~= "number" then return false end
-            count = count + 1
-        end
-        if count ~= #schema.enum then return false end
-    end
-    for _, key in ipairs({"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}) do
-        local bound = schema[key]
-        if bound ~= nil and (type(bound) ~= "number" or bound ~= bound or bound == math.huge or bound == -math.huge) then return false end
-    end
-    for _, key in ipairs({"minLength", "maxLength", "minItems", "maxItems", "minProperties", "maxProperties"}) do
-        local bound = schema[key]
-        if bound ~= nil and (type(bound) ~= "number" or bound ~= math.floor(bound) or bound < 0 or bound == math.huge) then return false end
-    end
-    if schema.pattern ~= nil and type(schema.pattern) ~= "string" then return false end
-    if schema.format ~= nil and type(schema.format) ~= "string" then return false end
-    if schema.uniqueItems ~= nil and type(schema.uniqueItems) ~= "boolean" then return false end
-    if schema.description ~= nil and type(schema.description) ~= "string" then return false end
-    if schema.additionalProperties ~= nil and type(schema.additionalProperties) ~= "boolean"
-        and not valid_schema(schema.additionalProperties, depth + 1, false) then return false end
-    return true
-end
--- MCP annotations are four booleans from a closed set. A configured tool
--- that misstates them is refused at admission.
-local ANNOTATION_KEYS: {[string]: boolean} = {readOnlyHint = true, destructiveHint = true,
-    idempotentHint = true, openWorldHint = true}
-local function valid_annotations(value: unknown): boolean
-    local annotations = bounds.object(value)
-    if not annotations then return false end
-    for key, item in pairs(annotations) do
-        if type(key) ~= "string" or not ANNOTATION_KEYS[key] or type(item) ~= "boolean" then return false end
-    end
-    return true
 end
 local function list(value: unknown, limit: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, "expected list" end
@@ -147,10 +57,10 @@ function M.decode(raw: unknown): (Catalog?, string?)
             return nil, "invalid or duplicate tool declaration"
         end
         for _, policy in ipairs(policies) do if not reference(policy) then return nil, "invalid policy reference" end end
-        if schema.type ~= "object" or not valid_schema(schema, 0, false) then
+        if not agent_tool.valid_schema(schema) then
             return nil, "tool schema must be an object schema in the supported subset"
         end
-        if not valid_annotations(annotations) then
+        if not agent_tool.valid_annotations(annotations) then
             return nil, "tool annotations must be booleans from the MCP annotation set"
         end
         names[name] = true
@@ -240,10 +150,10 @@ function M.from_framework(framework: unknown, policies: unknown): (Catalog?, str
         end
         local tool_name: string = name or ""
         local operation_id: string = operation or ""
-        if schema.type ~= "object" or not valid_schema(schema, 0, false) then
+        if not agent_tool.valid_schema(schema) then
             return nil, "tool schema must be an object schema in the supported subset"
         end
-        if not valid_annotations(annotations) then
+        if not agent_tool.valid_annotations(annotations) then
             return nil, "tool annotations must be booleans from the MCP annotation set"
         end
         local admitted = bounds.ids(host[operation_id], true)

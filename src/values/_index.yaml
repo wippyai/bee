@@ -10,6 +10,13 @@ entries:
   source: file://bounds.lua
   imports:
     clock: bee.values:clock
+- name: agent_tool
+  kind: library.lua
+  source: file://agent_tool.lua
+  modules: [hash, json]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
 - name: canonical
   kind: library.lua
   source: file://canonical.lua

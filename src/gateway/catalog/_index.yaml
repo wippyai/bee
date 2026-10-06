@@ -8,6 +8,7 @@ entries:
   - json
   imports:
     bounds: bee.values:bounds
+    agent_tool: bee.values:agent_tool
 - name: context
   kind: library.lua
   source: file://context.lua

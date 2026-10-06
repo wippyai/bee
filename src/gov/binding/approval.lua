@@ -8,6 +8,8 @@ local M = {}
 local REQUEST = "bee.approvals.binding:request"
 local CONSUME = "bee.approvals.binding:consume"
 local REVALIDATE = "bee.approvals.binding:revalidate"
+local READ = "bee.approvals.binding:read"
+local CLOSE = "bee.approvals.binding:close_activation"
 
 type Object = {[string]: unknown}
 type Executor = {call: (Executor, string, unknown) -> (unknown?, unknown?)}
@@ -264,6 +266,33 @@ end
 
 function M.revalidate_activation(executor: Executor, value: unknown, current_incarnation: unknown): (Object?, Fault?)
     return activation_effect(executor, REVALIDATE, value, current_incarnation, nil)
+end
+
+-- ending reads how the activation's approval request ended without approval:
+-- denied, expired or withdrawn; nil while it is pending or approved.
+function M.activation_ending(executor: Executor, value: unknown): (string?, string?)
+    local item, intent_error = activation(value)
+    if not item then return nil, intent_error end
+    if not item.approval_id or not item.approval_proposal_digest then return nil, "activation has no approval request" end
+    local raw, call_error = executor:call(READ, {approval_id = item.approval_id})
+    local read, read_error = reply(raw, call_error)
+    if not read then return nil, read_error end
+    if bounds.id(read.approval_id) ~= item.approval_id or hex(read.proposal_digest) ~= item.approval_proposal_digest then
+        return nil, "approval owner returned another activation approval"
+    end
+    if read.state == "expired" or read.state == "withdrawn" then return read.state, nil end
+    if read.state == "decided" and read.decision == "denied" then return "denied", nil end
+    return nil, nil
+end
+
+-- close_activation tells the approval owner the ended request is settled here.
+function M.close_activation(executor: Executor, value: unknown): string?
+    local item, intent_error = activation(value)
+    if not item then return intent_error end
+    local raw, call_error = executor:call(CLOSE, {approval_id = item.approval_id,
+        proposal_digest = item.approval_proposal_digest})
+    local _, close_error = reply(raw, call_error)
+    return close_error
 end
 
 return M

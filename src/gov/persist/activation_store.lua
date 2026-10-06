@@ -22,7 +22,11 @@ local MAX_MIGRATION_RECEIPT = 262144
 local MAX_DIAGNOSTICS = 8192
 local MAX_REQUEST = 4194304
 local MAX_REVISION = 9007199254740991
-local OUTCOMES: {[string]: boolean} = {applied = true, blocked = true, failed = true, uncertain = true}
+-- An activation whose approval request ended without approval settles with
+-- how it ended; it never reached its effect.
+local ENDINGS: {[string]: boolean} = {denied = true, expired = true, withdrawn = true}
+local OUTCOMES: {[string]: boolean} = {applied = true, blocked = true, failed = true, uncertain = true,
+    denied = true, expired = true, withdrawn = true}
 
 type Result = transaction.Result
 type Store = {db: sql.DB, node: string, workspace: string, closed: boolean}
@@ -672,7 +676,15 @@ function M.prepare(store: Store, actor: string, input: PrepareRequest): Result
             input.resolution, input.preflight, input.migration_work,
             input.application_admission)
         if not authorized then return failure("INTERNAL", "measure activation authorization") end
-        local effect_bytes = canonical.encode({schema_revision = "bee.governance-effect@1", authorization_digest = authorized})
+        -- One effect per authorization at a time: a request that ended without
+        -- approval never reached its effect, so the next one is a new attempt.
+        local ended_row, ended_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_activation_intents i JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id WHERE i.owner_node = ? AND i.workspace_id = ? AND i.authorization_digest = ? AND e.phase = 'settled' AND e.outcome IN ('denied', 'expired', 'withdrawn')", {store.node, store.workspace, authorized}, "ended activation attempts")
+        if ended_error or not ended_row then return ended_error or failure("INTERNAL", "ended activation attempts are missing") end
+        local attempt = count(ended_row.count, false)
+        if attempt == nil then return failure("INTERNAL", "ended activation attempts are corrupt") end
+        local effect_bytes = canonical.encode(attempt == 0
+            and {schema_revision = "bee.governance-effect@1", authorization_digest = authorized}
+            or {schema_revision = "bee.governance-effect@2", authorization_digest = authorized, attempt = attempt})
         local effect_key = effect_bytes and digest(effect_bytes)
         if not effect_key then return failure("INTERNAL", "measure activation effect key") end
         local admission = input.application_admission
@@ -898,7 +910,12 @@ end
 function M.record_outcome(store: Store, actor: string, input: OutcomeRequest): Result
     local measured, measure_error = request_digest(input)
     if not measured then return assert(measure_error) end
-    return transition(store, actor, input, {applying = true, settled = true}, function(tx: sql.Transaction, row: Intent): Result
+    return transition(store, actor, input, {approval_bound = true, consuming = true, applying = true, settled = true}, function(tx: sql.Transaction, row: Intent): Result
+        local waiting = row.phase == "approval_bound" or row.phase == "consuming"
+        if (ENDINGS[input.outcome] == true) ~= waiting then
+            return failure("CONFLICT", waiting and "an activation waiting for its approval ends only as denied, expired or withdrawn"
+                or "only an activation waiting for its approval ends as denied, expired or withdrawn")
+        end
         if input.outcome == "applied"
             and not (row.migrations_completed == true or tonumber(row.migrations_completed) == 1) then
             return failure("CONFLICT", "activation migrations are not complete")

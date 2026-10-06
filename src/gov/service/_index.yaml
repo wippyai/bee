@@ -44,6 +44,14 @@ entries:
         id: bee.gov.activation
       policies:
       - bee.gov.security:destination_service_policy
+- name: activation_pass
+  kind: library.lua
+  source: file://activation_pass.lua
+  modules:
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    service: bee.gov.binding:destination_service
 - name: activation_worker
   kind: process.lua
   source: file://activation_worker.lua
@@ -53,8 +61,7 @@ entries:
   - logger
   imports:
     worker: bee.process:worker
-    bounds: bee.values:bounds
-    service: bee.gov.binding:destination_service
+    pass: bee.gov.service:activation_pass
     approval_service: bee.approvals.binding:service
 - name: activation_service
   meta:

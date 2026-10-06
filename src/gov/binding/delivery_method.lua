@@ -26,6 +26,9 @@ local PUBLICATION = "bee.gov.binding:publication_call"
 local DESTINATION = "bee.gov.binding:destination_call"
 -- An authorized intent settles within the activation owner's own step bound.
 local MAX_STEPS = 16
+-- Requests for one version whose approval ended unanswered or denied.
+local MAX_ATTEMPTS = 64
+local ENDED: {[string]: boolean} = {denied = true, expired = true, withdrawn = true}
 
 -- One delivery action per operation, checked against the caller's own actor
 -- before any owner facade runs.
@@ -137,14 +140,28 @@ local function activate(workspace_id: string, source_node: string, source_worksp
             idempotency_key = key("select")}))
         if not chosen then return nil, select_error end
     end
-    local intent, prepare_error = forward(DESTINATION, with({operation = "prepare", intent_id = key("intent"),
-        receipt_key = key("receipt")}))
-    if not intent then return nil, prepare_error end
+    -- An earlier request whose approval was denied, expired or withdrawn has
+    -- ended; the next attempt prepares under its own keys and asks the person anew.
+    local intent: Object? = nil
+    local attempt_id, attempt_receipt = key("intent"), key("receipt")
+    for attempt = 0, MAX_ATTEMPTS do
+        if attempt > 0 then
+            attempt_id, attempt_receipt = key("intent") .. "-" .. tostring(attempt), key("receipt") .. "-" .. tostring(attempt)
+        end
+        local prepared, prepare_error = forward(DESTINATION, with({operation = "prepare", intent_id = attempt_id,
+            receipt_key = attempt_receipt}))
+        if not prepared then return nil, prepare_error end
+        intent = prepared
+        if not (prepared.phase == "settled" and ENDED[tostring(prepared.outcome)]) then break end
+        intent = nil
+    end
+    if not intent then return nil, failure("BLOCKED", "this version was requested " .. tostring(MAX_ATTEMPTS)
+        .. " times without approval; the person installs it from Library") end
     for _ = 1, MAX_STEPS do
         local phase = intent.phase
         if phase ~= "authorized" and phase ~= "consuming" and phase ~= "applying" then break end
         local stepped, step_error = forward(DESTINATION, {operation = "step", workspace_id = workspace_id,
-            intent_id = key("intent"), receipt_key = key("receipt")})
+            intent_id = attempt_id, receipt_key = attempt_receipt})
         if not stepped then return nil, step_error end
         intent = stepped
     end
@@ -176,15 +193,21 @@ local function request_operation(workspace_id: string, source_workspace: string,
     end
     if not found then return failure("BLOCKED", "the prepared version is not discoverable at this destination") end
 
-    local staged, stage_error = forward(DESTINATION, {operation = "stage", workspace_id = workspace_id,
-        source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
-        descriptor_digest = descriptor.digest, idempotency_key = "deliver-" .. source_workspace .. "-" .. version})
-    if not staged then return stage_error end
-    if staged.status ~= "staged" then return failure("BLOCKED", "the version did not stage at this destination") end
-
-    local plan, plan_error = forward(DESTINATION, {operation = "get", workspace_id = workspace_id,
-        source_node = descriptor.owner_id, source_workspace = source_workspace, version = version})
-    if not plan then return plan_error end
+    -- A version requested again was staged and accepted before; its request
+    -- carries on from that plan, and activation measures it afresh.
+    local identity = {operation = "get", workspace_id = workspace_id,
+        source_node = descriptor.owner_id, source_workspace = source_workspace, version = version}
+    local plan = forward(DESTINATION, identity)
+    if not (plan and plan.status == "reviewed" and plan.review_status == "accepted") then
+        local staged, stage_error = forward(DESTINATION, {operation = "stage", workspace_id = workspace_id,
+            source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
+            descriptor_digest = descriptor.digest, idempotency_key = "deliver-" .. source_workspace .. "-" .. version})
+        if not staged then return stage_error end
+        if staged.status ~= "staged" then return failure("BLOCKED", "the version did not stage at this destination") end
+        local read, plan_error = forward(DESTINATION, identity)
+        if not read then return plan_error end
+        plan = read
+    end
     local report, report_error = preflight.decode_report(plan.preflight_bytes, plan.preflight_digest)
     if not report then return failure("INTERNAL", "staged preflight report: " .. tostring(report_error)) end
     local ready = report.ready == true and #report.diagnostics == 0

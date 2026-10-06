@@ -50,6 +50,59 @@ local function migration_blob(): ({[string]: string}, string)
 end
 local function define_tests()
     test.describe("Governance activation store", function()
+        test.it("ends an activation whose request was denied, expired or withdrawn, leaving the slot as it was", function()
+            local state = assert(store.open("bee:db", "node-a", "workspace-refused"))
+            for index, ending in ipairs({"denied", "expired", "withdrawn"}) do
+                local intent_id = "intent-refused-" .. ending
+                local input = prepare()
+                input.intent_id, input.idempotency_key, input.version = intent_id, intent_id .. "-prepare", "v" .. tostring(index)
+                local prepared = ok(store.call(state, "actor-a", input))
+                local bound = ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = intent_id,
+                    expected_revision = prepared.revision, idempotency_key = intent_id .. "-bind",
+                    approval_id = "approval-" .. ending, approval_proposal_digest = string.rep("d", 64),
+                    approval_owner_incarnation = 1}))
+                local current = bound
+                if ending == "denied" then
+                    -- A denial is found while the owner consumes it.
+                    current = ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = intent_id,
+                        expected_revision = bound.revision, idempotency_key = intent_id .. "-consume"}))
+                end
+                local ended = ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = intent_id,
+                    expected_revision = current.revision, idempotency_key = intent_id .. "-ended", outcome = ending,
+                    diagnostics = "the approval request was " .. ending}))
+                test.eq(ended.phase, "settled")
+                test.eq(ended.outcome, ending)
+                test.is_nil(ended.desired_intent_id)
+                test.is_nil(ended.observed_intent_id)
+            end
+            -- An applying activation cannot be ended by its request.
+            local refused = store.call(state, "actor-a", {operation = "record_outcome", intent_id = "intent-refused-denied",
+                expected_revision = 4, idempotency_key = "again", outcome = "denied", diagnostics = ""})
+            test.is_false(refused.ok)
+            assert(store.close(state))
+        end)
+
+        test.it("prepares the same version anew once its earlier request ended, never while it waits", function()
+            local state = assert(store.open("bee:db", "node-a", "workspace-asked-again"))
+            local function asked(intent_id: string): {[string]: unknown}
+                local input = prepare()
+                input.intent_id, input.idempotency_key = intent_id, intent_id .. "-prepare"
+                return store.call(state, "actor-a", input)
+            end
+            local first = ok(asked("intent-first"))
+            local bound = ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = "intent-first",
+                expected_revision = first.revision, idempotency_key = "intent-first-bind", approval_id = "approval-first",
+                approval_proposal_digest = string.rep("d", 64), approval_owner_incarnation = 1}))
+            test.is_false(asked("intent-while-waiting").ok == true)
+            ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = "intent-first",
+                expected_revision = bound.revision, idempotency_key = "intent-first-ended", outcome = "expired",
+                diagnostics = "expired"}))
+            local second = ok(asked("intent-second"))
+            test.eq(second.authorization_digest, first.authorization_digest)
+            test.is_false(second.effect_key == first.effect_key)
+            assert(store.close(state))
+        end)
+
         test.it("rejects invalid revisions at the direct revert boundary", function()
             local state = assert(store.open("bee:db", "node-a", "workspace-revert-revision"))
             local input: store.Request = {operation = "revert_activation"}

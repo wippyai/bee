@@ -639,6 +639,43 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     return transaction.success(intent, true)
 end
 
+-- What the person reads about an activation whose approval request ended
+-- without approval.
+local ENDED: {[string]: string} = {
+    denied = "The person denied this installation.",
+    expired = "The approval request expired before the person answered; install again to ask anew.",
+    withdrawn = "The approval request was withdrawn; install again to ask anew.",
+}
+
+-- close ends an activation whose approval request ended without approval:
+-- the approval owner says how it ended, the intent settles so without ever
+-- reaching its effect, and the request leaves the approval owner's queue.
+function M.close(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): Result
+    local config, config_error = configuration(raw_config)
+    local intent_id, prefix = bounds.id(intent_raw), bounds.id(receipt_raw)
+    if not config or not intent_id or not prefix then return failure("INVALID", config_error or "activation close identity is invalid") end
+    local intent, status_error = status(config, intent_id)
+    if not intent then return status_error end
+    if intent.overlay_owner ~= config.overlay_owner then return failure("DENIED", "activation belongs to another overlay owner") end
+    local result: Result = transaction.success(intent, true)
+    if intent.phase == "approval_bound" or intent.phase == "consuming" then
+        local ending, ending_error = approval.activation_ending(config.approvals, intent)
+        if ending_error then return failure("UNAVAILABLE", ending_error) end
+        if not ending then return failure("CONFLICT", "the activation's approval request has not ended") end
+        local close_key = key(prefix, "ended-" .. ending)
+        if not close_key then return failure("INVALID", "activation receipt key is too long") end
+        result = activations.call(config.activations, config.actor_id, {operation = "record_outcome",
+            intent_id = intent_id, expected_revision = intent.revision, idempotency_key = close_key,
+            outcome = ending, diagnostics = ENDED[ending]})
+        if not result.ok then return result end
+    elseif not (intent.phase == "settled" and ENDED[tostring(intent.outcome)] ~= nil) then
+        return failure("CONFLICT", "the activation is not waiting for its approval")
+    end
+    local close_error = approval.close_activation(config.approvals, intent)
+    if close_error then return failure("UNAVAILABLE", close_error) end
+    return result
+end
+
 function M.desired(raw_config: Config): Result
     local config, config_error = configuration(raw_config)
     if not config then return failure("INVALID", config_error or "activation owner configuration is invalid") end

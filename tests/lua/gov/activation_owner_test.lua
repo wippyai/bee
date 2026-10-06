@@ -463,6 +463,68 @@ local function authority_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+        test.it("ends an activation whose approval was denied or expired and closes its request", function()
+            for _, ending in ipairs({"denied", "expired"}) do
+                local workspace = "workspace-ended-" .. ending
+                local plans = assert(plan_store.open("bee:db", "node-owner", workspace))
+                local activations = assert(activation_store.open("bee:db", "node-owner", workspace))
+                local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+                local exact = assert(artifact.create({entry}))
+                selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+                local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {},
+                    requires_approval = true, revocation = {grants = {}, fenced_attempts = {}},
+                    lines = {"widened: Read owned threads"}, resolved = {"Read owned threads"},
+                    delta = {"widened: Read owned threads"}}
+                local world: ResolverWorld = {revision = 4, digest = SHA, capability = installed_capability(review)}
+                local requested: {[string]: unknown}? = nil
+                local closed = 0
+                local executor = {}
+                function executor.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
+                    local input = assert(bounds.object(request))
+                    if method == "bee.approvals.binding:request" then
+                        local proposal = assert(bounds.object(input.proposal))
+                        requested = {approval_id = "ended-" .. ending, proposal = proposal,
+                            proposal_digest = assert(hash.sha256(assert(canonical.encode(proposal)))), owner_incarnation = 3}
+                        return {ok = true, value = requested}, nil
+                    end
+                    local shown = assert(requested)
+                    if method == "bee.approvals.binding:read" then
+                        return {ok = true, value = {approval_id = shown.approval_id, proposal_digest = shown.proposal_digest,
+                            state = ending == "denied" and "decided" or "expired",
+                            decision = ending == "denied" and "denied" or nil}}, nil
+                    end
+                    if method == "bee.approvals.binding:close_activation" then
+                        test.eq(input.approval_id, shown.approval_id)
+                        closed = closed + 1
+                        return {ok = true, value = {approval_id = shown.approval_id}}, nil
+                    end
+                    return {ok = false, error = {code = "DENIED", message = "the person denied it"}}, nil
+                end
+                local config: owner.Config = {plans = plans, activations = activations,
+                    resolver = shifting_resolver(entry, world), approvals = executor,
+                    actor_id = "host-a", consumer_id = "destination-host",
+                    overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
+                    migrations = migration_effect(),
+                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                        _intent: unknown): (boolean?, string?) return false, nil end,
+                    apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                        _intent: unknown): ({[string]: unknown}?, string?) return {changed = true}, nil end}
+                local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                    version = "v1", intent_id = "intent-ended", receipt_key = "ended"}))
+                test.eq(prepared.phase, "approval_bound")
+                if ending == "denied" then test.eq(ok(owner.step(config, "intent-ended", "ended")).phase, "consuming") end
+                local ended = ok(owner.close(config, "intent-ended", "ended"))
+                test.eq(ended.phase, "settled")
+                test.eq(ended.outcome, ending)
+                test.is_nil(ended.desired_intent_id)
+                test.eq(closed, 1)
+                -- Closing again finds it settled and closes the request again, which replays.
+                test.eq(ok(owner.close(config, "intent-ended", "ended")).outcome, ending)
+                test.eq(closed, 2)
+                assert(activation_store.close(activations))
+                assert(plan_store.close(plans))
+            end
+        end)
         test.it("applies a widening covered by an active lease without asking Approvals", function()
             local requests = 0
             local executor = {}

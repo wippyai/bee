@@ -15,11 +15,12 @@ end
 
 local function define_tests()
     test.describe("Activation worker", function()
-        test.it("may register the name approvals wakes it by and read approved activations", function()
+        test.it("may register the name approvals wakes it by and read approved and ended activations", function()
             local scope = service_scope()
             local actor = security.new_actor("bee.gov.activation")
             test.eq(scope:evaluate(actor, "process.registry.register", "bee.gov.activation_worker"), "allow")
             test.eq(scope:evaluate(actor, "bee.approvals.own", "activation_effects"), "allow")
+            test.eq(scope:evaluate(actor, "bee.approvals.own", "activation_closures"), "allow")
             test.eq(scope:evaluate(actor, "events.send", "bee.attention"), "allow")
         end)
     end)

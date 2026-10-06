@@ -61,3 +61,13 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+- name: activation_endings
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-07T04:00:00Z'
+  source: file://activation_endings.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

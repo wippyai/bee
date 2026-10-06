@@ -1201,6 +1201,56 @@ end
 -- source it activates, the activation owner consumes it and carries the intent
 -- bound to it until it settles. The approval is the person's; this only
 -- executes it.
+-- close_ended settles the activation whose approval request ended without
+-- approval, so its application is no longer waiting and can be installed
+-- again; an approval no activation is bound to only leaves the queue.
+function M.close_ended(raw: unknown): Result
+    local ended = bounds.object(raw)
+    local approval_id = ended and bounds.id(ended.approval_id) or nil
+    local workspace_id = ended and bounds.id(ended.workspace_id) or nil
+    local proposal_digest = ended and bounds.id(ended.proposal_digest) or nil
+    local proposal = ended and bounds.object(ended.proposal) or nil
+    local payload = proposal and bounds.object(proposal.payload) or nil
+    local source_node = payload and bounds.id(payload.source_node) or nil
+    local source_workspace = payload and bounds.id(payload.source_workspace) or nil
+    if not approval_id or not workspace_id or not proposal_digest or not source_node or not source_workspace then
+        return failure("INVALID", "ended activation is malformed")
+    end
+    local config, config_error = load()
+    if not config then return failure("BLOCKED", config_error or "activation configuration is unavailable") end
+    local plan_store, activation_store, lease_handle, open_error = stores(config.node_id, workspace_id)
+    if not plan_store or not activation_store or not lease_handle then return failure("UNAVAILABLE", open_error or "open destination stores") end
+    local result: Result
+    local bound = activations.bound_to(activation_store, approval_id)
+    local intent = bound.ok and bounds.object(bound.value) or nil
+    local intent_id = intent and bounds.id(intent.intent_id) or nil
+    if not bound.ok and bound.code == "NOT_FOUND" then
+        local executor, executor_error = approval_executor()
+        if not executor then
+            result = failure("BLOCKED", executor_error or "approval executor is unavailable")
+        else
+            local closed, close_error = executor:call("bee.approvals.binding:close_activation",
+                {approval_id = approval_id, proposal_digest = proposal_digest})
+            local reply = bounds.object(closed)
+            result = (reply and reply.ok == true) and transaction.success({approval_id = approval_id}, false)
+                or failure("UNAVAILABLE", tostring(close_error or (reply and bounds.object(reply.error) or {}).message or "close ended activation"))
+        end
+    elseif not intent_id then
+        result = bound.ok and failure("INTERNAL", "ended activation intent is malformed") or bound
+    else
+        local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
+        if not chosen then
+            result = failure("BLOCKED", profile_error or "activation profile is unavailable")
+        else
+            local configured = owner_config(config, chosen, plan_store, activation_store, lease_handle)
+            if not configured.ok then result = failure("BLOCKED", configured.error or "activation configuration is unavailable")
+            else result = owner.close(configured.config, intent_id, "ended-" .. approval_id) end
+        end
+    end
+    close(plan_store, activation_store, lease_handle)
+    return result
+end
+
 function M.apply_approved(raw: unknown): Result
     local effect = bounds.object(raw)
     local approval_id = effect and bounds.id(effect.approval_id) or nil

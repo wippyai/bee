@@ -63,11 +63,12 @@ local function define_tests()
                     test.is_nil((string.find(document.id, "runtime/system/", 1, true)))
                 end
             end
-            test.eq(runtime_count, 14)
+            test.eq(runtime_count, 17)
             for _, id in ipairs({"runtime/lua/core/base", "runtime/lua/core/channel", "runtime/lua/core/contract",
                 "runtime/lua/core/process", "runtime/lua/core/registry", "runtime/lua/core/time", "runtime/lua/data/json",
                 "runtime/lua/http/client", "runtime/lua/security/security", "runtime/lua/security/uuid",
-                "runtime/lua/storage/filesystem", "runtime/lua/storage/sql", "runtime/lua/system/tty", "runtime/lua/types"}) do
+                "runtime/lua/storage/filesystem", "runtime/lua/storage/sql", "runtime/lua/system/tty", "runtime/lua/types",
+                "runtime/lua/core/funcs", "runtime/lua/core/errors", "runtime/lua/dynamic/exec"}) do
                 test.is_true(runtime_ids[id] == true)
             end
             -- The three questions an agent must be able to answer are present:

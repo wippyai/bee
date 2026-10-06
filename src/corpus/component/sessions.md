@@ -1,154 +1,67 @@
-# Bee sessions
+# bee.threads.sessions
 
-`bee.sessions` owns the public session contracts, executor selection, readiness
-location and work scheduling. Threads owns the durable session journal and
-transactional work, claim, turn and result records; Sessions never writes its
-tables. Executors are selected by the host and operate through the fenced
-worker contract.
+Managed agent sessions. The contracts, owner bindings, catalog and client
+library live in `bee.threads.sessions`; Threads owns every durable record (the
+session journal, work, turns, results) and Sessions never writes its tables.
+The Threads journal is the host-selected binding named by
+`bee.threads.sessions.env:threads_journal_ref`
+(`meta.type: bee.sessions.threads_journal_ref`).
 
-`bee.sessions.binding` implements admission, catalog and control operations
-directly from its owner source; it also owns readiness observations and the
-Threads journal adapter. `bee.sessions.service` owns the pull scheduler and turn
-workers. `bee.sessions.executor` resolves host-selected executors and driver
-methods exactly as declared by the metadata-discovered, host-activated binding,
-with callable targets read from one pinned registry snapshot. Sessions has no persistence,
-migration or tool namespace: Threads owns its durable records and migrations.
+Every session runs the agent's own program in a terminal: admission pins the
+definition's window plan and `open` presents it through `bee.harness.binding:present`.
+A person opens the terminal from Sessions. A message sent to the session is
+queued as Work in Threads and delivered into the terminal at the agent's next
+turn boundary (UserPromptSubmit and Stop hooks, `hook_boundary`); the Stop hook
+settles the turn with the agent's final message. A process exit proved by
+placement suspends the session and marks unfinished Work uncertain.
 
-Every session is a window: admission and the catalog both pin the definition's
-window profile. A launch definition may list `docker_credentials`, the broker
-projections a Docker placement receives in place of `credentials`, since the
-container shares no home with the host CLI login. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes remain addressable. Catalog readiness measures the same
-window route that `open` admits. The real owner and catalog bindings are
-defaults; the kit starts the pull scheduler against the Threads journal.
+| Entry | Responsibility |
+|---|---|
+| `bee.threads.sessions:contract` | Methods `open`, `run`, `send`, `await`, `join`, `get`, `list`, `history`, `cancel`, `close` |
+| `bee.threads.sessions:catalog` | Method `list`: admitted definitions and saved profiles with executor readiness |
+| `bee.threads.sessions.binding:owner_binding` | Default binding of `contract` (`meta.type: bee.sessions.owner_binding`) |
+| `bee.threads.sessions.binding:catalog_binding` | Default binding of `catalog` (`meta.type: bee.sessions.catalog_binding`) |
+| `bee.threads.sessions.client:sessions` | The application client library |
+| `bee.threads.sessions.types:protocol` | Request, reply and fault decoding |
 
-Provider login checks use the home selected by each profile; file existence
-is an observation and the provider owns authentication.
+The owner binding also holds the window-session functions the Agent app uses:
+`attach`, `restore`, `launch_prompt`, `idle_check`, `hook_boundary`, and
+`attention_count`, a read-only display binding returning `{count}` of blocked
+and stalled sessions in the caller's workspace (it scans at most 16 pages and
+refuses another workspace).
 
-Session reads and list pagination include home-workspace sessions plus workspaces explicitly admitted by `bee.threads.workspace`. Cross-workspace mutations require separate exact host grants: `bee.sessions.workspace.open`, `bee.sessions.workspace.send`, `bee.sessions.workspace.cancel`, and `bee.sessions.workspace.close`. Visibility alone grants no mutation authority. List filters accept workspace, definition, lifecycle and activity.
+## Operations
 
-`open` accepts `budgets = {turn?: Budget, session?: Budget}` and `supervision = {quiet_period_ms?, on_stall?: "report"|"cancel_work"}`. `Budget` has positive `provider_steps`, `tool_calls`, `tokens`, `wall_time_ms` and `cost_usd` fields. Limits are opt-in. Turn limits combine with each Work's `budgets.turn` using the tighter value. Session counters survive restart and include settled turns; replayed observations do not spend twice. Session wall time starts with the first accepted turn and includes idle time. Descriptors declare provider-step units and accounting coverage. Token limits require declared trustworthy accounting; cost limits and window budgets currently reject as unsupported. Token limits can overshoot within one provider step before usage is reported. Exceeding a limit settles `budget_exceeded` only after placement proves exit. The quiet period defaults to 60000 ms; report leaves stalled work running, while cancel_work requests a placement stop. Known approval waits pause stall cancellation.
+- `open{spec = {definition, profile?, workdir?, workspace?}, operation_key}` admits a launch definition (and optional saved profile `{id, revision}`) and returns `{session, operation, snapshot}`. `workdir` is `{root_ref, path}` with the path inside the root.
+- `run` opens a session and queues its first work in one operation.
+- `send{session, input, output?, operation_key}` queues work and returns its receipt. The agent replies in text, so `output` is `bee:Text@1` or absent. A session whose lifecycle is not `active` or `suspended` refuses work.
+- `await`, `join`, `get`, `list`, `history`, `cancel`, `close` as described under the client below.
+- A snapshot carries lifecycle (`opening`, `active`, `suspended`, `closing`, `closed`), activity (`idle`, `working`, `blocked`, `stalled`), `activity_evidence` for a quiet stall, the thread ref, workspace, driver, definition, the effective profile with its digest and the last result summary.
 
-An accepted turn becomes `stalled` when its thread has no new live observation for the session's quiet period. `activity_evidence` identifies the turn, last progress time, quiet period and elapsed quiet time. `get` and `list` derive this view from the stored progress timestamp; `on_stall="report"` leaves stalled work running; `cancel_work` asks placement to prove a stop.
+Refs are qualified strings: `bs:` session, `bw:` work, `bo:` operation, `bj:` join. They are the only addresses. Every mutation requires an explicit `operation_key`; reusing a key with different arguments conflicts. Handles send `expected_incarnation`; a mismatch fails `STALE`.
 
-Managed open/call and MCP open/run accept an optional canonical `placement` override. Both the definition and host policy must admit that override; Docker template selection and native machine-home access retain their existing ceilings. The override persists in the Threads route and the scheduler reuses it for every turn. Window placement overrides require a saved profile.
-
-Snapshots expose the optional `saved_profile` reference `{id, revision}` used at admission.
-Snapshots carry the resolved `effective_profile` (`bee.agent-profile@3`) and its canonical SHA-256 `profile_digest`. They expose `presentation` and the canonical `thread_ref`, driver/provider, definition, workspace
-and last result summary. `history{session,cursor?}` pages immutable Work inputs;
-clients observe results with `get` or `await`. SDK open/call and MCP open/run accept
-an optional canonical `workspace`; opening outside the current workspace requires
-the exact host open grant. Setup associates the definition's retained resources
-and credentials before creating the Session.
-
-The scheduler runs independent Sessions concurrently through asynchronous turn
-workers, with at most one worker per Session. Its journal adapter decodes Work
-receipts, reservations, fenced turns and scan pages into scheduler records;
-the executor registry decodes execution results before returning them to the
-scheduler. Executor errors become durable
-uncertainty and do not trigger a blind retry.
-
-Open accepts `presentation = "headless" | "window"`, defaulting to `headless`.
-Headless sessions retain the pull executor and live conversation view. Window
-sessions select the admitted interactive profile and start the existing native
-PTY and hook runtime under a retained session viewport owner. The Sessions app
-uses M in the catalog to choose window presentation; Enter opens headless.
-The snapshot's presentation field selects the terminal viewer when reopening
-an existing SessionRef.
-
-The host opens a viewer on a live controlling display when it grants session
-presentation. Without a controlling person, the terminal remains detached.
-The viewer holds a recipient-bound observation/input/resize mount. Closing it
-revokes that mount and leaves the session and CLI running. Sessions list Open
-and `--session SessionRef` navigation reattach to the retained terminal and its
-history. Work reaches the driver through authenticated UserPromptSubmit hooks,
-with owner-set sender identity; Stop/StopFailure settles the turn. No Work is
-written to the PTY as keyboard input. Closing the session seals intake, stops
-its admitted placement, and settles remaining Work only after proved exit.
-Cancel uses the same evidence-backed placement stop path.
-
-Native interactive admission attaches a Session to its workspace thread.
-Its hook route fences stale attachment hooks and bypasses the pull scheduler.
-A proved process exit suspends an active session and preserves unfinished Work
-as uncertain. Native crash/reattach acceptance remains outstanding.
-Gateway workspace catalog views project the public Sessions list.
-
-Cancellation first commits the authenticated caller’s authorized request in Threads, then restores the persisted workspace-bound execution owner for placement stop and reconciliation. Placement retains its owner checks; callers cannot supply the execution identity.
-
-Owner admission reads only the host-declared nonsecret executable and configuration-directory variables through the shared harness environment policy, including callers entering through MCP. Provider credential reads remain broker operations.
-
-The read-only `bee.sessions.binding:attention_count` display binding returns
-`{count}` for blocked and stalled sessions in the authenticated caller's
-workspace. It refuses a different workspace and bounds scanning to 16 pages;
-it creates no approval and grants no authority. Desktop Needs you adds this
-count to pending approvals and opens Sessions when only sessions need attention.
-
-The scheduler service exposes the host-selected
-`bee.sessions.binding:lifecycle` owner callback for Hub component transitions.
-Its admission fence comes from Hub's existing durable operation receipt, not a
-second state store. `open`, `run`, `send` and `attach` refuse while fenced; reads,
-cancellation and close remain available. Quiesce waits for active pull turns,
-then checks the Threads journal for unresolved reserved/accepted work or
-uncertainty. Interactive sessions must close through their existing proved-exit
-path before a component transition. A full bounded scan cannot prove absence and refuses the drain.
-Queued work and all session data remain in Threads. Missing scheduler readiness
-or an uncertain obligation leaves the Hub receipt recoverable. Ready identifies
-the exact scheduler boot definition after the existing supervisor restarts it.
-The worker registers only after its lifecycle inbox is initialized; the owner
-waits for registration before requesting that acknowledgement. Missing
-interactive drain evidence refuses the transition.
-Other process hosts and interactive placements have no component drain protocol
-here and keep their existing ownership and stop paths.
+`list` and reads cover the caller's workspace plus workspaces the host admits. Mutating another workspace needs the exact host grant `bee.sessions.workspace.open`; visibility alone grants no mutation. `bee.sessions.attach` is the grant window-session `attach`, `restore`, `launch_prompt` and `detach` check against the definition. Cancellation commits the authorized request in Threads and then stops the placement with proved exit.
 
 ## Application client
 
-`bee.sessions.client:sessions` calls the `bee.sessions:contract` and
-`bee.sessions:catalog` owner contracts through their default bindings, as the
-calling process's own actor. It grants nothing; the host admits the caller and
-the owner authorizes every operation. Each function returns `value, Fault?`;
-a Fault is `{code, message, retry, operation_key?, operation?, current_revision?,
-evidence?, retry_after_ms?}` and `retry` is `never`, `same_key`, `refresh` or
-`reconcile`. Owner replies are decoded against the closed owner schemas and any
-deviation is a Fault, never a partial value.
-
-Decode values through `bee.sessions.types:protocol`; applications import the client directly.
+`bee.threads.sessions.client:sessions` calls the contracts through their default bindings as the calling process's own actor. It grants nothing; the host admits the caller and the owner authorizes every operation. Each function returns `value, Fault?`; a Fault is `{code, message, retry, operation_key?, ...}` with `retry` one of `never`, `same_key`, `refresh`, `reconcile`. Replies are decoded against closed schemas; a deviation is a Fault.
 
 ```lua
-local sessions = require("sessions") -- imports: sessions: bee.sessions.client:sessions
-local c = sessions.call{definition = "research:quick", input = "Summarize the repository", operation_key = "call/summary", timeout_ms = 30000}
--- c.work is the Work handle; c.observation.tag is ready, pending, blocked or uncertain.
-local s = sessions.open{definition = "research:worker", budgets = {turn = {provider_steps = 12, tokens = 20000}},
-    supervision = {quiet_period_ms = 45000, on_stall = "report"}, operation_key = "open/worker"}
-local w = s:send{input = "Check the baseline", budgets = {turn = {tokens = 5000}}, operation_key = "send/baseline"}
+local sessions = require("sessions") -- imports: sessions: bee.threads.sessions.client:sessions
+local s = sessions.open{definition = "research:worker", operation_key = "open/worker"}
+local w = s:send{input = "Check the baseline", operation_key = "send/baseline"}
 local a = w:await{timeout_ms = 30000}
 local closing = s:close{operation_key = "close/worker"}
+local c = sessions.call{definition = "research:quick", input = "Summarize the repository", operation_key = "call/summary"}
 ```
 
-- `call{definition, input, operation_key, output?, profile?, workdir?, budgets?, supervision?, timeout_ms?}` opens a session with its first work in one owner operation and awaits it once. It returns `{work, observation}` on every observation branch. An unsuccessful settlement is a `ready` observation whose `result.outcome` is not `succeeded`.
-- `open{definition, profile?, workdir?, budgets?, supervision?, operation_key}` returns a Session. `send{session?, input, output?, budgets?, operation_key}` (or `session:send`) returns a Work whose `receipt` proves intake only. Work is queued; nothing runs inside the call.
-- `budgets = {turn?: Budget, session?: Budget}` is opt-in on open. Send accepts `budgets.turn` and tightens the session turn defaults. Session totals are durable; token intake uses descriptor-declared accounting and may overshoot within a provider step. Cost and window limits currently reject as unsupported. Exceeding a budget returns `outcome = "budget_exceeded"` with `BUDGET_EXCEEDED` and placement exit evidence.
-- `cancel{work, operation_key}` and `close{session, operation_key}` return an Operation whose `await` reports `stopped`/`already_terminal` or `closed`, or an uncertain evidence branch.
-- `await{subject}`, `work:await` and `operation:await` wait up to `timeout_ms` (default 30000, at most 60000) for one work or operation to settle and return its observation; the owner wakes on the work's thread commits, never by polling. `timeout_ms` bounds observation, never execution: reaching it returns `pending` and the work keeps running. `session:await(work)` also checks that the work belongs to the session.
-- `join{works, operation_key, policy?, quorum?, timeout_ms?}` takes 1 to 64 distinct works, waits up to `timeout_ms` until the policy decides, returns one `JoinAwait` with every child's observation in input order, and validates `quorum` against the set.
-- `get(session_ref)` and `work(work_ref)` rehydrate a Session or Work from a ref; `work:state()` reads the `WorkState`, which carries `sender`, the owner-set authenticated sender of the work (a SessionRef when the caller is a session, else the principal). Callers never supply a sender. Refs (`bs:`, `bw:`, `bo:`, `bj:` qualified strings) are the only addresses; `:ref()` returns one.
-- Handles capture the session incarnation and send it as `expected_incarnation`; a session reset makes them fail with `STALE` rather than act on the new incarnation.
-- `list{filter?, cursor?}` filters by `workspace`, `definition`, `lifecycle` and `activity` (`idle`, `working`, `blocked`, `stalled`); session snapshots include quiet-period evidence when stalled. `supervision.quiet_period_ms` on open selects the period, defaulting to 60000. Stalled reports inactivity; `supervision.on_stall="cancel_work"` requests a stop with placement evidence. `catalog{kind?, definition_ref?, query?, sort?, include_unavailable?, cursor?}` returns the owner's candidates.
+- `open{definition, profile?, workdir?, workspace?, operation_key}` returns a Session; `call{... input, output?, timeout_ms?, operation_key}` opens one and sends its first work, then awaits it once, returning `{work, observation}`.
+- `send`, `cancel{work, reason?, operation_key}` and `close{session, operation_key}` also exist on the handles; cancel and close return an Operation whose `await` reports the stop, or an uncertain evidence branch.
+- `await{subject, timeout_ms?}`, `work:await` and `operation:await` wait up to `timeout_ms` (default 30000, at most 60000) and return the observation (`ready`, `pending`, `blocked` or `uncertain`). The timeout bounds observation, never execution.
+- `join{works, policy?, quorum?, timeout_ms?, operation_key}` takes 1 to 64 works; `policy` is `all_success` (default), `all_settled`, `first_success` or `quorum`. It returns every child's observation in input order.
+- `get(ref)`, `work(ref)`, `list{filter?, cursor?}` (filter fields `lifecycle`, `activity`, `workspace`, `definition`), `session:history{cursor?, limit?}`, `catalog{kind?, definition_ref?, query?, sort?, include_unavailable?, cursor?}`.
+- `work:state()` carries `sender`, the owner-set authenticated sender of the work; callers never supply one.
 
 Requests are validated before dispatch (`INVALID`): bounded text and refs, JSON inputs of at most 64 KiB and depth 16.
 
-### Operation keys
-
-Every mutation requires an explicit `operation_key`. The SDK cannot derive a
-durable identity from the current application broker or client, so applications
-must persist their own key before dispatch and reuse it after an uncertain
-reply. Reusing a key with different arguments is a conflict.
-
-Session snapshots expose `thread_ref`, `workspace`, driver/provider, definition and the latest settled result summary. `session:history{cursor?, limit?}` pages immutable Work inputs and refs in sequence order; rehydrate each Work to observe its current result.
-
-`sessions.open` and `sessions.call` accept optional `presentation = "headless" |
-"window"`. Headless is the default. Window opens an interactive session with a
-retained native terminal and a detachable viewer when the host grants
-presentation to a controlling person. Its snapshot exposes `presentation` so
-Sessions navigation selects that terminal. Work still uses `send` and reaches
-interactive sessions through their driver hooks at the next turn boundary.
-Closing a viewer leaves the session running; `close` or `cancel` stops its
-placement with exit evidence.
+The catalog marks each definition or profile `ready`, `missing`, `unconfigured`, `incompatible` or `unknown` by measuring its route through the host-selected driver locator; provider login checks observe file existence, and the provider owns authentication. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes stay addressable.

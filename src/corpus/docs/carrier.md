@@ -3,16 +3,15 @@
 The carrier turns one placement attempt's byte streams into durable thread
 records. It owns the driver protocol and logical turn state for that attempt;
 the thread owner persists records and checkpoints, and placement owns the
-executor, private directories and cleanup. Read [threads](../threads.md),
-[placement](../../../modules/placement/src/README.md) and [approvals](../approvals.md) with this
+executor, private directories and cleanup. Read [threads](threads.md),
+[component/placement](../component/placement.md) and [approvals](approvals.md) with this
 contract.
 
 A harness profile selects a driver, execution environment, options and MCP
 scope. Host authorization is the ceiling for profile selection and runtime
 context. Provider credentials, workspace, thread and delegated grants are
-resolved for each run; profile data never embeds live tokens. Docker placement
-and public remote launch remain proposals. The managed native profiles use the
-implemented local placement and carrier path.
+resolved for each run; profile data never embeds live tokens. Native and Docker
+placement both run through this carrier path.
 
 ## Terms and provenance
 
@@ -109,7 +108,7 @@ receipt.
 
 ## Input and replacement
 
-Before stdin dispatch, the carrier commits `bee.carrier.write@1` with a stable
+Before stdin dispatch, the carrier commits a `bee.carrier.write` (revision 1) control record with a stable
 `write_id`, attempt/turn identity, input digest and attachment generation,
 phase `intended`, and stores it in `pending_writes`. A runner acknowledgement
 changes it to `accepted`; accepted means bytes reached the runner, not that the
@@ -214,14 +213,14 @@ settings. Other copied JSON/TOML config is refused before child creation when
 it refers to host-only execution, includes or paths outside the admitted mounts.
 Private Grok/OpenCode turns publish their admitted base config even without
 gateway tools. OpenCode batch turns declare empty stdin with EOF; its TUI
-keeps stdin open. See [Docker placement](../../../modules/placement-docker/src/README.md)
+keeps stdin open. See [component/placement:docker](../component/placement:docker.md)
 for image preparation and host network prerequisites.
 
 ## Conditional permission and hook records
 
 When host policy enables a permission adapter, the carrier records a permission
 intent and its deterministic approval key in the same checkpoint transaction,
-then follows the approval and write rules in [approvals](../approvals.md).
+then follows the approval and write rules in [approvals](approvals.md).
 Authority incarnation, plan measurements, placement grants and proposal digest
 are revalidated before consumption or recovery dispatch. A wake notification or
 approval projection only prompts a fresh owner read; it never authorizes a
@@ -239,7 +238,5 @@ reading the authenticated placement owner. `running` records the thread start;
 `start_failed` settles with the exact cause. Explicit cancellation before child
 creation settles from placement's `start_cancelled` evidence without inventing
 a process exit. The executor quiet period begins after startup acknowledgement. The external executor publishes
-the same placement observations to Sessions. The Agent UI shows `starting`
+the same placement observations to Sessions. The Sessions app shows `starting`
 until acknowledgement and displays a refusal cause when startup fails.
-Launch-policy revision three removes the startup deadline; its revision-two
-decoder explicitly validates and ignores the retired `start_ms` field.

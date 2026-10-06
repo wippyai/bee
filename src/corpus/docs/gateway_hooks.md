@@ -56,9 +56,8 @@ turns and PermissionRequest HTTP hooks for windows. Codex windows use its
 PermissionRequest MCP hooks. Bee's `codex exec --json` route has no approval
 response channel; app-server JSON-RPC approvals require a different driver mode.
 Agy, Grok, Muse and OpenCode keep provider approval behavior in Bee's current
-modes; their descriptors state the unavailable answer channel. No deny is
-translated into a permission bypass. Standing approval leases are not selected
-by this exchange.
+modes; their descriptors state the unavailable answer channel.  No deny is
+translated into a permission bypass.
 
 ## Durable intake
 
@@ -89,9 +88,10 @@ seals, drains within its configured budget, rejects unclaimed work and revokes
 the binding. Expiry, listener replacement and fenced carrier loss follow the
 same rule.
 
+
+
 Managed hook events remain observations during shutdown and never replace the
-executor terminal result. Interactive window-exit lifecycle and crash
-reconciliation remain unfinished.
+executor terminal result.
 
 ## Provider configuration
 
@@ -100,8 +100,3 @@ provider configuration required for that selected set and deliver the hook
 credential through the runner's selected environment. Configuration never
 contains credential bytes. Provider capability and event support are part of
 the driver contract; unsupported hooks are not advertised.
-
-Run the focused checks with:
-
-    make gateway-check
-    make managed-launch-fixture-check

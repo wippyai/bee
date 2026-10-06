@@ -7,10 +7,11 @@ proves every transition with evidence, and removes the attempt's private
 home only after the process is proven gone. Placement implementations own
 executors, directories and receipts; this contract module owns none of them.
 
-| Slice | Responsibility |
+| Namespace | Responsibility |
 |---|---|
-| `bee.placement` | `types`: request, grant, attempt, evidence and capability values; `request`: exact decoding and canonical digest; `transitions`: the execution and cleanup state machines; `paths`: physical directory resolution and write-root containment shared by placement and its workdir preparers; contracts `placement` and `workdir_preparer` |
-| `bee.placement.registry` | `resolver`: measures one selected placement contract binding and its exact method targets from a caller-owned registry snapshot |
+| `bee.placement` | `types`: request, grant, attempt, evidence and capability values; `request`: exact decoding and canonical digest; `transitions`: the execution and cleanup state machines; `decode`: decoders for values that cross an owner boundary; contracts `placement` and `workdir_preparer` |
+| `bee.placement.binding` | `resolver`: measures one selected placement contract binding and its exact method targets from a caller-owned registry snapshot |
+| `bee.placement.profiles` | `profiles`: `bee.placement_profile` entry decoding and the default `bee.placement.profiles:native`; `paths`: physical directory resolution and write-root containment |
 
 The host resolves one `bee.placement:placement` contract binding from the
 registry snapshot used for launch admission. Its digest and method targets
@@ -20,8 +21,9 @@ recovery verify that recorded ID and digest before dispatching. The native
 implementation rejects requests naming another binding before durable intent;
 native windows require the exact native binding ID.
 
-`bee.placement_profile` entries use `bee.placement-profile@1`. The native
-default selects the native binding. Docker profiles select a digest-pinned
+`bee.placement_profile` entries use `schema_revision: bee.placement-profile@1`
+and name a `placement_binding`. The native default selects
+`bee.placement.native.binding:binding`. Docker profiles select a digest-pinned
 image, non-root uid:gid, host-selected network, bounded memory/CPU/PID limits,
 resource mount destinations and an interactive executor route. Registry metadata
 describes the placement; the launch policy's `placement_profiles` allowlist and
@@ -84,7 +86,7 @@ Failures are recorded as placement evidence.
   malformed output and an empty result retain uncertainty. A failed signal
   probe is never evidence that the group is gone.
 - Docker start refusal records `child.start_failed` and exposes its exact cause
-  as `start_failure` in status and placement events. Sessions reports a failed
+  as `start_failure` in status and placement events. Threads reports a failed
   launch as `start_failed`; cleanup still requires daemon proof of a stopped or absent container.
 - Signal evidence is not exit evidence. A liveness observation is returned
   beside the recorded state, never folded into it.
@@ -96,6 +98,4 @@ Failures are recorded as placement evidence.
 Structured `start` returns a monitored, durable `starting` attempt. Bound
 recipients follow owner state notifications through `running` or `start_failed`;
 there is no startup timeout field. Stop and declared lifecycle cancellation use
-the existing stop operation. Native placement migration 11 converts persisted
-request deadlines explicitly; launch-policy revision three removes the field,
-and revision two validates and ignores it when decoding historical entries.
+the existing stop operation.

@@ -107,30 +107,7 @@ login state to the selected source without hashing its contents. The broker
 never searches or exports the OS keyring: when credentials exist only there,
 a file projection is unavailable. Provider-specific JSON fields are opaque.
 
-Database migration 2 (`file_sources`) introduces `fs_directory` source and `file`
-projection kinds by rebuilding `bee_credential_definitions` with strict SQLite
-CHECK constraints (`provider IN ('claude', 'codex')`, `source_kind IN ('env_variable', 'fs_directory')`,
-`projection_kind IN ('environment', 'file')`), while preserving all existing populated
-definitions, projections, consumed generations, and migration ledger records.
-
-Migration 3 (`optional_files`) adds the constrained `optional` flag to
-definitions with a default of false; it is additive and preserves existing
-definitions, projections and the applied migration ledger.
-
-Migration 4 (`declared_providers`) removes the storage-level Claude/Codex enum
-while retaining a bounded, nonempty provider label and the other constraints.
-The populated upgrade proof preserves definition identities, projection receipts,
-consumed generations and earlier migration records across reopen. Provider declarations do not authorize source reads.
-
-Migration 5 (`frozen_formats`) adds nonsecret `format_json` to definitions and
-projections and backfills the historical Claude/Codex layouts without reading
-registry declarations or credentials. Existing definition digests, identities,
-receipts and retained-home markers are preserved. Unknown historical formats
-remain unbound and are refused. New definitions freeze the decoded host-selected
-layout; projections copy it. Issue, availability and use compare the saved layout
-with the current declaration; use also checks the projection's saved layout.
-Changing the declaration requires explicit redefinition and fresh projection.
-It cannot redirect a previously admitted credential.
+Definitions and projections freeze the decoded host-selected format (`format_json`, nonsecret). Issue, availability and use compare the saved layout with the current declaration; changing the declaration requires explicit redefinition and a fresh projection, so it cannot redirect a previously admitted credential.
 
 The pure `formats` decoder bounds paths, environment names and initialization
 files, rejecting traversal, sparse arrays, duplicate files and file/directory
@@ -138,22 +115,19 @@ collisions. Native placement admits only the broker's frozen format and refuses
 its reserved identity-marker path. The component owns its layout; callers still
 select a credential name and never supply a materialization path.
 
-Test suites enforce these invariants using synthetic workspace-scoped fixtures
-(`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
-
 Built-in private batch routes use the following home-relative files from the
 machine home. Placement projects only these admitted files into a fresh attempt
 home; it never walks or exposes the rest of the user's home. Bee's generated
 provider configuration is composed separately by the selected driver.
 
-| Provider | Login file | Ambient configuration/state | Private CLI home |
-|---|---|---|---|
-| Claude Code | `.claude/.credentials.json` | `.claude/settings.json`; Bee initializes `.claude.json` only when login bytes are present | `CLAUDE_CONFIG_DIR` points to the attempt's `.claude` |
-| Codex | `.codex/auth.json` | `.codex/config.toml`; one selected `.codex/<name>.config.toml` when a named profile is used | `CODEX_HOME` points to the attempt's `.codex` |
-| Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` | private `HOME` |
-| Grok | `.grok/auth.json` | `.grok/config.toml` is the private composition base | `GROK_HOME` points to the attempt's `.grok` |
-| Muse | `.config/muse/auth.json` | `.config/muse/settings.json` is the private composition base | private `HOME` |
-| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json` is the private composition base | private XDG config and data roots |
+| Provider | Login file | Ambient configuration |
+|---|---|---|
+| Claude Code | `.claude/.credentials.json` | `.claude/settings.json` |
+| Codex | `.codex/auth.json` | `.codex/config.toml`; one selected `.codex/<name>.config.toml` when a named profile is used |
+| Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` |
+| Grok | `.grok/auth.json` | `.grok/config.toml` |
+| Muse | `.config/muse/auth.json` | `.config/muse/settings.json` |
+| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json` |
 
 The host source allowlist admits token write-back for these login files only.
 When a child refreshes its login, the runner returns the changed file after
@@ -171,7 +145,7 @@ home or a driver's declared private attempt home. Retained homes preserve
 provider-refreshed bytes when the recorded definition identity matches;
 attempt homes are disposable and return token changes through guarded
 write-back. Changed identity or a partial retained seed refuses reuse. See
-[native placement](../../placement-native/src/README.md) for the delivery and
+component/placement:native for the delivery and
 filesystem guarantees. File contents never enter the environment projection
 route.
 
@@ -187,10 +161,7 @@ structurally inserts Bee's scoped MCP subtree into the private
 it. Source metadata and path are bound in the definition digest and rechecked
 before availability or projection use. A changed source requires explicit
 redefinition. Existing definitions with an older digest are refused rather than
-silently retargeted. Fixture acceptance covers each driver's declared files and
-a confined worker whose attempt home excludes unrelated machine-home files.
-The standard test gates use synthetic logins and fixture CLIs; they never
-discover or consume a host account. Docker delivery is unimplemented.
+silently retargeted.
 
 Revocation stops future materialization; a live attempt is stopped by placement at its next
 reconciliation, which the placement sweeper schedules on a fixed delay and
@@ -198,14 +169,14 @@ which is reported as pending until the exit is proven, with
 `credential.revoked` evidence; an environment value already inside a running
 child cannot be scrubbed.
 
-| Slice | Responsibility |
+| Namespace | Responsibility |
 |---|---|
-| `bee.credentials` | Credential contract, bounded protocol and pure provider-format decoder |
-| `bee.credentials.binding` | Broker authorization, source admission, projection use and transient materialization/write-back; contract methods call the broker implementation directly through `local` |
-| `bee.credentials.persist` | SQL metadata repository opened through `bee.persist`, generation receipts and owner-controlled node identity conversion; no credential bytes or caller authorization |
+| `bee.credentials` | Credential contract (`define`, `issue_projection`, `check`, `renew_attempt`, `availability`, `materialize`, `write_back`, `revoke`, `revoke_all`, `list`), bounded protocol and pure provider-format decoder |
+| `bee.credentials.binding` | Broker authorization, source admission, projection use and transient materialization and write-back; the local contract binding is `bee.credentials.binding:local` |
+| `bee.credentials.persist` | SQL metadata repository opened through `bee.persist` and generation receipts; no credential bytes |
 | `bee.credentials.env` | Linked host-selected database, materializer and source allowlist |
-| `bee.credentials.migrations` | Immutable schema migrations |
-| `bee.credentials.security` | Credential policy templates selected by the host |
+| `bee.credentials.migrations` | Schema migrations |
+| `bee.credentials.security` | Credential policy entries selected by the host |
 
 Actions: `bee.credentials.manage` (define, list, revoke any, revoke_all;
 `bee.credentials.security:credential_manage_policy`), `bee.credentials.issue` (issue for oneself;
@@ -239,9 +210,4 @@ Runtime refusals name the path and cause. Availability, projection checks and
 materialization retain that reason; the Agent catalog shows it in the login-needed
 state. A successful metadata probe checks presence only, without opening login
 contents. Projection still reads only the provider's host-admitted files.
-Writes, creates, renames and deletes retain root containment. Windows keeps the
-contained behavior because equivalent ownership/ACL evidence is unavailable.
-
-The pinned runtime implements external-link support. `make login-links-check`
-exercises synthetic accepted and refused files through broker, locate and the
-Agent model using the same upstream toolchain as the other gates.
+Writes, creates, renames and deletes retain root containment.

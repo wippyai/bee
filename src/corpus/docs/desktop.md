@@ -1,171 +1,96 @@
 # Desktop
 
-Bee separates the workspace that runs applications from the desktop that
-presents them. The workspace host can run without a physical terminal. A
-desktop client can be replaced or detached while the host and its applications
-continue to run.
+Bee separates the node that runs applications from the shell that displays
+them. The node (`bee.node`) owns workspaces, desktops and app instances; a
+shell (`bee.shell`) is one display of a node and can be started, replaced or
+closed while the node and its apps keep running.
 
-## Primary places and layout
+## Commands
 
-Start groups the desktop into Sessions, Needs you, Apps and Settings/Help.
-The top bar keeps these destinations visible at 80 columns and wider. Apps
-contains installed applications with infrastructure tools under Advanced;
-History is not a primary place. Needs you opens the existing Approvals inbox;
-decisions remain recorded by its owner. The top-bar count shows unavailable
-(`—`) because the desktop has no eligible read-only attention contract. Source
-Session navigation also needs a public application navigation contract.
+| Command | Process | Purpose |
+|---|---|---|
+| `bee` | `bee.shell:main` | Open the shell of this folder's node, or with an app command name (`bee claude`) open that app full-pane |
+| `bee node` | `bee.node:headless` | Run this folder's node without a display |
+| `bee client` | `bee.shell:client` | Display a running node's apps from an in-memory client node |
 
-New applications use the full pane below the top bar. F11 restores the saved
-floating bounds; the window menu labels this Advanced: floating layout.
-Existing saved layouts retain their geometry. Full-pane windows use the current
-display size after resizing. Snap and floating transforms retain their existing
-behavior.
+Each folder runs its own node with its own state.
 
-## Owners and identities
+## Identities
 
 | Identity | Owner | Meaning |
-| --- | --- | --- |
-| Node | Bee runtime and its membership boundary | The runtime that hosts services and workspaces. A node identity does not identify a workspace or grant access to one. |
-| Workspace | Workspace host | A durable application environment. The host owns its identity, project bindings, application membership, broker, checkpoints and producer viewports. |
-| Desktop | Desktop client store | A durable layout identity. It owns window placement, tab order, focus and client appearance. |
-| Display attachment | Host admission and the current client execution | A transient physical presentation. It has a connection, renderer generation and recipient-bound mounts. These are recreated on reconnect. |
-| Application target | Application host | A qualified `workspace_id`, `instance_id` and `view_id`. A client tab ID is only a local key for that target. |
+|---|---|---|
+| Node | Node owner | The runtime that hosts services, workspaces, desktops and app instances |
+| Workspace | Node | A folder on this machine; the folder the node runs in is always one |
+| Desktop | Node | A set of app instances working in one workspace; a node has several, each shown on at most one display |
+| Instance | Node owner | One running app with its viewport; kept with its desktop so a starting node reopens it |
+| Window | Shell | One display's placement, stacking, mode and name for an instance; two displays can show the same desktop differently |
 
-A workspace ID is independent of a project folder, node address or database
-filename. A desktop ID is independent of a terminal process or operating
-system display. A PID, connection, mount or renderer value is an execution
-address or capability, never a durable identity.
+A PID, viewport mount or launch token is an execution address, never a durable
+identity. Application lifecycle, checkpoints and admission are described in
+[application contracts](application_contracts.md).
+
+## Shell
+
+The shell shows one desktop of a node at a time and places that desktop's apps
+as windows. Each window is a mount of its app's viewport.
+
+| Key | Action |
+|---|---|
+| F1 | Start panel: apps grouped by the menus they name (Apps, System) |
+| F3 | Workspaces: switch the shown desktop or workspace, add a workspace, rename or close a desktop |
+| Alt+Tab | Next window (Shift reverses) |
+| Ctrl+W | Close the focused app |
+| F11 | Full pane |
+| Alt+F9 | Minimize |
+| F12 | Reload the display; instances and desktop stay |
+| Ctrl+Q | Quit the display; apps keep running |
+
+The mouse focuses, moves and resizes windows by their frame, uses their
+controls, and opens context menus on a window, a tab or the desktop (apps
+listed in `bee.shell:desktop_menu`). A user can rename a window and pick an
+accent; applications cannot set those. An app's own title (`client.title`)
+is shown unless the user named the window.
+
+The shell follows the node's owner process and closes when it stops. The shell
+is upgradable: on new code it hands its desktop and windows to the new
+version, which reattaches their viewports and redraws.
+
+## Node owner and displays
+
+A display calls the node through `bee.node:client` over the Hive and watches
+its events: opened and moved instances, closed instances, appearance,
+workspaces and desktops, the installed app catalog, title changes, app
+dialogs and attention requests. Apps ask the person confirm or text questions
+through `client.query`; the node shows the dialog on the displays watching the
+desktop and returns the answer to the app. A display that starts watching
+receives the pending dialogs. An app that needs the person raises an
+attention event and the display brings it forward.
+
+Opening an app on a desktop starts it in that desktop's workspace. A running
+singleton on the same desktop is focused instead and receives any open
+arguments as navigation.
 
 ## Provider homes
 
 A managed agent window that uses the host home runs the provider with the
 operating-system user's `HOME` and the provider's own home variable,
 `CODEX_HOME` for Codex and `CLAUDE_CONFIG_DIR` for Claude. Bee reads those
-variables from the environment of the project's owner, which inherits the
+variables from the environment of the node owner, which inherits the
 environment of the `bee` invocation that started it. A later `bee` invocation
-joins the running owner and does not change them: to use another provider home,
-run `bee stop`, then start Bee with the new variable set. Sign in with the
-provider's own CLI in that home before opening the window (for example
-`codex login`). When Bee finds no login evidence in the home selected for a
-managed window, Agent shows a `LOGIN_REQUIRED` hint with the provider's
-sign-in command. Press Enter to continue to the provider's own sign-in flow;
-the window title keeps the hint. Bee checks for files without opening them,
-so the hint does not prove whether a provider account is valid.
+joins the running node and does not change them. Sign in with the provider's
+own CLI in that home before opening the window (for example `codex login`).
+When Bee finds no login evidence in the home selected for a window, Sessions
+shows a `LOGIN_REQUIRED` view with the provider's sign-in command. Bee checks
+for files without opening them, so the view does not prove whether a provider
+account is valid.
 
-## Composition
+## Limits
 
-The local supervisor starts and owns one workspace host and one or more desktop
-clients. It coordinates readiness, admission, renderer replacement, save and
-shutdown. It does not become a second workspace or application owner.
-Other logical workspaces of the node get their hosts from the node host
-manager when a lease asks for them (see
-[workspace catalog](../reference/workspace-catalog.md#live-hosts)); a desktop
-shows one of them through the desktop bridge: `bee client` on a daemon picks
-one, and a running display switches to another from its workspace menu (F9,
-W). New workspaces come from the Workspaces viewer (Tools → Workspaces, N, or N
-in the workspace menu) or `bee workspace create`.
+- A display presents one desktop at a time.
+- A node owns its workspaces and desktops. Nodes join one hive (`bee hive
+  init`); each node's displays follow that node's owner.
+- The node stores desktops, workspaces and instances. It does not replicate
+  application data, credentials, live processes or grants across nodes.
 
-The workspace host owns the workspace database and application authority. It
-restores supported application checkpoints, routes application requests and
-publishes revisioned catalog and live-view snapshots to admitted clients. The
-host does not own client layout state.
-
-The desktop client owns the physical terminal adapter, presenter, session and
-client database. It asks the host to open and bind applications through the
-host's admission path. It cannot read the workspace database or use a registry
-record as authority. Settings changes and layout edits go through the client
-session and host-approved appearance operations.
-
-Terminal is a standalone application. Its native execution has the operating
-system user's authority; a project binding or desktop permission does not make
-it a sandbox. Application lifecycle and persistence rules are described in
-[application contracts](../reference/applications.md).
-
-## Admission and presentation
-
-The host admits an exact client execution to a workspace and a desktop
-identity. Admission supplies explicit open, close, control and appearance
-permissions. A successful admission creates a fresh connection ID. The host
-also supplies complete catalog and live-view snapshots with independent
-revisions; clients authenticate the sender and reject stale revisions.
-
-One desktop has at most one input and resize controller. It may have bounded
-read-only observers. An observer receives a recipient-bound view and cannot
-send input, resize the producer or change the layout. Replacing a controller
-requires the old attachment to be detached; an uncertain revocation leaves the
-desktop unavailable until it is resolved.
-
-Every bind is checked against the current connection and renderer generation.
-Stale generations and detached recipients are rejected. A presenter replacement
-gets a new renderer generation and fresh mounts while the application instance,
-workspace and desktop layout remain in place. F12 uses this same replacement
-path.
-
-Closing or losing a physical display revokes its attachment. It does not stop
-the workspace host, application processes or retained desktop. `bee observe`
-uses an observation attachment and never creates another layout writer. A
-controller can detach after its final committed save; an explicit workspace
-shutdown is a separate operation.
-
-## Layout persistence
-
-The client store is separate from the workspace database, registry history,
-thread records and other subsystem stores. A layout contains the scene,
-geometry, focus, tab order, appearance preferences and one qualified target for
-each window. The current client limit is sixteen windows per desktop.
-
-Client writes validate the complete state and compare the generation read by
-the owning client process. A stale writer must read and reconcile before it can
-write. The store has an append-only migration ledger with checksums; applied
-migrations are never edited. Session acknowledgements carry the complete
-projection, so the client commits accepted layout changes before reporting them
-to the presenter. A graceful exit takes one final session snapshot. Pointer
-motion, drawing and uncommitted drag previews do not write the database.
-
-The first import from the former combined desktop is an atomic layout-and-
-receipt operation. Retrying the same import returns its receipt and preserves
-later edits. Import does not copy application checkpoints, registry definitions,
-execution processes, mounts, credentials or permissions.
-
-The workspace host stores application checkpoints separately. An application
-owns the meaning of its opaque checkpoint state; the client layout never
-pretends to checkpoint a shell, terminal job or conversation.
-
-## Reconnect and recovery
-
-Rejoining a retained desktop reads its last committed layout and resolves each
-qualified target under current host admission. It creates a new client
-execution, connection, renderer generation and mounts. It never restores a PID,
-mount token, connection or permission grant from the layout store. An owner
-that is unavailable is not thereby proven to have closed an application; only a
-confirmed removal may retire a saved target.
-
-The host can restore applications whose definitions declare a supported restart
-policy and resume schema. It recreates their execution and capabilities, then
-the client binds fresh views. A native Terminal process has no cold-resume
-contract: a live presenter replacement preserves its PTY, but a dead shell is
-not recreated at its former instruction.
-
-## Current limits
-
-- A desktop client presents one workspace at a time. On a node without a folder
-  workspace (`bee daemon`) the client picks the workspace and switches through
-  the picker (Ctrl+] returns to it). Mixed tabs from several workspaces or
-  several owning nodes are not a supported client mode.
-- Local retained desktops and authenticated attachment paths are available.
-  Nodes join one hive with `bee hive invite` and `bee hive join`, on one host
-  or across machines, with no environment variable: each node picks its own
-  advertised address (see the [Hive module](../../modules/hive/src/README.md)).
-  Discovery, remote workspace composition and automatic cross-node desktop
-  reconnect are not exposed as a single desktop workflow.
-- A workspace has one writable host owner. Node loss does not create a writable
-  clone or silently move the workspace to another node.
-- Desktop layout has one writer. Multiple displays may observe a desktop, but
-  concurrent layout editing and implicit controller transfer are not supported.
-- The desktop store does not replicate workspace databases, application data,
-  credentials, live processes or grants. Those require the owning subsystem's
-  explicit transfer or synchronization contract.
-
-See [storage](../reference/storage.md) for database ownership and migration rules, and the
-[system map](../development/ownership.md) for the boundaries between the desktop, host,
-applications and other Bee subsystems.
+See [component/node](../component/node.md) and
+[component/shell](../component/shell.md).

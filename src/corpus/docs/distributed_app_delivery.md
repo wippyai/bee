@@ -39,7 +39,7 @@ preflight report and report digest, diagnostics and remedies, pending migrations
 and entries added, changed or removed against the captured composed base. It
 also shows selection, approval and activation state. A malformed report,
 blocked preflight or stale plan cannot be selected or prepared. Preparation is
-acknowledged as `approval_bound` before the person decides in Inbox. The approval
+acknowledged as `approval_bound` before the person decides in Needs you. The approval
 names applying and recovering the exact version until it is replaced or removed;
 host admission remains required. Apply advances acknowledged owner revisions
 through consumption, authorization and application. An unknown answer retains
@@ -73,21 +73,24 @@ the one-operation duration, and removal lasting until edit mode is enabled again
 
 ### Protected kernel
 
-The host-owned `bee.security.gov:protected_kernel` entry is the trust map no activation
+The host-owned `bee.gov:protected_kernel` entry is the trust map no activation
 profile can open, however permissive. It names every shipped namespace a
-host-selected security scope lives in or is reached from (`bee.gov`,
-`bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`,
-`bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
-`bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
-`bee.sync`, `bee.host`, `bee.client`, `bee.desktop`,
-`bee.terminal`, `bee.node` and `bee.workspace`, which cover their child
-namespaces. The legacy `bee.governance` prefix remains protected for old
-application admission records. The kernel also names the exact host selectors
-`bee.security.approvals:approver_policies`,
-`bee.security.capability:capability_catalog`, `bee.env:gov_activation_profiles`,
-`bee.env:gov_publication_profiles`, `bee.deps:gov`, `bee.deps:approvals` and
-itself. Its `super_edit` list is the host's explicit carve-out: Bee selects
-`bee.settings.app` and `bee.desktop`. A namespace the host deliberately names
+host-selected security scope lives in or is reached from (`bee.app`,
+`bee.approvals`, `bee.apps`, `bee.capability`, `bee.credentials`, `bee.deps`,
+`bee.docs`, `bee.env`, `bee.executor`, `bee.gateway`, `bee.git`, `bee.gov`,
+`bee.harness`, `bee.hive`, `bee.hub`, `bee.node`, `bee.persist`,
+`bee.placement`, `bee.resources`, `bee.security`, `bee.shell`, `bee.sync`,
+`bee.threads`, `bee.ui`, `bee.values` and the shared driver namespaces
+`bee.driver.binding`, `.codec`, `.descriptor`, `.locate`, `.permission`,
+`.profiles` and `.transport`), each covering its child namespaces. Each
+driver's own `bee.driver.<name>` namespaces stay under governance so workspace
+drivers can be delivered. The kernel also names exact host entries: itself,
+`bee.gov:activation_profiles`, `bee.gov:publication_profiles`,
+`bee.driver:types`, `bee.driver:driver`, `bee.driver:locate_facet` and the
+host bindings `bee:definition`, `bee:workers`, `bee:terminal`, `bee:os`,
+`bee:env_path`, `bee:env`, `bee:role`, `bee:db_path` and `bee:db`. Its
+`super_edit` list is the host's explicit carve-out: Bee selects
+`bee.apps.settings` and `bee.shell`. A namespace the host deliberately names
 there is the only protected namespace a super-edit profile may replace; an
 empty list opens nothing. An exact admitted super-edit grant keeps that opened
 namespace out of transitive kernel dependency traversal. Explicitly named kernel
@@ -102,8 +105,7 @@ protected namespace, updates a package that owns kernel definitions, or aims a
 requirement target into the kernel. The kernel changes only through the host
 composition and a person-confirmed native upgrade.
 
-A host may open a protected namespace to one narrow, time-bounded profile: a
-row in `bee.env:gov_activation_profiles` that carries `expires_at`. Such a
+A host may open a protected namespace to one narrow, time-bounded profile: a row in `bee.gov:activation_profiles` that carries `expires_at`. Such a
 super-edit row is refused unless it withholds auto start
 (`allow.auto_start: false`), names a dedicated approver policy whose name
 begins `super-edit` and which the host declares with `confirm: explicit` and at
@@ -126,10 +128,6 @@ and remove their overlay entries. The Edit mode pane reads the current host
 profiles on entry and after execution replacement, so removal remains visible
 when the initiating Settings execution is reloaded. Enabling a namespace that already has a
 super-edit profile requires disabling it first.
-
-If local startup fails before the host publishes readiness, Bee removes all
-expiring activation profiles and their overlay entries, then retries startup
-once. The recovery path runs before the desktop is available.
 
 Durable registry publication is a different operation. Overlay activation does
 not become a registry-history write, and a registry publication guard must not
@@ -168,26 +166,12 @@ Delivery requests retain `workspace_id` for the destination runtime target and
 `source_overlay_id` for the authoring identity. Internal services may use other
 storage fields, but those are not public authoring vocabulary.
 
-A normal saved-profile session may lack the separately gated `publish` tool.
-That does not prevent delivery or Hive sharing: after local review, approval
-and successful apply, the person opens **Modules**, selects **Authored**,
-prepares the same authored overlay/version/frozen snapshot, then publishes the
-locally applied version. This uses Governance's publication owner, not a direct
-registry write. The destination sees it in Overlays and reviews, selects,
-prepares and approves its own activation. Content travels; grants and decisions
-remain destination-local.
-
-In Authored, enter the workspace application's component `app.<overlay_id>`,
-its explicit version and the frozen snapshot digest. The pane also accepts
-package components in `namespace/name` form; neither name grants publication
-authority. Governance verifies the exact host-selected profile and applied
-content before publishing.
-
-For a Hive dashboard, the implemented counts-only status binding is
-`bee.hive.telemetry.binding:status` (`snapshot`, `detail`). Request that exact
-`contract.call` binding and methods using the capability requirement format
-below, and call it through `bee.gov.binding:contract_call`. The Hive telemetry
-component document describes its input and output fields and live refresh.
+A session without the separately gated `publish` tool can still deliver: after
+local review, approval and successful apply, the person publishes the locally
+applied version through Governance's publication owner, not a direct registry
+write. The destination sees it in Overlays and reviews, selects, prepares and
+approves its own activation. Content travels; grants and decisions remain
+destination-local.
 
 ## Workspace applications
 
@@ -198,9 +182,8 @@ metadata would prevent the desktop from opening the application.
 
 A fresh install delivers an application a workspace's own agent authors to
 that workspace without host configuration, and still only after the person
-approves it. The shipped `bee.env:gov_publication_profiles` sets
-`workspace_applications: true`, and the shipped
-`bee.env:gov_activation_profiles` carries a `workspace_applications` rule:
+approves it. The shipped `bee.gov:publication_profiles` sets
+`workspace_applications: true`, and the shipped `bee.gov:activation_profiles` carries a `workspace_applications` rule:
 the approval policy (`workspace-application-delivery`, decided in Approvals by
 the person, as `bee.security.approvals:approver_policies` ships it), the admitted entry kinds and
 native modules, and the admission policies and thread access of the one
@@ -239,8 +222,7 @@ ID and the `meta.hive_operation` input/output contract. The supervisor measures
 and verifies that declared service; namespace spelling grants no routing or
 invocation authority. Application and operation targets may occupy different
 child namespaces of the same measured artifact. The destination
-resolver checks the request against the host-owned `bee.security.capability:capability_catalog`,
-preserves the normalized parameters, reason, target, and catalog/template
+resolver checks the request against the host-owned `bee.capability:catalog`, preserves the normalized parameters, reason, target, and catalog/template
 revisions in the measured candidate, and includes the catalog definition in
 the candidate's external-base digest. The request grants no policy. Preflight
 refuses app-shipped `security.actor` and `security.groups` on every entry with
@@ -248,7 +230,7 @@ refuses app-shipped `security.actor` and `security.groups` on every entry with
 
 For the shipped `contract.call` capability, `meta.parameters` contains an exact
 `binding` and a nonempty `methods` list. For example, an application requests
-the counts-only Hive status methods with this registry entry in `entries.json`:
+the sessions catalog method with this registry entry in `entries.json`:
 
 ```json
 {
@@ -258,10 +240,10 @@ the counts-only Hive status methods with this registry entry in `entries.json`:
     "value_kind": "security.policy",
     "capability": "contract.call",
     "parameters": {
-      "binding": "bee.hive.telemetry.binding:status",
-      "methods": ["snapshot", "detail"]
+      "binding": "bee.threads.sessions.binding:catalog_binding",
+      "methods": ["list"]
     },
-    "reason": "Show live node names and session and approval counts."
+    "reason": "List the launch definitions this node can open."
   },
   "data": {
     "targets": [{"entry": "app.example:app", "path": ".security.policies +="}]
@@ -270,15 +252,15 @@ the counts-only Hive status methods with this registry entry in `entries.json`:
 ```
 
 Replace `app.example` with the application's admitted namespace. The components
-tool can read the destination's `bee.security.capability:capability_catalog`; its host-selected
+tool can read the destination's `bee.capability:catalog`; its host-selected
 parameter schema remains authoritative. This declaration requests permission;
 the person still reviews and approves the exact binding and methods locally.
 
-The catalog currently describes `workspace.files.read`, `app.database`,
-`threads.read`, `threads.message`, `agents.launch`, `contract.call`, `http.api`,
-`hive.expose`, `hive.view`, `hive.remote_view`, `workspace.catalog.read`,
-`workspace.catalog.manage`, `workspace.host.lease`, `desktop.application_stop`,
-`hub.manage`, `gov.delivery.manage` and `gov.delivery.activate`. Its decoder bounds relative subpaths, lists, identities and
+The catalog currently describes `workspace.files.read`, `workspace.files.write`,
+`app.database`, `threads.read`, `threads.message`, `agents.launch`,
+`contract.call`, `http.api`, `hive.expose`, `hive.view`,
+`desktop.application_stop`, `hub.manage`, `hub.self_update`,
+`gov.delivery.manage` and `gov.delivery.activate`. Its decoder bounds relative subpaths, lists, identities and
 HTTPS origins; it also carries a never-list for execution, environment and
 credential access, registry and scope management, approval decisions, core
 databases, and auto start. `bee.capability:model` expands templates into
@@ -301,14 +283,13 @@ operations still check the caller through the destination principal mappings.
 A file grant installs a host-created
 `fs.directory` at a verified subroot of the destination workspace's own
 folder: the destination reads the workspace's root and subpath from the node
-workspace catalog (through `bee.workspace.binding:read` under
-`bee.security.gov:workspace_folder_read_policy`), the grant record measures
+workspace catalog (through `bee.node.binding:read` under
+`bee.node.security:workspace_folder_read_policy`), the grant record measures
 that folder, the pinned runtime confines traversal and symlinks below the
 volume, a read grant is read-only at the filesystem boundary, and private
 paths and Bee state (`.wippy`) are refused, including ancestor subroots that
 would expose them. A database grant installs a host-provisioned dedicated
-SQLite store under `bee.env:app_databases` (the `BEE_APP_DATABASE_ROOT` state binding, created by the
-host), outside the readable tree, with a `db.get`-only policy on that store.
+SQLite store under `bee.capability:app_databases` (rooted at `BEE_APP_DATABASE_ROOT`, default `.wippy/app-db`), outside the readable tree, with a `db.get`-only policy on that store.
 An application reads the identities of its own granted volumes (by subpath)
 and database (by name) from `bee.gov.binding:granted_resources`, which answers
 only for the calling application's live grant; it never embeds a
@@ -347,36 +328,23 @@ and installs only the requested subset. Widening asks the person to approve
 the delta; refusal leaves the installed version and grant intact.
 
 The shipped `workspace_applications` ceiling admits `process.lua`,
-`library.lua` and `ns.requirement` entries. Native imports are limited to
+`library.lua`, `ns.requirement` and `registry.entry` entries. Native imports are limited to
 `tty`, `process`, `channel`, `json`, `time`, `uuid`, `base64`, `hash`, `funcs`,
 `fs` and `sql`; contract and HTTP reach goes through the gateway. The application binding gets
-`bee.security:ordinary_app_subsystem_boundary` and `thread_access: none`; the
+the `bee.node.security:application` policy group and `thread_access: none`; the
 generated grant policies add exactly the approved file, database and thread
 reach. `store.memory` and `store` are outside this ceiling. These are ceilings,
 not a grant to launch any agent definition: launch remains subject to the
-host's separate definition and application policies. Although the catalog
-also describes Hive exposure, this rule does not install that grant: Hive
-exposure stays host-published.
+host's separate definition and application policies. 
 
 The shipped `packages` ceiling beside it is the wider rule for installed
-package delivery: it additionally admits `security.policy`, `registry.entry`,
+package delivery: it additionally admits `security.policy`,
 `contract.binding` and `env.variable` entries with the `registry` and `system`
 native modules, still under the ordinary application boundary, no thread
 access, and the same explicit person approval. Governed admission bindings
 carry the runtime flags `appearance_write`, `application_stop`,
 `scope_management` and `close_grace_ms` alongside policies and thread access,
 so a package record states the same binding the broker enforces.
-
-The rule also names the host-composed package applications the catalog admits
-without delivery: Hive Manager (`hive.view`, `hive.remote_view`), Timeline
-(`threads.read`), Workspace Manager (`workspace.catalog.read`,
-`workspace.catalog.manage`, `workspace.host.lease`), Host Processes
-(`desktop.application_stop`, admitted with `application_stop`), Modules
-(`hub.manage`), and Overlays (`gov.delivery.manage`, `gov.delivery.activate`).
-Each entry reuses its reviewed static policies; a live host grant record for
-the package owner adds capability-derived policy IDs beside them. Only
-Settings, Console, Inbox and the harness window stay on the static admission
-list.
 
 ### Can a workspace application get its own database?
 
@@ -388,37 +356,26 @@ The opt-in application checkpoint of at most 65,536 bytes remains for small
 resume state. Closing the live view removes its resume record, while the
 database file persists.
 
-A person reviews the staged plan in Start › Apps › Advanced › Overlays, selects and
-prepares it there, approves the request in Needs you, and lets
-Overlays step the activation owner until it settles; the application then
-appears in the Start menu. `make workspace-app-delivery-check` proves this path
-on the unmodified composition with a scripted agent;
-`make agent-app-hive-e2e-check` also carries that agent-built application
-across Hive to a second node, which admits it only through its own shipped
-rule and person and opens it with its own grants; and
-`make workspace-app-delivery-live-check` proves it with the installed Claude
-Code building the application from its written spec.
+A person reviews the staged plan in Overlays (System menu), selects and prepares
+it there, approves the request in Needs you, and lets Overlays step the
+activation owner until it settles; the application then appears in the menus
+its `menus` field names.
 
 ## Limits
 
-Hive exposure is later work. The installed file, database, thread, launch,
-contract and HTTP grants are registry authority for the selected application
-scope. Runtime agent elevation is implemented through the gateway
-`request_capability` and `capability_status` tools: an approval bound to the
-authenticated thread and attempt consumes once and writes one thread-actor
-resources grant the attempt's placement resolves. The host verifies the named
-resource association and requested access before approval and before consuming
-an approved decision. Active revocation fencing is implemented: an epoch
-advance reports its fenced attempts, and an owner fence withdraws the fenced
-instance's thread delegation before stopping it. Resources `revoke` and
-`revoke_all` pass their fenced attempt IDs to Placement, which rechecks each
-recorded grant and requests a cooperative stop when that attempt lost access.
+Runtime agent elevation is implemented through the gateway `request_capability` and
+`capability_status` tools: an approval bound to the authenticated thread and
+attempt consumes once and writes one thread-actor resources grant the attempt's
+placement resolves. The host verifies the named resource association and
+requested access before approval and before consuming an approved decision.
+Active revocation fencing withdraws a fenced attempt's grants: Resources
+`revoke` and `revoke_all` pass their fenced attempt IDs to Placement, which
+rechecks each recorded grant and requests a cooperative stop when that attempt
+lost access.
 
 Destination migration execution requires a captured immutable registry view and
-is not supplied by ordinary overlay activation. Automatic Hive enrollment and
-discovery, remote workspace composition, destination Hub package transfer and
-installation, and managed headless launch remain separate boundaries.
+is not supplied by ordinary overlay activation.
 
-For the surrounding contracts, see [application contracts](../reference/applications.md),
-[approvals](../reference/approvals.md), [sync and inbox](../reference/sync-and-inbox.md),
-[Hub](hub.md) and [MCP configuration](agents/mcp.md).
+For the surrounding contracts, see [application contracts](application_contracts.md),
+[approvals](approvals.md), [sync and inbox](sync_and_inbox.md),
+[component/hub](../component/hub.md) and [MCP configuration](mcp_configuration.md).

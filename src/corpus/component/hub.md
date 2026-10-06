@@ -1,25 +1,10 @@
 # Hub module management
 
-This optional Bee component uses the existing native Hub reader and registry
-APIs. It has no Keeper dependency. The pinned runtime rejects a deployment-root
-artifact that changes versions of its nested composed dependency declarations.
-`make hub-self-update-runtime-check` reproduces this limitation. Update Bee uses
-a dependency-free core artifact and updates host-selected component roots in the
-existing publication transaction.
-
-Hub now ships as an independently resolved component. Existing immutable
-artifacts retain their recorded definition, receipt, migration, and policy
-identities; upgrading an older assembled artifact to this component layout is
-a reviewed installation change, not a compatibility alias or an automatic
-registry rewrite.
-
-Workspace-host startup invokes the host-admitted `bee.hub.binding:receipt_metadata`
-migration 1. The workspace host policy admits only that migration function; its
-executor receives the separate host-selected receipt migration grant.
-It appends a registry revision tagging historical operation entries
-with `meta.type: bee.hub_operation`; IDs, data, digests and prior revisions remain
-unchanged. Repeated calls make no registry change. Receipt discovery uses this
-metadata, and malformed tagged receipts report their exact decoder error.
+Hub is the module manager: it reads the native Hub and the live registry,
+plans, applies and removes package installs, runs package migrations, and
+publishes packages. It has no Keeper dependency. Update Bee updates the
+`bee/bee` core artifact and host-selected component roots in the existing
+publication transaction.
 
 The public `bee.hub.binding:call` function accepts `{operation, request?, expected_digest?}`
 and returns `{ok, value?, code?, message?, replayed}`. The host grants
@@ -60,11 +45,10 @@ installed component version. The list gives a registry revision; reads require
 that revision and return at most 16,384 bytes. It does not expose registry
 configuration, other owners or package resources. This covers local development
 versions that have no matching Hub artifact.
-See [the API and acceptance status](../../../docs/guides/hub.md) for request examples.
 
 Management operations are `plan`, `apply` and `status`, plus publication
 operations `publish_request` and `publish_apply` for person-approved Hub
-uploads (see the publication section of the Hub guide).
+uploads.
 Update Bee selects the core and every host-selected `bee.deps` Bee component
 root together, independent or required, through one measured plan and receipt.
 It preserves parameters, removed components and third-party root selections.
@@ -131,8 +115,9 @@ come from the native registry plan for the exact dependency-root transaction,
 including the preserved host requirement parameters. Unlinked artifact entries
 are not compared with installed, linked definitions.
 Each changed `process.service` names an owner `function.lua` in
-`meta.component_lifecycle`; the host selects its exact call grant through
-`bee.hub.binding:target_lifecycle_owners`. Metadata grants no permission.
+`meta.component_lifecycle`; the host grants Hub the exact call through
+`bee.hub.security:lifecycle_owner_policy`, which admits no owner function yet, so a
+change to a service-bearing component is refused. Metadata grants no permission.
 Services without that owner protocol, changed service/process identities,
 and process hosts or HTTP services without supported drain evidence are refused.
 Hub itself remains protected; its code replacement uses the existing `bee/bee`
@@ -154,11 +139,7 @@ Unfinished lifecycle intent blocks another Hub operation.
 The current retention policy is `retain`: files and database rows stay at their
 host-owned locations, queued work stays in its owner journal, and removal never
 runs migration `down` for a service-bearing component. No data export or data
-rollback is claimed. Sessions implements the first production owner: it fences
-new admissions, lets accepted pull turns finish and checks Threads' durable
-journal before reporting a drain. Interactive Sessions must close through their
-existing proved-exit path first. Reserved/accepted or uncertain work after a
-crash prevents completion; it is never silently discarded or retried.
+rollback is claimed.
 
 Open applications continue their existing definition-change replacement on
 update. Removal withdraws their catalog bindings immediately and refuses while
@@ -172,24 +153,8 @@ newest compatible version for each explicit component root and retains its
 requirement parameters alongside the core update.
 A candidate that declares Bee-component dependencies is refused with its entry ID:
 it would reclaim host selection, collide with host-owned roots or reinstall a
-removed component. This applies to the initial self-update conversion as well as
-later updates. Legacy full-composition artifacts remain installation bundle
-inputs; independently updatable core artifacts require separate release identities.
-`make native-pack BEE_VERSION=VERSION` seals the full executable baseline and
-the dependency-free Hub core in one generation. The local boot root has a
-distinct `-0.boot` prerelease identity; Hub publishes the core at `VERSION`.
-The generated `dist/portable-deployment/hub/src/deps/_index.yaml` selects the
-same components and requirement parameters as host-owned roots. Namespace
-definitions, native identity, resources and core code remain in the core artifact.
-`make hub-core-artifact-check` verifies the baseline pack list, exact host
-parameters, core contents and every requirement target. Publication refuses a
-core WAPP containing dependencies. Packing does not publish artifacts.
-The standalone acceptance converts a legacy authored closure on its first core
-update, applies a second core update and restarts the selected graph offline.
-Hosts with an already authored legacy `bee/bee` selection must first convert using
-a core self-update; its old manifest constraints remain effective until then.
-Self-update also refuses a candidate that changes the active Hub installer code.
-Both paths preserve deployment parameters and third-party roots.
+removed component. Self-update also refuses a candidate that changes the active Hub
+installer code. Both paths preserve deployment parameters and third-party roots.
 A pack can declare native needs in `ns.definition.meta.native_requirements`
 as `{package = "native/module", version = "1.2.3"}` rows. The planner compares
 those semantic versions against the executable's Go module build list, exposed
@@ -199,8 +164,7 @@ the build manifest; planning checks its native components and runtime commit
 against those executable facts. A target that needs an unavailable native
 version or another runtime commit is refused with `needs a newer Bee binary`
 before apply. Select an earlier `bee/bee` version in its version history to plan
-a rollback as another root update. Governed overlay restoration remains on its
-separate path. The About page reads the native module version and runtime commit
+a rollback as another root update. The About page reads the native module version and runtime commit
 from those same executable facts, while showing current and available pack
 versions from Hub inventory.
 Apply replans in a private worker before publishing the dependency-root change
@@ -212,24 +176,17 @@ Modules opens that history with Operations (O); recovery reviews the stored
 request and digest before a separate confirmation. The worker serializes Bee
 Hub operations, not all registry writers.
 
-Real install/update/uninstall, receipt persistence across restart and uninstalled
-resource filesystem reads pass on the existing runtime. Modules confirmation,
-input, F12 and resize have source/pack and executable acceptance. Publication
-recovery verifies the original root and inventory. Migration `up` captures exact
-definitions and verifies SQL ledger evidence across restart. Removal checks all
-departing owners, including orphaned dependencies. Explicit `down` records its
-work before reverting migrations, retains the root on partial failure, and
-commits root removal with its receipt. Recovery checks the original definitions
-and skips ledger work already committed. Database and function access require
-exact host-selected grants. A target may be an existing host resource or a SQL
-database supplied by this installation. Newly supplied database definitions are
-measured and verified after publication; an empty-ledger checkpoint is saved
+Migration `up` captures exact definitions and verifies SQL ledger evidence across
+restart. Removal checks all departing owners, including orphaned dependencies.
+Explicit `down` records its work before reverting migrations, retains the root on
+partial failure, and commits root removal with its receipt. Recovery checks the
+original definitions and skips ledger work already committed. Database and function
+access require exact host-selected grants. A target may be an existing host resource
+or a SQL database supplied by this installation. Newly supplied database definitions
+are measured and verified after publication; an empty-ledger checkpoint is saved
 before any migration runs. Existing matching ledger IDs refuse migration until
-reviewed. Recovery verifies both migration and database definitions and skips
-work committed after that checkpoint. SQL resource fields such as .file and .dsn
-can use selected/default requirement values. SQLite acceptance covers new
-databases, ledger collisions, partial failure, retry and crashes around the
-checkpoint, schema commit and root removal.
+reviewed. SQL resource fields such as .file and .dsn can use selected/default
+requirement values.
 
 Authored component overlays and application launch/sharing admission remain separate responsibilities.
 
@@ -263,14 +220,3 @@ selects install or update and the newest release, renders one approval body
 from a ready plan bound to the asking gateway binding, verifies a recorded
 request belongs to that binding and attempt, and maps an apply reply to the
 agent's status. The gateway performs the calls.
-
-`make hub-self-update-standalone-check` builds local sealed baseline and core artifacts and
-serves their artifacts through a disposable fixture Hub. The acceptance uses
-the pinned upstream toolchain. The acceptance
-checks running-service Files updates, retained work/data on removal and reinstall,
-crash during drain followed by exact-receipt recovery, optional telemetry install/removal, protected Hub
-removal refusal, a core self-update, another independent Files update, the older
-wildcard dependency, exact digest approval, completed receipts, unchanged runtime
-owner PID, live Settings About rendering, and restart
-with the same history/cache in an isolated network namespace. To reuse already
-built fixtures, set `BEE_DEPLOYMENT` and `BEE_SELF_UPDATE_TARGET_DEPLOYMENT`.

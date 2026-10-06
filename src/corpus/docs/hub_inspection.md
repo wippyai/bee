@@ -1,7 +1,7 @@
 # Hub installation and package reads
 
 Bee's Hub component provides scoped package inspection and host-authorized local
-installation. Modules is the corresponding terminal application. Hub inspection
+installation. Modules (`bee.apps.modules`) is the corresponding terminal application. Hub inspection
 never grants package capabilities, writes registry history, starts code or
 creates an application overlay.
 
@@ -51,9 +51,7 @@ package resources:
 
 The component, version, resource and path are illustrative. `files` returns a
 directory page and optional `next_offset`; `read_file` returns base64 content,
-byte offset, size, `eof` and optional `next_offset`. File reads default to 64
-KiB and are limited to 1 MiB. Directory reads default to 100 entries and are
-limited to 1,000. Paths are relative to the declared resource and traversal is
+byte offset, size, `eof` and optional `next_offset`. Paths are relative to the declared resource and traversal is
 refused. Pass the inspected `expected_digest` to bind later reads to that exact
 artifact.
 
@@ -220,10 +218,10 @@ applies the request when it polls `install_status`, and a request whose attempt
 ended before polling stays unapplied.
 
 The host grants these tools per launch policy (`gateway_tools`) and links their
-MCP policy through the gateway's `target_tool_install_policy`; the shipped
+MCP policy through the gateway's `tool_install_policy_ref`; the shipped
 policy admits filing and polling requests and never applying them. The shipped
 agent launch policies include them. The configuration link
-`target_install_configuration` fails closed when absent.
+`bee.gateway.env:install_configuration_ref` fails closed when absent.
 
 ## Agent publication requests
 
@@ -256,31 +254,21 @@ credential never reaches the agent: the uploader CLI reads the person's
 host-confined credential, the command carries no secret, and receipts hold
 digests only.
 
-The person selects the publishing organization, uploader executable, admitted
-source roots and pack staging root once in the host configuration
-`bee.hub.publication:hub_publication`; every publication must belong to that organization and
-an absent link fails closed. The uploader runs under the host-selected executor
-`bee.hub.publication:publish_executor`, which needs a POSIX sh with sha256sum. The host
-grants the tools per launch policy and links their MCP policy through the
-gateway's `target_tool_hub_publish_policy`.
+The uploader runs under the executor `bee.hub.publication:publish_executor`.
+The host grants the tools per launch policy and links their MCP policy through
+the gateway's `tool_hub_publish_policy_ref`, and the approval policy through
+`bee.gateway.env:publish_configuration_ref`.
 
-## Limits and checks
+## Limits
 
 Hub installation is local and host-authorized. It is separate from authored
 application overlays, application start confirmation and Hive delivery. Public
 Hive enrollment, remote workspace composition and destination-to-destination
 Hub transfer/install are not Hub operations.
 
-```sh
-make hub-unit-check
-make hub-inspect-check
-make hub-manage-check
-make hub-recovery-check
-```
-
-See [package boundaries](../development/package-boundaries.md),
-[distributed overlay delivery](overlays.md) and
-[MCP configuration](agents/mcp.md).
+See [package boundaries](package_boundaries.md),
+[distributed overlay delivery](distributed_app_delivery.md) and
+[MCP configuration](mcp_configuration.md).
 
 Package and application discovery uses declared registry metadata and ownership,
 not package names. The Modules catalog classifies installed applications from
@@ -289,10 +277,3 @@ Remote packages without that information remain visible. Update status reads the
 catalog for each exact host-selected component. Authored application publication
 selects a matching identity from overlays already present in the governance
 owner's store; entering a component name does not create or authorize an overlay.
-
-Agent-launch grants now name the exact Sessions contracts and owner methods.
-An installed agent-launch grant whose policy still grants Sessions operations
-with a namespace wildcard fails the current host-template measurement and needs
-a fresh capability review;
-its immutable record is retained. Built-in driver executable probes likewise
-admit the exact selected environment entries.

@@ -3,7 +3,7 @@
 Read this page before drawing any Bee application. It states the rules every
 terminal application follows, and each rule names the
 `bee.ui:frame` function that implements it. The
-[brand book](ui.md) explains the intent behind the rules; this page is the
+brand book (`docs/ui_brand_book`) explains the intent behind the rules; this page is the
 contract. When a rule and a wish conflict, follow the rule.
 
 ## 1. Grid
@@ -45,12 +45,17 @@ retain navigation and Help. Help lists every declared action, including unavaila
 Layouts change only at these breakpoints (`frame.size(width, height)`). Both
 dimensions must reach a class.
 
-| Class | From | Work area | Dashboard grid | List + detail |
-|---|---|---|---|---|
-| `narrow` | below 80x24 | identity, selection, one value | 1 column, first panel only | list only, Enter opens detail |
-| `compact` | 80x24 | 78x19 | 2 columns x 2 rows | list only, Enter opens detail |
-| `standard` | 120x36 | 118x31 | 3 columns x 2 rows | list 40 cells, detail rest |
-| `wide` | 160x48 | 158x43 | 4 columns x 2 rows | list 48 cells, detail rest |
+| Class | From | Work area (with tabs and actions) |
+|---|---|---|
+| `narrow` | below 80x24 | identity, selection, one value |
+| `compact` | 80x24 | 78x19 |
+| `standard` | 120x36 | 118x31 |
+| `wide` | 160x48 | 158x43 |
+
+A dashboard shows fewer panels and a list with detail shows the list alone on
+`narrow` and `compact`; Enter opens the detail as a second page. `standard` and
+`wide` add grid columns and a detail pane beside the list
+(`frame.master_detail` splits from 100x24: list 60 cells, detail the rest).
 
 A narrow canvas keeps the identity, the current state and one route forward.
 A wider class may add panels, metadata and a detail pane; it never removes
@@ -185,7 +190,8 @@ are the `compact` class (80x24) unless marked.
 
 A collection of items with properties. `frame.table` for the list; on
 `standard` and `wide` a detail pane beside it through
-`frame.split(work, {40, 0})` with `frame.panel` and label/value lines.
+`frame.master_detail` (or `frame.split(work, {40, 0})`) with `frame.panel` and
+label/value lines.
 
 ```
  PROCESSES                                          Live · 1s · 42 processes
@@ -206,7 +212,7 @@ detail as a second page and Esc returns.
 ### Dashboard grid
 
 Several independent measurements. `frame.grid(work, columns, rows)` with the
-column and row counts from section 3; each cell is a `frame.panel` holding one
+column and row counts the size class leaves room for; each cell is a `frame.panel` holding one
 visualization. The most important panel is first in reading order. Stat tiles
 (`viz.tiles`) take the first three work rows above the grid. The toolkit
 document in the agent corpus shows tested visualization calls and compact
@@ -350,14 +356,12 @@ drawn. Draw it with `viz.tiles`, `viz.line` and `frame.table` (section 12).
 
 ### Reference applications
 
-Each archetype above has a proven, copyable screen in `docs/reference/apps/`,
-served to agents through the docs tool as topic `reference_apps` (start with
-`reference_apps/index`): `deploy_board`, `ci_bench`, `inbox`, `log_viewer`,
-`topology`, `workflow`, `metrics`, `deploy_form` (wizard on the input kit) and
-`overlays` (palette, confirmation modal, toast). They use only the public
-`frame`, `viz`, `diagram` and `forms` libraries, keep state in a model the
-application owns, and are drawn at every size class by
-`make reference-apps-check`.
+Each archetype above has a copyable screen in the corpus topic `reference_apps`
+(start with `reference_apps/index`): `deploy_board`, `ci_bench`, `inbox`,
+`log_viewer`, `topology`, `workflow`, `metrics`, `deploy_form` (wizard on the
+forms kit) and `overlays` (palette, confirmation modal, toast). They use only
+the public `frame`, `viz`, `diagram` and `forms` libraries and keep state in a
+model the application owns.
 
 ## 12. Visualizations
 
@@ -414,5 +418,7 @@ Test every view at the three breakpoints plus one narrow size: exact row
 count, exact display width for every row, every hit inside the canvas, and the
 identity, the current state and the primary action visible at each class.
 
-Folder pickers render root references as readable root names. Owner requests
-retain the original reference; display labels grant no access.
+The folder picker `bee.ui.picker:folder` pages the admitted roots and their
+folders through `bee.node.binding:roots` and `folders` (see
+`docs/workspace_catalog`). A root reference stays the identifier; a display
+label grants no access.

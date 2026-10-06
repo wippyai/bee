@@ -9,8 +9,8 @@ brand; every other appearance preserves the same semantic roles.
 Every Bee application, bundled or agent-built, draws through the shared
 application frame, `bee.ui:frame`. The exact placement, color, state
 and breakpoint rules, with one layout per application archetype, are in
-[Application visual style](app-style.md); read it before drawing. The offline
-toolkit reference gives compact examples of the frame and the visualization
+`docs/app_style` (Application visual style); read it before drawing. The corpus
+`toolkit` document gives compact examples of the frame and the visualization
 kit `bee.ui.viz:viz`, with each chart example taken from a test. Use those
 calls with application-owned state and actions.
 
@@ -120,8 +120,7 @@ information, and never use animation as the only evidence that work continues.
 
 Every mouse action has a keyboard route. Arrow keys move within a collection;
 Tab changes panes; Enter performs the selected primary action; Escape backs out
-or closes. Letter shortcuts accept either case outside text fields; `R` refreshes
-and `T` opens Details. `F10` opens More and `?` opens shared Help. Ignore key-release events. A resize repaints from model state and
+or closes. Letter shortcuts accept either case outside text fields. `F10` opens More and `?` opens shared Help. Ignore key-release events. A resize repaints from model state and
 must not trigger remote work.
 
 Treat all external text as hostile presentation data. Pass it through
@@ -167,6 +166,5 @@ continues afterward.
 Before delivery, verify that the app draws through `bee.ui:frame`, uses
 semantic appearance roles, repaints on resize, has bounded external text, supports keyboard and mouse, preserves a
 useful compact state, keeps remote work out of rendering, and has focused tests
-for the user-visible behavior. Run `make lint`, the focused view tests, the
-source application journey and `make pack` when the application contract or
-production registry changed.
+for the user-visible behavior. Run `make lint` and `make test` (`TESTS=<test entry ids>` selects the
+focused view tests).

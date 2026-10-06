@@ -1,27 +1,29 @@
-# bee docs
+# bee.docs
 
 The offline platform documentation a bound agent reads through the gateway
-`docs` tool.
+`docs` MCP tool.
 
-The host composition holds one `fs.directory` entry, `bee.env:docs_corpus`, pointing
-at the `src/corpus` snapshot. `wippy.yaml` names it in its `embed:` list, so `make pack`
-and `make native-pack` freeze it into the root WAPP as a read-only `fs.embed` volume;
-an installed Bee serves it with no network (`docs/operations/native.md`). The
-volume is read-only at boot, so an agent can read the corpus and can never
+The host composition holds one `fs.directory` entry, `bee.env:docs_corpus`,
+pointing at `src/corpus`. `wippy.yaml` names it in its `embed:` list, so
+`make build` packs it into the application as a read-only `fs.embed` volume; an
+installed Bee serves it with no network. An agent can read the corpus and never
 change it.
 
-The snapshot itself, its selection rule and its per-document sources, byte
-counts and digests are built by `build/agent_corpus.py` (`make agent-corpus`) and
-verified offline by `make agent-corpus-check`. The manifest is
-`src/corpus/manifest.json`; a corpus change shows up as a digest change, so it
-cannot rot silently.
+`src/corpus/manifest.json` records every document's id, topic, byte count and
+SHA-256 digest. `tools/corpus.py` regenerates the reference driver pages and the
+manifest; `make lint` runs `python3 tools/corpus.py --check`, which fails when a
+page or a manifest record differs from the source.
 
-`bee.docs.binding:call` is the read-only facade the gateway's `docs` tool calls. It decodes
-one strict request (`list`, `search`, `read`), opens the one volume and answers
-within the bounds `bee.docs:protocol` declares; it holds no writer, no registry
-publication and no host path. The host fills `bee.docs.env:corpus_ref` through
-`target_corpus` and names `bee.security.docs:docs_policy` to grant only that reference and its
-selected volume. The normal provider window policies also serve saved headless
-sessions and admit `docs`, `overlay` (including the workspace guide),
-`components`, `capabilities` and `delivery` beside the session and thread tools.
-The hidden research batch policies keep their narrower session and thread surface.
+`bee.docs.binding:call` is the read-only facade the gateway's `docs` tool calls.
+`bee.docs:protocol` decodes one strict request:
+
+| Operation | Fields | Bound |
+|---|---|---|
+| `list` | `topic?`, `offset?`, `limit?` | 64 documents per page |
+| `search` | `query`, `topic?`, `offset?`, `limit?` | 16 matches per page, each with the section it sits under |
+| `read` | `id`, `section?`, `offset?`, `limit?` | 16384 bytes per window |
+
+Document ids match `^[%w_./:-]+$` up to 160 bytes. The facade opens the one
+volume and holds no writer, no registry publication and no host path. The host
+fills `bee.docs.env:corpus_ref` through `target_corpus`, and
+`bee.security.docs:docs_policy` grants only that reference and its volume.

@@ -2,17 +2,15 @@
 
 `bee.approvals` is the approval owner for one Bee node. It stores requests,
 decisions, history, inbox changes and delivery outbox rows in an owner-scoped
-database. See [the implementation README](../../modules/approvals/src/README.md) and
-[sync and inbox](sync-and-inbox.md) for the surrounding owner-feed boundary.
+database. See [component/approvals](../component/approvals.md) and
+[sync and inbox](sync_and_inbox.md) for the surrounding owner-feed boundary.
 Application confirmation dialogs are live broker questions; they are not
 durable approvals and never grant remote operation authority.
 
 ## Ownership and authority
 
 The operation owner decides whether an approval is required and which
-principals may answer. Workspace requests belong to the target workspace.
-Machine enrollment belongs to the machine authority and does not depend on an
-arbitrary project being open. The host selects each database resource; there
+principals may answer. Workspace requests belong to the target workspace. The host selects each database resource; there
 is no central approvals database. Sharing a SQLite file does not grant access
 to another owner's tables or create a cross-owner transaction.
 
@@ -21,9 +19,9 @@ person. The supervisor establishes the requesting principal/delegation and an
 approver's authority. A claimed user name or PID, mesh membership or possession
 of an inbox item is not enough. The host policy must grant `bee.approvals.decide`
 on the workspace and the actor must match the selected approver policy.
-Admission alone does not make an actor eligible. Native Terminal approval
-means native execution as the destination OS user; selecting a workspace or
-working directory does not confine that authority.
+Admission alone does not make an actor eligible. Approving native execution means
+execution as the destination OS user; selecting a workspace or working
+directory does not confine that authority.
 
 The authority process establishes a node incarnation before serving requests.
 A restart creates a new incarnation. An effect owner that observed an older
@@ -53,10 +51,9 @@ different content under the same key is a conflict. States are `pending`,
 will succeed.
 
 `decide` and `withdraw` compare the pending revision, deadline and authenticated
-actor in one transaction. Approvals are node-local: a host never exposes
-`decide` or `withdraw` over Hive, so a mapped principal reads the feed and a
-request but decides nothing, and a decision is always made on the node that
-owns the request. The transaction records the new history revision,
+actor in one transaction. Approvals are node-local: `feed_snapshot`, `feed_read_after`, `read`,
+`decide` and `withdraw` are the only operations declared as Hive policy
+operations, and a decision is always made on the node that owns the request. The transaction records the new history revision,
 inbox change and any thread outbox row together. Concurrent answers yield one
 committed decision; a retry returns that result and a conflicting answer
 returns a conflict. If cancellation races an approval, the reply reports the
@@ -112,8 +109,7 @@ and marks the owner unavailable when it cannot be queried.
 The bundled `bee.approvals.inbox.app:app` reads the launch workspace and host-listed
 workspaces through the approval owner, displays the proposed effect, target,
 requester and expiry, and submits `decide` with the viewed revision and
-proposal digest from the opened decision screen. Allow once and Deny each take
-one key; permission windows offer duration choices on that screen. `withdraw` is an explicit
+proposal digest from the opened decision screen. `A` allows once and `D` denies; permission windows offer duration choices on that screen. `withdraw` is an explicit
 requester operation; closing the app expires nothing. All displayed text and
 keys are bounded and control characters are removed. A conflict or settled
 state refreshes the owner's record and is never resubmitted. A lost answer is
@@ -130,9 +126,7 @@ permission request, while widening creates a request for the new delta.
 
 Presentation uses explicit requester, destination, scope, status and deadline
 labels; color is only a secondary status cue. A pending network answer must
-not look committed. The first intended remote use is a destination-owned
-Terminal request through the supervisor; that remote enrollment and execution
-flow remains a proposal until its destination admission contract is complete.
+not look committed.
 
 ## Capability envelopes and leases
 
@@ -256,13 +250,8 @@ and `{operation="revoke", grant_id, workspace_id?}`. Listing returns `grants`,
 `more`, and `next_id` for pages of 64. Decision authority and the issuing actor
 or admitted application definition are checked; other approvers cannot revoke
 your grant. Revocation stops subsequent automatic decisions without rewriting
-settlements that already committed. Grant administration is node-local and has
-no Hive exposure; remote Inbox feeds show the owning node's recorded history.
-
-Migration 6 (`approval_windows`, M5) appends the grant store and settlement
-references. Its source request stays retained while the window is active;
-applied migration SQL, prior ledger checksums, stored approval identities,
-projection schema and wire topics remain unchanged.
+settlements that already committed. Grant administration is node-local and declares
+no Hive operation; remote Inbox feeds show the owning node's recorded history.
 
 ## Storage and migrations
 
@@ -298,29 +287,8 @@ checkpoint and asks the fenced runner for status before a first dispatch.
 Unknown runner state leaves the write uncertain. Transcript presence or a
 permission adapter's eligibility never authorizes an effect by itself.
 
-## Proposal: reusable waits and wakeups
+## Runtime leases
 
-Approvals own decisions. A separate work owner would own durable waits and
-typed continuations; this section is a design boundary, not a current general
-workflow engine or callable API.
-
-A persisted continuation would contain a contract/function reference and
-revision, validated serializable arguments or owner-authorized artifact
-references, explicit bounded context, a security binding that is rechecked at
-dispatch, stable continuation/effect keys, a deadline, retry policy and a
-durable outcome receipt. It would never contain a closure, process memory,
-database handle or ambient authority. Wait registration would atomically bind
-source progress to the waiter, or use a durable subscription/outbox across
-owners, so a source change cannot be lost between registration and recheck.
-
-Completion, cancellation and timeout would compete for one committed waiter
-outcome. Dispatch would be at least once with leases, attempt epochs, owner
-receipts and explicit reconciliation. Client detachment would cancel only an
-ephemeral wait, not the workflow or approval. Any implementation must prove
-owner restart, duplicate wakeups, source changes during registration, revoked
-security, changed function generations, queue limits and uncertain external
-effects before this proposal becomes a callable contract.
-
-The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also `local.runtime_lease`). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. Grant consumes that exact approved proposal, revalidating its owner incarnation after a restart. Approval migration 5 stores leases and per-effect receipts in the Approvals ledger.
+The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also the `bee.approvals.binding:local` binding). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. Grant consumes that exact approved proposal, revalidating its owner incarnation after a restart. The Approvals ledger stores leases and per-effect receipts.
 
 Check/use require consume authority and the exact subject/workspace. Use additionally checks tool/input digest, expiry, revocation and the use bound; the same effect key replays only the same exact operation. Persisted runtime authority survives an owner restart. Subject or workspace manager may revoke; list exposes only the caller's records in one workspace. Saved profile references cannot transfer authority. The shared permission exchange uses matching references before requesting another decision and rechecks the same receipt before dispatch/recovery; Deny still wins.

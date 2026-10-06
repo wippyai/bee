@@ -1,44 +1,32 @@
 # Documentation map
 
-Repository documentation describes the implemented contracts and the boundaries
-that keep them safe. Bee also ships a generated, hashed documentation corpus so
-managed agents can search those contracts offline; refresh it with the existing
-generator when the corpus is intentionally updated.
+The corpus holds the runtime reference pages Bee application authors use, the
+contracts of Bee's components, the terminal toolkit and proven reference
+applications. Every page is read by stable id through the `docs` tool; the
+manifest records each document's topic, size and digest, and `make lint`
+checks that they match the files.
 
-| Read for | Source |
+| Read for | Documents |
 |---|---|
-| Runtime modules and Bee contracts available offline | [Agent documentation corpus](../modules/docs/src/README.md) |
-| Running Bee and local development | [Repository README](../README.md), [agent guide](development/agent-guide.md), [development conventions](development/conventions.md), [layout audit](development/layout.md) |
-| Ownership and boundaries | [System map](development/ownership.md), [package boundaries](development/package-boundaries.md) |
-| Current namespaces, registry IDs, requirement targets, topics, owned stores and handoff evidence | [Generated component inventory](development/component-inventory.json) |
-| Framework-shaped agents, Bee execution and Dataflow composition (proposal; the framework closure and CLI admission are implemented) | [Agent definitions](development/agent-definitions.md) |
-| Contributions and community standards | [Contributing](../CONTRIBUTING.md) |
-| Vulnerabilities and credential handling | [Security](../SECURITY.md) |
-| Bee visual language and accessible terminal UI | [UI brand book](guides/ui.md) |
-| Shared frame, semantic appearance, bounded text and presentation kits | [UI module](../modules/ui/src/README.md) |
-| Exact placement, color and breakpoint rules for application screens | [Application visual style](guides/app-style.md) |
-| Copyable, proven application screens (deploy board, inbox, logs, metrics, forms, overlays) | [Reference applications](reference/apps) |
-| Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md), [desktop component](../modules/desktop/src/README.md), [client component](../modules/client/src/README.md), [terminal component](../modules/terminal/src/README.md) |
-| Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
-| Workspace storage and application state | [Workspace component](../modules/workspace/src/README.md), [storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
-| Node workspace catalog, lazy workspace hosts, workspace extensions and the Workspaces viewer | [Workspace catalog](reference/workspace-catalog.md) |
-| Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md), [optional application Threads client](../modules/application-threads/src/README.md) |
-| Managed work and workspace host lease clients | [Sessions](../modules/sessions/src/README.md), [Workspace](../modules/workspace/src/README.md) |
-| Shared bounds, canonical JSON, time conversions, and reply decoding | [Values module](../modules/values/src/README.md) |
-| Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |
-| Native executable, updates, and I/O events | [Native distribution](operations/native.md) |
-| Hive network reachability and runtime proposal | [Reachability study](operations/hive-reachability.md) |
-| Runtime integration and upstream boundaries | [Runtime integration](development/runtime.md) |
-| Standalone startup timings and load-aware regression measurement | [Boot measurement](development/boot-measurement.md) |
-| Live process code handoff and recovery status | [Process handoff](development/process-handoff.md) |
-| Release artifacts and publication | [Releasing](operations/releasing.md) |
-| GitHub protections and repository settings | [GitHub setup](development/github.md) |
-| Hub package inspection and local installation | [Hub](guides/hub.md) |
-| Managed harness gateway, hooks, and MCP configuration | [Gateway](reference/agents/gateway.md), [gateway module](../modules/gateway/src/README.md), [gateway hooks](reference/agents/hooks.md), [MCP configuration](guides/agents/mcp.md) |
-| Governed application delivery | [Distributed app delivery](guides/overlays.md) |
-| Managed-agent bundle and its application SDK, harness, placement, resource, and credential module contracts | [Agent bundle](../modules/agents/src/README.md), [application SDK](../modules/application/src/README.md), [Harness module](../modules/harness/src/README.md), [placement module](../modules/placement/src/README.md), [native placement](../modules/placement-native/src/README.md), [Docker placement](../modules/placement-docker/src/README.md), [resources module](../modules/resources/src/README.md), [credentials module](../modules/credentials/src/README.md) |
-| Persistence, approvals, shared capability model, governance, Hub, Hive, Hive telemetry, sync, and node module contracts | [Persist module](../modules/persist/src/README.md), [approvals module](../modules/approvals/src/README.md), [capability module](../modules/capability/src/README.md), [governance module](../modules/gov/src/README.md), [Hub module](../modules/hub/src/README.md), [Hive module](../modules/hive/src/README.md), [Hive telemetry module](../modules/hive-telemetry/src/README.md), [sync module](../modules/sync/src/README.md), [node module](../modules/node/src/README.md) |
+| Working on Bee: layout, make targets, tests | `docs/agent_guide` |
+| Component ownership and boundaries | `docs/system_map`, `docs/package_boundaries` |
+| Visual language and placement, color and breakpoint rules for application screens | `docs/ui_brand_book`, `docs/app_style` |
+| Drawing, layout, styles, input and the application client | `toolkit` |
+| Copyable application screens | `reference_apps/index` and one page per application |
+| Writing an agent driver for another CLI | `reference_drivers/opencode`, `component/driver` |
+| Application admission, launch, messages and recovery | `docs/application_contracts`, `component/app`, `component/app:threads` |
+| Delivering an application or driver as a governed overlay | `docs/distributed_app_delivery`, `component/gov` |
+| Threads, timeline, subscriptions and delivery | `docs/threads`, `component/threads`, `component/sessions` |
+| Managed agents: harness, carrier, gateway, hooks and MCP configuration | `docs/carrier`, `docs/gateway`, `docs/gateway_hooks`, `docs/mcp_configuration`, `component/harness`, `component/gateway` |
+| Placement, resources, credentials and drivers | `component/placement`, `component/placement:native`, `component/placement:docker`, `component/resources`, `component/credentials`, `component/driver` |
+| Approvals and the approval inbox | `docs/approvals`, `docs/sync_and_inbox`, `component/approvals` |
+| Hub package inspection and installation | `docs/hub_inspection`, `component/hub` |
+| Node state, sync and the hive | `component/node`, `component/sync`, `component/hive`, `docs/sync_and_inbox` |
+| Shared bounds, canonical JSON and reply decoding | `component/values` |
+| Stock applications and the application menu | `component/apps:help`, `component/apps:modules`, `component/apps:overlays`, `component/apps:processes`, `component/apps:settings`, `component/apps:terminal`, `component/shell` |
+| Environment and resource entries | `component/env`, `component/resources` |
+| Lua runtime modules (process, channel, registry, sql, fs, http, tty and others) | `runtime/lua/...` |
 
-Use the source module README and tests for implementation details. A contract
-describes a callable boundary only when the source and its checks implement it;
-unfinished operations remain explicitly marked as proposals.
+Use the component sources and their tests under `src/<component>` and
+`tests/lua/<component>` for implementation detail. A contract describes a
+callable boundary only when the source implements it.

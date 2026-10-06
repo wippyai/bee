@@ -1,127 +1,103 @@
 # Bee ownership and boundaries
 
-This page records ownership and explicit boundaries. It is not a list of
-callable APIs. Use module READMEs and the linked contracts for implementation
-details.
+This page records which component of `src/` owns what, and the boundaries
+between them. It is not a list of callable APIs; each component has its own
+document (`component/<name>`).
 
-Bee is a persistent terminal workspace. One Bee can own multiple workspaces;
-each workspace owns its application state and recovery. A client presents
-views from a workspace, while the host owns execution and attachments. The
-desktop can be replaced or detached without stopping admitted applications.
+Bee is a terminal desktop. A node (`bee.node`) owns the workspaces, desktops and
+running application instances of one folder. A display (`bee.shell`) shows one
+desktop at a time and owns window placement, so a display can detach or be
+replaced without stopping the applications the node runs. Agents run as
+sessions; Threads keeps their durable record.
 
-## Identities and ownership
+## Identities
 
-Machine, Bee node, workspace, desktop client, application instance, execution
-process, human/agent principal and transport session are separate identities.
-A PID is an execution address, not a credential. An attachment grants a
-recipient explicit observation, input and resize rights over an existing view;
-multiple presentations must not duplicate execution.
+A machine, a Bee node, a workspace, a desktop, an application instance, an
+execution process, a human or agent principal and a transport session are
+separate identities. A process id is an execution address, not a credential. An
+attachment grants a recipient observation, input and resize rights over an
+existing view. Knowing a process id, holding a mesh membership or reading
+metadata authorizes nothing: each operation is authorized by its owner.
 
-The generated [component inventory](component-inventory.json) records current
-namespaces and entry IDs, every `ns.requirement` target and its resolver,
-message topics, owned stores and tables, native-known IDs, and checked handoff
-evidence. Topic values ending in a dot are dynamic prefixes; other values are
-literal topics. It reports zero dangling requirement targets. Run
-`make component-inventory-check` to verify the source snapshot, its persisted
-identity baseline and the root source budget. A persisted ID, topic or schema
-removal needs an entry in `build/component-inventory-migrations.json` naming
-one of the proposal's M0–M7 migrations.
+## Table ownership
 
-There is no central Bee SQL catalog. Registry definitions and configuration
-history, workspace application state, approval records, thread records,
-resources, credentials and client presentation state retain their respective
-owners. A shared physical database does not change table authority. Aggregates
-and caches are projections that owners can rebuild.
+There is no central SQL catalog. Every component owns the `bee_<name>_*` tables
+that its migrations create in the node database (see `docs/storage`).
+Aggregates and caches are projections an owner can rebuild.
 
-## Subsystem boundaries
+## Components
 
-| Subsystem | Owns | Availability |
+| Component (`src/`) | Namespace | Owns |
 |---|---|---|
-| Native runtime | Processes, supervision, transport, storage, terminal surfaces, filesystem events and lifecycle | Implemented platform foundation; Bee policy remains above runtime primitives |
-| Workspace owner | Workspace identity, the node workspace catalog, application data, resources, instances and recovery | Implemented: any number of logical workspaces per node, catalog operations, extensions, hosts started on a lease, desktops attached through the host manager, a daemon without a folder workspace and a paged Hive workspace listing; presenting another node's workspace needs that node to admit the display client |
-| Host and attachments | Application admission, producer lifetime, view sharing, control/observation and retained execution | Implemented for local host/client attachment |
-| Desktop component | Scene, layout, reducer and committed desktop projection | Implemented in `bee/desktop`; host selects policies, client lifetime and attachment authority |
-| Client component | Desktop attachments, qualified layouts, local catalog and presenter/session replacement | Implemented in `bee/client`; consumes owner data and host grants; host retains lifetime, execution and authorization |
-| Terminal component | Presenter, desktop shell rendering, input values and asynchronous attachment delivery | Implemented in `bee/terminal`; root launch retains the physical display, client lifetime and host-selected viewport authority |
-| Registry/catalog | Stable definitions, dependency closure, versions and discovery projections | Metadata is descriptive; admission and policy are separate |
-| Application definition service | Service-owned editable application records projected into admitted runtime definitions | Proposal; these records are not registry overlays or workspace tables |
-| Hub | Search, provenance, local planning, host-authorized apply and receipts | Local path implemented; destination transfer/install is a proposal |
-| Governance | Durable overlay authoring, immutable candidates, review, activation and restart recovery | Implemented for host-selected local overlays; durable public registry publication is a proposal |
-| Approvals | Owner-scoped requests, decisions, policy, inbox feed, consumption and delivery outbox | Local owner and Inbox projection implemented; federation is a proposal |
-| Threads and delivery | Durable records, memberships, actions, attempts, subscriptions, obligations, waits, projections and carriers | Local owner implemented; cross-node forwarding remains a proposal |
-| Resources and credentials | Named roots, containment, audience-bound grants and credential materialization | Owner contracts implemented; portable authority transfer remains a proposal |
-| Placement and harnesses | Launch plans, attempts, native placement, carrier, hooks, permissions and cleanup | Native and Docker Sessions use the external executor and pull scheduler; Docker network/gateway admission uses one person approval |
-| Managed-agent package | Agent application, gateway hook endpoints, host-selected launch policies, credential sources, placement/resource roots and built-in driver composition | Implemented in installable components composed by `bee/agents`; the default Bee lock includes the bundle, while a bare kernel can omit it |
-| Hive | Authenticated operation contracts, configured policy routing and invite-based joining | Generic policy route and invite joins between nodes of one host implemented; cross-host addressing, discovery and remote workspace composition are proposals |
-| Operation/interface catalog | Filtered descriptions shared by contracts, tools, traits, UI and remote adapters | Visibility is descriptive; each invocation is authorized at its owner |
+| `values` | `bee.values` | Bounded decoders, canonical encoding, the clock and reply values every owner shares |
+| `persist` | `bee.persist` | Access to the node database and its transactions |
+| `deps`, `env` | `bee.deps`, `bee.env` | Dependencies on Wippy modules; the workspace folder, the machine home and the documentation corpus volume |
+| `process` | `bee.process` | The worker loop background services run |
+| `node` | `bee.node` | Workspaces, desktops, kept application instances, node settings, the node owner process, the application broker and the workspace catalog operations |
+| `app` | `bee.app` | The application SDK: launch values, `client`, arguments, descriptors, interaction; `bee.app.threads` carries thread requests from an app through its broker |
+| `shell` | `bee.shell` | The display: windows, Start menu, taskbar, workspace menu, dialogs |
+| `ui` | `bee.ui` | The application frame, appearance and themes, visualization (`viz`), diagrams, forms and the folder picker |
+| `apps` | `bee.apps.*` | The stock applications: Help, Modules, Overlays, Processes, Settings, Terminal |
+| `hive` | `bee.hive` | The call protocol between nodes: one supervisor per node routes an operation by its prefix to the node-local service that serves it |
+| `sync` | `bee.sync` | Typed projection feeds and replicas between nodes |
+| `threads` | `bee.threads` | Durable thread records, membership, delivery, notices, action inboxes, carrier checkpoints and the Sessions work journal |
+| `threads/sessions` | `bee.threads.sessions` | The Sessions contract, client and protocol over the journal |
+| `approvals` | `bee.approvals` | Owner-scoped approval requests, decisions, policy, the feed and the Needs you app (`bee.approvals.inbox.app`) |
+| `capability` | `bee.capability` | The capability catalog and the model that compares grants |
+| `resources` | `bee.resources` | Named resource roots, associations and grants |
+| `credentials` | `bee.credentials` | Credential sources and projections |
+| `harness` | `bee.harness` | Agent profiles, launch admission, hooks, the carrier of a running attempt and the Sessions app (`bee.harness.app`) |
+| `driver` | `bee.driver` | Agent drivers: `claude`, `codex`, `agy`, `grok`, `muse`, `opencode` and the native `wippy` driver, over shared descriptors, profiles, codec, permission and transport |
+| `placement` | `bee.placement` | Launch plans and attempts; `native` and `docker` place them |
+| `executor/external` | `bee.executor.external` | Running a driver's external process under a placement |
+| `git/worktree` | `bee.git.worktree` | The Git worktree a launch can prepare and clean up |
+| `gateway` | `bee.gateway` | The scoped MCP gateway agents reach Bee through: sessions, bindings, hooks, tool surfaces and publication |
+| `docs` | `bee.docs` | The offline corpus and its read-only `docs` tool |
+| `gov` | `bee.gov` | Overlay authoring, freeze, preflight, delivery, approval, activation, revert and recovery; the component authoring guide |
+| `hub` | `bee.hub` | Package search, inspection, planning, installation and publication |
+| `security` | `bee.security.*` | Policies the approval, documentation and gateway owners hold |
+| `corpus` | none | The documentation read by the `docs` tool |
 
-An application definition describes capabilities, but the host-selected
-admission record supplies policy and scopes. A component cannot publish itself,
-select an arbitrary database, or turn a client attachment into authority.
-Native Terminal retains OS-user authority. Core remains independent of default
-application implementations; all applications are standalone processes.
+## Boundaries
 
-## Installation and change ownership
+An application definition describes what it needs; the host-selected admission
+record supplies its policy and scopes. A component cannot publish itself, select
+an arbitrary database or turn a display attachment into authority. Applications
+run as separate processes in a scope that holds only what their process entry and admission
+name, and may not start the node's own services; they reach an owner through its contract or through the
+application broker.
 
-Use one reviewable plan for local Hub changes, governed overlays and
-service-owned application changes. The plan names the authenticated requester,
-target owner/workspace, expected revisions, exact candidate and dependency
-digests, effective capability/resource changes, dependency order, migration and
-lifecycle effects, recovery steps and rollback limits.
+The node database is opened only by an owner. Applications read workspace data
+through `bee.node.binding` and threads through `bee.threads` contracts under the
+actor the broker issues.
 
-The owner sequence is stage, resolve, validate, authorize, apply, activate,
-verify and receipt. Each owner writes its own tables and migration ledger.
-Persist intent before effects, use idempotent operation keys, recheck revisions
-and policy ceilings, and reconcile an uncertain effect after a crash. Publishing
-a definition and activating it are separate outcomes. Installed, visible,
-compatible, activated and running are separate states; Hub search and artifact
-caching confer none of the later states.
+Metadata is descriptive. Registry entries, route names and `meta` fields never
+authorize an operation; the owner of each operation checks the caller.
 
-Applied migrations are immutable. Plans must identify whether a change supports
-live application replacement, checkpoint/restore, presenter rejoin, owner
-restart or native rebuild. Existing executions keep their admitted closure until
-their lifecycle contract permits replacement. A recoverable baseline is
-required for runtime editing.
+## Change ownership
+
+Governance and Hub are the two ways installed code changes. A change follows
+stage, validate, authorize, apply, activate and verify, and each owner writes
+only its own tables and migrations. Intent is persisted before effects, retried
+effects use idempotency keys, and an uncertain effect is reconciled after a
+crash. An agent-authored overlay is frozen, preflighted and delivered, and the
+person approves one request that names the version and the permissions it adds
+(see `docs/approvals` and `component/gov`). Installed, visible, activated and
+running are separate states. Applied migrations are immutable, and an existing
+execution keeps its admitted definition until its lifecycle permits replacement.
 
 ## Visibility, approvals and sharing
 
-The Inbox is an owner-qualified projection. A client may aggregate requests it
-is authorized to discover and read, keeping a separate cursor per owner. The
-authoritative owner rechecks visibility, deadline, proposal digest and approver
-rights when reading or deciding. A stale row cannot authorize a changed
-proposal. Notifications wake a client; they are not decisions. There is no
-invented global order across approval owners.
-
-Keep these operations separate:
+The Needs you inbox is an owner-qualified projection. A client aggregates the
+requests it may read, keeping a separate cursor per owner. The owner rechecks
+visibility, deadline, proposal digest and approver rights when it reads or
+decides; a stale row cannot authorize a changed proposal, and a notification
+wakes a client without deciding anything. See `docs/sync_and_inbox`.
 
 - Sharing a view keeps execution at its owner and grants a new attachment.
-- Sharing a definition exports admitted content and dependencies for a new
-  destination-owned plan.
-- Transferring supported state uses an owner-defined schema and resolves
-  destination resources and authority explicitly.
-- Exposing a service publishes a host-selected interface description, then
-  authorizes each invocation and resulting session at its owner.
+- Sharing a definition exports the admitted content for a destination-owned plan.
+- Exposing a service publishes an operation on a Hive route, and each invocation
+  is authorized at its owner.
 
 Portable content excludes credentials, enrollment secrets, active grants, live
-PIDs, native handles and unsupported process memory. Client layouts are not
-portable execution snapshots. Registry publication is not a workspace database
-export. Knowing a PID, holding a mesh membership or reading metadata does not
-authorize an operation.
-
-## Explicit proposals
-
-The following remain proposals until their owners, permissions, migration and
-acceptance contracts are implemented:
-
-- Named-node Hive discovery, headless launch and remote workspace composition;
-- destination-owned Hub package transfer/install and durable/federated registry
-  publication;
-- independent package releases and alternate overlay lifecycles;
-- cross-node approval/inbox federation and remote view/state sharing;
-- end-to-end Docker Sessions launch, automatic local runtime-image provisioning,
-  portable harness execution and generic durable
-  continuation/wakeup workflows.
-
-Each proposal must preserve destination-owned permissions, explicit identities,
-typed boundaries, append-only migrations and recoverable receipts. No desktop,
-agent, registry description or mesh membership may bypass those owners.
+process ids and native handles.

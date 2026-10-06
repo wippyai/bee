@@ -1,65 +1,31 @@
 # bee.persist
 
-Migration mechanics for owned SQLite stores. A component supplies its
-resource, its ledger table and label, and its immutable migration list; this
-module checks the ledger against that list on every open and applies what is
-missing. The default commits one migration and its ledger row per transaction.
-A rebuild runs with foreign keys off on the dedicated connection, outside its
-transaction, and checks references before commit. A failed step leaves earlier
-committed steps intact.
+Access to the node database `bee:db`, the one SQLite resource every component
+stores its state in. SQLite serializes writers on its single connection.
 
-`ledger.apply(db, config, migrations)` accepts `transaction = "batch"` to commit
-all pending migrations and the ledger together. A failure rolls back the entire
-batch. Batch mode refuses rebuild migrations, which require their own foreign
-key enforcement boundary. `applied_at = false` preserves a ledger with only
-`id`, `name` and `checksum`; the default ledger includes `applied_at`.
-`freshness_table` names a connection-local temporary table containing one
-`fresh` integer: 1 when the batch starts with an empty ledger, otherwise 0.
-It requires batch mode and refreshes on every apply, including connection reuse.
-The runner takes SQLite's writer lock before reading the ledger inside each
-migration transaction, then validates the ledger again so concurrent opens
-observe the winning writer's committed steps without applying them twice.
-
-A migration can declare `historical_sql` containing exact immutable texts from
-previously shipped variants under the same ID and name. Ledger verification
-checks those texts' SHA-256 digests as well as the current text; it preserves
-the stored checksum and never replays an applied variant. Unknown digests still
-refuse the store with the owner label, migration ID/name, expected digest and
-found digest. Historical texts cover workspace 6/8/9, threads 16, governance 14,
-gateway 16 and sync 4/8. New migrations reconcile their schema/data differences;
-applied rows retain their original digest and timestamp.
-
-SQL failures retain the native error text with the failing operation. Transaction
-begin, statement, commit, rollback and database release failures remain visible
-to the caller. Cleanup failures append to the initiating failure, including
-rollback and foreign-key restoration after a rebuild.
-
-| Slice | Responsibility |
+| Entry | Responsibility |
 |---|---|
-| `bee.persist.persist` | `ledger`: checksums, ledger replay, apply; `database`: SQLite open with WAL, full sync, foreign keys, busy timeout, then ledger apply |
+| `bee.persist:database` | `open()` returns `sql.get("bee:db")` or `nil` with a `node database:` error |
+| `bee.persist:transaction` | Result values and write/read transactions |
 
-Owned-store consumers include `bee.approvals`, `bee.credentials.persist`,
-`bee.gateway`, `bee.gov.persist`, `bee.placement.native`, `bee.resources.persist`,
-`bee.sync.persist`, and `bee.threads.persist` (ledger
-`bee_thread_schema_migrations`, label `thread`). `bee.workspace.persist:store` and
-`bee.client.persist:store` use batch mode. Workspace migration 8 consumes
-`temp.workspace_migration_run`; its ledger retains `applied_at`. The client
-ledger retains its original three columns, without `applied_at` or a new
-migration. Each owner keeps its immutable SQL, ledger identity, resource and
-schema; this module supplies the runner.
+`transaction.write(db, label, body)` runs `body(tx)` in one serializable
+transaction: a success commits, a refusal (`transaction.refusal`) commits and
+still reports its failure, any other failure rolls back. `transaction.read`
+runs `body` in a read-only serializable transaction. A result is
+`{ok, code, message, value, replayed}`. `transaction.busy(err)` classifies
+SQLite busy (5) and locked (6) from `err:details().sqlite_code`; those become
+`BUSY` and every other SQL error `INTERNAL`. Error messages keep the native
+text with the failed operation, and a failed rollback or `db:release()`
+is appended to the initiating failure. `label` names the store in messages.
 
-The runner publishes migration checkpoints with lowercase owner labels through
-`bee.persist.env:startup_progress` while retained startup is active. Ledger
-verification reports each checked revision, pending steps report their old/new
-revision before SQL and their applied revision after the ledger insert, and
-completion reports only after commit. A batch completes after its single
-commit; rollback never announces completion. The host-selected store scope
-grants reads and writes only to this progress field, backed by the native host
-environment without a terminal. Ready owners and isolated compositions expose
-an empty field. Startup follows owner readiness and failure events.
-Migration SQL and checksums remain unchanged.
+## Migrations
 
-The transaction runner classifies SQLite busy (5) and locked (6) from
-`err:details().sqlite_code`, including extended codes via their primary code.
-Other errors remain internal failures even when their text contains "busy" or
-"locked". Error messages retain the original operation and runtime text.
+Schema changes are `function.lua` entries in the component's migrations
+namespace (`bee.<component>.migrations`) with
+`meta: {type: migration, target_db: bee:db, timestamp: <UTC>}`, `method: run`
+and the import `migration: wippy.migration:migration`. The source returns
+`require("migration").define(...)` with `migration(name, ...)`, `database("sqlite", ...)`
+and `up`/`down` functions that execute statements on `db`. The `wippy/migration`
+dependency (`bee.deps:migration`) applies every migration entry that targets
+`bee:db` at boot, ordered by timestamp. Migrations are immutable once shipped;
+a schema change adds a new entry with a later timestamp.

@@ -1,8 +1,8 @@
 -- MIT. The visualization kit draws exact golden frames, stays inside the
 -- rectangle it is given at every size, colors marks by semantic role and
--- keeps live series bounded. Each "-- example:" block below is the proven
--- example build/agent_corpus.py publishes for the named kit functions: its
--- code, its test.eq results and its golden frame as a screenshot.
+-- keeps live series bounded. Each "-- example:" block below is a proven
+-- example for the named kit functions: its code, its test.eq results and its
+-- golden frame as a screenshot.
 local test = require("test")
 local tty = require("tty")
 local frame = require("frame")

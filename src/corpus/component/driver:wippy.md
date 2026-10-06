@@ -1,11 +1,10 @@
-# Bee Wippy Driver
+# bee.driver.wippy
 
-Native in-process agent harness driver for Wippy.
+The native in-process agent harness driver for Wippy.
 
 Runs a framework `agent.gen1` closure (resolved by `bee.harness.launch:agent_resolver`)
 in-process with its traits, tools, and contracts, against an OpenAI-compatible chat
-completions endpoint chosen by host config (no provider or key baked in; key by
-credential reference).
+completions endpoint chosen by host config (key by credential reference).
 
 `bee.driver.wippy.binding:run` is the harness's in-process execution adapter. The harness
 owns the carrier claim and checkpoint, terminal receipt, status, wait and
@@ -20,7 +19,7 @@ fresh per-attempt actor narrowed to the tool's declared scopes.
 `bee.driver.wippy.binding:run` accepts `host_config`, defaulting to the
 `bee.driver.wippy.env:host_config` registry entry. Fields:
 
-- `endpoint`: https URL, or plain http only for the 127.0.0.1 loopback fixture.
+- `endpoint`: https URL, or plain http only for the 127.0.0.1 loopback.
 - `credential_ref`: registry reference for the chat key. An unresolvable
   reference fails the run; the reference string is never sent as the key,
   and the key never enters logs or errors.

@@ -2,19 +2,23 @@
 
 Native placement: one admitted launch becomes one attempt, run as a native
 child under a runner process this module owns. Receipts live in an owned
-SQLite store opened through `bee.persist`; attempt homes and retained
-session directories live under `bee.placement.native.env:root`, the default for
-the replaceable `target_root` requirement.
+SQLite store in `bee:db` (`bee.persist`); attempt homes and retained session
+directories live under `bee.placement.native.env:root` (`BEE_PLACEMENT_ROOT`,
+default `.wippy/placement`, mode `0700`), which the `root_ref` entry links.
+The other host references are the `bee.resource_ref` entries `runner_host_ref`
+(`bee:workers`), `executor_ref`, `host_files_ref`, `admitted_roots_ref`,
+`resource_mode_ref` and `workdir_preparers_ref`; replacing one's target
+selects a different resource.
 
-| Slice | Responsibility |
+| Namespace | Responsibility |
 |---|---|
-| `bee.placement.native` | Contracts, host requirements and runner/service wire protocol |
-| `bee.placement.native.binding` | Authenticated contract operations and the native process backend |
-| `bee.placement.native.service` | Attempt runner and startup supervision, windows, materialization, cleanup sweep, capability and identity checks, homes and workdir preparers |
-| `bee.placement.native.persist` | Attempts and append-only evidence |
-| `bee.placement.native.migrations` | Immutable schema migrations |
-| `bee.placement.native.env` | Selected resources and linked host references |
-| `bee.placement.native.security` | Permission policies selected by the host |
+| `bee.placement.native` | `protocol`: the runner/service wire protocol |
+| `bee.placement.native.binding` | The contract binding, one function per contract method plus `stop_revoked`, and `process_backend` |
+| `bee.placement.native.service` | `service` (operations), `runner`, `startup` supervision, `window`, `materialization`, `homes`, `identity`, `capability`, `executable`, `workdir_preparers`, `writable_roots_adapter`, `provider_projection`, `sweeper_service` |
+| `bee.placement.native.persist` | `store`: attempts and append-only evidence |
+| `bee.placement.native.migrations` | Immutable schema migrations (`attempts`, `complete`) |
+| `bee.placement.native.env` | Root, executor, host files, admitted roots, resource mode and preparer entries; `resources` and `configuration` libraries |
+| `bee.placement.native.security` | Permission policies (`placement_store_policy`, `placement_exec_policy`, `placement_service_policy`, `placement_sweeper_policy`, `placement_runner_policy`) |
 
 ## Order of a start
 
@@ -87,9 +91,9 @@ there is no automatic retry or replay of the user's prompt.
 ## Workdir preparers and writable roots
 
 Placement exposes a generic `bee.placement:workdir_preparer` extension point discovered
-from the registry and authorized by the host through `target_workdir_preparers` (registry
-metadata alone never authorizes). The default preparer list is empty; the host
-explicitly selects bindings. Each binding implements read-only `plan`, idempotent
+from the registry and authorized by the host's `bee.placement_workdir_preparers` entry
+`bee.placement.native.env:workdir_preparers` (registry metadata alone never
+authorizes), which lists `bee.git.worktree.binding:binding`. Each binding implements read-only `plan`, idempotent
 `setup`, and idempotent `cleanup`. Placement persists plan state and the selected
 method targets before calling setup, including for preparers without state. The
 plan record lives whole in `bee_placement_preparer_states` (at most 64 KiB; a larger
@@ -182,9 +186,7 @@ available because the credential broker reads only the host-declared source
 files before the worker starts.
 
 Configuration and state files are never returned. Evidence records status and
-projection identity only; it never contains login bytes. The runtime feature
-branch adds the descriptor-relative no-follow read needed to resume write-back;
-Bee keeps the behavior disabled while its manifest pins the earlier runtime.
+projection identity only; it never contains login bytes.
 
 Retained homes keep their existing identity marker and seed rules. The first
 seed records provider, definition ID and revision only after the login file is
@@ -192,15 +194,6 @@ completely written. A matching resume leaves the login file untouched, so
 provider-refreshed bytes persist. Changed identity or an interrupted seed
 refuses reuse. Existing parents are refused unless the current materialization
 created them; login formats cannot overwrite the retained identity marker.
-
-The native fixture checks the placement root's actual `0700` mode rather than
-registry metadata. The helper reads the root's actual numeric
-`fs.FileInfo.mode` and refuses group or other access; it does not infer privacy
-from the registry declaration. The pinned `fs` write contract reports an error
-for a short write, so a successful write plus successful close is the
-ready-marker precondition. It has no fsync operation: ready-marker ordering
-refuses interrupted process writes, but is not a machine-power-loss durability
-claim.
 
 An optional source may seed no login bytes. Retained homes preserve either an
 absent file or one created by interactive sign-in; later machine credentials
@@ -210,10 +203,7 @@ provided login bytes remain an error. Default provider windows use the
 explicitly authorized host HOME and select no login projection, except Grok,
 whose private window projects `grok_login` into its selected retained session
 home. Private batch launches without a retained home selection project their
-declared files into attempt homes. Fixture unit tests
-cover all six driver declarations and placement paths, and the confined Codex
-fixture worker verifies that unrelated machine-home files stay outside its
-attempt home. `managed-launch-fixture-check` uses fixture CLIs only.
+declared files into attempt homes.
 
 ## Capability
 
@@ -287,7 +277,7 @@ authority's code otherwise), and `reconcile` resolves them for a live
 attempt and stops it cooperatively when one no longer holds
 (`grant.revoked` evidence; enforcement is pending until the exit is
 proven). `capabilities` reports the mode, `delegated_resource_grants`,
-`revocation_enforcement: stop_on_reconcile` and `credential_broker: false`.
+`revocation_enforcement: stop_on_reconcile` and `credential_broker: true`.
 
 ## Input uncertainty
 
@@ -349,15 +339,6 @@ and no-child evidence. Consumers settle cancellation directly, without an exit
 code or exit source. Reconciliation never guesses a startup result from runner
 absence while its monitor is recording the outcome.
 
-Placement migration 11 (`supervised_startup`, M5) adds `start_failed` to the
-owned attempt state schema, removes `timeouts.start_ms` from persisted request
-JSON and carries existing failed-start evidence into that state. Existing
-request digests, IDs, timestamps, evidence and migration checksums are retained.
-New request decoders reject `start_ms`. Registry launch-policy revision
-`bee.launch-policy@3` removes it; the explicit revision-two decoder validates
-and ignores the retired field for persisted policies while retaining the
-original entry digest. No registry history or frozen policy is rewritten.
-
 Signal evidence is not exit evidence; the runner records exit only from
 `wait`. Without a live runner, `stop` signals the group only after the
 leader is identified alive by pid, start stamp and boot identity; otherwise
@@ -415,16 +396,12 @@ for the exact attempt, owner and runner. An arbitrary process message cannot
 stop the window. The listener is installed before publishing `running`; publication compares the
 recorded state with `starting`, so a concurrent stop cannot be overwritten. The
 window retires its listener when finalization commits.
-Native PTY acceptance proves live reconciliation, raw-stop denial, admitted stop,
-input, resize, finalization and duplicate/foreign-owner refusal. A native Agent
-fixture also keeps its MCP binding live across the real 30-second sweep.
 
 Structured turns with a SessionRef and an admitted writable session home retain
 the driver-selected provider state across attempt cleanup. Ephemeral turns keep
 their attempt-local private home.
 
-Private provider configuration uses the shared provider projection scanner from
-the Docker placement lane. It bounds nesting and resolves `{file:...}` references
+Private provider configuration uses the shared provider projection scanner. It bounds nesting and resolves `{file:...}` references
 only to driver-declared files materialized by the credential broker. Both
 absolute host-home paths and `~/` references become paths under the private
 home. Undeclared, absent, traversing or unresolved dependencies refuse before

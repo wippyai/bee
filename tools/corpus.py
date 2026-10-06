@@ -53,7 +53,7 @@ def page(driver: str, title: str) -> str:
         "which the person reviews with the overlay. Change the descriptor, "
         "argv rendering and output "
         "normalization to the new CLI, then freeze and deliver it. The person approves the overlay "
-        "and admits the new binding through harness activation (`component/agents`).",
+        "and admits the new binding through harness activation (`component/harness`).",
         "",
     ]
     for path in files:

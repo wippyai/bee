@@ -1,41 +1,48 @@
 # Working on Bee
 
-Read [the repository README](../../README.md), [development conventions](conventions.md),
-and the [documentation map](../README.md) before changing Bee. Source
-under the root and selected modules' `src/` directories is production code;
-tests, fixtures and the legacy proof of concept in
-`../bee-legacy/` are never runtime dependencies.
+Bee is a Wippy application: Lua registry entries under `src/`, a small Go
+native layer under `native/`, and Lua suites under `tests/`. Read the
+repository `README.md` and the [documentation map](docs/readme) before changing
+anything.
 
 Bee-owned code and artwork are MIT. Preserve the upstream license for Wippy and
-other dependencies when changing or copying runtime code. Keep core ownership,
-standalone application processes, typed boundary decoders and host-selected
-permissions intact. Registry metadata describes capabilities; it never grants
-them. Native Terminal runs with the operating system user's authority.
+other dependencies when changing or copying runtime code. Registry metadata
+describes capabilities; it never grants them. Native Terminal runs with the
+operating system user's authority.
 
-Keep host lifetime and admission in the `src/` component folders (`src/host`,
-`src/launch` and their siblings, one namespace per folder),
-public application helpers in `modules/application/src`, shared frame, appearance,
-text and presentation kits in `modules/ui/src`, and application UI in
-`modules/<module>/src/app` child namespaces. Desktop values and projection live
-in `modules/desktop/src`; client actors, attachment/catalog bindings and
-qualified layout storage live in `modules/client/src`. The terminal shell and
-delivery live in `modules/terminal/src`; `bee.launch:display` owns the physical display.
-Use the [UI brand book](../guides/ui.md) and
-[application visual style](../guides/app-style.md) for presentation and
-interaction rules. The offline toolkit reference gives compact, tested examples
-for `bee.ui:frame` and `bee.ui.viz:viz`. Apps use
-public contracts such as `bee.app:client` and
-`bee.threads.binding:authority_local`;
-they do not import private broker or store modules.
+## Layout
 
-The `bee/workspace` component owns the node catalog, application checkpoints,
-display assignments, binding rows and its migration ledger. The root host owns
-its resources, permissions, leases and recovery lifetime.
-Registry configuration/history, thread records, approvals, resources and
-credentials remain owned by their respective subsystems, even when stores
-share a SQLite file. Never edit an applied migration, alter a migration
-checksum, query another owner's tables, or reset a workspace database to hide
-a migration failure. Use an owner operation for every state change.
+Each component is one folder `src/<component>/` that holds its own
+`_index.yaml` and is the namespace `bee.<component>`. Its subfolders are child
+namespaces, one per concern:
+
+| Folder | Holds |
+|---|---|
+| `binding/` | contract bindings other components call |
+| `env/` | env entries that name resources and executables |
+| `security/` | policies the component's entries run under |
+| `service/` | long-lived processes |
+| `persist/`, `migrations/` | the component's stores and their migrations |
+| `types/` | shared type definitions |
+
+The component list and what each owns is in [the system map](docs/system_map);
+each has a page under `component/`. Shared kits: `src/app` is the application
+SDK (`bee.app:client`), `src/ui` the frame, appearance, text and visualization
+kits (`bee.ui:frame`, `bee.ui:appearance`, `bee.ui.viz:viz`), `src/values` the
+shared bounds, canonical JSON and reply decoding. Applications that ship with
+Bee live in `src/apps/<name>`; each application's UI sits in its own
+namespace. Use [the visual style](docs/app_style) and
+[the UI brand book](docs/ui_brand_book) for presentation, and the
+[toolkit](toolkit) for compact, tested examples. Applications use public
+contracts such as `bee.app:client`; they do not import private broker or
+store modules.
+
+Each store belongs to one component. Registry configuration, thread records,
+approvals, resources, credentials and node state remain owned by their
+components even when stores share a SQLite file. Never edit an applied
+migration, alter a migration checksum, query another component's tables, or
+reset a database to hide a migration failure. Use the owner's operation for
+every state change.
 
 Use typed values for every decoded message and request. Validate versions,
 identities, strings, arrays, state and request IDs before changing state. A PID
@@ -44,162 +51,83 @@ the relevant instance, token or operation grant. A successful send means
 queued; it does not mean ready, committed or stopped. Timeouts can leave an
 unknown result and must not cause a blind retry.
 
-Use the Makefile for development:
+## Build and test
 
 ```sh
-make setup
-make lint
-make check
-make pack
-make portable-deployment-check
-make standalone
+make tools        # install the pinned builder and build the matching wippy toolchain
+make lint         # corpus check, then lint of src and of the tests workspace
+make test         # run every Lua suite in tests/ against the composed source
+make test TESTS=bee.docs:corpus_test    # run selected test entries by id
+make build        # pack the application and build dist/bee
+make install      # install dist/bee as ~/.local/bin/bee, keeping the previous as bee.prev
 ```
 
-`make run` starts an editable source workspace. `make desktop-check` runs the
-desktop acceptance against the built pack, and `make attachments-check` covers
-host/client attachment grants and revocation. Use focused tests while editing,
-then the checks required by the changed boundary. Documentation-only changes
-need link and source consistency checks; they do not need a full terminal run.
+`make e2e` drives two hive nodes and a display through the built binary and
+`make footprint` checks a headless node's resident memory and live heap.
+`make runtime-pin RUNTIME_VERSION=<commit>` and
+`make native-pin NATIVE_VERSION=<commit>` move the release build's pins in
+`wippy.build.json`. `RUNTIME_SOURCE=<path>` builds against a local runtime
+checkout.
 
-`make owner-journey BEE_BINARY=/path/to/bee BEE_SOURCE_STATE=/path/to/state`
-drives an existing standalone through the owner's desktop, agent, update,
-overlay, self-edit and two-node Hive journey. It copies state without credentials
-and reports each step, approval and failure under `.wippy/owner-journey/`.
-See the [journey fixture guide](../../tests/fixtures/owner_journey/README.md)
-for isolation, subscription requirements and evidence handling.
+Suites are `function.lua` entries with `meta: {type: test, suite: bee}` in
+`tests/lua/<component>/_index.yaml`. `make test` first composes a copy of
+`src` with test-only seams (`tests/compose.py`), starts from fresh run state
+and runs under a clean environment: fixture executables from
+`tests/fixtures/harness/bin` stand in for the agent CLIs, and the suites never
+reach the person's home, PATH or provider credentials. Heavy gates (`e2e`,
+`footprint`, binary builds) run on release tags; pushes and pull requests run
+lint and the Lua suites. Documentation changes run `make lint`, which checks
+the corpus manifest; regenerate its byte counts and digests with
+`python3 tools/corpus.py`.
 
-Development loads the selected components' `src/` trees. `make native-pack` uses
-`wippy pack --module` for the root and every physical component; `make portable-deployment-check`
-boots their exact local vendor WAPPs with no source or replacements. Keep binaries, registry
-stores, credentials, fixture data and temporary databases outside the pack. Inspect assembled packs
-for test registrations and fixture dependencies. Do not add a local runtime
-binary or legacy source to production, and do not edit registry tables directly
-to work around source loading.
+Keep binaries, registry stores, credentials, fixture data and temporary
+databases out of the pack. A new test entry belongs in the suite folder of the
+component it covers.
 
-The desktop client may replace its presenter with F12. The session can pick up
-changed code with a same-PID handoff; on an incompatible checkpoint, its client
-restarts the session from the committed layout while retaining the desktop and
-applications. See [process handoff](process-handoff.md). Workspace, broker,
-host or application changes still require the owning process lifecycle and
-recovery path. Admitted application definition and imported-library changes now
-restart the execution behind its retained view through the broker's existing
-checkpoint/resume path; incompatible state produces a visible fresh-start notice.
-Preferences and opted-in application checkpoints persist in the
-workspace database. Settings opts in to checkpointing; a dead native Terminal
-does not become a portable checkpoint. See
-[application contracts](../reference/applications.md) for launch, attachment,
-checkpoint and close behavior.
+## Governed delivery
 
-The host keeps application execution independent from presentation. A producer
-may be ready without a presenter, a client may observe a retained desktop, and
-attachments carry recipient-bound observation, input and resize authority.
-Detaching a client does not stop admitted applications. A stale attachment
-loses its authority. The public client, local host and explicit Hive invite
-join are implemented; remote workspace composition, automatic Hive enrollment
-and discovery and destination Hub transfer/install remain unfinished. Managed
-headless turns and Docker Sessions use the external executor and pull scheduler.
-Docker first-use network/gateway admission uses one person approval; see
-[Docker placement](../../modules/placement-docker/src/README.md).
-Keep those operations labeled as proposals until their acceptance contracts
-exist.
+An agent authors an application or a driver as an overlay, freezes it and
+requests delivery. Preflight checks the frozen pack against the rules in the
+authoring guide the overlay tool returns, a person approves the exact version
+and the permissions it adds, and the owning component applies it.
+Installed metadata describes a capability; it never grants one. Hub discovery
+or installation alone does not publish an admission binding or grant an
+application authority. See [governance](component/gov),
+[Hub](component/hub) and [package boundaries](docs/package_boundaries).
 
-`bee observe` attaches a read-only display to a running local Bee and never
-starts or displaces the controller. `bee recover` boots Bee's shipped bundle
-with fresh registry history while preserving workspace and application state;
-it does not select a managed launch by name. These commands keep the local
-owner boundary and provide no remote enrollment. On a node without a folder
-workspace (`bee daemon`),
-`bee client` picks one of the node's workspaces and Ctrl+] returns to the
-picker to switch; see [the workspace catalog](../reference/workspace-catalog.md).
+When changing a behavior, update the relevant contract page and run the suites
+of that owner. Preserve stable definition IDs independently of versions.
+Carry expected revisions and recovery information in activation requests.
+Do not describe a proposal as a callable API.
 
 ## Managed agent containment
 
-Managed CLIs run with the operating system user's authority. Every
-batch worker opened through a session uses a private retained session home containing only
-the provider login, configuration and conversation state its driver declares and the host
-credential broker projects; the launch policy admits no host HOME inheritance
-and no prompt-free permission mode. When a person chooses a named Codex profile,
-the driver projects that one admitted profile file into the private home so
-Codex resolves it with the selected profile. Each CLI further runs under its
-own permission control where one exists and is proven: Codex
-`--sandbox workspace-write`, Claude Code and Grok default permission
-modes, Muse `on-request` approval, agy `--sandbox`. Grok and OpenCode
-offer no workdir confinement Bee can select, so the host records those
-batch routes as `unconfined`.
+Managed CLIs run with the operating system user's authority. A session's batch
+worker uses a private retained home containing only the provider login,
+configuration and conversation state its driver declares and the credential
+broker projects; the batch launch policy admits no host HOME inheritance. Each CLI
+further runs under its own permission control where one exists. These controls
+are CLI permissions, not operating system confinement: a managed CLI can read
+any file the OS user can read outside its workdir. Treat the brief, workdir
+and home as the containment boundary and keep Hive keys, Bee state and other
+provider logins outside every granted folder and home. Placement is described
+in [placement](component/placement) and [native placement](component/placement:native),
+credential projection in [credentials](component/credentials).
 
-For an edit-capable profile with a write-granted workdir, the host-selected
-Git worktree plugin resolves the repository's Git directory and shared common
-directory from Git's metadata files. Placement passes those physical paths to the CLI sandbox only when both
-remain within a host-admitted write root; this lets a worktree commit while
-keeping the host's admitted roots as the outer boundary.
+Each driver declares its provider login evidence as a path relative to the
+provider home. Missing evidence yields a typed `LOGIN_REQUIRED` notice from
+placement's prepare step and the agent window shows the provider's own sign-in
+command; Bee checks existence only and leaves sign-in to the provider.
 
-These controls are CLI permissions, not operating system confinement. A
-managed CLI can still read any file the OS user can read outside its
-workdir; only full OS confinement, a separate Wippy runtime feature,
-removes that authority. Treat the worker brief, workdir and home as the
-containment boundary and keep Hive keys, Bee state and other provider
-logins outside every granted folder and home.
-
-## Managed provider login
-
-Each built-in Codex, Claude, agy, Grok, Muse and OpenCode window launch declares
-its provider's login evidence as safe paths relative to its provider home, plus
-a command to show the person. Native placement checks file existence in the
-home selected for that attempt. Missing evidence yields a typed
-`LOGIN_REQUIRED` notice in placement's prepare reply. The Agent window shows
-the provider and command before starting the CLI; Enter continues to the
-provider's own sign-in flow, and the title keeps a login hint. This is a
-helpful observation, not an authentication decision: Bee checks existence
-only and leaves sign-in to the provider.
-
-The built-in window profiles select the machine home under their existing
-host-selected `allow_host_home` policies, including Muse. Grok keeps its private
-window home and declares `grok_login` for the host's first-use setup and broker
-projection. Its selected retained session home holds login and conversation
-state across turns, with `GROK_HOME` pointing into the same home on resume.
-These selections keep catalog login evidence and the CLI's launch
-home aligned: a saved machine login needs no second sign-in. A driver's window
-descriptor and profile agree on the home selection. Batch profiles keep their
-declared private homes and receive only broker-admitted login files.
-
-Confined batch workers receive only their driver's declared files from the
-machine home:
-
-| Driver | Login | Ambient configuration | Child home selection |
-|---|---|---|---|
-| Claude Code | `.claude/.credentials.json` | `.claude/settings.json`; Bee creates the onboarding marker `.claude.json` only with a present login | `CLAUDE_CONFIG_DIR` points inside the attempt home |
-| Codex | `.codex/auth.json` | `.codex/config.toml` | `CODEX_HOME` points inside the attempt home |
-| Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` | private `HOME` |
-| Grok | `.grok/auth.json` | `.grok/config.toml` | `GROK_HOME` points inside the attempt home |
-| Muse | `.config/muse/auth.json` | `.config/muse/settings.json` | private `HOME` |
-| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`; declared `.config/opencode/towers.key` dependency | XDG config and data roots point inside the attempt home |
-
-The machine login source selects the runtime's `owner_safe` link policy. On Unix,
-external links resolve to regular files owned by the process UID or root;
-the target and every canonical parent through filesystem root must also have
-`mode & 022 == 0`, including sticky directories. Resolution is bounded to 40
-symlinks and detects loops. Refusals retain the runtime's path and reason in the
-broker and Agent catalog. The pinned runtime implements this policy. Windows retains containment because
-ownership/ACL evidence is unavailable. See the
-[credential contract](../../modules/credentials/src/README.md#machine-login-links).
+| Driver | Login | Ambient configuration |
+|---|---|---|
+| Claude Code | `.claude/.credentials.json` | `.claude/settings.json`; `.claude.json` onboarding marker |
+| Codex | `.codex/auth.json` | `.codex/config.toml` |
+| Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` |
+| Grok | `.grok/auth.json` | `.grok/config.toml` |
+| Muse | `.config/muse/auth.json` | `.config/muse/settings.json` |
+| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`, `.config/opencode/towers.key` |
 
 Only a provider's login file may be returned to its original path after the
-child exits. The broker requires the active attempt projection and unchanged
-source digest, so a newer machine login is left in place. Provider configuration
-and other home files are not copied back. Codex `--profile NAME` keeps working
-with the selected `NAME.config.toml` projected into that attempt's private home.
-
-The local Hub can inspect, plan and apply host-authorized components. Governed
-overlays can stage bounded content, freeze an immutable candidate, obtain an
-exact approval, apply it through the owning host and recover after restart.
-Hub discovery or installation alone does not publish an admission binding or
-grant an application authority. Publication, public enrollment and destination
-package transfer are separate authority boundaries; see
-[package boundaries](package-boundaries.md) and [the system map](ownership.md).
-
-When changing a behavior, update the relevant implementation contract and run
-the checks for that owner. Preserve stable definition IDs independently of
-versions and paths. Carry expected revisions, capability changes and recovery
-information in activation requests. Describe whether an update supports live
-rejoin, application checkpoint/restore or a full restart; do not describe a
-proposal as a callable API.
+child exits, and only when the source digest is unchanged; provider
+configuration and other home files are not copied back.

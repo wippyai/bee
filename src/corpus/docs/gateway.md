@@ -9,26 +9,23 @@ lifecycle.
 
 ## Component boundary
 
-Gateway is the `bee/gateway` component, loaded from `modules/gateway/src`.
-Its root namespace declares the component, dependencies and host requirements,
-and exports shared `protocol` values. Resource references and configuration live
+Gateway lives in `src/gateway`. Its root namespace `bee.gateway` exports the shared `protocol` values. Resource references and configuration live
 in `bee.gateway.env`. Lifecycle and hook queue calls use
 `bee.gateway.binding:*`; HTTP route handlers use
 `bee.gateway.api:*`; endpoint discovery uses
 `bee.gateway.binding:address`. The root namespace has no forwarding functions
 for those calls.
 
-A host composes the component and selects the database, listener, endpoint
-configuration, harness executable storage, approval policies, and the policies
-for admitted built-in tools. The host also owns the HTTP service, router, and
-routes that call the API handlers. An endpoint selection describes where the
+The host selects the database, listener, endpoint configuration, approval
+policies, and the policies for admitted built-in tools. The host also owns the
+HTTP service, router, and routes that call the API handlers. An endpoint selection describes where the
 listener runs; it does not give a caller network authority. Tool, caller, and
 listener permissions remain host-selected policies.
 
 ## Connection and credentials
 
-The listener accepts loopback and explicitly selected RFC1918 IPv4 addresses.
-Wildcard, public, link-local and hostname addresses are refused. Requests must
+The listener accepts IPv4 `host:port` addresses in 127.0.0.0/8 and the RFC1918
+ranges. Wildcard, public, link-local and hostname addresses are refused. Requests must
 use the selected Host address and port; localhost is accepted only for the same
 127.0.0.1 endpoint. Browser origins are refused.
 
@@ -63,7 +60,7 @@ its recorded deadline.
 | revoke_attempt | placement supervision | Retire bindings after a fenced attempt failure or loss. |
 | ready, drain | carrier or managed host | Verify listener readiness or begin controlled shutdown. |
 | mcp | authenticated child | Serve JSON-RPC initialize, tools/list and tools/call. |
-| hook operations | authenticated child and carrier | Accept and drain lifecycle observations as described in [Gateway hooks](hooks.md). |
+| hook operations | authenticated child and carrier | Accept and drain lifecycle observations as described in [gateway hooks](gateway_hooks.md). |
 
 An MCP tool name maps to one existing owner operation. Tool annotations and
 driver flags describe behavior; the binding and target owner still enforce
@@ -74,9 +71,11 @@ authority.
 The host may admit the ten session tools (session_catalog, session_open,
 session_run, session_send, session_await, session_join, session_get,
 session_list, session_cancel, session_close), thread_read, thread_message,
-capabilities, Governance overlay, Hub components, Hub installation requests
-(install_request, uninstall_request, install_status), delivery, publish, docs
-and application_open. Each tool receives only bounded
+capabilities, overlay, components, install_request, uninstall_request,
+install_status, publish_request, publish_status, delivery, publish, request_capability,
+capability_status, docs and application_open. The server also lists `session`
+(read or select traits and context, request host-declared access) and `call_tool`.
+Each tool receives only bounded
 arguments. The binding supplies thread, subject, action, attempt and context.
 Tool results carry the JSON reply as text and as structured content with an
 output schema; failures use one normalized error shape
@@ -92,7 +91,7 @@ thread, and the authoring path (overlay guide, delivery preflight).
 ### Sessions
 
 The ten session tools are the only way to start an agent, give it work and read
-its result. They project the `bee.sessions:contract` and `bee.sessions:catalog`
+its result. They project the `bee.threads.sessions:contract` and `bee.threads.sessions:catalog`
 owner contracts one method each; the gateway holds no session state. Arguments
 are the published closed schemas, every mutation requires `operation_key`, and
 caller identity travels only in the authenticated call context, never in a
@@ -105,12 +104,9 @@ The flow is catalog, open, send, await, close:
 1. session_catalog lists the definitions and profiles whose executor is ready.
    `include_unavailable` adds the rest with reasons. It starts nothing.
 2. session_open takes `spec` (`definition`, optional `profile`, `workdir`,
-   `workspace`, `budgets`, `supervision`) and returns a `SessionRef` that survives turns
-   and owner restarts. `budgets` selects `turn` and/or `session` limits;
-   `supervision.quiet_period_ms` defaults to 60000. No process runs while the session is idle.
-3. session_send takes `session`, `input`, an optional `output` schema reference
-   and an optional per-Work `budgets.turn` of the same shape. A Work budget tightens
-   matching session limits. It commits one immutable unit of work and returns a `WorkReceipt`.
+   `workspace`) and returns a `SessionRef` that survives turns
+   and owner restarts. No process runs while the session is idle.
+3. session_send takes `session`, `input`, and an optional `output` schema reference. It commits one immutable unit of work and returns a `WorkReceipt`.
    A receipt says the work is queued; it is not a result. A busy session queues
    the work; nothing is injected into a running process. This is the only way
    to give a session work.
@@ -121,22 +117,14 @@ The flow is catalog, open, send, await, close:
 5. session_close seals intake and drains accepted work. Await the returned
    operation for closure; use session_cancel to stop one Work.
 
-Managed `spec.placement` overrides use the canonical native/Docker union and require both the definition and host policy to admit `placement`. Docker template references and native machine-home authority are checked again. Window placement overrides require a saved profile.
-
 session_run opens a fresh session, submits one Work and returns its
-`WorkReceipt`; `spec.budgets` sets turn/session defaults and its top-level `budgets.turn`
-sets the first Work limit. Await the receipt. session_join observes an ordered set of
+`WorkReceipt`. Await the receipt. session_join observes an ordered set of
 `WorkRef` values under `all_success`, `all_settled`, `first_success` or
 `quorum`. session_get inspects one session, work or operation, or recovers an
 operation by its saved `operation_key`. session_list pages durable sessions
 with a stable snapshot and feed cursor. session_cancel requests cancellation of
 one work and keeps its session open; the receipt says `requested` and the
 operation observation reports `stopped`, `already_terminal` or `uncertain`.
-
-An accepted turn appears as `stalled` after `supervision.quiet_period_ms` without a live
-thread event. `session_get` and `session_list` include its quiet-period evidence;
-`on_stall="report"` keeps work running, while `cancel_work` requests a placement stop. Known approval waits pause stall cancellation. When an opted-in Work budget is exceeded,
-await returns `budget_exceeded` with `BUDGET_EXCEEDED` and placement exit evidence.
 
 Reuse the same `operation_key` after a lost reply; changing the input under a
 key is a conflict.
@@ -158,7 +146,7 @@ give a session work call session_send.
 
 This gateway tool writes `record` under its own agent tool policy. It does
 not add `record` permission to a workspace application's generated
-`threads.message` grant (see [Applications](../applications.md)).
+`threads.message` grant (see [application contracts](application_contracts.md)).
 
 delivery and publish take their destination `workspace_id` from the binding:
 an omitted `workspace_id` is the binding's own workspace, a request naming any
@@ -171,9 +159,9 @@ activation status. Check a candidate with preflight before requesting
 delivery. delivery stages versions, so it is not annotated read-only.
 
 application_open is available only through the active, approval-granted
-bee.app:runtime trait. It accepts definition_id, literal arguments and
+`bee.app:runtime` trait. It accepts definition_id, literal arguments and
 an idempotency key, then routes only an already applied, admitted definition
-through the workspace host and applications broker. It cannot publish, activate,
+through the node owner. It cannot publish, activate,
 write the registry or apply an overlay. The trusted binding supplies the
 workspace, thread, durable approval receipt and, for a window agent, the
 originating display. Its result names the workspace, view, instance, definition,
@@ -184,23 +172,9 @@ in-flight operation; an uncertain reply does not start another application.
 
 Drivers render provider configuration into the selected private home and use
 the host-selected credential environment variables. They do not receive token
-bytes in configuration. Claude and Codex support the rendered MCP setup and
-hook adapters; a provider that cannot accept the required configuration cannot
+bytes in configuration. A provider that cannot accept the required configuration cannot
 be admitted for those features.
 
 Gateway HTTP uses bounded bodies, exact Host checks, bearer authentication and
 no CORS. The runtime HTTP client does not expose redirect refusal, so readiness
 is limited to the controlled loopback acceptance path.
-
-Run the relevant checks with:
-
-    make gateway-check
-    make managed-launch-fixture-check
-    make app-journey-check
-
-Session open accepts `spec.presentation = "headless" | "window"`; omission
-selects headless. Window selects the host-admitted interactive profile. The
-session owns its terminal, while the Sessions app attaches a viewer. Closing
-that viewer detaches it; Sessions list Open reattaches to the same live terminal.
-Work arrives through driver hooks at a turn boundary. `session_close` seals
-intake and stops the placement with exit evidence.

@@ -15,11 +15,14 @@ identifiers replay their original receipt. Receipts are retained until the feed
 reaches its configured hard receipt ceiling; at that point new writes fail with
 `CAPACITY_EXHAUSTED` rather than forgetting deduplication.
 
-The host links `target_db`; this module does not select a workspace database
-or expose a public mutation binding. Feed adapters own their payload decoder
-and authorization. The distributor has no transport default or independent
-auto-start: a host links `target_sender`, selects `target_exports`, and starts
-the worker with its own process host and policy.
+The store keeps its feeds, replicas and distribution cursors in the node
+database `bee:db`. Feed adapters own their payload decoder and authorization.
+The `bee.sync.service:service` process follows committed feed events through
+`bee:changes`, runs the distributor and hosts the replica receiver.
+A component publishes feeds to the hive with a `registry.entry` of
+`meta.type: bee.sync.exports` whose `data.exports` lists `feed` and
+`content_kinds`; receivers are Hive routes with `meta.sync: receiver`
+(route prefix `sync`, name `bee.sync`).
 
 `bee.sync:protocol` decodes the common transport envelopes and tracks cursors
 and snapshots without interpreting a feed payload. An adapter supplies a typed
@@ -38,11 +41,11 @@ the discovered range. The compare-and-set rejects a stale concurrent checkpoint.
 The replica receiver cannot infer whether a discovery page contained additional
 descriptors, so transfer completion alone must never be treated as catch-up.
 
-| Slice | Responsibility |
+| Namespace | Responsibility |
 |---|---|
-| `bee.sync` | Shared bounded values, descriptors, protocol, and the `Sender.send(destination, descriptor, content, options)` obligation |
-| `bee.sync.migrations` | Immutable SQLite migrations for the Sync owner |
-| `bee.sync.persist` | SQLite database, projections, immutable replicas, and distribution cursors |
-| `bee.sync.registry` | Linked SQL and host export references |
-| `bee.sync.binding` | Authenticated immutable replica receiver |
-| `bee.sync.service` | Distributor and worker, wired and started only by a host |
+| `bee.sync` | `protocol` (transport envelopes, cursors, snapshots) and `replica_protocol` (replica transfer envelopes) |
+| `bee.sync.values` | `limits` (bounded capacities) and `version` (replica version descriptors) |
+| `bee.sync.persist` | `store` (feeds and projections), `replicas` (immutable replicas and source cursors), `distribution_store` (destination cursors) |
+| `bee.sync.binding` | `replica_receive`, the authenticated immutable replica receiver |
+| `bee.sync.service` | `sender` (`send(destination, descriptor, content, options)`), `distributor`, and the `sync` process run as `service` |
+| `bee.sync.migrations` | Immutable SQLite migrations for feeds and replicas |

@@ -11,14 +11,7 @@ lease, authoring and delivery schemas, value decoders and measurement formats.
 selection and activation operations. `bee.gov.persist` owns SQL repositories,
 `bee.gov.migrations` the immutable ledger, `bee.gov.service` recovery processes,
 `bee.gov.security` policy templates and scopes, and `bee.gov.traits` agent tools.
-The host injects selected resources through the existing requirements.
-
-This M0 role correction changes library IDs and direct imports together. Public
-contracts and bindings, process IDs, stores, topics, schema tags and digest
-algorithms retain their identities; no row migration is needed. Before deploying
-these moved definitions, quiesce pending effects that reference removed helper
-IDs and restart consuming owners. Frozen artifacts and Registry/Hub/Governance
-receipts remain immutable; publication alone does not replace active closures.
+The host selects resources through the `bee.resource_ref` entries of `bee.gov.env` (the node database `bee:db`, activation and publication profiles, approval policies, workspace folder reads).
 
 `bee.gov.types:resolver` owns the shared `Resolver` interface for staging and
 activation: `resolve` returns the measured candidate and destination context,
@@ -28,17 +21,17 @@ resolvers implement this interface with the same method receiver type.
 The destination owner activates reviewed changes in owner-local ephemeral
 overlays without durable registry publication. Agents call a scoped
 headless governance trait; they do not receive the owner's writer permissions.
-The internal overlay materializer now replaces one complete owner-local overlay
+The overlay materializer replaces one complete owner-local overlay
 from exact decoded artifact entries. `activation_owner` binds the selected plan,
 destination-local measurement, local approval, activation ledger and a
 host-supplied overlay adapter into a resumable state machine. The destination
 service supplies the Hub resolver, fixed approval consumer and boot recovery,
-and exposes local workspace-scoped operations. Migration-enabled activation now
+and exposes local workspace-scoped operations. Migration-enabled activation
 captures exact work and runs it behind a prerequisite overlay before the full
 application overlay becomes visible. The agent execution environment is separate.
 Persistent target ledgers remain authoritative even for ephemeral definitions.
 
-`bee.gov.types:workspace` now freezes trusted in-memory file records into a
+`bee.gov.types:workspace` freezes trusted in-memory file records into a
 deterministic binary-safe snapshot. It copies records, measures each file's bytes
 and SHA-256, hashes a sorted length-framed manifest, and binds workspace identity
 and revision. It rejects path traversal, drive/stream paths, duplicate paths,
@@ -47,8 +40,7 @@ file, 16 MiB total). It is not a filesystem server or an authorization boundary;
 returned Lua values must be remeasured before execution, not treated as immutable
 merely because the helper calls them snapshots.
 
-The source now includes the `bee.gov.binding:overlay_call` function and
-`bee.gov:overlay_contract` binding through `overlay_local`, with the
+`bee.gov.binding:overlay_call` and the `bee.gov:overlay_contract` binding `overlay_local`, with the
 `authoring_trait` agent description. This is private authoring, not activation.
 The managed Agent gateway admits `bee.gov.overlay.read` (list/read) and
 `bee.gov.overlay.write` (create/put/append/remove/freeze) only through this
@@ -92,30 +84,16 @@ backend requires that scope's execution marker. The caller's actor remains the
 recorded identity, while ordinary applications retain their direct-store deny.
 Publication still verifies the host profile and exact applied artifact.
 
-The host links `target_db`; `BEE_GOVERNANCE_DB` selects the default SQLite path.
-Checked migration 1 owns the private workspace rows, files, frozen copies and
-receipt tables. Capacity is bounded to eight overlays per authenticated author
+Governance stores the private workspace rows, files, frozen copies and receipts in `bee:db`.
+Capacity is bounded to eight overlays per authenticated author
 and 64 per node, 16 distinct snapshots and 512 mutation receipts per overlay,
 in addition to the file bounds above. One Agent therefore cannot consume every
 authoring overlay slot on the node. Exhaustion fails explicitly; there is no
 eviction, garbage collection or ownership transfer yet. Frozen content and
 receipts are durable; they do not imply activation,
 approval, or automatic restoration of runtime definitions. This virtual file API
-does not mount a host directory or execute WASM. Hive transfer, inbox requests
-and plugin dispatch remain unimplemented.
+does not mount a host directory.
 
-`make governance-workspace-check` proves the public route with distinct actors
-and two boots of the same database: binary round trips, denied caller/foreign
-ownership, stale and simultaneous CAS writes, exact retry replay, frozen copies
-surviving edits/removal, snapshot-capacity refusal and migration persistence.
-The focused governance Lua suite passes 16 checks; these tests do not establish
-Hive transfer, destination approval or application installation.
-
-`make governance-overlay-check` independently proves ephemeral owner-generation
-conflicts, entry ownership and scoped permissions, explicit deletion and unchanged
-durable history on the candidate executable. Logical overlay ownership is not
-automatic process-exit cleanup. Expanded packages, service readiness and migration
-ordering remain unproved by this registry-entry-only fixture.
 `bee.gov.binding:materializer` keeps the overlay owner outside transferred data,
 copies and remeasures the desired artifact, and deletes definitions no longer in
 that owner's complete desired set. Cleanup can reconcile and observe the exact
@@ -130,16 +108,10 @@ A conflict returns to the destination owner, which must rebuild its trusted
 context and rerun preflight before another attempt. It has no durable registry
 publication path. The later destination owner supplies the host-selected owner
 identity and approval; callers do not.
-The separate `governance-wasm-check` currently fails: the real guest can read a
-synthetic outside file through a symlink in a read-only host-directory mount.
-Admitted reads, write refusal and parent-traversal refusal alone are insufficient.
-Do not enable untrusted host-directory WASM access until this gate passes.
-
 The host adapter must supply exact artifact/entry/migration measurements,
 resolved dependencies and references, final requirement bindings, a coherent
 registry/policy snapshot, and the applied migration ledgers for updated packages.
-Durable publication and overlay activation use distinct conflict boundaries.
-Durable publication still needs an atomic composed-base CAS. Overlay activation
+Overlay activation
 re-resolves and re-preflights immediately before owner-local apply, re-verifies
 the composed base after the apply, and records uncertainty with a named
 composed-base diagnostic when the base moved instead of claiming applied. It
@@ -162,15 +134,11 @@ changes the candidate and requires a new plan/approval. The plan digest binds
 destination, base revision, complete candidate and host policy measurement.
 Sharing content over Hive does not share a decision or destination authority.
 
-The current runtime fails the durable guarded-publication acceptance gate. That
-blocks the durable publication adapter, not the distinct owner/generation-fenced
-overlay adapter.
-No production
-adapter may claim `guarded_publication` or `exact_expansion` from metadata alone.
+No production adapter may claim `exact_expansion` from metadata alone.
 No direct registry writer or remote activation endpoint is exposed through the
 agent facade.
 
-Migrations 5-7 and `bee.gov.persist:activation_store` provide the internal
+`bee.gov.persist:activation_store` provides the internal
 recovery ledger. An immutable intent binds the host-selected overlay owner and
 exact plan, artifact, resolution, preflight and migration-work digests.
 Approval/consumption and migration progress are stored separately, and the
@@ -218,7 +186,7 @@ failure falls back to this last good generation, and a committed migration
 whose compensation cannot complete stops in recovery rather than booting
 incompatible code against newer data.
 
-`bee.gov.binding:hub_resolver` now provides the destination resolution adapter.
+`bee.gov.binding:hub_resolver` provides the destination resolution adapter.
 It captures one atomic registry state, asks the runtime to plan a
 host-selected Hub dependency root, reconstructs the complete selected closure
 from the planned final state, and retains definitions absent from the plan
@@ -247,8 +215,7 @@ The resolver and destination service are implemented and covered through the
 plan adapter. `activation_profiles` supplies host-selected roots, overlay
 owners, approval policies and capability ceilings; it cannot be populated by a
 remote artifact. The boot worker follows only an already-authorized desired
-intent. Runtime PR #787 supplies the reviewed plan and bound apply contract
-used for production resolution.
+intent.
 
 An activation profile may also carry `database_bindings`, a bounded list of
 logical `target_db`, physical `database_id` and optional `table_prefix` values.
@@ -258,8 +225,7 @@ into preflight and includes each selected physical database in the composed-base
 measurement. New immutable migration work uses
 `bee.governance-migration-work@3` and freezes the logical target, physical
 database, optional prefix and physical definition evidence. Execution derives
-its database map from that work rather than rereading the profile. Stored `@2`
-work remains strict and keeps its identity binding without rewriting its bytes.
+its database map from that work rather than rereading the profile. Stored `@2` work keeps its identity binding without rewriting its bytes.
 Applied facts follow their originating intent, so an ordinary update cannot
 retarget an established migration chain by changing the database or prefix.
 When the list is present, a
@@ -274,9 +240,7 @@ confinement.
 
 New measured application admission records declare `identity_generation` as
 `current`. An explicitly measured `prior` generation retains the historical
-admission ID independently of owner spelling. Governance migration 17 adds the
-generation to existing activation rows and leaves their admission bytes and
-digests unchanged; restoration uses that recorded generation.
+admission ID independently of owner spelling. Restoration uses the recorded generation.
 
 The activation configuration may carry one `workspace_applications` rule
 beside its explicit rows, and the publication configuration a matching
@@ -308,13 +272,14 @@ flow into it, and the application retains its custom-scope creation denial.
 Preflight also refuses edits to the host `bee.security.gov:protected_kernel` trust map, its
 transitive code dependencies and requirement selectors aimed at it. That map
 names every shipped namespace a host-selected scope lives in or is reached from
-(the governance, security, approvals, admission and launch namespaces plus
-`bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
-`bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
-`bee.sync`, `bee.host`, `bee.client`, `bee.desktop`,
-`bee.terminal`, `bee.node` and `bee.workspace`), and its `super_edit` list is
-the host's explicit carve-out of protected namespaces. Bee selects
-`bee.settings.app` and `bee.desktop` there. A super-edit profile row carries `expires_at`; it is admitted only
+(`bee.app`, `bee.approvals`, `bee.apps`, `bee.capability`, `bee.credentials`,
+`bee.deps`, `bee.docs`, the shared `bee.driver` core, `bee.env`, `bee.executor`,
+`bee.gateway`, `bee.git`, `bee.gov`, `bee.harness`, `bee.hive`, `bee.hub`,
+`bee.node`, `bee.persist`, `bee.placement`, `bee.resources`, `bee.security`,
+`bee.shell`, `bee.sync`, `bee.threads`, `bee.ui`, `bee.values`), and its
+`super_edit` list is the host's explicit carve-out of protected namespaces. Bee
+selects `bee.apps.settings` and `bee.shell` there. Each driver's own `bee.driver.<name>`
+namespaces stay under governance. A super-edit profile row carries `expires_at`; it is admitted only
 while unexpired, must set `allow.auto_start: false`, must name a dedicated
 `super-edit`-prefixed approver policy declared with `confirm: explicit`, and may
 not carry `allow.grants` for `security.*`, `funcs.security`, `process.security`
@@ -363,8 +328,7 @@ package records and the currently projected governed records for the core
 catalog; package projection is memoized by registry revision, workspace and
 node.
 
-Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
-values decode as `hub`. The private-overlay resolver consumes exact immutable
+Host profiles select `resolver: hub` or `resolver: overlay`; an omitted value is `hub`. The private-overlay resolver consumes exact immutable
 Sync artifact definitions and preserves their registry IDs. It assigns package
 ownership from the selected local profile, rejects reserved remote `registry`
 metadata, Hub dependency directives and namespace/entry collisions, and passes

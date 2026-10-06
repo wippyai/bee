@@ -6,8 +6,7 @@ never exposes a tool outside it. Admission measures the configuration and binds
 it to the managed attempt. Component metadata describes a capability; it does
 not authorize invocation or scope.
 
-The MCP route handler is `bee.gateway.api:mcp_http` from the `bee/gateway`
-component. The host owns the listener, router, route, and selected tool
+The MCP route handler is `bee.gateway.api:mcp_http`, routed at `/mcp/:action`. The host owns the listener, router, route, and selected tool
 policies; configuring the route or a tool does not grant caller authority.
 
 ## Surface declaration
@@ -83,7 +82,7 @@ or grant package permissions.
 `installed_source` for the effective Lua source of a locally installed
 development version, and `installed` (which takes no request body) for the
 effective inventory. `read_file` windows are capped at 16,384 bytes with
-`next_offset`. See the [Hub inspection guide](../hub.md).
+`next_offset`. See [hub inspection](hub_inspection.md).
 
 `install_request`, `uninstall_request` and `install_status` are write tools
 beside `components`. A request names a Hub package (`component`, optional
@@ -91,8 +90,8 @@ exact `version`); the host resolves the plan and files one approval bound to
 the caller's thread and attempt. The person decides it in Approvals; the
 caller's next `install_status` applies exactly the approved plan digest, and a
 replayed poll replays its receipt. They are admitted through the host's
-`target_tool_install_policy` link and never grant Hub management to the
-caller. See [agent installation requests](../hub.md#agent-installation-requests).
+`tool_install_policy_ref` link and never grant Hub management to the
+caller. See [agent installation requests](hub_inspection.md#agent-installation-requests).
 
 Read `capabilities` before authoring: it reports the admitted tools with
 their policies, the trait catalog, the bound workspace and thread, and the
@@ -110,8 +109,8 @@ close.
    ready: the driver is installed, logged in and supported on this platform.
    `include_unavailable` adds the rest with the reason each is not ready.
    Nothing else lists agents, and the call starts nothing.
-2. `session_open` takes `spec` (`definition`, optional `profile`, `title` and
-   `workdir`) and `operation_key`, and returns a `SessionRef`. The session is
+2. `session_open` takes `spec` (`definition`, optional `profile`, `workdir` and
+   `workspace`) and `operation_key`, and returns a `SessionRef`. The session is
    durable: it survives turns, process exits and owner restarts, and no
    process runs while it is idle. The host admits the definition against the
    caller's policy before the session opens.
@@ -122,13 +121,12 @@ close.
    is injected into a running process. `session_send` is the only way to give a
    session work: a task, a follow-up or a correction.
 4. `session_await` takes the `WorkRef` (or an operation reference) and
-   `timeout_ms` (at most 60000) and returns one observation tagged `ready`
+   `timeout_ms` (default 30000, at most 60000) and returns one observation tagged `ready`
    (with the result), `pending`, `blocked` (with what unblocks it) or
    `uncertain`. Queued or accepted is not done, and a timeout never cancels
    the work.
-5. `session_close` seals intake and drains by default (`mode: drain`), or
-   requests cancellation (`mode: cancel`). Await the returned operation for
-   the closure.
+5. `session_close` seals intake and drains accepted work. Await the returned
+   operation for the closure.
 
 `session_run` submits one job on a fresh session that closes after settlement;
 it returns a `WorkReceipt` to await. `session_join` observes an ordered set of
@@ -145,27 +143,16 @@ Every mutation requires `operation_key`. Reuse the same key after a lost
 reply; changing the input under a key is a conflict, and `session_get` with
 the saved key recovers the operation. Caller identity travels only in the
 authenticated call context, never in a payload. Each tool is one method of the
-`bee.sessions` owner contract, and the gateway holds no session state; see
-[Gateway](../../reference/agents/gateway.md#sessions).
+`bee.threads.sessions` owner contract, and the gateway holds no session state; see
+[gateway](gateway.md#sessions).
 
 After an owner restart the scheduler reconciles the last placement attempt
 before any new invocation. An outcome it cannot prove is reported as
 `uncertain`, never silently re-run.
 
-Worker definitions carry these containment bases:
-
-| Worker definition | Home | CLI control |
-|---|---|---|
-| Codex batch | private, no host inheritance | `--sandbox workspace-write` |
-| Codex named_batch | private, selected profile projected from the host home | `--sandbox workspace-write` |
-| Claude batch | private, no host inheritance | default permission mode |
-| Muse batch | private, no host inheritance | `on-request` approval |
-| agy batch | private, no host inheritance | `--sandbox` |
-| Grok batch | private, no host inheritance | none provable: recorded `unconfined` |
-| OpenCode batch | private, no host inheritance | none exists: recorded `unconfined` |
-
-These are CLI permission controls, not operating system confinement; see
-[Managed agent containment](../../development/agent-guide.md#managed-agent-containment).
+Batch worker definitions run under CLI permission controls, not operating
+system confinement; definitions for drivers with no provable control, such as
+Grok and OpenCode, are recorded `unconfined`.
 
 ## Transcript
 
@@ -231,7 +218,7 @@ request access.
 An agent sends `session` `request_access` with an idempotency key, requested
 traits and a bounded reason. The gateway creates a durable request bound to its
 binding, action, attempt, thread, configuration digest and fixed context.
-Approvals presents it through the ordinary Inbox; the agent polls
+Approvals presents it in Needs you; the agent polls
 `access_status`. Once an approver decides, the gateway consumes the exact
 effect and records the new selection atomically with its surface revision.
 
@@ -242,6 +229,6 @@ A grant lasts only for its binding and is still subject to expiry, credential
 rotation and revocation. An agent cannot approve itself, publish arbitrary
 registry state or rely on an application ID in context as target authorization.
 
-For listener, credential and hook behavior, see [Gateway](../../reference/agents/gateway.md) and
-[Gateway hooks](../../reference/agents/hooks.md). For the application-authoring path, see
-[distributed overlay delivery](../overlays.md).
+For listener, credential and hook behavior, see [gateway](gateway.md) and
+[gateway hooks](gateway_hooks.md). For the application-authoring path, see
+[distributed overlay delivery](distributed_app_delivery.md).

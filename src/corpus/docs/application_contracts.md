@@ -1,433 +1,211 @@
 # Application contracts
 
 This is the version 1 contract for view-owned applications. A **definition**
-is an admitted registry process entry, identified by its stable definition ID
-and exact application revision. An **instance** is one logical launch; an
-**execution** is one running process; a **view** is its visual surface. A
-**mount** is a recipient-bound capability to observe, send input or resize a
-view. A workspace owns application state and a presenter is a replaceable
-desktop surface. A process ID, definition ID and instance ID are different
-identities.
+is a `process.lua` registry entry with `meta.type = bee.app`. An **instance**
+is one launch of a definition on a desktop; it runs as one process with one
+view. The node owner (`bee.node`) is the broker: it admits definitions,
+starts instances, routes the `bee.app.*` messages below and keeps instances
+across restarts. An app is built on `bee.app:client`.
 
-The broker bounds one workspace at 64 admitted definitions, 16 view-owned
-instances, 32 policy bindings per definition, 16 stop waiters per instance and
-128 completed owner request IDs. Request deduplication is bounded and in
-memory; it is not durable exactly-once execution.
+## Declaration
 
-## Admission
+An app definition carries `meta.application`:
 
-An application definition uses `meta.type = bee.app` and
-`meta.application` with `api_version: 1`, `lifetime: view`, a nonempty
-`revision` and `title`, and `instance_policy: singleton|multiple`. It may
-declare an icon, a role and bounded `application.commands`.
+| Field | Rule |
+|---|---|
+| `api_version` | `1` |
+| `lifetime` | `view` |
+| `revision` | nonempty, at most 80 bytes; advance it whenever source or configuration changes |
+| `title` | nonempty, at most 80 bytes |
+| `instance_policy` | `singleton` or `multiple` |
+| `icon` | optional, at most 8 bytes |
+| `group`, `role` | optional presentation hints (at most 160 and 32 bytes) |
+| `menus` | optional list of up to 16 `bee.menu` entry ids |
+| `terminal` | optional boolean; `true` runs the app as a terminal page |
+| `resume_schema`, `restart_policy` | see Checkpoint |
+| `commands` | optional list of up to 16 command handlers |
 
-`menus` lists the ids of the `bee.menu` entries the app is placed in, at most
-16. The desktop's Start panel shows an app only in the menus it names:
-`bee.shell:apps_menu` (Apps), `bee.shell:system_menu` (System, for apps that
-inspect and manage the node) and `bee.shell:desktop_menu` (the desktop's
-context menu). An app that names no menu is installed and runnable but
-appears in no menu. `terminal: true` runs the app as a terminal page.
+`menus` names where the Start panel shows the app: `bee.shell:apps_menu`
+(Apps), `bee.shell:system_menu` (System, for apps that inspect and manage the
+node) and `bee.shell:desktop_menu` (the desktop's context menu). An app that
+names no menu is installed and runnable but appears in no menu. Roles, menus
+and metadata describe an app; they never grant authority.
 
 ```yaml
-meta:
-  type: bee.app
-  application:
-    api_version: 1
-    title: Hello
-    lifetime: view
-    revision: "1"
-    instance_policy: singleton
-    menus: [bee.shell:apps_menu]
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Hello
+      lifetime: view
+      revision: "1"
+      instance_policy: singleton
+      menus: [bee.shell:apps_menu]
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel]
+  imports:
+    client: bee.app:client
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
 ```
 
-Roles, menus and metadata affect discovery and presentation; they never grant
-authority. Executable or configuration changes require a new
-revision, and one revision identifies one exact runnable definition.
-Use `restart_policy: never` (the default) when the app does not checkpoint.
-`automatic` and `manual` require a nonempty `resume_schema` of at most 80
-characters without control characters. Without that schema, the desktop cannot
-open the definition; governed preflight reports `APPLICATION_CHECKPOINT`.
+`bee NAME` opens the app that handles command name `NAME`. A handler is
+`{name, arguments?, fullscreen?}` in `meta.application.commands`, or a
+`bee.app_command` registry entry whose data names `name`, `definition_id`,
+optional `arguments` and `fullscreen`. Names are lowercase `[a-z][a-z0-9_-]*`
+up to 40 bytes; `run`, `runtime`, `update`, `client` and `node` are reserved.
+A name matching more than one installed app is refused. `bee claude`,
+`bee codex`, `bee agy`, `bee grok`, `bee muse` and `bee opencode` open the
+Sessions app on the matching driver and accept no trailing arguments.
 
-The protected `bee.security:application_admission.bindings` selection supplies shipped
-definitions, policy IDs and grants such as `appearance_write` and
-`application_stop`. A reviewed governed overlay may add a
-workspace-local definition through the host's
-`bee.env:gov_activation_profiles.applications` selection. Activation freezes
-the selected artifact, owner, bindings and external policy definitions in its
-immutable intent and creates one reserved admission record beside the artifact.
-Portable content cannot claim that identity. Static and governed claims cannot
-name the same definition, and their combined count remains bounded.
+## Admission and authority
 
-Governed bindings default static-only operation grants to false. Either binding
-may select `thread_access: none|observe_post`; omission means `none`.
-`observe_post` gives the exact admitted revision a broker-bound facade for
-reading, subscribing and posting on its initiating agent's bound thread. It
-does not provide raw Threads policies, arbitrary thread selection or thread
-storage. Application metadata and launch arguments cannot select it.
-
-An agent-authored app may declare a measured capability request through an
-`ns.requirement` whose metadata names a catalog capability, parameters, reason
-and `security.policy` value kind. It must append to the app entry's
-`.security.policies +=` target, except a `hive.expose` request, which appends
-to one of the artifact's own Hive operations at the requested mode and installs
-a host-owned exposure-scope policy over exactly the approved operations. The
-destination resolver validates the request
-against the protected host catalog and retains it in the immutable preflight
-candidate. A request by itself grants no authority. App content that supplies
-`security.actor` or `security.groups` is
-refused by preflight on every entry kind.
-
-The host resolves the requested set and presents its catalog wording and
-changes against the installed grant in Approvals. An approved install writes
-host-owned policy entries, requirement defaults and a grant record in one
-registry transaction. The workspace application profile derives its allowed
-policies and admission binding from that live record. A contained upgrade
-reuses the installed approval after measurement and preflight, and installs
-only the new version's requested subset. A widening requires a new decision;
-refusal leaves the installed grant in place. This slice installs only
-`threads.read` with owned scope. An admitted agent attempt elevates itself
-through the gateway `request_capability` tool: the approval shows the host
-catalog's own wording bound to the authenticated thread and attempt, and
-consumption writes one resources grant row for that thread actor, which
-placement resolves for the attempt alone; a child attempt resolves nothing.
-The host verifies that the named resource association exists and allows the
-requested access before filing approval, then checks it again before consuming
-an approved decision.
-File and database provisioning and contract gateways remain later work, while
-active revocation fencing is implemented: an epoch advance reports its fenced
-attempts, and an owner fence withdraws the fenced instance's thread
-delegation and force-stops it, leaving future opens to re-admit from the
-present authority.
-
-The broker accepts a governed record only for its own workspace while the
-current normalized host profile selects the same source, owner, bindings and
-policies. Hub installation alone does not publish an admission binding or
-grant application authority. Removing a binding blocks new opens and recovery;
-existing processes continue until their normal lifecycle. Withdrawing a
-governed profile also makes its retained record ineffective immediately and
-causes the next governed thread operation to follow the revocation path.
-
-The broker compares decoded descriptors, bindings, accepted governed-admission
-digests and registry revision from one immutable snapshot. An unchanged
-selection reuses scopes. A changed selection rebuilds host scopes and checks
-the catalog before publication. Invalid declarations or unavailable policies
-clear future admission without terminating existing instances.
-
-The optional protected `scope_management` binding field defaults to `false`;
-unknown fields and nonboolean values are rejected. Ordinary applications use
-`bee.security:app_boundary_policy`. The reviewed native harness application may use
-`bee.security:scope_managing_app_boundary` to construct call scopes from policies it
-already holds. That is a host trust decision, not application metadata, and is
-not a confinement guarantee. Driver configuration still runs with an empty
-scope, denying store, executor and nested function calls. Native execution
-has the operating system user's authority.
-
-## Threads and application authority
-
-Applications receive a host-created actor whose stable ID derives from the
-trusted workspace and logical instance. Its metadata includes workspace,
-definition, revision and execution generation. A compatible replacement keeps
-the actor ID and advances the generation. Metadata, roles and launch
+Every app runs as a host-created actor derived from the workspace, instance,
+definition and revision, inside the policy group `bee.node.security:application`
+plus the policies its process entry and admission name. Metadata and launch
 arguments never authorize calls.
 
-For `observe_post`, the broker binds the application to the initiating thread
-and requires both the exact admitted revision's selection and a live
-`bee.app:runtime` grant. The authenticated facade exposes `read`,
-`post`, `subscribe`, `page`, `ack_page`, `resume` and `unsubscribe`. Each
-request carries the logical instance, launch token and execution generation;
-the caller cannot choose a thread, actor, workspace, membership or grant. The
-broker rechecks the durable binding and exact Threads membership revision on
-every operation and supplies the stable application actor.
+The node owner finds a definition's admission binding in this order:
+`bee.node.application_admission` registry entries (the host's own apps),
+then the overlays governance admitted for the workspace, then the packages it
+composes. A binding has `definition_id`, `policies`, `thread_access`
+(`none` or `observe_post`), `appearance_write`, `application_stop`,
+`scope_management` and `close_grace_ms`. An app without a binding runs in the
+base group. `scope_management: true` selects
+`bee.node.security:scope_managing_application`, which lets the app build call
+scopes; the Sessions app (`bee.harness.app:app`) holds it. Native execution has
+the operating system user's authority; no binding makes it a sandbox.
 
-Closing first commits a durable revoke fence and disables the facade, then
-removes the execution while membership cleanup may continue. Recovery treats
-unavailable membership as unknown and never adopts or removes another revision.
-If membership is removed or access changes to `none`, the next facade request
-returns `DENIED`, revokes and cleans the binding, and restart does not restore
-or advertise the instance. During compatible replacement, a request received
-while the old producer is retiring returns `UNCERTAIN`; it is never run against
-stale definition bytes. The old launch token and generation cannot authenticate
-after replacement.
-
-Timeline is a read-only owner viewer. It lists and reads through its own
-subscription cursor and uses `bee.threads.binding:watch` for wakeups;
-`wait` claims an obligation and is not a viewing operation. Page acknowledgment
-records consumer progress, not proof that rows were seen. If the app loses
-unsaved rows after acknowledging a page, it resumes past that cursor and shows
-the gap as bounded unsaved data rather than marking it seen. It closes only its
-own subscriptions; presenter reload keeps them so they can resume. Viewing
-does not mutate thread obligations or delivery history.
-
-## Running managed agents
-
-An application opens and drives managed agents with `bee.sessions.client:sessions`,
-which calls the `bee.sessions` owner contracts as the application's own actor.
-The SDK grants nothing: the host admits the caller and the owner authorizes
-every operation. The flow is catalog, open, send, await, close. `send` is the
-only way to give a session work, and its receipt proves intake only; the result
-comes from `await`.
-
-```lua
-local sessions = require("sessions")   -- imports: sessions: bee.sessions.client:sessions
-
-local ready = sessions.catalog{}                        -- definitions whose executor is ready
-local s, fault = sessions.open{definition = "bee.driver.codex.profiles:research_batch", operation_key = "research/open"}
-if not s then return fault.code .. ": " .. fault.message end
-local work = s:send{input = "Summarize the build scripts in this folder.",
-    budgets = {turn = {provider_steps = 8, wall_time_ms = 120000}}, operation_key = "research/send"}
-local seen = work:await{timeout_ms = 30000}             -- ready, pending, blocked or uncertain
-if seen and seen.tag == "ready" then show(seen.result) end
-s:close{operation_key = "research/close"}
-```
-
-`sessions.open` accepts optional `budgets={turn?,session?}` and `supervision={quiet_period_ms?,on_stall?}`;
-`sessions.send` accepts an optional per-Work `budgets.turn`. The budget shape is
-`Budget = {provider_steps?, tool_calls?, tokens?, wall_time_ms?, cost_usd?}` and all fields are opt-in. A Work
-budget tightens matching session budget fields. Quiet accepted turns appear as
-`stalled` with evidence. The default `on_stall="report"` keeps work running; `cancel_work` requests a placement stop. Session counters survive restart and receipts replay without spending twice. Cost and window limits reject as unsupported. Exceeding a budget
-returns `budget_exceeded` with typed placement exit evidence.
-
-`sessions.call{definition, input}` opens a session with its first work and
-awaits it once. Every function returns `value, Fault`; a Fault carries `code`,
-`message` and a `retry` of `never`, `same_key`, `refresh` or `reconcile`.
-`await` bounds observation, never execution: a timeout is a `pending`
-observation and the work keeps running. Every mutation carries an operation
-key, so a replayed handler receives the original receipts; a lost reply is
-`UNKNOWN_OUTCOME` and is retried with the same key. The
-`bee.app` package README documents the handle functions, joins,
-cancellation and key derivation.
-
-Launch definitions are registry entries with `meta.type = bee.launch_definition`;
-a definition ID alone does not reveal whether the host lets this application
-open it. The installed driver definitions include
-`bee.driver.claude.profiles:research_batch`,
-`bee.driver.codex.profiles:research_batch`, `bee.driver.codex.profiles:named_batch`,
-`bee.driver.agy.profiles:research_batch`, `bee.driver.muse.profiles:research_batch` and
-`bee.driver.opencode.profiles:research_batch`. This is an inventory of definitions, not
-an authorization list; `catalog` lists the ones that are ready, and the host
-still decides admission when `open` runs. The Agent app manages saved profiles;
-a caller must obtain an exact ID and revision from the person.
-
-Applications explicitly select `bee/application-threads` and import
-`bee.app.threads:client`. Its `request` helper routes operations for an authenticated initiating
-thread through the broker when a host grants that thread access. The shipped
-workspace-application rule sets `thread_access: none`. A UI may show its own
-work statuses and the results `await` returns, but cannot claim a live
-transcript of a session through this API.
+An agent-authored app declares capabilities with `ns.requirement` entries
+that name a catalog capability; a request grants nothing until a person
+approves it. See [distributed_app_delivery](distributed_app_delivery.md) and
+[component/capability](../component/capability.md).
 
 ## Launch and lifecycle
 
-The broker supplies one validated launch value containing `version`, broker and
-workspace process IDs, `workspace_id`, `instance_id`, `view_id`,
-`definition_id`, optional `thread_id`, `execution_generation`,
-`definition_revision`, `registry_revision` and `launch_token`. The client
-library validates and copies it. `client.reference(launch)` returns only the
-logical `{workspace_id, instance_id, view_id}` reference; it contains no PID,
-mount, token or permission.
+The broker passes one launch value to the app's `main`. `client.launch(value)`
+validates and copies it: `version`, `broker_pid`, `workspace_pid`,
+`workspace_id`, `instance_id`, `view_id`, `definition_id`, optional
+`thread_id`, `execution_generation`, `definition_revision`,
+`registry_revision`, `launch_token`, `resume_schema`, `resume_state`,
+`arguments` and `appearance`. `client.reference(launch)` returns only
+`{workspace_id, instance_id, view_id}`.
 
-`workspace_id` is the opaque ID installed by the owning workspace in trusted
-bootstrap state. The broker, workspace and presenter require it to match their
-own identity on replies, checkpoints and private open/close/bind/shutdown
-requests. A missing or foreign identity returns `workspace_mismatch` and never
-falls back to the local workspace. These are local routing checks, not remote
-dispatch or multi-workspace clients.
+Messages to the broker carry `version = 1`, the instance id and the launch
+token; the broker refuses a message that does not come from the instance's
+own process with its token.
 
-An authorized open may carry a bounded `thread_id` association. It is a
-printable descriptive thread record ID of at most 160 bytes; it grants no
-membership or operation permission. `bee.app.open` rejects a caller
-chosen association, and applications cannot infer one from arguments. The
-broker carries the selected association through launch, replies, inventory and
-checkpoints. A singleton opened with a different live association returns
-`thread_conflict`.
+| Topic | Sent by | Helper |
+|---|---|---|
+| `bee.app.ready` | app | `client.ready(launch, {negotiate_close = true}?)` |
+| `bee.app.title` | app | `client.title(launch, title)` |
+| `bee.app.query` | app | `client.query(launch, options)` |
+| `bee.app.checkpoint` | app | `client.checkpoint(launch, json)` |
+| `bee.app.request` | app | `client.navigate(launch, definition_id, arguments?)` |
+| `bee.app.close.reply` | app | `client.close_reply(launch, request_id, decision)` |
+| `bee.app.query.result`, `bee.app.checkpoint_result`, `bee.app.close`, `bee.app.close.result`, `bee.app.navigate` | broker | `client.query_result`, `client.close_request`, `client.close_result`, `client.navigation` |
 
-An open may carry up to 16 dense string arguments, each at most 1 KiB and 8 KiB
-combined, without control characters. The broker and client validate them.
-Arguments participate in open deduplication, are not accepted on
-close/bind/shutdown, and are not automatically persisted. A ready singleton
-reopen with nonempty arguments queues `{version = 1, instance_id, view_id,
-execution_generation, launch_token, arguments}` from the authenticated broker
-to the retained producer on the fixed `bee.app.navigate` topic before
-returning focus. The receiver calls `client.navigation(launch, sender, payload)`;
-it accepts only the current broker, instance, view, generation and launch token,
-then decodes bounded arguments. Queued delivery does not acknowledge successful
-navigation. Empty arguments only focus, and a duplicate completed open does
-not redeliver. Admission and thread-owner checks precede delivery. `bee run definition-id [arguments...]`
-uses this boundary; explicit initial arguments take precedence over a selected
-checkpoint.
+Call `client.ready(launch)` after the first frame is presented. Every helper
+returns whether the message was queued, never whether it was applied.
 
-Producer readiness does not depend on a presenter. The broker can acknowledge
-an admitted open, retain its viewport and checkpoint state, and attach a later
-recipient. A failed initial attachment reports `attachment_failed` without
-terminating the application. The local workspace launcher still selects a
-physical desktop; this behavior is not a managed headless launch profile.
+An open may carry up to 16 string arguments, each at most 1 KiB, without
+control characters. Opening a running singleton on the same desktop focuses
+it and delivers any arguments to it on `bee.app.navigate`; the receiver
+decodes them with `client.navigation(launch, sender, payload)`, which accepts
+only the broker's message for the current instance, view, generation and
+token. Opening a definition from inside an app uses `client.navigate`.
 
-After initializing its input/output, an app calls `client.ready(launch)`. The
-broker authenticates the sender PID, instance/view identities and launch token.
-UI apps signal after their initial frame and Terminal after PTY attachment;
-later process failure is reported by EXIT. Readiness is independent of a
-presenter, but it does not make a native process safe to checkpoint or recover.
+`client.title(launch, title)` sets a window title of at most 80 bytes
+without control characters.
 
-Owner requests use `bee.app.request`, version 1, a nonempty request ID and
-`open|close|bind|unbind|shutdown`. Requests are accepted only from the trusted
-broker owner and include the workspace identity. A bind may target an exact
-view and instance; an empty recipient detaches that view. An unbind names a
-recipient and removes its default plus current controller grants. Revocation is
-per grant and a failed grant remains recorded for retry. Replies use
-`bee.app.reply`, correlate the request and include view/instance identity,
-title, mount, optional thread association and explicit error fields. EXIT
-produces an unsolicited `closed` reply. Duplicate successful opens focus the
-existing instance and never replay obsolete mounts.
-
-This boundary currently couples one process to one view. Independent services,
-multi-view applications and separate detach-versus-stop lifetimes are
-proposals; they require distinct owner operations.
-
-## Built-in handlers and presentation
-
-`bee claude`, `bee codex`, `bee agy`, `bee grok`, `bee muse` and `bee opencode` select their
-reviewed managed launch definitions and use the same admission, carrier,
-thread, hook and MCP path as the Agent picker. They preserve the caller's
-working directory and accept no trailing raw arguments. The runtime-level
-`bee recover` command boots Bee's shipped bundle; it does not select a managed
-launch by name. Native Terminal exposes the `terminal` handler and runs an
-explicit native argument vector with the OS user's authority; an empty vector
-starts `/bin/bash -i`. Declaring a handler
-does not grant native execution to another application.
-
-An admitted command declaration contains at most 16 lowercase ASCII command
-names, optional bounded prefix arguments and an idempotent fullscreen request.
-Host names `run`, `update`, `recover` and `wippy` are reserved. Duplicate
-matches fail; discovery includes admitted definitions only. Arguments select
-an application and are never interpreted as an instruction to perform a
-privileged action.
-
-Apps read appearance through `bee.appearance.request` (`state|set`) and
-`bee.appearance.state`, version 1, with a request ID. Writes require the
-protected appearance grant. The session commits the preference and projection
-revision; broker-originated changes are validated before adoption. The theme
-and presentation role choose viewport defaults; a role does not add permission.
-
-`bee.app:client.title(launch, title)` queues a title of at most 80
-bytes without controls; an empty title restores the admitted title. Queued
-does not mean committed. The broker authenticates PID, instance/view IDs and
-launch token, coalesces updates and routes them through the session. A user's
-window label takes precedence and survives supported checkpoint recovery. The
-admitted icon is copied to presentation state; Settings may use compact icon
-tabs and the taskbar clips icons to two cells, falling back to the title. A
-user may set a separate window label and named accent; applications cannot
-submit those private desktop commands. Native PTY OSC title forwarding is not
-implemented.
-
-Process control uses `bee.app.control` (`stop|force_stop`,
-`execution_pid`) and `bee.app.result`. The broker checks the caller's
-grant and target ownership; a successful stop is reported only after EXIT.
-If escalation finds a producer that has already left the scheduler, the close
-waiter stays pending until the broker consumes its monitored EXIT. Denied
-termination authority still reports `termination_pending`, which is not success.
-Desktop command messages are private to
-the owning workspace and acknowledge committed scene, tabs, preferences and
-errors.
-
-## Checkpoint and restore
-
-An application opts in with `resume_schema` and
-`restart_policy: automatic|manual`; the default is `never`. Schema names are
-application-owned compatibility contracts and are independent of package,
-registry, database and migration versions. Automatic instances remain pending
-while their definition is absent and resume only after admission; unavailable
-definitions do not block desktop readiness. A changed or incompatible schema
-keeps the saved record on cold restore rather than feeding it to a different definition.
-
-A live registry transition replaces a running application's execution when its
-admitted definition revision, Lua source or imported Lua libraries change. The
-broker uses its existing replacement and checkpoint protocol for every restart
-policy; the policy still controls cold recovery. It waits for pending checkpoint
-receipts, resumes from the last committed state, and retains the logical
-instance, view, terminal mount and window or tab. Unchanged definitions keep
-running. Removed or invalid admission never authorizes a replacement.
-An incompatible resume schema starts the new execution fresh. A persistent
-one-line notice inside its window says that saved state is incompatible and the
-app restarted fresh, including when the window has a custom label. The optional
-bounded `notice` field travels in broker replies and host view inventory and is
-projected by the desktop's private `announce` command. It grants no authority.
-
-`client.checkpoint(launch, json_string)` queues at most 64 KiB of opaque,
-application-owned JSON and returns a request ID. A successful
-`bee.app.checkpoint_result` means the workspace transaction committed;
-one pending request is retained per app, superseded requests report
-`superseded`, and a five-second wait may end with an unknown result. Only an
-acknowledged receipt changes the saved resume state.
-
-The workspace preserves acknowledged state, logical instance/view IDs, optional
-thread association, geometry, mode and preferences. On boot it reopens
-automatic instances in saved order after admission checks; manual instances
-resume from Start. Process and terminal capabilities are recreated. Failed
-restores retain their checkpoint. Closing a live view-owned instance removes
-its resume record after EXIT; workspace shutdown retains it. An application
-that returns normally has closed its view. An EXIT with an error result from a
-ready application is an application failure, and the workspace keeps an
-automatic instance's record and display assignment for recovery. A revoked thread
-binding removes the saved record and prevents restoration. Stored JSON never
-contains credentials, grants, PIDs or runtime objects. Native Terminal has no
-cold-resume contract; a surviving session service would be required to rejoin
-a PTY.
-
-Retained-instance alias attestation and restore-open failures are isolated to
-that instance. Alias recovery uses the exact admitted binding's overlay owner
-to preserve its stable application identity. The broker keeps the saved record,
-logs its exact reason with workspace, instance and definition identities, and
-publishes an acknowledgement notice through the existing question delivery
-channel. Apps → Restoration
-failures and Needs you expose these notices even without a live view. A missing
-admission reports `Retained application is not admitted: <definition ID>`.
-Other admitted applications continue restoring and opening. Acknowledgement
-clears the notice; it does not delete the record or authorize an application.
-Successful restoration clears its notice. Catalog admission changes recheck
-the retained aliases. Only the broker can publish restoration notices.
+A running app is stopped by cancellation; its process exiting closes its view.
+Apps are linked to the node owner, so an owner failure takes its apps with it
+and the restarted owner reopens each kept instance.
 
 ## Questions and close
 
-`client.query(launch, options)` submits a broker-owned `confirm` or `text`
-question. Titles are limited to 80 bytes, messages to 512, accept labels to
-24 and text input to 256, all without controls. A second pending question for
-one view returns `busy`. Results contain `accept|cancel`, a value and an error;
-questions are not persisted, are canceled on app exit, and F12 retains the
-question while resetting transient input and focus. They are plain text, not
-password fields. A positive answer is not a capability grant.
-The options are `{kind = "confirm"|"text", title = string, message?, accept?,
-initial?}`. Listen on `bee.app.query.result` before calling `query`;
-it returns `request_id, error`. Decode the broker message with
-`client.query_result(launch, tostring(message:from()), message:payload():data())`
-and match its `request_id`. The decoded reply is `{request_id, action =
-"accept"|"cancel", value, error}`; a busy reply has `error = "busy"`.
-
-Terminal key events use `key_type` values such as `runes`, `space`, `enter`,
-`backspace`, `tab`, `up`, `down`, `left`, `right`, `pgup` and `pgdown`;
-the payload also carries `key`, `ctrl`, `alt` and `shift`. Mouse wheel events
-have `type = "mouse"`, `action = "wheel"` and `button = "wheel_up"` or
-`"wheel_down"` (some senders use `"up"` or `"down"`).
-`bee.ui:text.bound(value, limit)` replaces control
-characters, including newlines, with spaces and truncates on a UTF-8
-character boundary.
+`client.query(launch, options)` asks the person a `confirm` or `text`
+question and returns `request_id, error`. Options are `{kind, title,
+message?, accept?, initial?}`; titles are at most 80 bytes, messages 512,
+accept labels 24 and text input 256, all without control characters. Listen
+on `bee.app.query.result` before calling `query` and decode the reply with
+`client.query_result(launch, tostring(message:from()), message:payload():data())`,
+which yields `{request_id, action = "accept"|"cancel", value, error}`. A
+second question while one is pending replies `error = "busy"`. A positive
+answer is not a capability grant.
 
 An app opts into negotiated close with `client.ready(launch,
-{negotiate_close = true})` and the authenticated close request/result helpers.
-The first valid readiness acknowledgement fixes the policy. The broker waits
-two seconds for an app response; a confirmation can then wait for the user.
-Silence exposes Force stop/Cancel, cancellation returns `cancelled`, and
-acceptance starts cooperative cleanup before termination if needed. The host
-binding selects `close_grace_ms` from 0 to 60000, default 250; application
-metadata and close replies cannot extend it. The native Agent window uses the
-host-selected long allowance for pending hook delivery. Repeated close clicks
-share one negotiation, stale senders and tokens cannot accept it, and a pending
-ordinary question becomes `busy`.
+{negotiate_close = true})`. The broker then sends `bee.app.close` and waits
+for `client.close_reply` with `accept`, `cancel` or `confirm` (the person is
+asked); a forced close stops the app without asking. Without negotiation a
+close stops the app.
 
-Workspace quit gathers opted-in decisions while continuing checkpoint writes
-and reports incomplete cleanup after its bounded deadline. Only a successful
-checkpoint receipt guarantees a save. Ctrl+Q and fatal process or terminal loss
-remain emergency exits without a graceful-close guarantee. When the workspace
-host stops or is lost, the broker cancels every application and exits only after
-each has exited; an application still running eight seconds after its cancel is
-terminated. The Terminal application returns only after its PTY child is reaped,
-so a stopped owner leaves no shell behind. Closing a view stops its view-owned
-process; work that must outlive a view belongs to a supervised owner service.
+## Checkpoint and restore
+
+An app opts in with `resume_schema` (nonempty, at most 80 bytes, no control
+characters) and `restart_policy: automatic|manual`; the default is `never`.
+Preflight reports `APPLICATION_CHECKPOINT` for an app whose metadata the
+desktop cannot open.
+
+`client.checkpoint(launch, json_string)` queues at most 64 KiB of opaque,
+application-owned JSON and returns a request id. The broker replies on
+`bee.app.checkpoint_result` with `error_code` empty once the state is stored,
+or `invalid_checkpoint` when `resume_schema` differs from the definition's, or
+`storage`. The stored state is passed back as `launch.resume_state` when the
+node reopens the instance. Stored state never contains credentials, grants or
+PIDs.
+
+## Presentation
+
+Draw through `bee.ui:frame` and read appearance through `bee.ui:appearance`;
+see [component/ui](../component/ui.md). `launch.appearance` carries the
+current preferences. Terminal key events carry `key_type` values such as
+`runes`, `space`, `enter`, `backspace`, `tab`, `up`, `down`, `left`, `right`,
+`pgup` and `pgdown`, plus `key`, `ctrl`, `alt` and `shift`; mouse events have
+`type = "mouse"` with `action` and `button`. `bee.ui:text.bound(value, limit)`
+replaces control characters with spaces and truncates on a UTF-8 boundary.
+
+## Running managed agents
+
+An app opens and drives managed agents with `bee.threads.sessions.client:sessions`,
+which calls the `bee.threads.sessions:contract` and
+`bee.threads.sessions:catalog` owner contracts as the app's own actor. The
+client grants nothing: the owner authorizes every operation. The flow is
+catalog, open, send, await, close. `send` is the only way to give a session
+work; its receipt proves intake only, and the result comes from `await`.
+
+```lua
+local sessions = require("sessions")   -- imports: sessions: bee.threads.sessions.client:sessions
+
+local page = sessions.catalog{}                         -- admitted definitions and profiles with readiness
+local s, fault = sessions.open{definition = "bee.driver.codex.profiles:research_batch", operation_key = "research/open"}
+if not s then return fault.code .. ": " .. fault.message end
+local work = s:send{input = "Summarize the build scripts in this folder.", operation_key = "research/send"}
+local seen = work:await{timeout_ms = 30000}
+s:close{operation_key = "research/close"}
+```
+
+Functions: `open`, `call`, `send`, `cancel`, `close`, `await`, `join`, `get`,
+`work`, `list`, `history` and `catalog`; `sessions.client()` returns an
+independent client. `call{definition, input, ...}` opens a session with its
+first work and awaits it once. Every function returns `value, Fault`; a Fault
+carries `code`, `message` and a `retry` of `never`, `same_key`, `refresh` or
+`reconcile`. `await` bounds observation, never execution: a timeout is a
+pending observation and the work keeps running. Every mutation carries an
+`operation_key`, so a replayed handler receives the original receipt; a lost
+reply is `UNKNOWN_OUTCOME` and is retried with the same key. See
+[component/sessions](../component/sessions.md).
+
+Launch definitions are registry entries with `meta.type = bee.launch_definition`.
+Installed driver definitions include `bee.driver.<name>.profiles:research_batch`
+for `claude`, `codex`, `agy`, `grok`, `muse` and `opencode`, plus
+`bee.driver.codex.profiles:named_batch` and each driver's `default_window`.
+The catalog lists which are ready; the owner still decides admission when
+`open` runs.
+
+`bee.app.threads:client` (`request`, `result`) formats `bee.app.thread.request`
+messages carrying the operations `read`, `post`, `subscribe`, `page`,
+`ack_page`, `resume` and `unsubscribe`.

@@ -9,5 +9,4 @@ entries:
   imports:
     access: bee.driver.profiles:profile_access
     bounds: bee.values:bounds
-    budgets: bee.threads.records:budgets
     canonical: bee.values:canonical

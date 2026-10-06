@@ -34,7 +34,7 @@ local function fresh(): string
 end
 local function put(id: string, revision: integer, key: string, title: string): {[string]: unknown}
     return {operation = "put", workspace_id = WORKSPACE, profile_id = id, expected_revision = revision, idempotency_key = key,
-        profile = {schema_revision = "bee.agent-profile@2", name = title, definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {mcp = {}}}}
+        profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {mcp = {}}}}
 end
 local function define_tests()
     test.describe("Saved profile owner facade", function()

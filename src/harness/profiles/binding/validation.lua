@@ -3,7 +3,6 @@ local registry = require("registry")
 local bounds = require("bounds")
 local descriptors = require("descriptors")
 local protocol = require("protocol")
-local budgets = require("budgets")
 local M = {}
 function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
     local definition = pinned:get(profile.definition_ref)
@@ -37,7 +36,6 @@ function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
             if invalid then return invalid end
         end
     end
-    return budgets.accounting(profile.budgets, descriptor.capabilities and descriptor.capabilities.budgets,
-        profile.presentation or (definition_data.default_mode == "window" and "window" or "headless"), descriptor.codec)
+    return nil
 end
 return M

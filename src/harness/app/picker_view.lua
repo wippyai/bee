@@ -6,8 +6,10 @@ local text = require("text")
 local agents = require("agents")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
-local HINTS = frame.hints({{key = "Enter", verb = "open"}, {key = "/", verb = "search"}, {key = "Esc", verb = "back"}})
-local MORE = frame.hints({{key = "↑↓", verb = "select"}, {key = "E", verb = "customize copy or edit"}, {key = "N", verb = "new profile"},
+-- The footer names only keys the buttons above it do not show; help lists
+-- them all.
+local HINTS = frame.hints({{key = "/", verb = "search"}})
+local MORE = frame.hints({{key = "Enter", verb = "open"}, {key = "Esc", verb = "back"}, {key = "↑↓", verb = "select"}, {key = "E", verb = "customize copy or edit"}, {key = "N", verb = "new profile"},
     {key = "S", verb = "setup"}, {key = "U", verb = "unavailable"}, {key = "R", verb = "refresh"}, {key = "Ctrl+S", verb = "sort"}})
 -- The right column names what kind of choice a row is: a saved profile, or
 -- why an agent cannot open.
@@ -37,9 +39,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if count == 0 and status == "" and height >= 5 then
         frame.empty(painter, first, "No agents are ready on this node",
             height >= 7 and "Install a harness and log in, then R refresh, or U to see unavailable agents" or nil)
+    elseif count == 0 and height >= 5 then
+        frame.empty(painter, first, text.bound(status, 512))
     end
     local item = listing.items[selected]
-    local message = status
+    local message = count == 0 and "" or status
     if message == "" and item and not item.ready and item.reason ~= "" then message = item.reason end
     if message == "" and not show_unavailable and listing.unavailable > 0 then
         message = tostring(listing.unavailable) .. " unavailable · U to show"

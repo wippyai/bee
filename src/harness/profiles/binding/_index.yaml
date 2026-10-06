@@ -7,7 +7,6 @@ entries:
   modules:
   - registry
   imports:
-    budgets: bee.threads.records:budgets
     bounds: bee.values:bounds
     descriptors: bee.driver.descriptor:descriptor
     protocol: bee.harness.profiles:protocol

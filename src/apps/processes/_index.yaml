@@ -34,6 +34,17 @@ entries:
     - bee.hive.security:caller
     - bee.hive.security:messaging
     - bee.apps.processes:observe
+    - bee.apps.processes:service_titles
+- name: service_titles
+  kind: security.policy.expr
+  meta:
+    comment: Process Manager reads the titles of Bee's own services from their registry entries
+  policy:
+    actions:
+    - registry.get
+    resources: '*'
+    expression: action == "registry.get" && resource matches "^bee[.][a-z0-9_.]+:[A-Za-z0-9_.-]+$"
+    effect: allow
 - name: observe
   kind: security.policy
   meta:

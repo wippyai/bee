@@ -5,12 +5,11 @@ local login_evidence = require("login_evidence")
 local schema_values = require("schema_values")
 local M = {}
 type PermissionAnswer = {transport: string, adapter_ref: string?, reason: string?}
-type BudgetCapabilities = {provider_steps: "agent_turn" | "model_step", tokens: boolean, cost_usd: boolean, tool_calls: boolean, wall_time_ms: boolean}
-type Capabilities = {permission_answers: {[string]: PermissionAnswer}, budgets: BudgetCapabilities?}
+type Capabilities = {permission_answers: {[string]: PermissionAnswer}}
 local function capabilities(value: unknown): (Capabilities?, string?)
     if value == nil then return {permission_answers = {}}, nil end
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"permission_answers", "budgets"}) then return nil, "CLI descriptor.capabilities is malformed" end
+    if not object or bounds.fields(object, {"permission_answers"}) then return nil, "CLI descriptor.capabilities is malformed" end
     local answers = bounds.object(object.permission_answers)
     if not answers or bounds.fields(answers, {"window", "first_turn", "resume"}) then return nil, "CLI descriptor permission_answers contexts are malformed" end
     local result: {[string]: PermissionAnswer} = {}
@@ -24,16 +23,7 @@ local function capabilities(value: unknown): (Capabilities?, string?)
             or (transport ~= "provider" and (not adapter_ref or item.reason ~= nil)) then return nil, "permission_answers." .. context .. " needs an adapter or an unsupported reason" end
         result[context] = {transport = transport, adapter_ref = adapter_ref, reason = reason}
     end
-    local budget: BudgetCapabilities? = nil
-    if object.budgets ~= nil then
-        local value = bounds.object(object.budgets)
-        if not value or bounds.fields(value, {"provider_steps", "tokens", "cost_usd", "tool_calls", "wall_time_ms"}) then return nil, "Budget capability declaration is malformed" end
-        if (value.provider_steps ~= "agent_turn" and value.provider_steps ~= "model_step") or type(value.tokens) ~= "boolean"
-            or type(value.cost_usd) ~= "boolean" or type(value.tool_calls) ~= "boolean" or type(value.wall_time_ms) ~= "boolean" then return nil, "Budget capabilities need an explicit unit and accounting coverage" end
-        budget = {provider_steps = value.provider_steps == "model_step" and "model_step" or "agent_turn", tokens = value.tokens,
-            cost_usd = value.cost_usd, tool_calls = value.tool_calls, wall_time_ms = value.wall_time_ms}
-    end
-    return {permission_answers = result, budgets = budget}, nil
+    return {permission_answers = result}, nil
 end
 M.TYPE = "bee.driver.cli_descriptor"
 M.SCHEMA = "bee.driver.cli-descriptor@3"

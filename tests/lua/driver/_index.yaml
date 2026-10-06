@@ -151,12 +151,6 @@ entries:
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
 
-- name: budget_accounting_test
-  kind: function.lua
-  source: file://budget_accounting_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, budgets: bee.threads.records:budgets, descriptor: bee.driver.descriptor:descriptor}
 - name: docker_probe_test
   kind: function.lua
   source: file://docker_probe_test.lua

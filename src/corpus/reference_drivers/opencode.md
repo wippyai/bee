@@ -84,12 +84,6 @@ entries:
       - tokens
     configure: opencode
     capabilities:
-      budgets:
-        provider_steps: agent_turn
-        tokens: true
-        cost_usd: false
-        tool_calls: true
-        wall_time_ms: true
       permission_answers:
         window:
           transport: provider

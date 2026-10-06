@@ -4,7 +4,7 @@ local editor = require("profile_editor")
 local protocol = require("protocol")
 
 local function profile(): protocol.Profile
-    local value, err = protocol.profile({schema_revision = "bee.agent-profile@2", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {model = "small", options = {enabled = false, note = "initial"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}})
+    local value, err = protocol.profile({schema_revision = "bee.agent-profile@3", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {model = "small", options = {enabled = false, note = "initial"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}})
     if not value then error(tostring(err)) end
     return value
 end
@@ -15,7 +15,7 @@ local function allowed(): {[string]: unknown}
 end
 
 local function profile_without_model(): protocol.Profile
-    local value, err = protocol.profile({schema_revision = "bee.agent-profile@2", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {enabled = false}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}})
+    local value, err = protocol.profile({schema_revision = "bee.agent-profile@3", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {enabled = false}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}})
     if not value then error(tostring(err)) end
     return value
 end
@@ -80,11 +80,11 @@ local function define_tests()
             test.eq(refusal, "this launch does not allow choosing a folder")
             test.is_false(editor.set_thread(closed, "thread-1"))
             -- A saved choice the launch no longer allows is refused, not dropped.
-            local saved = protocol.profile({schema_revision = "bee.agent-profile@2", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}} , workdir = {root_ref = "bee.env:workspace_root", path = "legacy"}})
+            local saved = protocol.profile({schema_revision = "bee.agent-profile@3", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}} , workdir = {root_ref = "bee.env:workspace_root", path = "legacy"}})
             if not saved then error("saved profile with a folder") end
             test.is_nil(editor.new(saved, {options = {}, mcp_tools = {}, instructions = false}))
-            test.is_nil(protocol.profile({schema_revision = "bee.agent-profile@2", name = "T", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {mcp = {}} , workdir = {root_ref = "r", path = "/abs"}}))
-            test.is_nil(protocol.profile({schema_revision = "bee.agent-profile@2", name = "T", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {mcp = {}} , thread = {thread_id = "t", title = "x"}}))
+            test.is_nil(protocol.profile({schema_revision = "bee.agent-profile@3", name = "T", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {mcp = {}} , workdir = {root_ref = "r", path = "/abs"}}))
+            test.is_nil(protocol.profile({schema_revision = "bee.agent-profile@3", name = "T", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {mcp = {}} , thread = {thread_id = "t", title = "x"}}))
         end)
 
         test.it("edits bounded titles and appends multiline guidance", function()

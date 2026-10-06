@@ -111,7 +111,7 @@ local function snapshot(value: unknown): (Object?, string?)
         lifecycle = lifecycle, activity = activity, activity_evidence = activity_evidence,
         execution = {state = row.execution_running == true and "running" or "quiescent", evidence_at = at, stale = false},
         queue_count = queued, effective_limits = route.budgets or {},
-        saved_profile = saved_profile, effective_profile = route.effective_profile, profile_digest = route.profile_digest, budget_consumption = row.budget_consumption, continuity = {mode = "provider_resume"}, actions = {}}, nil
+        saved_profile = saved_profile, effective_profile = profile_values.upgrade(route.effective_profile), profile_digest = route.profile_digest, budget_consumption = row.budget_consumption, continuity = {mode = "provider_resume"}, actions = {}}, nil
 end
 
 local finish_closing: (string, string) -> string?

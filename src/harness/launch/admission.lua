@@ -25,7 +25,6 @@ local interrupted = require("interrupted")
 local profiles = require("profiles")
 local profile_validation = require("profile_validation")
 local descriptors = require("descriptors")
-local budgets = require("budgets")
 local M = {}
 M.CARRIER = "bee.harness.service:carrier"
 M.CARRIER_HOST_REF = "bee.harness.env:carrier_host_ref"
@@ -40,7 +39,6 @@ M.MAX_AGENT_INSTRUCTIONS_BYTES = 4096
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
-    budget_capabilities: descriptors.BudgetCapabilities?,
     effective_profile: profiles.Profile?,
     effective_profile_digest: string?,
     saved_profile_id: string?,
@@ -464,10 +462,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         if resolved_profile and placement.placement_kind == "docker" then effective_profile.placement = {kind = "docker", profile_ref = resolved_profile.ref}
         else effective_profile.placement = {kind = "native", home = default_private_home and "private" or "machine"} end
     end
-    if not effective_profile.presentation then effective_profile.presentation = "window" end
-    local budget_error = budgets.accounting(effective_profile.budgets, descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile.presentation, descriptor and descriptor.codec)
-    if budget_error then return nil, fail("UNSUPPORTED_CAPABILITY", budget_error) end
-    return {budget_capabilities = descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile = effective_profile,
+    return {effective_profile = effective_profile,
         effective_profile_digest = digest_of(effective_profile),
         title = selected and selected.profile.name or launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest, driver_id = binding.driver_id,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest, permission_answers = launch_policy.permission_answers,

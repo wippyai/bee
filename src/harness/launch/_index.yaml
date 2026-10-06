@@ -23,7 +23,6 @@ entries:
   - security
   - time
   imports:
-    budgets: bee.threads.records:budgets
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     catalog: bee.harness.catalog:catalog

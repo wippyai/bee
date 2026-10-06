@@ -1,10 +1,11 @@
 local bounds = require("bounds")
-local budgets = require("budgets")
 local canonical = require("canonical")
 local json = require("json")
 local access = require("access")
 local M = {}
-M.SCHEMA = "bee.agent-profile@2"
+M.SCHEMA = "bee.agent-profile@3"
+M.PRIOR = "bee.agent-profile@2"
+M.RETIRED = {"presentation", "budgets", "supervision"}
 M.MAX_OPTIONS = 64
 type Object = {[string]: unknown}
 type Workdir = {root_ref: string, path: string}
@@ -19,7 +20,7 @@ type Workspace = access.Workspace
 type Bee = access.Bee
 type Placement = {kind: "native", home: "private" | "machine"} | {kind: "docker", profile_ref: string, overrides: Object?}
 type Profile = {schema_revision: string, definition_ref: string, driver_binding_ref: string, name: string,
-    provider: Provider, bee: Bee, placement: Placement?, presentation: "headless" | "window"?, budgets: budgets.Budgets?, supervision: budgets.Supervision?,
+    provider: Provider, bee: Bee, placement: Placement?,
     workdir: Workdir?, thread: Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer,
     idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer, definition_ref: string?, query: string?, sort: string?}
@@ -131,10 +132,22 @@ function M.placement(value: unknown): (Placement?, string?)
     else return nil, "placement must be native or docker" end
 
 end
+-- A recorded v2 profile in the current schema: the same fields without the
+-- retired presentation, budgets and supervision. Other values pass unchanged.
+function M.upgrade(value: unknown): unknown
+    local raw = bounds.object(value)
+    if not raw or raw.schema_revision ~= M.PRIOR then return value end
+    local result: Object = {}
+    for key, item in pairs(raw) do
+        if not bounds.member(key, M.RETIRED) then result[key] = item end
+    end
+    result.schema_revision = M.SCHEMA
+    return result
+end
 function M.profile(value: unknown): (Profile?, string?)
     local raw = bounds.object(value)
     if not raw then return nil, "profile must be an object" end
-    local extra = bounds.fields(raw, {"schema_revision", "definition_ref", "driver_binding_ref", "name", "provider", "bee", "placement", "presentation", "budgets", "supervision", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"})
+    local extra = bounds.fields(raw, {"schema_revision", "definition_ref", "driver_binding_ref", "name", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"})
     if extra then return nil, extra end
     if raw.schema_revision ~= M.SCHEMA then return nil, "profile.schema_revision must be " .. M.SCHEMA end
     local definition, driver, name = bounds.id(raw.definition_ref), bounds.id(raw.driver_binding_ref), bounds.line(raw.name, 80)
@@ -143,14 +156,7 @@ function M.profile(value: unknown): (Profile?, string?)
     if not provider then return nil, provider_error end
     local bee, bee_error = M.bee(raw.bee)
     if not bee then return nil, bee_error end
-    local limits, limit_error = budgets.budgets(raw.budgets)
-    if limit_error then return nil, limit_error end
-    local supervision, supervision_error = budgets.supervision(raw.supervision)
-    if supervision_error then return nil, supervision_error end
-    local result: Profile = {schema_revision = M.SCHEMA, definition_ref = definition, driver_binding_ref = driver, name = name, provider = provider, bee = bee, budgets = limits, supervision = supervision}
-    if raw.presentation == "headless" then result.presentation = "headless"
-    elseif raw.presentation == "window" then result.presentation = "window"
-    elseif raw.presentation ~= nil then return nil, "presentation must be headless or window" end
+    local result: Profile = {schema_revision = M.SCHEMA, definition_ref = definition, driver_binding_ref = driver, name = name, provider = provider, bee = bee}
     local placement, placement_error = M.placement(raw.placement)
     if placement_error then return nil, placement_error end
     result.placement = placement

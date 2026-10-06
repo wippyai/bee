@@ -7,7 +7,6 @@
 local bounds = require("bounds")
 local preferences = require("preferences")
 local protocol = require("protocol")
-local budgets = require("budgets")
 
 local json = require("json")
 local canonical = require("canonical")
@@ -30,8 +29,7 @@ type Allowed = {
     host_home: boolean?,
 }
 type Draft = {schema_revision: string, definition_ref: string, driver_binding_ref: string, name: string,
-    provider: protocol.Provider, bee: protocol.Bee, placement: protocol.Placement?, presentation: "headless" | "window"?,
-    budgets: budgets.Budgets?, supervision: budgets.Supervision?,
+    provider: protocol.Provider, bee: protocol.Bee, placement: protocol.Placement?,
     workdir: protocol.Workdir?, thread: protocol.Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?,
     -- Kept out of the public result. It is copied at construction and is
     -- consulted on every edit and result validation.
@@ -102,7 +100,6 @@ end
 local function raw_profile(draft: Profile): {[string]: unknown}
     return {schema_revision = draft.schema_revision, name = draft.name, definition_ref = draft.definition_ref,
         driver_binding_ref = draft.driver_binding_ref, provider = draft.provider, bee = draft.bee, placement = draft.placement,
-        presentation = draft.presentation, budgets = draft.budgets, supervision = draft.supervision,
         workdir = draft.workdir, thread = draft.thread, agent_ref = draft.agent_ref,
         owner_component_revision = draft.owner_component_revision, spec_digest = draft.spec_digest}
 end
@@ -158,7 +155,6 @@ local function replace(draft: Draft, profile: Profile)
     draft.name, draft.definition_ref, draft.driver_binding_ref = profile.name, profile.definition_ref, profile.driver_binding_ref
     draft.provider, draft.bee, draft.placement = profile.provider, profile.bee, profile.placement
     draft.workdir, draft.thread = profile.workdir, profile.thread
-    draft.presentation, draft.budgets, draft.supervision = profile.presentation, profile.budgets, profile.supervision
     draft.agent_ref, draft.owner_component_revision, draft.spec_digest = profile.agent_ref, profile.owner_component_revision, profile.spec_digest
 end
 function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
@@ -169,7 +165,6 @@ function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
     local draft: Draft = {schema_revision = decoded.schema_revision, name = decoded.name,
         definition_ref = decoded.definition_ref, driver_binding_ref = decoded.driver_binding_ref,
         provider = decoded.provider, bee = decoded.bee, placement = decoded.placement,
-        presentation = decoded.presentation, budgets = decoded.budgets, supervision = decoded.supervision,
         workdir = decoded.workdir, thread = decoded.thread, agent_ref = decoded.agent_ref,
         owner_component_revision = decoded.owner_component_revision, spec_digest = decoded.spec_digest, _allowed = allowed}
     local checked, checked_error = result_for(draft)

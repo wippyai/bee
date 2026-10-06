@@ -390,7 +390,7 @@ local function define_tests()
             local workspace_id, saved_id = workspace, fresh("profile")
             local function save(revision: integer, title: string, options: {[string]: unknown})
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
-                    expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
+                    expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
             end
             save(0, "First profile", {})
             local original = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
@@ -422,7 +422,7 @@ local function define_tests()
             for _, refs in ipairs({{}, {"anthropic"}}) do
                 local saved_id = fresh("credential-profile")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
-                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Selected credentials",
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Selected credentials",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {},
                         bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
                 local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
@@ -441,7 +441,7 @@ local function define_tests()
             end
             local saved_id = fresh("undeclared-credential")
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
-                expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Undeclared",
+                expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Undeclared",
                     definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
             local refused = call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(refused), "DENIED")
@@ -470,7 +470,7 @@ local function define_tests()
                 local environment: {[string]: unknown} = {}
                 environment[item.name] = item.literal and {kind = "literal", value = "fixture-value"} or {kind = "credential", credential_ref = "anthropic"}
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
-                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Environment",
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Environment",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
                 local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
                 replies[index] = call("bee.harness.binding:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
@@ -1426,7 +1426,7 @@ local function define_tests()
                 if not applied then error("configure codex named profile: " .. tostring(apply_error)) end
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
-                    profile = {schema_revision = "bee.agent-profile@2", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "ds-flash"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
+                    profile = {schema_revision = "bee.agent-profile@3", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "ds-flash"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
                 local selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
@@ -1699,7 +1699,7 @@ local function define_tests()
             with_overrides({"brief", "workdir"}, {"workdir"}, function()
                 local saved_id = fresh("folder-profile")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
-                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Profiled folder",
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Profiled folder",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}},
                         workdir = {root_ref = ROOT, path = "profiled"}}}))
                 local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
@@ -2218,13 +2218,13 @@ local function define_tests()
             local workspace_id, saved_id = workspace, fresh("agent-profile")
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"),
-                profile = {schema_revision = "bee.agent-profile@2", name = "Outside tools", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
+                profile = {schema_revision = "bee.agent-profile@3", name = "Outside tools", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
             local outside = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(outside), "FORBIDDEN")
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                 expected_revision = 1, idempotency_key = fresh("save"),
-                profile = {schema_revision = "bee.agent-profile@2", name = "Claimed model", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {model = "sneaky"}, bee = {mcp = {}}}}))
+                profile = {schema_revision = "bee.agent-profile@3", name = "Claimed model", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {model = "sneaky"}, bee = {mcp = {}}}}))
             local claimed = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2})
             test.eq(code(claimed), "FORBIDDEN")

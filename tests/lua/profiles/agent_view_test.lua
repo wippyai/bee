@@ -59,9 +59,12 @@ local function define_tests()
             for _, hit in ipairs(picker_view.draw(80, 12, appearance.defaults(), empty, 0, "", false, false).hits) do
                 test.is_true(hit.kind ~= "open" and hit.kind ~= "headless" and hit.kind ~= "setup" and hit.kind ~= "edit")
             end
-            local loading = table.concat(picker_view.draw(80, 12, appearance.defaults(), empty, 0, "Loading agents…", false, false).rows)
+            local loading_rows = picker_view.draw(80, 12, appearance.defaults(), empty, 0, "Loading agents…", false, false).rows
+            local loading = table.concat(loading_rows)
             test.is_true(loading:find("Loading agents", 1, true) ~= nil)
             test.is_true(loading:find("No agents are ready", 1, true) == nil)
+            -- An empty list says it is loading where its agents will appear.
+            test.is_true(loading_rows[2]:find("Loading agents", 1, true) ~= nil)
             local busy = picker_view.draw(80, 12, appearance.defaults(), hostile, 1, "Opening session…", true, false)
             test.is_true(table.concat(busy.rows):find("Opening session", 1, true) ~= nil)
             for _, hit in ipairs(busy.hits) do
@@ -78,7 +81,14 @@ local function define_tests()
             test.is_true(rows[1]:find("NEW SESSION", 1, true) ~= nil and rows[1]:find("2 agents", 1, true) ~= nil)
             test.eq(rows[2]:sub(1, 7), " Alpha ")
             test.eq(rows[3]:sub(1, #"›"), "›")
-            test.is_true(rows[24]:find("Enter open · / search · Esc back", 1, true) ~= nil)
+            -- The footer lists only keys the buttons above it do not show.
+            test.is_true(rows[23]:find("Enter Open", 1, true) ~= nil)
+            test.is_true(rows[24]:find("/ search", 1, true) ~= nil)
+            test.is_nil((rows[24]:find("Enter open", 1, true)))
+            test.is_true(drawn.controls ~= nil)
+            local listed: {[string]: boolean} = {}
+            for _, hint in ipairs((assert(drawn.controls)).hints) do listed[hint.key] = true end
+            test.is_true(listed["Enter"] and listed["Esc"] and listed["/"])
             local chosen = 0
             for _, hit in ipairs(drawn.hits) do if hit.kind == "choice" and hit.y == 3 then chosen = hit.index end end
             test.eq(chosen, 2)
@@ -122,7 +132,9 @@ local function define_tests()
                 test.is_true(plain:find("Fix API", 1, true) ~= nil)
                 test.is_true(plain:find("closed", 1, true) ~= nil)
                 test.is_nil((plain:find("bs:n:w:s", 1, true)))
-                test.is_true(shown.rows[size[2]]:find("Enter open", 1, true) ~= nil)
+                test.is_true(shown.rows[size[2] - 1]:find("Enter Open", 1, true) ~= nil)
+                test.is_nil((shown.rows[size[2]]:find("Enter open", 1, true)))
+                test.is_true(shown.rows[size[2]]:find("Esc back", 1, true) ~= nil)
             end
         end)
     end)

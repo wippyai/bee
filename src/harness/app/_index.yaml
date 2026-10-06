@@ -174,7 +174,6 @@ entries:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
     preferences: bee.driver.profiles:preferences
-    budgets: bee.threads.records:budgets
     protocol: bee.harness.profiles:protocol
 - name: profile_form
   kind: library.lua
@@ -191,7 +190,6 @@ entries:
     bounds: bee.values:bounds
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
-    budgets: bee.threads.records:budgets
     protocol: bee.harness.profiles:protocol
     editor: bee.harness.app:profile_editor
 - name: profile_view
@@ -235,6 +233,5 @@ entries:
   kind: library.lua
   source: file://profile_settings.lua
   imports:
-    budgets: bee.threads.records:budgets
     bounds: bee.values:bounds
     editor: bee.harness.app:profile_editor

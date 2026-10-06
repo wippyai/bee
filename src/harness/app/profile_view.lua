@@ -80,7 +80,6 @@ local function fields(state: State): {Field}
                 max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
         end
     end
-    result[#result + 1] = {kind = "presentation", name = "", label = "Presentation: " .. (state.form.draft.presentation or "Default")}
     if state.form.repair_json then result[#result + 1] = {kind = "repair", name = "", label = "Migration repair"} end
     if state.advanced then
         local placement = state.form.draft.placement
@@ -115,8 +114,6 @@ local function fields(state: State): {Field}
         end
         result[#result + 1] = {kind = "refresh", name = "", label = "Refresh runtime options: " .. (state.form.readiness or "not probed")}
         for _, field in ipairs(settings.fields(state.form.draft)) do result[#result + 1] = field end
-        result[#result + 1] = {kind = "stall", name = "", label = "When stalled: " ..
-            (state.form.draft.supervision and state.form.draft.supervision.on_stall == "cancel_work" and "Cancel work" or "Report")}
     end
     return result
 end
@@ -299,18 +296,12 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    if field.kind == "stall" or field.kind == "home" or field.kind == "presentation" or field.kind == "answers" or field.kind == "placement" or field.kind == "credential" or field.kind == "lease" or field.kind == "refresh" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
+    if field.kind == "home" or field.kind == "answers" or field.kind == "placement" or field.kind == "credential" or field.kind == "lease" or field.kind == "refresh" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
         if event.type == "key" and event.action == "press" and
             (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
             local err: string? = nil
-            if field.kind == "stall" then
-                local supervision = state.form.draft.supervision or {}
-                supervision.on_stall = supervision.on_stall == "cancel_work" and "report" or "cancel_work"
-                state.form.draft.supervision = supervision; ok = true
-            elseif field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
-            elseif field.kind == "presentation" then
-                state.form.draft.presentation = state.form.draft.presentation == "window" and "headless" or "window"; ok = true
+            if field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
             elseif field.kind == "answers" then
                 local current = state.form.draft.bee.permission_answers
                 state.form.draft.bee.permission_answers = current == "provider" and "ask" or current == "ask" and "deny" or "provider"; ok = true

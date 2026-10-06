@@ -7,8 +7,11 @@ local protocol = require("protocol")
 local agents = require("agents")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
-local HINTS = frame.hints({{key = "Enter", verb = "open"}, {key = "N", verb = "new"}, {key = "X", verb = "close"}, {key = "Esc", verb = "back"}})
-local MORE = frame.hints({{key = "↑↓", verb = "select"}, {key = "W", verb = "this workspace or all"}, {key = "C", verb = "closed sessions"}, {key = "R", verb = "refresh"}})
+-- The footer names only keys the buttons above it do not show; help lists
+-- them all.
+local HINTS = frame.hints({{key = "Esc", verb = "back"}})
+local MORE = frame.hints({{key = "Enter", verb = "open"}, {key = "N", verb = "new"}, {key = "X", verb = "close"}, {key = "↑↓", verb = "select"},
+    {key = "W", verb = "this workspace or all"}, {key = "C", verb = "closed sessions"}, {key = "R", verb = "refresh"}})
 
 -- state names what the session is doing in a word a person reads at a glance.
 local function state(item: protocol.SessionSnapshot): string

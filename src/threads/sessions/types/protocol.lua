@@ -27,7 +27,6 @@ type Placement = profile_values.Placement
 type Workdir = {root_ref: string, path: string}
 type Budget = budget_values.Budget
 type Budgets = budget_values.Budgets
-type Supervision = budget_values.Supervision
 type Sender = {kind: "session" | "principal", id: string}
 type FaultExtra = {operation: string?, current_revision: integer?, evidence: Evidence?, retry_after_ms: integer?}
 type Fault = {code: string, message: string, retry: Retry, operation_key: string?, operation: string?,
@@ -155,8 +154,6 @@ end
 
 M.decode_placement = profile_values.placement
 M.decode_workdir = profile_values.workdir
-M.decode_budgets = budget_values.budgets
-M.decode_supervision = budget_values.supervision
 function M.decode_budget(value: unknown): (Budget?, string?)
     return budget_values.decode(value)
 end

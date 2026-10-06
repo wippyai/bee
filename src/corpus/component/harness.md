@@ -53,12 +53,12 @@ Agent window and the `bee claude`, `bee codex`, `bee agy`, `bee grok`,
 `bee muse` and `bee opencode` shortcuts pass the selected definition back
 through admission before execution.
 
-Saved profiles use `bee.agent-profile@2`, owned by the existing Harness/Sync profile feed. Stock resolved defaults and saved copies share this shape:
+Saved profiles use `bee.agent-profile@3`, owned by the existing Harness/Sync profile feed. Stock resolved defaults and saved copies share this shape:
 
 - Identity: `schema_revision`, `definition_ref`, `driver_binding_ref`, `name`; optional `agent_ref`, `owner_component_revision`, `spec_digest` fence the closure. Revisions stay in the CAS store envelope.
 - `provider`: `model`, `effort`, `permission_mode`, `tool_allow`, `tool_deny`, `system_prompt_append`, `env`, `options`. Driver-specific values such as Codex sandbox and config profile use descriptor-declared `options` keys.
 - `bee`: scoped `mcp`, `files`, `workspaces`, `credential_refs`, `approval_leases`, `permission_answers` (`provider`, `ask`, `deny`). References describe requested authority and never grant it.
-- `placement`: `{kind="native", home="private"|"machine"}` or `{kind="docker", profile_ref=Ref, overrides?}`; `presentation`: `headless` or `window`; optional `workdir`, `thread`, `budgets={turn?,session?}`, `supervision={quiet_period_ms?,on_stall?}`.
+- `placement`: `{kind="native", home="private"|"machine"}` or `{kind="docker", profile_ref=Ref, overrides?}`; optional `workdir` and `thread`. Every session runs in an interactive window, so a profile names no presentation, budgets or supervision.
 
 The gateway checks saved MCP scopes against every decoded call, including nested Session definitions. Cross-workspace scopes name an admitted owner operation and destination; the tool owner authorizes the destination on every call. Resources issues attempt-bound, narrowed file grants; gateway revalidates their revocation, expiry and association identity. These private gateway grants remain independent of placement workdir grants, including repeated resource names. Credential selectors contain only definition-admitted references. Descriptor-declared environment renders deliver literals through the frozen placement delivery; credential references retain the broker's exact environment destination and cannot retarget secrets. Runtime lease references belong to the existing Approvals owner and require the same authenticated subject/workspace at admission and consumption. Copying a profile transfers no authority. Machine home requires host permission; native execution retains OS-user authority.
 
@@ -68,7 +68,7 @@ Prompt additions stay in the placement's private home. Claude uses `--append-sys
 
 Docker uses the existing reusable `bee.placement.docker` templates. Overrides narrow host memory bytes, CPU millicpus, pids and admitted mounts, or retain the exact pinned image/non-root user. Network/tmpfs/directory/environment overrides reject when the template has no admitting mechanism. Revoke Docker access is an Advanced action. Passive readiness never provisions an image. Version and root/subcommand help run in an isolated, networkless probe container only for a cached immutable image. Capabilities cache by image and descriptor digest; Refresh runtime options preserves the draft and reloads image status/help. Missing images show the first-launch build requirement.
 
-A transactional migration rewrites historical payloads to v2 once for the profile owner. Unknown fields, missing definitions, unsupported options and conflicting aliases produce `bee.agent-profile-migration@1` with original source, editable draft and reasons. Diagnostics block launch and repair through normal CAS. Projection revisions, tombstones, receipt/event bytes and other owners remain intact; feed cursors advance and fence old snapshots. Applied SQL migrations remain unchanged. Session snapshots carry `effective_profile`, `profile_digest` and durable `budget_consumption`. Cost limits reject with the exact budget field and usage codec because the shipped codecs have no trustworthy cost accounting. Window budgets reject at profile configuration because hook accounting cannot prove enforcement. Saved profiles with missing/invalid definitions, policies or descriptors retain their source and CAS revision in the JSON repair form.
+A transactional migration rewrites historical payloads to v3 once for the profile owner. A v2 profile loses `presentation`, `budgets` and `supervision`; one that configured budgets or a stall quiet period or action becomes a diagnostic whose reasons say these no longer apply and whose draft is the v3 profile without them, so saving the repair drops them. Unknown fields, missing definitions, unsupported options and legacy budgets produce `bee.agent-profile-migration@1` with original source, editable draft and reasons. Diagnostics block launch and repair through normal CAS. Projection revisions, tombstones, receipt/event bytes and other owners remain intact; feed cursors advance and fence old snapshots. Applied SQL migrations remain unchanged. Session snapshots carry `effective_profile` in v3; a session recorded with a v2 profile reports it without the retired fields. Saved profiles with missing/invalid definitions, policies or descriptors retain their source and CAS revision in the JSON repair form.
 
 ## Boundaries
 
@@ -105,9 +105,8 @@ Manual `M` attach remains in the catalog.
 The unavailable Setup action explains the owner-reported reason and the
 install/sign-in/refresh steps; it executes no provider commands.
 
-Stock definitions offer Customize copy. Name, admitted folder, model, effort,
-placement and presentation are basic fields. Advanced uses named turn/session
-limits, a quiet period and stall action, and Docker memory/CPU/process limits
+Stock definitions offer Customize copy. Name, admitted folder, model, effort
+and placement are basic fields. Advanced holds Docker memory/CPU/process limits
 with explicit units. Empty limits inherit the host defaults. Ctrl+P opens Advanced permissions for instructions, conversation
 selection, other options and tool grants with human-readable names. Saving uses
 the existing profile revision and operation keys and grants no new authority.

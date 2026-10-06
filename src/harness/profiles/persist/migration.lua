@@ -2,12 +2,26 @@
 local bounds = require("bounds")
 local protocol = require("protocol")
 local M = {}
-M.ID = "bee.agent-profile@2"
+M.ID = "bee.agent-profile@3"
 M.DIAGNOSTIC = "bee.agent-profile-migration@1"
 type Object = {[string]: unknown}
 type Binding = (string) -> string?
 type NativeHome = "private" | "machine"
 type Home = (string) -> NativeHome?
+M.BUDGETS_RETIRED = "Budgets no longer apply: every session runs in an interactive window. Saving this profile drops them."
+M.SUPERVISION_RETIRED = "Stall supervision no longer applies: every session runs in an interactive window. Saving this profile drops it."
+-- A v2 profile in the current schema, with the reasons a configured budget or
+-- supervision gives the owner.
+local function retire(source: Object): (Object, {string})
+    local draft = bounds.object(protocol.upgrade(source)) or {}
+    local reasons: {string} = {}
+    if source.budgets ~= nil then reasons[#reasons + 1] = M.BUDGETS_RETIRED end
+    local supervision = bounds.object(source.supervision)
+    if source.supervision ~= nil and (not supervision or supervision.quiet_period_ms ~= nil or (supervision.on_stall ~= nil and supervision.on_stall ~= "report")) then
+        reasons[#reasons + 1] = M.SUPERVISION_RETIRED
+    end
+    return draft, reasons
+end
 function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profile) -> string?)?, home: Home?): Object
     local source = bounds.object(value)
     local reasons: {string} = {}
@@ -17,14 +31,31 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
         return {schema_revision = M.DIAGNOSTIC, source = value, draft = draft, reasons = reasons}
     end
     if not source then return diagnostic("Stored profile is not an object") end
-    if source.schema_revision == M.DIAGNOSTIC then return source end
-    if source.schema_revision == protocol.SCHEMA then
-        local profile, err = protocol.profile(source)
-        if not profile then return diagnostic(err or "Invalid v2 profile") end
-        draft = source
+    if source.schema_revision == M.DIAGNOSTIC then
+        local prior = bounds.object(source.draft)
+        if not prior or prior.schema_revision ~= protocol.PRIOR then return source end
+        local upgraded, retired = retire(prior)
+        local kept: {string} = {}
+        for _, reason in ipairs(bounds.array(source.reasons, 64) or {}) do
+            if type(reason) == "string" then kept[#kept + 1] = reason end
+        end
+        for _, reason in ipairs(retired) do kept[#kept + 1] = reason end
+        return {schema_revision = M.DIAGNOSTIC, source = source.source, draft = upgraded, reasons = kept}
+    end
+    if source.schema_revision == protocol.SCHEMA or source.schema_revision == protocol.PRIOR then
+        local current: Object = source
+        if source.schema_revision == protocol.PRIOR then
+            local upgraded, retired = retire(source)
+            current = upgraded
+            for _, reason in ipairs(retired) do reasons[#reasons + 1] = reason end
+        end
+        draft = current
+        local profile, err = protocol.profile(current)
+        if not profile then return diagnostic(err or "Invalid profile") end
         local validation_error = validate and validate(profile) or nil
         if validation_error then return diagnostic(validation_error) end
-        return source
+        if #reasons > 0 then return {schema_revision = M.DIAGNOSTIC, source = value, draft = draft, reasons = reasons} end
+        return current
     end
     local extra = bounds.fields(source, {"schema_revision", "title", "definition_ref", "options", "config_profile", "mcp_tools", "instructions", "placement_profile_ref", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "bee", "budget", "progress_quiet_ms", "presentation"})
     if extra then reasons[#reasons + 1] = extra end
@@ -34,7 +65,7 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
     local definition = bounds.id(source.definition_ref)
     draft.driver_binding_ref = definition and binding(definition) or nil
     if not draft.driver_binding_ref then reasons[#reasons + 1] = "Definition has no admitted driver binding" end
-    for _, key in ipairs({"workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "presentation"}) do draft[key] = source[key] end
+    for _, key in ipairs({"workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"}) do draft[key] = source[key] end
     local provider: Object = {}
     local options: Object = {}
     local raw_options = bounds.object(source.options or {})
@@ -68,19 +99,8 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
             draft.placement = {kind = "native", home = prior_home}
         else draft.placement = {kind = "docker", profile_ref = source.placement_profile_ref} end
     end
-    if source.budget ~= nil then
-        local budget = bounds.object(source.budget)
-        if budget then
-            local renamed: Object = {}
-            for key, item in pairs(budget) do
-                local field = key == "max_turns" and "provider_steps" or key == "max_tokens" and "tokens" or key
-                if renamed[field] ~= nil and renamed[field] ~= item then reasons[#reasons + 1] = "Conflicting budget alias " .. field end
-                renamed[field] = item
-            end
-            draft.budgets = {turn = renamed}
-        else reasons[#reasons + 1] = "Invalid budget" end
-    end
-    if source.progress_quiet_ms ~= nil then draft.supervision = {quiet_period_ms = source.progress_quiet_ms, on_stall = "report"} end
+    if source.budget ~= nil then reasons[#reasons + 1] = M.BUDGETS_RETIRED end
+    if source.progress_quiet_ms ~= nil then reasons[#reasons + 1] = M.SUPERVISION_RETIRED end
     local checked, err = protocol.profile(draft)
     if not checked then reasons[#reasons + 1] = err or "Profile cannot be mapped" end
     if checked and validate then

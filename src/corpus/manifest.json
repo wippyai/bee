@@ -451,9 +451,9 @@
       "topic": "component"
     },
     {
-      "bytes": 13361,
+      "bytes": 13350,
       "id": "component/harness",
-      "sha256": "9cf473002afb6d5facc143672bda40cc9b6ffc1fbcb8cb3d2c7d3bab8baddb30",
+      "sha256": "6523309619bcdefba1fb85c40bbb1869264d3bef7a662ae0947bde15831d0cac",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -531,9 +531,9 @@
       "topic": "component"
     },
     {
-      "bytes": 14297,
+      "bytes": 14271,
       "id": "component/sessions",
-      "sha256": "d031c5c4602bbfa0cf35de33ef24328468687eb11c068f25b18b9df108bde294",
+      "sha256": "7675dca0844d2c5b124a8211f5f31254e8c6d7d9c91a756a1a00f660553d5de9",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -675,9 +675,9 @@
       "topic": "terminal"
     },
     {
-      "bytes": 24241,
+      "bytes": 24094,
       "id": "reference_drivers/opencode",
-      "sha256": "ea15b4b3ff0c08bfc151d5204898b0596a1a0e54fa0c34cbb3b029ba0cc0da1c",
+      "sha256": "c0b94c09bd8ed0b6794236340409a37d639c0aaa1bd8bdd47c0b055792eda19b",
       "source": "generated: tools/corpus.py from src/driver/opencode",
       "title": "Reference driver: OpenCode CLI",
       "topic": "reference_drivers"
@@ -686,7 +686,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 837461,
+    "bytes": 837277,
     "documents": 85
   }
 }

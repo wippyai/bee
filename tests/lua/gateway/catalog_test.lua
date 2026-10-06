@@ -216,6 +216,30 @@ local function define_tests()
             raw.traits = {{id = "application:spoof", title = "Spoof", prompt = "Spoof", tools = {"application_open"}}}
             test.is_nil((surface.prepare(raw, mcp.TOOLS, {"application_open"})))
         end)
+        test.it("admits application tools only where a person enabled them or approves the access", function()
+            local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
+                access = {policy = "agent-tools", traits = {"bee.app:tools"}}}
+            local prepared = surface.prepare(raw, mcp.TOOLS, {"app_tools"})
+            if not prepared then error("requestable application tools refused") end
+            test.is_nil(surface.select(prepared, {"bee.app:tools"}, {}))
+            local granted = assert(surface.grant(prepared, {"bee.app:tools"}))
+            local selected = assert(surface.select(granted, {"bee.app:tools"}, {}))
+            local active = assert(catalog.select(granted.catalog, granted.ceiling, granted.base_tools, granted.allowed_traits, selected.active))
+            test.eq(#active, 1)
+            test.eq(active[1].name, "app_tools")
+            local enabled = {tools = {}, traits = {}, base_tools = {"app_tools"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+            local base = surface.prepare(enabled, mcp.TOOLS, {"app_tools"})
+            if not base then error("profile-enabled application tools refused") end
+            local listed = assert(catalog.select(base.catalog, base.ceiling, base.base_tools, base.allowed_traits, {}))
+            test.eq(listed[1].name, "app_tools")
+            local _, _, ungated = surface.prepare({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {},
+                dynamic_keys = {}}, mcp.TOOLS, {"app_tools"})
+            test.eq(ungated, "app_tools needs a person: enable it in the profile or offer bee.app:tools as requestable access")
+            local spoof = {tools = {}, traits = {{id = "application:spoof", title = "Spoof", prompt = "Spoof", tools = {"app_tools"}}},
+                base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
+                access = {policy = "agent-tools", traits = {"bee.app:tools"}}}
+            test.is_nil((surface.prepare(spoof, mcp.TOOLS, {"app_tools"})))
+        end)
         test.it("projects framework tools and traits with exact tool authority", function()
             local framework = {tools = {
                 {alias = "FileRead", operation = "bee.harness.catalog:agent_read_tool", description = "Read a file through the review contract",

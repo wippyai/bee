@@ -11,6 +11,8 @@ local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local session_tools = require("session_tools")
 local node_tests = require("node_tests")
+local json_schema = require("json_schema")
+local canonical = require("canonical")
 local M = {}
 function M.is_retired_tool(name: string): boolean
     return name == "thread_launch" or name == "run_status" or name == "run_wait" or name == "run_cancel"
@@ -34,7 +36,7 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, tests: string, capabilities: string, capability: string, install: string, hub_publish: string}
+type ToolPolicyRefs = {session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, tests: string, app_tools: string, capabilities: string, capability: string, install: string, hub_publish: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     session = "bee.gateway.env:tool_session_policy_ref",
     read = "bee.gateway.env:tool_read_policy_ref",
@@ -45,6 +47,7 @@ local TOOL_POLICY_REFS: ToolPolicyRefs = {
     delivery = "bee.gateway.env:tool_delivery_policy_ref",
     publish = "bee.gateway.env:tool_publish_policy_ref",
     application_open = "bee.gateway.env:tool_application_open_policy_ref",
+    app_tools = "bee.gateway.env:tool_app_tools_policy_ref",
     tests = "bee.gateway.env:tool_tests_policy_ref",
     capabilities = "bee.gateway.env:tool_read_policy_ref",
     capability = "bee.gateway.env:tool_read_policy_ref",
@@ -207,6 +210,10 @@ local TOOLS: {Tool} = {
             body = {type = "string", maxLength = 1048576},
             timeout = {type = "number", minimum = 1, maximum = 60},
         }}},
+    {name = "app_tools", description = "List the tools this workspace's applications offer agents, the application each belongs to, and why any tool is not offered. Each listed tool is callable by its own name, like any other tool: it runs as its application, with only the grants the person approved for that application, on the same state the application shows the person. Call it again after an application is installed or removed; tools/list follows the same discovery on every request.",
+        operation = "bee.node.binding:app_tools",
+        policies = {TOOL_POLICY_REFS.app_tools}, annotations = READ_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, properties = table.create(0, 1)}},
     {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.apps:open_call",
         policies = {TOOL_POLICY_REFS.application_open}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_id", "arguments", "idempotency_key"}, properties = {
@@ -290,6 +297,11 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
             activation_refusal = STRING_SCHEMA}}),
     publish = output_schema({type = "object"}),
     application_open = output_schema({type = "object"}),
+    app_tools = output_schema({type = "object", additionalProperties = false, properties = {
+        tools = array_schema({type = "object", additionalProperties = false, properties = {
+            name = STRING_SCHEMA, description = STRING_SCHEMA, application = STRING_SCHEMA, function_id = STRING_SCHEMA}}),
+        diagnostics = array_schema({type = "object", additionalProperties = false, properties = {
+            code = STRING_SCHEMA, tool = STRING_SCHEMA, message = STRING_SCHEMA}})}}),
     tests = output_schema({type = "object", additionalProperties = false,
         properties = {run_id = STRING_SCHEMA, application = STRING_SCHEMA, state = {type = "string", enum = {"running", "complete", "interrupted"}}, error = STRING_SCHEMA,
             total = INTEGER_SCHEMA, progress = {type = "object", additionalProperties = false,
@@ -328,6 +340,11 @@ M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
 M.APPLICATION_RUNTIME_TRAIT = {id = "bee.app:runtime", title = "Application runtime",
     prompt = "Open only reviewed and admitted workspace applications. They may read and post in this agent's bound thread and continue after the initiating agent finishes under the durable thread lifetime contract.",
     tools = {"application_open"}}
+-- The built-in trait that offers the application tools of the bound
+-- workspace; a person enables it in the profile or approves it as access.
+M.APPLICATION_TOOLS_TRAIT = {id = "bee.app:tools", title = "Application tools",
+    prompt = "Call the tools this workspace's applications offer agents. Each runs as its application with only the grants the person approved for it; app_tools lists them.",
+    tools = {"app_tools"}}
 -- Each advertised tool carries its own annotations.
 M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
 function M.tool(name: string): Tool?
@@ -408,6 +425,85 @@ function M.list(admitted: {string}): ToolList
         end
     end
     return {tools = tools}
+end
+M.MAX_APP_TOOL_REPLY_BYTES = 262144
+type AppTool = {alias: string, ref: string, definition_id: string, description: string,
+    input_schema: Object, output_schema: Object?, annotations: Object}
+type AppDiagnostic = {code: string, tool: string, message: string}
+type AppProjection = {listed: {Object}, tools: {[string]: AppTool}, diagnostics: {AppDiagnostic}}
+-- app_projection: the application tools a discovery offers, under their own
+-- names, as listed tools. A name a gateway tool or another surface tool
+-- already holds is not projected and is reported instead.
+function M.app_projection(discovered: unknown, taken: {string}): AppProjection
+    local used: {[string]: boolean} = {session = true, call_tool = true}
+    for _, name in ipairs(taken) do used[name] = true end
+    local result: AppProjection = {listed = {}, tools = {}, diagnostics = {}}
+    local value = bounds.object(discovered)
+    local diagnostics = value and value.diagnostics or nil
+    for _, raw in ipairs(type(diagnostics) == "table" and diagnostics or {}) do
+        local item = bounds.object(raw)
+        if item then
+            result.diagnostics[#result.diagnostics + 1] = {code = tostring(item.code), tool = tostring(item.tool),
+                message = tostring(item.message)}
+        end
+    end
+    local tools = value and value.tools or nil
+    for _, raw in ipairs(type(tools) == "table" and tools or {}) do
+        local item = bounds.object(raw)
+        local alias = item and bounds.line(item.alias, 64) or nil
+        local ref = item and bounds.id(item.ref) or nil
+        local definition = item and bounds.id(item.definition_id) or nil
+        local description = item and bounds.text(item.description, 4096) or nil
+        local input = item and bounds.object(item.input_schema) or nil
+        local output = item and item.output_schema ~= nil and bounds.object(item.output_schema) or nil
+        local annotations = item and bounds.object(item.annotations) or nil
+        if alias and ref and definition and description and input and annotations then
+            if used[alias] then
+                result.diagnostics[#result.diagnostics + 1] = {code = "NAME_TAKEN", tool = alias,
+                    message = alias .. " from " .. ref .. " is not offered: a gateway tool already holds that name"}
+            else
+                used[alias] = true
+                result.tools[alias] = {alias = alias, ref = ref, definition_id = definition, description = description,
+                    input_schema = input, output_schema = output, annotations = annotations}
+                result.listed[#result.listed + 1] = {name = alias, description = description, inputSchema = input,
+                    outputSchema = output_schema(output or {type = "object"}), annotations = annotations}
+            end
+        end
+    end
+    return result
+end
+-- app_tool_arguments: the call's arguments, when they conform to the input
+-- schema the tool advertises.
+function M.app_tool_arguments(tool: AppTool, params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments == nil and {} or params.arguments)
+    if not arguments then return nil, "tool arguments must be an object" end
+    local failure = json_schema.validate(tool.input_schema, arguments)
+    if failure then return nil, failure end
+    return arguments, nil
+end
+-- app_tool_reply: nil when the application's reply is bounded and, on
+-- success, conforms to the output schema the tool advertises.
+function M.app_tool_reply(tool: AppTool, reply: unknown): string?
+    local encoded = canonical.encode(reply, M.MAX_APP_TOOL_REPLY_BYTES)
+    if not encoded or #encoded > M.MAX_APP_TOOL_REPLY_BYTES then
+        return "the reply exceeds " .. tostring(M.MAX_APP_TOOL_REPLY_BYTES) .. " bytes"
+    end
+    local value = bounds.object(reply)
+    local output = tool.output_schema
+    if value and value.ok == true and output then
+        local failure = json_schema.validate(output, value.value)
+        if failure then return "the reply does not match the tool's output schema: " .. failure end
+    end
+    return nil
+end
+-- configured_arguments: a configured tool's arguments, when they conform to
+-- the schema it advertises.
+function M.configured_arguments(tool: Tool, params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "tool arguments must be an object" end
+    local failure = json_schema.validate(tool.schema, arguments)
+    if failure then return nil, failure end
+    return arguments, nil
 end
 -- A tool result carries one text content block with the operation's JSON
 -- reply plus the same reply as structured content; a refused call is a tool

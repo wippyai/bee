@@ -41,6 +41,17 @@ entries:
     resources:
     - bee.apps:open_call
     effect: allow
+- name: gateway_tool_app_tools_policy
+  kind: security.policy
+  meta:
+    comment: A bound MCP subject lists and calls the tools its workspace's applications offer agents through the node, which runs each as its application with only that application's approved grants; this grants the subject nothing of the application's own
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.node.binding:app_tools
+    - bee.node.binding:app_tool_call
+    effect: allow
 - name: gateway_tool_tests_policy
   kind: security.policy.expr
   meta:

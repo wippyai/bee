@@ -242,7 +242,7 @@ entries:
   kind: security.policy
   meta: {type: test_support, comment: The agent tools test installs application grants and calls the node's application tool functions}
   policy:
-    actions: [funcs.call, security.actor.create, registry.get, registry.find, registry.snapshot, registry.apply, registry.version]
+    actions: [funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.find, registry.snapshot, registry.apply, registry.version]
     resources: '*'
     effect: allow
 - name: app_tools_test

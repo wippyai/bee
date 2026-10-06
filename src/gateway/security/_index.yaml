@@ -89,6 +89,7 @@ entries:
     - bee.security.gateway:gateway_tool_publish_policy
     - bee.security.gateway:gateway_tool_application_open_policy
     - bee.security.gateway:gateway_tool_tests_policy
+    - bee.security.gateway:gateway_tool_app_tools_policy
     - bee.security.gateway:gateway_tool_install_policy
     - bee.security.gateway:gateway_tool_session_policy
     - bee.security.gateway:gateway_tool_hub_publish_policy
@@ -110,6 +111,7 @@ entries:
     - bee.gateway.env:tool_publish_policy_ref
     - bee.gateway.env:tool_application_open_policy_ref
     - bee.gateway.env:tool_tests_policy_ref
+    - bee.gateway.env:tool_app_tools_policy_ref
     - bee.gateway.env:tool_install_policy_ref
     - bee.gateway.env:tool_session_policy_ref
     effect: allow

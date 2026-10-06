@@ -232,6 +232,47 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
     local reply, call_error = executor:call(tool.operation, request)
     return reply_result(reply, call_error)
 end
+-- The application tools the bound workspace offers now, projected under
+-- names no surface tool holds. Discovery runs as the bound subject under the
+-- app_tools tool policy, on every request, so installs and removals show at
+-- once.
+local function app_projection(binding: gateway.Binding, holder: mcp.Tool, available: {mcp.Tool}, values: Object,
+    grants: {context.ResourceGrant}?): (mcp.AppProjection?, Object?)
+    local executor, failure = subject_executor(binding, holder, values, nil, grants)
+    if not executor then return nil, failure end
+    local reply, call_error = executor:call(holder.operation, {})
+    if call_error then return nil, refused("UNAVAILABLE", tostring(call_error), nil, true, "retry the same call") end
+    local decoded, decode_error = decode_owner_reply(reply)
+    if not decoded then return nil, refused("UNAVAILABLE", decode_error or "application tool discovery returned an invalid reply") end
+    if not decoded.ok then return nil, reply_result(reply, nil) end
+    local taken: {string} = {}
+    for _, item in ipairs(available) do taken[#taken + 1] = item.name end
+    return mcp.app_projection(decoded.value, taken), nil
+end
+-- The app_tools tool reports the projection: what is offered under which
+-- name, and why anything is not.
+local function app_listing(projection: mcp.AppProjection): Object
+    local tools: {Object} = {}
+    for _, item in ipairs(projection.listed) do
+        local tool = projection.tools[tostring(item.name)]
+        tools[#tools + 1] = {name = tool.alias, description = tool.description, application = tool.definition_id,
+            function_id = tool.ref}
+    end
+    return reply_result({ok = true, value = {tools = tools, diagnostics = projection.diagnostics}}, nil)
+end
+-- One call of an application tool: the node re-reads discovery and the
+-- application's live grant and runs the tool as the application; the reply
+-- must stay bounded and match the output schema the tool advertises.
+local function app_call(binding: gateway.Binding, holder: mcp.Tool, tool: mcp.AppTool, arguments: Object, values: Object,
+    grants: {context.ResourceGrant}?): Object
+    local executor, failure = subject_executor(binding, holder, values, nil, grants)
+    if not executor then return assert(failure) end
+    local reply, call_error = executor:call("bee.node.binding:app_tool_call", {tool = tool.alias, arguments = arguments})
+    if call_error then return refused("UNAVAILABLE", tostring(call_error), nil, true, "retry the same call") end
+    local invalid = mcp.app_tool_reply(tool, reply)
+    if invalid then return refused("INVALID_REPLY", "application tool " .. tool.alias .. ": " .. invalid) end
+    return reply_result(reply, nil)
+end
 local function handle(): nil
     local request, request_error = http.request({max_body = mcp.MAX_BODY_BYTES})
     local response = http.response()
@@ -263,6 +304,16 @@ local function handle(): nil
     local described: {Object} = {}
     for _, item in ipairs(available) do described[#described + 1] = {name = item.name, description = item.description,
         inputSchema = item.schema, outputSchema = mcp.OUTPUT_SCHEMAS[item.name], annotations = item.annotations} end
+    local holder: mcp.Tool? = nil
+    for _, item in ipairs(available) do if item.name == "app_tools" then holder = item end end
+    local projection: mcp.AppProjection? = nil
+    local projection_failure: Object? = nil
+    if holder and (call.method == "tools/list" or call.method == "tools/call") then
+        projection, projection_failure = app_projection(binding, holder, available, values, config.resource_grants)
+        if projection then
+            for _, item in ipairs(projection.listed) do described[#described + 1] = item end
+        end
+    end
     if call.method == "tools/list" then
         local listed: {Object} = {}
         for _, item in ipairs(described) do listed[#listed + 1] = item end
@@ -330,6 +381,21 @@ local function handle(): nil
     end
     local tool: mcp.Tool? = nil
     for _, item in ipairs(available) do if item.name == name then tool = item end end
+    if not tool and holder then
+        local offered = projection and projection.tools[name] or nil
+        if not offered then
+            answer(response, http.STATUS.OK, mcp.result(call.id, projection_failure or refused("TOOLS_CHANGED",
+                "no tool named " .. name .. " is offered now; application tools follow what is installed and approved",
+                nil, false, "call tools/list or app_tools for the current tools")))
+            return nil
+        end
+        local app_arguments, app_argument_error = mcp.app_tool_arguments(offered, parameters)
+        if not app_arguments then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, app_argument_error or "invalid arguments")); return nil end
+        local revalidated = profile_scope.revalidate(bound.configuration.resource_grants, binding.attempt_id, function(target: string, value: unknown): (unknown, unknown) local raw, err = funcs.call(target, value); return raw, err end)
+        if revalidated then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", revalidated))); return nil end
+        answer(response, http.STATUS.OK, mcp.result(call.id, app_call(binding, holder, offered, app_arguments, values, bound.configuration.resource_grants)))
+        return nil
+    end
     if not tool then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "tool is not admitted for this binding")); return nil end
     local arguments: Object? = nil
     local argument_error: string? = nil
@@ -353,7 +419,7 @@ local function handle(): nil
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters, binding.workspace_id)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
     elseif tool.name == "tests" then arguments, argument_error = mcp.tests_arguments(parameters)
-    else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end
+    else arguments, argument_error = mcp.configured_arguments(tool, parameters) end
     if arguments and (tool.name == "delivery" or tool.name == "publish") then
         argument_error = mcp.bound_workspace(arguments, binding.workspace_id)
         if argument_error then arguments = nil end
@@ -363,6 +429,14 @@ local function handle(): nil
     if grant_error then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", grant_error))); return nil end
     local scope_error = profile_scope.check(bound.configuration.profile, tool.name, tool.operation, binding.workspace_id, arguments)
     if scope_error then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, scope_error)); return nil end
+    if tool.name == "app_tools" then
+        if not projection then
+            answer(response, http.STATUS.OK, mcp.result(call.id, projection_failure or refused("UNAVAILABLE", "application tools are unavailable")))
+            return nil
+        end
+        answer(response, http.STATUS.OK, mcp.result(call.id, app_listing(projection)))
+        return nil
+    end
     local runtime: RuntimeGrant? = nil
     if tool.name == "application_open" then
         local granted, grant_failure = gateway.application_runtime(binding, bound)

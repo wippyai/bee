@@ -153,6 +153,7 @@ entries:
     - bee.security.gateway:gateway_tool_publish_policy
     - bee.security.gateway:gateway_tool_application_open_policy
     - bee.security.gateway:gateway_tool_tests_policy
+    - bee.security.gateway:gateway_tool_app_tools_policy
     - bee.security.gateway:gateway_tool_install_policy
     - bee.security.gateway:gateway_tool_session_policy
     - bee.security.gateway:gateway_tool_hub_publish_policy
@@ -171,6 +172,8 @@ entries:
     delivery_protocol: bee.gov.types:delivery_protocol
     node_tests: bee.node:tests
     docs_protocol: bee.docs:protocol
+    json_schema: bee.gateway.catalog:json_schema
+    canonical: bee.values:canonical
     record_bounds: bee.threads.records:bounds
 - name: gateway_endpoint
   kind: registry.entry

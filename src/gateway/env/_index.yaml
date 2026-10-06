@@ -101,6 +101,12 @@ entries:
     type: bee.resource_ref
     comment: Linked host policy for the built-in admitted-application open tool
   resource_ref: bee.security.gateway:gateway_tool_application_open_policy
+- name: tool_app_tools_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected policy the app_tools tool and the application tools it projects run under; an absent link fails closed
+  resource_ref: bee.security.gateway:gateway_tool_app_tools_policy
 - name: tool_tests_policy_ref
   kind: registry.entry
   meta:

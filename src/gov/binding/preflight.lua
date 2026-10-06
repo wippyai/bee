@@ -670,10 +670,13 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             issue("DATABASE_REPLACEMENT", item.id, "migration binding does not retain the host database definition", "bind an unchanged host SQL resource")
         end
         local historical = context.applied_databases and context.applied_databases[item.target_db] or nil
+        -- A provisioned application database keeps its chain while its
+        -- binding stays: the grant record pins its definition.
+        local definition_changed = generated_target ~= item.target_db and (not database
+            or historical ~= nil and (historical.kind ~= database.kind or historical.package ~= database.package
+                or historical.digest ~= database.digest))
         if historical and (historical.database_id ~= database_id
-            or historical.table_prefix ~= (binding and binding.table_prefix or nil)
-            or not database or historical.kind ~= database.kind or historical.package ~= database.package
-            or historical.digest ~= database.digest) then
+            or historical.table_prefix ~= (binding and binding.table_prefix or nil) or definition_changed) then
             issue("APPLIED_DATABASE_CHANGED", item.id, "applied migration database binding or definition changed",
                 "retain the original database binding or use an explicit relocation operation")
         end

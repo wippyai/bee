@@ -430,6 +430,22 @@ local function define_tests()
             test.is_true(stable.ready)
             test.is_false(stable.plan_digest == changed.plan_digest)
         end)
+        test.it("keeps an applied migration chain on the application database its grant provisions", function()
+            local candidate, context = fixture()
+            local database_id = "bee.gov.grants:database." .. string.rep("d", 64)
+            candidate.migrations = {{id = "demo:001", target_db = "notes", checksum = SHA, ordinal = 1}}
+            context.databases = {notes = true}
+            context.database_bindings = {notes = {database_id = database_id}}
+            context.generated_databases = {[database_id] = "notes"}
+            context.applied["notes\ndemo:001"] = candidate.migrations[1]
+            context.applied_databases = {notes = {database_id = database_id, kind = "db.sql.sqlite",
+                package = "wolfy-j/demo", digest = string.rep("e", 64)}}
+            local kept = checked(candidate, context)
+            test.is_false(has(kept, "APPLIED_DATABASE_CHANGED"))
+            test.is_true(kept.ready)
+            context.applied_databases.notes.database_id = "bee.gov.grants:database." .. string.rep("f", 64)
+            test.is_true(has(checked(candidate, context), "APPLIED_DATABASE_CHANGED"))
+        end)
         test.it("rejects activation before migrations and unauthorized resource targets", function()
             local candidate, context = fixture()
             candidate.entries[1].auto_start = true

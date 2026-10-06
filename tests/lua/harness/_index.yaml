@@ -1660,6 +1660,15 @@ entries:
     test: wippy.test:test
     capability: bee.gov.types:capability_request
     bounds: bee.values:bounds
+- name: elevation_home_policy
+  kind: security.policy
+  meta:
+    type: test_support
+    comment: The elevation suite reads the machine home folder for a workspace no display watches
+  policy:
+    actions: [env.get]
+    resources: [bee.env:machine_home]
+    effect: allow
 - name: elevation_client_policy
   kind: security.policy
   meta:
@@ -1791,9 +1800,11 @@ entries:
   - time
   - system
   - process
+  - env
   security:
     policies:
     - bee.harness.catalog:elevation_client_policy
+    - bee.harness.catalog:elevation_home_policy
     - bee.tests.node:catalog_test_policy
   imports:
     bounds: bee.values:bounds

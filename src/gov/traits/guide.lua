@@ -276,6 +276,11 @@ function M.pack_contents(): string
         .. " native modules, policy grants and resource bindings during preflight, and the activation owner alone"
         .. " applies the reviewed overlay. Use the read-only components tool to inspect the effective installed"
         .. " registry and exact Hub package entries, documentation and examples before authoring."
+        .. " While you work, request_capability asks the person in Needs you for one catalog capability for this"
+        .. " attempt and a bounded time: process.exec to run one exact command in a folder of this workspace, or"
+        .. " http.api to reach one https origin under a path prefix with named methods. Poll capability_status"
+        .. " with the approval_id; once it reports granted, call process_run (your arguments follow the approved"
+        .. " command) or http_request with that approval_id until it expires."
 end
 function M.application_shape(): string
     return "An application is one process.lua entry with meta.type bee.app and a"
@@ -479,9 +484,19 @@ function M.workspace_delivery(): string
         .. ' meta.parameters is {binding = "bee.hive.telemetry.binding:status", methods = {"snapshot", "detail"}}'
         .. " when requesting the counts-only Hive status binding. The binding and method names are exact;"
         .. " check the destination's bee.capability:catalog with the components tool for its admitted parameters."
-        .. " At run time, call"
-        .. " bee.gov.binding:granted_resources for the identities of your granted file volumes (by subpath) and"
-        .. " database (by name), and make approved contract calls and HTTP requests through"
+        .. " To run a host program, request process.exec with"
+        .. ' meta.parameters {command = "/usr/bin/make test", directory = "."}: command is the executable, an'
+        .. " absolute path or a name on the host PATH, followed by any fixed leading arguments, and directory a"
+        .. " folder relative to your workspace. The person sees that exact command and folder in Needs you and"
+        .. " approves it explicitly; the app may then run the command alone or followed by further arguments, in"
+        .. " that folder, with no environment of its own. To reach a web API, request http.api with an https"
+        .. " origin, methods and a path_prefix. A native module outside the profile is admitted only together"
+        .. " with the capability that authorizes it: declare the exec module with an approved process.exec"
+        .. " request, and the contract module with an approved contract.call or agents.launch request;"
+        .. " preflight reports MODULE_DENIED naming the capability to request otherwise. At run time, call"
+        .. " bee.gov.binding:granted_resources for the identities of your granted file volumes (by subpath),"
+        .. " database (by name) and executors (by command, then directory) and pass that executor to exec.get;"
+        .. " make approved contract calls and HTTP requests through"
         .. " bee.gov.binding:contract_call and bee.gov.binding:http_request; never embed a grant identity."
 end
 

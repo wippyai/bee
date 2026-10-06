@@ -42,6 +42,18 @@ local function define_tests()
             test.eq(guide.NAMESPACE, identity.namespace)
             test.eq((assert(bounds.object(guide.example()[1]))).id, assert(naming.application(guide.example())))
         end)
+        test.it("explains how an application requests process execution, network and native modules", function()
+            local text = guide.workspace_delivery()
+            for _, needle in ipairs({"process.exec", "command", "directory", "explicitly", "MODULE_DENIED",
+                "exec module", "contract module", "http.api", "bee.gov.binding:http_request",
+                "bee.gov.binding:granted_resources", "executors", "Needs you"}) do
+                test.not_nil((string.find(text, needle, 1, true)), needle)
+            end
+            local contents = guide.pack_contents()
+            for _, needle in ipairs({"request_capability", "process_run", "http_request", "capability_status"}) do
+                test.not_nil((string.find(contents, needle, 1, true)), needle)
+            end
+        end)
         test.it("points at the offline platform documentation the docs tool reads", function()
             local document = guide.document()
             -- An agent that reads the application contract must be told where

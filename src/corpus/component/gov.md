@@ -270,7 +270,16 @@ live grant after measuring and checking a later artifact, while widening
 requests a new permission approval. File grants root in the destination
 workspace's folder from the node catalog; contract and HTTP grants authorize
 only the capability gateway (`bee.gov.binding:contract_call`,
-`bee.gov.binding:http_request`), which checks the caller's own live record.
+`bee.gov.binding:http_request`), which checks the caller's own live record. A
+`process.exec` grant installs a host-created executor fixed to the approved
+folder and the host PATH, and an expression grant that runs only the approved
+command, alone or with further arguments; `bee.gov.binding:granted_resources`
+names it under `executors[command][directory]`. A runtime module outside the
+profile's `modules` is admitted for the application only by an approved request
+for a capability whose catalog template names that module (`exec` by
+`process.exec`, `contract` by `contract.call` or `agents.launch`); otherwise
+preflight reports `MODULE_DENIED` with a remedy naming the capability to
+request.
 An approved contract call retains the original application actor and enters the
 private `bee.gov.security:gateway_callee_scope`, whose policy grants nothing.
 Only the callee's declared policies apply; caller and gateway permissions do not

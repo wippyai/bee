@@ -14,6 +14,7 @@ local registry = require("registry")
 local time = require("time")
 local system = require("system")
 local client = require("client")
+local env = require("env")
 local AGENT = "bee.test.elevation_agent"
 local MANAGER = "bee.test.elevation_manager"
 local APPROVER = "bee.test.elevation_approver"
@@ -147,15 +148,14 @@ local function attempt_binding(workspace: string, tools: {string}): Bound
         tools = tools, ttl_ms = 600000, idempotency_key = fresh("admit"), surface = surface, workspace_id = workspace})
     return {binding_id = tostring((assert(bounds.object(binding.binding))).binding_id), thread_id = thread, attempt_id = attempt}
 end
--- The node's home workspace, which the catalog records with a real folder.
-local function home(): {id: string, path: string}
-    local value, err = client.call(assert(system.node.id()), "watch", {})
-    if not value then error("watch: " .. tostring(err)) end
-    local state = assert(client.state(value))
-    for _, workspace in ipairs(state.workspaces) do
-        if workspace.id == state.home then return {id = workspace.id, path = workspace.path} end
-    end
-    error("no home workspace")
+-- A workspace on the machine home folder, which exists, and which no display
+-- watches: an elevation requested in it presents the approvals app on no
+-- desktop, so later suites see the node's desktops as this suite found them.
+local function isolated(): {id: string, path: string}
+    local path = assert(env.get("bee.env:machine_home"))
+    local added, err = client.call(assert(system.node.id()), "workspace_add", {path = path, label = "elevation"})
+    if not added then error("workspace_add: " .. tostring(err)) end
+    return {id = tostring(added.workspace), path = path}
 end
 -- The approver decides one pending elevation as approved.
 local function approve(workspace: string, approval_id: unknown)
@@ -242,7 +242,7 @@ local function define_tests()
         end)
         test.it("runs the approved command for the attempt holding a process elevation, and nothing else", function()
             ensure_approver_policy()
-            local workspace = home()
+            local workspace = isolated()
             local tools = {"request_capability", "capability_status", "process_run", "http_request"}
             local bound = attempt_binding(workspace.id, tools)
             local requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
@@ -282,7 +282,7 @@ local function define_tests()
         end)
         test.it("holds an HTTP elevation for the approved origin, methods and path prefix only", function()
             ensure_approver_policy()
-            local workspace = home()
+            local workspace = isolated()
             local bound = attempt_binding(workspace.id, {"request_capability", "capability_status", "process_run", "http_request"})
             local requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
                 capability = "http.api", parameters = {origin = "https://api.example.com", methods = {"GET"}, path_prefix = "/v1"},

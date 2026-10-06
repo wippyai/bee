@@ -88,15 +88,16 @@ local function http_request(request_raw: unknown): Reply
 end
 
 -- The registry identities of the calling application's own installed file
--- volumes and database, keyed by the approved subpath and database name, so
--- an application addresses its grants on any node without embedding
--- host-generated identities.
+-- volumes, databases and command executors, keyed by the approved subpath,
+-- database name, and command then folder, so an application addresses its
+-- grants on any node without embedding host-generated identities.
 local function granted_resources(_request: unknown): Reply
     local _, record, live, refusal = access.granted()
     if refusal then return refusal end
     if not live or not record then return fail("DENIED", "the caller holds no live application grants") end
     local volumes: {[string]: string} = {}
     local databases: {[string]: string} = {}
+    local executors: {[string]: {[string]: string}} = {}
     for _, raw_grant in ipairs((record.capabilities or {})) do
         local grant = bounds.object(raw_grant)
         local scope = grant and bounds.object(grant.scope) or nil
@@ -108,9 +109,15 @@ local function granted_resources(_request: unknown): Reply
             local id, id_error = files.database_id(record.overlay_owner, scope.name)
             if not id then return fail("UNAVAILABLE", tostring(id_error)) end
             databases[scope.name] = id
+        elseif grant and scope and grant.capability == "process.exec" then
+            local id, id_error = files.executor_id(record.overlay_owner, record.folder, scope.subpath, grant.resource)
+            if not id then return fail("UNAVAILABLE", tostring(id_error)) end
+            local folders = executors[grant.resource] or {}
+            folders[scope.subpath] = id
+            executors[grant.resource] = folders
         end
     end
-    return succeed({volumes = volumes, databases = databases})
+    return succeed({volumes = volumes, databases = databases, executors = executors})
 end
 
 return {contract_call = contract_call, http_request = http_request, granted_resources = granted_resources}

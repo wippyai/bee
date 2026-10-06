@@ -23,7 +23,7 @@ type Outcome = {result: Object, stage: string}
 
 -- Proposes one process.exec grant and installs its executor and policy the
 -- way activation composes them.
-local function install(requirement: string, command: string, directory: string): (Object, Object, {string})
+local function install(requirement: string, command: string, directory: string, recorded: boolean?): (Object, Object, {string})
     local vocabulary = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
     local proposal = assert(grants.propose(vocabulary, OWNER, APP, {
         {id = "app." .. NAME .. ":" .. requirement, expected_kind = "security.policy", targets = {APP},
@@ -34,7 +34,13 @@ local function install(requirement: string, command: string, directory: string):
     local executor = assert(bounds.object(proposal.executors[1]))
     local changes = assert(registry.snapshot()):changes()
     local created: {string} = {}
-    for _, entry in ipairs({executor, policy}) do
+    local entries: {Object} = {executor, policy}
+    if recorded then
+        entries[#entries + 1] = assert(grants.record(OWNER, WORKSPACE, APP, proposal, "approval-process", 1))
+        entries[#entries + 1] = {id = proposal.bindings[1].requirement_id, kind = "ns.requirement",
+            meta = {}, data = {default = proposal.bindings[1].policy_id}}
+    end
+    for _, entry in ipairs(entries) do
         local id = assert(bounds.id(entry.id))
         if not registry.get(id) then
             changes:create({id = id, kind = assert(bounds.text(entry.kind, 160)),
@@ -107,6 +113,22 @@ local function define_tests()
                 test.is_false(outcome.result.ok == true)
                 test.eq(outcome.result.stage, outcome.stage)
             end
+        end)
+        test.it("names the approved executor to the application by command and folder", function()
+            local policy, executor, created = install("named", "/bin/echo named", "lua", true)
+            local scope = app_scope.boundary({assert(bounds.id(policy.id)), CALL_POLICY})
+            local caller = funcs.new():with_actor(actor()):with_scope(scope)
+            local raw, err = caller:call("bee.gov.binding:granted_resources", {})
+            local reply = assert(bounds.object(raw))
+            local value = reply.ok == true and assert(bounds.object(reply.value)) or {}
+            local executors = bounds.object(value.executors) or {}
+            local named = bounds.object(executors["/bin/echo named"]) or {}
+            local ran = run(policy, tostring(named.lua), "/bin/echo named")
+            remove(created)
+            test.is_nil(err)
+            test.is_true(reply.ok == true)
+            test.eq(named.lua, executor.id)
+            test.eq(ran.output, "named\n")
         end)
     end)
 end

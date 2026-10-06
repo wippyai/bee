@@ -207,9 +207,9 @@ function M.executor(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknow
         data = {default_work_dir = directory, default_env = {PATH = M.EXEC_PATH}}}, nil
 end
 
--- The application acquires only its own executor and runs only the approved
--- command, alone or followed by further arguments, in the executor's fixed
--- folder with no caller environment.
+-- The application reads its granted identities, acquires only its own
+-- executor and runs only the approved command, alone or followed by further
+-- arguments, in the executor's fixed folder with no caller environment.
 type ExprPolicy = {id: string, kind: "security.policy.expr", meta: {comment: string},
     data: {policy: {actions: {string}, resources: string, expression: string, effect: "allow"}}}
 function M.process_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, command_raw: unknown,
@@ -220,11 +220,12 @@ function M.process_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: 
     if not executor or not id or not command then
         return nil, executor_error or "process grant policy identity is invalid"
     end
-    local expression = '(action == "exec.get" && resource == "' .. executor.id .. '") || (action == "exec.run"'
+    local expression = '(action == "funcs.call" && resource == "' .. gateway.GRANTED_RESOURCES .. '")'
+        .. ' || (action == "exec.get" && resource == "' .. executor.id .. '") || (action == "exec.run"'
         .. ' && meta.executor == "' .. executor.id .. '" && meta.work_dir == "" && len(meta.env_names) == 0'
         .. ' && (resource == "' .. command .. '" || resource startsWith "' .. command .. ' "))'
     return {id = id, kind = "security.policy.expr", meta = {comment = "Host-generated approved command grant"},
-        data = {policy = {actions = {"exec.get", "exec.run"}, resources = "*", expression = expression,
+        data = {policy = {actions = {"funcs.call", "exec.get", "exec.run"}, resources = "*", expression = expression,
             effect = "allow"}}}, nil
 end
 

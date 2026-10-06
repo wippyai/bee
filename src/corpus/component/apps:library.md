@@ -34,8 +34,8 @@ application, its permissions and its menu entry are taken off this bee, its
 databases and their data are kept and nothing is deleted, and installing it again
 finds it as it was. Go back, offered when an earlier version exists, runs
 `revert`: the application goes back to the version before it, applied migrations
-stay where they are, and a change that would need a compensation plan stops and
-says so. The removed version is listed in History as Removed.
+stay where they are, and going back past a later version's database change stops
+and says so. The removed version is listed in History as Removed.
 
 Install on a shared version runs the local path in one move: it receives the
 version, reads its checks, reviews, chooses it and prepares its activation,

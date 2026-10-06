@@ -3,6 +3,7 @@ local bounds = require("bounds")
 local transaction = require("transaction")
 local headless_revert = require("headless_revert")
 local activation_store = require("activation_store")
+local artifact = require("artifact")
 
 local OWNER = "bee.super_edit:0123456789abcdef0123456789abcdef.vendor.alpha.00000000-0000-7000-8000-000000000000"
 local function define_tests()
@@ -56,11 +57,65 @@ local function define_tests()
             assert(activation_store.close(store))
         end)
 
-        test.it("refuses migration facts without an applied compensation plan", function()
+        test.it("goes back to an earlier version that defines every applied migration, running none", function()
+            local exact = assert(artifact.create({{id = "app.notes:create_notes", kind = "function.lua",
+                meta = {type = "migration", target_db = "notes", ordinal = 1}, data = {source = "return true", method = "run"}}}))
+            local seen: {[string]: unknown}? = nil
+            local activations: headless_revert.Activations = {
+                applied = function(_: activation_store.Store, _: string): transaction.Result
+                    return transaction.success({migrations = {["notes\napp.notes:create_notes"] = {
+                        id = "app.notes:create_notes", target_db = "notes", ordinal = 1}}}, false)
+                end,
+                revert_activation = function(_: activation_store.Store, _: string, request: activation_store.Request): transaction.Result
+                    seen = request
+                    return transaction.success({intent_id = "baseline"}, false)
+                end,
+            }
+            local store = assert(activation_store.open("bee:db", "node-headless", "headless-revert-covered"))
+            local result = headless_revert.revert(activations, store, OWNER,
+                {overlay_owner = OWNER, component = "vendor/app", slot_revision = 7},
+                {overlay_owner = OWNER, component = "vendor/app", version = "1.0.0",
+                    artifact_bytes = exact.bytes, artifact_digest = exact.digest}, "revert-covered", "person-1")
+            assert(activation_store.close(store))
+            test.is_true(result.ok)
+            local request = assert(bounds.object(seen))
+            local compensation = assert(bounds.object(request.compensation))
+            test.is_true(tostring(compensation.bytes):find("rows", 1, true) ~= nil)
+        end)
+
+        test.it("refuses to go back past a later version's database change and tells the person why", function()
+            local exact = assert(artifact.create({{id = "app.notes:create_notes", kind = "function.lua",
+                meta = {type = "migration", target_db = "notes", ordinal = 1}, data = {source = "return true", method = "run"}}}))
             local called = false
             local activations: headless_revert.Activations = {
                 applied = function(_: activation_store.Store, _: string): transaction.Result
-                    return transaction.success({migrations = {migration = {id = "vendor:001"}}}, false)
+                    return transaction.success({migrations = {
+                        ["notes\napp.notes:create_notes"] = {id = "app.notes:create_notes", target_db = "notes", ordinal = 1},
+                        ["notes\napp.notes:add_tag"] = {id = "app.notes:add_tag", target_db = "notes", ordinal = 2}}}, false)
+                end,
+                revert_activation = function(_: activation_store.Store, _: string, _: activation_store.Request): transaction.Result
+                    called = true
+                    return transaction.success({}, false)
+                end,
+            }
+            local store = assert(activation_store.open("bee:db", "node-headless", "headless-revert-later"))
+            local result = headless_revert.revert(activations, store, OWNER,
+                {overlay_owner = OWNER, component = "vendor/app", slot_revision = 7},
+                {overlay_owner = OWNER, component = "vendor/app", version = "1.0.0",
+                    artifact_bytes = exact.bytes, artifact_digest = exact.digest}, "revert-later", "person-1")
+            assert(activation_store.close(store))
+            test.eq(result.code, "BLOCKED")
+            test.eq(result.message, "Going back to 1.0.0 is not possible: a later version changed the saved data in notes"
+                .. " (app.notes:add_tag), and that change stays. Install a newer version instead.")
+            test.is_false(called)
+        end)
+
+        test.it("refuses, as the recovery actor, a migration the retained version does not define", function()
+            local exact = assert(artifact.create({{id = "vendor:app", kind = "registry.entry", data = {value = "v1"}}}))
+            local called = false
+            local activations: headless_revert.Activations = {
+                applied = function(_: activation_store.Store, _: string): transaction.Result
+                    return transaction.success({migrations = {migration = {id = "vendor:001", target_db = "vendor"}}}, false)
                 end,
                 revert_activation = function(_: activation_store.Store, _: string, _: activation_store.Request): transaction.Result
                     called = true
@@ -70,7 +125,8 @@ local function define_tests()
             local store = assert(activation_store.open("bee:db", "node-headless", "headless-revert-blocked"))
             local result = headless_revert.revert(activations, store, OWNER,
                 {overlay_owner = OWNER, component = "vendor/app", slot_revision = 7},
-                {overlay_owner = OWNER, component = "vendor/app"}, "revert-2")
+                {overlay_owner = OWNER, component = "vendor/app", version = "v1",
+                    artifact_bytes = exact.bytes, artifact_digest = exact.digest}, "revert-2")
             assert(activation_store.close(store))
             test.is_false(result.ok)
             test.eq(result.code, "BLOCKED")

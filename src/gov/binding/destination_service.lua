@@ -427,7 +427,10 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
             return nil, "installed grant differs from the activated intent"
         end
         revision = prior.revision
-    elseif not (prior == nil and intent.phase == "settled" and intent.outcome == "applied"
+    -- A settled, applied intent carries the grant the person approved for its
+    -- exact version; restoring it, after the overlay was lost or when the
+    -- person goes back to it, installs that grant again over whatever replaced it.
+    elseif not (intent.phase == "settled" and intent.outcome == "applied"
         and intent.application_admission_digest ~= nil) then
         if (prior and prior.record_digest or nil) ~= intent.grant_predecessor_digest then
             return nil, "installed grant changed since permission review"
@@ -818,8 +821,9 @@ local function application_owner(activation_store: activations.Store, workspace_
 end
 
 -- A person's removal of an application they installed: the activation owner
--- records it under the person and empties the owner's registry overlay. The
--- saved data of its granted databases is left as it is.
+-- records it under the person and takes the application off its registry
+-- overlay. Its databases stay registered, with no grant reaching them, so the
+-- data and its migration ledger are there for the next install.
 local function uninstall_application(request: Object, workspace_id: string, actor_id: string,
     activation_store: activations.Store): Result
     if exact(request, {"source_workspace", "receipt_key"}) then return failure("INVALID", "uninstall has unknown fields") end
@@ -827,8 +831,8 @@ local function uninstall_application(request: Object, workspace_id: string, acto
     local overlay_owner = source_workspace and application_owner(activation_store, workspace_id, source_workspace) or nil
     if not source_workspace or not key or not overlay_owner then return failure("INVALID", "uninstall names no application") end
     return uninstall.uninstall({activations = activation_store, overlay_owner = overlay_owner, actor_id = actor_id,
-        clear = function(): ({[string]: unknown}?, string?) return materializer.reconcile(overlay_owner, {}) end,
-        cleared = function(): (boolean?, string?) return materializer.matches(overlay_owner, {}) end}, key)
+        clear = function(): ({[string]: unknown}?, string?) return materializer.retain_data(overlay_owner) end,
+        cleared = function(): (boolean?, string?) return materializer.retains_data(overlay_owner) end}, key)
 end
 
 type RevertMethods = {

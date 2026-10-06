@@ -171,6 +171,7 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
+    artifact: bee.gov.types:artifact
     bounds: bee.values:bounds
     test: wippy.test:test
     transaction: bee.persist:transaction
@@ -1101,7 +1102,7 @@ entries:
   meta:
     type: test
     suite: bee
-    timeout: 180s
+    timeout: 300s
   security:
     policies:
     - bee.tests.gov:app_database_test_policy

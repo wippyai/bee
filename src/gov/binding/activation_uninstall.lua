@@ -1,9 +1,8 @@
 -- MIT. A person's removal of one governed application: the activation owner
 -- records it under the person who asked, the slot stops wanting any version,
--- and the owner's registry overlay is emptied through the same reconcile that
--- applies a version, with no version as its target. The application's saved
--- data lives in the databases the host granted it; removal never touches
--- them, and installing the application again finds them as they were.
+-- and the owner's registry overlay keeps only the application's databases.
+-- The saved data lives in those databases; removal never touches it, and
+-- installing the application again finds it as it was.
 local bounds = require("bounds")
 local transaction = require("transaction")
 local activations = require("activation_store")
@@ -12,7 +11,8 @@ local M = {}
 type Object = {[string]: unknown}
 type Result = transaction.Result
 
--- clear empties the owner's overlay and cleared observes that it is empty.
+-- clear takes everything but the databases off the owner's overlay and cleared
+-- observes that only they remain.
 type Config = {activations: activations.Store, overlay_owner: string, actor_id: string,
     clear: () -> ({[string]: unknown}?, string?), cleared: () -> (boolean?, string?)}
 
@@ -40,15 +40,15 @@ function M.uninstall(config: Config, receipt_raw: unknown): Result
     elseif desired.code ~= "NOT_FOUND" then
         return desired
     end
-    local empty, empty_error = config.cleared()
-    if empty == nil then return failure("UNAVAILABLE", tostring(empty_error)) end
-    if removed == nil and empty then return failure("NOT_FOUND", "this application is not installed here") end
-    if not empty then
+    local off, off_error = config.cleared()
+    if off == nil then return failure("UNAVAILABLE", tostring(off_error)) end
+    if removed == nil and off then return failure("NOT_FOUND", "this application is not installed here") end
+    if not off then
         local cleared, clear_error = config.clear()
-        if not cleared then return failure("UNCERTAIN", tostring(clear_error or "empty the application's overlay"), removed) end
+        if not cleared then return failure("UNCERTAIN", tostring(clear_error or "take the application off its overlay"), removed) end
         local observed, observe_error = config.cleared()
         if observed ~= true then
-            return failure("UNCERTAIN", tostring(observe_error or "the emptied overlay is not observable; try again"), removed)
+            return failure("UNCERTAIN", tostring(observe_error or "the removed application's overlay is not observable; try again"), removed)
         end
     end
     return transaction.success(removed or {removed = true}, false)

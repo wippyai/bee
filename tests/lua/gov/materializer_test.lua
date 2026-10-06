@@ -295,6 +295,21 @@ local function define_tests()
                     executors = {private}, record = record}))
         end)
 
+        test.it("keeps an application's databases when it is removed and takes everything else off", function()
+            local state: State = {entries = {
+                ["app.notes:app"] = {id = "app.notes:app", kind = "process.lua", meta = {type = "bee.app"}, data = {source = "return true"}},
+                ["bee.gov.grants:notes_db"] = {id = "bee.gov.grants:notes_db", kind = "db.sql.sqlite", meta = {}, data = {file = "notes.db"}},
+                ["bee.gov.grants:notes_policy"] = {id = "bee.gov.grants:notes_policy", kind = "security.policy", meta = {}, data = {}},
+            }, generation = 1, conflicts = 0}
+            test.eq(materializer.retains_data_with(api(state), "bee.gov:overlay"), false)
+            local kept = assert(materializer.retain_data_with(api(state), is_conflict, "bee.gov:overlay"))
+            test.eq(kept.overlay_entries, 1)
+            test.is_nil(state.entries["app.notes:app"])
+            test.is_nil(state.entries["bee.gov.grants:notes_policy"])
+            test.not_nil(state.entries["bee.gov.grants:notes_db"])
+            test.eq(materializer.retains_data_with(api(state), "bee.gov:overlay"), true)
+        end)
+
         test.it("leaves governed migration definitions out of the application overlay", function()
             -- Governance runs a version's migrations itself; installed, a
             -- migration definition would be found and run again by the

@@ -3,7 +3,9 @@
 -- an agent tool; the person approves the installation in Needs you, reading
 -- the migration it runs; Bee installs the database, runs the migration and
 -- exposes the application. The application and the agent tool then share
--- the table. A later version appends a migration that runs forward only.
+-- the table. A later version appends a migration that runs forward only; going
+-- back past it is refused, going back to a version that defines it runs none,
+-- and removing the application keeps its data for the next install.
 local test = require("test")
 local funcs = require("funcs")
 local security = require("security")
@@ -15,6 +17,7 @@ local system = require("system")
 local client = require("client")
 local principal = require("principal")
 local application = require("application")
+local registry = require("registry")
 
 -- The suite delivers the guide's example under an overlay of its own, so no
 -- other suite's copy of the example shares its owner.
@@ -44,6 +47,15 @@ local NOTE = {id = NAMESPACE .. ":add_note", kind = "function.lua",
     data = {source = (guide.MIGRATION_SOURCE:gsub("CREATE TABLE counts %(value INTEGER NOT NULL%)",
         "ALTER TABLE counts ADD COLUMN note TEXT NOT NULL DEFAULT 'kept'"):gsub("DROP TABLE IF EXISTS counts", "SELECT 1")),
         method = "run", imports = {migration = "wippy.migration:migration"}}}
+local function revised(entries: {Object}, revision: string): {Object}
+    for _, entry in ipairs(entries) do
+        if entry.id == APP then
+            local meta = assert(bounds.object(entry.meta))
+            assert(bounds.object(meta.application)).revision = revision
+        end
+    end
+    return entries
+end
 local function second_version(): {Object}
     local entries: {Object} = {}
     for _, raw in ipairs(first_version()) do
@@ -196,6 +208,22 @@ local function as_agent(workspace: string, tool: string, arguments: Object): Obj
         {tool = tool, arguments = arguments})))
 end
 
+-- library acts as the person in the Library, which goes back and removes.
+local function library(workspace: string, request: Object): Object
+    local identity = assert(principal.value(workspace, "countdb-library", "bee.apps.library:app", "1", 1))
+    local scope = security.new_scope({assert(security.policy("bee.apps.library:destination_client")),
+        assert(security.policy("bee.apps.library:delivery_operations"))})
+    request.workspace_id = workspace
+    return reply(funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata))):with_scope(scope)
+        :call("bee.gov.binding:destination_call", request))
+end
+
+-- settle installs a version through Needs you when it asks the person.
+local function settle(writer: funcs.Executor, workspace: string, delivered: Object, version: string): Object
+    if delivered.approval_id ~= nil then approve(workspace, delivered.approval_id) end
+    return installed(writer, workspace, version, delivered.intent_id)
+end
+
 local function counts(listed: Object): string
     local found: {string} = {}
     for _, value in ipairs(listed.counts :: {unknown}) do found[#found + 1] = tostring(value) end
@@ -241,6 +269,37 @@ local function define_tests()
             test.eq(second_outcome, "applied")
             local listed = counts(as_agent(workspace, "counter_list", {}))
             test.eq(listed, "1:kept,2:kept")
+            local source = OVERLAY
+
+            -- 1.0.0 came before add_note: going back would run it on a column it
+            -- does not know, and the person reads why it stops.
+            local back = library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-1"})
+            local fault = assert(bounds.object(back.error))
+            test.eq(fault.code, "BLOCKED")
+            test.eq(fault.message, "Going back to 1.0.0 is not possible: a later version changed the saved data in "
+                .. guide.DATABASE_NAME .. " (" .. NAMESPACE .. ":add_note), and that change stays. Install a newer version instead.")
+
+            -- 1.0.2 adds no migration; going back to 1.0.1, which defines both,
+            -- runs none and keeps the rows.
+            local third = value(deliver(writer, workspace, revised(second_version(), "3"), "1.0.2"))
+            test.eq(third.pending_migrations, 0)
+            test.eq(settle(writer, workspace, third, "1.0.2").outcome, "applied")
+            close_presented(before)
+            local returned = value(library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-2"}))
+            close_presented(before)
+            test.eq(returned.phase, "settled")
+            test.eq(returned.version, "1.0.1")
+            test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
+
+            -- Removal takes the application off and keeps its data: installing it
+            -- again finds the rows, with no migration to run.
+            value(library(workspace, {operation = "uninstall", source_workspace = source, receipt_key = "countdb-remove"}))
+            test.is_nil((registry.get(APP)))
+            local again = value(deliver(writer, workspace, revised(second_version(), "4"), "1.0.3"))
+            test.eq(again.pending_migrations, 0)
+            test.eq(settle(writer, workspace, again, "1.0.3").outcome, "applied")
+            close_presented(before)
+            test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
         end)
     end)
 end

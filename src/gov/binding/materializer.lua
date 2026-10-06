@@ -463,6 +463,38 @@ function M.provided_with(open: Open, owner_raw: unknown, provisioned_raw: unknow
     return true, nil
 end
 
+-- An application's saved data outlives its removal: the overlay keeps only its
+-- SQL databases, which no grant reaches any more, so governance still reads
+-- their migration ledgers and the next install finds the data as it was.
+local function data_entries(open: Open, owner: string): ({Entry}?, string?)
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    local current, current_error = current_entries(raw_snapshot)
+    if not current then return nil, current_error end
+    local kept: {Entry} = {}
+    for _, entry in pairs(current) do
+        local kind = bounds.id(entry.kind)
+        if kind and kind:sub(1, 7) == "db.sql." then kept[#kept + 1] = entry end
+    end
+    return kept, nil
+end
+
+function M.retain_data_with(open: Open, conflict: Conflict, owner_raw: unknown): ({[string]: unknown}?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local kept, kept_error = data_entries(open, owner)
+    if not kept then return nil, kept_error end
+    return reconcile_wanted_with(open, conflict, owner, kept, "", #kept)
+end
+
+function M.retains_data_with(open: Open, owner_raw: unknown): (boolean?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local kept, kept_error = data_entries(open, owner)
+    if not kept then return nil, kept_error end
+    return matches_wanted_with(open, owner, kept)
+end
+
 local function open(owner: string): (Snapshot?, unknown?)
     local composed, composed_error = registry.snapshot()
     if not composed then return nil, composed_error end
@@ -523,6 +555,14 @@ end
 
 function M.provides(owner: unknown, provisioned: unknown): (boolean?, string?)
     return M.provided_with(open, owner, provisioned)
+end
+
+function M.retain_data(owner: unknown): ({[string]: unknown}?, string?)
+    return M.retain_data_with(open, conflict, owner)
+end
+
+function M.retains_data(owner: unknown): (boolean?, string?)
+    return M.retains_data_with(open, owner)
 end
 
 return M

@@ -1,10 +1,13 @@
--- MIT. Build a safe revert for an activation with no applied migrations, by the
--- recovery actor or, when a person asks for it, by that person.
+-- MIT. Build a safe revert to the retained earlier version, by the recovery
+-- actor or, when a person asks for it, by that person. Migrations are forward
+-- only: going back runs none and rolls none back, so it is allowed only when the
+-- earlier version already defines every migration applied to the application.
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local transaction = require("transaction")
 local activation_store = require("activation_store")
+local artifact = require("artifact")
 
 local M = {}
 local RECOVERY_ACTOR = "bee.gov.recovery"
@@ -17,14 +20,41 @@ type Activations = {
     revert_activation: (Store, string, Request) -> Result,
 }
 
-local function has_facts(activations: Activations, store: Store, component: string): (boolean?, string?)
+type Applied = {id: string, target_db: string}
+
+-- applied lists the migrations applied to the component, in database and id order.
+local function applied(activations: Activations, store: Store, component: string): ({Applied}?, string?)
     local result = activations.applied(store, component)
     if not result.ok then return nil, result.message or "read applied migration facts" end
     local value = bounds.object(result.value)
     local migrations = value and bounds.object(value.migrations) or nil
     if not migrations then return nil, "applied migration facts are malformed" end
-    for _ in pairs(migrations) do return true, nil end
-    return false, nil
+    local found: {Applied} = {}
+    for _, raw in pairs(migrations) do
+        local fact = bounds.object(raw)
+        local id, target_db = fact and bounds.text(fact.id, 256), fact and bounds.text(fact.target_db, 256)
+        if not id or not target_db then return nil, "applied migration facts are malformed" end
+        found[#found + 1] = {id = id, target_db = target_db}
+    end
+    table.sort(found, function(a: Applied, b: Applied): boolean
+        if a.target_db ~= b.target_db then return a.target_db < b.target_db end
+        return a.id < b.id
+    end)
+    return found, nil
+end
+
+-- defined names the migrations the earlier version's exact artifact carries.
+local function defined_by(baseline: Object): ({[string]: boolean}?, string?)
+    local entries, decode_error = artifact.decode(baseline.artifact_bytes, baseline.artifact_digest)
+    if not entries then return nil, "read the earlier version's definitions: " .. tostring(decode_error) end
+    local defined: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do
+        local meta = bounds.object(entry.meta)
+        local target_db = meta and meta.type == "migration" and bounds.text(meta.target_db, 256) or nil
+        local id = bounds.text(entry.id, 256)
+        if target_db and id then defined[target_db .. "\n" .. id] = true end
+    end
+    return defined, nil
 end
 
 function M.revert(activations: Activations, store: Store, owner_raw: unknown,
@@ -43,12 +73,26 @@ function M.revert(activations: Activations, store: Store, owner_raw: unknown,
     local components: {[string]: boolean} = {}
     components[current_component] = true
     components[baseline_component] = true
+    local facts: {Applied} = {}
     for component in pairs(components) do
-        local present, facts_error = has_facts(activations, store, component)
-        if present == nil then return transaction.failure("UNAVAILABLE", tostring(facts_error)) end
-        if present then
-            return transaction.failure("BLOCKED", "applied migration facts exist for " .. component
-                .. "; provide and apply a forward-only compensation plan before reverting")
+        local found, facts_error = applied(activations, store, component)
+        if not found then return transaction.failure("UNAVAILABLE", tostring(facts_error)) end
+        for _, item in ipairs(found) do facts[#facts + 1] = item end
+    end
+    if #facts > 0 then
+        local defined, defined_error = defined_by(baseline)
+        if not defined then return transaction.failure("UNAVAILABLE", tostring(defined_error)) end
+        local ids, databases, named = {}, {}, {}
+        for _, item in ipairs(facts) do
+            if not defined[item.target_db .. "\n" .. item.id] then
+                ids[#ids + 1] = item.id
+                if not named[item.target_db] then named[item.target_db] = true; databases[#databases + 1] = item.target_db end
+            end
+        end
+        if #ids > 0 then
+            return transaction.failure("BLOCKED", "Going back to " .. tostring(bounds.id(baseline.version) or "the earlier version")
+                .. " is not possible: a later version changed the saved data in " .. table.concat(databases, ", ")
+                .. " (" .. table.concat(ids, ", ") .. "), and that change stays. Install a newer version instead.")
         end
     end
     local bytes, encode_error = canonical.encode({schema_revision = "bee.governance-migration-receipt@1", rows = {}})
@@ -60,7 +104,7 @@ function M.revert(activations: Activations, store: Store, owner_raw: unknown,
     return activations.revert_activation(store, actor, {operation = "revert_activation",
         overlay_owner = owner, expected_revision = revision, idempotency_key = key,
         compensation = {bytes = bytes, digest = digest},
-        diagnostics = "headless recovery revert; no applied migration facts exist"})
+        diagnostics = "revert to the earlier version; it defines every applied migration, so none runs or rolls back"})
 end
 
 return M

@@ -903,7 +903,14 @@ function M.record_outcome(store: Store, actor: string, input: OutcomeRequest): R
             and not (row.migrations_completed == true or tonumber(row.migrations_completed) == 1) then
             return failure("CONFLICT", "activation migrations are not complete")
         end
-        if row.phase == "settled" and row.outcome ~= "uncertain"
+        -- An applied generation the person went back to is final but no longer
+        -- observed; once its overlay is restored the slot observes it again.
+        local before_slot, before_error = slot(tx, store, row.overlay_owner, false)
+        if before_error then return before_error end
+        local restored = row.phase == "settled" and row.outcome == "applied" and input.outcome == "applied"
+            and before_slot ~= nil and before_slot.desired_intent_id == row.intent_id
+            and before_slot.observed_intent_id == nil
+        if row.phase == "settled" and row.outcome ~= "uncertain" and not restored
             and not (row.outcome == "applied" and input.outcome == "uncertain") then
             return failure("CONFLICT", "activation outcome is already final")
         end
@@ -1100,6 +1107,27 @@ function M.baseline(store: Store, overlay_raw: unknown): Result
         end
         local row, row_error = load(tx, store, current_slot.baseline_intent_id)
         if row_error or not row then return row_error or failure("INTERNAL", "baseline activation intent is missing") end
+        return transaction.success(view(store, row, current_slot), false)
+    end)
+end
+-- reverted_from reads the generation a recorded revert replaced, when that
+-- revert went back to the target intent; restoring the target installs over it.
+function M.reverted_from(store: Store, overlay_raw: unknown, target_raw: unknown): Result
+    if store.closed then return failure("CLOSED", "governance activation store is closed") end
+    local overlay_owner, target = id(overlay_raw), id(target_raw)
+    if not overlay_owner or not target then return failure("INVALID", "activation revert identity is invalid") end
+    return transaction.read(store.db, "governance activation", function(tx): Result
+        local reverted, revert_error = one(tx, "SELECT reverted_from_intent_id, target_intent_id FROM bee_governance_activation_reverts WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ?", {store.node, store.workspace, overlay_owner}, "activation revert")
+        if revert_error then return revert_error end
+        if not reverted or reverted.target_intent_id ~= target then
+            return failure("NOT_FOUND", "no recorded revert went back to this activation")
+        end
+        local from = id(reverted.reverted_from_intent_id)
+        if not from then return failure("INTERNAL", "reverted activation intent is missing") end
+        local row, row_error = load(tx, store, from)
+        if row_error or not row then return row_error or failure("INTERNAL", "reverted activation intent is missing") end
+        local current_slot, slot_error = slot(tx, store, overlay_owner, false)
+        if slot_error then return slot_error end
         return transaction.success(view(store, row, current_slot), false)
     end)
 end

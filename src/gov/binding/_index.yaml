@@ -491,6 +491,7 @@ entries:
     canonical: bee.values:canonical
     transaction: bee.persist:transaction
     activation_store: bee.gov.persist:activation_store
+    artifact: bee.gov.types:artifact
 - name: activation_measure
   kind: library.lua
   source: file://activation_measure.lua

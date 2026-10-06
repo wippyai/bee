@@ -376,6 +376,20 @@ local function define_tests()
                 overlay_owner = "bee.gov:overlay", expected_revision = second.slot_revision,
                 idempotency_key = "rollback-1", compensation = compensation, diagnostics = "boot failed on v2"}))
             test.eq(replayed.reverted_from_intent_id, "intent-gen-2")
+            -- The restored generation reads the one it replaced, whose grant it installs over.
+            local replaced = ok(store.reverted_from(state, "bee.gov:overlay", "intent-gen-1"))
+            test.eq(replaced.intent_id, "intent-gen-2")
+            test.eq(replaced.version, "v2")
+            test.eq(store.reverted_from(state, "bee.gov:overlay", "intent-gen-2").code, "NOT_FOUND")
+            -- Once its overlay is restored, the slot observes the earlier generation again.
+            local restored = ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = "intent-gen-1",
+                expected_revision = reverted.revision, idempotency_key = "restored-1", outcome = "applied",
+                diagnostics = "restored after going back"}))
+            test.eq(restored.observed_intent_id, "intent-gen-1")
+            test.eq(restored.desired_intent_id, "intent-gen-1")
+            test.eq(store.call(state, "actor-a", {operation = "record_outcome", intent_id = "intent-gen-1",
+                expected_revision = restored.revision, idempotency_key = "restored-2", outcome = "applied",
+                diagnostics = "observed twice"}).code, "CONFLICT")
             assert(store.close(state))
         end)
         test.it("removes an applied application under the person who asked and keeps its intents as history", function()

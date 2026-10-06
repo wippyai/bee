@@ -386,10 +386,19 @@ local function remeasure_restoration(config: Config, intent: Object): Result?
     local proposal = object(current.capability_proposal)
     local installed = object(current.capability_installed)
     if proposal or installed or intent.grant_predecessor_digest ~= nil then
+        -- The installed grant is this activation's own, or, after the person
+        -- went back to it, the grant of the version that revert replaced.
+        local owner_intent: Object = intent
+        if installed and installed.artifact_digest ~= intent.artifact_digest then
+            local replaced = activations.reverted_from(config.activations, config.overlay_owner, intent.intent_id)
+            local from = replaced.ok and object(replaced.value) or nil
+            if from then owner_intent = from end
+        end
+        local own = owner_intent == intent
         if not proposal or (not installed and intent.application_admission_digest == nil)
-            or (installed and (installed.digest ~= proposal.digest
-                or installed.artifact_digest ~= intent.artifact_digest or installed.version ~= intent.version
-                or installed.approval_id ~= intent.approval_id)) then
+            or (installed and ((own and installed.digest ~= proposal.digest)
+                or installed.artifact_digest ~= owner_intent.artifact_digest or installed.version ~= owner_intent.version
+                or installed.approval_id ~= owner_intent.approval_id)) then
             return failure("CONFLICT", "settled activation grant no longer matches its artifact, version and approval")
         end
     end
@@ -583,9 +592,26 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         if superseded then return superseded end
         local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
         if not desired_entries then return assert(desired_error) end
+        -- The person went back to this generation: once its overlay holds, the
+        -- slot observes it again.
+        local function observed(result: Object): Result
+            if intent.observed_intent_id == intent_id then return transaction.success(result, false) end
+            local observe_key = key(prefix, "restored-" .. tostring(intent.revision))
+            if not observe_key then return failure("INVALID", "activation receipt key is too long") end
+            local recorded = activations.call(config.activations, config.actor_id, {operation = "record_outcome",
+                intent_id = intent_id, expected_revision = intent.revision, idempotency_key = observe_key,
+                outcome = "applied", diagnostics = "restored after going back"})
+            if not recorded.ok then return recorded end
+            local value = object(recorded.value)
+            if value then value.recovered = result.recovered end
+            return transaction.success(value or result, false)
+        end
         local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
-        if matches then return transaction.success(intent, true) end
+        if matches then
+            if intent.observed_intent_id == intent_id then return transaction.success(intent, true) end
+            return observed(intent)
+        end
         local restoration_error = remeasure_restoration(config, intent)
         if restoration_error then return restoration_error end
         local restored, restore_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
@@ -593,7 +619,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             local result: Object = {}
             for field, value in pairs(intent) do result[field] = value end
             result.recovered = true
-            return transaction.success(result, false)
+            return observed(result)
         end
         -- A settled activation may drift more than once during its lifetime.
         -- Fence each recovery observation by the execution revision while

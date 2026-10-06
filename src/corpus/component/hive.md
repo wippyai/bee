@@ -9,7 +9,9 @@ nodes on a machine into one hive; `bee hive invite` on one machine and
 endpoint the inviting machine is reachable at (LAN, Tailscale, virtual
 interfaces); the joiner dials them concurrently, pins the first whose identity
 matches the token, and the inviting machine dials back to verify the joiner's
-address. Bees started after a join listen on the network.
+address. The token's ten minutes bound only the join; the joined machine stays in the
+hive, and bees running on either machine restart themselves to use it. Bees
+remember the addresses of the other machine's nodes and use them as seeds.
 
 | Entry | Responsibility |
 |---|---|

@@ -72,6 +72,9 @@ type Admission struct {
 	Seeds []string `json:"seeds"`
 	// Observed is the IP the hive node saw the joiner connect from.
 	Observed string `json:"observed,omitempty"`
+	// Reached is the joiner address the hive node dialed back successfully;
+	// it is empty when no joiner address answered.
+	Reached string `json:"reached,omitempty"`
 }
 
 // Refused is a definite refusal by the hive node.

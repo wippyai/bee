@@ -23,6 +23,7 @@ import (
 
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/api/event"
 	app "github.com/wippyai/runtime/cmd/app"
 
 	"github.com/wippyai/bee/native/hookpost"
@@ -83,6 +84,11 @@ type Host struct {
 	// its address.
 	ephemeral bool
 	members   Members
+	// watch restarts this bee when the machine's hive changes under it.
+	watch *hiveWatch
+	cache *remoteCache
+	// relaunch replaces the process once it stopped for a restart.
+	relaunch func() error
 }
 
 // Component returns the Bee native host.
@@ -105,8 +111,18 @@ func (h *Host) Load(ctx context.Context) (context.Context, error) {
 
 // Start records this node's membership address so other nodes can join it.
 func (h *Host) Start(ctx context.Context) error {
+	if h.watch != nil {
+		h.watch.start()
+	}
 	if h.node == "" {
 		return nil
+	}
+	if bus := event.GetBus(ctx); bus != nil && h.cache == nil {
+		cache, err := startRemoteCache(ctx, bus, h.dir)
+		if err != nil {
+			return err
+		}
+		h.cache = cache
 	}
 	membership := clusterapi.GetMembership(ctx)
 	if membership == nil {
@@ -121,6 +137,13 @@ func (h *Host) Start(ctx context.Context) error {
 
 // Stop withdraws this node's address, and a client node's key.
 func (h *Host) Stop(context.Context) error {
+	if h.watch != nil {
+		h.watch.close()
+	}
+	if h.cache != nil {
+		h.cache.close()
+		h.cache = nil
+	}
 	if h.node == "" {
 		return nil
 	}
@@ -152,6 +175,9 @@ func (h *Host) Plan(_ context.Context, launch app.Launch) (app.Plan, error) {
 		return app.Plan{Run: func(ctx context.Context) error {
 			return hookpost.RunTo(ctx, os.Stdin, os.Stdout, args[1], args[2], args[3], args[4])
 		}}, nil
+	}
+	if launch.Op == app.OpRun && isHelp(launch.Args) {
+		return app.Plan{Run: func(context.Context) error { Help(os.Stdout); return nil }}, nil
 	}
 	dir, err := Dir()
 	if err != nil {
@@ -199,22 +225,43 @@ func (h *Host) Plan(_ context.Context, launch app.Launch) (app.Plan, error) {
 		}
 		return h.clientPlan(dir, launch.State, hive, owned, command)
 	}
+	if hive == nil && launch.Op != app.OpRun {
+		return app.Plan{}, nil
+	}
 	return h.nodePlan(dir, launch.State, hive), nil
 }
 
 // nodePlan runs the folder's node, joining the machine's hive when there is one.
 func (h *Host) nodePlan(dir, state string, hive *Hive) app.Plan {
-	if hive == nil {
-		return app.Plan{}
-	}
 	return app.Plan{Prepare: func(context.Context) (boot.Config, func() error, error) {
+		h.watchHive(dir, hive)
+		if hive == nil {
+			return boot.NewConfig(), h.finish, nil
+		}
 		config, node, err := Prepare(dir, state, *hive, &h.members)
 		if err != nil {
 			return nil, nil, err
 		}
 		h.node = node
-		return config, func() error { return nil }, nil
+		return config, h.finish, nil
 	}}
+}
+
+// watchHive makes this bee restart when the machine's hive differs from applied.
+func (h *Host) watchHive(dir string, applied *Hive) {
+	h.watch = &hiveWatch{dir: dir, applied: applied, interval: pollInterval, interrupt: interruptSelf}
+}
+
+// finish runs after the bee stopped: a bee that stopped to adopt a changed hive
+// starts again as the same command.
+func (h *Host) finish() error {
+	if h.watch == nil || !h.watch.restartRequested() {
+		return nil
+	}
+	if h.relaunch == nil {
+		return relaunch()
+	}
+	return h.relaunch()
 }
 
 // clientPlan runs an in-memory client node of the machine's hive. It displays
@@ -249,7 +296,8 @@ func (h *Host) clientPlan(dir, state string, hive *Hive, owned bool, command []s
 				return nil, nil, err
 			}
 			h.node, h.ephemeral = node, true
-			return config, func() error { return nil }, nil
+			h.watchHive(dir, hive)
+			return config, h.finish, nil
 		},
 	}, nil
 }
@@ -408,7 +456,7 @@ func configure(dir string, hive Hive, node Node, key ed25519.PrivateKey, members
 	if err != nil {
 		return nil, err
 	}
-	for _, seed := range hive.Seeds {
+	for _, seed := range append(slices.Clone(hive.Seeds), remoteAddresses(dir)...) {
 		joins = appendUnique(joins, seed)
 	}
 	cluster := map[string]any{

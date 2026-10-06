@@ -35,6 +35,12 @@ const maxProbeAddresses = 16
 // another machine and serves it until it is redeemed, expires or ctx ends.
 // The invite line goes to out; guidance goes to notes.
 func Invite(ctx context.Context, dir string, out, notes io.Writer) error {
+	return invitation(ctx, dir, InviteLifetime, out, notes)
+}
+
+// invitation serves an invite that expires after lifetime. The lifetime bounds
+// the setup only: what a join writes carries no expiry.
+func invitation(ctx context.Context, dir string, lifetime time.Duration, out, notes io.Writer) error {
 	hive, err := Ensure(dir)
 	if err != nil {
 		return err
@@ -73,12 +79,12 @@ func Invite(ctx context.Context, dir string, out, notes io.Writer) error {
 	if len(candidates) > invite.MaxCandidates {
 		line.Candidates = candidates[:invite.MaxCandidates]
 	}
-	session := &inviteSession{dir: dir, id: id, digest: sha256.Sum256([]byte(secret)), identity: identity, expires: time.Now().Add(InviteLifetime), notes: notes}
+	session := &inviteSession{dir: dir, id: id, digest: sha256.Sum256([]byte(secret)), identity: identity, expires: time.Now().Add(lifetime), notes: notes}
 	if _, err := fmt.Fprintln(out, line.String()); err != nil {
 		return err
 	}
-	fmt.Fprintf(notes, "Valid for %d minutes, single use. On the other machine run:\n  bee hive join TOKEN\nwith the line above as TOKEN. Keep this command running until it joins.\n",
-		int(InviteLifetime/time.Minute))
+	fmt.Fprintf(notes, "Valid for %d minutes to join, single use; a machine that joined stays in the hive.\nOn the other machine run:\n  bee hive join TOKEN\nwith the line above as TOKEN. Keep this command running until it joins.\n",
+		int(lifetime/time.Minute))
 	if notice := inviteNotice(line.Candidates, assigned); notice != "" {
 		fmt.Fprint(notes, notice)
 	}
@@ -99,7 +105,7 @@ func Invite(ctx context.Context, dir string, out, notes io.Writer) error {
 	}
 }
 
-const restartNotice = "Bees already running on this machine keep their old network settings; restart them to be reachable from the other machine.\n"
+const restartNotice = "Bees running on this machine restart themselves to use the joined hive.\n"
 
 type inviteSession struct {
 	dir      string
@@ -157,13 +163,16 @@ func (s *inviteSession) handle(ctx context.Context, peer ed25519.PublicKey, requ
 	if reachErr == nil {
 		hive.Seeds = appendUnique(hive.Seeds, net.JoinHostPort(reached.String(), strconv.Itoa(request.Port)))
 	} else {
-		fmt.Fprintf(s.notes, "This machine cannot reach %s (%v); its bees can dial this machine but not the other way round.\n%s",
-			request.Observed, reachErr, unreachableAdvice)
+		fmt.Fprintf(s.notes, "This machine cannot dial %s back (%v); the hive works over the connections that machine opens.\n", request.Observed, reachErr)
 	}
 	if err := WriteHive(s.dir, *hive); err != nil {
 		return refuse("UNAVAILABLE", err.Error())
 	}
 	s.joined = request.Node
 	s.finished()
-	return invite.Accept(invite.Admission{Node: hive.Machine, Secret: hive.Secret, Seeds: seeds})
+	admission := invite.Admission{Node: hive.Machine, Secret: hive.Secret, Seeds: seeds}
+	if reachErr == nil {
+		admission.Reached = reached.String()
+	}
+	return invite.Accept(admission)
 }

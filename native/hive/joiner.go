@@ -13,16 +13,14 @@ import (
 	"net"
 	"net/netip"
 	"strings"
-	"time"
 
 	"github.com/wippyai/bee/native/hive/invite"
 )
 
-// reachedWait is how long the joiner waits for the hive node's reachability
-// probe after the admission arrived.
-const reachedWait = 2 * time.Second
-
-const unreachableAdvice = "Other machines can reach this one only on a shared network, over Tailscale or with mirrored networking under WSL2.\n"
+// oneWayNotice explains a machine only the other side can be dialed from: the
+// mesh carries gossip and calls over the connections the dialing side opens, so
+// the hive works; a machine others can dial directly also accepts connections.
+const oneWayNotice = "The hive works over the connections this machine opens. To let the other machine dial this one as well, put both on a shared network or Tailscale, or under WSL2 enable mirrored networking.\n"
 
 // Join redeems the invite token for this machine. The hive is created when the
 // machine has none, and its secret is replaced by the hive's, so the machine's
@@ -56,8 +54,7 @@ func Join(ctx context.Context, dir, token string, out io.Writer) error {
 	}
 	probing, stopProbing := context.WithCancel(ctx)
 	defer stopProbing()
-	reached := make(chan netip.Addr, 1)
-	go func() { _ = invite.ServeProbe(probing, probe, identity, line.Fingerprint, reached) }()
+	go func() { _ = invite.ServeProbe(probing, probe, identity) }()
 	request := invite.Request{Node: hive.Machine, Addresses: addresses, ProbePort: probe.Addr().(*net.TCPAddr).Port, Port: hive.Port}
 	admission, _, path, err := invite.DialCandidates(ctx, line, identity, request)
 	if err != nil {
@@ -71,11 +68,7 @@ func Join(ctx context.Context, dir, token string, out io.Writer) error {
 	if err != nil || len(secret) != 32 {
 		return errors.New("bee hive join: the hive node sent an invalid hive secret")
 	}
-	var advertise netip.Addr
-	select {
-	case advertise = <-reached:
-	case <-time.After(reachedWait):
-	}
+	advertise, _ := netip.ParseAddr(admission.Reached)
 	verified := advertise.IsValid()
 	if !verified {
 		if advertise, err = routeSource(path.Endpoint); err != nil {
@@ -96,12 +89,12 @@ func Join(ctx context.Context, dir, token string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "Joined the hive of machine %s through %s.\nThis machine is %s at %s.\n", admission.Node, path.Endpoint, hive.Machine, hive.Advertise)
 	if !verified {
-		fmt.Fprintf(out, "The other machine could not reach %s back, so bees there will not reach bees here.\n%s", hive.Advertise, unreachableAdvice)
+		fmt.Fprintf(out, "The other machine cannot dial %s back.\n%s", hive.Advertise, oneWayNotice)
 		if guest, ok := wslNATGuest(assigned); ok {
 			fmt.Fprintf(out, "This machine is a WSL2 guest behind the Windows NAT (%s). To %s.\n", guest, mirroredNetworking)
 		}
 	}
-	fmt.Fprint(out, restartNotice)
+	fmt.Fprint(out, "The token is no longer needed: this machine stays in the hive.\n", restartNotice)
 	return nil
 }
 

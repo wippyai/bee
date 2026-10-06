@@ -47,12 +47,22 @@ func TestInitCreatesTheHiveOnceAndKeepsIt(t *testing.T) {
 	require.Equal(t, first.Secret, second.Secret)
 }
 
-func TestPlanWithoutAHiveLeavesTheLaunchUnchanged(t *testing.T) {
+func TestPlanWithoutAHiveJoinsNoClusterButWatchesForOne(t *testing.T) {
 	isolatedConfig(t)
-	plan, err := Component().Plan(context.Background(), app.Launch{Command: "bee", State: t.TempDir()})
+	update, err := Component().Plan(context.Background(), app.Launch{Command: "bee", State: t.TempDir(), Op: app.OpUpdate})
+	require.NoError(t, err)
+	require.Nil(t, update.Run)
+	require.Nil(t, update.Prepare, "an operation other than running boots no node")
+
+	host := Component()
+	plan, err := host.Plan(context.Background(), app.Launch{Command: "bee", State: t.TempDir()})
 	require.NoError(t, err)
 	require.Nil(t, plan.Run)
-	require.Nil(t, plan.Prepare)
+	require.NotNil(t, plan.Prepare)
+	config, _, err := plan.Prepare(context.Background())
+	require.NoError(t, err)
+	require.False(t, config.Sub("cluster").GetBool("enabled", false), "a machine outside a hive runs no cluster")
+	require.NotNil(t, host.watch, "the bee watches for the hive its machine joins")
 }
 
 func TestPlanRoutesHiveCommands(t *testing.T) {
@@ -252,7 +262,7 @@ func TestNodeOutsideAHiveRunsHeadless(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, nodeCommand, plan.Command)
 	require.Empty(t, plan.Args)
-	require.Nil(t, plan.Prepare)
+	require.NotNil(t, plan.Prepare)
 }
 
 func TestNodeInAnOwnedFolderIsRefused(t *testing.T) {

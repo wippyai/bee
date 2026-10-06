@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"net"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -57,7 +58,8 @@ func TestInviteAndJoinMergeTheHivesOfTwoMachines(t *testing.T) {
 	inviter, joiner := t.TempDir(), t.TempDir()
 	out, notes := &lockedBuffer{}, &lockedBuffer{}
 	done := make(chan error, 1)
-	go func() { done <- Invite(context.Background(), inviter, out, notes) }()
+	lifetime := 3 * time.Second
+	go func() { done <- invitation(context.Background(), inviter, lifetime, out, notes) }()
 	require.Eventually(t, func() bool { return strings.Contains(out.String(), "\n") }, 5*time.Second, 10*time.Millisecond)
 	token := strings.TrimSpace(out.String())
 	line, err := invite.Parse(token)
@@ -80,7 +82,53 @@ func TestInviteAndJoinMergeTheHivesOfTwoMachines(t *testing.T) {
 	require.Contains(t, left.Seeds, net.JoinHostPort(right.Advertise, strconv.Itoa(right.Port)), "the inviter dials the joiner's gossip port")
 	require.Contains(t, joined.String(), "Joined the hive of machine "+left.Machine)
 	require.Contains(t, notes.String(), "joined the hive")
-	require.NotContains(t, joined.String(), "could not reach", "the inviter reached the joiner back")
+	require.NotContains(t, joined.String(), "cannot dial", "the inviter reached the joiner back")
+	require.Contains(t, notes.String(), "Valid for 0 minutes to join", "the notes say the lifetime bounds the join")
+	require.Contains(t, notes.String(), "a machine that joined stays in the hive")
+
+	// The invite's lifetime bounds the setup only: once it passed, the joined
+	// machines start and restart on what the join wrote.
+	time.Sleep(lifetime + 200*time.Millisecond)
+	raw, err := os.ReadFile(filepath.Join(joiner, hiveFile))
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "expire")
+	for _, side := range []struct {
+		dir  string
+		hive *Hive
+	}{{inviter, left}, {joiner, right}} {
+		for restart := 0; restart < 2; restart++ {
+			config, _, err := Prepare(side.dir, t.TempDir(), *side.hive, &Members{})
+			require.NoError(t, err)
+			cluster := config.Sub("cluster")
+			require.Equal(t, "0.0.0.0", cluster.GetString("membership.bind_addr", ""))
+			require.Equal(t, side.hive.Advertise, cluster.GetString("membership.advertise_addr", ""))
+		}
+	}
+	_, _, err = Prepare(joiner, t.TempDir(), *right, &Members{})
+	require.NoError(t, err)
+	require.Contains(t, mustSeeds(t, joiner, *right), left.Advertise+":"+strconv.Itoa(left.Port))
+
+	err = Join(context.Background(), t.TempDir(), token, &bytes.Buffer{})
+	require.Error(t, err, "a redeemed or expired invite admits nobody")
+}
+
+func mustSeeds(t *testing.T, dir string, hive Hive) string {
+	t.Helper()
+	config, _, err := Prepare(dir, t.TempDir(), hive, &Members{})
+	require.NoError(t, err)
+	return config.Sub("cluster").GetString("membership.join_addrs", "")
+}
+
+func TestAnUnusedInviteExpiresAndRefusesAfterwards(t *testing.T) {
+	hasRoutableInterface(t)
+	dir := t.TempDir()
+	out, notes := &lockedBuffer{}, &lockedBuffer{}
+	err := invitation(context.Background(), dir, 300*time.Millisecond, out, notes)
+	require.ErrorContains(t, err, "expired unused")
+	token := strings.TrimSpace(out.String())
+	_, parseErr := invite.Parse(token)
+	require.NoError(t, parseErr)
+	require.Error(t, Join(context.Background(), t.TempDir(), token, &bytes.Buffer{}), "an expired token cannot be redeemed")
 }
 
 func TestAnInviteRedeemsOnceWithItsSecret(t *testing.T) {
@@ -119,7 +167,7 @@ func TestAnInviteRedeemsOnceWithItsSecret(t *testing.T) {
 	require.Empty(t, stored.Seeds, "an unreachable joiner is not a seed")
 }
 
-func TestAnExpiredInviteIsRefused(t *testing.T) {
+func TestASessionPastItsExpiryRefusesItsSecret(t *testing.T) {
 	dir := t.TempDir()
 	_, err := Ensure(dir)
 	require.NoError(t, err)

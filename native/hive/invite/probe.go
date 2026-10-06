@@ -79,12 +79,10 @@ func Reach(ctx context.Context, addresses []string, port int, joiner ed25519.Pub
 	return netip.Addr{}, errors.Join(failures...)
 }
 
-// ServeProbe accepts the hive node's reachability probes on listener until ctx
-// ends. A probe counts when the connecting peer proves the identity key whose
-// fingerprint the invite carries; the local address it reached is sent to
-// reached. The joiner learns from it which of its addresses the hive node can
-// reach.
-func ServeProbe(ctx context.Context, listener net.Listener, identity ed25519.PrivateKey, fingerprint string, reached chan<- netip.Addr) error {
+// ServeProbe answers the hive node's reachability probes on listener until ctx
+// ends: it completes the TLS handshake as identity, which proves to the prober
+// that the address reaches the joiner.
+func ServeProbe(ctx context.Context, listener net.Listener, identity ed25519.PrivateKey) error {
 	own, err := certificate(identity)
 	if err != nil {
 		return err
@@ -102,33 +100,9 @@ func ServeProbe(ctx context.Context, listener net.Listener, identity ed25519.Pri
 		}
 		go func() {
 			defer connection.Close()
-			secured := tls.Server(connection, config)
 			handshake, cancel := context.WithTimeout(ctx, ProbeTimeout)
 			defer cancel()
-			if secured.HandshakeContext(handshake) != nil {
-				return
-			}
-			state := secured.ConnectionState()
-			raw := make([][]byte, 0, len(state.PeerCertificates))
-			for _, peer := range state.PeerCertificates {
-				raw = append(raw, peer.Raw)
-			}
-			key, err := peerKey(raw)
-			if err != nil || Fingerprint(key) != fingerprint {
-				return
-			}
-			host, _, err := net.SplitHostPort(connection.LocalAddr().String())
-			if err != nil {
-				return
-			}
-			address, err := netip.ParseAddr(host)
-			if err != nil {
-				return
-			}
-			select {
-			case reached <- address.Unmap():
-			default:
-			}
+			_ = tls.Server(connection, config).HandshakeContext(handshake)
 		}()
 	}
 }

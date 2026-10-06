@@ -51,6 +51,15 @@ entries:
     descriptor: bee.app:descriptor
     governed_admission: bee.gov.types:governed_application_admission
     application_admissions: bee.gov.binding:application_admissions
+- name: app_tools
+  kind: library.lua
+  source: file://app_tools.lua
+  modules: [registry]
+  imports:
+    bounds: bee.values:bounds
+    agent_tool: bee.values:agent_tool
+    application: bee.node:application
+    capability_access: bee.gov.binding:capability_access
 - name: tests
   kind: library.lua
   source: file://tests.lua

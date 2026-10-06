@@ -169,4 +169,21 @@ function M.decode(ref: string, entry: Object): (Tool?, string?)
         output_schema = output_schema, scopes = scopes, annotations = annotations}, nil
 end
 
+-- application reads a tool an application offers agents: a tool whose
+-- schemas Bee advertises and that declares no security of its own, so it
+-- runs only with the application's scope.
+function M.application(ref: string, entry: Object): (Tool?, string?)
+    local tool, tool_error = M.decode(ref, entry)
+    if not tool then return nil, tool_error end
+    if not M.valid_schema(tool.input_schema)
+        or (tool.output_schema ~= nil and not M.valid_schema(tool.output_schema)) then
+        return nil, "agent tool " .. ref .. " uses a schema Bee does not advertise"
+    end
+    local data = bounds.object(entry.data)
+    if data and data.security ~= nil then
+        return nil, "agent tool " .. ref .. " declares its own security; it runs only with the application's grants"
+    end
+    return tool, nil
+end
+
 return M

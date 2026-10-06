@@ -189,3 +189,72 @@ entries:
     application: bee.node:application
   security:
     policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+- name: tools_app
+  kind: process.lua
+  source: file://runner_fixture/app.lua
+  method: main
+  modules: [process]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Notes tools, lifetime: view, revision: '1', instance_policy: multiple}
+- name: tools_twin
+  kind: process.lua
+  source: file://runner_fixture/app.lua
+  method: main
+  modules: [process]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Notes twin, lifetime: view, revision: '1', instance_policy: multiple}
+- name: tools_add
+  kind: function.lua
+  source: file://tools_note.lua
+  method: add
+  modules: [funcs, security, sql]
+  meta:
+    type: tool
+    llm_alias: notes_add
+    llm_description: Add one note to the notes application
+    input_schema: '{"type":"object","additionalProperties":false,"required":["text"],"properties":{"text":{"type":"string","maxLength":200}}}'
+    output_schema: '{"type":"object","properties":{"added":{"type":"string"},"actor":{"type":"string"}}}'
+    mcp: {annotations: {readOnlyHint: false, idempotentHint: false}}
+- name: tools_list
+  kind: function.lua
+  source: file://tools_note.lua
+  method: list
+  modules: [funcs, security, sql]
+  meta:
+    type: tool
+    llm_alias: notes_list
+    llm_description: List the notes the notes application holds
+    input_schema: '{"type":"object","additionalProperties":false,"properties":{}}'
+    mcp: {annotations: {readOnlyHint: true}}
+- name: tools_twin_add
+  kind: function.lua
+  source: file://tools_note.lua
+  method: add
+  modules: [funcs, security, sql]
+  meta:
+    type: tool
+    llm_alias: notes_add
+    llm_description: Another application's tool under the same name
+    input_schema: '{"type":"object","properties":{"text":{"type":"string"}}}'
+- name: app_tools_test_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The agent tools test installs application grants and calls the node's application tool functions}
+  policy:
+    actions: [funcs.call, security.actor.create, registry.get, registry.find, registry.snapshot, registry.apply, registry.version]
+    resources: '*'
+    effect: allow
+- name: app_tools_test
+  kind: function.lua
+  source: file://app_tools_test.lua
+  method: run
+  modules: [funcs, security, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    capability_model: bee.capability:model
+    capability_grants: bee.gov.types:capability_grants
+  security:
+    policies: [bee.tests.node:app_tools_test_policy]

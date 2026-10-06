@@ -72,3 +72,26 @@ entries:
     tests: bee.node:tests
     test_runs: bee.node:test_runs
     discovery: wippy.test:discovery
+- name: app_tools
+  kind: function.lua
+  meta:
+    comment: The tools the caller's workspace applications offer agents, with diagnostics for tools that are not offered
+  source: file://app_tools_call.lua
+  method: list
+  modules: [funcs, security, ctx]
+  imports: &app_tools_imports
+    bounds: bee.values:bounds
+    application: bee.node:application
+    app_tools: bee.node:app_tools
+  security:
+    policies: [bee.node.security:app_tools_runner, bee.node.security:identity]
+- name: app_tool_call
+  kind: function.lua
+  meta:
+    comment: Runs one tool the caller's workspace applications offer agents, as that application with the actor and exact scope its own instances run with
+  source: file://app_tools_call.lua
+  method: call
+  modules: [funcs, security, ctx]
+  imports: *app_tools_imports
+  security:
+    policies: [bee.node.security:app_tools_runner, bee.node.security:identity]

@@ -217,16 +217,8 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
             if not candidate or not owned[ref] then
                 return nil, "agent tool " .. tostring(ref) .. " is not this artifact's own tool function"
             end
-            local decoded, decode_error = agent_tool.decode(ref, candidate)
+            local decoded, decode_error = agent_tool.application(ref, candidate)
             if not decoded then return nil, decode_error end
-            if not agent_tool.valid_schema(decoded.input_schema)
-                or (decoded.output_schema ~= nil and not agent_tool.valid_schema(decoded.output_schema)) then
-                return nil, "agent tool " .. ref .. " uses a schema Bee does not advertise"
-            end
-            local data = object(candidate.data)
-            if data and data.security ~= nil then
-                return nil, "agent tool " .. ref .. " declares its own security; it runs only with the application's grants"
-            end
             local prior = aliases[decoded.alias]
             if prior then return nil, "agent tools " .. prior .. " and " .. ref .. " share the alias " .. decoded.alias end
             aliases[decoded.alias] = ref

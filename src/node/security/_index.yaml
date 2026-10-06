@@ -183,6 +183,14 @@ entries:
     actions: [registry.get, registry.version, registry.find, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
     resources: '*'
     effect: allow
+- name: app_tools_runner
+  kind: security.policy
+  meta:
+    comment: Application tools read the registry for admissions, grant records and tool entries, and run a tool as its application with the actor and scope the node gives the application's own instances
+  policy:
+    actions: [registry.get, registry.version, registry.find, registry.snapshot, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
+    resources: '*'
+    effect: allow
 - name: tests_store
   kind: security.policy
   meta:

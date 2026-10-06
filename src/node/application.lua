@@ -60,6 +60,36 @@ function M.admission(definition_id: string, workspace_id: string): (governed_adm
     return nil, nil, nil
 end
 
+-- definitions are the app definitions admitted in workspace_id, each once
+-- and in name order, from the same sources admission reads.
+function M.definitions(workspace_id: string): ({string}?, string?)
+    local seen: {[string]: boolean} = {}
+    local result: {string} = {}
+    local function add(definition_id: string)
+        if not seen[definition_id] then
+            seen[definition_id] = true
+            result[#result + 1] = definition_id
+        end
+    end
+    for _, entry in ipairs(registry.find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}) or {}) do
+        local data: unknown = entry.data
+        local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
+        if not bindings then return nil, "admission " .. entry.id .. ": " .. tostring(bindings_error) end
+        for _, binding in ipairs(bindings) do add(binding.definition_id) end
+    end
+    local pinned = assert(registry.snapshot())
+    local selection, selection_error = application_admissions.read(pinned, pinned:version():string(), workspace_id,
+        assert(system.node.id()))
+    if not selection then return nil, selection_error end
+    for _, source in ipairs({selection.governed, selection.packages}) do
+        for _, measured in ipairs(source) do
+            for _, binding in ipairs(measured.record.bindings) do add(binding.definition_id) end
+        end
+    end
+    table.sort(result)
+    return result, nil
+end
+
 -- actor is the actor an app instance runs as; owners such as Threads and the
 -- approval owner authorize by the workspace and definition it carries.
 function M.actor(workspace_id: string, instance_id: string, definition: Definition, generation: integer): (security.Actor?, string?)

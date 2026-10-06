@@ -13,6 +13,20 @@ function M.id(value: unknown): string?
     return value
 end
 
+-- A component that owns registry content: a Hub package org/module, or a
+-- workspace application, whose component is its namespace.
+function M.component(value: unknown): string?
+    local name = M.id(value)
+    if not name or #name > 256 then return nil end
+    local organization, module = name:match("^([%w_.-]+)/([%w_.-]+)$")
+    if organization and module then
+        if organization == "." or organization == ".." or module == "." or module == ".." then return nil end
+        return name
+    end
+    if name:match("^[a-z][a-z0-9_]*%.[a-z0-9_.]*[a-z0-9_]$") then return name end
+    return nil
+end
+
 function M.text(value: unknown, limit: integer?): string?
     if type(value) ~= "string" or #value > (limit or M.MAX_TEXT_BYTES) then return nil end
     return value

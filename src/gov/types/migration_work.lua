@@ -75,19 +75,6 @@ local function target(value: unknown): string?
     return name
 end
 
-local function package_name(value: unknown): string?
-    local name = identifier(value)
-    if not name then return nil end
-    local organization, module = name:match("^([%w_.-]+)/([%w_.-]+)$")
-    if not organization then return nil end
-    if not module then return nil end
-    if organization == "." then return nil end
-    if organization == ".." then return nil end
-    if module == "." then return nil end
-    if module == ".." then return nil end
-    return name
-end
-
 local function sha(value: unknown): string?
     if type(value) ~= "string" then return nil end
     if #value ~= 64 then return nil end
@@ -153,7 +140,7 @@ local function normalize(raw: unknown): (Payload?, string?)
         local extra_migration = fields(item, {"id", "target_db", "ordinal", "checksum", "package", "definition"})
         if extra_migration then return nil, extra_migration end
         local id, target_db = registry_id(item.id), target(item.target_db)
-        local ordinal, checksum, package = item.ordinal, sha(item.checksum), package_name(item.package)
+        local ordinal, checksum, package = item.ordinal, sha(item.checksum), bounds.component(item.package)
         local definition = object(item.definition)
         if not id then return nil, "migration work contains an invalid migration definition" end
         if not target_db then return nil, "migration work contains an invalid migration definition" end

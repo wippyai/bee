@@ -88,6 +88,8 @@ local function define_tests()
             exact = assert(artifact.create({migration}))
             candidate.entries[1].digest = measured(migration)
             candidate.migrations[1].target_db, candidate.migrations[1].checksum = "notes", measured(migration)
+            candidate.artifacts[1].component, candidate.entries[1].package = "app.notes", "app.notes"
+            context.packages = {["app.notes"] = true}
             context.databases = {notes = true}
             context.database_bindings = {notes = {database_id = database_id}}
             context.generated_databases = {[database_id] = "notes"}
@@ -99,6 +101,8 @@ local function define_tests()
             local work, problem = migration_work.capture(candidate, exact, context)
             if not work then error(tostring(problem)) end
             test.eq(work.migrations[1].target_db, "notes")
+            test.eq(work.migrations[1].package, "app.notes")
+            test.eq(work.databases[1].package, "app.notes")
             test.eq(work.databases[1].target_db, "notes")
             test.eq(work.databases[1].database_id, database_id)
             test.is_true(work.databases[1].planned)

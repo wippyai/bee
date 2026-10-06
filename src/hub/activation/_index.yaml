@@ -4,6 +4,8 @@ entries:
 - name: migrations
   kind: library.lua
   source: file://migrations.lua
+  imports:
+    bounds: bee.values:bounds
 - name: migration_work
   kind: library.lua
   source: file://migration_work.lua

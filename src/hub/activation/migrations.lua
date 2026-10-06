@@ -2,6 +2,7 @@
 -- ledger reader, and the public migration runner.  This adapter never discovers
 -- arbitrary entries or lets a request name a database: it runs only the
 -- snapshot-owned migration IDs admitted by the install plan.
+local bounds = require("bounds")
 local M = {}
 
 M.MAX_MIGRATIONS = 128
@@ -45,10 +46,6 @@ local function dense_strings(raw: unknown, label: string, maximum: integer): ({s
     return result, nil
 end
 
-local function component(value: string): boolean
-    local org, name = value:match("^([%w_%-%.]+)/([%w_%-%.]+)$")
-    return org ~= nil and name ~= nil and org ~= "." and org ~= ".." and name ~= "." and name ~= ".."
-end
 
 function M.decode(raw: unknown): (Request?, string?)
     if type(raw) ~= "table" then return nil, "migration request must be an object" end
@@ -63,7 +60,7 @@ function M.decode(raw: unknown): (Request?, string?)
     local components, component_error = dense_strings(value.components, "migration components", M.MAX_MIGRATIONS)
     if not components or #components == 0 then return nil, component_error or "migration components must not be empty" end
     for _, name in ipairs(components) do
-        if not component(name) then return nil, "migration components must be org/module names" end
+        if not bounds.component(name) then return nil, "migration components must be Hub packages or application namespaces" end
     end
     return {operation = operation, entry_ids = entry_ids, components = components}, nil
 end

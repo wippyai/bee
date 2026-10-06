@@ -154,6 +154,9 @@ function M.open(raw_request: unknown): Reply
     end
     local owner_id, workspace = identity()
     if not owner_id or not workspace then return fail("DENIED", "the authenticated caller has no workspace identity", operation_key) end
+    if not security.can("bee.harness.launch", definition) then
+        return fail("DENIED", "opening " .. definition .. " requires a launch grant for that definition", operation_key)
+    end
     if spec.workspace ~= nil then
         local target_workspace = bounds.id(spec.workspace)
         if not target_workspace or #target_workspace ~= 32 or target_workspace:find("[^0-9a-f]") then return fail("INVALID", "workspace must be a canonical workspace ID", operation_key) end

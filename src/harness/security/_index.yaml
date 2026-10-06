@@ -51,13 +51,15 @@ entries:
 - name: harness_setup_policy
   kind: security.policy.expr
   meta:
-    comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application also resolves the public sessions contracts, whose owner authorizes each operation
+    comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application also resolves the public sessions contracts and opens any definition the person picks, and their owner authorizes each operation
   policy:
     expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource in ["bee.harness.binding:setup", "bee.gov.binding:driver_bindings"])
       || (action == "contract.get" && (resource == "bee.threads.sessions:contract" || resource == "bee.threads.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await",
       "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.threads.sessions.binding:owner_binding" || resource == "bee.threads.sessions.binding:catalog_binding"))
       || (action == "funcs.call" && resource == "bee.node.binding:read") || (action == "bee.node.workspace.read" && resource == actor.meta.workspace_id)
+      || action == "bee.harness.launch"
     actions:
+    - bee.harness.launch
     - bee.node.workspace.read
     - bee.harness.setup
     - funcs.call

@@ -60,7 +60,7 @@ end
 -- ceiling; each generated body repeats its reviewed static policy exactly.
 -- Other catalog entries remain review vocabulary until their resource and
 -- owner boundaries arrive in later slices.
-local SESSIONS_EXPRESSION = '(action == "contract.open" && resource in ["bee.threads.sessions:contract", "bee.threads.sessions:catalog", "bee.threads.sessions.binding:owner_binding", "bee.threads.sessions.binding:catalog_binding"]) || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:open", "bee.threads.sessions.binding:run", "bee.threads.sessions.binding:send", "bee.threads.sessions.binding:get", "bee.threads.sessions.binding:list", "bee.threads.sessions.binding:history", "bee.threads.sessions.binding:await", "bee.threads.sessions.binding:join", "bee.threads.sessions.binding:cancel", "bee.threads.sessions.binding:close", "bee.threads.sessions.binding:catalog"])'
+local SESSIONS_EXPRESSION = '(action == "contract.get" && resource in ["bee.threads.sessions:contract", "bee.threads.sessions:catalog"]) || (action == "contract.open" && resource in ["bee.threads.sessions:contract", "bee.threads.sessions:catalog", "bee.threads.sessions.binding:owner_binding", "bee.threads.sessions.binding:catalog_binding"]) || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "history", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:open", "bee.threads.sessions.binding:run", "bee.threads.sessions.binding:send", "bee.threads.sessions.binding:get", "bee.threads.sessions.binding:list", "bee.threads.sessions.binding:history", "bee.threads.sessions.binding:await", "bee.threads.sessions.binding:join", "bee.threads.sessions.binding:cancel", "bee.threads.sessions.binding:close", "bee.threads.sessions.binding:catalog"])'
 
 local function plain(actions: {string}, resources: unknown, comment: string, id: string): Object
     return {id = id, kind = "security.policy", meta = {comment = comment},
@@ -149,7 +149,7 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
         local expression = SESSIONS_EXPRESSION .. ' || (action == "bee.harness.launch" && resource in [' .. table.concat(names, ", ") .. '])'
         return {id = id, kind = "security.policy.expr",
             meta = {comment = "Host-generated managed agent session grant"},
-            data = {policy = {actions = {"contract.open", "contract.call", "funcs.call", "bee.harness.launch"},
+            data = {policy = {actions = {"contract.get", "contract.open", "contract.call", "funcs.call", "bee.harness.launch"},
                 resources = "*", expression = expression, effect = "allow"}}}, nil, nil, nil
     end
     -- The runtime cannot pair a contract binding with its method or an HTTP

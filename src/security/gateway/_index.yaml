@@ -168,13 +168,15 @@ entries:
 - name: gateway_tool_session_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject supplies its authenticated context and scope to the bee.sessions owner contracts for the default session tools; owners authorize every operation against that subject again
+    comment: A bound MCP subject supplies its authenticated context and scope to the bee.sessions owner contracts for the default session tools and may open any definition admitted in its workspace; owners authorize every operation against that subject again
   policy:
     expression: (action == "contract.context" && resource == "context") || (action == "contract.security" && resource == "security") || (action == "contract.open" && resource in ["bee.threads.sessions:contract",
-      "bee.threads.sessions:catalog", "bee.threads.sessions.binding:owner_binding", "bee.threads.sessions.binding:catalog_binding"]) || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await",
+      "bee.threads.sessions:catalog", "bee.threads.sessions.binding:owner_binding", "bee.threads.sessions.binding:catalog_binding"]) || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "history", "await",
       "join", "cancel", "close"]) || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:open", "bee.threads.sessions.binding:run", "bee.threads.sessions.binding:send", "bee.threads.sessions.binding:get", "bee.threads.sessions.binding:list",
       "bee.threads.sessions.binding:history", "bee.threads.sessions.binding:await", "bee.threads.sessions.binding:join", "bee.threads.sessions.binding:cancel", "bee.threads.sessions.binding:close", "bee.threads.sessions.binding:catalog"])
+      || action == "bee.harness.launch"
     actions:
+    - bee.harness.launch
     - contract.context
     - contract.security
     - contract.open

@@ -193,6 +193,7 @@ local function define_tests()
             local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
             local actions: {[string]: boolean} = {}
             for _, action in ipairs(principals.strings(body.actions)) do actions[action] = true end
+            test.is_true(actions["contract.get"])
             test.is_true(actions["contract.open"])
             test.is_true(actions["contract.call"])
             test.is_true(actions["funcs.call"])
@@ -202,6 +203,7 @@ local function define_tests()
             test.is_true(expression:find("agent_call", 1, true) == nil)
             test.is_true(expression:find("resource matches", 1, true) == nil)
             test.is_true(expression:find("bee.threads.sessions.binding:run", 1, true) ~= nil)
+            test.is_true(expression:find('"history", "await"', 1, true) ~= nil)
         end)
         test.it("grants scoped HTTP only through the host gateway", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,

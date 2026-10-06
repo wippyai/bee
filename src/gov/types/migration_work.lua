@@ -65,6 +65,16 @@ local function registry_id(value: unknown): string?
     return id
 end
 
+-- A migration's logical database target: a host database's registry ID or
+-- the name of the application database the host provisions for the grant.
+local function target(value: unknown): string?
+    local id = registry_id(value)
+    if id then return id end
+    local name = identifier(value)
+    if not name or #name > 64 or not name:match("^[A-Za-z][A-Za-z0-9_]*$") then return nil end
+    return name
+end
+
 local function package_name(value: unknown): string?
     local name = identifier(value)
     if not name then return nil end
@@ -142,7 +152,7 @@ local function normalize(raw: unknown): (Payload?, string?)
         if not item then return nil, "migration work migrations[" .. tostring(index) .. "] must be an object" end
         local extra_migration = fields(item, {"id", "target_db", "ordinal", "checksum", "package", "definition"})
         if extra_migration then return nil, extra_migration end
-        local id, target_db = registry_id(item.id), registry_id(item.target_db)
+        local id, target_db = registry_id(item.id), target(item.target_db)
         local ordinal, checksum, package = item.ordinal, sha(item.checksum), package_name(item.package)
         local definition = object(item.definition)
         if not id then return nil, "migration work contains an invalid migration definition" end
@@ -199,7 +209,7 @@ local function normalize(raw: unknown): (Payload?, string?)
         end
         local extra_database = fields(item, database_fields)
         if extra_database then return nil, extra_database end
-        local target_db = registry_id(schema == M.LEGACY_SCHEMA and item.id or item.target_db)
+        local target_db = schema == M.LEGACY_SCHEMA and registry_id(item.id) or target(item.target_db)
         local database_id = registry_id(schema == M.LEGACY_SCHEMA and item.id or item.database_id)
         local prefix: string? = nil
         if schema ~= M.LEGACY_SCHEMA and item.table_prefix ~= nil then
@@ -296,6 +306,18 @@ local function full_artifact(raw: unknown): (artifact.Artifact?, string?)
     return copied, nil
 end
 
+-- The definition of the application database the capability proposal
+-- provisions under database_id, when it provisions one.
+local function provisioned(context: preflight.Context, database_id: string): Object?
+    local evidence = context.host_evidence.capability
+    if evidence.kind == "absent" then return nil end
+    for _, raw in ipairs(evidence.proposal.databases) do
+        local entry = object(raw)
+        if entry and entry.id == database_id then return entry end
+    end
+    return nil
+end
+
 function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
     context: preflight.Context): (Work?, string?)
     local exact_artifact, artifact_error = full_artifact(artifact_raw)
@@ -386,13 +408,34 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
             return nil, "migration database has no host binding: " .. target_db
         end
         local database_id = binding and binding.database_id or target_db
-        local summary = context.entries[database_id]
-        if not summary then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
         if not context.databases[target_db] then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
-        if not summary.kind:match("^db%.sql%.") then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
-        databases[#databases + 1] = {target_db = target_db, database_id = database_id,
-            table_prefix = binding and binding.table_prefix or nil, kind = summary.kind,
-            package = summary.package, digest = summary.digest, planned = false, definition = nil}
+        local summary = context.entries[database_id]
+        local planned: Object? = nil
+        -- An application database the capability grant provisions is this
+        -- overlay's own: installed by an earlier version, or planned here and
+        -- installed before its migrations run.
+        local generated = context.generated_databases and context.generated_databases[database_id] == target_db
+        if not summary and generated then
+            summary = context.installed_entries and context.installed_entries[database_id] or nil
+            if not summary then planned = provisioned(context, database_id) end
+        end
+        if planned then
+            local kind = database_kind(planned.kind)
+            local measured, measure_error = definition_digest(planned)
+            if not kind then return nil, "planned migration database is not an SQL resource: " .. target_db end
+            if not measured then return nil, measure_error end
+            if #candidate.artifacts ~= 1 then return nil, "planned migration database has no single owning package: " .. target_db end
+            databases[#databases + 1] = {target_db = target_db, database_id = database_id,
+                table_prefix = binding and binding.table_prefix or nil, kind = kind,
+                package = candidate.artifacts[1].component, digest = measured, planned = true, definition = planned}
+        else
+            if not summary then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
+            local kind = database_kind(summary.kind)
+            if not kind then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
+            databases[#databases + 1] = {target_db = target_db, database_id = database_id,
+                table_prefix = binding and binding.table_prefix or nil, kind = kind,
+                package = summary.package, digest = summary.digest, planned = false, definition = nil}
+        end
     end
     table.sort(databases, function(left: Database, right: Database): boolean return left.target_db < right.target_db end)
 
@@ -446,18 +489,18 @@ end
 -- Resolve one logical target from already validated immutable work. Legacy
 -- work used one `id` for both sides and never carried a prefix.
 function M.database(work: Work, target_raw: unknown): (Database?, string?)
-    local target = registry_id(target_raw)
-    if not target then
+    local wanted = target(target_raw)
+    if not wanted then
         return nil, "migration work database lookup is invalid"
     end
     local found: Database? = nil
     for _, item in ipairs(work.databases) do
-        if item.target_db == target then
+        if item.target_db == wanted then
             if found then return nil, "migration work database binding is ambiguous" end
             found = item
         end
     end
-    if not found then return nil, "migration work is missing database " .. target end
+    if not found then return nil, "migration work is missing database " .. wanted end
     return found, nil
 end
 
@@ -476,14 +519,14 @@ function M.forward_only(applied: unknown, migrations: unknown): (boolean, string
         if type(key) ~= "string" then return false, "applied migration keys must be strings" end
         local row = object(raw)
         if not row then return false, "applied migration evidence is malformed" end
-        local target, ordinal = registry_id(row.target_db), row.ordinal
-        if not target then return false, "applied migration evidence is malformed" end
+        local applied_target, ordinal = target(row.target_db), row.ordinal
+        if not applied_target then return false, "applied migration evidence is malformed" end
         if type(ordinal) ~= "number" then return false, "applied migration evidence is malformed" end
         if ordinal ~= math.floor(ordinal) then return false, "applied migration evidence is malformed" end
         if ordinal < 1 then return false, "applied migration evidence is malformed" end
         local id = registry_id(row.id)
         if not id then return false, "applied migration evidence is malformed" end
-        local target_key = target
+        local target_key = applied_target
         local seen = highest[target_key]
         if seen == nil or ordinal > seen then highest[target_key] = ordinal end
         occupied[target_key .. "\n" .. id] = true
@@ -492,24 +535,24 @@ function M.forward_only(applied: unknown, migrations: unknown): (boolean, string
     for index, raw in ipairs(migrations) do
         local item = object(raw)
         if not item then return false, "compensating migration " .. tostring(index) .. " is malformed" end
-        local id, target, ordinal = registry_id(item.id), registry_id(item.target_db), item.ordinal
+        local id, compensated, ordinal = registry_id(item.id), target(item.target_db), item.ordinal
         if not id then return false, "compensating migration identity is invalid" end
-        if not target then return false, "compensating migration identity is invalid" end
+        if not compensated then return false, "compensating migration identity is invalid" end
         if type(ordinal) ~= "number" then return false, "compensating migration identity is invalid" end
         if ordinal ~= math.floor(ordinal) then return false, "compensating migration identity is invalid" end
         if ordinal < 1 then return false, "compensating migration identity is invalid" end
-        if occupied[target .. "\n" .. id] then
+        if occupied[compensated .. "\n" .. id] then
             return false, "compensating migration re-runs an applied migration: " .. id
         end
-        local target_key = target
+        local target_key = compensated
         local floor = highest[target_key]
         if floor ~= nil and ordinal <= floor then
-            return false, "compensating migration does not move forward on " .. target .. ": " .. id
+            return false, "compensating migration does not move forward on " .. compensated .. ": " .. id
         end
-        if target < previous_target then return false, "compensating migrations are duplicated or out of order" end
-        if (target == previous_target and (ordinal < previous_ordinal
+        if compensated < previous_target then return false, "compensating migrations are duplicated or out of order" end
+        if (compensated == previous_target and (ordinal < previous_ordinal
                 or (ordinal == previous_ordinal and id <= previous_id))) then return false, "compensating migrations are duplicated or out of order" end
-        previous_target, previous_ordinal, previous_id = target, ordinal, id
+        previous_target, previous_ordinal, previous_id = compensated, ordinal, id
     end
     return true, nil
 end

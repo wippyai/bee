@@ -77,6 +77,47 @@ local function define_tests()
             test.is_true(assert(migration_work.verify(work, candidate, exact, context)))
         end)
 
+        test.it("captures an approved application database under its logical name, planned until installed", function()
+            local exact, candidate, context = fixture()
+            local database_id = "bee.gov.grants:database." .. string.rep("d", 64)
+            local generated: {[string]: unknown} = {id = database_id, kind = "db.sql.sqlite",
+                meta = {comment = "Host-provisioned application database"},
+                data = {file = "${env:bee.capability:app_database_root}/" .. string.rep("d", 64) .. ".db"}}
+            local migration: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
+                meta = {type = "migration", target_db = "notes", ordinal = 1}, data = {up = "create table notes"}}
+            exact = assert(artifact.create({migration}))
+            candidate.entries[1].digest = measured(migration)
+            candidate.migrations[1].target_db, candidate.migrations[1].checksum = "notes", measured(migration)
+            context.databases = {notes = true}
+            context.database_bindings = {notes = {database_id = database_id}}
+            context.generated_databases = {[database_id] = "notes"}
+            local proposal = {capabilities = {}, policies = {}, bindings = {}, volumes = {}, databases = {generated},
+                executors = {}, thread_access = "none", digest = SHA}
+            local evidence: unknown = {application_admission = {kind = "absent"},
+                capability = {kind = "new", proposal = proposal, review = {}}}
+            context.host_evidence = evidence :: preflight.HostEvidence
+            local work, problem = migration_work.capture(candidate, exact, context)
+            if not work then error(tostring(problem)) end
+            test.eq(work.migrations[1].target_db, "notes")
+            test.eq(work.databases[1].target_db, "notes")
+            test.eq(work.databases[1].database_id, database_id)
+            test.is_true(work.databases[1].planned)
+            test.eq((assert(work.databases[1].definition)).id, database_id)
+            test.eq(work.databases[1].kind, "db.sql.sqlite")
+            local decoded = assert(migration_work.decode(work.bytes, work.digest))
+            test.eq(decoded.databases[1].target_db, "notes")
+            test.eq((assert(migration_work.database(decoded, "notes"))).database_id, database_id)
+            test.is_true(assert(migration_work.verify(work, candidate, exact, context)))
+            context.installed_entries = {[database_id] = candidate_entry(database_id, "db.sql.sqlite", "app.notes", measured(generated))}
+            local installed = assert(migration_work.capture(candidate, exact, context))
+            test.is_false(installed.databases[1].planned)
+            test.is_nil(installed.databases[1].definition)
+            test.eq(installed.databases[1].package, "app.notes")
+            context.installed_entries = nil
+            context.host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
+            local _, unprovisioned = migration_work.capture(candidate, exact, context)
+            test.eq(unprovisioned, "migration database is not an admitted host SQL resource: notes")
+        end)
         test.it("preserves the registry root owner marker for a host database", function()
             local exact, candidate, context = fixture()
             context.entries["host:db"].package = ""

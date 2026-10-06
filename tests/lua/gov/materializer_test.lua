@@ -185,7 +185,7 @@ local function define_tests()
                 volumes = {{id = volume_id, kind = "fs.directory", data = {directory = "docs",
                     base = "project", auto_init = false, readonly = true, mode = "0500"}}},
                 databases = {{id = database_id, kind = "db.sql.sqlite",
-                    data = {file = "${env:bee.env:app_database_root}/" .. string.rep("d", 64) .. ".db"}}},
+                    data = {file = "${env:bee.capability:app_database_root}/" .. string.rep("d", 64) .. ".db"}}},
                 record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
                     kind = "registry.entry", data = {digest = string.rep("f", 64)}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,

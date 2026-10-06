@@ -16,7 +16,7 @@ local PRIVATE_ROOT = ".wippy"
 local PRIVATE_PREFIX = ".wippy/"
 -- Application databases live outside every approved readable tree, under the
 -- host-selected application database root binding.
-M.DATABASE_ROOT = "${env:bee.env:app_database_root}"
+M.DATABASE_ROOT = "${env:bee.capability:app_database_root}"
 
 local function segments(value: string): ({string}?, string?)
     if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c") then

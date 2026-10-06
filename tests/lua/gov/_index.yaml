@@ -933,3 +933,20 @@ entries:
     test: wippy.test:test
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
+- name: database_grant_test
+  kind: function.lua
+  source: file://database_grant_test.lua
+  method: run
+  modules:
+  - registry
+  meta:
+    type: test
+    suite: bee
+  security:
+    policies:
+    - bee.tests.gov:gateway_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model

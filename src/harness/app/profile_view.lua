@@ -56,6 +56,7 @@ local TOOL_NAMES = {
     session_get = "Inspect sessions", session_list = "Find peer sessions", session_cancel = "Stop work", session_close = "Close sessions",
     capabilities = "Read available permissions", request_capability = "Request permissions", capability_status = "Read permission decisions",
     process_run = "Run approved commands", http_request = "Send approved web requests",
+    app_tools = "Use workspace application tools",
     guide = "Read Bee help", preflight = "Check application changes", delivery = "Deliver application changes",
     install_request = "Request app installation", uninstall_request = "Request app removal", install_status = "Read installation status",
 }

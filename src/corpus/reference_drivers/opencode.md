@@ -539,6 +539,7 @@ entries:
     - components
     - delivery
     - tests
+    - app_tools
     gateway_hooks: []
     prepare_options: {}
     placement_profiles:

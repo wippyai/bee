@@ -156,6 +156,7 @@ entries:
     - components
     - delivery
     - tests
+    - app_tools
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

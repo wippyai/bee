@@ -169,6 +169,20 @@ local function define_tests()
             test.eq(#narrowed.gateway_tools, 1)
             test.eq(narrowed.gateway_tools[1], "thread_read")
         end)
+        test.it("offers application tools only where the person chose them or approves them as access", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = assert(bounds.object(raw.data))
+            data.gateway_tools = {"thread_read", "app_tools"}
+            local stock = assert(policy.decode("test:policy", raw))
+            test.eq(table.concat(stock.gateway_tools, ","), "thread_read")
+            local chosen = assert(policy.decode("test:policy", raw, nil,
+                {options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = ""}))
+            test.eq(table.concat(chosen.gateway_tools, ","), "app_tools,thread_read")
+            data.gateway_surface = {tools = {}, traits = {}, base_tools = {"thread_read"}, active_traits = {},
+                fixed_context = {}, dynamic_keys = {}, access = {policy = "agent-access", traits = {"bee.app:tools"}}}
+            local requestable = assert(policy.decode("test:policy", raw))
+            test.eq(table.concat(requestable.gateway_tools, ","), "app_tools,thread_read")
+        end)
         test.it("rejects legacy harness turn ceilings in host and profile preferences", function()
             local raw = entry({claude = "/bin/claude"})
             local data = assert(bounds.object(raw.data))

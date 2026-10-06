@@ -81,6 +81,11 @@ entries:
     - definition_id: bee.approvals.inbox.app:app
     confirm: explicit
     max_ttl_ms: 86400000
+  - name: agent-access
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    max_ttl_ms: 86400000
   - name: docker-environment
     approvers:
     - definition_id: bee.approvals.inbox.app:app

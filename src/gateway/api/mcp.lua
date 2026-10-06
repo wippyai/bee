@@ -781,11 +781,20 @@ end
 function M.docs_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local decoded, decode_error = docs_protocol.decode(arguments)
-    if not decoded then return nil, decode_error end
-    -- The corpus decoder owns the schema; this copies its bounded fields into
+    -- The docs decoders own the schema; this copies their bounded fields into
     -- the plain object the endpoint passes to the facade.
     local request: Object = {}
+    local web, web_error = docs_protocol.web(arguments)
+    if web_error then return nil, web_error end
+    if web then
+        for _, name in ipairs({"operation", "query", "path", "offset", "limit"}) do
+            local value = web[name]
+            if value ~= nil then request[name] = value end
+        end
+        return request, nil
+    end
+    local decoded, decode_error = docs_protocol.decode(arguments)
+    if not decoded then return nil, decode_error end
     for _, name in ipairs({"operation", "topic", "query", "id", "section", "offset", "limit"}) do
         local value = decoded[name]
         if value ~= nil then request[name] = value end

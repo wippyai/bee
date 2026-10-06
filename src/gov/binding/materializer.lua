@@ -163,11 +163,13 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
         local record = generated and bounds.object(generated.record) or nil
         local volumes = generated and generated.volumes
         local databases = generated and generated.databases
+        local executors = generated and generated.executors
         if not generated or type(policies) ~= "table" or type(bindings) ~= "table"
             or not record or not capability_grants.reserved(record.id)
             or record.kind ~= "registry.entry" or #policies ~= #bindings or #policies > 8
             or (volumes ~= nil and type(volumes) ~= "table")
-            or (databases ~= nil and type(databases) ~= "table") then
+            or (databases ~= nil and type(databases) ~= "table")
+            or (executors ~= nil and type(executors) ~= "table") then
             return nil, nil, nil, "generated capability entries are invalid"
         end
         local volume_ids: {[string]: boolean} = {}
@@ -210,18 +212,63 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             database_ids[id] = true
             complete[#complete + 1] = database
         end
+        local executor_ids: {[string]: boolean} = {}
+        for _, raw_executor in ipairs((executors or {})) do
+            local executor = bounds.object(raw_executor)
+            local id = executor and bounds.id(executor.id) or nil
+            local config = executor and bounds.object(executor.data) or nil
+            local directory = config and config.default_work_dir or nil
+            local environment = config and bounds.object(config.default_env) or nil
+            if not executor or not id or not id:match("^bee%.gov%.grants:executor%.[0-9a-f]+$")
+                or executor.kind ~= "exec.native" or not config or type(directory) ~= "string"
+                or #directory == 0 or bounds.fields(config, {"default_work_dir", "default_env"})
+                or not environment or bounds.fields(environment, {"PATH"})
+                or environment.PATH ~= capability_files.EXEC_PATH then
+                return nil, nil, nil, "generated capability executor is invalid"
+            end
+            for segment in directory:gmatch("[^/]+") do
+                if segment == ".wippy" or segment == ".." then
+                    return nil, nil, nil, "generated capability executor runs in private state"
+                end
+            end
+            if executor_ids[id] then return nil, nil, nil, "generated capability executor is duplicated" end
+            executor_ids[id] = true
+            complete[#complete + 1] = executor
+        end
+        -- An expression grant is installable only for a requirement whose
+        -- capability the host enforces through one.
+        local capability_of: {[string]: unknown} = {}
+        for _, raw_binding in ipairs(bindings) do
+            local binding = bounds.object(raw_binding)
+            local policy_id = binding and bounds.id(binding.policy_id) or nil
+            if binding and policy_id then
+                for _, entry in ipairs(complete) do
+                    local meta = entry.id == binding.requirement_id and bounds.object(entry.meta) or nil
+                    if meta then capability_of[policy_id] = meta.capability end
+                end
+            end
+        end
         local policy_ids: {[string]: boolean} = {}
         for _, raw_policy in ipairs(policies) do
             local policy = bounds.object(raw_policy)
             local id = policy and bounds.id(policy.id) or nil
             if not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
                 and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
-                or policy.kind ~= "security.policy" or policy_ids[id] then
+                or (policy.kind ~= "security.policy" and not (policy.kind == "security.policy.expr"
+                    and capability_grants.expression(capability_of[id]))) or policy_ids[id] then
                 return nil, nil, nil, "generated capability policy is invalid"
             end
             policy_ids[id] = true
             local data = bounds.object(policy.data)
             local inner = data and bounds.object(data.policy) or nil
+            local expression = inner and inner.expression or nil
+            if type(expression) == "string" then
+                for executor_id in expression:gmatch("bee%.gov%.grants:executor%.[0-9a-f]+") do
+                    if not executor_ids[executor_id] then
+                        return nil, nil, nil, "generated capability policy references an absent executor"
+                    end
+                end
+            end
             local resources = inner and inner.resources or nil
             if type(resources) == "table" then
                 for _, resource in ipairs(resources) do

@@ -244,6 +244,57 @@ local function define_tests()
                 "bee.gov:overlay", portable, nil, direct))
         end)
 
+        test.it("installs an approved command's executor and expression grant, and a managed agent expression grant", function()
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            local exec_id = "bee.gov.grants:policy." .. string.rep("a", 64)
+            local agents_id = "bee.gov.grants:policy." .. string.rep("b", 64)
+            local executor_id = "bee.gov.grants:executor." .. string.rep("c", 64)
+            local portable = {{id = "app.notes:app", kind = "process.lua",
+                meta = {type = "bee.app"}, data = {source = "return true"}},
+                {id = "app.notes:run", kind = "ns.requirement",
+                    meta = {capability = "process.exec", value_kind = "security.policy"},
+                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}},
+                {id = "app.notes:agents", kind = "ns.requirement",
+                    meta = {capability = "agents.launch", value_kind = "security.policy"},
+                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
+            local executor = {id = executor_id, kind = "exec.native",
+                data = {default_work_dir = "alpha/src", default_env = {PATH = "${env:bee.capability:exec_path}"}}}
+            local function exec_policy(target: string): Entry
+                return {id = exec_id, kind = "security.policy.expr",
+                    data = {policy = {actions = {"exec.get", "exec.run"}, resources = "*", effect = "allow",
+                        expression = '(action == "exec.get" && resource == "' .. target .. '")'}}}
+            end
+            local agents_policy = {id = agents_id, kind = "security.policy.expr",
+                data = {policy = {actions = {"bee.harness.launch"}, resources = "*", effect = "allow",
+                    expression = 'action == "bee.harness.launch" && resource in ["acme:research"]'}}}
+            local record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
+                kind = "registry.entry", data = {digest = string.rep("f", 64)}}
+            local bindings = {{requirement_id = "app.notes:run", policy_id = exec_id},
+                {requirement_id = "app.notes:agents", policy_id = agents_id}}
+            local generated = {policies = {exec_policy(executor_id), agents_policy}, bindings = bindings,
+                executors = {executor}, record = record}
+            local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, generated))
+            test.eq(applied.overlay_entries, 7)
+            test.not_nil(state.entries[executor_id])
+            test.not_nil(state.entries[exec_id])
+            test.not_nil(state.entries[agents_id])
+            local dangling = {policies = {exec_policy("bee.gov.grants:executor." .. string.rep("9", 64)), agents_policy},
+                bindings = bindings, executors = {executor}, record = record}
+            test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, dangling))
+            local widened = {id = executor_id, kind = "exec.native",
+                data = {default_work_dir = "alpha/src", default_env = {PATH = "/usr/bin", HOME = "/root"}}}
+            test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, {policies = generated.policies, bindings = bindings,
+                    executors = {widened}, record = record}))
+            local private = {id = executor_id, kind = "exec.native",
+                data = {default_work_dir = "alpha/.wippy", default_env = {PATH = "${env:bee.capability:exec_path}"}}}
+            test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, {policies = generated.policies, bindings = bindings,
+                    executors = {private}, record = record}))
+        end)
+
         test.it("measures and reconciles an overlay entry near the 256 KiB artifact limit", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local desired = {{id = "app:large", kind = "function.lua",

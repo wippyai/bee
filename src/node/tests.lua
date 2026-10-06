@@ -5,14 +5,12 @@ local bounds = require("bounds")
 
 local M = {}
 
--- The runner service holds NAME; a request names the topic its reply returns on.
+-- The runner service holds NAME and takes WAKE messages as hints that a run
+-- waits in the node database; a message carries nothing the runner trusts.
 M.NAME = "bee.node.tests"
-M.REQUEST = "bee.node.tests.request"
+M.WAKE = "bee.node.tests.wake"
 -- UPDATE prefixes the topic one run receives its tests' case events on.
 M.UPDATE = "bee.node.tests.update."
--- ANSWER bounds how long the service takes to answer a request; a run itself
--- is bounded by each test's own timeout.
-M.ANSWER = "10s"
 M.DEFAULT_TIMEOUT = "30s"
 M.MAX_TESTS = 64
 M.MAX_CASES = 512
@@ -31,6 +29,14 @@ end
 
 function M.succeed(value: unknown): Reply
     return {ok = true, value = value, error = nil}
+end
+
+-- overlay_of names the overlay an application argument refers to: an
+-- application definition id app.<overlay>:<name> or the overlay id itself.
+function M.overlay_of(application: string): string
+    local namespace = application:match("^([^:]+):")
+    if namespace then return namespace:match("^app%.([^.]+)$") or "" end
+    return application
 end
 
 -- truncate bounds one error text and reports whether it was cut.

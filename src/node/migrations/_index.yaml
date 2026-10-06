@@ -51,3 +51,13 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+- name: test_runs
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-06T00:00:00Z'
+  source: file://test_runs.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

@@ -178,15 +178,15 @@ entries:
 - name: tests_runner
   kind: security.policy
   meta:
-    comment: The test runner reads the registry to find an application and its tests and runs each test as that application, with the actor and scope the node gives the application's own instances
+    comment: The test runner reads the registry to find an application and runs each test as that application, with the actor and scope the node gives the application's own instances
   policy:
-    actions: [registry.get, registry.version, registry.find, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, process.send, security.scope.create]
+    actions: [registry.get, registry.version, registry.find, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
     resources: '*'
     effect: allow
 - name: tests_store
   kind: security.policy
   meta:
-    comment: The test runner reads the node database to find the applications admitted in a workspace
+    comment: The test runner reads its runs from the node database and writes their results
   policy:
     actions: [db.get]
     resources: [bee:db]
@@ -198,4 +198,40 @@ entries:
   policy:
     actions: [process.registry.register]
     resources: [bee.node.tests]
+    effect: allow
+- name: tests_facade
+  kind: security.policy.expr
+  meta:
+    comment: The test facade enters the private test backend scope and calls the backend; it holds no database or runner grant of its own
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.node.security:tests_backend") || (action == "funcs.call" && resource == "bee.node.binding:tests_backend")
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.node.security:tests_backend, bee.node.binding:tests_backend]
+    effect: allow
+- name: tests_backend_store
+  kind: security.policy
+  groups: [tests_backend]
+  meta:
+    comment: The test backend writes and reads runs in the node database
+  policy:
+    actions: [db.get]
+    resources: [bee:db]
+    effect: allow
+- name: tests_backend_registry
+  kind: security.policy
+  groups: [tests_backend]
+  meta:
+    comment: The test backend finds an application, its admission and its tests in the registry
+  policy:
+    actions: [registry.get, registry.version, registry.find, security.policy_group.get, security.policy.get]
+    resources: '*'
+    effect: allow
+- name: tests_backend_wake
+  kind: security.policy
+  groups: [tests_backend]
+  meta:
+    comment: The test backend wakes the runner after it records a run
+  policy:
+    actions: [process.send]
+    resources: '*'
     effect: allow

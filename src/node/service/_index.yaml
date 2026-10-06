@@ -35,11 +35,11 @@ entries:
   kind: process.lua
   source: file://tests.lua
   method: main
-  modules: [process, channel, registry, funcs, time, uuid, logger]
+  modules: [process, channel, funcs, time, logger]
   imports:
     application: bee.node:application
     tests: bee.node:tests
-    discovery: wippy.test:discovery
+    test_runs: bee.node:test_runs
 - name: tests_service
   meta:
     title: Node · tests

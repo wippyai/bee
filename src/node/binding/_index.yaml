@@ -51,10 +51,24 @@ entries:
 - name: tests_call
   kind: function.lua
   meta:
-    comment: Run and read the tests an application the caller delivered carries; the node's test runner admits only applications admitted in the caller's workspace from an overlay the caller owns
+    comment: Run and read the tests an application the caller delivered carries; it verifies the caller owns the overlay the application is delivered from, then enters the private test backend scope
   source: file://tests_call.lua
   method: handle
-  modules: [funcs, security, process, channel, time, uuid]
+  modules: [funcs, security]
   imports:
     bounds: bee.values:bounds
     tests: bee.node:tests
+  security:
+    policies: [bee.node.security:tests_facade]
+- name: tests_backend
+  kind: function.lua
+  meta:
+    comment: Plans a run of an application's tests, writes it to the node database and wakes the runner; reads a run's results. Runs only in the test backend scope
+  source: file://tests_backend.lua
+  method: handle
+  modules: [process, registry, uuid]
+  imports:
+    application: bee.node:application
+    tests: bee.node:tests
+    test_runs: bee.node:test_runs
+    discovery: wippy.test:discovery

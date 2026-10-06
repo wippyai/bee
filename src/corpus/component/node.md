@@ -16,8 +16,10 @@ running node.
 | `bee.node:client` | The display side of the owner protocol |
 | `bee.node:principal` | Reads the node identity |
 | `bee.node:application` | An app's definition, its admission, the actor an instance runs as and the scope that actor runs in; the owner starts apps with it and the test runner runs their tests with it |
-| `bee.node.service:tests` | The test runner, registered as `bee.node.tests`; runs an application's tests and keeps each run's results in memory |
+| `bee.node.service:tests` | The test runner, registered as `bee.node.tests`; runs the application tests recorded in `bee_node_test_runs` and writes their results there |
 | `bee.node.binding:tests_call` | The facade the `tests` MCP tool calls |
+| `bee.node.binding:tests_backend` | Plans and records runs and reads results, in the private test backend scope |
+| `bee.node:test_runs` | The run table's access |
 | `bee.node:tests` | The tests request, its bounds and its reply envelope |
 | `bee.node:headless` | The `node` command |
 
@@ -74,16 +76,25 @@ through the overlay facade. The runner admits only an application installed in
 that workspace under the namespace `app.<overlay>` of one of those overlays;
 anything else is `DENIED`.
 
+The facade verifies the caller owns the overlay, then enters the private scope
+`bee.node.security:tests_backend` (the only holder of database access here; no
+application scope has it) and calls `bee.node.binding:tests_backend`. The backend
+plans the tests, writes the run (workspace, actor, application, plan) as a row of
+`bee_node_test_runs` and wakes the runner with the run id. A message to the runner
+is only a hint that a row waits: the runner reads the request from the row, trusts
+no message field, and a forged message starts nothing.
+
 A run starts at once and returns `run_id`; the runner executes the entries one
 after another, each as the application: the actor and the exact scope
 `bee.node:application` gives the app's own instances (the application boundary
 plus its admission's policies), never the runner's authority. Each test is
 awaited as the framework's runner awaits it: its case events arrive on a topic of
-the run, and its own `meta.timeout` bounds it. `status` returns progress and, when
-the run completes, per entry the cases (`pass`, `fail` or `skip`, `error`,
-`duration_ms`) and totals. A run keeps at most 64 tests, 512 cases and 2048 bytes
-per error text and reports what it dropped; 16 runs are retained in memory, at
-most 4 run at once, and a run is readable only by the actor that started it.
+the run, and its own `meta.timeout` bounds it. The runner writes progress and the
+final results to the row; `status` reads them from the database, so it needs no
+runner round trip and survives a runner restart (a run the node stopped under is
+reported `interrupted`). A run keeps at most 64 tests, 512 cases and 2048 bytes
+per error text and reports what it dropped; 16 runs are retained, at most 4 run at
+once, and a run is readable only by the actor that started it.
 
 Migrations in `bee.node.migrations` create `bee_node_workspaces`,
 `bee_node_settings`, `bee_node_desktops`, identities and instance workspace

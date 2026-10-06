@@ -179,7 +179,7 @@ local TOOLS: {Tool} = {
         schema = {type = "object", additionalProperties = false, required = {"approval_id"}, properties = {
             approval_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
-    {name = "tests", description = "Run the Lua tests your application's pack carries, inside the node, as the application: each test runs with the actor and the exact scope the person approved for the application, nothing more. It works on an application delivered from an overlay you own and only after the person approved the delivery. list names an application's tests; run starts a run and returns its run_id at once (filter keeps the tests whose id contains it); status with that run_id returns progress and, when complete, one result per test entry with its cases (pass, fail or skip, error, duration_ms) and totals. A test is a function.lua entry of meta.type test; the overlay guide's tests section shows one. A run keeps at most 64 tests, 512 cases and 2048 bytes per error text and reports any truncation; runs live in memory, so an unknown run_id is NOT_FOUND.",
+    {name = "tests", description = "Run the Lua tests your application's pack carries, inside the node, as the application: each test runs with the actor and the exact scope the person approved for the application, nothing more. It works on an application delivered from an overlay you own and only after the person approved the delivery. list names an application's tests; run starts a run and returns its run_id at once (filter keeps the tests whose id contains it); status with that run_id returns progress and, when complete, one result per test entry with its cases (pass, fail or skip, error, duration_ms) and totals. A test is a function.lua entry of meta.type test; the overlay guide's tests section shows one. A run keeps at most 64 tests, 512 cases and 2048 bytes per error text and reports any truncation; 16 runs are kept, a run is readable only by the actor that started it, and an unknown run_id is NOT_FOUND.",
         operation = "bee.node.binding:tests_call",
         policies = {TOOL_POLICY_REFS.tests}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
@@ -272,7 +272,7 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
     publish = output_schema({type = "object"}),
     application_open = output_schema({type = "object"}),
     tests = output_schema({type = "object", additionalProperties = false,
-        properties = {run_id = STRING_SCHEMA, application = STRING_SCHEMA, state = {type = "string", enum = {"running", "complete"}},
+        properties = {run_id = STRING_SCHEMA, application = STRING_SCHEMA, state = {type = "string", enum = {"running", "complete", "interrupted"}}, error = STRING_SCHEMA,
             total = INTEGER_SCHEMA, progress = {type = "object", additionalProperties = false,
                 properties = {done = INTEGER_SCHEMA, total = INTEGER_SCHEMA}},
             tests = array_schema({type = "object", additionalProperties = false,

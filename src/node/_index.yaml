@@ -56,6 +56,12 @@ entries:
   source: file://tests.lua
   imports:
     bounds: bee.values:bounds
+- name: test_runs
+  kind: library.lua
+  source: file://test_runs.lua
+  modules: [sql, json, time]
+  imports:
+    tests: bee.node:tests
 - name: machine
   kind: fs.directory
   directory: /

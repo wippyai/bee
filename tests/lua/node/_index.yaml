@@ -162,18 +162,20 @@ entries:
   kind: security.policy
   meta: {type: test_support, comment: The runner test makes agent actors and calls the overlay and test facades as them}
   policy:
-    actions: [funcs.call, funcs.security, bee.gov.overlay.read, bee.gov.overlay.write, security.actor.create, security.scope.create, security.policy.get]
+    actions: [funcs.call, funcs.security, bee.gov.overlay.read, bee.gov.overlay.write, security.actor.create, security.scope.create, security.policy.get, security.policy_group.get, db.get, process.send, registry.get, registry.find, registry.version]
     resources: '*'
     effect: allow
 - name: tests_runner_test
   kind: function.lua
   source: file://tests_runner_test.lua
   method: run
-  modules: [funcs, security, time]
+  modules: [funcs, security, time, process, sql, registry, system]
   meta: {type: test, suite: bee, timeout: 120s}
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
+    tests: bee.node:tests
+    application: bee.node:application
   security:
     policies: [bee.tests.node:tests_runner_test_policy]
 - name: application_test

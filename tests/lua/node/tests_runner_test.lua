@@ -6,6 +6,10 @@ local funcs = require("funcs")
 local security = require("security")
 local time = require("time")
 local bounds = require("bounds")
+local process = require("process")
+local sql = require("sql")
+local tests = require("tests")
+local application = require("application")
 
 local WORKSPACE = string.rep("c", 32)
 local OVERLAY = "runner_fixture"
@@ -64,6 +68,14 @@ local function case_of(entry: Object, name: string): Object
         if case.name == name then return case end
     end
     error("no case " .. name .. " in " .. tostring(entry.id) .. ": " .. tostring(entry.error))
+end
+
+-- runs counts the rows of the node's test run table.
+local function runs(): integer
+    local db = assert(sql.get("bee:db"))
+    local rows = assert(db:query("SELECT COUNT(*) AS count FROM bee_node_test_runs"))
+    db:release()
+    return math.floor(tonumber(rows[1].count) or 0)
 end
 
 local function define_tests()
@@ -162,6 +174,50 @@ local function define_tests()
             test.eq(code_of(tests_call(other, {operation = "status", run_id = run_id})), "NOT_FOUND")
             test.eq(code_of(tests_call(author, {operation = "status", run_id = "no-such-run"})), "NOT_FOUND")
             completed(author, run_id)
+        end)
+
+        test.it("starts nothing from a forged message to the runner", function()
+            local before = runs()
+            local runner = assert(process.registry.lookup(tests.NAME))
+            for _, topic in ipairs({tests.WAKE, "bee.node.tests.request"}) do
+                process.send(runner, topic, {run_id = "forged", overlay = OVERLAY, application = APPLICATION, workspace_id = WORKSPACE,
+                    actor_id = "runner-other", filter = "authority", reply_topic = "bee.forged"})
+            end
+            -- The runner reads its wakes in order, so once a genuine run it was woken for completes,
+            -- the forged ones sent before it have been handled.
+            local started = value_of(tests_call(author, {operation = "run", application = OVERLAY, filter = "authority"}))
+            completed(author, tostring(started.run_id))
+            test.eq(runs(), before + 1)
+        end)
+
+        test.it("keeps the application scope away from the run table and the backend", function()
+            local definition = assert(application.definition(APPLICATION))
+            local actor = assert(application.actor(WORKSPACE, "scope-probe", definition, 1))
+            local scope = assert(application.scope(definition, WORKSPACE))
+            test.neq(scope:evaluate(actor, "db.get", "bee:db"), "allow")
+            test.neq(scope:evaluate(actor, "funcs.call", "bee.node.binding:tests_backend"), "allow")
+            test.neq(scope:evaluate(actor, "funcs.call", "bee.node.binding:tests_call"), "allow")
+        end)
+
+        test.it("answers status from the stored results", function()
+            local started = value_of(tests_call(author, {operation = "run", application = OVERLAY, filter = "authority"}))
+            local run_id = tostring(started.run_id)
+            completed(author, run_id)
+            local db = assert(sql.get("bee:db"))
+            local rows = assert(db:query("SELECT state, actor_id, workspace_id FROM bee_node_test_runs WHERE run_id = ?", {run_id}))
+            db:release()
+            test.eq(rows[1].state, "complete")
+            test.eq(rows[1].actor_id, "runner-author")
+            test.eq(rows[1].workspace_id, WORKSPACE)
+            test.eq(value_of(tests_call(author, {operation = "status", run_id = run_id})).state, "complete")
+        end)
+
+        test.it("keeps at most the retained runs", function()
+            for _ = 1, tests.MAX_RUNS + 2 do
+                local started = value_of(tests_call(author, {operation = "run", application = OVERLAY, filter = "authority"}))
+                completed(author, tostring(started.run_id))
+            end
+            test.is_true(runs() <= tests.MAX_RUNS)
         end)
 
         test.it("refuses malformed requests", function()

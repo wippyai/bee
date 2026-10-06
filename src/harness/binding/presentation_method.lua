@@ -20,4 +20,7 @@ end
 function M.type(value: unknown): {[string]: unknown}
     return execute("bee.harness.service:type", value)
 end
+function M.activity(value: unknown): {[string]: unknown}
+    return execute("bee.harness.service:activity", value)
+end
 return M

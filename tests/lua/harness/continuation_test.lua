@@ -308,6 +308,31 @@ local function define_tests()
             rows = {observation(1028, "provider-session", "old-binding", false, "previous")}
             test.is_nil(continuation.resolve_window(call, request))
         end)
+        test.it("starts afresh after a previous attempt the thread never recorded, with nothing to recover", function()
+            local calls: {string} = {}
+            local function never_recorded(target: string, input: unknown): (unknown, string?)
+                calls[#calls + 1] = target
+                if target == "bee.threads.binding:checkpoint" then return {ok = false, error = {code = "NOT_FOUND", message = "attempt does not exist"}}, nil end
+                return nil, "unexpected target " .. target
+            end
+            local request: continuation.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice",
+                previous_attempt_id = "admitted-never-started", session_ref = "session", binding_ref = "driver:binding", binding_digest = "binding-digest",
+                profile_id = "window", profile_digest = "profile-digest", placement_binding_ref = PLACEMENT.binding_id,
+                placement_binding_digest = PLACEMENT.binding_digest, placement_methods = PLACEMENT_METHODS}
+            local resumed, resume_error = continuation.resolve_window(never_recorded, request)
+            test.is_nil(resumed)
+            test.eq(resume_error, continuation.NEVER_RECORDED)
+            local recovered, recover_error = interrupted.recover(request, never_recorded)
+            test.is_true(recovered, tostring(recover_error))
+            for _, target in ipairs(calls) do test.eq(target, "bee.threads.binding:checkpoint") end
+            local function denied(target: string, input: unknown): (unknown, string?)
+                return {ok = false, error = {code = "DENIED", message = "caller is not a member of the thread"}}, nil
+            end
+            local refused, refused_error = continuation.resolve_window(denied, request)
+            test.is_nil(refused)
+            test.neq(refused_error, continuation.NEVER_RECORDED)
+            test.is_false((interrupted.recover(request, denied)))
+        end)
         test.it("resumes interrupted hooks with historical pins after implementation review", function()
             local point = checkpoint.new({binding_ref = "driver:binding", binding_digest = "historical-binding",
                 profile_id = "window", profile_digest = "historical-profile", plan_digest = "historical-plan",

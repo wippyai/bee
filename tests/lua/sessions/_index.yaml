@@ -249,6 +249,14 @@ entries:
   modules: [process]
   security:
     policies: [bee.tests.sessions:resume_probe_policy]
+- name: activity_probe
+  kind: function.lua
+  source: file://resume_probe.lua
+  method: activity
+  meta: {type: test_support}
+  modules: [process]
+  security:
+    policies: [bee.tests.sessions:resume_probe_policy]
 - name: interactive_lifecycle_policy
   kind: security.policy
   meta: {type: test_support}

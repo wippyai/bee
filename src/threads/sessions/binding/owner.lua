@@ -118,6 +118,7 @@ local finish_closing: (string, string) -> string?
 local deliver: (string, string) -> string?
 local TYPE = "bee.harness.binding:present_type"
 local RESUME = "bee.harness.binding:present_restore"
+local ACTIVITY = "bee.harness.binding:present_activity"
 
 local function describe(session: string): (Object?, string?)
     local value, err = journal.invoke("session_describe", {session = session})
@@ -461,7 +462,12 @@ deliver = function(session: string, key_seed: string): string?
     local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "deliver:" .. key_seed})
     local next_turn = object(reserved)
     if reserve_error or not next_turn then return reserve_error or "the next message could not be reserved" end
-    if not next_turn.turn then return nil end
+    if not next_turn.turn then
+        -- Nothing waits: the window may stop an agent nobody uses.
+        local _, idle_error = funcs.call(ACTIVITY, {session = session, state = "idle"})
+        if idle_error then return tostring(idle_error) end
+        return nil
+    end
     local turn, claim = tostring(next_turn.turn), tostring(next_turn.claim)
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
     local input = object(pulled)
@@ -572,6 +578,9 @@ function M.hook_boundary(raw_request: unknown): Reply
     local accepted, accept_error = journal.invoke("turn_accept", {turn = turn_ref, claim = claim, input_digest = input.input_digest,
         checkpoint = {attempt_id = route.native_attempt_id, hook_event = event_key}, operation_key = "hook-accept:" .. boundary_key})
     if accept_error or not accepted then return unavailable(accept_error or "interactive turn accept unavailable", event_key) end
+    -- A working agent is never stopped for idling, whoever started its turn.
+    local _, activity_error = funcs.call(ACTIVITY, {session = session, state = "working"})
+    if activity_error then return unavailable(tostring(activity_error), event_key) end
     return succeed({})
 end
 

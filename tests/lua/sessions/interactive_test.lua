@@ -18,23 +18,25 @@ end
 
 -- with_window_probes runs body with the window resume and type facades
 -- replaced by probes that report to this test, then restores them.
-local function with_window_probes(body: (resumed: process.Listener, typed: process.Listener) -> ())
-    local originals = {assert(registry.get("bee.harness.binding:present_restore")), assert(registry.get("bee.harness.binding:present_type"))}
-    local resume_probe = assert(registry.get("bee.tests.sessions:resume_probe"))
-    resume_probe.id = "bee.harness.binding:present_restore"
-    local type_probe = assert(registry.get("bee.tests.sessions:type_probe"))
-    type_probe.id = "bee.harness.binding:present_type"
+local function with_window_probes(body: (resumed: process.Listener, typed: process.Listener, activity: process.Listener) -> ())
+    local originals = {assert(registry.get("bee.harness.binding:present_restore")), assert(registry.get("bee.harness.binding:present_type")),
+        assert(registry.get("bee.harness.binding:present_activity"))}
     local swap = assert(registry.snapshot()):changes()
-    swap:update(resume_probe)
-    swap:update(type_probe)
+    for probe, facade in pairs({resume_probe = "present_restore", type_probe = "present_type", activity_probe = "present_activity"}) do
+        local entry = assert(registry.get("bee.tests.sessions:" .. probe))
+        entry.id = "bee.harness.binding:" .. facade
+        swap:update(entry)
+    end
     assert(swap:apply())
     local resumed = assert(process.listen("bee.test.resumed", {message = true}))
     local typed = assert(process.listen("bee.test.typed", {message = true}))
+    local activity = assert(process.listen("bee.test.activity", {message = true}))
     assert(process.registry.register("bee.test.resume_probe"))
-    local ok, failure = pcall(body, resumed, typed)
+    local ok, failure = pcall(body, resumed, typed, activity)
     process.registry.unregister("bee.test.resume_probe", process.registry.LOCAL)
     process.unlisten(resumed)
     process.unlisten(typed)
+    process.unlisten(activity)
     local restore = assert(registry.snapshot()):changes()
     for _, original in ipairs(originals) do restore:update(original) end
     assert(restore:apply())
@@ -242,7 +244,7 @@ local function define_tests()
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "starting-terminal", operation_key = harness.key()}))
             local session_ref = assert(bounds.id(opened.session))
-            with_window_probes(function(resumed: process.Listener, typed: process.Listener)
+            with_window_probes(function(resumed: process.Listener, typed: process.Listener, activity: process.Listener)
                 local sent = owner_call("send", {session = opened.session, input = "wait for the agent", operation_key = harness.key()})
                 test.eq(assert(received(resumed)).session, opened.session)
                 test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "queued")
@@ -260,6 +262,19 @@ local function define_tests()
                 local delivered = assert(received(typed), "the queued message was not typed after the first turn")
                 test.eq(delivered.text, owner_text("wait for the agent", "sessions-owner"))
                 test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "reserved")
+                hook("UserPromptSubmit", delivered.text)
+                hook("Stop", nil, "The waited answer.")
+                test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "settled")
+                -- Every accepted turn reports the agent working, and only a
+                -- turn that ends with nothing waiting reports it idle.
+                local reports: {string} = {}
+                for _ = 1, 4 do
+                    local report = received(activity)
+                    if not report then break end
+                    test.eq(report.session, opened.session)
+                    reports[#reports + 1] = tostring(report.state)
+                end
+                test.eq(table.concat(reports, ","), "working,working,idle")
             end)
         end)
         test.it("gives a starting terminal the message waiting for it as its prompt, the same message each time it asks", function()

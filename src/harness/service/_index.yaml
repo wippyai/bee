@@ -5,6 +5,8 @@ entries:
   kind: library.lua
   source: file://presentation.lua
   modules:
+  - env
+  - logger
   - process
   - channel
   - time
@@ -25,6 +27,8 @@ entries:
   source: file://presentation.lua
   method: main
   modules:
+  - env
+  - logger
   - process
   - channel
   - time
@@ -52,6 +56,8 @@ entries:
   source: file://presentation.lua
   method: open
   modules:
+  - env
+  - logger
   - process
   - channel
   - time
@@ -94,6 +100,8 @@ entries:
   source: file://presentation.lua
   method: restore
   modules:
+  - env
+  - logger
   - process
   - channel
   - time
@@ -136,6 +144,52 @@ entries:
   source: file://presentation.lua
   method: type
   modules:
+  - env
+  - logger
+  - process
+  - channel
+  - time
+  - uuid
+  - hash
+  - security
+  - funcs
+  - json
+  - tty
+  imports:
+    bounds: bee.values:bounds
+    admission: bee.harness.launch:admission
+    canonical: bee.values:canonical
+    recovery: bee.harness.app:recovery
+    principal: bee.node:principal
+  security:
+    policies:
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:interactive_session_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.threads.security:create
+    - bee.harness.security:harness_setup_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.node.security:workspace_folder_browse_policy
+    - bee.node.security:workspace_catalog_read_policy
+    - bee.threads.security:sessions_owner
+    - bee.harness.security:presentation_owner_policy
+    - bee.harness.security:presentation_bridge_policy
+- name: activity
+  kind: function.lua
+  source: file://presentation.lua
+  method: activity
+  modules:
+  - env
+  - logger
   - process
   - channel
   - time
@@ -191,3 +245,11 @@ entries:
     - bee.harness.security:carrier_policy
     - bee.harness.security:carrier_process_registry_policy
     - bee.harness.security:carrier_environment_policy
+- name: session_idle_stop
+  kind: env.variable
+  meta:
+    comment: How long an agent nobody uses keeps running after its last turn ended with nothing waiting; empty keeps agents running until their session closes
+  storage: bee:os
+  variable: BEE_SESSION_IDLE_STOP
+  default: 15m
+  readonly: true

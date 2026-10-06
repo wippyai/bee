@@ -731,6 +731,9 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
     end
     local resources: {placement_types.ResourceGrant} = {}
     local session_ref: string? = session_turn and session_turn.session_ref or nil
+    -- A previous attempt the thread never recorded was admitted but never
+    -- started: this window is the session's first start, not a continuation.
+    local first_start = false
     if session_resource then
         if not session_turn then
             local session_digest, session_error = digest_of({workspace_id = request.workspace_id,
@@ -755,7 +758,8 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
                 if err then return nil, tostring(err) end
                 return reply, nil
             end, recovery_request)
-            if not resume and resume_error ~= continuation.NO_CONVERSATION then
+            first_start = resume_error == continuation.NEVER_RECORDED
+            if not resume and resume_error ~= continuation.NO_CONVERSATION and not first_start then
                 return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error))
             end
         end
@@ -829,7 +833,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_profile_ref = plan.placement_profile_ref, placement_profile_digest = plan.placement_profile_digest, placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
-        previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil, origin_view = request.origin_view,
+        previous_attempt_id = previous and not first_start and previous.previous_attempt_id or nil, reauthorize = previous and not first_start and previous.reauthorize or nil, origin_view = request.origin_view,
         options = launch.options}
     return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,
         thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref,

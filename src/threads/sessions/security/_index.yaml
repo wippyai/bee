@@ -66,6 +66,7 @@ entries:
     resources:
     - bee.harness.binding:present_type
     - bee.harness.binding:present_restore
+    - bee.harness.binding:present_activity
     effect: allow
 - name: owner_principal_policy
   kind: security.policy.expr

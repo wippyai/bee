@@ -200,8 +200,9 @@ entries:
     - tty.observe
     - tty.input
     - tty.resize
+    - env.get
     resources: '*'
-    expression: (action in ["process.spawn", "process.spawn.monitored"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
+    expression: (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action in ["process.spawn", "process.spawn.monitored"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
       ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"] || ((action == "process.registry.register" || action == "process.registry.unregister") &&
       resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")
     effect: allow
@@ -213,7 +214,7 @@ entries:
     - funcs.call
     - security.policy_group.get
     resources: '*'
-    expression: (action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource in ["bee.harness.service:open", "bee.harness.service:restore", "bee.harness.service:type"]) || (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope")
+    expression: (action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource in ["bee.harness.service:open", "bee.harness.service:restore", "bee.harness.service:type", "bee.harness.service:activity"]) || (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope")
     effect: allow
 - name: presentation_viewer_policy
   kind: security.policy.expr

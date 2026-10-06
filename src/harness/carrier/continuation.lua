@@ -10,8 +10,7 @@ local PLACEMENT_METHODS = {"prepare", "start", "status", "stop", "reconcile", "c
 type Request = {thread_id: string, action_id: string, attempt_id: string, owner_id: string, previous_attempt_id: string, session_ref: string,
     binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string, placement_binding_ref: string, placement_binding_digest: string, placement_methods: {[string]: string}, reauthorize: boolean?}
 type Call = (string, unknown) -> (unknown, string?)
-local function value(call: Call, target: string, request: unknown): ({[string]: unknown}?, string?)
-    local raw, err = call(target, request)
+local function reply_value(target: string, raw: unknown, err: string?): ({[string]: unknown}?, string?)
     if err then return nil, target .. ": " .. err end
     local reply = bounds.object(raw)
     if not reply or reply.ok ~= true then return nil, target .. " refused continuation lookup" end
@@ -19,6 +18,13 @@ local function value(call: Call, target: string, request: unknown): ({[string]: 
     if not result then return nil, target .. " returned an invalid value" end
     return result, nil
 end
+local function value(call: Call, target: string, request: unknown): ({[string]: unknown}?, string?)
+    local raw, err = call(target, request)
+    return reply_value(target, raw, err)
+end
+-- A previous attempt the thread never recorded was admitted but never
+-- started: it has no process to recover and no conversation to resume.
+M.NEVER_RECORDED = "previous attempt was never recorded"
 local function target(request: Request, method: string): string?
     return request.placement_methods[method]
 end
@@ -73,7 +79,11 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     if missing_placement then return nil, missing_placement end
     if not bounds.id(request.previous_attempt_id) or request.previous_attempt_id == request.attempt_id then return nil, "continuation needs a distinct previous attempt" end
     if not bounds.id(request.session_ref) then return nil, "continuation needs a retained session" end
-    local stored, stored_error = value(call, "bee.threads.binding:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
+    local raw_stored, stored_call_error = call("bee.threads.binding:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
+    local stored_reply = not stored_call_error and bounds.object(raw_stored) or nil
+    local stored_fault = stored_reply and stored_reply.ok == false and bounds.object(stored_reply.error) or nil
+    if stored_fault and stored_fault.code == "NOT_FOUND" then return nil, M.NEVER_RECORDED end
+    local stored, stored_error = reply_value("bee.threads.binding:checkpoint", raw_stored, stored_call_error)
     if not stored then return nil, stored_error end
     if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
     if stored.placement_binding ~= request.placement_binding_ref then return nil, "previous attempt used another placement binding" end
@@ -116,6 +126,7 @@ end
 M.NO_CONVERSATION = "previous window recorded no provider conversation"
 function M.resolve_window(call: Call, request: Request): (string?, string?, boolean?)
     local previous, inspect_error = M.inspect_window(call, request, true)
+    if inspect_error == M.NEVER_RECORDED then return nil, M.NEVER_RECORDED end
     if not previous then return nil, inspect_error end
     local attempt, binding = previous.attempt, previous.binding
     local cursor = 0

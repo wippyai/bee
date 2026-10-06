@@ -19,6 +19,21 @@ local CALLER = "bee.session.viewer/"
 local TOPIC = "bee.session.window.request"
 local REPLY = "bee.session.window.reply"
 local RESTORE = "bee.harness.binding:present_restore"
+local env = require("env")
+local logger = require("logger")
+-- idle_period is the host's idle period for an unused agent, a duration such
+-- as "15m"; an empty value keeps agents running until their session closes.
+local function idle_period(): string?
+    local configured = env.get("bee.harness.service:session_idle_stop")
+    if type(configured) ~= "string" or configured == "" then return nil end
+    local probe = time.timer(configured)
+    if not probe then
+        logger:warn("Session idle period is not a duration", {value = configured})
+        return nil
+    end
+    probe:stop()
+    return configured
+end
 type Object = {[string]: unknown}
 local function fail(message: string): Object return {ok = false, error = {code = "UNAVAILABLE", message = message}} end
 -- A window runs as its own application principal, named by the request that
@@ -147,6 +162,21 @@ function M.type(value: unknown): Object
     return rpc(tostring(owner), {op = "type", text = text})
 end
 
+-- activity tells a session's window whether its agent is working, from the
+-- turn it accepted, or idle, after its turn ended with nothing waiting. A
+-- window that is not running has nothing to keep or stop.
+function M.activity(value: unknown): Object
+    local body = bounds.object(value)
+    local session = body and bounds.id(body.session)
+    local state = body and body.state
+    if not body or not session or bounds.fields(body, {"session", "state"}) or (state ~= "working" and state ~= "idle") then
+        return fail("invalid window activity report")
+    end
+    local owner = process.registry.lookup(OWNER .. session)
+    if not owner then return {ok = true, value = {}} end
+    return rpc(tostring(owner), {op = state})
+end
+
 function M.attach(value: unknown): Object
     local request = bounds.object(value)
     local session = request and bounds.id(request.session)
@@ -236,10 +266,29 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
     end
     local mount: string? = nil
     local recipient: string? = nil
+    -- An agent nobody uses stops after the host's idle period: idle since its
+    -- last turn ended with nothing waiting, and no viewer attached. A message,
+    -- a start or a viewer keeps it running; the next message resumes it.
+    local idle = false
+    local idle_after = idle_period()
+    local idle_timer: time.Timer? = nil
+    local function disarm()
+        if idle_timer then idle_timer:stop() end
+        idle_timer = nil
+    end
+    local function arm()
+        if idle and not recipient and pid and not idle_timer and idle_after then idle_timer = time.timer(idle_after) end
+    end
     while true do
-        local event = channel.select({requests:case_receive(), events:case_receive()})
+        local cases = {requests:case_receive(), events:case_receive()}
+        local stopping = idle_timer
+        if stopping then cases[#cases + 1] = stopping:channel():case_receive() end
+        local event = channel.select(cases)
         if not event.ok then break end
-        if event.channel == events then
+        if stopping and event.channel == stopping:channel() then
+            idle_timer = nil
+            if pid then process.cancel(pid, "session idle") end
+        elseif event.channel == events then
             if pid and event.value.kind == process.event.EXIT and tostring(event.value.from) == pid then break end
             if event.value.kind == process.event.CANCEL then
                 if not pid then break end
@@ -258,10 +307,22 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 local candidate = supplied and canonical.encode(supplied, 16384, 16)
                 if not supplied or candidate ~= expected or body.operation_key ~= operation_key then reply = fail(decode_error or "window operation key changed")
                 else reply = receipt() end
+            elseif body.op == "idle" then
+                idle = true
+                arm()
+                reply = {ok = true, value = {}}
+            elseif body.op == "working" then
+                idle = false
+                disarm()
+                reply = {ok = true, value = {}}
             elseif body.op == "start" then
+                idle = false
+                disarm()
                 ensure_started()
                 reply = {ok = true, value = {}}
             elseif body.op == "attach" then
+                idle = false
+                disarm()
                 ensure_started()
                 local current = assert(view)
                 if mount then assert(current:revoke(mount)) end
@@ -269,6 +330,8 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 recipient = sender
                 reply = {ok = true, value = {mount = mount}}
             elseif body.op == "type" and bounds.text(body.text, 65536) then
+                idle = false
+                disarm()
                 if not view then
                     -- A terminal that has not started takes the waiting
                     -- message as its agent's launch prompt.
@@ -286,6 +349,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
             elseif body.op == "detach" and recipient == sender then
                 if mount and view then assert(view:revoke(mount)) end
                 mount, recipient = nil, nil
+                arm()
                 reply = {ok = true, value = {}}
             else reply = fail("invalid window operation") end
             reply.caller_token = token
@@ -293,6 +357,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         end
         ::next_request::
     end
+    disarm()
     if view then view:close() end
     for _, registered in ipairs(aliases) do process.registry.unregister(registered, process.registry.LOCAL) end
 end

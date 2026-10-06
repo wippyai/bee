@@ -122,6 +122,18 @@ entries:
   security:
     policies:
     - bee.harness.security:presentation_facade_policy
+- name: present_activity
+  kind: function.lua
+  source: file://presentation_method.lua
+  method: activity
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.harness.security:presentation_facade_policy
 - name: profiles_local
   kind: contract.binding
   contracts:

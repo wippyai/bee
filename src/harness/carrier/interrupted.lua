@@ -58,6 +58,7 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
         if err then return nil, tostring(err) end
         return raw, nil
     end, request, false)
+    if invalid == continuation.NEVER_RECORDED then return true, nil end
     if not previous then return false, invalid end
     if previous.stored.attempt_state == "ended" then return true, nil end
     -- Reconciliation observes the recorded native identity; a dead presenter

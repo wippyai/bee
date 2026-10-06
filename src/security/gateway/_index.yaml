@@ -41,6 +41,22 @@ entries:
     resources:
     - bee.apps:open_call
     effect: allow
+- name: gateway_tool_tests_policy
+  kind: security.policy.expr
+  meta:
+    comment: A bound MCP subject may run and read the tests of an application delivered from an overlay it owns through the node's test facade, which lists the caller's overlays through the overlay facade and hands the request to the node's runner; this grants no authority for the tests themselves, which run as the application
+  policy:
+    expression: (action == "funcs.call" && (resource == "bee.node.binding:tests_call" || resource == "bee.gov.binding:overlay_call")) || (action == "bee.gov.overlay.read" && resource == "own-overlays") || action == "process.send"
+    actions:
+    - funcs.call
+    - bee.gov.overlay.read
+    - process.send
+    resources:
+    - bee.node.binding:tests_call
+    - bee.gov.binding:overlay_call
+    - own-overlays
+    - '*'
+    effect: allow
 - name: gateway_tool_components_policy
   kind: security.policy.expr
   meta:

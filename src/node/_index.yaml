@@ -51,6 +51,11 @@ entries:
     descriptor: bee.app:descriptor
     governed_admission: bee.gov.types:governed_application_admission
     application_admissions: bee.gov.binding:application_admissions
+- name: tests
+  kind: library.lua
+  source: file://tests.lua
+  imports:
+    bounds: bee.values:bounds
 - name: machine
   kind: fs.directory
   directory: /

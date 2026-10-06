@@ -75,6 +75,7 @@ local function define_tests()
                 {id = "bee.gov.traits:authoring_trait", tools = {"bee.gov.binding:overlay_call"}},
                 {id = "bee.gov.traits:application_delivery_trait", tools = {"bee.gov.binding:delivery_call"}},
                 {id = "bee.gov.traits:application_publish_trait", tools = {"bee.gov.binding:delivery_call"}},
+                {id = "bee.gov.traits:application_tests_trait", tools = {"bee.node.binding:tests_call"}},
             }) do
                 local trait = entry(expected.id)
                 test.eq(trait.kind, "registry.entry")
@@ -93,6 +94,30 @@ local function define_tests()
             for _, name in ipairs({"operation", "overlay_id", "expected_revision", "idempotency_key"}) do
                 test.not_nil(properties[name])
             end
+        end)
+        test.it("offers the application tests tool with the node's own request decoder", function()
+            local tool = mcp.tool("tests")
+            if not tool then error("tests tool") end
+            test.eq(tool.operation, "bee.node.binding:tests_call")
+            test.eq(tool.policies[1], "bee.gateway.env:tool_tests_policy_ref")
+            test.is_true(mcp.is_tool_policy_reference(tool.policies[1]))
+            test.not_nil(mcp.OUTPUT_SCHEMAS.tests)
+            local properties = assert(bounds.object(tool.schema.properties))
+            for _, name in ipairs({"operation", "application", "filter", "run_id"}) do test.not_nil(properties[name]) end
+            test.eq((assert(bounds.object(tool.annotations))).readOnlyHint, false)
+            local run = mcp.tests_arguments({arguments = {operation = "run", application = "tally", filter = "smoke"}})
+            test.eq(run and run.operation, "run")
+            test.eq(run and run.application, "tally")
+            test.eq(run and run.filter, "smoke")
+            local status = mcp.tests_arguments({arguments = {operation = "status", run_id = "run-1"}})
+            test.eq(status and status.run_id, "run-1")
+            local _, missing = mcp.tests_arguments({arguments = {operation = "run"}})
+            test.eq(missing, "run needs an application")
+            local _, extra = mcp.tests_arguments({arguments = {operation = "list", application = "tally", workspace_id = "w"}})
+            test.not_nil(extra)
+            local _, mixed = mcp.tests_arguments({arguments = {operation = "status", run_id = "run-1", application = "tally"}})
+            test.eq(mixed, "status takes only run_id")
+            test.is_true(mcp.INSTRUCTIONS:find("tests run", 1, true) ~= nil)
         end)
         test.it("decodes capability elevation requests with a bounded TTL", function()
             local tool = mcp.tool("request_capability")

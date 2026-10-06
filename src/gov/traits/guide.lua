@@ -12,7 +12,7 @@ local drivers = require("drivers")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@13"
+M.REVISION = "bee.governance-component-guide@14"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -224,6 +224,27 @@ function M.example_json(): (string?, string?)
     return json.encode(M.example())
 end
 
+-- The example's test: one function.lua entry in the application's namespace.
+M.TEST_SOURCE = [==[local test = require("test")
+
+local function define_tests()
+    test.describe("counter", function()
+        test.it("adds one to a count", function()
+            test.eq(1 + 1, 2)
+        end)
+    end)
+end
+
+local cases = test.run_cases(define_tests)
+return {run = function(options: unknown) return cases(options) end}
+]==]
+
+function M.test_example(): {{[string]: unknown}}
+    return {{id = M.NAMESPACE .. ":counter_test", kind = "function.lua",
+        data = {source = M.TEST_SOURCE, method = "run", imports = {test = "wippy.test:test"}},
+        meta = {type = "test", suite = M.OVERLAY_ID}}}
+end
+
 local DELIVERY_STEPS = {"approve it in Needs you, which opens on the person's desktop",
     "Bee applies it once approved", "open it from the start menu"}
 
@@ -351,6 +372,25 @@ function M.driver_delivery(): string
         .. " Existing sessions retain their pinned routes; new sessions use the new binding."
 end
 
+-- How an application ships tests and runs them in the node.
+function M.tests(): string
+    return "An application's tests ship in its own pack: a function.lua entry in the application's namespace with"
+        .. " meta.type test, an optional meta.suite that groups it and an optional meta.timeout such as 30s that"
+        .. " bounds the one test (30s by default), method run and the import test = wippy.test:test. Its source"
+        .. " describes cases with test.describe and test.it, asserts with test.eq, test.neq, test.is_true,"
+        .. " test.is_false, test.is_nil, test.not_nil, test.contains and test.throws, builds them with"
+        .. " local cases = test.run_cases(define_tests) and returns {run = function(options) return cases(options) end};"
+        .. " run passes its options on, because they say where the results go. Keep the logic worth testing in a"
+        .. " library.lua entry of the pack that the application and the test both import. After the person approved"
+        .. " the delivery, call the tests tool: list names the application's tests, run starts a run and returns its"
+        .. " run_id at once (filter keeps tests whose id contains it), and status with that run_id returns progress and,"
+        .. " when complete, each test's cases with pass, fail or skip, the error and the duration. Name the application by"
+        .. " its overlay id or its definition id; it must be delivered from an overlay you own. A test runs inside the node as"
+        .. " your application, with the scope the person approved for it and no more, so a case that needs a module or"
+        .. " grant the application lacks fails with a denial; change the application and deliver again. Only the delivered"
+        .. " version has tests to run: change, freeze and deliver again to test new code."
+end
+
 type Section = {id: string, title: string, body: fun(): string}
 local SECTIONS: {Section} = {
     {id = "pack", title = "Component pack shape", body = function(): string return M.pack_shape() end},
@@ -361,6 +401,7 @@ local SECTIONS: {Section} = {
     {id = "config", title = "Configuration shapes", body = function(): string return CONFIG_SHAPE_RULE end},
     {id = "transport", title = "Overlay transport, freeze", body = function(): string return M.transport() end},
     {id = "delivery", title = "Delivery after freeze", body = function(): string return M.after_freeze() end},
+    {id = "tests", title = "Testing your application", body = function(): string return M.tests() end},
     {id = "workspace", title = "Delivering to your own workspace", body = function(): string return M.workspace_delivery() end},
     {id = "drivers", title = "Custom CLI drivers and source inspection", body = function(): string return M.driver_delivery() end},
     {id = "docs", title = "Platform documentation", body = function(): string return M.platform_documentation() end},
@@ -409,6 +450,8 @@ function M.document(): string
     lines[#lines + 1] = M.transport()
     lines[#lines + 1] = ""
     lines[#lines + 1] = M.after_freeze()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.tests()
     lines[#lines + 1] = ""
     lines[#lines + 1] = M.workspace_delivery()
     lines[#lines + 1] = ""
@@ -526,9 +569,13 @@ function M.value(request: {[string]: unknown}?): {[string]: unknown}
     local encoded, encode_error = M.example_json()
     if not encoded then return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
         example_error = tostring(encode_error)} end
+    local test_encoded, test_error = json.encode(M.test_example()[1])
+    if not test_encoded then return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
+        example_error = tostring(test_error)} end
     return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
         example = {path = M.ENTRIES_PATH, entries_json = encoded, definition_id = "app.counter:app",
-            title = M.TITLE, version = M.VERSION, source = M.SOURCE}}
+            title = M.TITLE, version = M.VERSION, source = M.SOURCE,
+            test_entry_json = test_encoded, test_entry_id = M.test_example()[1].id}}
 end
 
 return M

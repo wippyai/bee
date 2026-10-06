@@ -115,6 +115,66 @@ local function define_tests()
             test.eq(entry.definition_id, assert(naming.application(guide.example())))
             test.not_nil((string.find(entry.entries_json, "process.lua", 1, true)))
         end)
+        test.it("teaches shipping tests and running them with the tests tool", function()
+            local text = assert(guide.section_text("tests"))
+            for _, needle in ipairs({"function.lua", "meta.type test", "meta.suite", "meta.timeout", "wippy.test:test",
+                "test.describe", "test.it", "test.eq", "test.run_cases", "{run = function(options) return cases(options) end}", "library.lua",
+                "tests tool", "run_id", "status", "pass, fail or skip", "as your application"}) do
+                test.eq(needle .. (string.find(text, needle, 1, true) and "" or " missing"), needle)
+            end
+            test.not_nil((string.find(guide.document(), text, 1, true)))
+            test.not_nil((string.find(guide.index(), "tests:", 1, true)))
+            local example = assert(bounds.object((assert(bounds.object(guide.value({include_example = true})))).example))
+            test.eq(example.test_entry_id, "app.counter:counter_test")
+            local decoded = assert(json.decode(tostring(example.test_entry_json)))
+            test.eq((assert(bounds.object(decoded))).kind, "function.lua")
+        end)
+        test.it("carries an example test entry the destination's preflight admits with the application", function()
+            local pack = {guide.example()[1], guide.test_example()[1]}
+            local measured, measure_error = artifact.create(pack)
+            test.is_nil(measure_error)
+            local entry = assert(bounds.object(measured.entries[2]))
+            test.eq(entry.kind, "function.lua")
+            test.eq((assert(bounds.object(entry.meta))).type, "test")
+            local data = assert(bounds.object(entry.data))
+            test.eq((assert(bounds.object(data.imports))).test, "wippy.test:test")
+            test.is_nil((string.find(tostring(data.source), "file://", 1, true)))
+            local no_strings: {string} = {}
+            local function measure(item: {[string]: unknown}, references: {string}): preflight.Entry
+                local item_data = assert(bounds.object(item.data))
+                local objects, lists, empty = artifact.config_shapes(item_data)
+                return {id = tostring(item.id), kind = tostring(item.kind), package = "app.counter", digest = string.rep("b", 64),
+                    references = references, auto_start = false, grants = no_strings,
+                    modules = item_data.modules and principals.strings(item_data.modules) or no_strings,
+                    config_objects = objects, config_lists = lists, config_empty = empty,
+                    application_unplaced = artifact.application_unplaced(item)}
+            end
+            local base: preflight.Entry = {id = "wippy.test:test", kind = "library.lua", package = "wippy/test", digest = string.rep("c", 64),
+                references = no_strings, auto_start = false, grants = no_strings, modules = no_strings,
+                config_objects = no_strings, config_lists = no_strings, config_empty = no_strings}
+            local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-a", base_revision = 1,
+                base_digest = string.rep("a", 64),
+                artifacts = {{component = "app.counter", version = "1.0.0", digest = string.rep("d", 64), dependencies = no_strings,
+                    namespaces = {"app.counter"}}},
+                entries = {measure(assert(bounds.object(measured.entries[1])), {"bee.app:client", "bee.ui:appearance", "bee.ui:frame", "bee.shell:apps_menu"}),
+                    measure(entry, {"wippy.test:test"})},
+                requirements = {}, migrations = {}}
+            local context: preflight.Context = {node_id = "node-a", registry_revision = 1, registry_digest = string.rep("a", 64),
+                policy_digest = string.rep("a", 64), packages = {["app.counter"] = true}, namespaces = {["app.counter"] = true},
+                kinds = {["process.lua"] = true, ["function.lua"] = true}, databases = {}, entries = {["wippy.test:test"] = base,
+                    ["bee.app:client"] = base, ["bee.ui:appearance"] = base, ["bee.ui:frame"] = base, ["bee.shell:apps_menu"] = base},
+                installed_entries = nil, applied = {}, grants = {}, modules = {tty = true, process = true, channel = true, json = true},
+                exact_expansion = true, migration_barrier = false, auto_start = false,
+                protected = {revision = 1, namespaces = {"bee.gov", "bee.security"}, super_edit = {},
+                    entries = {"bee.security.approvals:approver_policies", "bee.gov:protected_kernel"}},
+                host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
+            local report, check_error = preflight.check(candidate, context)
+            if not report then error(tostring(check_error)) end
+            local codes: {string} = {}
+            for _, diagnostic in ipairs(report.diagnostics) do codes[#codes + 1] = diagnostic.code .. " " .. diagnostic.target end
+            test.eq(table.concat(codes, ", "), "")
+            test.is_true(report.ready)
+        end)
         test.it("carries one measurable example entry with inline source", function()
             local encoded = guide.example_json()
             if type(encoded) ~= "string" then error("invalid fixture encoded") end

@@ -48,3 +48,13 @@ entries:
   imports: *operation_imports
   security:
     policies: [bee.node.security:workspace_catalog_facade]
+- name: tests_call
+  kind: function.lua
+  meta:
+    comment: Run and read the tests an application the caller delivered carries; the node's test runner admits only applications admitted in the caller's workspace from an overlay the caller owns
+  source: file://tests_call.lua
+  method: handle
+  modules: [funcs, security, process, channel, time, uuid]
+  imports:
+    bounds: bee.values:bounds
+    tests: bee.node:tests

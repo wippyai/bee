@@ -47,6 +47,20 @@ entries:
     '
   tools:
   - bee.gov.binding:delivery_call
+- name: application_tests_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Application tests
+    comment: Run and read the tests an application you delivered carries, inside the node and as the application; the tests run with the authority the person approved for it and no more
+  prompt: 'Ship tests with the application: a function.lua entry of meta.type test in its pack (the overlay guide''s tests section shows one). After the person approved the delivery, use the tests tool: list
+    names the application''s tests, run starts a run and returns its run_id at once, and status with that run_id returns progress and, when complete, each test''s cases with pass, fail or skip, the error and
+    the duration. Name the application by its overlay id or its definition id; it must be delivered from an overlay you own. A test runs as the application with the scope its approval gave it, so a case
+    that needs authority the application lacks fails with a denial: change the application and deliver again, you cannot widen it here.
+
+    '
+  tools:
+  - bee.node.binding:tests_call
 - name: application_publish_trait
   kind: registry.entry
   meta:

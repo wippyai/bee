@@ -9,8 +9,9 @@ fixture instant, and the Sessions owner and catalog bindings yield the
 contract defaults to the suites' synthetic owners. The placement publication
 suite compiles the current native materialization source against its test
 homes, the host environment the suites read names the Claude protocol
-fixture as the installed claude executable, and the gateway listens on one
-selected loopback port the suites open explicitly.
+fixture as the installed claude executable, the gateway listens on one
+selected loopback port the suites open explicitly, and the node's test runner
+finds the fixture applications' tests by a type the suites' own runner skips.
 """
 from pathlib import Path
 import shutil
@@ -137,6 +138,11 @@ def managed_gateway(src):
     update_entries(src / "gateway/security/_index.yaml", pin)
 
 
+def runner_fixture_type(src):
+    """The runner finds the fixture applications' tests by their own type, so the suites' unrestricted runner leaves them alone."""
+    replace_once(src / "node/service/tests.lua", 'local TEST_TYPE = "test"', 'local TEST_TYPE = "app_test"')
+
+
 def host_environment():
     """The unit host facts, with the Claude fixture as the installed claude."""
     document = yaml.safe_load((TESTS / "fixtures/harness/host.yaml").read_text())
@@ -160,6 +166,7 @@ def main():
     fixture_clock(src)
     yield_session_defaults(src)
     managed_gateway(src)
+    runner_fixture_type(src)
     shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",
                  TESTS / "lua/placement_publication/materialization.lua")
     host_environment()

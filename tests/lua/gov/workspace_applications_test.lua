@@ -63,6 +63,16 @@ local function define_tests()
             end
             test.is_true(found)
         end)
+        test.it("admits function entries, so an application pack can carry its tests", function()
+            local entry = assert(registry.get("bee.gov:activation_profiles"))
+            local data = assert(bounds.object(entry.data))
+            local shipped = assert(bounds.object(data.workspace_applications))
+            local admitted = false
+            for _, kind in ipairs(principals.strings(shipped.kinds)) do
+                if kind == "function.lua" then admitted = true end
+            end
+            test.is_true(admitted)
+        end)
         test.it("selects the host ceilings for an eligible overlay this node authored", function()
             local config = assert(profiles.configuration(configured(), NODE))
             local profile, refused = profiles.select(config, WORKSPACE, NODE, "tally")

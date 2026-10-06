@@ -23,6 +23,7 @@ entries:
       approval_policy: workspace-application-delivery
       kinds:
       - process.lua
+      - function.lua
       - library.lua
       - ns.requirement
       - registry.entry

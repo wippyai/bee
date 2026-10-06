@@ -152,6 +152,7 @@ entries:
     - bee.security.gateway:gateway_tool_delivery_policy
     - bee.security.gateway:gateway_tool_publish_policy
     - bee.security.gateway:gateway_tool_application_open_policy
+    - bee.security.gateway:gateway_tool_tests_policy
     - bee.security.gateway:gateway_tool_install_policy
     - bee.security.gateway:gateway_tool_session_policy
     - bee.security.gateway:gateway_tool_hub_publish_policy
@@ -168,6 +169,7 @@ entries:
     arguments: bee.app:arguments
     workspace_protocol: bee.gov.types:workspace_protocol
     delivery_protocol: bee.gov.types:delivery_protocol
+    node_tests: bee.node:tests
     docs_protocol: bee.docs:protocol
     record_bounds: bee.threads.records:bounds
 - name: gateway_endpoint

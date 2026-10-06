@@ -85,6 +85,7 @@ entries:
     - docs
     - components
     - delivery
+    - tests
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

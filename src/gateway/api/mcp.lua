@@ -10,6 +10,7 @@ local docs_protocol = require("docs_protocol")
 local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local session_tools = require("session_tools")
+local node_tests = require("node_tests")
 local M = {}
 function M.is_retired_tool(name: string): boolean
     return name == "thread_launch" or name == "run_status" or name == "run_wait" or name == "run_cancel"
@@ -33,7 +34,7 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, capability: string, install: string, hub_publish: string}
+type ToolPolicyRefs = {session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, tests: string, capabilities: string, capability: string, install: string, hub_publish: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     session = "bee.gateway.env:tool_session_policy_ref",
     read = "bee.gateway.env:tool_read_policy_ref",
@@ -44,6 +45,7 @@ local TOOL_POLICY_REFS: ToolPolicyRefs = {
     delivery = "bee.gateway.env:tool_delivery_policy_ref",
     publish = "bee.gateway.env:tool_publish_policy_ref",
     application_open = "bee.gateway.env:tool_application_open_policy_ref",
+    tests = "bee.gateway.env:tool_tests_policy_ref",
     capabilities = "bee.gateway.env:tool_read_policy_ref",
     capability = "bee.gateway.env:tool_read_policy_ref",
     install = "bee.gateway.env:tool_install_policy_ref",
@@ -177,6 +179,15 @@ local TOOLS: {Tool} = {
         schema = {type = "object", additionalProperties = false, required = {"approval_id"}, properties = {
             approval_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
+    {name = "tests", description = "Run the Lua tests your application's pack carries, inside the node, as the application: each test runs with the actor and the exact scope the person approved for the application, nothing more. It works on an application delivered from an overlay you own and only after the person approved the delivery. list names an application's tests; run starts a run and returns its run_id at once (filter keeps the tests whose id contains it); status with that run_id returns progress and, when complete, one result per test entry with its cases (pass, fail or skip, error, duration_ms) and totals. A test is a function.lua entry of meta.type test; the overlay guide's tests section shows one. A run keeps at most 64 tests, 512 cases and 2048 bytes per error text and reports any truncation; runs live in memory, so an unknown run_id is NOT_FOUND.",
+        operation = "bee.node.binding:tests_call",
+        policies = {TOOL_POLICY_REFS.tests}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
+            operation = {type = "string", enum = {"list", "run", "status"}},
+            application = {type = "string", minLength = 1, maxLength = 160, description = "list and run: the application definition id (app.<overlay>:app) or the overlay id it was delivered from"},
+            filter = {type = "string", minLength = 1, maxLength = 160, description = "list and run: keep the tests whose entry id contains this text"},
+            run_id = {type = "string", minLength = 1, maxLength = 160, description = "status: the run_id run returned"},
+        }, examples = {{operation = "run", application = "tally"}, {operation = "status", run_id = "0198f1c2-0000-7000-8000-000000000000"}}}},
     {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.apps:open_call",
         policies = {TOOL_POLICY_REFS.application_open}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_id", "arguments", "idempotency_key"}, properties = {
@@ -260,6 +271,20 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
             activation_refusal = STRING_SCHEMA}}),
     publish = output_schema({type = "object"}),
     application_open = output_schema({type = "object"}),
+    tests = output_schema({type = "object", additionalProperties = false,
+        properties = {run_id = STRING_SCHEMA, application = STRING_SCHEMA, state = {type = "string", enum = {"running", "complete"}},
+            total = INTEGER_SCHEMA, progress = {type = "object", additionalProperties = false,
+                properties = {done = INTEGER_SCHEMA, total = INTEGER_SCHEMA}},
+            tests = array_schema({type = "object", additionalProperties = false,
+                properties = {id = STRING_SCHEMA, suite = STRING_SCHEMA, timeout = STRING_SCHEMA}}),
+            entries = array_schema({type = "object", additionalProperties = false,
+                properties = {id = STRING_SCHEMA, suite = STRING_SCHEMA, error = STRING_SCHEMA, truncated = BOOLEAN_SCHEMA,
+                    cases = array_schema({type = "object", additionalProperties = false,
+                        properties = {name = STRING_SCHEMA, status = {type = "string", enum = {"pass", "fail", "skip"}},
+                            error = STRING_SCHEMA, duration_ms = INTEGER_SCHEMA}})}}),
+            totals = {type = "object", additionalProperties = false,
+                properties = {passed = INTEGER_SCHEMA, failed = INTEGER_SCHEMA, skipped = INTEGER_SCHEMA, errors = INTEGER_SCHEMA}},
+            truncated = {type = "object", additionalProperties = false, properties = {cases = INTEGER_SCHEMA}}}}),
     request_capability = output_schema({type = "object", additionalProperties = false,
         properties = {approval_id = {type = "string"}, status = {type = "string"}}}),
     capability_status = output_schema({type = "object", additionalProperties = false,
@@ -331,7 +356,8 @@ M.INSTRUCTIONS = table.concat({
     "To build an application or a driver: call overlay with operation guide for the section index, read the sections"
         .. " the task needs, and take include_example for a complete working application. Author entries.json in your"
         .. " overlay, freeze it, run delivery preflight on the frozen snapshot, then delivery request. The person approves"
-        .. " it in Needs you and it opens from the start menu; a new version is a new freeze and request.",
+        .. " it in Needs you and it opens from the start menu; a new version is a new freeze and request. Run your"
+        .. " application's tests with tests run, then tests status.",
     "A tool this session does not list may sit behind a trait: session read shows the traits, select activates an allowed"
         .. " one and request_access asks the person for one that is not allowed.",
 }, "\n\n")
@@ -572,6 +598,17 @@ function M.open_arguments(params: Object): (Object?, string?)
     if not idempotency_key or #idempotency_key > 64 then return nil, "idempotency_key must be a bounded identifier" end
     if not literal then return nil, "arguments must be an array of bounded literal strings" end
     return {definition_id = definition_id, arguments = literal, idempotency_key = idempotency_key}, nil
+end
+
+-- The tests tool shares the node runner's own request decoder, so the schema
+-- the tool advertises and the fields it accepts cannot drift apart.
+function M.tests_arguments(params: Object): (Object?, string?)
+    local arguments_value = bounds.object(params.arguments)
+    if not arguments_value then return nil, "arguments must be an object" end
+    local request, decode_error = node_tests.decode(arguments_value)
+    if not request then return nil, decode_error end
+    local decoded: Object = {operation = request.operation, application = request.application, filter = request.filter, run_id = request.run_id}
+    return decoded, nil
 end
 
 -- The docs tool shares the corpus request decoder, so the schema the tool

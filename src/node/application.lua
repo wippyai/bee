@@ -20,7 +20,6 @@ M.MANAGING_SCOPE = "bee.node.security:scope_managing_application"
 M.ADMISSION_TYPE = "bee.node.application_admission"
 
 type Definition = {process: string, title: string, terminal: boolean, revision: string, resume_schema: string, singleton: boolean}
-M.Definition = Definition
 
 -- definition is the app process entry id declares, from its meta.application
 -- descriptor.

@@ -349,6 +349,7 @@ local function handle(): nil
     elseif tool.name == "delivery" then arguments, argument_error = mcp.delivery_arguments(parameters, binding.workspace_id)
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters, binding.workspace_id)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
+    elseif tool.name == "tests" then arguments, argument_error = mcp.tests_arguments(parameters)
     else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end
     if arguments and (tool.name == "delivery" or tool.name == "publish") then
         argument_error = mcp.bound_workspace(arguments, binding.workspace_id)

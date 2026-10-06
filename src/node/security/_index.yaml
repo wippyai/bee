@@ -175,3 +175,27 @@ entries:
     actions: [funcs.call, bee.node.workspace.read]
     resources: '*'
     effect: allow
+- name: tests_runner
+  kind: security.policy
+  meta:
+    comment: The test runner reads the registry to find an application and its tests and runs each test as that application, with the actor and scope the node gives the application's own instances
+  policy:
+    actions: [registry.get, registry.version, registry.find, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, process.send, security.scope.create]
+    resources: '*'
+    effect: allow
+- name: tests_store
+  kind: security.policy
+  meta:
+    comment: The test runner reads the node database to find the applications admitted in a workspace
+  policy:
+    actions: [db.get]
+    resources: [bee:db]
+    effect: allow
+- name: tests_name
+  kind: security.policy
+  meta:
+    comment: The test runner holds its node-local name
+  policy:
+    actions: [process.registry.register]
+    resources: [bee.node.tests]
+    effect: allow

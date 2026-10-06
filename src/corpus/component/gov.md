@@ -49,6 +49,12 @@ actor; an operation grant does not transfer an existing overlay's ownership.
 The method's protected store policy does not grant callers direct database,
 publication, approval, activation or registry/overlay access.
 
+The workspace-application profile admits `function.lua` entries, so an application
+pack carries its own tests (`meta.type: test`). The guide's
+`tests` section teaches the shape and `bee.gov.traits:application_tests_trait`
+describes the `tests` tool that runs them in the node as the application
+(`component/node`).
+
 Public requests use `operation` and `overlay_id`; `guide` and caller-owned
 overlay listing carry no overlay identity, and `workspace_id` is rejected on
 this surface. `list` without `overlay_id` returns up to eight overlays owned

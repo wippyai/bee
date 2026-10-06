@@ -82,6 +82,7 @@ entries:
     - docs
     - components
     - delivery
+    - tests
     gateway_hooks:
     - PreToolUse
     - PostToolUse

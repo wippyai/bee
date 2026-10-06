@@ -15,6 +15,10 @@ running node.
 | `bee.node:command` | Resolves `bee NAME` to an installed app |
 | `bee.node:client` | The display side of the owner protocol |
 | `bee.node:principal` | Reads the node identity |
+| `bee.node:application` | An app's definition, its admission, the actor an instance runs as and the scope that actor runs in; the owner starts apps with it and the test runner runs their tests with it |
+| `bee.node.service:tests` | The test runner, registered as `bee.node.tests`; runs an application's tests and keeps each run's results in memory |
+| `bee.node.binding:tests_call` | The facade the `tests` MCP tool calls |
+| `bee.node:tests` | The tests request, its bounds and its reply envelope |
 | `bee.node:headless` | The `node` command |
 
 ## Commands
@@ -58,6 +62,28 @@ governance (`bee.gov.binding:application_admissions`). Security groups
 `application` and `scope_managing_application` carry the boundary every app
 runs under: it may message processes, but may not select security for other
 processes, change the registry, or start the node's own services.
+
+## Application tests
+
+An application's pack may carry tests: `function.lua` entries of `meta.type: test`
+(optional `meta.suite`, `meta.timeout` default `30s`) in its namespace, written
+with `wippy.test:test`. The `tests` MCP tool (`list`, `run`, `status`) reaches the
+runner through `bee.node.binding:tests_call`, which takes the caller's workspace
+and actor from the authenticated context and lists the overlays the caller owns
+through the overlay facade. The runner admits only an application installed in
+that workspace under the namespace `app.<overlay>` of one of those overlays;
+anything else is `DENIED`.
+
+A run starts at once and returns `run_id`; the runner executes the entries one
+after another, each as the application: the actor and the exact scope
+`bee.node:application` gives the app's own instances (the application boundary
+plus its admission's policies), never the runner's authority. Each test is
+awaited as the framework's runner awaits it: its case events arrive on a topic of
+the run, and its own `meta.timeout` bounds it. `status` returns progress and, when
+the run completes, per entry the cases (`pass`, `fail` or `skip`, `error`,
+`duration_ms`) and totals. A run keeps at most 64 tests, 512 cases and 2048 bytes
+per error text and reports what it dropped; 16 runs are retained in memory, at
+most 4 run at once, and a run is readable only by the actor that started it.
 
 Migrations in `bee.node.migrations` create `bee_node_workspaces`,
 `bee_node_settings`, `bee_node_desktops`, identities and instance workspace

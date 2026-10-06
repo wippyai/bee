@@ -31,3 +31,26 @@ entries:
       policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.node.security:owner_role, bee.hive.security:messaging]
     restart:
       max_attempts: 10
+- name: tests
+  kind: process.lua
+  source: file://tests.lua
+  method: main
+  modules: [process, channel, registry, funcs, time, uuid, logger]
+  imports:
+    application: bee.node:application
+    tests: bee.node:tests
+    discovery: wippy.test:discovery
+- name: tests_service
+  meta:
+    title: Node · tests
+  kind: process.service
+  process: bee.node.service:tests
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service]
+    security:
+      actor: {id: bee.node.tests}
+      policies: [bee.node.security:tests_runner, bee.node.security:tests_store, bee.node.security:tests_name, bee.node.security:identity]
+    restart:
+      max_attempts: 10

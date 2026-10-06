@@ -9,6 +9,7 @@
 #   make build     pack the application, record its checksum, build dist/bee
 #   make install   install dist/bee as ~/.local/bin/bee (previous kept as bee.prev)
 #   make runtime-pin RUNTIME_VERSION=<commit>  pin the release build to one runtime commit
+#   make native-pin NATIVE_VERSION=<commit>    pin the release build's native module to one pushed Bee commit
 #
 # RUNTIME_SOURCE=<path to a local runtime checkout> builds against that
 # checkout's HEAD for unreleased runtime branches, and against this
@@ -41,7 +42,7 @@ export GIT_CONFIG_VALUE_1 := https://github.com/wippyai/bee
 $(shell python3 build/local_manifest.py $(RUNTIME_SOURCE) .)
 endif
 
-.PHONY: tools runtime-pin compose lint test e2e footprint build install
+.PHONY: tools runtime-pin native-pin compose lint test e2e footprint build install
 
 $(BUILDER):
 	GOBIN=$(abspath $(BIN)) go install github.com/wippyai/builder/cmd/wippy-builder@$(BUILDER_VERSION)
@@ -57,6 +58,12 @@ runtime-pin:
 	@test -n "$(RUNTIME_VERSION)" || { echo "set RUNTIME_VERSION=<runtime commit>"; exit 2; }
 	python3 build/runtime_pin.py $(RUNTIME_VERSION)
 	cd native && GOFLAGS=-mod=mod go get github.com/wippyai/runtime@$(RUNTIME_VERSION) && go mod tidy
+
+# native-pin moves the release build's native module to one pushed Bee commit
+# that holds the native packages the manifest names.
+native-pin:
+	@test -n "$(NATIVE_VERSION)" || { echo "set NATIVE_VERSION=<pushed bee commit>"; exit 2; }
+	python3 build/native_pin.py $(NATIVE_VERSION)
 
 # tests/compose.py writes the copy of src the suites load, with their
 # test-only seams; it never changes src or a pack.

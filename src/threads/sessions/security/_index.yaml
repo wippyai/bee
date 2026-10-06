@@ -41,6 +41,8 @@ entries:
     - bee.threads.binding:feed_read
     - bee.placement.native.binding:stop
     - bee.placement.native.binding:reconcile
+    - bee.placement.native.binding:activity
+    - bee.placement.docker.binding:activity
     - bee.harness:profiles
     - bee.harness.binding:call
     - bee.harness.binding:present

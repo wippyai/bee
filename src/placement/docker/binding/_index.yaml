@@ -20,6 +20,7 @@ entries:
       capabilities: bee.placement.docker.binding:capabilities
       measure_executable: bee.placement.docker.binding:measure_executable
       close_stdin: bee.placement.docker.binding:close_stdin
+      activity: bee.placement.docker.binding:activity
 - name: prepare
   kind: function.lua
   source: file://methods.lua
@@ -77,6 +78,14 @@ entries:
   kind: function.lua
   source: file://methods.lua
   method: status
+  imports: *id001
+  security:
+    policies: *id003
+  modules: *id002
+- name: activity
+  kind: function.lua
+  source: file://methods.lua
+  method: activity
   imports: *id001
   security:
     policies: *id003

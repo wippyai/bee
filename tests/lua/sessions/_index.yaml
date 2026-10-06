@@ -226,6 +226,18 @@ entries:
   modules: [security]
   method: running
   meta: {type: test_support}
+- name: interactive_quiet
+  kind: function.lua
+  source: file://interactive_placement.lua
+  modules: [security]
+  method: quiet
+  meta: {type: test_support}
+- name: interactive_background
+  kind: function.lua
+  source: file://interactive_placement.lua
+  modules: [security]
+  method: background
+  meta: {type: test_support}
 - name: resume_probe_policy
   kind: security.policy
   meta: {type: test_support}

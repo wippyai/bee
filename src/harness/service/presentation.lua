@@ -22,7 +22,7 @@ local RESTORE = "bee.harness.binding:present_restore"
 local env = require("env")
 local logger = require("logger")
 -- idle_period is the host's idle period for an unused agent, a duration such
--- as "15m"; an empty value keeps agents running until their session closes.
+-- as "24h"; an empty value keeps agents running until their session closes.
 local function idle_period(): string?
     local configured = env.get("bee.harness.service:session_idle_stop")
     if type(configured) ~= "string" or configured == "" then return nil end
@@ -216,6 +216,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
     local restoring = bounds.object(bounds.object(value) and (value :: Object).resume)
     local request: admission.Request? = nil
     local aliases: {string} = {}
+    local session_ref: string? = nil
     local view: tty.Viewport? = nil
     local pid: string? = nil
     -- launch starts the window executor once; an opened session's agent
@@ -244,6 +245,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         if not saved or not session or not workspace or name ~= OWNER .. session then error(saved_error or "invalid window restore") end
         assert(process.registry.register(OWNER .. session))
         aliases = {OWNER .. session}
+        session_ref = session
         local encoded = assert(recovery.encode(saved))
         view, pid = start(workspace, assert(uuid.v7()), {}, encoded, operation_key)
         reply_to(initial_token, {ok = true, value = {session = session}})
@@ -255,6 +257,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         local admitted, refused = admission.admit_request(decoded, operation_key)
         if not admitted or not admitted.session_ref then error(tostring(refused and refused.error and refused.error.message or "window was not admitted")) end
         local alias = OWNER .. admitted.session_ref
+        session_ref = admitted.session_ref
         assert(process.registry.register(alias))
         aliases = {name, alias}
         local encoded = assert(json.encode({request_id = decoded.request_id, definition_ref = decoded.definition_ref,
@@ -287,7 +290,18 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         if not event.ok then break end
         if stopping and event.channel == stopping:channel() then
             idle_timer = nil
-            if pid then process.cancel(pid, "session idle") end
+            -- Sessions decides at this moment: no turn, nothing waiting and
+            -- no work the agent still runs of its own; otherwise it keeps
+            -- running for another idle period.
+            local raw, check_error = funcs.call("bee.threads.sessions.binding:idle_check", {session = session_ref})
+            local checked = bounds.object(raw)
+            local verdict = checked and checked.ok == true and bounds.object(checked.value) or nil
+            if pid and not check_error and verdict and verdict.stop == true then
+                process.cancel(pid, "session idle")
+            else
+                if check_error or not verdict then logger:warn("Session idle check unavailable", {session = session_ref, cause = tostring(check_error)}) end
+                arm()
+            end
         elseif event.channel == events then
             if pid and event.value.kind == process.event.EXIT and tostring(event.value.from) == pid then break end
             if event.value.kind == process.event.CANCEL then

@@ -388,10 +388,8 @@ entries:
     title: OpenCode
     binding_ref: bee.driver.opencode.binding:binding
     profile_id: window
-    session_profile_id: batch
-    session_credentials:
+    docker_credentials:
     - opencode_login
-    session_mode: batch
     policy_ref: bee.driver.opencode.security:launch_policy_opencode_window
     default_mode: window
     allowed_overrides:

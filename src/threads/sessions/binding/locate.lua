@@ -7,7 +7,7 @@ M.STATUSES = {"ready", "missing", "unconfigured", "incompatible", "unknown"}
 M.INVALIDATION_CAUSES = {"install", "config", "login", "launch_failure"}
 
 type Status = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
-type Kind = "definition" | "profile" | "executor"
+type Kind = "definition" | "profile"
 type Clock = {now_ms: () -> integer, format: (integer) -> string}
 type Action = {operation: string, label: string}
 type Fault = {code: string, message: string, retry: "never" | "same_key" | "refresh" | "reconcile"}
@@ -70,7 +70,7 @@ end
 local function validate_candidate(candidate: CandidateInput): string?
     if type(candidate) ~= "table" then return "candidate must be an object" end
     if not bounded_id(candidate.ref) then return "candidate ref is malformed" end
-    if not member(candidate.kind, {"definition", "profile", "executor"}) then return "candidate kind is invalid" end
+    if not member(candidate.kind, {"definition", "profile"}) then return "candidate kind is invalid" end
     if not bounded_text(candidate.title, 512) or candidate.title == "" then return "candidate title is invalid" end
     if candidate.revision ~= nil and not is_integer(candidate.revision, 1) then return "candidate revision is invalid" end
     for _, field in ipairs({"target", "binding_ref", "binding_digest", "runtime_identity", "availability_revision"}) do
@@ -209,7 +209,7 @@ end
 local function valid_candidate_value(raw: unknown): boolean
     if type(raw) ~= "table" then return false end
     local item = raw
-    if not bounded_id(item.ref) or not member(item.kind, {"definition", "profile", "executor"}) then return false end
+    if not bounded_id(item.ref) or not member(item.kind, {"definition", "profile"}) then return false end
     if item.revision ~= nil and not is_integer(item.revision, 1) then return false end
     if not bounded_text(item.title, 512) or item.title == "" or not member(item.status, M.STATUSES) then return false end
     if not bounded_text(item.checked_at, 64) then return false end

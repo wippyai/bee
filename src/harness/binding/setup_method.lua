@@ -15,8 +15,7 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return {ok = false, error = "request must be an object"} end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir", "session_turn", "placement_override"}) then return {ok = false, error = "unknown field"} end
-    if request.session_turn ~= nil and type(request.session_turn) ~= "boolean" then return {ok = false, error = "session_turn must be boolean"} end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir", "placement_override"}) then return {ok = false, error = "unknown field"} end
     local workspace, definition_ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace then return {ok = false, error = "workspace_id is not an identifier"} end
     if not definition_ref then return {ok = false, error = "definition_ref is not an identifier"} end
@@ -28,13 +27,13 @@ local function handle(raw: unknown): {[string]: unknown}
     end
     local placement, placement_error = profiles.placement(request.placement_override)
     if placement_error then return {ok = false, error = placement_error} end
-    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, request.session_turn == true, placement)
+    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, placement)
     if not plan then return {ok = false, error = tostring(plan_error and plan_error.error and plan_error.error.message or "launch plan unavailable")} end
     if plan.plan_digest ~= request.expected_plan_digest then return {ok = false, error = "selected launch plan changed"} end
     -- A folder under an admitted root becomes the working directory only
     -- where the definition and its launch policy both allow the override: the
     -- request's folder, otherwise the saved profile's.
-    local backend_request: {[string]: unknown} = {workspace_id = workspace, definition_ref = definition_ref, expected_definition_digest = plan.definition_digest, session_turn = request.session_turn == true or plan.placement_kind == "docker"}
+    local backend_request: {[string]: unknown} = {workspace_id = workspace, definition_ref = definition_ref, expected_definition_digest = plan.definition_digest, placement_kind = plan.placement_kind}
     local folder: unknown = request.workdir
     if folder == nil and plan.effective_profile then folder = plan.effective_profile.workdir end
     if folder ~= nil then

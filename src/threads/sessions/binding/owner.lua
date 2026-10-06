@@ -200,7 +200,7 @@ function M.attach(raw_request: unknown): Reply
     if not workspace then return fail("DENIED", "interactive attach has no workspace", operation_key) end
     local profile_id = request.saved_profile_id == nil and nil or ref(request.saved_profile_id)
     local revision = request.saved_profile_revision == nil and nil or bounds.integer(request.saved_profile_revision)
-    local pinned, refused = admission.resolve(definition, "window", workspace, profile_id, revision, nil, nil, nil, false)
+    local pinned, refused = admission.resolve(definition, "window", workspace, profile_id, revision)
     local plan = object(pinned)
     if not plan then return unavailable(tostring(refused and refused.error and refused.error.message or "interactive plan is unavailable"), operation_key) end
     if plan.plan_digest ~= request.plan_digest or plan.mode ~= "window" then return fail("CONFLICT", "interactive attach plan changed", operation_key) end
@@ -424,6 +424,27 @@ function M.launch_prompt(raw_request: unknown): Reply
     local text = input and M.message_text(input.input, object(input.sender), session)
     if pull_error or not input or not text then return unavailable(pull_error or "the waiting message is unreadable", nil) end
     return succeed({prompt = text})
+end
+
+-- idle_check tells a window whether it may stop its agent now: no turn is in
+-- flight, nothing waits, and the placement proves the agent alive with no
+-- work of its own. A placement that cannot count that work keeps it running.
+function M.idle_check(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request)
+    if not request then return assert(refused) end
+    local session = ref(request.session)
+    if not session or bounds.fields(request, {"session"}) then return fail("INVALID", "idle_check needs one session ref") end
+    local raw, read_error = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    local route = stored and object(stored.route)
+    if read_error or not stored or not route then return unavailable(read_error or "session is unavailable", nil) end
+    if route.delivery ~= "hook" then return fail("INVALID", "only a window session runs a terminal") end
+    local definition = ref(route.definition)
+    if not definition or not security.can("bee.sessions.attach", definition) then return fail("DENIED", "an idle check requires a host grant") end
+    if stored.state ~= "active" or stored.active_turn ~= nil or bounds.integer(stored.queued) ~= 0 then return succeed({stop = false}) end
+    local attempt = bounds.id(route.native_attempt_id)
+    if not attempt then return succeed({stop = false}) end
+    return succeed({stop = cancellation.quiet(route.placement_methods, attempt, route)})
 end
 
 -- deliver types the session's next queued message into its terminal once

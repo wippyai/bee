@@ -46,7 +46,7 @@ function M.list(client: sessions.Client, include_unavailable: boolean, query: st
         for _, candidate in ipairs(page.items) do
             local person_launchable = false
             for _, feature in ipairs(candidate.features) do if feature == "presentation:start_menu" then person_launchable = true end end
-            if candidate.kind ~= "executor" and person_launchable then
+            if person_launchable then
                 local ready = candidate.status == "ready"
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
                 local provider = ""

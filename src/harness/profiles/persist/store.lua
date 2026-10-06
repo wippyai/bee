@@ -208,7 +208,7 @@ function M.call(input: Request, node: string, actor: string, pinned: registry.Sn
             local data = entry and bounds.object(entry.data)
             return data and bounds.id(data.binding_ref) or nil
         end, function(profile: Profile): string? return validate(pinned, profile) end,
-        function(ref: string, presentation: string?): migration.NativeHome?
+        function(ref: string): migration.NativeHome?
             local entry = pinned:get(ref)
             local definition = entry and bounds.object(entry.data)
             local binding_ref = definition and bounds.id(definition.binding_ref)
@@ -218,7 +218,7 @@ function M.call(input: Request, node: string, actor: string, pinned: registry.Sn
             local declaration = profiles_ref and pinned:get(profiles_ref)
             local data = declaration and bounds.object(declaration.data)
             local driver = data and driver_profile.decode(data.driver)
-            local profile_id = definition and bounds.id(presentation == "window" and definition.profile_id or definition.session_profile_id or definition.profile_id)
+            local profile_id = definition and bounds.id(definition.profile_id)
             local selected = driver and profile_id and driver_profile.find(driver, profile_id)
             if not selected then return nil end
             return selected.isolation_env.private_home and "private" or "machine"

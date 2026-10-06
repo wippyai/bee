@@ -251,5 +251,5 @@ entries:
     comment: How long an agent nobody uses keeps running after its last turn ended with nothing waiting; empty keeps agents running until their session closes
   storage: bee:os
   variable: BEE_SESSION_IDLE_STOP
-  default: 15m
+  default: 24h
   readonly: true

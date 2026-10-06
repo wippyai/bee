@@ -17,4 +17,12 @@ end
 function M.owner_stop(request: {[string]: unknown}): unknown
     return M.owner_running(request)
 end
+-- An agent process alive with no work of its own, and one still running a
+-- background command.
+function M.quiet(request: {[string]: unknown}): unknown
+    return {ok = true, value = {attempt_id = request.attempt_id, alive = true, descendants = 0}}
+end
+function M.background(request: {[string]: unknown}): unknown
+    return {ok = true, value = {attempt_id = request.attempt_id, alive = true, descendants = 1}}
+end
 return M

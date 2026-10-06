@@ -57,6 +57,8 @@ entries:
     description: Measure an absolute executable path under the selected placement's host rules
   - name: close_stdin
     description: Close the admitted attempt's stdin when its driver declares session end on stdin closure
+  - name: activity
+    description: Whether a live attempt's process still runs work of its own, as the count of processes descending from it
 - name: workdir_preparer
   kind: contract.definition
   meta:

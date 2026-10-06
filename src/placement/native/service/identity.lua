@@ -153,6 +153,37 @@ function M.group_absent(pgid: integer): (boolean?, string?)
     if not seen then return nil, "group probe returned nothing" end
     return not present, nil
 end
+-- descendants counts the processes that descend from pid in a fully decoded
+-- process table: the work an agent still runs after its turn ended.
+function M.descendants(pid: integer): (integer?, string?)
+    if pid <= 1 then return nil, "invalid process" end
+    local executor_ref, reference_error = resources.executor()
+    local executor, executor_error
+    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
+    if not executor then return nil, "executor unavailable: " .. tostring(executor_error) end
+    local output, err, code = capture(executor, "ps -e -o pid=,ppid=")
+    executor:release()
+    if not output then return nil, err end
+    if code ~= 0 then return nil, "process table probe failed with exit " .. tostring(code) end
+    local children: {[integer]: {integer}} = {}
+    for line in output:gmatch("[^\r\n]+") do
+        local child, parent = line:match("^%s*(%d+)%s+(%d+)%s*$")
+        if not child or not parent then return nil, "process table probe returned an invalid row" end
+        local parent_pid, child_pid = math.floor(assert(tonumber(parent))), math.floor(assert(tonumber(child)))
+        local list = children[parent_pid] or {}
+        list[#list + 1] = child_pid
+        children[parent_pid] = list
+    end
+    local count, pending = 0, {pid}
+    while #pending > 0 do
+        local current = table.remove(pending)
+        for _, child in ipairs(children[current] or {}) do
+            count = count + 1
+            pending[#pending + 1] = child
+        end
+    end
+    return count, nil
+end
 -- Signals the identified leader's group, or nothing when identity is not
 -- proven alive first.
 function M.signal_group(recorded: Identity, signal: integer): (boolean, string?)

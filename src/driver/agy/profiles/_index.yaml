@@ -119,8 +119,7 @@ entries:
     title: Antigravity CLI
     binding_ref: bee.driver.agy.binding:binding
     profile_id: window
-    session_profile_id: session
-    session_credentials:
+    docker_credentials:
     - agy_login
     policy_ref: bee.driver.agy.security:launch_policy_agy_window
     default_mode: window

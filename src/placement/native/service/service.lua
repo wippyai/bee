@@ -689,6 +689,22 @@ function M.status(value: unknown): Reply
     end
     return succeed({attempt = attempt, liveness = liveness, private_home = private_home})
 end
+-- activity reports whether a live attempt's process still runs work of its
+-- own: the processes descending from it. An attempt that is not proven alive
+-- reports no count.
+function M.activity(value: unknown): Reply
+    local id, invalid = named(value)
+    if not id then return invalid end
+    local attempt, denied = load(id)
+    if not attempt then return assert(denied) end
+    local recorded = recorded_identity(attempt.attempt_id)
+    if not recorded then return succeed({attempt_id = attempt.attempt_id, alive = false}) end
+    local observation = identity.observe(recorded)
+    if not observation.observed or not observation.alive then return succeed({attempt_id = attempt.attempt_id, alive = false}) end
+    local count, count_error = identity.descendants(recorded.pid)
+    if count == nil then return fail("UNAVAILABLE", count_error or "process table unavailable") end
+    return succeed({attempt_id = attempt.attempt_id, alive = true, descendants = count})
+end
 -- stop: the runner signals when it lives; otherwise the identified leader's
 -- group is signalled, and an unidentified attempt becomes uncertain.
 function M.stop(value: unknown): Reply

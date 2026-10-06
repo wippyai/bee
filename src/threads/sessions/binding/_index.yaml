@@ -365,6 +365,29 @@ entries:
   - hash
   - funcs
   - time
+- name: idle_check
+  kind: function.lua
+  source: file://owner.lua
+  method: idle_check
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id002
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
 - name: hook_boundary
   kind: function.lua
   source: file://owner.lua
@@ -450,7 +473,6 @@ entries:
   source: file://catalog.lua
   modules:
   - funcs
-  - time
   imports:
     bounds: bee.values:bounds
     harness_catalog: bee.harness.catalog:catalog

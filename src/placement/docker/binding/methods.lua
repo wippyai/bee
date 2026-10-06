@@ -271,6 +271,14 @@ function M.status(value: unknown): Reply
         liveness = {observed = find_error == nil, alive = found and found.state == "running" or false,
             at = store.now(), detail = find_error or (absent and "exact container absent" or "exact container observed")}})
 end
+-- activity reports the container's liveness; the processes inside it are not
+-- counted, so a Docker agent is never proven idle.
+function M.activity(value: unknown): Reply
+    local loaded, load_error = M.load(value)
+    if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
+    local found = M.find(loaded)
+    return succeed({attempt_id = loaded.attempt.attempt_id, alive = found ~= nil and found.state == "running"})
+end
 function M.stop(value: unknown): Reply
     local loaded, load_error = M.load(value)
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end

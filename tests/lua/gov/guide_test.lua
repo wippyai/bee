@@ -13,7 +13,7 @@ local function define_tests()
     test.describe("Governance application guide", function()
         test.it("explains how an approved driver becomes selectable in Sessions", function()
             local text = guide.driver_delivery()
-            for _, needle in ipairs({"presentation.start_menu = true", "session_resource = session", "Sessions", "N", "E", "headless"}) do
+            for _, needle in ipairs({"presentation.start_menu = true", "session_resource = session", "Sessions", "N", "E", "default_mode window", "docker_credentials"}) do
                 test.not_nil((string.find(text, needle, 1, true)))
             end
             local steps, next_app = guide.delivery_steps("driver.stubagent")

@@ -2313,6 +2313,7 @@ entries:
       capabilities: bee.placement.native.binding:capabilities
       measure_executable: bee.placement.native.binding:measure_executable
       close_stdin: bee.placement.native.binding:close_stdin
+      activity: bee.placement.native.binding:activity
 - name: managed_run_probe
   kind: function.lua
   source: file://managed_run_probe.lua

@@ -46,17 +46,35 @@ local function evidence(summary: string, attempt_id: string, state: string?, exi
     return {summary = summary, artifacts = artifacts}
 end
 
-function M.stop(methods: unknown, attempt_id: string, stored_route: unknown, allow_exited: boolean?): Result
-    local placement = object(methods)
-    if not placement then return {state = "uncertain", evidence = evidence("session route has no placement operations", attempt_id, nil, nil)} end
+-- owner_actor restores the placement owner a session route names; placement
+-- answers only the owner of an attempt.
+local function owner_actor(stored_route: unknown): (security.Actor?, string?)
     local route = object(stored_route)
     local owner = route and bounds.id(route.owner_id)
     local workspace = route and bounds.id(route.workspace_id)
     if not owner or not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then
-        return {state = "uncertain", evidence = evidence("session route has no workspace-bound placement owner", attempt_id, nil, nil)}
+        return nil, "session route has no workspace-bound placement owner"
     end
     local actor, actor_error = security.new_actor(owner, {workspace_id = workspace})
-    if not actor then return {state = "uncertain", evidence = evidence("placement owner cannot be restored: " .. tostring(actor_error), attempt_id, nil, nil)} end
+    if not actor then return nil, "placement owner cannot be restored: " .. tostring(actor_error) end
+    return actor, nil
+end
+
+-- quiet reports whether placement proves the attempt's process alive with no
+-- work of its own; anything it cannot prove is not quiet.
+function M.quiet(methods: unknown, attempt_id: string, stored_route: unknown): boolean
+    local placement = object(methods)
+    local actor = owner_actor(stored_route)
+    if not placement or not actor or type(placement.activity) ~= "string" then return false end
+    local activity = call(placement.activity, {attempt_id = attempt_id}, actor)
+    return activity ~= nil and activity.alive == true and bounds.integer(activity.descendants) == 0
+end
+
+function M.stop(methods: unknown, attempt_id: string, stored_route: unknown, allow_exited: boolean?): Result
+    local placement = object(methods)
+    if not placement then return {state = "uncertain", evidence = evidence("session route has no placement operations", attempt_id, nil, nil)} end
+    local actor, actor_error = owner_actor(stored_route)
+    if not actor then return {state = "uncertain", evidence = evidence(tostring(actor_error), attempt_id, nil, nil)} end
     local before, before_code, before_error = call(placement.reconcile, {attempt_id = attempt_id}, actor)
     if not before then
         if before_code == "NOT_FOUND" then

@@ -128,7 +128,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     if not descriptor_ref then return repair_only("Driver descriptor is missing") end
     local descriptor, descriptor_error = descriptors.load_from(pinned, descriptor_ref)
     if not descriptor then return repair_only(descriptor_error) end
-    local probed = readiness.probe(decoded.binding_ref, decoded.session_profile_id or decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
+    local probed = readiness.probe(decoded.binding_ref, decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
     local capabilities = probed.result and probed.result.capabilities or {}
     local declared = bounds.object((bounds.object(descriptor.options) or {}).fields) or {}
     local restrictions, restriction_error = preferences.decode_profile_restrictions(policy_data.profile_restrictions)
@@ -196,7 +196,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     end
     for _, ref in ipairs(base.bee.approval_leases or {}) do if not bounds.member(ref, leases) then leases[#leases + 1] = ref end end
     local credential_choices = decoded.credentials
-    if base.presentation ~= "window" or (base.placement and base.placement.kind == "docker") then credential_choices = decoded.session_credentials or decoded.credentials end
+    if base.placement and base.placement.kind == "docker" and decoded.docker_credentials then credential_choices = decoded.docker_credentials end
     return {workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
         leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
         save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,

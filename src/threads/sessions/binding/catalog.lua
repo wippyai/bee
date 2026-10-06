@@ -8,17 +8,15 @@ local admission = require("admission")
 local profile_protocol = require("profile_protocol")
 local locate = require("locate")
 local readiness = require("readiness")
-local time = require("time")
 local M = {}
 
 M.PAGE_SIZE = 64
 M.MAX_DEFINITIONS = 64
 M.MAX_PROFILE_PAGES = 16
 M.PROFILE_CALL = "bee.harness.binding:call"
-M.EXTERNAL_EXECUTOR = "bee.threads.sessions.binding:external_executor_binding"
 
 type Object = {[string]: unknown}
-type Kind = "definition" | "profile" | "executor"
+type Kind = "definition" | "profile"
 type Status = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
 type Fault = {code: string, message: string, retry: "never" | "same_key" | "refresh" | "reconcile"}
 type ProfileRow = {workspace_id: string, profile_id: string, revision: integer, tombstone: boolean, profile: profile_protocol.Profile?, migration_diagnostic: Object?}
@@ -155,13 +153,6 @@ local function diagnostic_from(failure: Fault): Fault
     return {code = failure.code, message = failure.message, retry = failure.retry}
 end
 
-local function timestamp(): string
-    local nanoseconds = time.now():unix_nano()
-    local milliseconds = math.floor(nanoseconds / 1000000)
-    return time.unix(math.floor(milliseconds / 1000), (milliseconds % 1000) * 1000000)
-        :utc():format("2006-01-02T15:04:05.000Z07:00")
-end
-
 local function measured_candidate(cache: locate.Cache, readiness_cache: readiness.Cache, kind: Kind, ref: string,
     title: string, revision: integer?, selected: definition.Definition, plan: unknown, refused: unknown,
     generation: integer): (locate.Candidate?, string?)
@@ -236,9 +227,9 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
     local plan: unknown = nil
     local refused: unknown = nil
     if kind == "profile" and profile_id and revision then
-        plan, refused = admission.resolve(ref, nil, workspace, profile_id, revision, nil, nil, nil, true)
+        plan, refused = admission.resolve(ref, "window", workspace, profile_id, revision)
     else
-        plan, refused = admission.read(pinned, ref, nil, true)
+        plan, refused = admission.read(pinned, ref, "window")
     end
     local candidate, candidate_error = measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
     if candidate and decoded.presentation.start_menu then
@@ -263,7 +254,7 @@ function M.list(raw: unknown, workspace: string): (locate.Page?, Fault?)
     if not request then return nil, fault("INVALID", "catalog request must be an object", "never") end
     local extra = bounds.fields(request, {"kind", "include_unavailable", "cursor", "definition_ref", "query", "sort"})
     if extra then return nil, fault("INVALID", "catalog request: " .. extra, "never") end
-    local kind = bounds.member(request.kind, {"definition", "profile", "executor"})
+    local kind = bounds.member(request.kind, {"definition", "profile"})
     if request.kind ~= nil and not kind then return nil, fault("INVALID", "catalog kind is invalid", "never") end
     if request.include_unavailable ~= nil and type(request.include_unavailable) ~= "boolean" then
         return nil, fault("INVALID", "include_unavailable must be boolean", "never")
@@ -348,22 +339,6 @@ function M.list(raw: unknown, workspace: string): (locate.Page?, Fault?)
                         diagnostics[#diagnostics + 1] = fault("UNAVAILABLE", candidate_error or "A saved profile could not be measured.", "refresh")
                     end
                 end
-            end
-        end
-    end
-
-    if kind == "executor" then
-        local entry = harness_catalog.entry(pinned, M.EXTERNAL_EXECUTOR)
-        if entry then
-            candidates[#candidates + 1] = {ref = "bee.executor.external", kind = "executor", title = "External CLI",
-                status = "ready", checked_at = timestamp(), reasons = {}, features = {"turn:external"},
-                actions = {{operation = "select", label = "Select executor"}}}
-        else
-            unavailable = 1
-            if show_unavailable then
-                local candidate = unavailable_candidate(locate_cache, "executor", "bee.executor.external", "External CLI",
-                    nil, "missing", "The external executor is not installed.", generation)
-                if candidate then candidates[#candidates + 1] = candidate end
             end
         end
     end

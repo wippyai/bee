@@ -87,10 +87,8 @@ entries:
     title: Muse CLI
     binding_ref: bee.driver.muse.binding:binding
     profile_id: window
-    session_profile_id: batch
-    session_credentials:
+    docker_credentials:
     - muse_login
-    session_mode: batch
     policy_ref: bee.driver.muse.security:launch_policy_muse_window
     default_mode: window
     allowed_overrides:

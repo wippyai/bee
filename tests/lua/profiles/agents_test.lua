@@ -8,8 +8,8 @@ type Object = {[string]: unknown}
 local fixtures = require("fixtures")
 local protocol = require("protocol")
 type Refreshed = {works: {sessions.Work}?, activity: string?}
-local function candidate(ref: string, title: string, status: string, reasons: {string}, kind: string?): Object
-    return {ref = ref, kind = kind or "definition", title = title, status = status, checked_at = "2026-09-30T12:00:00.000Z", reasons = reasons,
+local function candidate(ref: string, title: string, status: string, reasons: {string}): Object
+    return {ref = ref, kind = "definition", title = title, status = status, checked_at = "2026-09-30T12:00:00.000Z", reasons = reasons,
         features = {"presentation:start_menu"}, actions = {}}
 end
 local function snapshot(activity: string, queued: integer): protocol.SessionSnapshot
@@ -71,8 +71,7 @@ local function define_tests()
             local asked: {Object} = {}
             local client: unknown = {catalog = function(_self: unknown, options: unknown): (unknown, nil)
                 asked[#asked + 1] = assert(bounds.object(options))
-                return {items = {candidate("b:two", "Two", "ready", {}), candidate("a:one", "One", "ready", {}),
-                    candidate("x:exec", "Exec", "ready", {}, "executor")}, complete = true, unavailable_count = 2, diagnostics = {}}, nil
+                return {items = {candidate("b:two", "Two", "ready", {}), candidate("a:one", "One", "ready", {})}, complete = true, unavailable_count = 2, diagnostics = {}}, nil
             end}
             local api = assert(bounds.object(agents))
             local list = api.list

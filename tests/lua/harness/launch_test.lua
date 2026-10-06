@@ -476,19 +476,19 @@ local function define_tests()
         test.it("admits placement overrides only at both host ceilings and pins the selected home", function()
             local resolved = admission.resolve(DEFINITION)
             local original = assert(resolved)
-            local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
+            local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
             test.is_nil(refused)
             with_overrides({"brief", "placement"}, {"placement"}, function()
-                local resolved = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
+                local resolved = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
                 local selected = assert(resolved)
                 test.neq(selected.plan_digest, original.plan_digest)
                 test.eq(selected.placement_kind, "native")
                 test.eq(selected.effective_profile and selected.effective_profile.placement and selected.effective_profile.placement.home, "private")
-                local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "machine"})
+                local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "machine"})
                 test.is_nil(refused)
             end)
             with_overrides({"brief", "placement"}, {}, function()
-                local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
+                local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
                 test.is_nil(refused)
             end)
         end)
@@ -773,14 +773,14 @@ local function define_tests()
                 test.eq(invalid == nil, false)
             end
         end)
-        test.it("pins explicit machine-login projections for structured default sessions", function()
+        test.it("pins explicit machine-login projections for Docker windows", function()
             for _, provider in ipairs({"claude", "codex", "agy", "muse", "grok", "opencode"}) do
                 local ref = "bee.driver." .. provider .. ".profiles:default_window"
                 local entry = assert(registry.get(ref))
                 local decoded = assert(definitions.decode(ref, entry))
-                test.not_nil(decoded.session_credentials)
+                test.not_nil(decoded.docker_credentials)
                 local found = false
-                for _, name in ipairs(decoded.session_credentials or {}) do
+                for _, name in ipairs(decoded.docker_credentials or {}) do
                     if name == provider .. "_login" then found = true end
                 end
                 test.is_true(found)
@@ -788,7 +788,7 @@ local function define_tests()
             local entry = assert(registry.get("bee.driver.claude.profiles:default_window"))
             local changed = {data = {}}
             for name, value in pairs(entry.data) do changed.data[name] = value end
-            changed.data.session_credentials = {false}
+            changed.data.docker_credentials = {false}
             local invalid, err = definitions.decode("bee.driver.claude.profiles:default_window", changed)
             test.is_nil(invalid)
             test.not_nil(err)

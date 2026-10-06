@@ -297,6 +297,36 @@ local function define_tests()
             test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "reserved")
             test.eq(launch_prompt().prompt, first.prompt)
         end)
+        test.it("lets a window stop its agent only when no turn runs, nothing waits and the agent runs no work of its own", function()
+            local journal = harness.principal("bee.application:" .. WORKSPACE .. ":idle-owner", {"bee.threads.security:sessions_owner"}, WORKSPACE)
+            local actor = assert(security.new_actor("window", {workspace_id = WORKSPACE}))
+            local window = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}))
+            local function idle_check(session: unknown): boolean
+                local raw, err = window:call("bee.threads.sessions.binding:idle_check", {session = session})
+                if err then error(tostring(err)) end
+                local reply = assert(bounds.object(raw))
+                if reply.ok ~= true then error("idle_check: " .. tostring((assert(bounds.object(reply.error))).message)) end
+                return (assert(bounds.object(reply.value))).stop == true
+            end
+            local function window_session(activity: string?): unknown
+                local methods: {[string]: unknown} = {}
+                if activity then methods.activity = "bee.tests.sessions:interactive_" .. activity end
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+                    definition = "interactive-fixture", placement_methods = methods, owner_id = "bee.application:" .. WORKSPACE .. ":idle-owner",
+                    workspace_id = WORKSPACE}}))
+                harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "idle-terminal", operation_key = harness.key()}))
+                return opened.session
+            end
+            local quiet = window_session("quiet")
+            test.is_true(idle_check(quiet))
+            harness.value(journal:call("work_send", {session = quiet, input = "a waiting message", operation_key = harness.key()}))
+            test.is_false(idle_check(quiet))
+            local reserved = harness.value(journal:call("turn_reserve", {session = quiet, operation_key = harness.key()}))
+            test.not_nil(reserved.turn)
+            test.is_false(idle_check(quiet))
+            test.is_false(idle_check(window_session("background")))
+            test.is_false(idle_check(window_session(nil)))
+        end)
         test.it("rejects an open key already used for another operation", function()
             local journal = harness.session_owner(WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))

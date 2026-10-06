@@ -64,7 +64,7 @@ local function handle(raw: unknown): Reply
         saved_profile_revision = bounds.count(request.saved_profile_revision)
         if not saved_profile_id or not saved_profile_revision or saved_profile_revision < 1 then return fail("saved hook profile is malformed") end
     elseif request.saved_profile_revision ~= nil then return fail("saved profile revision has no profile") end
-    local pinned, resolution_error = admission.resolve(definition, "window", workspace, saved_profile_id, saved_profile_revision, nil, nil, nil, false)
+    local pinned, resolution_error = admission.resolve(definition, "window", workspace, saved_profile_id, saved_profile_revision)
     if not pinned then return fail(tostring(resolution_error and resolution_error.error and resolution_error.error.message or "hook admission unavailable")) end
     if pinned.plan_digest ~= plan_digest then return fail("window admission changed") end
     local snapshot, snapshot_error = catalog.pin()
@@ -95,7 +95,7 @@ local function handle(raw: unknown): Reply
     local executable = pinned.executables[capabilities.executable]
     if not executable then return fail("accepted hook executable is unavailable") end
     local function revalidate(): string?
-        local current, current_error = admission.resolve(definition, "window", workspace, saved_profile_id, saved_profile_revision, nil, nil, nil, false)
+        local current, current_error = admission.resolve(definition, "window", workspace, saved_profile_id, saved_profile_revision)
         if not current then return "hook admission is unavailable" end
         if current.plan_digest ~= plan_digest then return "hook admission changed" end
         local bound, bound_error = value("bee.gateway.binding:check", {binding_id = binding_id})

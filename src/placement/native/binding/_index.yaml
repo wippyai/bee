@@ -17,6 +17,7 @@ entries:
       capabilities: bee.placement.native.binding:capabilities
       measure_executable: bee.placement.native.binding:measure_executable
       close_stdin: bee.placement.native.binding:close_stdin
+      activity: bee.placement.native.binding:activity
   meta:
     type: placement
     placement_kind: native
@@ -45,6 +46,14 @@ entries:
 - name: status
   kind: function.lua
   source: file://status_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: *id001
+- name: activity
+  kind: function.lua
+  source: file://activity_method.lua
   method: handle
   imports:
     service: bee.placement.native.service:service

@@ -112,7 +112,6 @@ type Request = {
     parent_action_id: string?,
     origin_view: OriginView?,
 }
-type SessionTurnContext = {owner_id: string, session_ref: string, action_id: string, attempt_id: string}
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
@@ -221,12 +220,7 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     end
     return {bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
-local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, session_route: boolean?, placement_override: profiles.Placement?): (Plan?, Reply?, placement_types.Preferences?)
-    if session_route and launch.session_profile_id then
-        launch.profile_id = launch.session_profile_id
-        if launch.session_credentials then launch.credentials = launch.session_credentials end
-        launch.default_mode = launch.session_mode or "session"
-    end
+local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, placement_override: profiles.Placement?): (Plan?, Reply?, placement_types.Preferences?)
     if selected then
         local invalid = profile_validation.check(pinned, selected.profile)
         if invalid then return nil, fail("UNSUPPORTED_CAPABILITY", invalid) end
@@ -372,7 +366,13 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         if not tuned then return nil, fail("FORBIDDEN", tune_error or "Docker override is outside the host template") end
         resolved_profile = tuned
     end
-    if resolved_profile and resolved_profile.profile.placement_binding == "bee.placement.docker.binding:binding" and launch.session_credentials then launch.credentials = launch.session_credentials end
+    local selected_binding = launch_policy.placement_binding
+    if resolved_profile then selected_binding = resolved_profile.profile.placement_binding end
+    local placement, placement_error = placement_resolver.resolve(pinned, selected_binding)
+    if not placement then return nil, fail("UNAVAILABLE", placement_error or "placement binding") end
+    -- A container shares no home with the host, so its CLI login travels as
+    -- the definition's Docker credentials.
+    if placement.placement_kind == "docker" and launch.docker_credentials then launch.credentials = launch.docker_credentials end
     if selected and selected.profile.bee.credential_refs then
         local admitted: {string} = {}
         for _, ref in ipairs(selected.profile.bee.credential_refs) do
@@ -393,10 +393,6 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
             end
         end
     end
-    local selected_binding = launch_policy.placement_binding
-    if resolved_profile then selected_binding = resolved_profile.profile.placement_binding end
-    local placement, placement_error = placement_resolver.resolve(pinned, selected_binding)
-    if not placement then return nil, fail("UNAVAILABLE", placement_error or "placement binding") end
     if not binding then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
     -- A listed profile needs a host-selected executable, but this passive
     -- read cannot know the driver's eventual launch.executable. The carrier
@@ -490,14 +486,14 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
 end
 -- A caller composing a larger host plan can retain the same snapshot for
 -- its other declarations; this read performs no registry mutation or admission.
-function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?, session_route: boolean?): (Plan?, Reply?)
+function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?): (Plan?, Reply?)
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode, nil, nil, nil, nil, session_route)
+    local plan, refused = resolve(pinned, launch, mode, nil, nil, nil, nil)
     if not plan then return nil, refused end
     return plan, nil
 end
-function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?, session_route: boolean?, placement_override: profiles.Placement?): (Plan?, Reply?)
+function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?, placement_override: profiles.Placement?): (Plan?, Reply?)
     local selected: Selected? = nil
     if saved_id or saved_revision then
         if not workspace or not saved_id or not saved_revision or saved_revision < 1 then return nil, fail("INVALID", "saved profile needs workspace, identity and revision") end
@@ -509,7 +505,7 @@ function M.resolve(definition_ref: string, mode: string?, workspace: string?, sa
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest, session_route, placement_override)
+    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest, placement_override)
     if not plan then return nil, refused end
     return plan, nil
 end
@@ -637,10 +633,10 @@ end
 -- thread, obtain the attempt-bound resource grant and credential
 -- projections in the requester's own authority, and return the carrier
 -- request. Every acquisition keys on the request id, so a retry replays.
-local function admit_request(value: unknown, session_turn: SessionTurnContext?, session_operation_key: string?): (Admitted?, Reply?)
+function M.admit_request(value: unknown, session_operation_key: string?): (Admitted?, Reply?)
     local request, decode_error = M.decode_request(value)
     if not request then return nil, fail("INVALID", decode_error or "invalid request") end
-    local requester = session_turn and session_turn.owner_id or actor()
+    local requester = actor()
     if not requester then return nil, fail("UNAUTHENTICATED", "no actor") end
     local selected: Selected? = nil
     if request.saved_profile_id and request.saved_profile_revision then
@@ -658,7 +654,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, request.definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest, session_turn ~= nil, request.placement_override)
+    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest, request.placement_override)
     if not plan then return nil, plan_refused end
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
@@ -666,8 +662,8 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
     if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
     if request.workdir and not M.overrides(plan, "workdir") then return nil, fail("FORBIDDEN", "the launch does not allow a workdir override") end
     local defined_thread = launch.thread_policy.kind == "named" and request.thread_id == launch.thread_policy.thread_ref
-    local thread_override = not session_turn and (request.thread_title ~= nil
-        or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller" and not defined_thread))
+    local thread_override = request.thread_title ~= nil
+        or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller" and not defined_thread)
     if thread_override and not M.overrides(plan, "thread") then return nil, fail("FORBIDDEN", "the launch does not allow a thread override") end
     if request.placement and request.placement ~= plan.placement_kind then
         if not M.overrides(plan, "placement") then return nil, fail("FORBIDDEN", "the launch does not allow a placement override") end
@@ -679,16 +675,13 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         if not prepared then return nil, prepare_error end
     end
     local ids = M.identities(request.request_id)
-    if session_turn then ids = {action_id = session_turn.action_id, attempt_id = session_turn.attempt_id} end
     local previous = request.continuation
     if previous and (#request.workspace_id ~= 32 or request.workspace_id:find("[^0-9a-f]")) then
         return nil, fail("CONFLICT", "saved windows belong to their canonical home workspace")
     end
     if previous and plan.mode ~= "window" then return nil, fail("INVALID", "launch continuation requires a window profile") end
     local thread_id = request.thread_id
-    if session_turn then
-        if not thread_id then return nil, fail("INVALID", "a session turn needs its durable thread") end
-    elseif launch.thread_policy.kind == "named" and not thread_override then thread_id = launch.thread_policy.thread_ref end
+    if launch.thread_policy.kind == "named" and not thread_override then thread_id = launch.thread_policy.thread_ref end
     if previous then
         if thread_id and thread_id ~= previous.thread_id then return nil, fail("CONFLICT", "the saved thread differs from the launch definition") end
         thread_id = previous.thread_id
@@ -707,7 +700,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
     -- but it must be authorized before any session, project or credential
     -- resource is acquired. Carrier commits check membership again; this
     -- earlier read prevents a refused launch from leaving admission effects.
-    if thread_id and not previous and not session_turn then
+    if thread_id and not previous then
         local visible, thread_refused = call(M.THREADS .. ":get", {thread_id = thread_id})
         if not visible then return nil, thread_refused or fail("DENIED", "caller is not a member of the selected thread") end
         local membership = bounds.object(visible.membership)
@@ -720,7 +713,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
     -- session gets one stable digest-derived identity per launch request, while the
     -- default remains ephemeral and receives no session grant.
     local interactive_session: string? = nil
-    if not session_turn and plan.mode == "window" and previous then
+    if plan.mode == "window" and previous then
         local attached, attach_error = call("bee.threads.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
             plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
             attempt_id = previous.previous_attempt_id, origin_request_id = previous.origin_request_id,
@@ -730,18 +723,16 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
     end
     local resources: {placement_types.ResourceGrant} = {}
-    local session_ref: string? = session_turn and session_turn.session_ref or nil
+    local session_ref: string? = nil
     -- A previous attempt the thread never recorded was admitted but never
     -- started: this window is the session's first start, not a continuation.
     local first_start = false
     if session_resource then
-        if not session_turn then
-            local session_digest, session_error = digest_of({workspace_id = request.workspace_id,
-                request_id = previous and previous.origin_request_id or request.request_id})
-            if not session_digest then return nil, fail("UNAVAILABLE", tostring(session_error or "derive retained session identity")) end
-            session_ref = interactive_session or "session:" .. session_digest
-        end
-        if previous and not session_turn then
+        local session_digest, session_error = digest_of({workspace_id = request.workspace_id,
+            request_id = previous and previous.origin_request_id or request.request_id})
+        if not session_digest then return nil, fail("UNAVAILABLE", tostring(session_error or "derive retained session identity")) end
+        session_ref = interactive_session or "session:" .. session_digest
+        if previous then
             -- Saved references grant nothing. Existing owner operations verify
             -- membership, exact producer/session, driver pins and completed
             -- cleanup before this request obtains any fresh grants.
@@ -779,7 +770,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         if not created then return nil, create_refused end
         thread_id = tostring(created.thread_id)
     end
-    if not session_turn and plan.mode == "window" then
+    if plan.mode == "window" then
         local attached, attach_error = call("bee.threads.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
             plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
             attempt_id = ids.attempt_id, origin_request_id = previous and previous.origin_request_id or request.request_id,
@@ -839,50 +830,6 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref,
         saved_profile_revision = plan.saved_profile_revision,
         owner_component_revision = plan.owner_component_revision}, nil
-end
-function M.admit_request(value: unknown, session_operation_key: string?): (Admitted?, Reply?)
-    return admit_request(value, nil, session_operation_key)
-end
--- The scheduler is the only caller of this internal admission path. Threads
--- stores the owner, workspace, session, and thread identities on the route;
--- the current turn supplies only its immutable input and attempt identity.
-function M.admit_session_turn(value: unknown): (Admitted?, Reply?)
-    local input = bounds.object(value)
-    if not input then return nil, fail("INVALID", "session turn admission must be an object") end
-    local unknown_field = bounds.fields(input, {"attempt_id", "definition_ref", "workspace_id", "owner_id", "thread_id", "session_ref",
-        "action_id", "brief", "expected_plan_digest", "profile_id", "saved_profile_id", "saved_profile_revision", "workdir", "placement_override"})
-    if unknown_field then return nil, fail("INVALID", "session turn admission: " .. unknown_field) end
-    local attempt_id, definition_ref = bounds.id(input.attempt_id), bounds.id(input.definition_ref)
-    local workspace_id, owner_id = bounds.id(input.workspace_id), bounds.id(input.owner_id)
-    local thread_id, session_ref = bounds.id(input.thread_id), bounds.id(input.session_ref)
-    local action_id, profile_id = bounds.id(input.action_id), bounds.id(input.profile_id)
-    local brief = bounds.text(input.brief, M.MAX_BRIEF_BYTES)
-    local expected_plan_digest = bounds.text(input.expected_plan_digest, 64)
-    local workdir = input.workdir == nil and nil or bounds.id(input.workdir)
-    if not attempt_id or not definition_ref or not workspace_id or not owner_id or not thread_id
-        or not session_ref or not action_id or not profile_id or not brief
-        or not expected_plan_digest or #expected_plan_digest ~= 64 or not expected_plan_digest:match("^[0-9a-f]+$")
-        or (input.workdir ~= nil and not workdir) then
-        return nil, fail("INVALID", "session turn admission identities are incomplete")
-    end
-    local request: {[string]: unknown} = {request_id = attempt_id, definition_ref = definition_ref,
-        workspace_id = workspace_id, thread_id = thread_id, brief = brief,
-        expected_plan_digest = expected_plan_digest}
-    if input.saved_profile_id ~= nil then request.saved_profile_id = input.saved_profile_id end
-    if input.placement_override ~= nil then request.placement_override = input.placement_override end
-    if input.saved_profile_revision ~= nil then request.saved_profile_revision = input.saved_profile_revision end
-    if workdir then request.workdir = workdir end
-    local context: SessionTurnContext = {owner_id = owner_id, session_ref = session_ref,
-        action_id = action_id, attempt_id = attempt_id}
-    local admitted, refused = admit_request(request, context)
-    if not admitted then return nil, refused end
-    if admitted.plan.profile_id ~= profile_id then
-        return nil, fail("CONFLICT", "the selected session profile changed since admission")
-    end
-    if not admitted.plan.session_resource then
-        return nil, fail("UNAVAILABLE", "the selected definition has no retained session resource")
-    end
-    return admitted, nil
 end
 -- External callers keep the operation reply; local execution paths consume
 -- the typed admitted request without decoding our own value a second time.

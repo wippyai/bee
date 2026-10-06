@@ -14,10 +14,11 @@ methods exactly as declared by the metadata-discovered, host-activated binding,
 with callable targets read from one pinned registry snapshot. Sessions has no persistence,
 migration or tool namespace: Threads owns its durable records and migrations.
 
-A launch definition may select `session_profile_id` for structured executor
-turns and `session_credentials` for their explicit broker projections. Sessions admission pins that driver profile while native manual windows
-retain the definition's window profile. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes remain addressable. Catalog readiness measures the same
-structured route that `open` admits. The real owner and catalog bindings are
+Every session is a window: admission and the catalog both pin the definition's
+window profile. A launch definition may list `docker_credentials`, the broker
+projections a Docker placement receives in place of `credentials`, since the
+container shares no home with the host CLI login. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes remain addressable. Catalog readiness measures the same
+window route that `open` admits. The real owner and catalog bindings are
 defaults; the kit starts the pull scheduler against the Threads journal.
 
 Provider login checks use the home selected by each profile; file existence

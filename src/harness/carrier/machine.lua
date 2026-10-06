@@ -218,7 +218,7 @@ function M.verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAccept
     if mismatch then return nil, label .. " acceptance: " .. mismatch end
     return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
 end
-local function measure(request: Request, session_turn: boolean?, resumed: boolean?): (Measured?, string?)
+local function measure(request: Request): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
     local snapshot, snapshot_error = catalog.read(pinned, nil)
@@ -269,7 +269,7 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
         if not launch_policy.fixture then
             local capability, capability_error = descriptor.find_provider(pinned, binding.driver_id)
             if not capability then return nil, capability_error end
-            local context = profile.mode == "window" and "window" or (resumed and "resume" or "first_turn")
+            local context = profile.mode == "window" and "window" or "first_turn"
             local answer = descriptor.permission_answer(capability, context)
             if answer.transport == "provider" then return nil, answer.reason end
             if answer.adapter_ref ~= declared.adapter_ref then return nil, "host permission adapter differs from the driver's declared transport" end
@@ -321,7 +321,7 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, {provider_ref = launch_policy.provider_ref,
-        option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or (resumed and "resume" or "first_turn"), provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or "first_turn", provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
         gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
@@ -340,9 +340,11 @@ function M.required_file_refusal(launch: driver_types.Launch, private_home: bool
         " is only available where Bee inherits the user's home; a private home does not carry it"
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
--- launch, bind executables and requirements from the host policy.
-local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?, prompt: string?): (Plan?, string?)
-    local measured, measure_error = measure(request, session_turn, session_resume_ref ~= nil)
+-- launch, bind executables and requirements from the host policy. A window
+-- may start its agent with a prompt: the message waiting for it, which is
+-- not the admitted brief.
+function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
+    local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
     local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then
@@ -355,14 +357,7 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
     if request.reauthorize == true and (not request.previous_attempt_id or profile.mode ~= "window") then
         return nil, "reauthorization requires a saved window"
     end
-    if session_turn and session_resume_ref then
-        if not request.session_ref then return nil, "session continuation needs its retained session" end
-        resume_ref = session_resume_ref
-        previous_private_home = profile.private_home
-        local dispatch = binding.methods.dispatch
-        if not dispatch then return nil, "driver has no continuation method" end
-        prepare_target = dispatch
-    elseif request.previous_attempt_id and not session_turn then
+    if request.previous_attempt_id then
         if not request.session_ref then return nil, "continuation needs a retained session" end
         if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
         local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
@@ -545,17 +540,6 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
     end
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
         placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
-end
--- plan measures and prepares a launch. A window may start its agent with a
--- prompt: the message waiting for it, which is not the admitted brief.
-function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
-    return build_plan(io, request, false, nil, prompt)
-end
-function M.session_plan(io: IO, request: Request, resume_ref: string?): (Plan?, string?)
-    if resume_ref ~= nil and (resume_ref == "" or #resume_ref > 256 or resume_ref:find("[%c%s]")) then
-        return nil, "session resume identity is invalid"
-    end
-    return build_plan(io, request, true, resume_ref)
 end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records

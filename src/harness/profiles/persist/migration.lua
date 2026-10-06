@@ -7,7 +7,7 @@ M.DIAGNOSTIC = "bee.agent-profile-migration@1"
 type Object = {[string]: unknown}
 type Binding = (string) -> string?
 type NativeHome = "private" | "machine"
-type Home = (string, string?) -> NativeHome?
+type Home = (string) -> NativeHome?
 function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profile) -> string?)?, home: Home?): Object
     local source = bounds.object(value)
     local reasons: {string} = {}
@@ -63,7 +63,7 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
     draft.bee = bee
     if source.placement_profile_ref ~= nil then
         if source.placement_profile_ref == "bee.placement.profiles:native" then
-            local prior_home = definition and home and home(definition, bounds.id(source.presentation)) or nil
+            local prior_home = definition and home and home(definition) or nil
             if not prior_home then reasons[#reasons + 1] = "Former native home cannot be established" end
             draft.placement = {kind = "native", home = prior_home}
         else draft.placement = {kind = "docker", profile_ref = source.placement_profile_ref} end

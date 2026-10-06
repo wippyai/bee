@@ -539,11 +539,64 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     if not executor then return {ok = false, error = tostring(executor_error or "approval executor is unavailable")} end
     local resolved = destination_resolver(config, profile_value, activation_store.node,
         profile_value.workspace_id, activation_store)
+    -- An application database the intent's grant provisions is staged with
+    -- the grant that reaches it before its migrations run, and its migrations
+    -- run with that grant; the application overlay installs both for good.
+    local function database_grants(work: migration_work.Work, intent: unknown): ({unknown}?, {string}?, string?)
+        local staged: {unknown} = {}
+        local policies: {string} = {}
+        local wanted: {[string]: migration_work.Database} = {}
+        local any = false
+        for _, item in ipairs(work.databases) do
+            if item.database_id:sub(1, #capability_files.DATABASE_PREFIX) == capability_files.DATABASE_PREFIX then
+                wanted[item.database_id], any = item, true
+            end
+        end
+        if not any then return staged, policies, nil end
+        local generated, generated_error = generated_install(profile_value, intent)
+        if not generated then return nil, nil, generated_error or "the intent provisions no application database" end
+        local granted: {[string]: boolean} = {}
+        for _, raw_policy in ipairs(bounds.array(generated.policies, 64) or {}) do
+            local policy = bounds.object(raw_policy)
+            local data = policy and bounds.object(policy.data) or nil
+            local inner = data and bounds.object(data.policy) or nil
+            local resources = inner and bounds.array(inner.resources, 64) or nil
+            local reaches: migration_work.Database? = nil
+            for _, resource in ipairs(resources or {}) do
+                if type(resource) == "string" and wanted[resource] then reaches = wanted[resource] end
+            end
+            if policy and reaches then
+                policies[#policies + 1] = tostring(policy.id)
+                granted[reaches.database_id] = true
+                if reaches.planned then staged[#staged + 1] = policy end
+            end
+        end
+        for id, item in pairs(wanted) do
+            if not granted[id] then return nil, nil, "no approved grant reaches application database " .. id end
+            if item.planned then staged[#staged + 1] = item.definition end
+        end
+        table.sort(policies)
+        return staged, policies, nil
+    end
     local migration_adapter = {
-        matches = migration_effect.matches, prepare = migration_effect.prepare,
+        matches = function(overlay_owner: string, work: migration_work.Work, intent: unknown): (boolean?, string?)
+            local staged, _, staged_error = database_grants(work, intent)
+            if not staged then return nil, staged_error end
+            return migration_effect.matches(overlay_owner, work, staged)
+        end,
+        prepare = function(overlay_owner: string, work: migration_work.Work, intent: unknown): ({[string]: unknown}?, string?)
+            local staged, _, staged_error = database_grants(work, intent)
+            if not staged then return nil, staged_error end
+            return migration_effect.prepare(overlay_owner, work, staged)
+        end,
         clear = migration_effect.clear, cleared = migration_effect.cleared,
-        execute = function(work: migration_work.Work): ({bytes: string, digest: string}?, boolean, string?)
-            local receipt, complete, execute_error = migration_effect.execute(work, profile_value.migration_policies)
+        execute = function(work: migration_work.Work, intent: unknown): ({bytes: string, digest: string}?, boolean, string?)
+            local _, granted, grant_error = database_grants(work, intent)
+            if not granted then return nil, false, grant_error end
+            local execution: {string} = {}
+            for _, id in ipairs(profile_value.migration_policies or {}) do execution[#execution + 1] = id end
+            for _, id in ipairs(granted) do execution[#execution + 1] = id end
+            local receipt, complete, execute_error = migration_effect.execute(work, execution)
             return receipt, complete, execute_error
         end,
     }

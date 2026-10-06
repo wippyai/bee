@@ -26,12 +26,7 @@ type Object = {[string]: unknown}
 type ResolverWorld = {revision: integer, digest: string,
     application_admission: application_admission.Measurement?,
     capability: preflight.CapabilityEvidence?, blocked: boolean?}
-type MigrationEffects = {
-    matches: (string, migration_work.Work) -> (boolean?, string?),
-    prepare: (string, migration_work.Work) -> ({[string]: unknown}?, string?),
-    clear: (string) -> ({[string]: unknown}?, string?),
-    cleared: (string) -> (boolean?, string?),
-    execute: (migration_work.Work) -> ({bytes: string, digest: string}?, boolean, string?)}
+type MigrationEffects = owner.MigrationEffects
 
 local function candidate_entry(id: string, kind: string, package: string, digest: string): preflight.Entry
     return {id = id, kind = kind, package = package, digest = digest, references = EMPTY_STRINGS,
@@ -61,11 +56,11 @@ local function ok(result: {[string]: unknown}): {[string]: unknown}
 end
 local function migration_effect(): MigrationEffects
     return {
-        matches = function(_owner: string, _work: migration_work.Work): (boolean?, string?) return false, nil end,
-        prepare = function(_owner: string, _work: migration_work.Work): ({[string]: unknown}?, string?) return {changed = false}, nil end,
+        matches = function(_owner: string, _work: migration_work.Work, _intent: unknown): (boolean?, string?) return false, nil end,
+        prepare = function(_owner: string, _work: migration_work.Work, _intent: unknown): ({[string]: unknown}?, string?) return {changed = false}, nil end,
         clear = function(_owner: string): ({[string]: unknown}?, string?) return {changed = false}, nil end,
         cleared = function(_owner: string): (boolean?, string?) return true, nil end,
-        execute = function(_work: migration_work.Work): ({bytes: string, digest: string}?, boolean, string?)
+        execute = function(_work: migration_work.Work, _intent: unknown): ({bytes: string, digest: string}?, boolean, string?)
             return nil, false, "unexpected migration execution"
         end,
     }
@@ -1094,15 +1089,15 @@ local function migration_tests()
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
             local state: {[string]: unknown} = {staged = false, executed = false, applied = false}
             local effect = {
-                matches = function(_owner: string, _work: migration_work.Work): (boolean?, string?) return state.staged == true, nil end,
-                prepare = function(_owner: string, _work: migration_work.Work): ({[string]: unknown}?, string?)
+                matches = function(_owner: string, _work: migration_work.Work, _intent: unknown): (boolean?, string?) return state.staged == true, nil end,
+                prepare = function(_owner: string, _work: migration_work.Work, _intent: unknown): ({[string]: unknown}?, string?)
                     state.staged = true; return {changed = true}, nil
                 end,
                 clear = function(_owner: string): ({[string]: unknown}?, string?)
                     state.staged = false; return {changed = true}, nil
                 end,
                 cleared = function(_owner: string): (boolean?, string?) return state.staged ~= true, nil end,
-                execute = function(_work: migration_work.Work): ({bytes: string, digest: string}?, boolean, string?)
+                execute = function(_work: migration_work.Work, _intent: unknown): ({bytes: string, digest: string}?, boolean, string?)
                     state.executed = true
                     local bytes = assert(canonical.encode({schema_revision = "bee.governance-migration-receipt@1",
                         rows = {{id = "demo:001", target_db = "host:db", module = "demo/app", status = "applied"}}}))

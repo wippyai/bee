@@ -23,12 +23,15 @@ type Resolver = resolution.Resolver
 type Executor = approval.Executor
 type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?)
 type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?)
+-- Migration effects receive the intent so the destination can stage what
+-- the intent's grants provision for the migrations: the application database
+-- and the grant that lets its migrations reach it.
 type MigrationEffects = {
-    matches: (string, migration_work.Work) -> (boolean?, string?),
-    prepare: (string, migration_work.Work) -> ({[string]: unknown}?, string?),
+    matches: (string, migration_work.Work, unknown) -> (boolean?, string?),
+    prepare: (string, migration_work.Work, unknown) -> ({[string]: unknown}?, string?),
     clear: (string) -> ({[string]: unknown}?, string?),
     cleared: (string) -> (boolean?, string?),
-    execute: (migration_work.Work) -> ({bytes: string, digest: string}?, boolean, string?)}
+    execute: (migration_work.Work, unknown) -> ({bytes: string, digest: string}?, boolean, string?)}
 type Config = {plans: plans.Store, activations: activations.Store, resolver: Resolver,
     approvals: Executor, actor_id: string, consumer_id: string, overlay_owner: string,
     approval_policy: string, apply: Apply, matches: Observe, migrations: MigrationEffects,
@@ -459,7 +462,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         local work, work_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
         if not work then return failure("INTERNAL", tostring(work_error or "decode activation migration work")) end
         if intent.migrations_completed ~= true then
-            local staged, staged_error = config.migrations.matches(config.overlay_owner, work)
+            local staged, staged_error = config.migrations.matches(config.overlay_owner, work, intent)
             if staged == nil then return failure("UNAVAILABLE", tostring(staged_error)) end
             local cleared, cleared_error = config.migrations.cleared(config.overlay_owner)
             if cleared == nil then return failure("UNAVAILABLE", tostring(cleared_error)) end
@@ -476,11 +479,11 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             end
             local _, measurement_error = remeasure_progress(config, intent)
             if measurement_error then return measurement_error end
-            local prepared, prepare_error = config.migrations.prepare(config.overlay_owner, work)
+            local prepared, prepare_error = config.migrations.prepare(config.overlay_owner, work, intent)
             if not prepared then return failure("UNCERTAIN", tostring(prepare_error or "prepare migration definitions")) end
-            local exact, exact_error = config.migrations.matches(config.overlay_owner, work)
+            local exact, exact_error = config.migrations.matches(config.overlay_owner, work, intent)
             if exact ~= true then return failure("UNCERTAIN", tostring(exact_error or "migration definitions are not exactly staged")) end
-            local receipt, complete, execute_error = config.migrations.execute(work)
+            local receipt, complete, execute_error = config.migrations.execute(work, intent)
             if not receipt then return failure("UNCERTAIN", tostring(execute_error or "execute captured migrations")) end
             local operation_key = key(prefix, "migrations-" .. tostring(intent.revision))
             if not operation_key then return failure("INVALID", "activation receipt key is too long") end

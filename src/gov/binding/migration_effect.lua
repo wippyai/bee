@@ -24,22 +24,25 @@ local function staging_owner(overlay_owner: string): (string?, string?)
     return value, nil
 end
 
-local function definitions(work: migration_work.Work): {unknown}
+-- The staged prerequisites: the captured migration definitions and the
+-- provisioned entries they need before the application overlay exists.
+local function definitions(work: migration_work.Work, provisioned: {unknown}): {unknown}
     local entries: {unknown} = {}
     for _, item in ipairs(work.migrations) do entries[#entries + 1] = item.definition end
+    for _, entry in ipairs(provisioned) do entries[#entries + 1] = entry end
     return entries
 end
 
-function M.matches(overlay_owner: string, work: migration_work.Work): (boolean?, string?)
+function M.matches(overlay_owner: string, work: migration_work.Work, provisioned: {unknown}): (boolean?, string?)
     local owner, owner_error = staging_owner(overlay_owner)
     if not owner then return nil, owner_error end
-    return materializer.matches(owner, definitions(work))
+    return materializer.matches(owner, definitions(work, provisioned))
 end
 
-function M.prepare(overlay_owner: string, work: migration_work.Work): ({[string]: unknown}?, string?)
+function M.prepare(overlay_owner: string, work: migration_work.Work, provisioned: {unknown}): ({[string]: unknown}?, string?)
     local owner, owner_error = staging_owner(overlay_owner)
     if not owner then return nil, owner_error end
-    return materializer.reconcile(owner, definitions(work))
+    return materializer.reconcile(owner, definitions(work, provisioned))
 end
 
 function M.clear(overlay_owner: string): ({[string]: unknown}?, string?)

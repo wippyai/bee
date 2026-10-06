@@ -188,6 +188,25 @@ local TOOLS: {Tool} = {
             filter = {type = "string", minLength = 1, maxLength = 160, description = "list and run: keep the tests whose entry id contains this text"},
             run_id = {type = "string", minLength = 1, maxLength = 160, description = "status: the run_id run returned"},
         }, examples = {{operation = "run", application = "tally"}, {operation = "status", run_id = "0198f1c2-0000-7000-8000-000000000000"}}}},
+    {name = "process_run", description = "Run the command a person approved for this attempt through request_capability with process.exec: the approved command followed by these arguments, in the approved folder of this workspace, with only the host PATH in its environment. Pass the approval_id capability_status reported as granted. Returns the exit code and the combined stdout and stderr, at most 1 MiB per stream; a run past timeout_ms is stopped. Refused once the approval's time runs out or for any other command.",
+        operation = "bee.gateway.binding:process_run",
+        policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"approval_id"}, properties = {
+            approval_id = {type = "string", minLength = 1, maxLength = 160},
+            arguments = {type = "array", maxItems = 64, items = {type = "string", maxLength = 4096}},
+            timeout_ms = {type = "integer", minimum = 1, maximum = 600000},
+        }}},
+    {name = "http_request", description = "Send one HTTP request a person approved for this attempt through request_capability with http.api: the url must be under the approved https origin and path prefix and the method one of the approved methods. Pass the approval_id capability_status reported as granted. Returns status_code, headers and body; a response that arrived from outside the approved origin and path is withheld. Refused once the approval's time runs out.",
+        operation = "bee.gateway.binding:http_request",
+        policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"approval_id", "method", "url"}, properties = {
+            approval_id = {type = "string", minLength = 1, maxLength = 160},
+            method = {type = "string", enum = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}},
+            url = {type = "string", minLength = 1, maxLength = 2048},
+            headers = {type = "object"},
+            body = {type = "string", maxLength = 1048576},
+            timeout = {type = "number", minimum = 1, maximum = 60},
+        }}},
     {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.apps:open_call",
         policies = {TOOL_POLICY_REFS.application_open}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_id", "arguments", "idempotency_key"}, properties = {
@@ -289,7 +308,12 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
         properties = {approval_id = {type = "string"}, status = {type = "string"}}}),
     capability_status = output_schema({type = "object", additionalProperties = false,
         properties = {approval_id = {type = "string"}, status = {type = "string"},
-            grant_id = {type = "string"}, expires_at = {type = "string"}, authorization_epoch = {type = "integer"}}}),
+            grant_id = {type = "string"}, expires_at = {type = "string"}, authorization_epoch = {type = "integer"},
+            tools = STRING_ARRAY_SCHEMA}}),
+    process_run = output_schema({type = "object", additionalProperties = false,
+        properties = {exit_code = INTEGER_SCHEMA, output = STRING_SCHEMA}}),
+    http_request = output_schema({type = "object", additionalProperties = false,
+        properties = {status_code = INTEGER_SCHEMA, headers = {type = "object"}, body = STRING_SCHEMA}}),
     install_request = output_schema({type = "object"}),
     uninstall_request = output_schema({type = "object"}),
     install_status = output_schema({type = "object"}),
@@ -480,6 +504,50 @@ function M.capability_status_arguments(params: Object): (Object?, string?)
     local approval_id = bounds.id(arguments.approval_id)
     if not approval_id then return nil, "approval_id is required and must be an identifier" end
     return {approval_id = approval_id}, nil
+end
+-- A held elevation's tools name the approval they exercise; the gateway
+-- reads everything else from that approval.
+local function held_approval(arguments: Object): (string?, string?)
+    local approval_id = bounds.id(arguments.approval_id)
+    if not approval_id then return nil, "approval_id is required and must be an identifier" end
+    return approval_id, nil
+end
+function M.process_run_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"approval_id", "arguments", "timeout_ms"})
+    if unknown_field then return nil, unknown_field end
+    local approval_id, approval_error = held_approval(arguments)
+    if not approval_id then return nil, approval_error end
+    local rows = bounds.dense_list(arguments.arguments == nil and {} or arguments.arguments, 64, "arguments")
+    if not rows then return nil, "arguments must be a list of strings" end
+    local values: {string} = {}
+    for _, item in ipairs(rows) do
+        if type(item) ~= "string" or #item > 4096 then return nil, "arguments must be a list of strings" end
+        values[#values + 1] = item
+    end
+    local request: Object = {approval_id = approval_id, arguments = values}
+    if arguments.timeout_ms ~= nil then
+        local timeout = bounds.integer(arguments.timeout_ms)
+        if not timeout or timeout < 1 or timeout > 600000 then return nil, "timeout_ms must be between 1 and 600000" end
+        request.timeout_ms = timeout
+    end
+    return request, nil
+end
+function M.http_request_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"approval_id", "method", "url", "headers", "body", "timeout"})
+    if unknown_field then return nil, unknown_field end
+    local approval_id, approval_error = held_approval(arguments)
+    if not approval_id then return nil, approval_error end
+    if type(arguments.method) ~= "string" then return nil, "method is required" end
+    if type(arguments.url) ~= "string" then return nil, "url is required" end
+    local request: Object = {approval_id = approval_id, method = arguments.method, url = arguments.url}
+    if arguments.headers ~= nil then request.headers = arguments.headers end
+    if arguments.body ~= nil then request.body = arguments.body end
+    if arguments.timeout ~= nil then request.timeout = arguments.timeout end
+    return request, nil
 end
 -- Installation requests name a package; the host resolves everything else.
 function M.install_arguments(params: Object, uninstall: boolean): (Object?, string?)

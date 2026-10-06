@@ -1682,6 +1682,8 @@ entries:
     - bee.resources.binding:revoke_all
     - bee.resources.binding:resolve
     - bee.resources.binding:list
+    - bee.gateway.binding:process_run
+    - bee.gateway.binding:http_request
     effect: allow
 - name: installation_client_policy
   kind: security.policy
@@ -1787,13 +1789,17 @@ entries:
   - security
   - registry
   - time
+  - system
+  - process
   security:
     policies:
     - bee.harness.catalog:elevation_client_policy
+    - bee.tests.node:catalog_test_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
     principals: bee.tests.principals:bound
+    client: bee.node:client
 - name: permission_carrier_test
   kind: function.lua
   source: file://permission_carrier_test.lua

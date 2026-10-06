@@ -218,7 +218,8 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         if not selected then return missing end
         request.thread_id = selected
     end
-    if tool.name == "request_capability" or tool.name == "capability_status" or tool.name == "install_request"
+    if tool.name == "request_capability" or tool.name == "capability_status" or tool.name == "process_run"
+        or tool.name == "http_request" or tool.name == "install_request"
         or tool.name == "uninstall_request" or tool.name == "install_status"
         or tool.name == "publish_request" or tool.name == "publish_status" then
         request.binding_id = binding.binding_id
@@ -338,6 +339,8 @@ local function handle(): nil
     elseif tool.name == "capabilities" then arguments, argument_error = mcp.capabilities_arguments(parameters)
     elseif tool.name == "request_capability" then arguments, argument_error = mcp.capability_arguments(parameters)
     elseif tool.name == "capability_status" then arguments, argument_error = mcp.capability_status_arguments(parameters)
+    elseif tool.name == "process_run" then arguments, argument_error = mcp.process_run_arguments(parameters)
+    elseif tool.name == "http_request" then arguments, argument_error = mcp.http_request_arguments(parameters)
     elseif tool.name == "overlay" then arguments, argument_error = mcp.overlay_arguments(parameters)
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)
     elseif tool.name == "components" then arguments, argument_error = mcp.components_arguments(parameters)

@@ -35,6 +35,24 @@ entries:
     type: bee.resource_ref
     comment: Linked host approval consume policy; an absent link fails closed
   resource_ref: bee.security.approvals:approval_consume_policy
+- name: workspace_folder_read_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked workspace catalog read a held process elevation resolves the bound workspace's folder through; an absent link fails closed
+  resource_ref: bee.node.binding:read
+- name: workspace_folder_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked policy the bound subject reads its workspace's catalog row under; an absent link fails closed
+  resource_ref: bee.node.security:workspace_folder_read_policy
+- name: process_executor
+  kind: exec.native
+  meta:
+    comment: Runs the commands agent attempts hold person-approved process elevations for; children start with the host PATH and nothing else
+  default_env:
+    PATH: ${env:bee.capability:exec_path}
 - name: tool_read_policy_ref
   kind: registry.entry
   meta:

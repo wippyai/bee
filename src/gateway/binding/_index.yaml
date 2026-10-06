@@ -35,6 +35,7 @@ entries:
     access: bee.gateway.security:access
     elevation: bee.gateway.security:elevation
     installation: bee.gateway.security:installation
+    capability_use: bee.gateway.security:capability_use
 - name: open
   kind: function.lua
   source: file://open_method.lua
@@ -171,6 +172,35 @@ entries:
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
     - bee.resources.security:resource_grant_thread_policy
+- name: process_run
+  kind: function.lua
+  source: file://process_run_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:elevation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.gateway.security:process_use_policy
+    - bee.resources.security:resource_environment_policy
+- name: http_request
+  kind: function.lua
+  source: file://http_request_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:elevation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.gateway.security:http_use_policy
 - name: install_request
   kind: function.lua
   source: file://install_request_method.lua

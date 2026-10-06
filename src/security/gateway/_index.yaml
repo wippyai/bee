@@ -168,8 +168,8 @@ entries:
 - name: gateway_tool_read_policy
   kind: security.policy
   meta:
-    comment: The scope a bound subject runs thread_read, thread_wait, thread_sessions and capability elevation under; membership is still checked by the thread owner and elevation writes only through a
-      thread-bound approval
+    comment: The scope a bound subject runs thread_read, thread_wait, thread_sessions, capability elevation and the tools that exercise a held elevation under; membership is still checked by the thread
+      owner, elevation writes only through a thread-bound approval and each held tool call checks that approval again
   policy:
     actions:
     - funcs.call
@@ -179,6 +179,8 @@ entries:
     - bee.threads.binding:get
     - bee.gateway.binding:request_capability
     - bee.gateway.binding:capability_status
+    - bee.gateway.binding:process_run
+    - bee.gateway.binding:http_request
     effect: allow
 - name: gateway_tool_session_policy
   kind: security.policy.expr

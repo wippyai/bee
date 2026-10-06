@@ -32,6 +32,7 @@ local hook_store = require("hook_store")
 local listener_store = require("listener_store")
 local access = require("access")
 local elevation = require("elevation")
+local capability_use = require("capability_use")
 local installation = require("installation")
 local sessions = require("sessions")
 local M = {}
@@ -1322,6 +1323,28 @@ function M.capability_status(value: unknown): Reply
     if not policy_name then return policy_refusal end
     local object = bounds.object(value) or {}
     return elevation.status(binding, policy_name, object.approval_id)
+end
+-- A tool exercises only the approved capability this attempt holds; the
+-- held approval is checked again on every call.
+local function held(value: unknown, tool: string): (Binding?, elevation.Held?, Reply?)
+    local binding, refusal = own_binding(value)
+    if not binding then return nil, nil, refusal or fail("UNAVAILABLE", "binding is unavailable") end
+    local policy_name, policy_refusal = elevation_policy(binding)
+    if not policy_name then return nil, nil, policy_refusal end
+    local object = bounds.object(value) or {}
+    local request, held_refusal = elevation.held(binding, policy_name, object.approval_id, tool)
+    if not request then return nil, nil, held_refusal end
+    return binding, request, nil
+end
+function M.process_run(value: unknown): Reply
+    local binding, request, refusal = held(value, "process_run")
+    if not binding or not request then return refusal or fail("DENIED", "no held capability runs a process") end
+    return capability_use.process(binding, request, value)
+end
+function M.http_request(value: unknown): Reply
+    local binding, request, refusal = held(value, "http_request")
+    if not binding or not request then return refusal or fail("DENIED", "no held capability sends HTTP requests") end
+    return capability_use.http(request, value)
 end
 local function installation_call(value: unknown, fields: {string}): (Binding?, string?, unknown?, Reply?)
     local binding, refusal = own_binding(value)

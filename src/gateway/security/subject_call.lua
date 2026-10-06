@@ -24,20 +24,22 @@ type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string,
 
 function M.fail(code: string, message: string): Reply return {ok = false, value = nil, error = {code = code, message = message}} end
 
-local function linked_policy(reference: string, description: string): (string?, Reply?)
+-- linked: the registry identity a host-linked resource reference names.
+local function linked(reference: string, description: string): (string?, Reply?)
     local entry, entry_error = registry.get(reference)
-    if entry_error or not entry then return nil, M.fail("UNAVAILABLE", description .. " policy reference is unavailable") end
+    if entry_error or not entry then return nil, M.fail("UNAVAILABLE", description .. " reference is unavailable") end
     local data = bounds.object(entry.data)
     local target = data and bounds.id(data.resource_ref)
-    if not target then return nil, M.fail("UNAVAILABLE", description .. " policy is not linked") end
+    if not target then return nil, M.fail("UNAVAILABLE", description .. " is not linked") end
     return target, nil
 end
+M.linked = linked
 
 -- The host-linked approval request and consume policies, in that order.
 function M.approval_policies(): ({string}?, Reply?)
-    local request, request_error = linked_policy(M.REQUEST_POLICY_REF, "approval request")
+    local request, request_error = linked(M.REQUEST_POLICY_REF, "approval request policy")
     if not request then return nil, request_error end
-    local consume, consume_error = linked_policy(M.CONSUME_POLICY_REF, "approval consume")
+    local consume, consume_error = linked(M.CONSUME_POLICY_REF, "approval consume policy")
     if not consume then return nil, consume_error end
     return {request, consume}, nil
 end

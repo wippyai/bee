@@ -1,9 +1,11 @@
--- MIT. Drain both probe pipes and observe completion or a caller-declared wait bound.
+-- MIT. Drain both pipes of a host process and observe completion or a
+-- caller-declared wait bound.
 local channel = require("channel")
 local time = require("time")
 
 local M = {}
 M.MAX_OUTPUT_BYTES = 4096
+M.MAX_BOUND_BYTES = 1048576
 M.DEADLINE_MS = 3000
 
 type Stream = {
@@ -37,7 +39,7 @@ end
 
 function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Release, timeout_ms: integer?, maximum_bytes: integer?): (string?, integer?, string?)
     local maximum: integer = maximum_bytes or math.floor(M.MAX_OUTPUT_BYTES)
-    if maximum < 1 or maximum > 65536 then return nil, nil, "invalid host probe output bound" end
+    if maximum < 1 or maximum > M.MAX_BOUND_BYTES then return nil, nil, "invalid host probe output bound" end
     local timeout = timeout_ms or M.DEADLINE_MS
     local finished = false
     local function cleanup(force: boolean)

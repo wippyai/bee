@@ -2,7 +2,9 @@
 -- host catalog capability, the person approves its catalog wording bound
 -- to that thread and attempt, consumption writes one resources grant row
 -- for the authenticated thread actor, and placement resolves it for that
--- attempt only. A child attempt resolves nothing.
+-- attempt only. A child attempt resolves nothing. A capability exercised
+-- through gateway tools is held as its consumed approval, and only that
+-- attempt's tool calls run the approved command.
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
@@ -10,6 +12,8 @@ local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
 local time = require("time")
+local system = require("system")
+local client = require("client")
 local AGENT = "bee.test.elevation_agent"
 local MANAGER = "bee.test.elevation_manager"
 local APPROVER = "bee.test.elevation_approver"
@@ -120,31 +124,53 @@ local function restore_database_source(source: string)
     end
     apply(entry)
 end
+type Bound = {binding_id: string, thread_id: string, attempt_id: string}
+-- One admitted attempt on a fresh thread, bound to the gateway with these
+-- tools and the fixture approver policy for elevation.
+local function attempt_binding(workspace: string, tools: {string}): Bound
+    local thread = tostring(call(AGENT, workspace, "bee.threads.binding:create",
+        {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Elevation"}).thread_id)
+    call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
+    local attempt = fresh("attempt")
+    local action = "action-" .. attempt
+    call(AGENT, workspace, "bee.threads.binding:admit_action", {thread_id = thread, action_id = action,
+        idempotency_key = fresh("admit"), admitted = {request_id = fresh("req"), principal_id = AGENT, binding_ref = "test-binding",
+            binding_digest = "test-digest", grant_refs = {}, budget_ref = "test-budget", input = {text = "elevate"}}})
+    call(AGENT, workspace, "bee.threads.binding:prepare_attempt", {thread_id = thread, action_id = action,
+        attempt_id = attempt, idempotency_key = fresh("prepare"), prepared = {binding_ref = "test-binding", binding_digest = "test-digest",
+            profile_id = "test-profile", profile_digest = "test-profile-digest", placement_binding = "test-placement",
+            placement_attempt_id = attempt, plan_digest = "test-plan"}})
+    local surface = {tools = {}, traits = {}, base_tools = tools, active_traits = {},
+        fixed_context = {}, dynamic_keys = {}, access = {policy = APPROVER_POLICY, traits = {}}}
+    local binding = call(AGENT, workspace, "bee.gateway.binding:admit", {subject = AGENT, action_id = action,
+        attempt_id = attempt, thread_id = thread, owner_incarnation = 1, carrier_epoch = 1,
+        tools = tools, ttl_ms = 600000, idempotency_key = fresh("admit"), surface = surface, workspace_id = workspace})
+    return {binding_id = tostring((assert(bounds.object(binding.binding))).binding_id), thread_id = thread, attempt_id = attempt}
+end
+-- The node's home workspace, which the catalog records with a real folder.
+local function home(): {id: string, path: string}
+    local value, err = client.call(assert(system.node.id()), "watch", {})
+    if not value then error("watch: " .. tostring(err)) end
+    local state = assert(client.state(value))
+    for _, workspace in ipairs(state.workspaces) do
+        if workspace.id == state.home then return {id = workspace.id, path = workspace.path} end
+    end
+    error("no home workspace")
+end
+-- The approver decides one pending elevation as approved.
+local function approve(workspace: string, approval_id: unknown)
+    local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = approval_id})
+    call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = approval_id,
+        expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
+end
 local function define_tests()
     test.describe("Capability elevation", function()
         test.it("elevates one attempt through a thread-bound approval into a placement grant", function()
             ensure_approver_policy()
             admit_root()
             local workspace = fresh("elevation")
-            local thread = call(AGENT, workspace, "bee.threads.binding:create",
-                {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Elevation"}).thread_id
-            call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
-            local attempt = fresh("attempt")
-            local action = "action-" .. attempt
-            call(AGENT, workspace, "bee.threads.binding:admit_action", {thread_id = thread, action_id = action,
-                idempotency_key = fresh("admit"), admitted = {request_id = fresh("req"), principal_id = AGENT, binding_ref = "test-binding",
-                    binding_digest = "test-digest", grant_refs = {}, budget_ref = "test-budget", input = {text = "elevate"}}})
-            call(AGENT, workspace, "bee.threads.binding:prepare_attempt", {thread_id = thread, action_id = action,
-                attempt_id = attempt, idempotency_key = fresh("prepare"), prepared = {binding_ref = "test-binding", binding_digest = "test-digest",
-                    profile_id = "test-profile", profile_digest = "test-profile-digest", placement_binding = "test-placement",
-                    placement_attempt_id = attempt, plan_digest = "test-plan"}})
-            local tools = {"request_capability", "capability_status"}
-            local surface = {tools = {}, traits = {}, base_tools = tools, active_traits = {},
-                fixed_context = {}, dynamic_keys = {}, access = {policy = APPROVER_POLICY, traits = {}}}
-            local binding = call(AGENT, workspace, "bee.gateway.binding:admit", {subject = AGENT, action_id = action,
-                attempt_id = attempt, thread_id = thread, owner_incarnation = 1, carrier_epoch = 1,
-                tools = tools, ttl_ms = 600000, idempotency_key = fresh("admit"), surface = surface, workspace_id = workspace})
-            local binding_id = (assert(bounds.object(binding.binding))).binding_id
+            local bound = attempt_binding(workspace, {"request_capability", "capability_status"})
+            local binding_id, thread, attempt = bound.binding_id, bound.thread_id, bound.attempt_id
             local unrealizable = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",
                 {binding_id = binding_id, capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
             test.is_false(unrealizable.ok)
@@ -213,6 +239,74 @@ local function define_tests()
             end)()
             restore_database_source(previous_source)
             test.eq(outcome.status, "granted")
+        end)
+        test.it("runs the approved command for the attempt holding a process elevation, and nothing else", function()
+            ensure_approver_policy()
+            local workspace = home()
+            local tools = {"request_capability", "capability_status", "process_run", "http_request"}
+            local bound = attempt_binding(workspace.id, tools)
+            local requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
+                capability = "process.exec", parameters = {command = "/bin/echo held", directory = "."}, ttl_ms = 60000})
+            local approval_id = requested.approval_id
+            local read = call(APPROVER, workspace.id, "bee.approvals.binding:read", {approval_id = approval_id})
+            local proposal = assert(bounds.object((assert(bounds.object(read.proposal))).payload))
+            test.is_true(tostring(proposal.wording):find("Run /bin/echo held", 1, true) ~= nil)
+            test.is_true(tostring(proposal.wording):find("workspace folder .", 1, true) ~= nil)
+            test.eq(code(AGENT, workspace.id, "bee.gateway.binding:process_run",
+                {binding_id = bound.binding_id, approval_id = approval_id}), "DENIED")
+            approve(workspace.id, approval_id)
+            local granted = call(AGENT, workspace.id, "bee.gateway.binding:capability_status",
+                {binding_id = bound.binding_id, approval_id = approval_id})
+            test.eq(granted.status, "granted")
+            test.is_nil(granted.grant_id)
+            test.eq(table.concat(principals.strings(granted.tools), ","), "process_run")
+            local ran = call(AGENT, workspace.id, "bee.gateway.binding:process_run",
+                {binding_id = bound.binding_id, approval_id = approval_id, arguments = {"one", "two words", "it's"}})
+            test.eq(ran.exit_code, 0)
+            test.eq(ran.output, "held one two words it's\n")
+            test.eq(code(AGENT, workspace.id, "bee.gateway.binding:http_request", {binding_id = bound.binding_id,
+                approval_id = approval_id, method = "GET", url = "https://example.com/"}), "DENIED")
+            local where_requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
+                capability = "process.exec", parameters = {command = "/bin/pwd", directory = "."}, ttl_ms = 60000})
+            approve(workspace.id, where_requested.approval_id)
+            call(AGENT, workspace.id, "bee.gateway.binding:capability_status",
+                {binding_id = bound.binding_id, approval_id = where_requested.approval_id})
+            local where = call(AGENT, workspace.id, "bee.gateway.binding:process_run",
+                {binding_id = bound.binding_id, approval_id = where_requested.approval_id})
+            test.eq(where.output, workspace.path .. "\n")
+            local other = attempt_binding(workspace.id, tools)
+            test.eq(code(AGENT, workspace.id, "bee.gateway.binding:process_run",
+                {binding_id = other.binding_id, approval_id = approval_id}), "DENIED")
+            test.eq(code(AGENT, workspace.id, "bee.gateway.binding:process_run",
+                {binding_id = bound.binding_id, approval_id = approval_id, arguments = {1}}), "INVALID")
+        end)
+        test.it("holds an HTTP elevation for the approved origin, methods and path prefix only", function()
+            ensure_approver_policy()
+            local workspace = home()
+            local bound = attempt_binding(workspace.id, {"request_capability", "capability_status", "process_run", "http_request"})
+            local requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
+                capability = "http.api", parameters = {origin = "https://api.example.com", methods = {"GET"}, path_prefix = "/v1"},
+                ttl_ms = 60000})
+            approve(workspace.id, requested.approval_id)
+            local granted = call(AGENT, workspace.id, "bee.gateway.binding:capability_status",
+                {binding_id = bound.binding_id, approval_id = requested.approval_id})
+            test.eq(granted.status, "granted")
+            test.eq(table.concat(principals.strings(granted.tools), ","), "http_request")
+            local function refusal(request: Object): string
+                request.binding_id, request.approval_id = bound.binding_id, requested.approval_id
+                local reply = raw_call(AGENT, workspace.id, "bee.gateway.binding:http_request", request)
+                test.is_false(reply.ok)
+                local fault = assert(bounds.object(reply.error))
+                return tostring(fault.code) .. ": " .. tostring(fault.message)
+            end
+            test.eq(refusal({method = "POST", url = "https://api.example.com/v1/items"}),
+                "DENIED: no grant covers POST https://api.example.com/v1/items")
+            test.eq(refusal({method = "GET", url = "https://api.example.com/v2/items"}),
+                "DENIED: no grant covers GET https://api.example.com/v2/items")
+            test.eq(refusal({method = "GET", url = "https://other.example.com/v1"}),
+                "DENIED: no grant covers GET https://other.example.com/v1")
+            test.eq(code(AGENT, workspace.id, "bee.gateway.binding:process_run",
+                {binding_id = bound.binding_id, approval_id = requested.approval_id}), "DENIED")
         end)
     end)
 end

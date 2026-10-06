@@ -211,6 +211,44 @@ entries:
     - bee.threads.binding:get
     - bee.threads.binding:read_after
     effect: allow
+- name: process_use_policy
+  kind: security.policy.expr
+  meta:
+    comment: A held process elevation reads the bound workspace's folder through the linked catalog read, resolves its root on this host and runs the approved command through the host process executor only
+  policy:
+    expression: (action == "registry.get" && resource != "") || (action == "system.read" && resource == "cwd") || (action == "security.policy.get" && resource == "bee.node.security:workspace_folder_read_policy")
+      || (action == "exec.get" && resource == "bee.gateway.env:process_executor") || (action == "exec.run" && meta.executor == "bee.gateway.env:process_executor" && len(meta.env_names) == 0)
+    actions:
+    - registry.get
+    - system.read
+    - security.policy.get
+    - exec.get
+    - exec.run
+    resources: '*'
+    effect: allow
+- name: http_use_policy
+  kind: security.policy
+  meta:
+    comment: A held HTTP elevation sends the request its approved origin, methods and path prefix admit; the gateway checks that scope before sending and where the response arrived from after
+  policy:
+    actions:
+    - http_client.request
+    resources: '*'
+    effect: allow
+- name: capability_use
+  kind: library.lua
+  source: file://capability_use.lua
+  modules:
+  - exec
+  imports:
+    bounds: bee.values:bounds
+    quote: bee.driver.binding:quote
+    probe_capture: bee.driver.locate:probe_capture
+    resources: bee.resources.env:resources
+    capability_files: bee.gov.types:capability_files
+    capability_http: bee.gov.binding:capability_http
+    capability: bee.gov.types:capability_request
+    subject_call: bee.gateway.security:subject_call
 - name: elevation
   kind: library.lua
   source: file://elevation.lua
@@ -219,6 +257,7 @@ entries:
   - registry
   imports:
     bounds: bee.values:bounds
+    clock: bee.values:clock
     canonical: bee.values:canonical
     capability: bee.gov.types:capability_request
     subject_call: bee.gateway.security:subject_call

@@ -250,7 +250,7 @@ local function handle(): nil
         response:set_status(http.STATUS.ACCEPTED)
         return nil
     end
-    if call.method == "initialize" then answer(response, http.STATUS.OK, mcp.result(call.id, mcp.initialize())); return nil end
+    if call.method == "initialize" then answer(response, http.STATUS.OK, mcp.result(call.id, mcp.initialize(mcp.INSTRUCTIONS))); return nil end
     if call.method == "notifications/initialized" or call.method == "ping" then answer(response, http.STATUS.OK, mcp.result(call.id, {})); return nil end
     local bound, surface_error = gateway.surface(binding)
     if not bound then answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(surface_error, nil))); return nil end

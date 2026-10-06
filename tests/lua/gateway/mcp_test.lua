@@ -205,6 +205,17 @@ local function define_tests()
             test.eq(mcp.result(3, {a = 1}).result.a, 1)
             test.eq(mcp.initialize().protocolVersion, mcp.PROTOCOL)
         end)
+        test.it("orients a connecting agent toward the docs, the authoring guide and delivery", function()
+            local result = mcp.initialize(mcp.INSTRUCTIONS)
+            test.eq(result.instructions, mcp.INSTRUCTIONS)
+            test.is_nil(mcp.initialize().instructions)
+            for _, phrase in ipairs({"docs", "components", "capabilities", "overlay", "guide", "include_example", "freeze", "delivery", "preflight", "Needs you", "session"}) do
+                test.is_true(mcp.INSTRUCTIONS:find(phrase, 1, true) ~= nil, phrase)
+            end
+            local names: {[string]: boolean} = {session = true}
+            for _, tool in ipairs(mcp.TOOLS) do names[tool.name] = true end
+            for _, tool_name in ipairs({"docs", "components", "capabilities", "overlay", "delivery"}) do test.is_true(names[tool_name] == true, tool_name) end
+        end)
         test.it("admits bounded full workspace sources while retaining body and owner protocol limits", function()
             test.eq(mcp.MAX_WORKSPACE_TEXT_BYTES, 65536)
             test.eq(mcp.MAX_WORKSPACE_BASE64_BYTES, 87384)

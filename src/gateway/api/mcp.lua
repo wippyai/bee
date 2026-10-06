@@ -319,10 +319,28 @@ M.INTERNAL_ERROR = -32603
 function M.failure(id: RpcId?, code: integer, message: string): Object
     return {jsonrpc = "2.0", id = id, error = {code = code, message = message}}
 end
-function M.initialize(): Object
-    -- Trait selection changes the admitted tool set, so the list changes.
-    -- Clients re-list after session select; select names the new revision.
-    return {protocolVersion = M.PROTOCOL, capabilities = {tools = {listChanged = true}}, serverInfo = M.SERVER}
+-- The orientation a connecting agent reads once: where answers live and the
+-- one path an application or driver takes to the person's desktop. Each tool
+-- it names is in the catalog; the session tool says how to reach one this
+-- session does not list.
+M.INSTRUCTIONS = table.concat({
+    "Bee is the terminal desktop this session runs in; the person sees its windows and approves what you deliver.",
+    "Look an answer up before reading source or guessing a signature: docs searches the platform documentation bundled with Bee"
+        .. " (search a phrase, then read the id it returns), components inspects the installed registry and Hub packages,"
+        .. " and capabilities reports the tools, traits and workspace this session holds.",
+    "To build an application or a driver: call overlay with operation guide for the section index, read the sections"
+        .. " the task needs, and take include_example for a complete working application. Author entries.json in your"
+        .. " overlay, freeze it, run delivery preflight on the frozen snapshot, then delivery request. The person approves"
+        .. " it in Needs you and it opens from the start menu; a new version is a new freeze and request.",
+    "A tool this session does not list may sit behind a trait: session read shows the traits, select activates an allowed"
+        .. " one and request_access asks the person for one that is not allowed.",
+}, "\n\n")
+
+-- Trait selection changes the admitted tool set, so the list changes.
+-- Clients re-list after session select; select names the new revision.
+function M.initialize(instructions: string?): Object
+    return {protocolVersion = M.PROTOCOL, capabilities = {tools = {listChanged = true}}, serverInfo = M.SERVER,
+        instructions = instructions}
 end
 -- The tools a binding may call: the closed catalog filtered by the
 -- binding's admitted tool names, in catalog order, each with its input and

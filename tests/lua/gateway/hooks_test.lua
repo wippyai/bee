@@ -164,7 +164,7 @@ local function define_tests()
         end)
         test.it("renders driver-owned hook delivery with Codex trust hashes as the pinned executable computes them", function()
             local events = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
-            local gateway: configuration.GatewayInput = {endpoint = "127.0.0.1:18790", action_id = "act-1", tools = {"thread_read"}, hooks = events, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
+            local gateway: configuration.GatewayInput = {endpoint = "127.0.0.1:18790", action_id = "act-1", tools = {"thread_read"}, hooks = events, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN", hook_command = "/opt/bee/bee"}
             local raw, call_error = funcs.call("bee.driver.claude.binding:configure", {fixture = false, gateway = gateway})
             if call_error then error(tostring(call_error)) end
             local claude, claude_error = configuration.decode_reply(raw, nil, gateway)
@@ -182,6 +182,9 @@ local function define_tests()
             test.eq(handler.timeout, 2)
             test.eq((assert(bounds.object(handler.headers))).Authorization, "Bearer ${BEE_GATEWAY_HOOK_TOKEN}")
             test.is_nil((settings_json:find("BEE_GATEWAY_HOOK_TOKEN=", 1, true)))
+            local start = (principals.objects((principals.objects((assert(bounds.object(settings.hooks))).SessionStart))[1].hooks))[1]
+            test.eq(start.type, "command")
+            test.eq(start.command, "/opt/bee/bee hook-post 127.0.0.1:18790 act-1 BEE_GATEWAY_HOOK_TOKEN SessionStart")
             local codex_gateway: codex_configuration.Gateway = {endpoint = gateway.endpoint, action_id = gateway.action_id, tools = gateway.tools, hooks = gateway.hooks, token_environment = gateway.token_environment, hook_token_environment = gateway.hook_token_environment}
             local section = codex_configuration.gateway_section(codex_gateway)
             test.is_true(section:find('url = "http://127.0.0.1:18790/hook/act-1/mcp"', 1, true) ~= nil)

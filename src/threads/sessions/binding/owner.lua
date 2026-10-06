@@ -1,6 +1,7 @@
 -- MIT. Sessions owns admission and the public session operations; Threads
 -- remains the only durable store.
 local bounds = require("bounds")
+local json = require("json")
 local journal = require("journal")
 local admission = require("admission")
 local catalog_service = require("catalog_service")
@@ -114,7 +115,7 @@ local function snapshot(value: unknown): (Object?, string?)
 end
 
 local finish_closing: (string, string) -> string?
-local deliver: (string, string, boolean) -> string?
+local deliver: (string, string) -> string?
 local TYPE = "bee.harness.binding:present_type"
 local RESUME = "bee.harness.binding:present_restore"
 
@@ -384,12 +385,53 @@ local function claimed(active: Object, operation_key: string): (string?, string?
     return value, nil
 end
 
--- deliver types the session's next queued message into its terminal. A
--- suspended session's terminal is resumed first; its agent takes the message
--- when it starts. A turn already reserved is typed again only into a new
--- terminal (retype); a turn in flight otherwise means nothing to deliver. A
--- message the terminal cannot take settles as failed with the reason.
-deliver = function(session: string, key_seed: string, retype: boolean): string?
+-- launch_prompt hands a window that starts its agent the message waiting for
+-- it: the reserved message, or the next queued one, which it reserves. The
+-- agent takes it as its launch prompt, so nothing is typed into a terminal
+-- that is still starting. A session with nothing waiting has no prompt.
+function M.launch_prompt(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request)
+    if not request then return assert(refused) end
+    local session = ref(request.session)
+    if not session or bounds.fields(request, {"session"}) then return fail("INVALID", "launch_prompt needs one session ref") end
+    local raw, read_error = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    local route = stored and object(stored.route)
+    if read_error or not stored or not route then return unavailable(read_error or "session is unavailable", nil) end
+    if route.delivery ~= "hook" then return fail("INVALID", "only a window session starts a terminal") end
+    local definition = ref(route.definition)
+    if not definition or not security.can("bee.sessions.attach", definition) then return fail("DENIED", "a launch prompt requires a host grant") end
+    if stored.state ~= "active" then return succeed({}) end
+    local active = object(stored.active_turn)
+    local turn: string? = nil
+    local claim: string? = nil
+    if active then
+        if active.phase ~= "reserved" then return succeed({}) end
+        local current, claim_error = claimed(active, "launch-recover:" .. tostring(route.native_attempt_id))
+        if not current then return unavailable(claim_error or "the waiting message's claim is unavailable", nil) end
+        turn, claim = tostring(active.turn), current
+    else
+        local reserved, reserve_error = journal.invoke("turn_reserve", {session = session,
+            operation_key = "launch:" .. tostring(route.native_attempt_id) .. ":" .. tostring(stored.head_sequence)})
+        local next_turn = object(reserved)
+        if reserve_error or not next_turn then return unavailable(reserve_error or "the next message could not be reserved", nil) end
+        if not next_turn.turn then return succeed({}) end
+        turn, claim = tostring(next_turn.turn), tostring(next_turn.claim)
+    end
+    local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
+    local input = object(pulled)
+    local text = input and M.message_text(input.input, object(input.sender), session)
+    if pull_error or not input or not text then return unavailable(pull_error or "the waiting message is unreadable", nil) end
+    return succeed({prompt = text})
+end
+
+-- deliver types the session's next queued message into its terminal once
+-- that terminal's agent has ended a turn, which proves its input takes typed
+-- messages. Until then the message waits: a terminal that is gone or
+-- suspended is resumed, and a starting terminal takes the waiting message as
+-- its launch prompt (launch_prompt). A message the terminal cannot take
+-- settles as failed with the reason.
+deliver = function(session: string, key_seed: string): string?
     local raw, read_error = journal.invoke("session_describe", {session = session})
     local stored = object(raw)
     local route = stored and object(stored.route)
@@ -409,23 +451,18 @@ deliver = function(session: string, key_seed: string, retype: boolean): string?
     if stored.state == "suspended" then return resume() end
     if stored.state ~= "active" then return nil end
     local active = object(stored.active_turn)
-    local turn: string? = nil
-    local claim: string? = nil
+    -- A reserved turn waits for a terminal; one that is gone, as after a
+    -- restart, is resumed and takes it as its launch prompt.
     if active then
-        -- A turn typed into a terminal that is gone, as after a restart, is
-        -- typed again once the resumed agent starts.
-        if active.phase == "reserved" and not retype then return resume() end
-        if not retype or active.phase ~= "reserved" then return nil end
-        local current, claim_error = claimed(active, "deliver-recover:" .. key_seed)
-        if not current then return claim_error end
-        turn, claim = tostring(active.turn), current
-    else
-        local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "deliver:" .. key_seed})
-        local next_turn = object(reserved)
-        if reserve_error or not next_turn then return reserve_error or "the next message could not be reserved" end
-        if not next_turn.turn then return nil end
-        turn, claim = tostring(next_turn.turn), tostring(next_turn.claim)
+        if active.phase == "reserved" then return resume() end
+        return nil
     end
+    if stored.attempt_turn_ended ~= true then return resume() end
+    local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "deliver:" .. key_seed})
+    local next_turn = object(reserved)
+    if reserve_error or not next_turn then return reserve_error or "the next message could not be reserved" end
+    if not next_turn.turn then return nil end
+    local turn, claim = tostring(next_turn.turn), tostring(next_turn.claim)
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
     local input = object(pulled)
     local text = input and M.message_text(input.input, object(input.sender), session)
@@ -452,7 +489,7 @@ function M.hook_boundary(raw_request: unknown): Reply
     local session, event, event_key = ref(request.session), request.event, key(request.operation_key)
     local attempt = bounds.id(request.attempt_id)
     if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id", "permission", "input", "answer"})
-        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" and event ~= "SessionStart") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
+        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
     if request.input ~= nil and (event ~= "UserPromptSubmit" or bounds.text(request.input, 65536) == nil) then return fail("INVALID", "native prompt is invalid", event_key) end
     if request.answer ~= nil and (event ~= "Stop" or bounds.text(request.answer, 65536) == nil) then return fail("INVALID", "the agent's reply is invalid", event_key) end
     if not security.can("bee.sessions.hook_boundary", session) then return fail("DENIED", "hook boundary requires the authenticated gateway", event_key) end
@@ -484,11 +521,6 @@ function M.hook_boundary(raw_request: unknown): Reply
     if not event_digest then return unavailable(tostring(digest_error), event_key) end
     local boundary_key = event_digest
     local active = object(stored.active_turn)
-    if event == "SessionStart" then
-        local problem = deliver(session, "start:" .. boundary_key, true)
-        if problem then return unavailable(problem, event_key) end
-        return succeed({})
-    end
     if event ~= "UserPromptSubmit" then
         if not active or active.phase ~= "accepted" then return succeed({}) end
         local claim, claim_error = claimed(active, "hook-recover:" .. boundary_key)
@@ -502,7 +534,7 @@ function M.hook_boundary(raw_request: unknown): Reply
             operation_key = "hook-stop:" .. boundary_key, result = event == "Stop" and {state = "succeeded", schema = "bee:Text@1", value = {text = reply_of(request.answer)}}
                 or {state = "failed", error = {code = "INTERACTIVE_FAILED", message = "Interactive turn failed"}}})
         if settle_error or not settled then return unavailable(settle_error or "interactive turn settlement unavailable", event_key) end
-        local problem = deliver(session, "after:" .. boundary_key, false)
+        local problem = deliver(session, "after:" .. boundary_key)
         if problem then return unavailable(problem, event_key) end
         return succeed({})
     end
@@ -522,8 +554,10 @@ function M.hook_boundary(raw_request: unknown): Reply
     elseif not active and request.input ~= nil then
         local sent, send_error = journal.invoke("work_send", {session = session, operation_key = "hook-native:" .. boundary_key,
             input = request.input, output_schema = "bee:Text@1"})
-        if send_error or not sent then return unavailable(send_error or "native prompt journal unavailable", event_key) end
-        local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-native-start:" .. boundary_key})
+        local native_work = object(sent)
+        if send_error or not native_work then return unavailable(send_error or "native prompt journal unavailable", event_key) end
+        local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, work = native_work.work,
+            operation_key = "hook-native-start:" .. boundary_key})
         local native = object(reserved)
         if reserve_error or not native then return unavailable(reserve_error or "native prompt turn unavailable", event_key) end
         if not native.turn then return succeed({}) end
@@ -569,7 +603,7 @@ function M.send(raw_request: unknown): Reply
     if send_error or not receipt then return unavailable(send_error or "Threads returned no work receipt", operation_key) end
     -- The message is queued either way; delivery that cannot happen now
     -- happens when the agent next starts or ends a turn.
-    local problem = deliver(session, "send:" .. operation_key, false)
+    local problem = deliver(session, "send:" .. operation_key)
     if problem then logger:warn("Session message not delivered yet", {session = session, cause = problem}) end
     return succeed(receipt)
 end
@@ -1098,6 +1132,10 @@ function M.join(raw_request: unknown): Reply
     return succeed(decided)
 end
 
+-- LIST_PAGE_BYTES is the published bound of one reply value; a page carries
+-- as many sessions as fit under it with its cursor.
+M.LIST_PAGE_BYTES = 65536
+local LIST_PAGE_OVERHEAD_BYTES = 512
 function M.list(raw_request: unknown): Reply
     local request, refused = request_input(raw_request)
     if not request then return assert(refused) end
@@ -1124,6 +1162,10 @@ function M.list(raw_request: unknown): Reply
     local refs = scan and scan.items
     if type(refs) ~= "table" then return unavailable("Threads returned a malformed session page", nil) end
     local items: {Object} = {}
+    -- The page stays within one published reply value: once the next session
+    -- would not fit, the page ends after the last session scanned.
+    local size = LIST_PAGE_OVERHEAD_BYTES
+    local scanned: string? = nil
     for _, raw_ref in ipairs(refs) do
         local session = ref(raw_ref)
         if not session then return unavailable("Threads returned a malformed session ref", nil) end
@@ -1131,8 +1173,16 @@ function M.list(raw_request: unknown): Reply
         if not current then return unavailable(read_error or "cannot read a listed session", nil) end
         if (lifecycle == nil or current.lifecycle == lifecycle) and (activity == nil or current.activity == activity)
             and (definition == nil or current.definition == definition) then
+            local encoded = json.encode(current)
+            if not encoded then return unavailable("a listed session is not encodable", nil) end
+            if size + #encoded + 1 > M.LIST_PAGE_BYTES then
+                if not scanned then return unavailable("one session exceeds the list page bound", nil) end
+                return succeed({items = items, next = scanned})
+            end
+            size = size + #encoded + 1
             items[#items + 1] = current
         end
+        scanned = session
     end
     return succeed({items = items, next = scan and ref(scan.next) or nil})
 end

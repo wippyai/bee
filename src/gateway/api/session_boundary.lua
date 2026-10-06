@@ -6,7 +6,7 @@ local M = {}
 type Object = {[string]: unknown}
 function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Object?, transport: string?): (Object?, string?)
     local event, event_id = outcome.event, bounds.id(outcome.event_id)
-    if event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" and event ~= "SessionStart" then return {}, nil end
+    if event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" then return {}, nil end
     if not event_id then return nil, "hook occurrence omitted its identity" end
     if binding.subject:sub(1, 3) ~= "bs:" then return {}, nil end
     local request: Object = {session = binding.subject, event = event, attempt_id = binding.attempt_id, operation_key = event_id}

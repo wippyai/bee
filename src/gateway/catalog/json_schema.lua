@@ -383,8 +383,13 @@ check = function(schema: Schema, value: unknown, path: string): string?
     end
     if schema.oneOf ~= nil then
         local matched = 0
-        for _, branch in ipairs(schema.oneOf) do if matches(branch, value) then matched = matched + 1 end end
-        if matched ~= 1 then return path .. " must match exactly one admitted form" end
+        local refusals: {string} = {}
+        for index, branch in ipairs(schema.oneOf) do
+            local failure = check(branch, value, path)
+            if failure then refusals[#refusals + 1] = "form " .. tostring(index) .. ": " .. failure:sub(1, 512) else matched = matched + 1 end
+        end
+        if matched > 1 then return path .. " must match exactly one admitted form" end
+        if matched == 0 then return path .. " must match exactly one admitted form (" .. table.concat(refusals, "; ") .. ")" end
     end
     if schema.anyOf ~= nil then
         local matched = false

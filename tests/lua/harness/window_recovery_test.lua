@@ -70,16 +70,6 @@ local function define_tests()
             test.is_true(recovery.acknowledged(launch, "broker", {version = 1, request_id = "request", error_code = "", error = ""}, "request"))
         end)
 
-        test.it("explains in plain words a window that cannot be resumed and how it closes", function()
-            local frame = restore_view.unresumable(80, 12, appearance.defaults(),
-                "its last session never started a conversation")
-            local rows = table.concat(frame.rows)
-            test.eq(#frame.rows, 12)
-            test.is_true(rows:find("This Agent window cannot be resumed", 1, true) ~= nil)
-            test.is_true(rows:find("its last session never started a conversation", 1, true) ~= nil)
-            test.is_true(rows:find("Enter or Esc closes it", 1, true) ~= nil)
-            test.is_nil((rows:find("CONFLICT", 1, true)))
-        end)
         test.it("renders a login notice with the provider command and a way to continue", function()
             local frame = restore_view.login(80, 12, appearance.defaults(),
                 {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login"})

@@ -193,6 +193,16 @@ function M.session_activity(tx: sql.Transaction, session_ref: string): (Row?, st
         "FROM bee_session_turns WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active session turn")
 end
 
+-- attempt_turn_ended reports whether a native attempt took a message and
+-- ended its turn: its terminal's input is proven to accept typed messages.
+function M.attempt_turn_ended(tx: sql.Transaction, session_ref: string, attempt_id: string): (boolean?, string?)
+    local rows, err = tx:query("SELECT 1 AS found FROM bee_session_turns t JOIN bee_session_work w ON w.work_ref = t.work_ref " ..
+        "WHERE t.session_ref = ? AND t.phase = 'settled' AND json_extract(t.checkpoint_json, '$.attempt_id') = ? " ..
+        "AND COALESCE(json_extract(w.result_json, '$.error.code'), '') <> 'UNDELIVERED' LIMIT 1", {session_ref, attempt_id})
+    if err or not rows then return nil, "read attempt turns" end
+    return #rows > 0, nil
+end
+
 function M.executing_sessions(tx: sql.Transaction, epoch: integer): ({Row}?, string?)
     return tx:query("SELECT COUNT(DISTINCT s.session_ref) AS count FROM bee_sessions s " ..
         "JOIN bee_session_work w ON w.session_ref = s.session_ref " ..
@@ -305,6 +315,12 @@ local TURN_COLUMNS = "turn_ref, session_ref, work_ref, claim_token, owner_epoch,
 function M.active_turn(tx: sql.Transaction, session_ref: string): (Row?, string?)
     return query_one(tx, "SELECT " .. TURN_COLUMNS .. " FROM bee_session_turns " ..
         "WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active turn")
+end
+
+function M.queued_work_ref(tx: sql.Transaction, session_ref: string, work_ref: string): (Row?, string?)
+    return query_one(tx, "SELECT work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
+        "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at, budget_json FROM bee_session_work " ..
+        "WHERE session_ref = ? AND work_ref = ? AND phase = 'queued'", {session_ref, work_ref}, "queued work")
 end
 
 function M.queued_work(tx: sql.Transaction, session_ref: string): (Row?, string?)

@@ -4,6 +4,7 @@ local catalog = require("catalog")
 local surface = require("surface")
 local mcp = require("mcp")
 local access = require("access")
+local json_schema = require("json_schema")
 local function sample()
     return {tools = {{name = "measure", operation = "research:measure", description = "Run the admitted benchmark",
         policies = {"research:measure_policy"}, schema = {type = "object"}, annotations = {readOnlyHint = false}}},
@@ -24,6 +25,16 @@ local function requestable_surface()
 end
 local function define_tests()
     test.describe("Configurable MCP catalog", function()
+        test.it("names why each form refused a value that matches no form of a choice", function()
+            local schema = {oneOf = {
+                {type = "object", additionalProperties = false, required = {"ok", "value"}, properties = {ok = {const = true}, value = {type = "string", maxLength = 3}}},
+                {type = "object", additionalProperties = false, required = {"ok", "error"}, properties = {ok = {const = false}, error = {type = "string"}}}}}
+            test.is_nil(json_schema.validate(schema, {ok = true, value = "abc"}))
+            local failure = tostring(json_schema.validate(schema, {ok = true, value = "abcd"}))
+            test.is_true(failure:find("arguments must match exactly one admitted form", 1, true) ~= nil, failure)
+            test.is_true(failure:find("form 1: arguments.value", 1, true) ~= nil, failure)
+            test.is_true(failure:find("form 2: ", 1, true) ~= nil, failure)
+        end)
         test.it("copies two traits sharing a tool without sharing configuration tables", function()
             local raw = sample()
             local decoded = catalog.decode(raw)

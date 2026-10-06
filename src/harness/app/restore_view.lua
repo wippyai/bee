@@ -14,16 +14,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 
--- A saved window that cannot be resumed ends; the person reads why and closes it.
-function M.unresumable(width: integer, height: integer, preferences: appearance.Preferences, reason: string): frame.View
-    local painter = frame.new(width, height, preferences)
-    frame.header(painter, "AGENT")
-    frame.line(painter, 3, "This Agent window cannot be resumed", painter.theme.text)
-    frame.line(painter, 5, "Bee restarted, and " .. reason .. ".", painter.theme.text)
-    frame.line(painter, 6, "Open a new Agent from the Start menu to continue.", painter.theme.muted)
-    if height >= 8 then frame.footer(painter, "", "Enter or Esc closes it") end
-    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
-end
 function M.login(width: integer, height: integer, preferences: appearance.Preferences,
     notice: {code: "LOGIN_REQUIRED", provider: string, command: string}): frame.View
     local painter = frame.new(width, height, preferences)

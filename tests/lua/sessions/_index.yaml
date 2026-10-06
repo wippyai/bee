@@ -17,7 +17,7 @@ entries:
   source: file://interactive_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs, security, sql, uuid, registry, process, channel, time]
+  modules: [funcs, security, sql, uuid, registry, process, channel, time, json]
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
@@ -237,6 +237,14 @@ entries:
   kind: function.lua
   source: file://resume_probe.lua
   method: handle
+  meta: {type: test_support}
+  modules: [process]
+  security:
+    policies: [bee.tests.sessions:resume_probe_policy]
+- name: type_probe
+  kind: function.lua
+  source: file://resume_probe.lua
+  method: type_text
   meta: {type: test_support}
   modules: [process]
   security:

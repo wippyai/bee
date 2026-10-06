@@ -9,12 +9,55 @@ local registry = require("registry")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
+local json = require("json")
 local WORKSPACE = string.rep("a", 32)
 -- owner_text is the text Sessions types into the agent for a queued message.
 local function owner_text(input: string, sender: string): string
     return "[Bee message from " .. sender .. "]\n" .. input
 end
 
+-- with_window_probes runs body with the window resume and type facades
+-- replaced by probes that report to this test, then restores them.
+local function with_window_probes(body: (resumed: process.Listener, typed: process.Listener) -> ())
+    local originals = {assert(registry.get("bee.harness.binding:present_restore")), assert(registry.get("bee.harness.binding:present_type"))}
+    local resume_probe = assert(registry.get("bee.tests.sessions:resume_probe"))
+    resume_probe.id = "bee.harness.binding:present_restore"
+    local type_probe = assert(registry.get("bee.tests.sessions:type_probe"))
+    type_probe.id = "bee.harness.binding:present_type"
+    local swap = assert(registry.snapshot()):changes()
+    swap:update(resume_probe)
+    swap:update(type_probe)
+    assert(swap:apply())
+    local resumed = assert(process.listen("bee.test.resumed", {message = true}))
+    local typed = assert(process.listen("bee.test.typed", {message = true}))
+    assert(process.registry.register("bee.test.resume_probe"))
+    local ok, failure = pcall(body, resumed, typed)
+    process.registry.unregister("bee.test.resume_probe", process.registry.LOCAL)
+    process.unlisten(resumed)
+    process.unlisten(typed)
+    local restore = assert(registry.snapshot()):changes()
+    for _, original in ipairs(originals) do restore:update(original) end
+    assert(restore:apply())
+    if not ok then error(tostring(failure)) end
+end
+-- received waits for one probe report.
+local function received(listener: process.Listener): {[string]: unknown}?
+    local event = channel.select({listener:case_receive(), time.after("5s"):case_receive()})
+    if not (event.ok and event.channel == listener) then return nil end
+    return assert(bounds.object(event.value:payload():data()))
+end
+local function owner_caller(): funcs.Executor
+    local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
+    return funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
+        assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}))
+end
+local function owner_call(method: string, input: {[string]: unknown}): {[string]: unknown}
+    local raw, err = owner_caller():call("bee.threads.sessions.binding:" .. method, input)
+    if err then error(tostring(err)) end
+    local reply = assert(bounds.object(raw))
+    if reply.ok ~= true then error(method .. ": " .. tostring((assert(bounds.object(reply.error))).message)) end
+    return assert(bounds.object(reply.value))
+end
 local function define_tests()
     test.describe("Sessions owner control boundary", function()
         test.it("restores the admitted placement owner only after journal cancellation authorization", function()
@@ -152,6 +195,92 @@ local function define_tests()
             test.eq(active.turn, reserved.turn)
             test.eq(active.phase, "reserved")
             test.is_nil(harness.value(journal:call("work_describe", {work = work.work})).uncertainty)
+        end)
+        test.it("lists sessions in pages that fit one reply value, each session exactly once", function()
+            local workspace = string.rep("c", 32)
+            local journal = harness.session_owner(workspace)
+            local created: {[string]: boolean} = {}
+            local reply = string.rep("r", 4096)
+            for _ = 1, 20 do
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+                local work = harness.value(journal:call("work_send", {session = opened.session, input = "a long answer", operation_key = harness.key()}))
+                local turn = harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+                local pulled = harness.value(journal:call("turn_pull", {turn = turn.turn, claim = turn.claim}))
+                harness.value(journal:call("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = pulled.input_digest,
+                    checkpoint = {attempt_id = "list-page"}, operation_key = harness.key()}))
+                harness.value(journal:call("work_settle", {turn = turn.turn, claim = turn.claim, operation_key = harness.key(),
+                    result = {state = "succeeded", schema = "bee:Text@1", value = {text = reply}}}))
+                test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "settled")
+                created[tostring(opened.session)] = true
+            end
+            local actor = assert(security.new_actor("sessions-owner", {workspace_id = workspace}))
+            local caller = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.threads.security:sessions_owner"))}))
+            local seen: {[string]: boolean} = {}
+            local listed, pages = 0, 0
+            local cursor: unknown = nil
+            repeat
+                local raw, err = caller:call("bee.threads.sessions.binding:list", {filter = {workspace = workspace}, cursor = cursor})
+                if err then error(tostring(err)) end
+                local reply_value = assert(bounds.object(raw))
+                test.is_true(reply_value.ok == true, tostring(reply_value.error and assert(bounds.object(reply_value.error)).message))
+                local page = assert(bounds.object(reply_value.value))
+                test.is_true(#assert(json.encode(page)) <= 65536)
+                for _, item in ipairs(assert(bounds.array(page.items))) do
+                    local session = tostring(assert(bounds.object(item)).session)
+                    test.is_nil(seen[session])
+                    seen[session] = true
+                    if created[session] then listed = listed + 1 end
+                end
+                pages = pages + 1
+                cursor = page.next
+            until cursor == nil
+            test.eq(listed, 20)
+            test.is_true(pages > 1)
+        end)
+        test.it("keeps a message for a terminal whose agent has finished no turn queued, and types it once that agent ends its first turn", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "starting-terminal", operation_key = harness.key()}))
+            local session_ref = assert(bounds.id(opened.session))
+            with_window_probes(function(resumed: process.Listener, typed: process.Listener)
+                local sent = owner_call("send", {session = opened.session, input = "wait for the agent", operation_key = harness.key()})
+                test.eq(assert(received(resumed)).session, opened.session)
+                test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "queued")
+                local actor = assert(security.new_actor(session_ref, {workspace_id = WORKSPACE}))
+                local boundary = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.gateway.security:session_boundary_policy"))}))
+                local function hook(event: string, input: string?, answer: string?)
+                    local raw, err = boundary:call("bee.threads.sessions.binding:hook_boundary", {session = opened.session, event = event,
+                        operation_key = harness.key(), attempt_id = "starting-terminal", input = input, answer = answer})
+                    if err then error(tostring(err)) end
+                    local reply = assert(bounds.object(raw))
+                    if reply.ok ~= true then error(event .. ": " .. tostring((assert(bounds.object(reply.error))).message)) end
+                end
+                hook("UserPromptSubmit", "what the person typed first")
+                hook("Stop", nil, "The first answer.")
+                local delivered = assert(received(typed), "the queued message was not typed after the first turn")
+                test.eq(delivered.text, owner_text("wait for the agent", "sessions-owner"))
+                test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "reserved")
+            end)
+        end)
+        test.it("gives a starting terminal the message waiting for it as its prompt, the same message each time it asks", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", definition = "interactive-fixture"}}))
+            harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "fresh-terminal", operation_key = harness.key()}))
+            local actor = assert(security.new_actor("window", {workspace_id = WORKSPACE}))
+            local window = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}))
+            local function launch_prompt(): {[string]: unknown}
+                local raw, err = window:call("bee.threads.sessions.binding:launch_prompt", {session = opened.session})
+                if err then error(tostring(err)) end
+                local reply = assert(bounds.object(raw))
+                if reply.ok ~= true then error("launch_prompt: " .. tostring((assert(bounds.object(reply.error))).message)) end
+                return assert(bounds.object(reply.value))
+            end
+            test.is_nil(launch_prompt().prompt)
+            local work = harness.value(journal:call("work_send", {session = opened.session, input = "start with this", operation_key = harness.key()}))
+            local first = launch_prompt()
+            test.eq(first.prompt, owner_text("start with this", "sessions-owner"))
+            test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "reserved")
+            test.eq(launch_prompt().prompt, first.prompt)
         end)
         test.it("rejects an open key already used for another operation", function()
             local journal = harness.session_owner(WORKSPACE)

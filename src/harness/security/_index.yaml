@@ -180,7 +180,7 @@ entries:
       || (action == "process.context" && resource == "bee.workspace_id") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner")
       || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$")
       || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:get",
-      "bee.apps:open_call", "bee.harness.binding:setup", "bee.harness.service:open", "bee.threads.sessions.binding:restore"])
+      "bee.apps:open_call", "bee.harness.binding:setup", "bee.harness.service:open", "bee.threads.sessions.binding:restore", "bee.threads.sessions.binding:launch_prompt"])
     effect: allow
 - name: presentation_owner_policy
   kind: security.policy.expr

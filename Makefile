@@ -95,6 +95,7 @@ test: $(WIPPY) compose $(TEST_FIXTURES)/harness/bin/gateway-client
 		WIPPY_CACHE_DIR=$(abspath tests/.wippy/cache) TMPDIR=$(TEST_ROOT)/tmp LANG=C.UTF-8 NO_COLOR= \
 		PATH=$(TEST_FIXTURES)/harness/bin:/usr/bin:/bin \
 		BEE_FIXTURE_BIN=$(TEST_FIXTURES)/harness/bin BEE_FIXTURE_STREAMS=$(TEST_FIXTURES)/drivers \
+		BEE_FIXTURE_HOOK_COMMAND=$(TEST_FIXTURES)/harness/bin/gateway-client \
 		BEE_AMBIENT_LIVE_PROVIDER=none \
 		CLAUDE_CONFIG_DIR=$(TEST_ROOT)/shell/claude CODEX_HOME=$(TEST_ROOT)/shell/codex \
 		ANTHROPIC_API_KEY=fixture-shell-value-not-a-key \

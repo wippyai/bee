@@ -366,6 +366,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
+    hook_command_ref: bee.harness.catalog:fixture_hook_command
 - name: gateway_surface_policy
   kind: registry.entry
   meta:
@@ -395,6 +396,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
+    hook_command_ref: bee.harness.catalog:fixture_hook_command
     gateway_surface:
       tools: []
       traits:
@@ -495,6 +497,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
+    hook_command_ref: bee.harness.catalog:fixture_hook_command
 - name: codex_gateway_policy
   kind: registry.entry
   meta:
@@ -525,6 +528,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
+    hook_command_ref: bee.harness.catalog:fixture_hook_command
 - name: gateway_harness_test
   kind: function.lua
   source: file://gateway_harness_test.lua
@@ -631,6 +635,14 @@ entries:
     type: test_support
   storage: bee.placement.native.env:environment
   variable: BEE_FIXTURE_BIN
+  readonly: true
+- name: fixture_hook_command
+  kind: env.variable
+  meta:
+    type: test_support
+    comment: The fixture standing in for Bee's hook-post command in test launch policies
+  storage: bee.placement.native.env:environment
+  variable: BEE_FIXTURE_HOOK_COMMAND
   readonly: true
 - name: live_claude_bin
   kind: env.variable

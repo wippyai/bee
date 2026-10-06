@@ -204,13 +204,14 @@ local function define_tests()
             local saved_private_home = true
             local original_call = call
             -- A window whose previous session never began a conversation
-            -- names that exact condition, so recovery can end the window
-            -- rather than offer a resume that cannot exist.
+            -- names that exact condition with the session's home, so the
+            -- next window starts a new conversation in the same session.
             local saved_rows = rows
             rows = {}
-            local unresumable, unresumable_error = continuation.resolve_window(call, request)
+            local unresumable, unresumable_error, unresumable_home = continuation.resolve_window(call, request)
             test.is_nil(unresumable)
             test.eq(unresumable_error, continuation.NO_CONVERSATION)
+            test.eq(unresumable_home, true)
             -- A resumed window that ended before its agent reported a hook
             -- still continued the conversation it was started with.
             point.conversation_ref = "resumed-session"
@@ -255,10 +256,15 @@ local function define_tests()
                 test.is_nil(continuation.resolve_window(call, request))
                 cleaned[field] = original
             end
-            local before_invalid = cleanup_calls
+            -- A window with no conversation is cleaned up like any ended
+            -- window, since the next one starts afresh in the same session.
+            local before_fresh = cleanup_calls
             rows = {}
-            test.is_nil(continuation.resolve_window(call, request))
-            test.eq(cleanup_calls, before_invalid, "no cleanup without a verified conversation")
+            local fresh, fresh_error = continuation.resolve_window(call, request)
+            test.is_nil(fresh)
+            test.eq(fresh_error, continuation.NO_CONVERSATION)
+            test.eq(cleanup_calls, before_fresh + 1, "an ended window is cleaned up before a fresh conversation")
+            local before_invalid = cleanup_calls
             rows = {observation(1025, "provider-session", "old-binding", false, "previous")}
             attempt.owner_id = "foreign"
             test.is_nil(continuation.resolve_window(call, request))

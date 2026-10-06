@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"sort"
 	"strconv"
@@ -170,7 +171,12 @@ func runHooks(settingsLiteral string) int {
 	}
 	statuses := make([]int, 0, len(events))
 	for _, event := range events {
-		status, _ := hookPost(c, url, token, event)
+		var status int
+		if command := commandHook(settings, event["hook_event_name"].(string)); command != "" {
+			status = runCommandHook(command, event)
+		} else {
+			status, _ = hookPost(c, url, token, event)
+		}
 		statuses = append(statuses, status)
 	}
 	replayStatus, replayBody := hookPost(c, url, token, events[0])
@@ -192,6 +198,72 @@ func runHooks(settingsLiteral string) int {
 		report["flood"] = codes
 	}
 	writeReport("hooks", report)
+	return 0
+}
+
+// commandHook is the command of an event's command-type handler, as Claude
+// Code runs it; an event with an http handler has none.
+func commandHook(settings object, event string) string {
+	hooks, _ := settings["hooks"].(object)
+	groups, _ := hooks[event].([]any)
+	if len(groups) == 0 {
+		return ""
+	}
+	group, _ := groups[0].(object)
+	handlers, _ := group["hooks"].([]any)
+	if len(handlers) == 0 {
+		return ""
+	}
+	handler, _ := handlers[0].(object)
+	if handler["type"] != "command" {
+		return ""
+	}
+	command, _ := handler["command"].(string)
+	return command
+}
+
+// runCommandHook runs a command hook with the event on stdin and returns the
+// gateway status the hook-post command reported.
+func runCommandHook(command string, event object) int {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return 0
+	}
+	run := exec.Command("sh", "-c", command)
+	run.Stdin = bytes.NewReader(body)
+	run.Env = os.Environ()
+	output, err := run.Output()
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		if value, found := strings.CutPrefix(line, "hook_post_status="); found {
+			status, _ := strconv.Atoi(strings.TrimSpace(value))
+			return status
+		}
+	}
+	return 0
+}
+
+// runHookPostCommand mirrors Bee's hook-post command line: endpoint, action,
+// the environment variable holding the hook credential and the event, with
+// the hook's JSON on stdin. It reports the gateway status on stdout.
+func runHookPostCommand(args []string) int {
+	if len(args) != 4 {
+		fmt.Fprintln(os.Stderr, "hook-post needs endpoint, action, token variable and event")
+		return 2
+	}
+	raw, err := io.ReadAll(io.LimitReader(os.Stdin, 32768))
+	if err != nil {
+		return 1
+	}
+	var payload object
+	if err := json.Unmarshal(raw, &payload); err != nil || payload["hook_event_name"] != args[3] {
+		fmt.Fprintln(os.Stderr, "hook-post payload does not name the event")
+		return 2
+	}
+	status, _ := hookPost(newHTTPClient(10*time.Second), "http://"+args[0]+"/hook/"+args[1], os.Getenv(args[2]), payload)
+	fmt.Printf("hook_post_status=%d\n", status)
 	return 0
 }
 
@@ -988,6 +1060,8 @@ func main() {
 		status = runCodexGateway(os.Args[2])
 	case "hookpost":
 		status = runHookPost(os.Args[2:])
+	case "hook-post":
+		status = runHookPostCommand(os.Args[2:])
 	}
 	if status != 0 {
 		os.Exit(status)

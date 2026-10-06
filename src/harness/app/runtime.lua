@@ -443,12 +443,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
 
         local function render()
             if not dirty then return end
-            local frame
-            if phase == "unresumable" then
-                frame = restore_view.unresumable(width, height, preferences, status)
-            else
-                frame = restore_view.draw(width, height, preferences, status)
-            end
+            local frame = restore_view.draw(width, height, preferences, status)
             frame_ui.render(frame, menu, preferences)
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
@@ -565,10 +560,6 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                     if result.choice then
                         admitted = result.choice
                     elseif result.refused and result.refused.error
-                        and result.refused.error.code == admission.NOT_RESUMABLE then
-                        status = result.refused.error.message
-                        phase = "unresumable"
-                    elseif result.refused and result.refused.error
                         and result.refused.error.code == "CONFLICT" then
                         -- A plan that changed again while admitting is
                         -- resolved once more; an unchanged one is refused.
@@ -579,7 +570,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                     end
                     dirty = true
                 end
-                if phase == "refused" or phase == "unresumable" then
+                if phase == "refused" then
                     logger:warn("Agent terminal cannot resume", {reason = status, definition = request.definition_ref})
                 end
             else
@@ -598,10 +589,6 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                     elseif data.type == "key" and data.action == "press" then
                         if data.key_type == "escape" or data.key_type == "esc" or (data.ctrl and data.key == "q") then
                             cancel_restore()
-                        elseif data.key_type == "enter" or data.key == "enter" then
-                            if phase == "unresumable" then
-                                cancel_restore()
-                            end
                         end
                     end
                 end
@@ -650,7 +637,20 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         plan_digest = admitted.plan.plan_digest, origin_request_id = origin_request_id,
         previous_attempt_id = admitted.attempt_id, thread_id = admitted.thread_id}
     local transport = io()
-    local plan, plan_error = machine.plan(transport, admitted.request)
+    local prompt: string? = nil
+    if admitted.session_ref then
+        local raw, prompt_error = funcs.call("bee.threads.sessions.binding:launch_prompt", {session = admitted.session_ref})
+        local reply = bounds.object(raw)
+        local value = reply and reply.ok == true and bounds.object(reply.value) or nil
+        if prompt_error or not value then
+            local fault = reply and bounds.object(reply.error)
+            show_failure("Managed window prompt: " .. tostring(prompt_error or (fault and fault.message) or "Sessions returned no prompt"))
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            return
+        end
+        prompt = bounds.text(value.prompt, 65536)
+    end
+    local plan, plan_error = machine.plan(transport, admitted.request, prompt)
     if not plan then
         local reason = "Managed window plan: " .. tostring(plan_error)
         -- Planning precedes action admission, so there is no thread action

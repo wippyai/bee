@@ -37,7 +37,6 @@ M.MAX_BRIEF_BYTES = 16384
 M.MAX_AGENT_INSTRUCTIONS_BYTES = 4096
 -- A saved window that can never be resumed; recovery ends it instead of
 -- retrying or asking for review.
-M.NOT_RESUMABLE = "NOT_RESUMABLE"
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
@@ -756,10 +755,9 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
                 if err then return nil, tostring(err) end
                 return reply, nil
             end, recovery_request)
-            if not resume and resume_error == continuation.NO_CONVERSATION then
-                return nil, fail(M.NOT_RESUMABLE, "its last session never started a conversation")
+            if not resume and resume_error ~= continuation.NO_CONVERSATION then
+                return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error))
             end
-            if not resume then return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error)) end
         end
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = session_resource, access = "write", purpose = "session",
             audience = requester, attempt_id = ids.attempt_id, idempotency_key = "launch:" .. request.request_id .. ":session"})

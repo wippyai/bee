@@ -341,7 +341,7 @@ function M.required_file_refusal(launch: driver_types.Launch, private_home: bool
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.
-local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?): (Plan?, string?)
+local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?, prompt: string?): (Plan?, string?)
     local measured, measure_error = measure(request, session_turn, session_resume_ref ~= nil)
     if not measured then return nil, measure_error end
     local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
@@ -370,12 +370,16 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
             owner_id = request.owner_id, previous_attempt_id = request.previous_attempt_id, session_ref = request.session_ref,
             binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry,
             placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods, reauthorize = request.reauthorize})
-        if not resumed then return nil, resume_error end
-        resume_ref = resumed
+        -- A window whose previous agent began no conversation starts a new
+        -- one in the same session and its home.
+        if not resumed and not (profile.mode == "window" and resume_error == continuation.NO_CONVERSATION) then return nil, resume_error end
         previous_private_home = private_home
-        local dispatch = binding.methods.dispatch
-        if not dispatch then return nil, "driver has no continuation method" end
-        prepare_target = dispatch
+        if resumed then
+            resume_ref = resumed
+            local dispatch = binding.methods.dispatch
+            if not dispatch then return nil, "driver has no continuation method" end
+            prepare_target = dispatch
+        end
     end
     local private_home = previous_private_home
     if private_home == nil then private_home = profile.private_home end
@@ -388,6 +392,10 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id
     prepare_request.brief = request.brief
+    if prompt then
+        if profile.mode ~= "window" then return nil, "only a window starts its agent with a prompt" end
+        prepare_request.brief = prompt
+    end
     prepare_request.resume_ref = resume_ref
     -- The host enabled an interactive permission exchange: the driver
     -- prepares the launch shape that keeps stdin open for the responses.
@@ -538,8 +546,10 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
         placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
 end
-function M.plan(io: IO, request: Request): (Plan?, string?)
-    return build_plan(io, request, false, nil)
+-- plan measures and prepares a launch. A window may start its agent with a
+-- prompt: the message waiting for it, which is not the admitted brief.
+function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
+    return build_plan(io, request, false, nil, prompt)
 end
 function M.session_plan(io: IO, request: Request, resume_ref: string?): (Plan?, string?)
     if resume_ref ~= nil and (resume_ref == "" or #resume_ref > 256 or resume_ref:find("[%c%s]")) then

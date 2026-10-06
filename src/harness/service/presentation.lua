@@ -105,7 +105,7 @@ function M.restore(value: unknown): Object
     local session = body and bounds.id(body.session)
     if not body or not session or bounds.fields(body, {"session"}) then return fail("invalid window restore request") end
     local live = process.registry.lookup(OWNER .. session)
-    if live then return {ok = true, value = {session = session}} end
+    if live then return rpc(tostring(live), {op = "start"}) end
     local raw, err = funcs.call("bee.threads.sessions.binding:restore", {session = session})
     local reply = bounds.object(raw)
     if err or not reply or reply.ok ~= true then
@@ -130,9 +130,9 @@ function M.restore(value: unknown): Object
     return rpc(nil, {op = "resume"}, {resume = saved, session = session, workspace_id = workspace}, OWNER .. session, operation_key, owner_window)
 end
 
--- type delivers a message into a session's terminal. A session whose terminal
--- is gone is resumed instead; its agent takes the message once it reports
--- that it started.
+-- type delivers a message into a session's terminal. A terminal that is gone
+-- or not started yet starts instead; its agent takes the waiting message as
+-- its launch prompt.
 function M.type(value: unknown): Object
     local body = bounds.object(value)
     local session = body and bounds.id(body.session)
@@ -186,8 +186,15 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
     local restoring = bounds.object(bounds.object(value) and (value :: Object).resume)
     local request: admission.Request? = nil
     local aliases: {string} = {}
-    local started_view: tty.Viewport? = nil
-    local started_pid: string? = nil
+    local view: tty.Viewport? = nil
+    local pid: string? = nil
+    -- launch starts the window executor once; an opened session's agent
+    -- starts when it is first needed: a message for it, or a viewer.
+    local launch: (() -> ())? = nil
+    local function ensure_started()
+        if view or not launch then return end
+        launch()
+    end
     local function reply_to(token: string, reply: Object)
         reply.caller_token = token
         local caller = process.registry.lookup(token)
@@ -208,7 +215,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         assert(process.registry.register(OWNER .. session))
         aliases = {OWNER .. session}
         local encoded = assert(recovery.encode(saved))
-        started_view, started_pid = start(workspace, assert(uuid.v7()), {}, encoded, operation_key)
+        view, pid = start(workspace, assert(uuid.v7()), {}, encoded, operation_key)
         reply_to(initial_token, {ok = true, value = {session = session}})
     else
         local decoded, err = admission.decode_request(value)
@@ -224,18 +231,20 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
             brief = "", workdir = decoded.workdir, expected_plan_digest = decoded.expected_plan_digest,
             saved_profile_id = decoded.saved_profile_id, saved_profile_revision = decoded.saved_profile_revision,
             thread_id = admitted.thread_id}))
-        started_view, started_pid = start(decoded.workspace_id, decoded.request_id, {encoded}, "", operation_key)
+        launch = function() view, pid = start(decoded.workspace_id, decoded.request_id, {encoded}, "", operation_key) end
         reply_to(initial_token, receipt())
     end
-    local view, pid = assert(started_view), assert(started_pid)
     local mount: string? = nil
     local recipient: string? = nil
     while true do
         local event = channel.select({requests:case_receive(), events:case_receive()})
         if not event.ok then break end
         if event.channel == events then
-            if event.value.kind == process.event.EXIT and tostring(event.value.from) == tostring(pid) then break end
-            if event.value.kind == process.event.CANCEL then process.cancel(pid, "session owner stopping") end
+            if pid and event.value.kind == process.event.EXIT and tostring(event.value.from) == pid then break end
+            if event.value.kind == process.event.CANCEL then
+                if not pid then break end
+                process.cancel(pid, "session owner stopping")
+            end
         else
             local sender = tostring(event.value:from())
             local body = bounds.object(event.value:payload():data())
@@ -249,21 +258,33 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 local candidate = supplied and canonical.encode(supplied, 16384, 16)
                 if not supplied or candidate ~= expected or body.operation_key ~= operation_key then reply = fail(decode_error or "window operation key changed")
                 else reply = receipt() end
+            elseif body.op == "start" then
+                ensure_started()
+                reply = {ok = true, value = {}}
             elseif body.op == "attach" then
-                if mount then assert(view:revoke(mount)) end
-                mount = assert(view:mount(sender, {observe = true, input = true, resize = true}))
+                ensure_started()
+                local current = assert(view)
+                if mount then assert(current:revoke(mount)) end
+                mount = assert(current:mount(sender, {observe = true, input = true, resize = true}))
                 recipient = sender
                 reply = {ok = true, value = {mount = mount}}
             elseif body.op == "type" and bounds.text(body.text, 65536) then
-                -- The message reaches the agent the way a person's typing does:
-                -- pasted into its prompt, then submitted.
-                local pasted, paste_error = view:send({type = "paste", text = tostring(body.text)})
-                local entered, enter_error = nil, nil
-                if pasted then entered, enter_error = view:send({type = "key", key = "enter", key_type = "enter", action = "press"}) end
-                if entered then reply = {ok = true, value = {typed = true}}
-                else reply = fail("the terminal did not take the message: " .. tostring(paste_error or enter_error)) end
+                if not view then
+                    -- A terminal that has not started takes the waiting
+                    -- message as its agent's launch prompt.
+                    ensure_started()
+                    reply = {ok = true, value = {typed = false}}
+                else
+                    -- The message reaches the agent the way a person's typing
+                    -- does: pasted into its prompt, then submitted.
+                    local pasted, paste_error = view:send({type = "paste", text = tostring(body.text)})
+                    local entered, enter_error = nil, nil
+                    if pasted then entered, enter_error = view:send({type = "key", key = "enter", key_type = "enter", action = "press"}) end
+                    if entered then reply = {ok = true, value = {typed = true}}
+                    else reply = fail("the terminal did not take the message: " .. tostring(paste_error or enter_error)) end
+                end
             elseif body.op == "detach" and recipient == sender then
-                if mount then assert(view:revoke(mount)) end
+                if mount and view then assert(view:revoke(mount)) end
                 mount, recipient = nil, nil
                 reply = {ok = true, value = {}}
             else reply = fail("invalid window operation") end
@@ -272,7 +293,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         end
         ::next_request::
     end
-    view:close()
+    if view then view:close() end
     for _, registered in ipairs(aliases) do process.registry.unregister(registered, process.registry.LOCAL) end
 end
 function M.main(value: unknown, name: unknown, initial_token: unknown, operation_key: unknown)

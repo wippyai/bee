@@ -452,12 +452,19 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
         local used, usage_error = consumption(tx, session_ref)
         if not used then return failure("INTERNAL", usage_error or "session consumption is unavailable") end
         local execution_running = accepted > 0 and recovery_blocked == 0
+        local native_attempt = text(route.native_attempt_id, 160)
+        local attempt_turn_ended = false
+        if native_attempt then
+            local ended, ended_error = journal.attempt_turn_ended(tx, session_ref, native_attempt)
+            if ended == nil then return transaction.storage_failure(ended_error or "read attempt turns") end
+            attempt_turn_ended = ended
+        end
         return transaction.success({session = session.session_ref, thread_ref = session.thread_id, workspace = session.workspace_id,
             active_turn = active_turn and {turn = active_turn.turn_ref, claim = active_turn.claim_token, work = active_turn.work_ref,
                 owner_epoch = active_turn.owner_epoch, phase = active_turn.phase, last_progress_at_ms = active_turn.last_progress_at_ms} or nil,
             last_result = last_result, title = title, state = session.state, route = route,
             revision = session.revision, created_at = session.created_at, updated_at = session.updated_at,
-            queued = queued, active = reserved + accepted, execution_running = execution_running,
+            queued = queued, active = reserved + accepted, execution_running = execution_running, attempt_turn_ended = attempt_turn_ended,
             settled = settled, uncertain = uncertain, recovery_blocked = recovery_blocked,
             activity = activity, activity_evidence = activity_evidence, budget_consumption = used,
             head_sequence = head_sequence}, false)
@@ -1058,10 +1065,11 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
     if denied then return denied end
     local caller = assert(caller)
     local input = object(request)
-    if not input or not has_only(input, {session = true, operation_key = true}) then return missing_request() end
+    if not input or not has_only(input, {session = true, operation_key = true, work = true}) then return missing_request() end
     local session_ref, operation_key = ref(input.session), key(input.operation_key)
-    if not session_ref or not operation_key then return missing_request() end
-    local arguments = {session = session_ref}
+    local selected_work = input.work == nil and nil or ref(input.work)
+    if not session_ref or not operation_key or (input.work ~= nil and not selected_work) then return missing_request() end
+    local arguments = {session = session_ref, work = selected_work}
     return transaction.write(db, function(tx: sql.Transaction): Result
         local session, session_error = journal.session(tx, session_ref, target_workspace(session_ref, workspace))
         if session_error then return transaction.storage_failure(session_error) end
@@ -1088,8 +1096,13 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
             local receipt = {session = session_ref, turn = nil, state = "busy", operation = op_ref, committed_at = now}
             return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, session_ref, receipt, now)
         end
-        local work_row_data, work_error = journal.queued_work(tx, session_ref)
+        -- A named work is reserved itself, ahead of older queued work: a
+        -- prompt the agent submitted is the turn it runs now.
+        local work_row_data, work_error
+        if selected_work then work_row_data, work_error = journal.queued_work_ref(tx, session_ref, selected_work)
+        else work_row_data, work_error = journal.queued_work(tx, session_ref) end
         if work_error then return transaction.storage_failure(work_error) end
+        if selected_work and not work_row_data then return failure("CONFLICT", "the named work is not queued in this session") end
         if not work_row_data then
             local receipt = {session = session_ref, turn = nil, state = "idle", operation = op_ref, committed_at = now}
             return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, session_ref, receipt, now)

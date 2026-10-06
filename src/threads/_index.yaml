@@ -56,9 +56,9 @@ entries:
   - name: work_history
     description: Page immutable work inputs for a session
   - name: work_scan
-    description: Scan the next queued work and unsettled turn for the Sessions scheduler
+    description: Scan the next queued work and unsettled turn of a session
   - name: turn_reserve
-    description: Reserve the FIFO eligible work under a fenced owner epoch
+    description: Reserve the FIFO eligible work, or the named queued work, under a fenced owner epoch
   - name: turn_recover
     description: Re-fence one unsettled turn under the current owner epoch
   - name: turn_pull

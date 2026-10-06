@@ -111,7 +111,8 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     return {stored = stored, point = point, attempt = attempt, binding = binding, private_home = status.private_home}, nil
 end
 -- The previous window's session never began a provider conversation, so there
--- is nothing to resume; the refusal is permanent for that window.
+-- is nothing to resume: the next window starts a new conversation in the
+-- same session once the previous process is cleaned up.
 M.NO_CONVERSATION = "previous window recorded no provider conversation"
 function M.resolve_window(call: Call, request: Request): (string?, string?, boolean?)
     local previous, inspect_error = M.inspect_window(call, request, true)
@@ -178,11 +179,10 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
         cursor = through
         if not page.has_more then
             conversation_session_id = conversation_session_id or previous.point.conversation_ref
-            if not conversation_session_id then return nil, M.NO_CONVERSATION end
-            -- Only an owned, ended attempt with a verified conversation can
-            -- request cleanup. Placement still proves group absence and keeps
-            -- the retained session home; a refused or uncertain cleanup does
-            -- not authorize a replacement attempt.
+            -- Only an owned, ended attempt can request cleanup. Placement
+            -- still proves group absence and keeps the retained session home;
+            -- a refused or uncertain cleanup does not authorize a replacement
+            -- attempt.
             if attempt.cleanup_state ~= "complete" then
                 local cleanup_target = target(request, "cleanup")
                 if not cleanup_target then return nil, "placement binding has no cleanup method" end
@@ -196,6 +196,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
                     return nil, "previous native process cleanup is not complete"
                 end
             end
+            if not conversation_session_id then return nil, M.NO_CONVERSATION, previous.private_home end
             return conversation_session_id, nil, previous.private_home
         end
     end

@@ -34,6 +34,7 @@ entries:
   method: open
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -64,6 +65,7 @@ entries:
   method: run
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -86,6 +88,7 @@ entries:
   method: send
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -108,6 +111,7 @@ entries:
   method: await
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -137,6 +141,7 @@ entries:
   method: join
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -159,6 +164,7 @@ entries:
   method: get
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -181,6 +187,7 @@ entries:
   method: list
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -203,6 +210,7 @@ entries:
   method: history
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -225,6 +233,7 @@ entries:
   method: cancel
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -247,6 +256,7 @@ entries:
   method: close
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -269,6 +279,7 @@ entries:
   method: catalog
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -303,6 +314,7 @@ entries:
     policies: *id001
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -325,6 +337,30 @@ entries:
     policies: *id001
   modules:
   - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+- name: launch_prompt
+  kind: function.lua
+  source: file://owner.lua
+  method: launch_prompt
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+  security:
+    policies: *id001
+  modules:
+  - logger
+  - json
   - security
   - hash
   - funcs
@@ -347,6 +383,7 @@ entries:
     policies: *id001
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -357,6 +394,7 @@ entries:
   method: detach
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs
@@ -379,6 +417,7 @@ entries:
   method: attention_count
   modules:
   - logger
+  - json
   - security
   - hash
   - funcs

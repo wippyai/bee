@@ -22,7 +22,7 @@ entries:
   source: file://catalog_test.lua
   method: run
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, catalog: bee.gateway.catalog:catalog, surface: bee.gateway.catalog:surface, mcp: bee.gateway.api:mcp, access: bee.gateway.security:access}
+  imports: {test: wippy.test:test, catalog: bee.gateway.catalog:catalog, surface: bee.gateway.catalog:surface, mcp: bee.gateway.api:mcp, access: bee.gateway.security:access, json_schema: bee.gateway.catalog:json_schema}
 - name: hooks_test
   kind: function.lua
   source: file://hooks_test.lua

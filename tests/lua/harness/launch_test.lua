@@ -1260,6 +1260,7 @@ local function define_tests()
             policy_data.executable_env = {}
             policy_data.gateway_tools = {}
             policy_data.gateway_hooks = {}
+            policy_data.hook_command_ref = nil
 
             profile_entry.data = profile_data
             definition_entry.data = definition_data

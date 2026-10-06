@@ -226,6 +226,16 @@ action as `prepare`, records the revert under the asking person as the actor,
 applies the earlier version's definitions through the activation owner, and
 refuses with `BLOCKED` when no earlier version is retained or applied migration
 facts exist. `bee gov revert OWNER` runs this same revert as the recovery actor.
+`uninstall` removes an application that has no earlier version to go back to, or
+that the person no longer wants. It needs `bee.gov.delivery.activate`, and
+`bee.gov.binding:activation_uninstall` records it under the asking person
+(`remove_activation` in the activation store), makes the slot stop wanting any
+version so boot recovery never restores it, and empties the owner's registry
+overlay through the same reconcile that applies a version with no version as its
+target; the capability grant record and generated policies live in that overlay
+and go with it. The intents stay as history. The application's databases are
+host-granted files and are never touched: their data is kept and a later install
+finds it. A version still on its way refuses removal until it settles.
 
 The resolver and destination service are implemented and covered through the
 plan adapter. `activation_profiles` supplies host-selected roots, overlay

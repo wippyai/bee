@@ -41,3 +41,13 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+- name: uninstall
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-07T02:00:00Z'
+  source: file://uninstall.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

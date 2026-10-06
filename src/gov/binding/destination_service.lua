@@ -26,6 +26,7 @@ local destination = require("destination")
 local preflight = require("preflight")
 local materializer = require("materializer")
 local headless_revert = require("headless_revert")
+local uninstall = require("activation_uninstall")
 local artifact = require("artifact")
 local driver_admission = require("driver_admission")
 local migration_effect = require("migration_effect")
@@ -693,7 +694,7 @@ local function request_identity(request: Object): (string?, string?, string?)
     return bounds.id(request.source_node), bounds.id(request.source_workspace), bounds.id(request.version)
 end
 
-local OPERATIONS: Set = {available = true, stage = true, list = true, activations = true, get = true, changes = true, revert = true,
+local OPERATIONS: Set = {available = true, stage = true, list = true, activations = true, get = true, changes = true, revert = true, uninstall = true,
     review = true, select = true, prepare = true, step = true, status = true, recover = true,
     lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
 local READS: Set = {available = true, list = true, activations = true, get = true, changes = true, status = true}
@@ -744,6 +745,31 @@ end
 
 local RECOVERY_ATTEMPTS = 4
 
+-- The overlay owner an application of this workspace runs under: the one
+-- holding a desired version, else the application's own owner.
+local function application_owner(activation_store: activations.Store, workspace_id: string, source_workspace: string): string?
+    local identity = workspace_applications.identity(workspace_id, source_workspace)
+    if not identity then return nil end
+    for _, candidate in ipairs({workspace_applications.prior_owner(workspace_id, source_workspace), identity.overlay_owner}) do
+        if activations.desired(activation_store, candidate).ok then return candidate end
+    end
+    return identity.overlay_owner
+end
+
+-- A person's removal of an application they installed: the activation owner
+-- records it under the person and empties the owner's registry overlay. The
+-- saved data of its granted databases is left as it is.
+local function uninstall_application(request: Object, workspace_id: string, actor_id: string,
+    activation_store: activations.Store): Result
+    if exact(request, {"source_workspace", "receipt_key"}) then return failure("INVALID", "uninstall has unknown fields") end
+    local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
+    local overlay_owner = source_workspace and application_owner(activation_store, workspace_id, source_workspace) or nil
+    if not source_workspace or not key or not overlay_owner then return failure("INVALID", "uninstall names no application") end
+    return uninstall.uninstall({activations = activation_store, overlay_owner = overlay_owner, actor_id = actor_id,
+        clear = function(): ({[string]: unknown}?, string?) return materializer.reconcile(overlay_owner, {}) end,
+        cleared = function(): (boolean?, string?) return materializer.matches(overlay_owner, {}) end}, key)
+end
+
 type RevertMethods = {
     applied: (activations.Store, string) -> Result,
     revert_activation: (activations.Store, string, activations.Request) -> Result,
@@ -759,11 +785,10 @@ local function revert_application(request: Object, workspace_id: string, actor_i
     local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
     local identity = source_workspace and workspace_applications.identity(workspace_id, source_workspace) or nil
     if not source_workspace or not key or not identity then return failure("INVALID", "revert names no application") end
-    local overlay_owner: string? = nil
-    for _, candidate in ipairs({workspace_applications.prior_owner(workspace_id, source_workspace), identity.overlay_owner}) do
-        if overlay_owner == nil and activations.desired(activation_store, candidate).ok then overlay_owner = candidate end
+    local overlay_owner = application_owner(activation_store, workspace_id, source_workspace)
+    if not overlay_owner or not activations.desired(activation_store, overlay_owner).ok then
+        return failure("NOT_FOUND", "this application is not installed here")
     end
-    if not overlay_owner then return failure("NOT_FOUND", "this application is not installed here") end
     local desired = activations.desired(activation_store, overlay_owner)
     local current = desired.ok and bounds.object(desired.value) or nil
     local baseline_result = activations.baseline(activation_store, overlay_owner)
@@ -982,6 +1007,8 @@ function M.call(raw: unknown): Result
     elseif operation == "activations" then
         if exact(request, {}) then result = failure("INVALID", "activations has unknown fields")
         else result = annotate(activation_store, activations.listing(activation_store)) end
+    elseif operation == "uninstall" then
+        result = uninstall_application(request, workspace_id, actor_id, activation_store)
     elseif operation == "revert" then
         result = revert_application(request, workspace_id, actor_id, plan_store, activation_store, lease_handle)
     elseif operation == "get" then

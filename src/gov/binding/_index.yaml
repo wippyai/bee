@@ -249,6 +249,13 @@ entries:
     activation_store: bee.gov.persist:activation_store
     resources: bee.gov.binding:staging_resources
     transaction: bee.persist:transaction
+- name: activation_uninstall
+  kind: library.lua
+  source: file://activation_uninstall.lua
+  imports:
+    bounds: bee.values:bounds
+    transaction: bee.persist:transaction
+    activation_store: bee.gov.persist:activation_store
 - name: activation_owner
   kind: library.lua
   source: file://activation_owner.lua
@@ -329,6 +336,7 @@ entries:
     capability_files: bee.gov.types:capability_files
     workspace_applications: bee.gov.types:workspace_applications
     headless_revert: bee.gov.binding:headless_revert
+    activation_uninstall: bee.gov.binding:activation_uninstall
     preflight: bee.gov.binding:preflight
 - name: destination_backend_call
   kind: function.lua
@@ -409,6 +417,7 @@ entries:
     capability_files: bee.gov.types:capability_files
     workspace_applications: bee.gov.types:workspace_applications
     headless_revert: bee.gov.binding:headless_revert
+    activation_uninstall: bee.gov.binding:activation_uninstall
     preflight: bee.gov.binding:preflight
   security:
     policies:
@@ -453,6 +462,7 @@ entries:
     capability_files: bee.gov.types:capability_files
     workspace_applications: bee.gov.types:workspace_applications
     headless_revert: bee.gov.binding:headless_revert
+    activation_uninstall: bee.gov.binding:activation_uninstall
     preflight: bee.gov.binding:preflight
   security:
     policies:

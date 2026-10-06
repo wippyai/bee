@@ -559,6 +559,66 @@ entries:
   imports:
     test: wippy.test:test
     author: bee.gov.binding:author
+- name: activation_uninstall_test
+  kind: function.lua
+  source: file://activation_uninstall_test.lua
+  method: run
+  modules:
+  - hash
+  - uuid
+  meta:
+    type: test
+    suite: bee
+  security:
+    policies:
+    - bee.tests.gov:plan_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    activation_store: bee.gov.persist:activation_store
+    activation_uninstall: bee.gov.binding:activation_uninstall
+- name: lifecycle_test_policy
+  kind: security.policy
+  meta:
+    type: test_support
+  policy:
+    actions:
+    - funcs.call
+    - bee.gov.delivery.read
+    - bee.gov.delivery.manage
+    - bee.gov.delivery.activate
+    resources: '*'
+    effect: allow
+- name: application_lifecycle_test
+  kind: function.lua
+  source: file://application_lifecycle_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - registry
+  - system
+  - uuid
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  security:
+    policies:
+    - bee.tests.gov:plan_test_policy
+    - bee.tests.gov:gateway_test_policy
+    - bee.tests.gov:lifecycle_test_policy
+    - bee.security.approvals:approval_decide_policy
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    artifact: bee.gov.types:artifact
+    delivery: bee.gov.types:delivery
+    publisher: bee.gov.binding:publisher
+    governed: bee.apps.library:governed
+    library: bee.apps.library:model
 - name: delivery_test
   kind: function.lua
   source: file://delivery_test.lua

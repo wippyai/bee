@@ -28,12 +28,14 @@ no name shows the start of its identity.
 
 An installed application opens from its row: the destination returns the
 `bee.app` definition each applied activation declares and the Library asks its
-own broker to open it through `bee.app:client`. Remove asks first, naming what
-goes and what stays, then runs the destination's `revert`: the application goes
-back to the version before it, applied migrations stay where they are, and a
-removal that would need a compensation plan stops and says so. An application
-with no earlier version cannot be removed this way. The version it replaced is
-listed in History as Removed.
+own broker to open it through `bee.app:client`. Both removals ask first and name
+what goes and what stays. Remove runs the destination's `uninstall`: the
+application, its permissions and its menu entry are taken off this bee, its
+databases and their data are kept and nothing is deleted, and installing it again
+finds it as it was. Go back, offered when an earlier version exists, runs
+`revert`: the application goes back to the version before it, applied migrations
+stay where they are, and a change that would need a compensation plan stops and
+says so. The removed version is listed in History as Removed.
 
 Install on a shared version runs the local path in one move: it receives the
 version, reads its checks, reviews, chooses it and prepares its activation,
@@ -44,7 +46,7 @@ package open the package screens: details, changes, confirmation and result.
 The app calls two facades and nothing else. `bee.gov.binding:destination_call`
 runs under `bee.gov.delivery.read`, `manage` and `activate`; the operations it
 uses are `available`, `list`, `activations`, `stage`, `get`, `changes`,
-`review`, `select`, `prepare`, `step`, `status`, `recover` and `revert`. The public Hub
+`review`, `select`, `prepare`, `step`, `status`, `recover`, `revert` and `uninstall`. The public Hub
 facade `bee.hub.binding:call` runs under `bee.hub.read`, `bee.hub.manage` and,
 for the Bee deployment root, `bee.hub.self_update`. The approval decision
 belongs to the approvals owner (`component/approvals`); the activation owner

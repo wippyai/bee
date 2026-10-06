@@ -29,6 +29,9 @@ local function define_tests()
                 {operation = "revert", workspace_id = WORKSPACE, source_workspace = "notes", receipt_key = "revert-1"})
             test.is_false(reply.ok == true)
             test.eq(code(reply), "NOT_FOUND")
+            local gone = call({"bee.apps.library:destination_client", "bee.apps.library:delivery_operations"},
+                {operation = "uninstall", workspace_id = WORKSPACE, source_workspace = "notes", receipt_key = "remove-1"})
+            test.eq(code(gone), "NOT_FOUND")
             local malformed = call({"bee.apps.library:destination_client", "bee.apps.library:delivery_operations"},
                 {operation = "revert", workspace_id = WORKSPACE, source_workspace = "notes", receipt_key = "revert-1", extra = true})
             test.eq(code(malformed), "INVALID")
@@ -39,6 +42,9 @@ local function define_tests()
                 {operation = "revert", workspace_id = WORKSPACE, source_workspace = "notes", receipt_key = "revert-2"})
             test.is_false(reply.ok == true)
             test.eq(code(reply), "DENIED")
+            local removal = call({"bee.apps.library:destination_client", "bee.tests.apps.library:read_only"},
+                {operation = "uninstall", workspace_id = WORKSPACE, source_workspace = "notes", receipt_key = "remove-2"})
+            test.eq(code(removal), "DENIED")
             local listing = call({"bee.apps.library:destination_client", "bee.tests.apps.library:read_only"},
                 {operation = "activations", workspace_id = WORKSPACE})
             test.is_true(listing.ok == true)

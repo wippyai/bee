@@ -378,6 +378,47 @@ local function define_tests()
             test.eq(replayed.reverted_from_intent_id, "intent-gen-2")
             assert(store.close(state))
         end)
+        test.it("removes an applied application under the person who asked and keeps its intents as history", function()
+            local state = assert(store.open("bee:db", "node-a", "workspace-remove"))
+            local input = prepare()
+            input.intent_id, input.idempotency_key = "intent-remove", "remove-prepare"
+            local prepared = ok(store.call(state, "actor-a", input))
+            ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = "intent-remove", expected_revision = 1,
+                idempotency_key = "remove-bind", approval_id = "approval-remove",
+                approval_proposal_digest = string.rep("d", 64), approval_owner_incarnation = 1}))
+            ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = "intent-remove", expected_revision = 2,
+                idempotency_key = "remove-consume"}))
+            ok(store.call(state, "actor-a", {operation = "record_consumption", intent_id = "intent-remove", expected_revision = 3,
+                idempotency_key = "remove-record", consumer_id = "host", proposal_digest = string.rep("d", 64),
+                effect_key = prepared.effect_key}))
+            ok(store.call(state, "actor-a", {operation = "begin_apply", intent_id = "intent-remove", expected_revision = 4,
+                idempotency_key = "remove-apply"}))
+            local applied = ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = "intent-remove",
+                expected_revision = 5, idempotency_key = "remove-outcome", outcome = "applied", diagnostics = "observed"}))
+            local request = {operation = "remove_activation", overlay_owner = "bee.gov:overlay",
+                expected_revision = applied.slot_revision, idempotency_key = "remove-1", diagnostics = "removed by the person"}
+            local stale = {}
+            for field, value in pairs(request) do stale[field] = value end
+            stale.expected_revision, stale.idempotency_key = 0, "remove-stale"
+            test.eq(store.call(state, "person-1", stale).code, "CONFLICT")
+            local removed = ok(store.call(state, "person-1", request))
+            test.eq(removed.intent_id, "intent-remove")
+            test.is_nil(removed.desired_intent_id)
+            test.is_nil(removed.observed_intent_id)
+            test.eq(store.desired(state, "bee.gov:overlay").code, "NOT_FOUND")
+            local replay = store.call(state, "person-1", request)
+            test.is_true(replay.ok and replay.replayed == true)
+            test.eq(store.call(state, "person-2", request).code, "DENIED")
+            local again = {}
+            for field, value in pairs(request) do again[field] = value end
+            again.idempotency_key = "remove-2"
+            test.eq(store.call(state, "person-1", again).code, "CONFLICT")
+            local rows = assert(bounds.array(ok(store.listing(state)).activations))
+            test.eq(#rows, 1)
+            test.eq(assert(bounds.object(rows[1])).phase, "settled")
+            test.is_nil(assert(bounds.object(rows[1])).observed_intent_id)
+            assert(store.close(state))
+        end)
         test.it("refuses a revert without a retained baseline generation", function()
             local state = assert(store.open("bee:db", "node-a", "workspace-rollback-empty"))
             local input = prepare()

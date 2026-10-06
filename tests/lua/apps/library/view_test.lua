@@ -279,14 +279,15 @@ local function define_tests()
             state.can_open = true
             local ready = buttons()
             test.is_true(ready.launch.enabled and ready.launch.primary == true)
-            test.is_true(ready.remove.enabled)
-            test.is_true(ready.open.enabled)
+            test.is_true(ready.remove.enabled and ready.go_back.enabled and ready.open.enabled)
             test.is_true(kinds(view.draw(100, 24, appearance.defaults(), state, ui()).hits).launch)
             local first = {}
             for key, value in pairs(current) do first[key] = value end
             first.baseline_intent_id = nil
             test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {first, earlier}})))
-            test.is_false(buttons().remove.enabled)
+            local first_version = buttons()
+            test.is_true(first_version.remove.enabled)
+            test.is_false(first_version.go_back.enabled)
         end)
 
         test.it("asks before removing, names what goes and what stays, and takes every click", function()
@@ -298,7 +299,7 @@ local function define_tests()
                 source_node = NODE, source_workspace = "notes", version = "1.0.0", revision = 3, phase = "settled",
                 outcome = "applied", observed_intent_id = "i2", observed_outcome = "applied"}
             test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {current, earlier}})))
-            test.is_true(model.ask_remove(state, model.selected_row(state)))
+            test.is_true(model.ask_remove(state, model.selected_row(state), "back"))
             for _, size in ipairs({{100, 24}, {60, 16}, {30, 12}}) do
                 local drawn = view.draw(size[1], size[2], appearance.defaults(), state, ui())
                 test.eq(#drawn.rows, size[2])
@@ -310,11 +311,16 @@ local function define_tests()
             end
             local drawn = view.draw(100, 24, appearance.defaults(), state, ui())
             local text = table.concat(plain(drawn.rows), "\n")
-            test.is_true(text:find("Remove Notes 1.0.1?", 1, true) ~= nil)
+            test.is_true(text:find("Go back to Notes 1.0.0?", 1, true) ~= nil)
             test.is_true(text:find("goes back to 1.0.0", 1, true) ~= nil)
             test.is_true(text:find("saved stays", 1, true) ~= nil)
             local found = kinds(drawn.hits)
             test.is_true(found.confirm_remove and found.cancel_remove)
+            model.cancel_remove(state)
+            test.is_true(model.ask_remove(state, model.selected_row(state), "remove"))
+            local removing = table.concat(plain(view.draw(100, 24, appearance.defaults(), state, ui()).rows), "\n")
+            test.is_true(removing:find("Remove Notes 1.0.1?", 1, true) ~= nil)
+            test.is_true(removing:find("nothing is deleted", 1, true) ~= nil)
             model.cancel_remove(state)
             test.is_false(kinds(view.draw(100, 24, appearance.defaults(), state, ui()).hits).confirm_remove == true)
         end)

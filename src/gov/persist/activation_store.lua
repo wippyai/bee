@@ -44,10 +44,11 @@ type ApplyRequest = {operation: "begin_apply", intent_id: string, expected_revis
 type MigrationRequest = {operation: "record_migrations", intent_id: string, expected_revision: integer, idempotency_key: string, receipt: Blob, complete: boolean, diagnostics: string}
 
 type OutcomeRequest = {operation: "record_outcome", intent_id: string, expected_revision: integer, idempotency_key: string, outcome: string, diagnostics: string}
+type RemoveRequest = {operation: "remove_activation", overlay_owner: string, expected_revision: integer, idempotency_key: string, diagnostics: string}
 type RevertRequest = {operation: "revert_activation", overlay_owner: string, expected_revision: integer, idempotency_key: string, compensation: Blob, diagnostics: string}
 type StatusRequest = {operation: "activation_status", intent_id: string}
 type Mutation = PrepareRequest | BindRequest | LeaseRequest | ConsumeRequest | ConsumptionRequest | ApplyRequest | MigrationRequest | OutcomeRequest
-type DecodedRequest = {operation: "prepare_activation", request: PrepareRequest} | {operation: "bind_approval", request: BindRequest} | {operation: "authorize_lease", request: LeaseRequest} | {operation: "begin_consume", request: ConsumeRequest} | {operation: "record_consumption", request: ConsumptionRequest} | {operation: "begin_apply", request: ApplyRequest} | {operation: "record_migrations", request: MigrationRequest} | {operation: "record_outcome", request: OutcomeRequest} | {operation: "activation_status", request: StatusRequest} | {operation: "revert_activation", request: RevertRequest}
+type DecodedRequest = {operation: "prepare_activation", request: PrepareRequest} | {operation: "bind_approval", request: BindRequest} | {operation: "authorize_lease", request: LeaseRequest} | {operation: "begin_consume", request: ConsumeRequest} | {operation: "record_consumption", request: ConsumptionRequest} | {operation: "begin_apply", request: ApplyRequest} | {operation: "record_migrations", request: MigrationRequest} | {operation: "record_outcome", request: OutcomeRequest} | {operation: "activation_status", request: StatusRequest} | {operation: "revert_activation", request: RevertRequest} | {operation: "remove_activation", request: RemoveRequest}
 
 
 local function failure(code: string, message: string, value: unknown?): Result
@@ -547,6 +548,17 @@ local function decode(raw: unknown): (DecodedRequest?, string?)
         local intent_id = id(value.intent_id)
         if not intent_id then return nil, "intent_id is required" end
         return {operation = "activation_status", request = {operation = "activation_status", intent_id = intent_id}}, nil
+    end
+    if operation == "remove_activation" then
+        local extra = unknown(value, {"operation", "overlay_owner", "expected_revision", "idempotency_key", "diagnostics"})
+        if extra then return nil, extra end
+        local overlay_owner, key = id(value.overlay_owner), id(value.idempotency_key)
+        local expected = count(value.expected_revision, false)
+        local diagnostics = bounds.text(value.diagnostics or "", MAX_DIAGNOSTICS)
+        if not overlay_owner or not key or expected == nil or not diagnostics then
+            return nil, "remove requires overlay_owner, expected_revision and idempotency_key"
+        end
+        return {operation = "remove_activation", request = {operation = "remove_activation", overlay_owner = overlay_owner, expected_revision = expected, idempotency_key = key, diagnostics = diagnostics}}, nil
     end
     if operation == "revert_activation" then
         local extra = unknown(value, {"operation", "overlay_owner", "expected_revision", "idempotency_key", "compensation", "diagnostics"})
@@ -1167,6 +1179,56 @@ function M.revert_activation(store: Store, actor: string, raw_input: Request): R
         return transaction.success(result, false)
     end)
 end
+-- remove_activation: the person's removal of an application. The slot forgets
+-- its desired and observed generations, so boot recovery never restores it, and
+-- the receipt records who asked. The intents stay as history.
+function M.remove_activation(store: Store, actor: string, raw_input: Request): Result
+    if store.closed then return failure("CLOSED", "governance activation store is closed") end
+    local decoded, input_error = decode(raw_input)
+    if not decoded then return failure("INVALID", input_error or "invalid activation request") end
+    if decoded.operation ~= "remove_activation" then return failure("INVALID", "unsupported activation operation") end
+    local input = decoded.request
+    local measured, measure_error = request_digest(input)
+    if not measured then return assert(measure_error) end
+    return transaction.write(store.db, "governance activation", function(tx: sql.Transaction): Result
+        local prior, prior_error = one(tx, "SELECT actor_id, operation, request_digest, intent_id FROM bee_governance_activation_receipts WHERE owner_node = ? AND workspace_id = ? AND idempotency_key = ?", {store.node, store.workspace, input.idempotency_key}, "activation remove receipt")
+        if prior_error then return prior_error end
+        if prior then
+            if prior.actor_id ~= actor then return failure("DENIED", "idempotency key belongs to another actor") end
+            if prior.operation ~= input.operation or prior.request_digest ~= measured then
+                return failure("CONFLICT", "idempotency key was used by a different activation request")
+            end
+            local removed_id = id(prior.intent_id)
+            if not removed_id then return failure("INTERNAL", "removed activation intent is missing") end
+            local removed, removed_error = load(tx, store, removed_id)
+            if not removed then return removed_error or failure("INTERNAL", "removed activation intent is missing") end
+            local replay_slot, replay_error = slot(tx, store, input.overlay_owner, false)
+            if replay_error then return replay_error end
+            return transaction.success(view(store, removed, replay_slot), true)
+        end
+        local current_slot, slot_error = slot(tx, store, input.overlay_owner, false)
+        if slot_error then return slot_error end
+        if not current_slot or current_slot.observed_intent_id == nil or current_slot.observed_outcome ~= "applied" then
+            return failure("CONFLICT", "overlay has no applied generation to remove")
+        end
+        if count(current_slot.revision, false) ~= input.expected_revision then
+            return failure("CONFLICT", "expected_revision does not match the overlay slot")
+        end
+        if current_slot.desired_intent_id ~= current_slot.observed_intent_id then
+            return failure("CONFLICT", "the overlay has a newer generation on its way; let it settle first")
+        end
+        local removed, removed_error = load(tx, store, current_slot.observed_intent_id)
+        if removed_error or not removed then return removed_error or failure("INTERNAL", "applied activation intent is missing") end
+        local slot_updated, slot_write_error = tx:execute("UPDATE bee_governance_activation_slots SET revision = ?, desired_intent_id = NULL, desired_execution_revision = NULL, observed_intent_id = NULL, observed_execution_revision = NULL, observed_artifact_digest = NULL, observed_outcome = NULL, baseline_intent_id = NULL, baseline_execution_revision = NULL, baseline_artifact_digest = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ? AND revision = ?", {input.expected_revision + 1, store.node, store.workspace, input.overlay_owner, current_slot.revision})
+        local slot_update_error = cas_result(slot_updated, slot_write_error, "remove activation slot")
+        if slot_update_error then return slot_update_error end
+        local refreshed_slot, refresh_error = slot(tx, store, input.overlay_owner, false)
+        if refresh_error then return refresh_error end
+        local _, receipt_error = tx:execute("INSERT INTO bee_governance_activation_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, request_digest, intent_id, result_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", {store.node, store.workspace, input.idempotency_key, actor, input.operation, measured, removed.intent_id, removed.revision})
+        if receipt_error then return storage(receipt_error, "record activation remove receipt") end
+        return transaction.success(view(store, removed, refreshed_slot), false)
+    end)
+end
 function M.call(store: Store, actor_raw: string, raw: unknown): Result
     if store.closed then return failure("CLOSED", "governance activation store is closed") end
     local actor = id(actor_raw)
@@ -1175,6 +1237,7 @@ function M.call(store: Store, actor_raw: string, raw: unknown): Result
     if not input then return failure("INVALID", decode_error or "invalid activation request") end
     if input.operation == "activation_status" then return M.get(store, input.request.intent_id)
     elseif input.operation == "revert_activation" then return M.revert_activation(store, actor, input.request)
+    elseif input.operation == "remove_activation" then return M.remove_activation(store, actor, input.request)
     elseif input.operation == "prepare_activation" then return M.prepare(store, actor, input.request)
     elseif input.operation == "bind_approval" then return M.bind_approval(store, actor, input.request)
     elseif input.operation == "authorize_lease" then return M.authorize_lease(store, actor, input.request)

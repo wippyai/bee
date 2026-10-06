@@ -73,6 +73,7 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         if row and row.application and state.can_open then
             buttons[#buttons + 1] = {kind = "launch", key = "L", label = "Open", enabled = true}
         end
+        if model.can_go_back(row) then buttons[#buttons + 1] = {kind = "go_back", key = "B", label = "Go back", enabled = true} end
         if model.can_remove(row) then buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = true} end
         if state.governed.technical then
             local item = governed.selected(state.governed)
@@ -97,6 +98,7 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         if own then
             buttons[#buttons + 1] = {kind = "launch", key = "Enter", label = "Open", enabled = launchable, primary = launchable and not updating}
             buttons[#buttons + 1] = {kind = "open", key = "D", label = "Details", enabled = true, primary = not launchable and not updating}
+            buttons[#buttons + 1] = {kind = "go_back", key = "B", label = "Go back", enabled = model.can_go_back(row)}
             buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = model.can_remove(row)}
         else
             buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Details", enabled = row ~= nil, primary = not updating}
@@ -280,14 +282,14 @@ local function draw_removal(base: Frame, width: integer, height: integer, prefer
     local painter = frame.new(width, height, preferences)
     for y, row in ipairs(base.rows) do painter.canvas:put(1, y, row, width) end
     local lines = model.removal_lines(removal)
-    local box = frame.modal(painter, math.min(70, width - 2), #lines + 5, "Remove")
+    local box = frame.modal(painter, math.min(76, width - 2), #lines + 5, removal.kind == "back" and "Go back" or "Remove")
     if box.width > 0 then
         for index, line in ipairs(lines) do
             frame.put(painter, box.x, box.y + index, text.bound(line, 8192), box.width, index == 1 and painter.theme.accent or painter.theme.text)
         end
         local x = box.x
         local y = box.y + #lines + 2
-        x = frame.button(painter, x, y, {kind = "confirm_remove", key = "Enter", label = "Remove", enabled = true, primary = true})
+        x = frame.button(painter, x, y, {kind = "confirm_remove", key = "Enter", label = removal.kind == "back" and "Go back" or "Remove", enabled = true, primary = true})
         frame.button(painter, x, y, {kind = "cancel_remove", key = "Esc", label = "Keep", enabled = true})
     end
     return {rows = frame.rows(painter), hits = painter.hits, controls = nil, capacity = base.capacity,

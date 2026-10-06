@@ -20,9 +20,10 @@ type Row = {key: string, origin: Origin, name: string, version: string, status: 
     operation: string?, app: string?, application: string?, baseline: string?}
 type Selection = {installed: string?, shared: string?, history: string?}
 type Screen = "list" | "version"
--- A removal waits for the person's confirmation: the application and the
--- version it goes back to.
-type Removal = {app: string, name: string, version: string, baseline: string}
+-- A removal waits for the person's confirmation. Remove takes the application
+-- off this bee; back puts the version before it in its place.
+type RemovalKind = "remove" | "back"
+type Removal = {kind: RemovalKind, app: string, name: string, version: string, baseline: string?}
 type State = {workspace_id: string, tab: Tab, screen: Screen, selected: Selection, governed: governed.State, hub: hub.State,
     notice: string, can_open: boolean, removal: Removal?}
 
@@ -316,17 +317,25 @@ function M.show_version(state: State, shown: boolean)
     state.screen = shown and "version" or "list"
 end
 
--- Whether a row can be removed: an installed application with an earlier
--- version to go back to.
+-- Whether a row can be removed: any installed application.
 function M.can_remove(row: Row?): boolean
-    return row ~= nil and row.origin == "governed" and row.app ~= nil and row.baseline ~= nil
+    return row ~= nil and row.origin == "governed" and row.app ~= nil
         and (row.status == M.STATUS_INSTALLED or row.status == M.STATUS_UPDATE)
 end
 
--- ask_remove opens the confirmation for a removable row.
-function M.ask_remove(state: State, row: Row?): boolean
-    if not row or not M.can_remove(row) or not row.app or not row.baseline then return false end
-    state.removal = {app = row.app, name = row.name, version = row.version, baseline = row.baseline}
+-- Whether an installed application has an earlier version to go back to.
+function M.can_go_back(row: Row?): boolean
+    return M.can_remove(row) and row ~= nil and row.baseline ~= nil
+end
+
+-- ask_remove opens the confirmation for removing the row's application or,
+-- with kind back, for going back to its earlier version.
+function M.ask_remove(state: State, row: Row?, kind: RemovalKind?): boolean
+    local asked = kind or "remove"
+    if not row or not row.app then return false end
+    if asked == "remove" and not M.can_remove(row) then return false end
+    if asked == "back" and not M.can_go_back(row) then return false end
+    state.removal = {kind = asked, app = row.app, name = row.name, version = row.version, baseline = row.baseline}
     return true
 end
 
@@ -336,10 +345,17 @@ end
 
 -- What the confirmation tells the person: what goes, what stays.
 function M.removal_lines(removal: Removal): {string}
-    return {"Remove " .. removal.name .. " " .. removal.version .. "?",
-        removal.name .. " goes back to " .. removal.baseline .. ", the version before it.",
+    if removal.kind == "remove" then
+        return {"Remove " .. removal.name .. " " .. removal.version .. "?",
+            removal.name .. ", its permissions and its place in the menus are taken off this bee.",
+            "Anything " .. removal.name .. " saved in its databases is kept; nothing is deleted.",
+            "Installing " .. removal.name .. " again finds it as it was."}
+    end
+    return {"Go back to " .. removal.name .. " " .. tostring(removal.baseline) .. "?",
+        removal.name .. " " .. removal.version .. " is removed and " .. removal.name .. " goes back to "
+            .. tostring(removal.baseline) .. ", the version before it.",
         "Whatever " .. removal.name .. " saved stays where it is.",
-        "If this version changed its saved data, removing it stops and says so."}
+        "If this version changed its saved data, going back stops and says so."}
 end
 
 function M.toggle_technical(state: State)

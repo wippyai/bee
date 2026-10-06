@@ -188,8 +188,9 @@ local function main(options: unknown)
         refresh_names()
         state.notice = failures[1] or ""
     end
-    -- remove_now takes an application back to the version before it, as the
-    -- person. One attempt keeps its receipt key until the answer is known.
+    -- remove_now takes an application off this bee, or back to the version
+    -- before it, as the person. One attempt keeps its receipt key until the
+    -- answer is known.
     local pending_revert: {app: string, key: string}? = nil
     local function remove_now(removal: model.Removal)
         local attempt = pending_revert
@@ -197,12 +198,15 @@ local function main(options: unknown)
             attempt = {app = removal.app, key = new_key()}
             pending_revert = attempt
         end
-        local answer = invoke(governed.revert_request(gov, removal.app, attempt.key))
+        local request = removal.kind == "back" and governed.revert_request(gov, removal.app, attempt.key)
+            or governed.uninstall_request(gov, removal.app, attempt.key)
+        local answer = invoke(request)
         if not answer then state.notice = "No answer yet; try Refresh"; return end
         pending_revert = nil
         if answer.ok then
             refresh_governed()
-            state.notice = removal.name .. " went back to " .. removal.baseline
+            state.notice = removal.kind == "back" and (removal.name .. " went back to " .. tostring(removal.baseline))
+                or (removal.name .. " was removed")
             return
         end
         local fault = answer.error
@@ -679,9 +683,9 @@ local function main(options: unknown)
         if problem then gov.fault = problem end
         changed()
     end
-    local function ask_remove(row: model.Row?)
-        if row and model.ask_remove(state, row) then changed(); return end
-        state.notice = "There is no earlier version to go back to"
+    local function ask_remove(row: model.Row?, kind: model.RemovalKind?)
+        if row and model.ask_remove(state, row, kind) then changed(); return end
+        state.notice = kind == "back" and "There is no earlier version to go back to" or "This can't be removed from here"
         changed()
     end
     local function install_row(row: model.Row)
@@ -728,7 +732,8 @@ local function main(options: unknown)
         elseif kind == "open" and row then open_row(row)
         elseif kind == "update" and row then update_row(row)
         elseif kind == "remove" and row and row.component and row.origin == "hub" then remove_package(row.component)
-        elseif kind == "remove" and row and row.origin == "governed" then ask_remove(row)
+        elseif kind == "remove" and row and row.origin == "governed" then ask_remove(row, "remove")
+        elseif kind == "go_back" and row then ask_remove(row, "back")
         elseif kind == "launch" and row then launch_row(row)
         elseif kind == "search" then begin_editor("query")
         elseif kind == "keyword" then begin_editor("keyword")
@@ -759,7 +764,8 @@ local function main(options: unknown)
         elseif kind == "update" and row then update_row(row)
         elseif kind == "refresh" then perform(function() refresh_governed(); if row then open_version_now(row) end end)
         elseif kind == "technical" then model.toggle_technical(state); ui.offset = 0; changed()
-        elseif kind == "remove" then ask_remove(row)
+        elseif kind == "remove" then ask_remove(row, "remove")
+        elseif kind == "go_back" then ask_remove(row, "back")
         elseif kind == "launch" and row then launch_row(row)
         elseif kind == "back" then model.show_version(state, false); ui.offset = 0; changed()
         elseif kind == "accept" then perform(function() review_transition(true) end)
@@ -1011,6 +1017,7 @@ local function main(options: unknown)
                                 elseif letter == "p" then version_hit("prepare")
                                 elseif letter == "x" then version_hit(state.governed.technical and "step" or "remove")
                                 elseif letter == "l" then version_hit("launch")
+                                elseif letter == "b" then version_hit("go_back")
                                 elseif letter == "i" then version_hit("status")
                                 elseif letter == "g" then version_hit("recover")
                                 elseif key == "esc" or key == "escape" then version_hit("back") end
@@ -1037,7 +1044,8 @@ local function main(options: unknown)
                                 elseif (letter == "o" or letter == "d") and row then open_row(row)
                                 elseif letter == "u" then if row then update_row(row) end
                                 elseif letter == "x" and row and state.tab == "installed" then
-                                    if row.origin == "hub" and row.component then remove_package(row.component) else ask_remove(row) end
+                                    if row.origin == "hub" and row.component then remove_package(row.component) else ask_remove(row, "remove") end
+                                elseif letter == "b" and row and state.tab == "installed" then ask_remove(row, "back")
                                 elseif letter == "g" and state.tab == "history" then list_hit("recover", "")
                                 elseif letter == "/" then begin_editor("query")
                                 elseif letter == "t" then model.toggle_technical(state); changed()

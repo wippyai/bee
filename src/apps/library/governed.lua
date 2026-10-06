@@ -566,6 +566,10 @@ function M.apply_names(state: State, reply: Reply?): boolean
     for node, name in pairs(decoded) do state.names[node] = name end
     return true
 end
+function M.uninstall_request(state: State, source_workspace: string, key: string): Object
+    return {operation = "uninstall", workspace_id = state.workspace_id, source_workspace = source_workspace,
+        receipt_key = key}
+end
 function M.revert_request(state: State, source_workspace: string, key: string): Object
     return {operation = "revert", workspace_id = state.workspace_id, source_workspace = source_workspace,
         receipt_key = key}

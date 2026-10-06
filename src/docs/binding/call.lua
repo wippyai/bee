@@ -4,6 +4,7 @@
 -- host names the read-only policy this runs under, so registration grants nothing.
 local protocol = require("protocol")
 local corpus = require("corpus")
+local web = require("web")
 local resources = require("resources")
 local transaction = require("transaction")
 local bounds = require("bounds")
@@ -15,14 +16,28 @@ end
 -- The corpus is measured once per call; it is a fixed snapshot, so a call
 -- never observes a half-written document set.
 local function handle(raw: unknown): Result
-    local request, invalid = protocol.decode(raw)
-    if not request then return transaction.failure("INVALID_ARGUMENT", invalid or "invalid docs request") end
+    local web_request, web_invalid = protocol.web(raw)
+    if web_invalid then return transaction.failure("INVALID_ARGUMENT", web_invalid) end
+    local request: protocol.Request? = nil
+    if not web_request then
+        local decoded, invalid = protocol.decode(raw)
+        if not decoded then return transaction.failure("INVALID_ARGUMENT", invalid or "invalid docs request") end
+        request = decoded
+    end
     local resource, resource_error = resources.corpus()
     if not resource then return transaction.failure("UNAVAILABLE", tostring(resource_error)) end
     local volume, volume_error = corpus.open(resource)
     if not volume then return transaction.failure("UNAVAILABLE", tostring(volume_error)) end
     local manifest, manifest_error = corpus.manifest(volume)
     if not manifest then return transaction.failure("INTERNAL", tostring(manifest_error)) end
+    if web_request then
+        local window, code, fetch_error = web.fetch(manifest.base, web_request)
+        if not window then return transaction.failure(tostring(code), tostring(fetch_error)) end
+        local answer: {[string]: unknown} = window
+        answer.operation = web_request.operation
+        return transaction.success(answer, false)
+    end
+    if not request then return transaction.failure("INVALID_ARGUMENT", "invalid docs request") end
     if request.operation == "list" then
         local limit = request.limit or protocol.MAX_LIST
         local offset = request.offset or 0

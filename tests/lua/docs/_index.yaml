@@ -15,3 +15,11 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.security.docs:docs_policy]}
   imports: {test: wippy.test:test, corpus: bee.docs.binding:corpus, protocol: bee.docs:protocol, bounds: bee.values:bounds, resources: bee.docs.env:resources, method: bee.docs.binding:call}
+- name: web_test
+  kind: function.lua
+  source: file://web_test.lua
+  method: run
+  modules: [security]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.tests.principals:application_scope_policy]}
+  imports: {test: wippy.test:test, web: bee.docs.binding:web}

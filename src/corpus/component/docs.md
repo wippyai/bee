@@ -23,6 +23,22 @@ page or a manifest record differs from the source.
 | `search` | `query`, `topic?`, `offset?`, `limit?` | 16 matches per page, each with the section it sits under |
 | `read` | `id`, `section?`, `offset?`, `limit?` | 16384 bytes per window |
 
+`bee.docs:protocol` `web` decodes the live operations, which read the
+documentation site the corpus is selected from, at the manifest's `base`
+(`https://wippy.ai/llm`), through `bee.docs.binding:web`:
+
+| Operation | Fields | Reads |
+|---|---|---|
+| `web_search` | `query`, `offset?`, `limit?` | `<base>/search?q=<query>` |
+| `web_read` | `path`, `offset?`, `limit?` | `<base>/path/en/<path>`, a page path from `web_toc` or a search result |
+| `web_toc` | `offset?`, `limit?` | `<base>/toc` |
+| `web_index` | `offset?`, `limit?` | the site's curated `llms.txt` |
+
+Each answers one window of at most 16384 bytes with `next_offset` and `eof`.
+`bee.security.docs:docs_web_policy` allows `http_client.request` only to
+`https://wippy.ai/llm/` and `https://wippy.ai/llms.txt`; the site being
+unreachable reports `UNAVAILABLE`, a missing page `NOT_FOUND`.
+
 Document ids match `^[%w_./:-]+$` up to 160 bytes. The facade opens the one
 volume and holds no writer, no registry publication and no host path. The host
 fills `bee.docs.env:corpus_ref` through `target_corpus`, and

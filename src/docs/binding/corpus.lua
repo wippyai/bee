@@ -15,7 +15,7 @@ M.SCHEMA = "bee.docs-corpus@1"
 M.MAX_DOCUMENTS = 256
 M.MAX_CORPUS_BYTES = 4194304
 type Document = {id: string, topic: string, title: string, source: string, bytes: integer, sha256: string}
-type Manifest = {schema: string, selection_rule: string, totals: {documents: integer, bytes: integer}, documents: {Document}}
+type Manifest = {schema: string, selection_rule: string, base: string, totals: {documents: integer, bytes: integer}, documents: {Document}}
 type Excerpt = {id: string, title: string, topic: string, section: string, line: integer, text: string}
 type ReadFile = (string) -> (string?, string?)
 local function source(value: unknown): string?
@@ -98,7 +98,7 @@ function M.decode_manifest(decoded: unknown, readfile: ReadFile): (Manifest?, st
     if declared_documents ~= #documents or declared_bytes ~= total_bytes then
         return nil, "corpus manifest totals do not match its documents"
     end
-    return {schema = M.SCHEMA, selection_rule = selection_rule,
+    return {schema = M.SCHEMA, selection_rule = selection_rule, base = base,
         totals = {documents = declared_documents, bytes = declared_bytes}, documents = documents}, nil
 end
 -- The path of one document inside the volume: its id is the document path.

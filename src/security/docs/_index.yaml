@@ -13,3 +13,13 @@ entries:
     - bee.docs.env:corpus_ref
     - bee.env:docs_corpus
     effect: allow
+- name: docs_web_policy
+  kind: security.policy.expr
+  meta:
+    comment: The docs facade reads the live documentation site the corpus is selected from, and nothing else
+  policy:
+    actions:
+    - http_client.request
+    resources: '*'
+    expression: action == "http_client.request" && (resource matches "^https://wippy[.]ai/llm/" || resource == "https://wippy.ai/llms.txt")
+    effect: allow

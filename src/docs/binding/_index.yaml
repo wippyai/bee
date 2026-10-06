@@ -11,12 +11,14 @@ entries:
   imports:
     protocol: bee.docs:protocol
     corpus: bee.docs.binding:corpus
+    web: bee.docs.binding:web
     resources: bee.docs.env:resources
     transaction: bee.persist:transaction
     bounds: bee.values:bounds
   security:
     policies:
     - bee.security.docs:docs_policy
+    - bee.security.docs:docs_web_policy
   meta:
     type: tool
     title: Platform documentation
@@ -38,3 +40,8 @@ entries:
   imports:
     bounds: bee.values:bounds
     protocol: bee.docs:protocol
+- name: web
+  kind: library.lua
+  source: file://web.lua
+  modules:
+  - http_client

@@ -13,9 +13,9 @@ local function executor(change: boolean?, inspect_prompt: boolean?): approval.Ex
         if method == "bee.approvals.binding:request" then
             local prompt = assert(bounds.object(value.prompt))
             local wording = assert(bounds.text(prompt.text))
-            test.is_true(wording:find("Bee application", 1, true) ~= nil)
+            test.is_true(wording:find("Install ", 1, true) == 1)
             if inspect_prompt then
-                test.is_true(wording:find("Install Bee application application-a v1.", 1, true) ~= nil)
+                test.is_true(wording:find("Install application-a v1?", 1, true) ~= nil)
                 test.is_true(wording:find("permissions", 1, true) ~= nil or wording:find("It adds:", 1, true) ~= nil)
                 test.is_true(wording:find("this workspace", 1, true) ~= nil)
                 test.is_true(wording:find("until replaced or removed", 1, true) ~= nil)
@@ -96,7 +96,9 @@ local function define_tests()
                 return {ok = true, value = {approval_id = "approval-2", proposal = recorded, proposal_digest = digest,
                     owner_incarnation = 1}}, nil
             end
-            assert(approval.request_activation(recorder, intent, "user-approval", "activation-2", nil, migrations))
+            assert(approval.request_activation(recorder, intent, "user-approval", "activation-2", nil, migrations,
+                {title = "Notes", maker = "from bee node-b"}))
+            test.eq(tostring(seen):sub(1, 40), "Install Notes v1 (from bee node-b)? It a")
             test.is_true(tostring(seen):find("It runs 1 database migration: app.notes:create_notes on notes.", 1, true) ~= nil)
             test.is_true(tostring(seen):find("change the database for good", 1, true) ~= nil)
         end)

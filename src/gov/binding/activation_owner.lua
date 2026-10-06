@@ -197,6 +197,23 @@ local function require_desired(config: Config, intent: Object): Result?
     return nil
 end
 
+-- What the person installs, as they know it: the application's own title, and
+-- the node that shared it when another node made it.
+local function presentation(config: Config, intent: Object): approval.Presentation
+    local shown: approval.Presentation = {title = nil, maker = nil}
+    local entries = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+    for _, raw in ipairs(entries or {}) do
+        local entry = object(raw)
+        local meta = entry and object(entry.meta) or nil
+        local declared = meta and meta.type == "bee.app" and object(meta.application) or nil
+        local title = declared and bounds.line(declared.title, 80) or nil
+        if title and title ~= "" then shown.title = title end
+    end
+    local source = bounds.id(intent.source_node)
+    if source and source ~= config.activations.node then shown.maker = "from bee " .. source end
+    return shown
+end
+
 -- Prepare performs local resolution and measurement before it creates an
 -- approval request. It never consumes the decision or changes the registry.
 function M.prepare(raw_config: Config, raw: unknown): Result
@@ -280,7 +297,7 @@ function M.prepare(raw_config: Config, raw: unknown): Result
         end
     end
     local bound, approval_error = approval.request_activation(config.approvals, intent,
-        config.approval_policy, request_key, review, pending)
+        config.approval_policy, request_key, review, pending, presentation(config, intent))
     if not bound then return failure("APPROVAL", tostring(approval_error)) end
     return activations.call(config.activations, config.actor_id, {operation = "bind_approval",
         intent_id = intent_id, expected_revision = intent.revision, idempotency_key = bind_key,

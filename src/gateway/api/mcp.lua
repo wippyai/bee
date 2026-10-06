@@ -158,7 +158,7 @@ local TOOLS: {Tool} = {
         schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
             request_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
-    {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: review in the Library, approval in Approvals and apply by the activation owner. Request and preflight stage and check; status only reads.",
+    {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: the person approves the installation in Needs you, with the permissions it adds and every database migration it runs, and Bee installs it at once; the application then opens from Start, Apps, and Library shows installed versions and their history. Request and preflight stage and check, and request carries an installation the person already approved to applied; status only reads.",
         operation = "bee.gov.binding:delivery_call",
         policies = {TOOL_POLICY_REFS.delivery}, annotations = WRITE_ANNOTATIONS,
         schema = delivery_protocol.schema()},
@@ -295,6 +295,7 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
             human_steps_where = {type = "object", additionalProperties = false,
                 properties = {approve = STRING_SCHEMA, open = STRING_SCHEMA}},
             intent_id = STRING_SCHEMA, approval_id = STRING_SCHEMA, activation_phase = STRING_SCHEMA,
+            activation_outcome = STRING_SCHEMA,
             activation_refusal = STRING_SCHEMA}}),
     publish = output_schema({type = "object"}),
     application_open = output_schema({type = "object"}),

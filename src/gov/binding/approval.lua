@@ -15,6 +15,9 @@ type Fault = {code: string, message: string, value: Object?}
 -- A pending migration the activation runs: its definition and the database
 -- it changes.
 type Migration = {id: string, target_db: string}
+-- How the person knows what they install: the application's own title and
+-- who made it, when the destination knows.
+type Presentation = {title: string?, maker: string?}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -141,13 +144,14 @@ end
 -- permissions it adds, and its scope and duration. A driver may declare a
 -- login format for its own provider; approving it lets that driver's sessions
 -- use the person's machine login for that provider.
-local function activation_prompt(item: Object, changes: {string}?, migrations: {Object}): string
-    local subject = "Bee application " .. tostring(item.source_workspace)
+local function activation_prompt(item: Object, changes: {string}?, migrations: {Object}, shown: Presentation?): string
+    local subject = (shown and shown.title) or tostring(item.source_workspace)
     local login = ""
     if type(item.overlay_owner) == "string" and (item.overlay_owner :: string):sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then
         subject = "agent driver " .. tostring(item.source_workspace)
         login = " Its sessions may use your machine login for its own provider."
     end
+    local maker = shown and shown.maker and (" (" .. shown.maker .. ")") or ""
     local permissions = " It adds no permissions."
     if changes and #changes > 0 then permissions = " It adds: " .. table.concat(changes, "; ") .. "." end
     local schema = ""
@@ -160,12 +164,12 @@ local function activation_prompt(item: Object, changes: {string}?, migrations: {
         schema = " It runs " .. tostring(#migrations) .. " database migration" .. (#migrations == 1 and "" or "s")
             .. ": " .. table.concat(named, "; ") .. ". Migrations change the database for good."
     end
-    return "Install " .. subject .. " " .. tostring(item.version) .. "." .. permissions .. schema .. login
+    return "Install " .. subject .. " " .. tostring(item.version) .. maker .. "?" .. permissions .. schema .. login
         .. " Applies to this exact version in this workspace until replaced or removed."
 end
 
 function M.request_activation(executor: Executor, value: unknown, policy_raw: unknown, key_raw: unknown,
-    review_raw: unknown?, migrations_raw: {Migration}?): (Object?, string?)
+    review_raw: unknown?, migrations_raw: {Migration}?, presentation: Presentation?): (Object?, string?)
     local item, intent_error = activation(value)
     if not item then return nil, intent_error end
     local policy, key = bounds.id(policy_raw), bounds.id(key_raw)
@@ -182,7 +186,7 @@ function M.request_activation(executor: Executor, value: unknown, policy_raw: un
     end
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,
-        prompt = {text = activation_prompt(item, type(changes) == "table" and changes :: {string} or nil, shown)}})
+        prompt = {text = activation_prompt(item, type(changes) == "table" and changes :: {string} or nil, shown, presentation)}})
     local approved, approved_error = reply(raw, call_error)
     if not approved then return nil, approved_error end
     local approval_id, proposal_digest = bounds.id(approved.approval_id), hex(approved.proposal_digest)

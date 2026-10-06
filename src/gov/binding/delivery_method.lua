@@ -24,6 +24,8 @@ type Object = {[string]: unknown}
 
 local PUBLICATION = "bee.gov.binding:publication_call"
 local DESTINATION = "bee.gov.binding:destination_call"
+-- An authorized intent settles within the activation owner's own step bound.
+local MAX_STEPS = 16
 
 -- One delivery action per operation, checked against the caller's own actor
 -- before any owner facade runs.
@@ -106,7 +108,9 @@ end
 -- A ready plan is reviewed and selected by its requester and its activation
 -- prepared under keys derived from the plan digest, so a repeated request
 -- replays each step. Preparing raises the person's approval; nothing reaches
--- the registry before it.
+-- the registry before it. An intent the destination authorized without a new
+-- decision, such as a contained upgrade of approved grants, is carried on to
+-- settled here, so no request is left waiting for an approval that never comes.
 local function activate(workspace_id: string, source_node: string, source_workspace: string,
     version: string, plan: Object): (Object?, Result?)
     local digest = bounds.text(plan.plan_digest, 64)
@@ -133,7 +137,18 @@ local function activate(workspace_id: string, source_node: string, source_worksp
             idempotency_key = key("select")}))
         if not chosen then return nil, select_error end
     end
-    return forward(DESTINATION, with({operation = "prepare", intent_id = key("intent"), receipt_key = key("receipt")}))
+    local intent, prepare_error = forward(DESTINATION, with({operation = "prepare", intent_id = key("intent"),
+        receipt_key = key("receipt")}))
+    if not intent then return nil, prepare_error end
+    for _ = 1, MAX_STEPS do
+        local phase = intent.phase
+        if phase ~= "authorized" and phase ~= "consuming" and phase ~= "applying" then break end
+        local stepped, step_error = forward(DESTINATION, {operation = "step", workspace_id = workspace_id,
+            intent_id = key("intent"), receipt_key = key("receipt")})
+        if not stepped then return nil, step_error end
+        intent = stepped
+    end
+    return intent, nil
 end
 
 -- Publication prepare, then a destination stage, then the destination's own
@@ -172,7 +187,7 @@ local function request_operation(workspace_id: string, source_workspace: string,
     if not plan then return plan_error end
     local report, report_error = preflight.decode_report(plan.preflight_bytes, plan.preflight_digest)
     if not report then return failure("INTERNAL", "staged preflight report: " .. tostring(report_error)) end
-    local ready = report.ready == true and #report.diagnostics == 0 and #report.pending_migrations == 0
+    local ready = report.ready == true and #report.diagnostics == 0
     local steps, opening = guide.delivery_steps(source_workspace)
     local value: Object = {ready = ready, plan_digest = plan.plan_digest,
         artifact_digest = plan.artifact_digest, version = version, source_overlay_id = source_workspace,
@@ -184,6 +199,7 @@ local function request_operation(workspace_id: string, source_workspace: string,
         local intent, refused = activate(workspace_id, tostring(descriptor.owner_id), source_workspace, version, plan)
         if intent then
             value.intent_id, value.approval_id, value.activation_phase = intent.intent_id, intent.approval_id, intent.phase
+            value.activation_outcome = intent.outcome
         else
             value.activation_refusal = refused and refused.message or "activation was not prepared"
         end
@@ -213,7 +229,7 @@ local function preflight_operation(workspace_id: string, source_workspace: strin
         component = component, artifact_digest = descriptor.digest, descriptor = descriptor,
         snapshot_digest = snapshot_digest,
         human_steps = steps,
-        human_steps_where = {review = "Overlays", approve = "Approvals", open = opening}}, false)
+        human_steps_where = {approve = "Needs you", open = opening}}, false)
 end
 -- Read the staged plan and, when an intent is named, its activation status.
 local function status_operation(workspace_id: string, source_workspace: string, version: string,

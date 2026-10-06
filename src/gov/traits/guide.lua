@@ -245,8 +245,8 @@ function M.test_example(): {{[string]: unknown}}
         meta = {type = "test", suite = M.OVERLAY_ID}}}
 end
 
-local DELIVERY_STEPS = {"approve it in Needs you, which opens on the person's desktop",
-    "Bee applies it once approved", "open it from the start menu"}
+local DELIVERY_STEPS = {"approve it in Needs you, which opens on the person's desktop and lists the permissions and database migrations it adds",
+    "Bee installs it once approved; Library shows installed versions and their history", "open it from Start, Apps"}
 
 -- The steps a person takes after an agent requests delivery. Exposed so the
 -- delivery tool and the guide cannot disagree about who does what.
@@ -257,7 +257,7 @@ function M.delivery_steps(source_overlay_id: string?): ({string}, string)
         copied[#copied] = "open Sessions, press N and select the new driver; E customizes a saved copy"
         return copied, "Sessions"
     end
-    return copied, "start menu"
+    return copied, "Start, Apps"
 end
 
 -- Guide sections, each readable alone. The index names them; a section read

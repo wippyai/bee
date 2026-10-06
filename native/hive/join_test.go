@@ -215,16 +215,22 @@ func TestNodesListenOnLoopbackUntilTheHiveSpansMachines(t *testing.T) {
 }
 
 func TestTheFirstNodeOfAMachineHoldsItsGossipPort(t *testing.T) {
+	free := func() int {
+		listener, err := net.Listen("tcp", "0.0.0.0:0")
+		require.NoError(t, err)
+		port := listener.Addr().(*net.TCPAddr).Port
+		require.NoError(t, listener.Close())
+		return port
+	}
+	dir := t.TempDir()
+	port := free()
+	require.Equal(t, port, claimGossipPort(dir, port))
+	require.Zero(t, claimGossipPort(dir, port), "a bee that starts alongside the first leaves the choice to the runtime")
+
 	held, err := net.Listen("tcp", "0.0.0.0:0")
 	require.NoError(t, err)
 	defer held.Close()
-	busy := held.Addr().(*net.TCPAddr).Port
-	require.Zero(t, freeGossipPort(busy), "a taken port leaves the choice to the runtime")
-	free, err := net.Listen("tcp", "0.0.0.0:0")
-	require.NoError(t, err)
-	port := free.Addr().(*net.TCPAddr).Port
-	require.NoError(t, free.Close())
-	require.Equal(t, port, freeGossipPort(port))
+	require.Zero(t, claimGossipPort(t.TempDir(), held.Addr().(*net.TCPAddr).Port), "a port another process uses is not claimed")
 }
 
 type gossip struct{ nodes []clusterapi.NodeInfo }

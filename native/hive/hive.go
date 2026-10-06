@@ -483,7 +483,7 @@ func configure(dir string, hive Hive, node Node, key ed25519.PrivateKey, members
 	if hive.Advertise != "" {
 		cluster["membership.bind_addr"] = "0.0.0.0"
 		cluster["membership.advertise_addr"] = hive.Advertise
-		cluster["membership.bind_port"] = freeGossipPort(hive.Port)
+		cluster["membership.bind_port"] = claimGossipPort(dir, hive.Port)
 		cluster["internode.bind_addr"] = "0.0.0.0"
 	}
 	return boot.NewConfig(

@@ -5,8 +5,11 @@ package hive
 import (
 	"crypto/ed25519"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	clusterapi "github.com/wippyai/runtime/api/cluster"
@@ -46,10 +49,35 @@ func (m *Members) advertisedKey(node string) (ed25519.PublicKey, bool) {
 	return nil, false
 }
 
-// freeGossipPort returns port when both gossip protocols can bind it, else 0
-// so the runtime picks one. The first node of a machine thus holds the port the
-// machine's other hives dial.
-func freeGossipPort(port int) int {
+var (
+	heldMu sync.Mutex
+	// held keeps the port locks open for the life of the process.
+	held []*os.File
+)
+
+// portLock is the file whose lock claims the machine's gossip port.
+const portLock = "port.lock"
+
+// claimGossipPort returns port when this process is the first on the machine to
+// claim it and both gossip protocols can bind it, else 0 so the runtime picks
+// one. The claim is a file lock held until the process ends, so bees starting
+// together never contend for the port; the first holds the port other machines
+// dial.
+func claimGossipPort(dir string, port int) int {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return 0
+	}
+	file, err := os.OpenFile(filepath.Join(dir, portLock), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return 0
+	}
+	if !tryLock(file) {
+		_ = file.Close()
+		return 0
+	}
+	heldMu.Lock()
+	held = append(held, file)
+	heldMu.Unlock()
 	address := net.JoinHostPort("0.0.0.0", strconv.Itoa(port))
 	stream, err := net.Listen("tcp", address)
 	if err != nil {

@@ -459,7 +459,7 @@ local function authority_tests()
             test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-made-by", receipt_key = "made-by"})).phase, "approval_bound")
             local asked = tostring(prompt)
-            test.eq(asked:sub(1, asked:find("?", 1, true)), "Install app-a v1 (made by Claude Code, from bee source-a)?")
+            test.eq(asked:sub(1, asked:find("?", 1, true)), "Install app-a v1 (made by Claude Code · from bee source-a)?")
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)

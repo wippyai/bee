@@ -4,6 +4,9 @@ entries:
 - name: text
   kind: library.lua
   source: file://text.lua
+- name: glyphs
+  kind: library.lua
+  source: file://glyphs.lua
 - name: appearance
   kind: library.lua
   source: file://appearance.lua

@@ -495,6 +495,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     approval: bee.gov.binding:approval
+    drivers: bee.gov.types:drivers
     canonical: bee.values:canonical
 - name: destination_test
   kind: function.lua

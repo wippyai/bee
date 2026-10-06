@@ -28,3 +28,12 @@ entries:
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
+- name: glyphs_test
+  kind: function.lua
+  source: file://glyphs_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    glyphs: bee.ui:glyphs

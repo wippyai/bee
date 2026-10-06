@@ -2,6 +2,7 @@
 local test = require("test")
 local bounds = require("bounds")
 local approval = require("approval")
+local drivers = require("drivers")
 local canonical = require("canonical")
 local hash = require("hash")
 
@@ -101,6 +102,33 @@ local function define_tests()
             test.eq(tostring(seen):sub(1, 40), "Install Notes v1 (from bee node-b)? It a")
             test.is_true(tostring(seen):find("It runs 1 database migration: app.notes:create_notes on notes.", 1, true) ~= nil)
             test.is_true(tostring(seen):find("change the database for good", 1, true) ~= nil)
+        end)
+
+        test.it("carries what the card names and shows tools as agents see them", function()
+            local intent = {workspace_id = "workspace-a", overlay_owner = "bee.gov.apps:workspace-a.notes",
+                source_node = "node-a", source_workspace = "notes", version = "1.0.0",
+                authorization_digest = string.rep("a", 64), artifact_digest = string.rep("b", 64),
+                resolution_digest = string.rep("c", 64), preflight_digest = string.rep("d", 64), effect_key = "effect-notes"}
+            local review = {requires_approval = true,
+                resolved = {"Use an isolated application database named notes",
+                    "Let agents you enable call app.notes:add_note, app.notes:list_notes as this application, with this application's grants"},
+                delta = {"added: Use an isolated application database named notes"}}
+            local proposal = assert(approval.activation_proposal(intent, review, nil,
+                {title = "Notes", maker = "made by Claude Code · this bee",
+                    tools = {["app.notes:add_note"] = "notes_add", ["app.notes:list_notes"] = "notes_list"}}))
+            local payload = assert(bounds.object(proposal.payload))
+            test.eq(payload.title, "Notes")
+            test.eq(payload.maker, "made by Claude Code · this bee")
+            test.is_nil(payload.subject)
+            local resolved = assert(bounds.array(payload.resolved_capabilities))
+            test.eq(resolved[2], "Let agents you enable call notes_add, notes_list as this application, with this application's grants")
+            test.eq(resolved[1], "Use an isolated application database named notes")
+            local plain = assert(approval.activation_proposal(intent, review))
+            test.is_nil(assert(bounds.object(plain.payload)).title)
+            local driver = {}
+            for key, value in pairs(intent) do driver[key] = value end
+            driver.overlay_owner = drivers.OWNER_PREFIX .. "workspace-a.stub"
+            test.eq(assert(bounds.object(assert(approval.activation_proposal(driver)).payload)).subject, "driver")
         end)
     end)
 end

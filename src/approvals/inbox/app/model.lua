@@ -10,6 +10,7 @@ local text = require("text")
 local bounds = require("bounds")
 local caller = require("caller")
 local windows = require("windows")
+local glyphs = require("glyphs")
 local M = {}
 M.TEXT_LIMIT = 512
 M.LINE_LIMIT = 160
@@ -796,6 +797,77 @@ function M.permission_lines(value: unknown): {string}
     end
     return lines
 end
+-- One section of the install card: its heading and its statements.
+type CardSection = {heading: string, lines: {string}}
+-- The install question as the person reads it: what is installed, who made it
+-- and where it came from, then each fact once, then its scope.
+type Card = {glyph: string, title: string, maker: string?, sections: {CardSection}, scope: string}
+
+-- The word after the last colon of a registry id: a migration's short name.
+local function short(id: string): string
+    return id:match("([^:]+)$") or id
+end
+
+-- card reads an install question into the lines it shows, or nil for any
+-- other request. Each statement appears once; "Now also" appears only for an
+-- upgrade, where it is what the new version adds to the grant already held.
+function M.card(value: unknown): Card?
+    local view = M.decode_view(value)
+    if not view or view.proposal.ref ~= "bee.gov:establish-overlay" then return nil end
+    local payload = view.proposal.payload
+    if payload.title == nil and payload.source_workspace == nil then return nil end
+    local name = M.text(payload.title or payload.source_workspace, 80)
+    local kind = payload.subject == "driver"
+    local title = "Install " .. (kind and "driver " or "") .. name .. " " .. M.text(payload.version, 40)
+    local maker = type(payload.maker) == "string" and M.text(payload.maker, 160) or nil
+    local sections: {CardSection} = {}
+    local can: {string} = {}
+    if type(payload.resolved_capabilities) == "table" then
+        for _, raw in ipairs(payload.resolved_capabilities :: {unknown}) do
+            if type(raw) == "string" then can[#can + 1] = glyphs.capability .. " " .. M.text(raw, M.LINE_LIMIT) end
+        end
+    end
+    if #can == 0 then can[1] = glyphs.capability .. " nothing beyond its own screen" end
+    sections[#sections + 1] = {heading = "It can", lines = can}
+    local data: {string} = {}
+    local databases: {string} = {}
+    local named: {[string]: {string}} = {}
+    if type(payload.migrations) == "table" then
+        for _, raw in ipairs(payload.migrations :: {unknown}) do
+            local row = bounds.object(raw)
+            if row then
+                local target = M.text(row.target_db, 80)
+                if not named[target] then named[target] = {}; databases[#databases + 1] = target end
+                named[target][#named[target] + 1] = short(M.text(row.id, 160))
+            end
+        end
+    end
+    for _, target in ipairs(databases) do
+        data[#data + 1] = glyphs.capability .. " changes the \"" .. target .. "\" database ("
+            .. table.concat(named[target], ", ") .. ") — this stays after removal"
+    end
+    if #data > 0 then sections[#sections + 1] = {heading = "It changes your data", lines = data} end
+    if payload.grant_predecessor_digest ~= nil and type(payload.permission_changes) == "table" then
+        local now: {string} = {}
+        for _, raw in ipairs(payload.permission_changes :: {unknown}) do
+            if type(raw) == "string" then
+                local line = M.text(raw, M.LINE_LIMIT)
+                now[#now + 1] = glyphs.capability .. " " .. (line:gsub("^added: ", ""))
+            end
+        end
+        if #now > 0 then sections[#sections + 1] = {heading = "Now also", lines = now} end
+    end
+    return {glyph = kind and glyphs.driver or glyphs.app, title = title, maker = maker, sections = sections,
+        scope = "For this version in this workspace."}
+end
+
+-- The state word of a request with its glyph.
+function M.state_mark(state: string): string
+    if state == "approved" then return glyphs.installed end
+    if state == "denied" or state == "withdrawn" or state == "expired" then return glyphs.removed end
+    return glyphs.waiting
+end
+
 function M.checkpoint(state: State): string
     return json.encode({selected = state.selected, technical = state.technical}) or "{}"
 end

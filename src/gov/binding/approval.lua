@@ -15,9 +15,9 @@ type Fault = {code: string, message: string, value: Object?}
 -- A pending migration the activation runs: its definition and the database
 -- it changes.
 type Migration = {id: string, target_db: string}
--- How the person knows what they install: the application's own title and
--- who made it, when the destination knows.
-type Presentation = {title: string?, maker: string?}
+-- How the person knows what they install: the application's own title, who
+-- made it and where it came from, and the names its tools go by for agents.
+type Presentation = {title: string?, maker: string?, tools: {[string]: string}?}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -85,7 +85,23 @@ local function activation(value: unknown): (Object?, string?)
     return result, nil
 end
 
-local function review_lines(raw: unknown): ({string}?, string?)
+-- A tool is named to the person as agents see it, not by its function id.
+local function with_aliases(line: string, tools: {[string]: string}?): string
+    for id, alias in pairs(tools or {}) do
+        local result = ""
+        local rest = line
+        while true do
+            local from, to = rest:find(id, 1, true)
+            if not from or not to then break end
+            result = result .. rest:sub(1, from - 1) .. alias
+            rest = rest:sub(to + 1)
+        end
+        line = result .. rest
+    end
+    return line
+end
+
+local function review_lines(raw: unknown, tools: {[string]: string}?): ({string}?, string?)
     if type(raw) ~= "table" then return nil, "capability review lines are invalid" end
     local result: {string} = {}
     if #raw > 24 then return nil, "capability review exceeds its bound" end
@@ -94,7 +110,7 @@ local function review_lines(raw: unknown): ({string}?, string?)
         if not shown or shown == "" or shown:find("%c") then
             return nil, "capability review line is invalid"
         end
-        result[index] = shown
+        result[index] = with_aliases(shown, tools)
     end
     return result, nil
 end
@@ -113,7 +129,7 @@ local function migration_rows(raw: {Migration}?): ({Object}?, string?)
     return rows, nil
 end
 
-function M.activation_proposal(value: unknown, review_raw: unknown?, migrations_raw: {Migration}?): (Object?, string?)
+function M.activation_proposal(value: unknown, review_raw: unknown?, migrations_raw: {Migration}?, shown: Presentation?): (Object?, string?)
     local item, intent_error = activation(value)
     if not item then return nil, intent_error end
     local payload: Object = {workspace_id = item.workspace_id, overlay_owner = item.overlay_owner,
@@ -122,10 +138,17 @@ function M.activation_proposal(value: unknown, review_raw: unknown?, migrations_
         resolution_digest = item.resolution_digest, preflight_digest = item.preflight_digest,
         application_admission_digest = item.application_admission_digest}
     payload.grant_predecessor_digest = item.grant_predecessor_digest
+    -- What the card names: the application or driver, who made it and where it
+    -- came from.
+    payload.title = shown and bounds.line(shown.title, 80) or nil
+    payload.maker = shown and bounds.line(shown.maker, 160) or nil
+    if type(item.overlay_owner) == "string" and (item.overlay_owner :: string):sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then
+        payload.subject = "driver"
+    end
     if review_raw ~= nil then
         local review = object(review_raw)
-        local resolved, resolved_error = review and review_lines(review.resolved) or nil
-        local delta, delta_error = review and review_lines(review.delta) or nil
+        local resolved, resolved_error = review and review_lines(review.resolved, shown and shown.tools) or nil
+        local delta, delta_error = review and review_lines(review.delta, shown and shown.tools) or nil
         if not resolved or not delta or type(review.requires_approval) ~= "boolean" then
             return nil, resolved_error or delta_error or "capability review is invalid"
         end
@@ -174,7 +197,7 @@ function M.request_activation(executor: Executor, value: unknown, policy_raw: un
     if not item then return nil, intent_error end
     local policy, key = bounds.id(policy_raw), bounds.id(key_raw)
     if not policy or not key then return nil, "approval policy and idempotency key are required" end
-    local proposal, proposal_error = M.activation_proposal(value, review_raw, migrations_raw)
+    local proposal, proposal_error = M.activation_proposal(value, review_raw, migrations_raw, presentation)
     if not proposal then return nil, proposal_error end
     local payload = object(proposal.payload)
     local changes = payload and payload.permission_changes

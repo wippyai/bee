@@ -149,10 +149,23 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
     local lines: {string} = {}
     for _, item in ipairs(group) do
         local summary = model.summary(item, 0)
-        for _, line in ipairs(prompt_lines(summary.prompt, width)) do lines[#lines + 1] = line end
-        if not one_time then lines[#lines + 1] = "Capability: " .. summary.effect end
-        for _, line in ipairs(model.permission_lines(item)) do lines[#lines + 1] = line end
-        if not item.proposal.payload.adapter_ref and not one_time then
+        local card = model.card(item)
+        if card then
+            lines[#lines + 1] = card.glyph .. " " .. card.title
+            if card.maker then lines[#lines + 1] = "  " .. card.maker end
+            for _, section in ipairs(card.sections) do
+                lines[#lines + 1] = ""
+                lines[#lines + 1] = "  " .. section.heading
+                for _, line in ipairs(section.lines) do lines[#lines + 1] = "  " .. line end
+            end
+            lines[#lines + 1] = ""
+            lines[#lines + 1] = "  " .. card.scope
+        else
+            for _, line in ipairs(prompt_lines(summary.prompt, width)) do lines[#lines + 1] = line end
+            if not one_time then lines[#lines + 1] = "Capability: " .. summary.effect end
+            for _, line in ipairs(model.permission_lines(item)) do lines[#lines + 1] = line end
+        end
+        if not card and not item.proposal.payload.adapter_ref and not one_time then
             lines[#lines + 1] = model.text(table.concat(model.payload_lines(item), " · "), 512)
         end
     end
@@ -176,12 +189,12 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
     if cap > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = prefix .. " longer", enabled = idle} end
     buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
     if one_time then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
-    buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Details", enabled = true, more = true}
+    buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Technical", enabled = true, more = true}
     buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your grants", enabled = true, more = true}
     if detail.requesting_session then buttons[#buttons + 1] = {kind = "source", key = "S", label = "Return to source", enabled = true, more = true} end
     if height >= 4 then frame.actions(painter, height - 1, buttons) end
     if status ~= "" or state.notice ~= "" then frame.line(painter, height - 2, status ~= "" and status or state.notice, painter.theme.text) end
-    frame.footer(painter, "", frame.hints({{key = "T", verb = "details"}}))
+    frame.footer(painter, "", frame.hints({{key = "T", verb = "technical"}}))
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0}
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice, workspace_names: {[string]: model.Workspace}?): Frame
@@ -226,7 +239,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     for slot = 1, window.capacity do
         local row = rows[window.offset + slot]
         if not row then break end
-        local label = string.format("%s%-9s %s %s", slice.marked[row.approval_id] and "[x] " or "", state_label(row), row.effect, model.text(row.prompt, 256))
+        local card = model.card(row.view)
+        local asked = card and (card.title .. (card.maker and (" · " .. card.maker) or "")) or (row.effect .. " " .. model.text(row.prompt, 256))
+        local label = string.format("%s%s %-9s %s", slice.marked[row.approval_id] and "[x] " or "", model.state_mark(row.state == "decided" and (row.decision or "decided") or row.state), state_label(row), asked)
         if width >= 60 then
             local workspace = locations[row.workspace_id]
             label = label .. " · " .. (workspace and (workspace.label .. " / " .. workspace.folder) or "Workspace unavailable")
@@ -277,7 +292,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         buttons[#buttons + 1] = {kind = "refresh", key = "R", label = "Refresh", enabled = idle, primary = #rows == 0, more = #rows > 0}
         if detail then
             buttons[#buttons + 1] = {kind = "source", key = "S", label = "Return to source", enabled = detail.requesting_session ~= nil, more = true}
-            buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true, more = true}
+            buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.technical and "Hide technical" or "Technical", enabled = true, more = true}
         end
         if selected and selected.state == "pending" then buttons[#buttons + 1] = {kind = "mark", key = "M", label = "Mark", enabled = true, more = true} end
         if marked > 0 then

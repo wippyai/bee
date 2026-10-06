@@ -192,6 +192,85 @@ local function define_tests()
             test.is_true(visible:find("Change: added: Read owned threads", 1, true) ~= nil)
             test.is_true(visible:find("Capability: Read owned threads", 1, true) ~= nil)
         end)
+        test.it("asks an install question once, with each fact on its own line and the tools agents see", function()
+            local state = model.new({"ws-1"})
+            local item = request("install-1", "pending", "Install Notes 1.0.0 (made by Claude Code · this bee)? It adds: ...")
+            item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
+                input_digest = string.rep("a", 64), payload = {title = "Notes", version = "1.0.0",
+                    maker = "made by Claude Code · this bee", source_workspace = "notes",
+                    permission_changes = {"added: Use an isolated application database named notes"},
+                    resolved_capabilities = {"Use an isolated application database named notes",
+                        "Let agents you enable call notes_add, notes_list as this application, with this application's grants"},
+                    migrations = {{id = "app.notes:create_notes", target_db = "notes"}}}}
+            model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {
+                changes = {{seq = 1, approval_id = "install-1", revision = 1, request = item}}, next_seq = 1, more = false}, replayed = false}))
+            model.select(state, "install-1")
+            model.apply_read(state, "install-1", reply({ok = true, error = nil, value = item, replayed = false}))
+            local drawn = view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            local text = table.concat(rows, "\n")
+            test.is_true(text:find("▣ Install Notes 1.0.0", 1, true) ~= nil)
+            test.is_true(text:find("made by Claude Code · this bee", 1, true) ~= nil)
+            test.is_true(text:find("It can", 1, true) ~= nil)
+            test.is_true(text:find("◆ Use an isolated application database named notes", 1, true) ~= nil)
+            test.is_true(text:find("call notes_add, notes_list", 1, true) ~= nil)
+            test.is_true(text:find("It changes your data", 1, true) ~= nil)
+            test.is_true(text:find("◆ changes the \"notes\" database (create_notes) — this stays after removal", 1, true) ~= nil)
+            test.is_true(text:find("For this version in this workspace.", 1, true) ~= nil)
+            -- Each fact once: no paragraph, no change list, no repeated capability.
+            test.is_nil((text:find("It adds:", 1, true)))
+            test.is_nil((text:find("Change:", 1, true)))
+            test.is_nil((text:find("added:", 1, true)))
+            local first = text:find("Use an isolated application database named notes", 1, true)
+            test.is_nil((text:find("Use an isolated application database named notes", (first or 0) + 1, true)))
+            test.is_nil((text:find("app.notes:", 1, true)))
+            local approve, deny = false, false
+            for _, hit in ipairs(drawn.hits) do
+                if hit.kind == "approve" then approve = true end
+                if hit.kind == "deny" then deny = true end
+            end
+            test.is_true(approve and deny)
+            test.is_true(rows[36]:find("T technical", 1, true) ~= nil)
+            for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), 120) end
+        end)
+        test.it("names what an upgrade adds under Now also and keeps the technical lines behind T", function()
+            local state = model.new({"ws-1"})
+            local item = request("upgrade-1", "pending", "Install Notes 1.1.0?")
+            item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
+                input_digest = string.rep("a", 64), payload = {title = "Notes", version = "1.1.0", source_workspace = "notes",
+                    grant_predecessor_digest = string.rep("c", 64),
+                    permission_changes = {"added: Read owned threads"},
+                    resolved_capabilities = {"Use an isolated application database named notes", "Read owned threads"}}}
+            model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {
+                changes = {{seq = 1, approval_id = "upgrade-1", revision = 1, request = item}}, next_seq = 1, more = false}, replayed = false}))
+            model.select(state, "upgrade-1")
+            model.apply_read(state, "upgrade-1", reply({ok = true, error = nil, value = item, replayed = false}))
+            local text = table.concat(view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n")
+            test.is_true(text:find("Now also", 1, true) ~= nil)
+            test.is_true(text:find("◆ Read owned threads", 1, true) ~= nil)
+            test.is_nil((text:find("added:", 1, true)))
+            model.toggle_technical(state)
+            local technical = table.concat(view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n")
+            test.is_true(technical:find("Capability: Read owned threads", 1, true) ~= nil)
+        end)
+        test.it("shows a driver install with the driver glyph and a list row without the paragraph", function()
+            local state = model.new({"ws-1"})
+            local item = request("driver-1", "pending", "Install agent driver stub 1.0.0? It adds no permissions. Applies to this exact version.")
+            item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
+                input_digest = string.rep("a", 64), payload = {title = "Stub", version = "1.0.0", subject = "driver",
+                    source_workspace = "stub", resolved_capabilities = {}, permission_changes = {}}}
+            model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {
+                changes = {{seq = 1, approval_id = "driver-1", revision = 1, request = item}}, next_seq = 1, more = false}, replayed = false}))
+            local listed = table.concat(view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n")
+            test.is_true(listed:find("◷ pending", 1, true) ~= nil)
+            test.is_true(listed:find("Install driver Stub 1.0.0", 1, true) ~= nil)
+            test.is_nil((listed:find("Applies to this exact version", 1, true)))
+            model.select(state, "driver-1")
+            model.apply_read(state, "driver-1", reply({ok = true, error = nil, value = item, replayed = false}))
+            local text = table.concat(view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n")
+            test.is_true(text:find("⌁ Install driver Stub 1.0.0", 1, true) ~= nil)
+        end)
         test.it("keeps the full bounded capability review visible at desktop height", function()
             local state = model.new({"ws-1"})
             local item = request("grant-many", "pending", "Install the requested capabilities?")
@@ -261,7 +340,7 @@ local function define_tests()
             test.is_true(detailed:find("F10 More", 1, true) ~= nil)
             local details_button = false
             for _, button in ipairs(assert(view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).controls).overflow) do
-                if button.kind == "technical" and button.label == "Hide details" then details_button = true end
+                if button.kind == "technical" and button.label == "Hide technical" then details_button = true end
             end
             test.is_true(details_button)
         end)

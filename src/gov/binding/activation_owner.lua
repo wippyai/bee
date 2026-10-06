@@ -200,11 +200,14 @@ end
 -- What the person installs, as they know it: the application's own title, and
 -- the node that shared it when another node made it.
 local function presentation(config: Config, intent: Object, plan: Object): approval.Presentation
-    local shown: approval.Presentation = {title = nil, maker = nil}
+    local shown: approval.Presentation = {title = nil, maker = nil, tools = {}}
     local entries = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
     for _, raw in ipairs(entries or {}) do
         local entry = object(raw)
         local meta = entry and object(entry.meta) or nil
+        local id = entry and bounds.id(entry.id) or nil
+        local alias = meta and meta.type == "tool" and bounds.line(meta.llm_alias, 80) or nil
+        if id and alias and shown.tools then shown.tools[id] = alias end
         local declared = meta and meta.type == "bee.app" and object(meta.application) or nil
         local title = declared and bounds.line(declared.title, 80) or nil
         if title and title ~= "" then shown.title = title end
@@ -214,8 +217,8 @@ local function presentation(config: Config, intent: Object, plan: Object): appro
     local author = bounds.line(plan.author, 80)
     local source = bounds.id(intent.source_node)
     local made = author and author ~= "" and ("made by " .. author) or nil
-    local remote = source and source ~= config.activations.node and ("from bee " .. source) or nil
-    if made and remote then shown.maker = made .. ", " .. remote else shown.maker = made or remote end
+    local place = source and source ~= config.activations.node and ("from bee " .. source) or "this bee"
+    shown.maker = made and (made .. " · " .. place) or place
     return shown
 end
 

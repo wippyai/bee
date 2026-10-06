@@ -58,6 +58,7 @@ entries:
   imports:
     windows: bee.approvals.types:windows
     text: bee.ui:text
+    glyphs: bee.ui:glyphs
     bounds: bee.values:bounds
     caller: bee.app:caller
 - name: leases

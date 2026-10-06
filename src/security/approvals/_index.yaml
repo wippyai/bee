@@ -104,12 +104,13 @@ entries:
 - name: approval_activation_effects_policy
   kind: security.policy
   meta:
-    comment: Host-authorized activation worker lists approved governance activations; the activation owner consumes each approval and applies its exact intent
+    comment: Host-authorized activation worker lists approved governance activations and those whose request ended without approval; the activation owner consumes each approval and applies its exact intent, or settles the intent refused
   policy:
     actions:
     - bee.approvals.own
     resources:
     - activation_effects
+    - activation_closures
     effect: allow
 - name: approval_publication_effects_policy
   kind: security.policy

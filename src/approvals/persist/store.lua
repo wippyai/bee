@@ -117,6 +117,16 @@ function M.activation_effects(tx: sql.Transaction, now: integer, limit: integer)
         ORDER BY approval_id LIMIT ?]], {now, limit})
 end
 
+-- Governance activations whose request ended without approval (denied,
+-- expired or withdrawn) and whose requester has not yet closed them.
+function M.activation_closures(tx: sql.Transaction, limit: integer): ({unknown}?, string?)
+    return query(tx, [[SELECT * FROM bee_approval_requests
+        WHERE (state IN ('expired', 'withdrawn') OR (state = 'decided' AND decision = 'denied'))
+        AND effect_completed_at IS NULL
+        AND proposal_json LIKE '%"ref":"bee.gov:establish-overlay"%'
+        ORDER BY approval_id LIMIT ?]], {limit})
+end
+
 function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_at: string, result_json: string, updated_at: string): string?
     return execute(tx, "UPDATE bee_approval_requests SET effect_completed_at = ?, effect_result_json = ?, updated_at = ? WHERE approval_id = ? AND effect_completed_at IS NULL",
         {completed_at, result_json, updated_at, approval_id}, "complete installation effect")

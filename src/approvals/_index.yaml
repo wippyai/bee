@@ -34,6 +34,10 @@ entries:
     description: The consuming effect owner records the durable result for its exact approval and effect key; identical completion replays
   - name: activation_effects
     description: The host-authorized activation worker reads a bounded queue of approved governance activations their owner has not consumed
+  - name: activation_closures
+    description: The host-authorized activation worker reads a bounded queue of governance activations whose request was denied, expired or withdrawn and that their requester has not closed
+  - name: close_activation
+    description: The requester records that its activation whose request ended without approval is settled; closing again replays
   - name: revalidate
     description: After an authority restart, the effect owner records that an approved decision still holds under the current incarnation
   - name: read

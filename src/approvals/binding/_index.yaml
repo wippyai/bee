@@ -230,6 +230,22 @@ entries:
     service: bee.approvals.binding:service
   security:
     policies: *id001
+- name: activation_closures
+  kind: function.lua
+  source: file://activation_closures_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
+- name: close_activation
+  kind: function.lua
+  source: file://close_activation_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
 - name: complete_installation_effect
   kind: function.lua
   source: file://complete_installation_effect_method.lua
@@ -372,6 +388,8 @@ entries:
       installation_effects: bee.approvals.binding:installation_effects
       complete_installation_effect: bee.approvals.binding:complete_installation_effect
       activation_effects: bee.approvals.binding:activation_effects
+      activation_closures: bee.approvals.binding:activation_closures
+      close_activation: bee.approvals.binding:close_activation
       publication_effects: bee.approvals.binding:publication_effects
       complete_publication_effect: bee.approvals.binding:complete_publication_effect
       revalidate: bee.approvals.binding:revalidate

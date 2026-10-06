@@ -35,6 +35,7 @@ M.CONSUME = "bee.approvals.consume"
 M.INSTALLATION_EFFECTS = "installation_effects"
 M.PUBLICATION_EFFECTS = "publication_effects"
 M.ACTIVATION_EFFECTS = "activation_effects"
+M.ACTIVATION_CLOSURES = "activation_closures"
 M.WORKER_NAME = "bee.approvals.outbox"
 M.INSTALLATION_WORKER_NAME = "bee.approvals.installation_effect_worker"
 M.PUBLICATION_WORKER_NAME = "bee.approvals.publication_effect_worker"
@@ -171,7 +172,8 @@ end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
 local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
-    grant_window = true, runtime_lease = true, complete_installation_effect = true, complete_publication_effect = true, reconcile = true}
+    grant_window = true, runtime_lease = true, complete_installation_effect = true, complete_publication_effect = true, reconcile = true,
+    close_activation = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
 -- other authorities through the executor; the operation then runs inside
@@ -985,6 +987,50 @@ local function op_activation_effects(tx: sql.Transaction, actor: string, object:
     end
     return success({effects = effects}, false)
 end
+-- The activation worker carries each activation whose request ended without
+-- approval to its owner, which settles the intent and closes the request.
+local function op_activation_closures(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"limit"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
+    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
+    if not security.can(M.OWN, M.ACTIVATION_CLOSURES) then
+        return failure("DENIED", "caller may not enumerate ended activations")
+    end
+    local rows, err = store.activation_closures(tx, limit)
+    if err or not rows then return storage("read ended activations") end
+    local closures: {Object} = {}
+    for _, raw in ipairs(rows) do
+        local row, decode_error = decode_row(raw, tx)
+        if not row then return storage("decode ended activation: " .. tostring(decode_error)) end
+        closures[#closures + 1] = M.view(row)
+    end
+    return success({closures = closures}, false)
+end
+-- close_activation: the requester records that its activation, whose request
+-- ended without approval, is settled; the request leaves the closure queue.
+local function op_close_activation(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local approval_id, proposal_digest = bounds.id(object.approval_id), bounds.id(object.proposal_digest)
+    if not approval_id or not proposal_digest then return failure("INVALID_ARGUMENT", "approval_id and proposal_digest are required") end
+    local row, load_error = load(tx, approval_id)
+    if load_error then return storage(load_error) end
+    if not row then return failure("NOT_FOUND", "approval request does not exist") end
+    if not security.can(M.CONSUME, text(row.workspace_id) or "") or row.requester_id ~= actor then
+        return failure("DENIED", "only the requester closes its ended activation")
+    end
+    local ended = row.state == "expired" or row.state == "withdrawn" or (row.state == "decided" and row.decision == "denied")
+    if not ended or row.proposal_digest ~= proposal_digest then
+        return failure("CONFLICT", "the activation request has not ended without approval", M.view(row))
+    end
+    if row.effect_completed_at ~= nil then return success(M.view(row), true) end
+    local update_error = store.complete_effect(tx, approval_id, stamp(now), "{\"closed\":true}", stamp(now))
+    if update_error then return storage("close ended activation") end
+    local updated = load(tx, approval_id)
+    if not updated then return storage("read closed activation") end
+    return success(M.view(updated), false)
+end
 local function op_complete_installation_effect(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
     local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "result"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
@@ -1478,6 +1524,7 @@ operations.request, operations.decide, operations.withdraw, operations.consume, 
 operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
 operations.publication_effects, operations.complete_publication_effect = op_publication_effects, op_complete_publication_effect
 operations.activation_effects = op_activation_effects
+operations.activation_closures, operations.close_activation = op_activation_closures, op_close_activation
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
@@ -1493,6 +1540,8 @@ function M.complete_installation_effect(value: unknown): Reply return run(value,
 function M.publication_effects(value: unknown): Reply return run(value, "publication_effects") end
 function M.complete_publication_effect(value: unknown): Reply return run(value, "complete_publication_effect") end
 function M.activation_effects(value: unknown): Reply return run(value, "activation_effects") end
+function M.activation_closures(value: unknown): Reply return run(value, "activation_closures") end
+function M.close_activation(value: unknown): Reply return run(value, "close_activation") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.attention_count(value: unknown): Reply return run(value, "attention_count") end

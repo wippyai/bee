@@ -333,6 +333,52 @@ local function define_tests()
             test.is_nil(listed()[tostring(created.approval_id)])
             test.eq(code(call(outsider, "activation_effects", {})), "DENIED")
         end)
+        test.it("lists an activation that ended without approval until its requester closes it", function()
+            local workspace = "ws-closure-" .. key()
+            local activation = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "r1", payload = {source_workspace = "todo"}}
+            local denied = value(call(requester, "request", request_of(workspace, {proposal = activation})))
+            local expired = value(call(requester, "request", request_of(workspace, {proposal = activation, ttl_ms = 1})))
+            local withdrawn = value(call(requester, "request", request_of(workspace, {proposal = activation})))
+            local approved = value(call(requester, "request", request_of(workspace, {proposal = activation})))
+            local unrelated = value(call(requester, "request", request_of(workspace)))
+            value(call(alice, "decide", {approval_id = denied.approval_id, expected_revision = denied.revision,
+                proposal_digest = denied.proposal_digest, decision = "denied"}))
+            value(call(alice, "decide", {approval_id = approved.approval_id, expected_revision = approved.revision,
+                proposal_digest = approved.proposal_digest, decision = "approved"}))
+            value(call(alice, "decide", {approval_id = unrelated.approval_id, expected_revision = unrelated.revision,
+                proposal_digest = unrelated.proposal_digest, decision = "denied"}))
+            value(call(requester, "withdraw", {approval_id = withdrawn.approval_id}))
+            time.sleep("5ms")
+            local store = open_test_store()
+            executed(service.execute(store, OUTBOX, "reconcile", {}, nil, nil))
+            store:release()
+            local worker = caller("bee.test.activation_worker", {"bee.security.approvals:approval_activation_effects_policy"})
+            local function listed(): {[string]: string}
+                local found: {[string]: string} = {}
+                for _, item in ipairs(value(call(worker, "activation_closures", {limit = 64})).closures :: {unknown}) do
+                    local row = assert(bounds.object(item))
+                    found[tostring(row.approval_id)] = tostring(row.state) .. ":" .. tostring(row.decision)
+                end
+                return found
+            end
+            local ended = listed()
+            test.eq(ended[tostring(denied.approval_id)], "decided:denied")
+            test.eq(ended[tostring(expired.approval_id)], "expired:nil")
+            test.eq(ended[tostring(withdrawn.approval_id)], "withdrawn:nil")
+            test.is_nil(ended[tostring(approved.approval_id)])
+            test.is_nil(ended[tostring(unrelated.approval_id)])
+            test.eq(code(call(other_requester, "close_activation", {approval_id = denied.approval_id,
+                proposal_digest = denied.proposal_digest})), "DENIED")
+            test.eq(code(call(requester, "close_activation", {approval_id = approved.approval_id,
+                proposal_digest = approved.proposal_digest})), "CONFLICT")
+            value(call(requester, "close_activation", {approval_id = denied.approval_id, proposal_digest = denied.proposal_digest}))
+            test.eq(call(requester, "close_activation", {approval_id = denied.approval_id,
+                proposal_digest = denied.proposal_digest}).replayed, true)
+            local remaining = listed()
+            test.is_nil(remaining[tostring(denied.approval_id)])
+            test.eq(remaining[tostring(expired.approval_id)], "expired:nil")
+            test.eq(code(call(outsider, "activation_closures", {})), "DENIED")
+        end)
         test.it("announces a request waiting for the person on the node attention events", function()
             local workspace = "ws-attention-" .. key()
             local subscription = assert(events.subscribe(service.ATTENTION, "approval.requested"))

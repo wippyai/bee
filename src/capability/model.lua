@@ -10,7 +10,7 @@ type Value = {[string]: unknown}
 type Parameter = string | {string}
 type Parameters = {[string]: Parameter}
 type Template = {id: string, revision: integer, confirm: string, parameters: {[string]: string},
-    text: string, policies: {Value}, resources: {Value}}
+    text: string, policies: {Value}, resources: {Value}, modules: {string}, tools: {string}}
 type Vocabulary = {revision: integer, never: {[string]: boolean}, capabilities: {[string]: Template}}
 type Grant = {capability: string, template_revision: integer, operation: string,
     resource: string, scope: Value, parameters: Value?}
@@ -39,7 +39,7 @@ M.identity = identity
 local KINDS: {[string]: boolean} = {relative_subpath = true, name = true, owned_scope = true,
     children_scope = true, definitions = true, methods = true, http_methods = true,
     https_origin = true, url_path_prefix = true, binding = true, contract = true,
-    hive_operations = true, hive_mode = true, hive_audiences = true}
+    hive_operations = true, hive_mode = true, hive_audiences = true, command = true}
 local HIVE_MODES: {[string]: boolean} = {open = true, policy = true}
 local function collection_kind(kind: string): boolean
     return kind == "definitions" or kind == "methods" or kind == "http_methods"
@@ -63,6 +63,22 @@ local function resource_template(raw: unknown, parameters: {[string]: string}): 
     local parameter = (raw):match("^%$([a-z_]+)$")
     local kind = parameter and parameters[parameter] or nil
     return parameter == nil or (type(kind) == "string" and not collection_kind(kind))
+end
+
+-- A template's runtime modules and agent tools: distinct lowercase names.
+local function names(raw: unknown): {string}?
+    if raw == nil then return {} end
+    local rows = list(raw, 8)
+    if not rows then return nil end
+    local result: {string} = {}
+    local seen: {[string]: boolean} = {}
+    for _, item in ipairs(rows) do
+        local value = word(item, 64)
+        if not value or not value:match("^[a-z][a-z0-9_]*$") or seen[value] then return nil end
+        result[#result + 1], seen[value] = value, true
+    end
+    table.sort(result)
+    return result
 end
 
 local function decode_entry(raw: unknown): (Vocabulary?, string?)
@@ -95,9 +111,11 @@ local function decode_entry(raw: unknown): (Vocabulary?, string?)
         local params = row and object(row.parameters) or nil
         local policies = row and list(row.policies, 8) or nil
         local resources = row and list(row.resources, 8) or nil
+        local modules = row and names(row.modules) or nil
+        local tools = row and names(row.tools) or nil
         if not row or not id or never[id] or capabilities[id] or not params or not policies or #policies == 0
-            or not resources or not fields(row, {id = true, revision = true, confirm = true,
-                parameters = true, text = true, policies = true, resources = true})
+            or not resources or not modules or not tools or not fields(row, {id = true, revision = true, confirm = true,
+                parameters = true, text = true, policies = true, resources = true, modules = true, tools = true})
             or type(row.revision) ~= "number" or row.revision < 1 or row.revision ~= math.floor(row.revision)
             or (row.confirm ~= "standard" and row.confirm ~= "explicit") or not word(row.text, 512) then
             return nil, "capability template is malformed"
@@ -134,7 +152,7 @@ local function decode_entry(raw: unknown): (Vocabulary?, string?)
         end
         capabilities[id] = {id = id, revision = row.revision,
             confirm = row.confirm, parameters = schema, text = row.text,
-            policies = policies, resources = resources}
+            policies = policies, resources = resources, modules = modules, tools = tools}
     end
     return {revision = revision, never = never, capabilities = capabilities}, nil
 end
@@ -168,6 +186,26 @@ local function clean_path(raw: unknown, absolute: boolean): string?
     if #value > 1 and value:sub(-1) == "/" then value = value:sub(1, -2) end
     for segment in value:gmatch("[^/]+") do
         if segment == "." or segment == ".." or not segment:match("^[A-Za-z0-9_.-]+$") then return nil end
+    end
+    return value
+end
+-- A command an approved process may run: the executable, either a clean
+-- absolute path or a bare name the host resolves on its PATH, then the fixed
+-- leading arguments. Tokens hold no quote, escape or whitespace, so the
+-- runtime's command parser splits the command back into these exact tokens
+-- and a caller's further arguments can only follow them.
+local function command(raw: unknown): string?
+    local value = word(raw, 160)
+    if not value then return nil end
+    local count = 0
+    for token in (value .. " "):gmatch("([^ ]*) ") do
+        count = count + 1
+        if count > 16 then return nil end
+        if count == 1 then
+            if token:sub(1, 1) == "/" then
+                if clean_path(token, true) ~= token or token == "/" then return nil end
+            elseif not token:match("^[A-Za-z0-9][A-Za-z0-9_.+-]*$") then return nil end
+        elseif not token:match("^[A-Za-z0-9_./=:,+@%%-]+$") then return nil end
     end
     return value
 end
@@ -207,6 +245,7 @@ local function audience_list(raw: unknown): {string}?
 end
 local function parameter(raw: unknown, kind: string): Parameter?
     if kind == "relative_subpath" then return clean_path(raw, false) end
+    if kind == "command" then return command(raw) end
     if kind == "url_path_prefix" then return clean_path(raw, true) end
     if kind == "owned_scope" then return raw == "owned" and "owned" or nil end
     if kind == "children_scope" then return raw == "children" and "children" or nil end
@@ -585,6 +624,29 @@ function M.compare(installed_raw: unknown, proposed_raw: unknown): (Diff?, strin
     if not report then return nil, report_error end
     diff.revocation = report
     return diff, nil
+end
+-- The runtime modules each granted capability admits into an application.
+function M.modules(catalog: Vocabulary, grants: {Grant}): {[string]: boolean}
+    local result: {[string]: boolean} = {}
+    for _, grant in ipairs(grants) do
+        local template = catalog.capabilities[grant.capability]
+        if template then for _, name in ipairs(template.modules) do result[name] = true end end
+    end
+    return result
+end
+-- For each runtime module a capability admits, the capabilities that admit
+-- it, sorted, so a refusal can name the request that would admit it.
+function M.module_capabilities(catalog: Vocabulary): {[string]: {string}}
+    local result: {[string]: {string}} = {}
+    for id, template in pairs(catalog.capabilities) do
+        for _, name in ipairs(template.modules) do
+            local ids = result[name] or {}
+            ids[#ids + 1] = id
+            result[name] = ids
+        end
+    end
+    for _, ids in pairs(result) do table.sort(ids) end
+    return result
 end
 M.strings = string_set
 return M

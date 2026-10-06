@@ -10,11 +10,11 @@ entries:
   kind: registry.entry
   meta:
     type: bee.capability_catalog
-    comment: Host-owned review vocabulary and templates for the capabilities a governed application may request; declarations are not grants
+    comment: Host-owned review vocabulary and templates for the capabilities a governed application or an agent attempt may request; declarations are not grants. modules names the runtime modules a granted
+      application may load; tools names the gateway tools through which an agent attempt exercises the grant
   data:
-    revision: 3
+    revision: 4
     never:
-    - exec
     - env
     - credentials
     - registry.write
@@ -99,6 +99,8 @@ entries:
         definitions: definitions
       text: Launch managed agents from {definitions}
       confirm: explicit
+      modules:
+      - contract
       policies:
       - operation: agents.launch
         resource: managed_agents
@@ -112,6 +114,8 @@ entries:
         methods: methods
       text: Call app binding {binding} using {methods}
       confirm: explicit
+      modules:
+      - contract
       policies:
       - operation: contract.call
         resource: $binding
@@ -129,6 +133,8 @@ entries:
         path_prefix: url_path_prefix
       text: Send HTTP requests to {origin} at {path_prefix} using {methods}
       confirm: explicit
+      tools:
+      - http_request
       policies:
       - operation: http.request
         resource: $origin
@@ -139,6 +145,26 @@ entries:
       - kind: http.client
         mode: scoped
         source: host_selected_origin
+    - id: process.exec
+      revision: 1
+      parameters:
+        command: command
+        directory: relative_subpath
+      text: Run {command}, followed by any further arguments, in workspace folder {directory} with your user's full file and network access and no environment beyond the host PATH
+      confirm: explicit
+      modules:
+      - exec
+      tools:
+      - process_run
+      policies:
+      - operation: process.exec
+        resource: $command
+        scope:
+          subpath: $directory
+      resources:
+      - kind: exec.native
+        mode: scoped
+        source: host_generated_executor
     - id: hive.expose
       revision: 2
       parameters:

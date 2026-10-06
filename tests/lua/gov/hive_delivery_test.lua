@@ -80,7 +80,7 @@ local function define_tests()
 
             -- Bee A publishes the version it made; the Sync feed carries its descriptor.
             local published = ok(publisher.publish(source_node, {source_workspace = "notes", component = "app.notes",
-                version = "1.0.0", artifact = {bytes = exact.bytes, digest = exact.digest}}))
+                version = "1.0.0", author = "Claude Code", artifact = {bytes = exact.bytes, digest = exact.digest}}))
             local descriptor = assert(bounds.object(published.descriptor))
             local feed = assert(sync.open({owner = source_node}))
             local page = ok(sync.read_after(feed, delivery.FEED, 0, 16))
@@ -102,6 +102,13 @@ local function define_tests()
             test.eq(shared[1].status, "Shared")
             test.eq(shared[1].source, "from bee " .. source_node:sub(1, 16))
             test.eq(#library.rows(state, "installed"), 0)
+            local made_by = ""
+            for _, line in ipairs(library.version_lines(state, shared[1])) do
+                if line.label == "Made by" then made_by = line.value end
+            end
+            test.eq(made_by, "Claude Code")
+            test.is_true(governed.apply_names(state.governed, reply({names = {[source_node] = "laptop"}})))
+            test.eq(library.rows(state, "shared")[1].source, "from bee laptop")
 
             -- Install on bee B: receive, review, choose and ask for approval in B's own stores.
             local plans = assert(plan_store.open("bee:db", node, workspace))
@@ -166,7 +173,7 @@ local function define_tests()
             local waiting = library.rows(state, "installed")
             test.eq(#waiting, 1)
             test.eq(waiting[1].status, "Waiting for your approval")
-            test.eq(waiting[1].source, "from bee " .. source_node:sub(1, 16))
+            test.eq(waiting[1].source, "from bee laptop")
             test.eq(#library.rows(state, "shared"), 0)
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))

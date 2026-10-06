@@ -263,6 +263,50 @@ local function define_tests()
             test.eq(state.notice, "No answer yet; try Refresh")
         end)
 
+        test.it("reads the author a version names and refuses a malformed one", function()
+            local state = model.new("workspace-destination")
+            local named = available("2.0.0")
+            assert(named.manifest :: {[string]: unknown}).author = "Claude Code"
+            test.is_true(model.apply_available(state, reply({workspace_id = "workspace-destination", versions = {named}})))
+            test.eq(state.available[1].author, "Claude Code")
+            test.is_nil(available("3.0.0").manifest.author)
+            for _, bad in ipairs({7, string.rep("x", 81)}) do
+                local malformed = available("4.0.0")
+                assert(malformed.manifest :: {[string]: unknown}).author = bad
+                test.is_false(model.apply_available(state, reply({workspace_id = "workspace-destination", versions = {malformed}})))
+            end
+            test.eq(#state.available, 1)
+        end)
+
+        test.it("reads which application an install runs and the version it replaced", function()
+            local state = model.new("workspace-destination")
+            local installed = {owner_node = "node-destination", workspace_id = "workspace-destination",
+                intent_id = "intent-2", overlay_owner = "overlay", source_node = "node-source",
+                source_workspace = "notes", version = "1.0.1", revision = 6, phase = "settled", outcome = "applied",
+                observed_intent_id = "intent-2", observed_outcome = "applied", baseline_intent_id = "intent-1",
+                application = "app.notes:main"}
+            test.is_true(model.apply_activations(state, reply({workspace_id = "workspace-destination", activations = {installed}})))
+            test.eq(state.activations[1].application, "app.notes:main")
+            test.eq(state.activations[1].baseline_intent_id, "intent-1")
+        end)
+
+        test.it("asks for node names, keeps the answered ones and builds the person's revert", function()
+            local state = model.new("workspace-destination")
+            test.eq(model.NAMES, "bee.node.binding:names")
+            test.eq(model.names_request({"node-a"}).nodes[1], "node-a")
+            test.is_true(model.apply_names(state, reply({names = {["node-a"] = "laptop"}})))
+            test.is_true(model.apply_names(state, reply({names = {["node-b"] = "desk", ["node\nbad"] = "x"}})))
+            test.eq(state.names["node-a"], "laptop")
+            test.eq(state.names["node-b"], "desk")
+            test.is_nil(state.names["node\nbad"])
+            test.is_false(model.apply_names(state, reply({names = {}, extra = true})))
+            local request = model.revert_request(state, "notes", "revert-key")
+            test.eq(request.operation, "revert")
+            test.eq(request.workspace_id, "workspace-destination")
+            test.eq(request.source_workspace, "notes")
+            test.eq(request.receipt_key, "revert-key")
+        end)
+
         test.it("reads the activations of the workspace with their slot pointers", function()
             local state = model.new("workspace-destination")
             test.eq(model.activations_request(state).operation, "activations")

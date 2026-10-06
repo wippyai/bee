@@ -221,6 +221,71 @@ local function define_tests()
             test.eq(model.compare("1.0.0-beta", "1.0.0-alpha"), 1)
         end)
 
+        test.it("names the agent that made a version on this bee and the bee a shared version came from", function()
+            local state = fresh()
+            local made = version("notes", "1.0.1", NODE)
+            local made_manifest = made.manifest :: {[string]: unknown}
+            made_manifest.author = "Claude Code"
+            load(state, {made, version("tally", "1.0.0", "node-laptop")}, {
+                activation("i1", "notes", "1.0.1", "settled", "applied", "i1"),
+                activation("i2", "other", "1.0.0", "settled", "applied", "i2")})
+            local rows = model.rows(state, "installed")
+            test.eq(rows[1].source, "made by Claude Code")
+            test.eq(rows[2].source, "made on this bee")
+            test.eq(model.rows(state, "shared")[1].source, "from bee node-laptop")
+            test.is_true(governed.apply_names(state.governed, reply({names = {["node-laptop"] = "laptop"}})))
+            test.eq(model.rows(state, "shared")[1].source, "from bee laptop")
+            test.eq(model.sources(state)[1], "node-laptop")
+            test.eq(#model.sources(state), 1)
+        end)
+
+        test.it("says who made a shared version when it names its agent", function()
+            local state = fresh()
+            local shared = version("tally", "1.0.0", "node-laptop")
+            local shared_manifest = shared.manifest :: {[string]: unknown}
+            shared_manifest.author = "Codex"
+            load(state, {shared}, {})
+            model.show_tab(state, "shared")
+            local lines = model.version_lines(state, assert(model.selected_row(state)))
+            local made_by = ""
+            for _, line in ipairs(lines) do if line.label == "Made by" then made_by = line.value end end
+            test.eq(made_by, "Codex")
+        end)
+
+        test.it("opens an installed application by its definition and removes it back to the version before", function()
+            local state = fresh()
+            local installed = activation("i2", "notes", "1.0.1", "settled", "applied", "i2")
+            installed.application = "app.notes:main"
+            installed.baseline_intent_id = "i1"
+            load(state, {}, {installed, activation("i1", "notes", "1.0.0", "settled", "applied", "i2")})
+            local row = model.rows(state, "installed")[1]
+            test.eq(row.application, "app.notes:main")
+            test.eq(row.baseline, "1.0.0")
+            test.is_true(model.can_remove(row))
+            test.is_true(model.ask_remove(state, row))
+            local removal = assert(state.removal)
+            test.eq(removal.app, "notes")
+            test.eq(removal.baseline, "1.0.0")
+            local said = table.concat(model.removal_lines(removal), "\n")
+            test.is_true(said:find("Remove Notes 1.0.1?", 1, true) ~= nil)
+            test.is_true(said:find("goes back to 1.0.0", 1, true) ~= nil)
+            test.is_true(said:find("saved stays", 1, true) ~= nil)
+            model.cancel_remove(state)
+            test.is_nil(state.removal)
+        end)
+
+        test.it("offers no removal for a first version, a Hub package or an install on its way", function()
+            local state = fresh()
+            load(state, {}, {activation("i1", "notes", "1.0.0", "settled", "applied", "i1"),
+                activation("i3", "tally", "1.0.0", "prepared", nil, nil)})
+            for _, row in ipairs(model.rows(state, "installed")) do
+                test.is_false(model.can_remove(row))
+                test.is_false(model.ask_remove(state, row))
+            end
+            test.is_nil(state.removal)
+            test.is_false(model.can_remove(nil))
+        end)
+
         test.it("describes a version in person words and keeps technical words for details", function()
             local state = fresh()
             load(state, {version("tally", "1.0.0", "node-laptop")}, {})

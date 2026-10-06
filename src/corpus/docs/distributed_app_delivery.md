@@ -171,7 +171,8 @@ A session without the separately gated `publish` tool can still deliver: after
 local review, approval and successful apply, the person publishes the locally
 applied version through Governance's publication owner, not a direct registry
 write. The destination sees it in the Library under Shared, from the bee that
-published it, and Install there reviews, selects and prepares it; the person
+published it (named by what that bee's node reports) and, when the publishing
+session is known, made by the agent it runs, and Install there reviews, selects and prepares it; the person
 approves its own activation in Needs you. Content travels; grants and decisions remain
 destination-local.
 

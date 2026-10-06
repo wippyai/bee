@@ -217,6 +217,16 @@ host-selected resolver activation uses, and returns the added, changed and
 removed entries with both base digests. It records no decision, consumes no
 approval and writes no overlay.
 
+Two more operations serve a person's own Library. `activations` is a read: the
+workspace's activations, newest first, with the pointers of each overlay slot
+(its observed, desired and baseline intents) and, for each applied one, the
+`bee.app` definition its artifact declares. `revert` goes back to the version
+before the one an application runs. It needs the same `bee.gov.delivery.activate`
+action as `prepare`, records the revert under the asking person as the actor,
+applies the earlier version's definitions through the activation owner, and
+refuses with `BLOCKED` when no earlier version is retained or applied migration
+facts exist. `bee gov revert OWNER` runs this same revert as the recovery actor.
+
 The resolver and destination service are implemented and covered through the
 plan adapter. `activation_profiles` supplies host-selected roots, overlay
 owners, approval policies and capability ceilings; it cannot be populated by a
@@ -325,8 +335,9 @@ Settings can remove the
 current workspace's super-edit rows and their overlay entries. A failed local
 host readiness check removes expiring rows and their overlays before one
 startup retry. `bee gov revert OWNER` uses the fixed recovery actor to restore
-one retained activation baseline without the desktop; it refuses an owner with
-applied migration facts until a forward-only compensation plan exists.
+one retained activation baseline without the desktop (the destination's `revert`);
+it refuses an owner with applied migration facts until a forward-only
+compensation plan exists.
 
 The configuration may also carry one `packages` rule with the wider ceiling
 for installed package delivery (`security.policy`, `registry.entry`,

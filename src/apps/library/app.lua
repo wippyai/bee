@@ -12,6 +12,7 @@ local funcs = require("funcs")
 local time = require("time")
 local appearance = require("appearance")
 local frame = require("frame")
+local client = require("client")
 local model = require("model")
 local governed = require("governed")
 local hub = require("hub")
@@ -83,6 +84,8 @@ local function main(options: unknown)
     local width, height = tty.screen_size()
     local preferences = appearance.chosen(options)
     local state: model.State = model.new(workspace_of(options))
+    local launch = client.launch(options)
+    state.can_open = launch ~= nil
     local gov = state.governed
     local hubs = state.hub
     local ui: view.Ui = {offset = 0, status = "", reading = false, editor = nil, content = contents.new()}
@@ -162,6 +165,18 @@ local function main(options: unknown)
     local function refresh_activations()
         governed.apply_activations(gov, invoke(governed.activations_request(gov)))
     end
+    -- The bees that made versions are named once each; one that does not
+    -- answer is asked again only when the person refreshes.
+    local asked: {[string]: boolean} = {}
+    local function refresh_names()
+        local wanted: {string} = {}
+        for _, node in ipairs(model.sources(state)) do
+            if not asked[node] and gov.names[node] == nil then wanted[#wanted + 1] = node; asked[node] = true end
+        end
+        if #wanted == 0 then return end
+        local raw, err = funcs.new():call(governed.NAMES, governed.names_request(wanted))
+        if not err then governed.apply_names(gov, governed.reply(raw)) end
+    end
     local function refresh_governed()
         local failures: {string} = {}
         local function note()
@@ -170,7 +185,33 @@ local function main(options: unknown)
         governed.apply_available(gov, invoke(governed.available_request(gov))); note()
         governed.apply_list(gov, invoke(governed.list_request(gov))); note()
         governed.apply_activations(gov, invoke(governed.activations_request(gov))); note()
+        refresh_names()
         state.notice = failures[1] or ""
+    end
+    -- remove_now takes an application back to the version before it, as the
+    -- person. One attempt keeps its receipt key until the answer is known.
+    local pending_revert: {app: string, key: string}? = nil
+    local function remove_now(removal: model.Removal)
+        local attempt = pending_revert
+        if not attempt or attempt.app ~= removal.app then
+            attempt = {app = removal.app, key = new_key()}
+            pending_revert = attempt
+        end
+        local answer = invoke(governed.revert_request(gov, removal.app, attempt.key))
+        if not answer then state.notice = "No answer yet; try Refresh"; return end
+        pending_revert = nil
+        if answer.ok then
+            refresh_governed()
+            state.notice = removal.name .. " went back to " .. removal.baseline
+            return
+        end
+        local fault = answer.error
+        gov.fault = fault and (fault.code .. ": " .. fault.message) or "revert failed"
+        if fault and fault.code == "BLOCKED" then
+            state.notice = "Removing " .. removal.name .. " stopped; Technical says why"
+        else
+            state.notice = "That did not go through; Technical says why"
+        end
     end
     local function stage_now(item: governed.Available): boolean
         local staged = governed.staged_plan(gov, item)
@@ -631,6 +672,18 @@ local function main(options: unknown)
             changed()
         end
     end
+    local function launch_row(row: model.Row)
+        if not launch or not row.application then state.notice = "This application can't be opened from here"; changed(); return end
+        local _, problem = client.navigate(launch, row.application, nil)
+        state.notice = problem and "This application did not open; try again" or ("Opening " .. row.name)
+        if problem then gov.fault = problem end
+        changed()
+    end
+    local function ask_remove(row: model.Row?)
+        if row and model.ask_remove(state, row) then changed(); return end
+        state.notice = "There is no earlier version to go back to"
+        changed()
+    end
     local function install_row(row: model.Row)
         if row.origin == "hub" then open_row(row)
         else perform(function() install_now(row) end) end
@@ -675,11 +728,15 @@ local function main(options: unknown)
         elseif kind == "open" and row then open_row(row)
         elseif kind == "update" and row then update_row(row)
         elseif kind == "remove" and row and row.component and row.origin == "hub" then remove_package(row.component)
+        elseif kind == "remove" and row and row.origin == "governed" then ask_remove(row)
+        elseif kind == "launch" and row then launch_row(row)
         elseif kind == "search" then begin_editor("query")
         elseif kind == "keyword" then begin_editor("keyword")
         elseif kind == "developer_packages" then hub.toggle_developer_packages(hubs); changed()
         elseif kind == "technical" then model.toggle_technical(state); changed()
-        elseif kind == "refresh" then load_tab()
+        elseif kind == "refresh" then
+            for node in pairs(asked) do if gov.names[node] == nil then asked[node] = nil end end
+            load_tab()
         elseif kind == "operations_previous" then hub.set_operation_page(hubs, hubs.operation_page - 1); operation_history()
         elseif kind == "operations_next" then hub.set_operation_page(hubs, hubs.operation_page + 1); operation_history()
         elseif kind == "recover" then
@@ -702,6 +759,8 @@ local function main(options: unknown)
         elseif kind == "update" and row then update_row(row)
         elseif kind == "refresh" then perform(function() refresh_governed(); if row then open_version_now(row) end end)
         elseif kind == "technical" then model.toggle_technical(state); ui.offset = 0; changed()
+        elseif kind == "remove" then ask_remove(row)
+        elseif kind == "launch" and row then launch_row(row)
         elseif kind == "back" then model.show_version(state, false); ui.offset = 0; changed()
         elseif kind == "accept" then perform(function() review_transition(true) end)
         elseif kind == "reject" then perform(function() review_transition(false) end)
@@ -796,7 +855,13 @@ local function main(options: unknown)
     end
     local function handle_hit(kind: string, key: string)
         local screen = view.screen(state)
-        if ui.editor then package_hit(kind, key)
+        local removal = state.removal
+        if removal then
+            if kind == "confirm_remove" then
+                model.cancel_remove(state)
+                perform(function() remove_now(removal) end)
+            elseif kind == "cancel_remove" then model.cancel_remove(state); state.notice = "Kept"; changed() end
+        elseif ui.editor then package_hit(kind, key)
         elseif screen == "package" then package_hit(kind, key)
         elseif screen == "version" then version_hit(kind)
         else list_hit(kind, key) end
@@ -874,7 +939,11 @@ local function main(options: unknown)
                             local key, letter = data.key_type, tostring(data.key or "")
                             if key == "space" then letter = " " end
                             local editor = ui.editor
-                            if editor then
+                            local removal = state.removal
+                            if removal then
+                                if key == "enter" then handle_hit("confirm_remove", "")
+                                elseif key == "esc" or key == "escape" then handle_hit("cancel_remove", "") end
+                            elseif editor then
                                 if key == "esc" or key == "escape" then ui.editor = nil; ui.status = "Cancelled"; changed()
                                 elseif key == "enter" then finish_editor()
                                 elseif key == "backspace" then editor.buffer = previous(editor.buffer); ui.status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed()
@@ -940,7 +1009,8 @@ local function main(options: unknown)
                                 elseif letter == "n" then version_hit("reject")
                                 elseif letter == "s" then version_hit("select")
                                 elseif letter == "p" then version_hit("prepare")
-                                elseif letter == "x" then version_hit("step")
+                                elseif letter == "x" then version_hit(state.governed.technical and "step" or "remove")
+                                elseif letter == "l" then version_hit("launch")
                                 elseif letter == "i" then version_hit("status")
                                 elseif letter == "g" then version_hit("recover")
                                 elseif key == "esc" or key == "escape" then version_hit("back") end
@@ -950,6 +1020,7 @@ local function main(options: unknown)
                                 if key == "tab" or letter == "\t" then
                                     local order = {installed = "shared", shared = "history", history = "installed"}
                                     show_tab(order[state.tab] :: model.Tab)
+                                elseif key == "enter" and row and state.tab == "installed" and row.origin == "governed" and row.application then launch_row(row)
                                 elseif letter == "k" and hub.keyword_phase(tab_phase(state.tab)) then begin_editor("keyword")
                                 elseif key == "up" or letter == "k" then move_selection(-1)
                                 elseif key == "down" or letter == "j" then move_selection(1)
@@ -965,7 +1036,8 @@ local function main(options: unknown)
                                     else changed() end
                                 elseif (letter == "o" or letter == "d") and row then open_row(row)
                                 elseif letter == "u" then if row then update_row(row) end
-                                elseif letter == "x" and row and row.component and row.origin == "hub" and state.tab == "installed" then remove_package(row.component)
+                                elseif letter == "x" and row and state.tab == "installed" then
+                                    if row.origin == "hub" and row.component then remove_package(row.component) else ask_remove(row) end
                                 elseif letter == "g" and state.tab == "history" then list_hit("recover", "")
                                 elseif letter == "/" then begin_editor("query")
                                 elseif letter == "t" then model.toggle_technical(state); changed()

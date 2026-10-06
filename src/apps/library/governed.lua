@@ -10,6 +10,8 @@ M.CALL = "bee.gov.binding:destination_call"
 M.MAX_PLANS = 128
 M.MAX_AVAILABLE = 512
 M.MAX_ACTIVATIONS = 128
+M.MAX_NODES = 64
+M.NAMES = "bee.node.binding:names"
 M.MAX_CHANGES = 512
 type Object = {[string]: unknown}
 type Fault = {code: string, message: string}
@@ -18,7 +20,7 @@ type Reply = {ok: true, error: nil, value: unknown} | {ok: false, error: Fault, 
 type Status = "staged" | "reviewed" | "rejected"
 type Available = {owner_id: string, feed: string, version_key: string, component: string,
     version: string, source_workspace: string, content_digest: string, descriptor_digest: string,
-    total_bytes: integer}
+    total_bytes: integer, author: string?}
 type Plan = {owner_node: string, workspace_id: string, source_node: string, source_workspace: string,
     version: string, plan_digest: string, candidate_digest: string, artifact_digest: string,
     preflight_digest: string, revision: integer, status: Status, review_status: string?,
@@ -28,7 +30,8 @@ type Intent = {owner_node: string, workspace_id: string, intent_id: string, over
     source_node: string, source_workspace: string, version: string, revision: integer,
     phase: string, outcome: string?, diagnostics: string?, approval_id: string?,
     approval_proposal_digest: string?, consumed_proposal_digest: string?,
-    observed_intent_id: string?, observed_artifact_digest: string?, observed_outcome: string?}
+    observed_intent_id: string?, observed_artifact_digest: string?, observed_outcome: string?,
+    baseline_intent_id: string?, application: string?}
 type EntryChange = {id: string, kind: string, digest: string}
 type Changes = {plan_digest: string, candidate_digest: string, artifact_digest: string,
     base_digest: string, composed_base_digest: string, base_revision: integer,
@@ -39,7 +42,7 @@ type ReviewRow = {text: string, heading: boolean, summary: string?}
 type PendingPrepare = {plan_key: string, intent_id: string, receipt_key: string}
 type PendingStep = {intent_id: string, receipt_key: string}
 type PendingStage = {available_key: string, idempotency_key: string}
-type State = {workspace_id: string, owner_node: string?, available: {Available}, selected_available_key: string?,
+type State = {workspace_id: string, owner_node: string?, names: {[string]: string}, available: {Available}, selected_available_key: string?,
     plans: {Plan}, activations: {Intent}, selected_key: string?, detail: Plan?, intent: Intent?,
     technical: boolean, notice: string, fault: string, pending_prepare: PendingPrepare?,
     pending_step: PendingStep?, pending_recover_key: string?, restored_intent_id: string?, pending_stage: PendingStage?,
@@ -63,10 +66,11 @@ local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "o
     "approval_owner_incarnation", "consumed_consumer_id", "consumed_proposal_digest", "consumed_effect_key",
     "outcome", "diagnostics", "migrations_completed", "migration_receipt_bytes", "migration_receipt_digest",
     "slot_revision", "desired_intent_id", "desired_execution_revision",
-    "observed_intent_id", "observed_execution_revision", "observed_artifact_digest", "observed_outcome"}
+    "observed_intent_id", "observed_execution_revision", "observed_artifact_digest", "observed_outcome",
+    "baseline_intent_id", "application"}
 local DESCRIPTOR_FIELDS = {"schema", "owner_id", "feed", "key", "object_id", "version_id", "content_digest",
     "manifest_digest", "content_kind", "total_bytes", "manifest", "digest"}
-local MANIFEST_FIELDS = {"schema_revision", "source_workspace", "component", "artifact_digest"}
+local MANIFEST_FIELDS = {"schema_revision", "source_workspace", "component", "artifact_digest", "author"}
 local STATUSES: {[string]: boolean} = {staged = true, reviewed = true, rejected = true}
 local PHASES: {[string]: boolean} = {prepared = true, approval_bound = true, consuming = true,
     authorized = true, applying = true, settled = true}
@@ -195,9 +199,11 @@ local function available(raw: unknown): (Available?, string?)
     if total_bytes == nil or total_bytes < 1 or total_bytes > 16777216 then
         return nil, "available version size is malformed"
     end
+    local author = optional_text(manifest.author, 80)
+    if manifest.author ~= nil and not author then return nil, "available version author is malformed" end
     return {owner_id = owner_id, feed = feed, version_key = version_key, component = component,
         version = version, source_workspace = source_workspace, content_digest = content_digest,
-        descriptor_digest = descriptor_digest, total_bytes = total_bytes}, nil
+        descriptor_digest = descriptor_digest, total_bytes = total_bytes, author = author}, nil
 end
 local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
     local value = object(raw)
@@ -248,7 +254,8 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         consumed_proposal_digest = digest(value.consumed_proposal_digest),
         observed_intent_id = optional_id(value.observed_intent_id),
         observed_artifact_digest = digest(value.observed_artifact_digest),
-        observed_outcome = observed}, nil
+        observed_outcome = observed, baseline_intent_id = optional_id(value.baseline_intent_id),
+        application = optional_text(value.application, 256)}, nil
 end
 local function entry_change(raw: unknown): (EntryChange?, string?)
     local value = object(raw)
@@ -351,7 +358,7 @@ function M.available_plan_key(item: Available): string
     return item.owner_id .. "\0" .. item.source_workspace .. "\0" .. item.version
 end
 function M.new(workspace_id: string): State
-    return {workspace_id = workspace_id, owner_node = nil, available = {}, selected_available_key = nil,
+    return {workspace_id = workspace_id, owner_node = nil, names = {}, available = {}, selected_available_key = nil,
         plans = {}, activations = {}, selected_key = nil, detail = nil, intent = nil,
         technical = false, notice = "", fault = "", pending_prepare = nil, pending_step = nil,
         pending_recover_key = nil, restored_intent_id = nil, pending_stage = nil,
@@ -541,6 +548,27 @@ function M.apply_activation(state: State, reply: Reply?): boolean
     state.intent = item
     fail(state, M.phase_notice(item), "Activation " .. item.phase)
     return true
+end
+-- The names the bees that made versions go by; a node that has none stays
+-- unnamed.
+function M.names_request(nodes: {string}): Object
+    return {nodes = nodes}
+end
+function M.apply_names(state: State, reply: Reply?): boolean
+    local value = result_object(reply)
+    local names = value and object(value.names)
+    if not value or not names or bounds.fields(value, {"names"}) then refuse(state, reply); return false end
+    local decoded: {[string]: string} = {}
+    for node, name in pairs(names) do
+        local line = bounds.line(name, 80)
+        if bounds.id(node) and line then decoded[node] = line end
+    end
+    for node, name in pairs(decoded) do state.names[node] = name end
+    return true
+end
+function M.revert_request(state: State, source_workspace: string, key: string): Object
+    return {operation = "revert", workspace_id = state.workspace_id, source_workspace = source_workspace,
+        receipt_key = key}
 end
 function M.activations_request(state: State): Object
     return {operation = "activations", workspace_id = state.workspace_id}

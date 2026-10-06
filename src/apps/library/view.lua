@@ -68,8 +68,12 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         else
             buttons[#buttons + 1] = {kind = "refresh", key = "Enter", label = "Check", enabled = true, primary = true}
         end
-        buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide details" or "Details", enabled = true}
+        buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide technical" or "Technical", enabled = true}
         buttons[#buttons + 1] = {kind = "back", key = "Esc", label = "Back", enabled = true}
+        if row and row.application and state.can_open then
+            buttons[#buttons + 1] = {kind = "launch", key = "L", label = "Open", enabled = true}
+        end
+        if model.can_remove(row) then buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = true} end
         if state.governed.technical then
             local item = governed.selected(state.governed)
             buttons[#buttons + 1] = {kind = "accept", label = "Accept", enabled = governed.accepts_review(item)}
@@ -87,8 +91,17 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         if row and row.status == model.STATUS_UPDATE then
             buttons[#buttons + 1] = {kind = "update", key = "U", label = "Update", enabled = true, primary = true}
         end
-        buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = row ~= nil, primary = row == nil or row.status ~= model.STATUS_UPDATE}
-        buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = row ~= nil and row.origin == "hub" and row.app == nil}
+        local own = row ~= nil and row.origin == "governed"
+        local launchable = own and row ~= nil and row.application ~= nil and state.can_open
+        local updating = row ~= nil and row.status == model.STATUS_UPDATE
+        if own then
+            buttons[#buttons + 1] = {kind = "launch", key = "Enter", label = "Open", enabled = launchable, primary = launchable and not updating}
+            buttons[#buttons + 1] = {kind = "open", key = "D", label = "Details", enabled = true, primary = not launchable and not updating}
+            buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = model.can_remove(row)}
+        else
+            buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Details", enabled = row ~= nil, primary = not updating}
+            buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = row ~= nil and row.origin == "hub"}
+        end
     elseif tab == "shared" then
         buttons[#buttons + 1] = {kind = "install", key = "Enter", label = "Install", enabled = row ~= nil, primary = true}
         buttons[#buttons + 1] = {kind = "open", key = "O", label = "Open", enabled = row ~= nil}
@@ -97,7 +110,7 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         for _, candidate in ipairs(state.hub.operations) do
             if row and candidate.digest == row.operation then operation = candidate end
         end
-        buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide details" or "Details", enabled = true}
+        buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide technical" or "Technical", enabled = true}
         buttons[#buttons + 1] = {kind = "operations_previous", label = "Prev", enabled = state.hub.operation_page > 1}
         buttons[#buttons + 1] = {kind = "operations_next", label = "Next",
             enabled = state.hub.operation_page < math.max(1, math.ceil(state.hub.operation_total / math.max(1, state.hub.operation_page_size)))}
@@ -108,7 +121,7 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
     if tab == "shared" and with_filters then
         for _, button in ipairs(filters(state)) do buttons[#buttons + 1] = button end
     end
-    if tab ~= "history" then buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide details" or "Details", enabled = true} end
+    if tab ~= "history" then buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide technical" or "Technical", enabled = true} end
     buttons[#buttons + 1] = {kind = "refresh", key = "R", label = "Refresh", enabled = true}
     return buttons
 end
@@ -261,6 +274,26 @@ local function draw_version(width: integer, height: integer, preferences: appear
         capacity = room, offset = offset, operation_detail_offset = 0}
 end
 
+-- draw_removal floats the removal's confirmation above a drawn screen and
+-- takes every click for itself.
+local function draw_removal(base: Frame, width: integer, height: integer, preferences: appearance.Preferences, removal: model.Removal): Frame
+    local painter = frame.new(width, height, preferences)
+    for y, row in ipairs(base.rows) do painter.canvas:put(1, y, row, width) end
+    local lines = model.removal_lines(removal)
+    local box = frame.modal(painter, math.min(70, width - 2), #lines + 5, "Remove")
+    if box.width > 0 then
+        for index, line in ipairs(lines) do
+            frame.put(painter, box.x, box.y + index, text.bound(line, 8192), box.width, index == 1 and painter.theme.accent or painter.theme.text)
+        end
+        local x = box.x
+        local y = box.y + #lines + 2
+        x = frame.button(painter, x, y, {kind = "confirm_remove", key = "Enter", label = "Remove", enabled = true, primary = true})
+        frame.button(painter, x, y, {kind = "cancel_remove", key = "Esc", label = "Keep", enabled = true})
+    end
+    return {rows = frame.rows(painter), hits = painter.hits, controls = nil, capacity = base.capacity,
+        offset = base.offset, operation_detail_offset = base.operation_detail_offset}
+end
+
 -- draw paints the screen the model is on, with an open editor floating above it.
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, ui: Ui): Frame
     local screen = M.screen(state)
@@ -271,8 +304,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     elseif screen == "version" then base = draw_version(width, height, preferences, state, ui)
     else base = draw_list(width, height, preferences, state, ui) end
     local editor = ui.editor
-    if not editor then return base end
-    return hub_view.overlay(base, width, height, preferences, ui.status, editor)
+    if editor then return hub_view.overlay(base, width, height, preferences, ui.status, editor) end
+    local removal = state.removal
+    if removal then return draw_removal(base, width, height, preferences, removal) end
+    return base
 end
 
 return M

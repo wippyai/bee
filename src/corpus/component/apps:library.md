@@ -17,6 +17,24 @@ source: made on this bee, from bee `<node>` or from Hub. Words of the
 machinery (overlay, staged, plan, preflight, activation, destination,
 artifact, digest, descriptor, receipt) appear only in the details view (T).
 
+A version names the agent that made it when its session says so: publication
+reads the caller's session through the public Sessions contract and puts the
+title of the definition it runs (for example Claude Code) in the version and its
+manifest; the first author of a version stays. A row then reads `made by Claude
+Code`; a version from another bee reads `from bee <name>`, where the name is
+what that bee's node reports for itself, read through `bee.node.binding:names`
+under the one action `bee.node.names.read` the Library holds. A bee that gives
+no name shows the start of its identity.
+
+An installed application opens from its row: the destination returns the
+`bee.app` definition each applied activation declares and the Library asks its
+own broker to open it through `bee.app:client`. Remove asks first, naming what
+goes and what stays, then runs the destination's `revert`: the application goes
+back to the version before it, applied migrations stay where they are, and a
+removal that would need a compensation plan stops and says so. An application
+with no earlier version cannot be removed this way. The version it replaced is
+listed in History as Removed.
+
 Install on a shared version runs the local path in one move: it receives the
 version, reads its checks, reviews, chooses it and prepares its activation,
 which raises one approval in Needs you; the activation worker applies it once
@@ -26,7 +44,7 @@ package open the package screens: details, changes, confirmation and result.
 The app calls two facades and nothing else. `bee.gov.binding:destination_call`
 runs under `bee.gov.delivery.read`, `manage` and `activate`; the operations it
 uses are `available`, `list`, `activations`, `stage`, `get`, `changes`,
-`review`, `select`, `prepare`, `step`, `status` and `recover`. The public Hub
+`review`, `select`, `prepare`, `step`, `status`, `recover` and `revert`. The public Hub
 facade `bee.hub.binding:call` runs under `bee.hub.read`, `bee.hub.manage` and,
 for the Bee deployment root, `bee.hub.self_update`. The approval decision
 belongs to the approvals owner (`component/approvals`); the activation owner

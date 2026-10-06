@@ -95,6 +95,26 @@ entries:
     - bee.hub.manage
     resources: '*'
     effect: allow
+- name: names_client
+  kind: security.policy
+  meta:
+    comment: The Library asks the node names facade, and only that, which bees its shared versions came from are called
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.node.binding:names
+    effect: allow
+- name: names_read
+  kind: security.policy
+  meta:
+    comment: The person operating the Library reads the name each bee reports for itself; the read names nothing else of a node
+  policy:
+    actions:
+    - bee.node.names.read
+    resources:
+    - nodes
+    effect: allow
 - name: self_update
   kind: security.policy
   meta:
@@ -127,6 +147,7 @@ entries:
   - time
   imports:
     frame: bee.ui:frame
+    client: bee.app:client
     appearance: bee.ui:appearance
     model: bee.apps.library:model
     governed: bee.apps.library:governed
@@ -139,4 +160,6 @@ entries:
     - bee.apps.library:delivery_operations
     - bee.apps.library:hub_client
     - bee.apps.library:hub_operations
+    - bee.apps.library:names_client
+    - bee.apps.library:names_read
     - bee.apps.library:self_update

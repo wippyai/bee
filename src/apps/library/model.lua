@@ -12,14 +12,19 @@ type Tab = "installed" | "shared" | "history"
 type Status = "Shared" | "Waiting for your approval" | "Installing" | "Installed" | "Update available" | "Removed"
 type Origin = "governed" | "hub"
 -- One list row. key is stable across refreshes; update names the newer version
--- an Update available row offers; component names the Hub package.
+-- an Update available row offers; component names the Hub package;
+-- application is the definition that opens an installed application and
+-- baseline the version a removal goes back to.
 type Row = {key: string, origin: Origin, name: string, version: string, status: Status, update: string?,
     source: string, note: string, component: string?, available_key: string?, intent_id: string?,
-    operation: string?, app: string?}
+    operation: string?, app: string?, application: string?, baseline: string?}
 type Selection = {installed: string?, shared: string?, history: string?}
 type Screen = "list" | "version"
+-- A removal waits for the person's confirmation: the application and the
+-- version it goes back to.
+type Removal = {app: string, name: string, version: string, baseline: string}
 type State = {workspace_id: string, tab: Tab, screen: Screen, selected: Selection, governed: governed.State, hub: hub.State,
-    notice: string}
+    notice: string, can_open: boolean, removal: Removal?}
 
 M.STATUS_SHARED = "Shared"
 M.STATUS_WAITING = "Waiting for your approval"
@@ -30,7 +35,7 @@ M.STATUS_REMOVED = "Removed"
 
 function M.new(workspace_id: string): State
     return {workspace_id = workspace_id, tab = "installed", screen = "list", selected = {installed = nil, shared = nil, history = nil},
-        governed = governed.new(workspace_id), hub = hub.new(), notice = ""}
+        governed = governed.new(workspace_id), hub = hub.new(), notice = "", can_open = false, removal = nil}
 end
 
 -- The application a name stands for: its words capitalized, underscores spoken
@@ -61,10 +66,43 @@ function M.compare(left: string, right: string): integer
     return 0
 end
 
--- Where a version came from: this bee's own work, or another bee of the hive.
-function M.source(state: State, node: string): string
-    if node == state.governed.owner_node then return "made on this bee" end
-    return "from bee " .. node:sub(1, 16)
+-- The name of the agent that made one version, when the version says it.
+function M.author(state: State, node: string, name: string, release: string): string?
+    for _, item in ipairs(state.governed.available) do
+        if item.owner_id == node and item.source_workspace == name and item.version == release then return item.author end
+    end
+    return nil
+end
+
+-- What a bee is called: the name it reports, else the start of its identity.
+function M.bee(state: State, node: string): string
+    return state.governed.names[node] or node:sub(1, 16)
+end
+
+-- Where a version came from: this bee's own work, naming its agent when it is
+-- known, or another bee of the hive.
+function M.source(state: State, node: string, author: string?): string
+    if node == state.governed.owner_node then
+        return author and ("made by " .. author) or "made on this bee"
+    end
+    return "from bee " .. M.bee(state, node)
+end
+
+-- The bees other than this one that versions came from, which the Library
+-- asks for names.
+function M.sources(state: State): {string}
+    local seen: {[string]: boolean} = {}
+    local nodes: {string} = {}
+    local function note(node: string)
+        if node ~= state.governed.owner_node and not seen[node] and #nodes < governed.MAX_NODES then
+            seen[node] = true
+            nodes[#nodes + 1] = node
+        end
+    end
+    for _, item in ipairs(state.governed.available) do note(item.owner_id) end
+    for _, item in ipairs(state.governed.activations) do note(item.source_node) end
+    table.sort(nodes)
+    return nodes
 end
 
 type App = {name: string, owner: string, installed: governed.Intent?, flight: governed.Intent?}
@@ -116,8 +154,15 @@ local function installed_rows(state: State): {Row}
         if shown then
             local row: Row = {key = "g:app:" .. app.name, origin = "governed", name = M.title(app.name),
                 version = shown.version, status = M.STATUS_INSTALLED, update = nil,
-                source = M.source(state, (current or shown).source_node), note = "", component = nil,
-                available_key = nil, intent_id = shown.intent_id, operation = nil, app = app.name}
+                source = M.source(state, (current or shown).source_node,
+                    M.author(state, (current or shown).source_node, app.name, (current or shown).version)),
+                note = "", component = nil, available_key = nil, intent_id = shown.intent_id, operation = nil,
+                app = app.name, application = current and current.application or nil, baseline = nil}
+            if current and current.baseline_intent_id then
+                for _, earlier in ipairs(state.governed.activations) do
+                    if earlier.intent_id == current.baseline_intent_id then row.baseline = earlier.version end
+                end
+            end
             if flight then
                 row.status = waiting(flight) and M.STATUS_WAITING or M.STATUS_INSTALLING
             elseif current then
@@ -142,7 +187,8 @@ local function installed_rows(state: State): {Row}
         local row: Row = {key = "h:" .. module.component, origin = "hub", name = module.component, version = module.version,
             status = M.STATUS_INSTALLED, update = nil, source = built_in and "built in" or "from Hub",
             note = module.direct and "" or ("needed by " .. table.concat(module.used_by, ", ")),
-            component = module.component, available_key = nil, intent_id = nil, operation = nil, app = nil}
+            component = module.component, available_key = nil, intent_id = nil, operation = nil, app = nil,
+            application = nil, baseline = nil}
         local candidate = updates[module.component]
         if candidate and candidate.update_available and candidate.available_version ~= "" then
             local blocked = module.component == "bee/bee" and state.hub.bee_update ~= nil and state.hub.bee_update.needs_new_binary
@@ -171,15 +217,17 @@ local function shared_rows(state: State): {Row}
         local item = best[group]
         rows[#rows + 1] = {key = "g:ver:" .. governed.available_key(item), origin = "governed",
             name = M.title(item.source_workspace), version = item.version, status = M.STATUS_SHARED, update = nil,
-            source = M.source(state, item.owner_id), note = "", component = nil,
-            available_key = governed.available_key(item), intent_id = nil, operation = nil, app = item.source_workspace}
+            source = M.source(state, item.owner_id, item.author), note = "", component = nil,
+            available_key = governed.available_key(item), intent_id = nil, operation = nil, app = item.source_workspace,
+            application = nil, baseline = nil}
     end
     for _, item in ipairs(hub.visible_catalog(state.hub)) do
         if hub.component_status(state.hub, item.component) == nil then
             rows[#rows + 1] = {key = "h:" .. item.component, origin = "hub",
                 name = item.title ~= "" and item.title or item.component, version = item.latest_version,
                 status = M.STATUS_SHARED, update = nil, source = "from Hub", note = item.component,
-                component = item.component, available_key = nil, intent_id = nil, operation = nil, app = nil}
+                component = item.component, available_key = nil, intent_id = nil, operation = nil, app = nil,
+                application = nil, baseline = nil}
         end
     end
     return rows
@@ -197,9 +245,10 @@ local function history_rows(state: State): {Row}
                     and M.STATUS_INSTALLED or M.STATUS_REMOVED
             end
             rows[#rows + 1] = {key = "g:act:" .. item.intent_id, origin = "governed", name = M.title(item.source_workspace),
-                version = item.version, status = status, update = nil, source = M.source(state, item.source_node),
+                version = item.version, status = status, update = nil,
+                source = M.source(state, item.source_node, M.author(state, item.source_node, item.source_workspace, item.version)),
                 note = note, component = nil, available_key = nil, intent_id = item.intent_id, operation = nil,
-                app = item.source_workspace}
+                app = item.source_workspace, application = nil, baseline = nil}
         end
     end
     for _, operation in ipairs(state.hub.operations) do
@@ -217,7 +266,7 @@ local function history_rows(state: State): {Row}
         rows[#rows + 1] = {key = "h:op:" .. operation.digest, origin = "hub", name = operation.component,
             version = type(requested) == "string" and requested or "", status = status, update = nil, source = "from Hub",
             note = note, component = operation.component, available_key = nil, intent_id = nil,
-            operation = operation.digest, app = nil}
+            operation = operation.digest, app = nil, application = nil, baseline = nil}
     end
     return rows
 end
@@ -267,6 +316,32 @@ function M.show_version(state: State, shown: boolean)
     state.screen = shown and "version" or "list"
 end
 
+-- Whether a row can be removed: an installed application with an earlier
+-- version to go back to.
+function M.can_remove(row: Row?): boolean
+    return row ~= nil and row.origin == "governed" and row.app ~= nil and row.baseline ~= nil
+        and (row.status == M.STATUS_INSTALLED or row.status == M.STATUS_UPDATE)
+end
+
+-- ask_remove opens the confirmation for a removable row.
+function M.ask_remove(state: State, row: Row?): boolean
+    if not row or not M.can_remove(row) or not row.app or not row.baseline then return false end
+    state.removal = {app = row.app, name = row.name, version = row.version, baseline = row.baseline}
+    return true
+end
+
+function M.cancel_remove(state: State)
+    state.removal = nil
+end
+
+-- What the confirmation tells the person: what goes, what stays.
+function M.removal_lines(removal: Removal): {string}
+    return {"Remove " .. removal.name .. " " .. removal.version .. "?",
+        removal.name .. " goes back to " .. removal.baseline .. ", the version before it.",
+        "Whatever " .. removal.name .. " saved stays where it is.",
+        "If this version changed its saved data, removing it stops and says so."}
+end
+
 function M.toggle_technical(state: State)
     state.governed.technical = not state.governed.technical
 end
@@ -278,6 +353,11 @@ type Line = {label: string, value: string}
 function M.version_lines(state: State, row: Row): {Line}
     local lines: {Line} = {{label = "Status", value = row.status}, {label = "Source", value = row.source}}
     if row.update then lines[#lines + 1] = {label = "Newer", value = row.update .. " is shared with this bee"} end
+    for _, item in ipairs(state.governed.available) do
+        if governed.available_key(item) == row.available_key and item.author and not row.source:find("made by", 1, true) then
+            lines[#lines + 1] = {label = "Made by", value = item.author}
+        end
+    end
     local plan = governed.selected(state.governed)
     if row.available_key then
         for _, item in ipairs(state.governed.available) do

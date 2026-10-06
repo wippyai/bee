@@ -88,6 +88,8 @@ local function staged(source_workspace: string, release: string, ready: boolean,
     return state
 end
 
+type frame_button = {kind: string, enabled: boolean, primary: boolean?}
+
 local function kinds(hits: {{kind: string}}): {[string]: boolean}
     local found: {[string]: boolean} = {}
     for _, hit in ipairs(hits) do found[hit.kind] = true end
@@ -256,6 +258,65 @@ local function define_tests()
             for _, button in ipairs(view.actions(state, model.selected_row(state))) do
                 if button.kind == "prepare" or button.kind == "select" then test.is_false(button.enabled) end
             end
+        end)
+
+        test.it("opens an installed application where it can and removes it only with an earlier version", function()
+            local state = fresh()
+            local current = {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i2", overlay_owner = "owner-notes",
+                source_node = NODE, source_workspace = "notes", version = "1.0.1", revision = 3, phase = "settled",
+                outcome = "applied", observed_intent_id = "i2", observed_outcome = "applied", application = "app.notes:main",
+                baseline_intent_id = "i1"}
+            local earlier = {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i1", overlay_owner = "owner-notes",
+                source_node = NODE, source_workspace = "notes", version = "1.0.0", revision = 3, phase = "settled",
+                outcome = "applied", observed_intent_id = "i2", observed_outcome = "applied"}
+            test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {current, earlier}})))
+            local function buttons(): {[string]: frame_button}
+                local found: {[string]: frame_button} = {}
+                for _, button in ipairs(view.actions(state, model.selected_row(state))) do found[button.kind] = button end
+                return found
+            end
+            test.is_false(buttons().launch.enabled)
+            state.can_open = true
+            local ready = buttons()
+            test.is_true(ready.launch.enabled and ready.launch.primary == true)
+            test.is_true(ready.remove.enabled)
+            test.is_true(ready.open.enabled)
+            test.is_true(kinds(view.draw(100, 24, appearance.defaults(), state, ui()).hits).launch)
+            local first = {}
+            for key, value in pairs(current) do first[key] = value end
+            first.baseline_intent_id = nil
+            test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {first, earlier}})))
+            test.is_false(buttons().remove.enabled)
+        end)
+
+        test.it("asks before removing, names what goes and what stays, and takes every click", function()
+            local state = fresh()
+            local current = {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i2", overlay_owner = "owner-notes",
+                source_node = NODE, source_workspace = "notes", version = "1.0.1", revision = 3, phase = "settled",
+                outcome = "applied", observed_intent_id = "i2", observed_outcome = "applied", baseline_intent_id = "i1"}
+            local earlier = {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i1", overlay_owner = "owner-notes",
+                source_node = NODE, source_workspace = "notes", version = "1.0.0", revision = 3, phase = "settled",
+                outcome = "applied", observed_intent_id = "i2", observed_outcome = "applied"}
+            test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {current, earlier}})))
+            test.is_true(model.ask_remove(state, model.selected_row(state)))
+            for _, size in ipairs({{100, 24}, {60, 16}, {30, 12}}) do
+                local drawn = view.draw(size[1], size[2], appearance.defaults(), state, ui())
+                test.eq(#drawn.rows, size[2])
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), size[1]) end
+                for _, hit in ipairs(drawn.hits) do
+                    test.is_true(hit.kind == "confirm_remove" or hit.kind == "cancel_remove")
+                    test.is_true(hit.x + hit.width - 1 <= size[1] and hit.y + hit.height - 1 <= size[2])
+                end
+            end
+            local drawn = view.draw(100, 24, appearance.defaults(), state, ui())
+            local text = table.concat(plain(drawn.rows), "\n")
+            test.is_true(text:find("Remove Notes 1.0.1?", 1, true) ~= nil)
+            test.is_true(text:find("goes back to 1.0.0", 1, true) ~= nil)
+            test.is_true(text:find("saved stays", 1, true) ~= nil)
+            local found = kinds(drawn.hits)
+            test.is_true(found.confirm_remove and found.cancel_remove)
+            model.cancel_remove(state)
+            test.is_false(kinds(view.draw(100, 24, appearance.defaults(), state, ui()).hits).confirm_remove == true)
         end)
 
         test.it("keeps the list title whole when an installed name is long and marks the selected one", function()

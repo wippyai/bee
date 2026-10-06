@@ -127,27 +127,64 @@ local function define_tests()
             test.eq(history[1].note, "could not be installed")
         end)
 
-        test.it("lists Hub packages with their Hub update and what is built in", function()
+        test.it("lists what the person uses and folds Bee's platform into one row", function()
             local state = fresh()
             hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "bee/bee", version = "0.1.0-dev", source = "hub", direct = true, used_by = {}},
+                {component = "wippy/bootloader", version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}},
+                {component = "wippy/terminal", version = "1.0.0", source = "hub", direct = false, used_by = {"wippy/bootloader", "bee/bee"}},
                 {component = "bee/terminal", version = "0.4.6", source = "builtin", direct = true, used_by = {}},
                 {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}},
                 {component = "userspace/lib", version = "1.0.0", source = "hub", direct = false, used_by = {"userspace/calc"}},
+                {component = "userspace/shared", version = "1.0.0", source = "hub", direct = false, used_by = {"userspace/calc", "bee/bee"}},
             }, roots = {}}))
             hub.apply_updates(state.hub, hub_reply({modules = {
                 {component = "userspace/calc", installed_version = "1.0.0", available_version = "1.2.0", update_available = true}},
                 bee_update = {installed_version = "1.0.0", available_version = "1.0.0", update_available = false,
                     needs_new_binary = false, reason = ""}, catalog_error = ""}))
             local rows = model.rows(state, "installed")
-            test.eq(#rows, 3)
-            local by_name: {[string]: model.Row} = {}
-            for _, row in ipairs(rows) do by_name[row.name] = row end
-            test.eq(by_name["userspace/calc"].status, "Update available")
-            test.eq(by_name["userspace/calc"].update, "1.2.0")
-            test.eq(by_name["userspace/calc"].source, "from Hub")
-            test.eq(by_name["bee/terminal"].source, "built in")
-            test.eq(by_name["userspace/lib"].note, "needed by userspace/calc")
-            test.eq(rows[3].name, "userspace/lib")
+            test.eq(#rows, 2)
+            test.eq(rows[1].name, "userspace/calc")
+            test.eq(rows[1].kind, "package")
+            test.eq(rows[1].status, "Update available")
+            test.eq(rows[1].update, "1.2.0")
+            test.eq(rows[1].source, "from Hub")
+            test.is_true(model.can_remove_package(rows[1]))
+            test.eq(rows[2].kind, "platform")
+            test.eq(rows[2].name, "Bee")
+            test.eq(rows[2].version, "0.1.0-dev")
+            test.eq(rows[2].source, "built in · 4 packages")
+            test.is_false(model.can_remove_package(rows[2]))
+            local names: {string} = {}
+            for _, row in ipairs(model.platform(state)) do names[#names + 1] = row.name end
+            test.eq(table.concat(names, ","), "bee/bee,bee/terminal,wippy/bootloader,wippy/terminal")
+        end)
+
+        test.it("names an application by its title and a package by its Hub title once the catalog is known", function()
+            local state = fresh()
+            local current = activation("i1", "notes_app", "1.0.0", "settled", "applied", "i1")
+            current.title = "Notes"
+            load(state, {}, {current})
+            hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}}}, roots = {}}))
+            test.eq(model.rows(state, "installed")[1].name, "Notes")
+            test.eq(model.rows(state, "installed")[2].name, "userspace/calc")
+            hub.apply_catalog(state.hub, hub_reply({total = 1, items = {
+                {component = "userspace/calc", title = "Calculator", description = "App", latest_version = "1.0.0"}}}))
+            test.eq(model.rows(state, "installed")[2].name, "Calculator")
+        end)
+
+        test.it("marks a driver and keeps a package other things need out of removal", function()
+            local state = fresh()
+            local driver = activation("i1", "driver_stub", "1.0.0", "settled", "applied", "i1")
+            driver.overlay_owner = "bee.gov.drivers:workspace-destination.stub"
+            load(state, {}, {driver})
+            hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "userspace/editor", version = "1.0.0", source = "hub", direct = true, used_by = {"userspace/suite"}}}, roots = {}}))
+            local rows = model.rows(state, "installed")
+            test.eq(rows[1].kind, "driver")
+            test.eq(rows[2].component, "userspace/editor")
+            test.is_false(model.can_remove_package(rows[2]))
         end)
 
         test.it("does not offer an update of Bee that needs a newer binary", function()
@@ -161,7 +198,7 @@ local function define_tests()
             test.eq(model.rows(state, "installed")[1].status, "Installed")
         end)
 
-        test.it("shares the Hub packages that are not installed, applications first", function()
+        test.it("shares the hive's versions first and keeps the Hub catalog collapsed until it is opened", function()
             local state = fresh()
             hub.apply_installed(state.hub, hub_reply({modules = {
                 {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}}}, roots = {}}))
@@ -170,14 +207,35 @@ local function define_tests()
                 {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
                 {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
             }}))
+            load(state, {version("tally", "1.0.0", "node-laptop")}, {})
             local rows = model.rows(state, "shared")
-            test.eq(#rows, 1)
-            test.eq(rows[1].name, "Editor")
-            test.eq(rows[1].component, "userspace/editor")
-            test.eq(rows[1].source, "from Hub")
-            test.eq(rows[1].status, "Shared")
+            test.eq(#rows, 2)
+            test.eq(rows[1].name, "Tally")
+            test.eq(rows[2].kind, "section")
+            test.eq(rows[2].name, "Hub catalog")
+            test.is_true(rows[2].source:find("packages", 1, true) ~= nil)
+            test.is_false(model.summary(state):find("2 shared", 1, true) ~= nil)
+            state.hub_open = true
+            rows = model.rows(state, "shared")
+            test.eq(#rows, 2)
+            test.eq(rows[2].name, "Editor")
+            test.eq(rows[2].component, "userspace/editor")
+            test.eq(rows[2].source, "from Hub")
+            test.eq(rows[2].status, "Shared")
             hub.set_developer_packages(state.hub, true)
-            test.eq(#model.rows(state, "shared"), 2)
+            test.eq(#model.rows(state, "shared"), 3)
+        end)
+
+        test.it("picks a status glyph and a kind glyph from the one glyph set", function()
+            test.eq(model.status_glyph("Installed"), "✓")
+            test.eq(model.status_glyph("Update available"), "↑")
+            test.eq(model.status_glyph("Waiting for your approval"), "◷")
+            test.eq(model.status_glyph("Installing"), "⇣")
+            test.eq(model.status_glyph("Removed"), "✗")
+            test.eq(model.status_glyph("Shared"), "⬡")
+            test.eq(model.kind_glyph("app"), "▣")
+            test.eq(model.kind_glyph("driver"), "⌁")
+            test.eq(model.kind_glyph("package"), "◫")
         end)
 
         test.it("records installs, removals and unfinished work in History", function()
@@ -304,7 +362,7 @@ local function define_tests()
             local row = assert(model.selected_row(state))
             local lines = model.version_lines(state, row)
             test.eq(lines[1].label, "Status")
-            test.eq(lines[1].value, "Shared")
+            test.eq(lines[1].value, "⬡ Shared")
             test.eq(lines[2].value, "from bee node-laptop")
             for _, line in ipairs(lines) do
                 for _, word in ipairs({"overlay", "staged", "plan", "preflight", "activation", "destination", "artifact", "digest", "descriptor", "receipt"}) do

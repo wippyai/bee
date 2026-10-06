@@ -248,8 +248,10 @@ local function define_tests()
         test.it("names the application an artifact runs by its declared bee.app entry", function()
             local exact = assert(artifact.create({
                 {id = "app.notes:helper", kind = "library.lua", data = {source = "return {}"}},
-                {id = "app.notes:main", kind = "process.lua", meta = {type = "bee.app"}, data = {source = "return {}", method = "main"}}}))
-            test.eq(service.application_of(exact.bytes, exact.digest), "app.notes:main")
+                {id = "app.notes:main", kind = "process.lua", meta = {type = "bee.app", application = {title = "Notes"}}, data = {source = "return {}", method = "main"}}}))
+            local id, title = service.application_of(exact.bytes, exact.digest)
+            test.eq(id, "app.notes:main")
+            test.eq(title, "Notes")
             local plain = assert(artifact.create({{id = "app.notes:helper", kind = "library.lua", data = {source = "return {}"}}}))
             test.is_nil(service.application_of(plain.bytes, plain.digest))
             test.is_nil(service.application_of("not bytes", exact.digest))

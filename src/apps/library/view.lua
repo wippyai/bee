@@ -2,6 +2,7 @@
 -- table each, a version screen for what other bees and agents shared, and the
 -- Hub package screens. Technical words appear only in the details view.
 local appearance = require("appearance")
+local glyphs = require("glyphs")
 local frame = require("frame")
 local model = require("model")
 local governed = require("governed")
@@ -50,10 +51,14 @@ type Button = frame.Button
 -- The Hub filters of the Shared tab: search text, keyword and whether
 -- developer packages show.
 local function filters(state: model.State): {Button}
-    return {{kind = "search", key = "/", label = "Search packages…", enabled = true},
-        {kind = "keyword", key = "K", label = "Keyword " .. (state.hub.keyword == "" and "all" or state.hub.keyword), enabled = true},
-        {kind = "developer_packages", label = state.hub.developer_packages and "Developer packages [x]" or "Developer packages",
-            enabled = true, active = state.hub.developer_packages}}
+    local found: {Button} = {{kind = "hub_catalog", key = "H", label = glyphs.package .. " Hub catalog", enabled = true, active = state.hub_open}}
+    if state.hub_open then
+        found[#found + 1] = {kind = "search", key = "/", label = "Search packages…", enabled = true}
+        found[#found + 1] = {kind = "keyword", key = "K", label = "Keyword " .. (state.hub.keyword == "" and "all" or state.hub.keyword), enabled = true}
+        found[#found + 1] = {kind = "developer_packages", label = state.hub.developer_packages and "Developer packages [x]" or "Developer packages",
+            enabled = true, active = state.hub.developer_packages}
+    end
+    return found
 end
 
 -- The buttons for the chosen row: its primary move first, then the rest.
@@ -95,18 +100,24 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         local own = row ~= nil and row.origin == "governed"
         local launchable = own and row ~= nil and row.application ~= nil and state.can_open
         local updating = row ~= nil and row.status == model.STATUS_UPDATE
-        if own then
+        if row ~= nil and row.kind == "platform" then
+            buttons[#buttons + 1] = {kind = "platform", key = "Enter", label = "Packages", enabled = true, primary = not updating}
+        elseif own then
             buttons[#buttons + 1] = {kind = "launch", key = "Enter", label = "Open", enabled = launchable, primary = launchable and not updating}
             buttons[#buttons + 1] = {kind = "open", key = "D", label = "Details", enabled = true, primary = not launchable and not updating}
             buttons[#buttons + 1] = {kind = "go_back", key = "B", label = "Go back", enabled = model.can_go_back(row)}
             buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = model.can_remove(row)}
         else
             buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Details", enabled = row ~= nil, primary = not updating}
-            buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = row ~= nil and row.origin == "hub"}
+            buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = model.can_remove_package(row)}
         end
     elseif tab == "shared" then
-        buttons[#buttons + 1] = {kind = "install", key = "Enter", label = "Install", enabled = row ~= nil, primary = true}
-        buttons[#buttons + 1] = {kind = "open", key = "O", label = "Open", enabled = row ~= nil}
+        if row ~= nil and row.kind == "section" then
+            buttons[#buttons + 1] = {kind = "hub_catalog", key = "Enter", label = "Browse", enabled = true, primary = true}
+        else
+            buttons[#buttons + 1] = {kind = "install", key = "Enter", label = "Install", enabled = row ~= nil, primary = true}
+            buttons[#buttons + 1] = {kind = "open", key = "O", label = "Open", enabled = row ~= nil}
+        end
     else
         local operation: hub.Operation? = nil
         for _, candidate in ipairs(state.hub.operations) do
@@ -156,14 +167,14 @@ end
 -- The row's cells: name, version, status with the newer version it offers,
 -- and where it came from.
 local function cells(row: model.Row): {string}
-    local status = row.status .. (row.update and (" " .. row.update) or "")
+    local status = row.kind == "section" and "" or (model.status_glyph(row.status) .. " " .. row.status .. (row.update and (" " .. row.update) or ""))
     local source = row.source
     if row.note ~= "" then source = source .. " · " .. row.note end
-    return {row.name, row.version, status, source}
+    return {model.kind_glyph(row.kind) .. " " .. row.name, row.version, status, source}
 end
 
 local COLUMNS: {frame.Column} = {{title = "Name", width = 0}, {title = "Version", width = 10},
-    {title = "Status", width = 26}, {title = "Source", width = 34}}
+    {title = "Status", width = 28}, {title = "Source", width = 34}}
 
 local function empty_title(state: model.State): (string, string)
     local tab = state.tab
@@ -224,6 +235,35 @@ local function draw_list(width: integer, height: integer, preferences: appearanc
         state.governed.technical and TECHNICAL_HINTS or nil)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter),
         capacity = window.capacity, offset = window.offset, operation_detail_offset = detail_offset}
+end
+
+-- draw_platform lists the packages the one Bee row stands for.
+local function draw_platform(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, ui: Ui): Frame
+    local painter = frame.new(width, height, preferences)
+    local rows = model.platform(state)
+    local chosen = model.selected_row(state)
+    frame.header(painter, "LIBRARY  BEE", tostring(#rows) .. " packages · built in")
+    if height >= 6 then frame.tabs(painter, 2, TABS, "tab_" .. state.tab) end
+    local selected_index = 0
+    local table_cells: {{string}} = {}
+    local keys: {string} = {}
+    for index, row in ipairs(rows) do
+        table_cells[index] = {glyphs.package .. " " .. row.name, row.version, row.source}
+        keys[index] = row.key
+        if chosen and row.key == chosen.key then selected_index = index end
+    end
+    local window = {offset = 0, capacity = 0}
+    if #rows > 0 and height >= 6 then
+        window = frame.table(painter, 4, height - 2, {columns = {{title = "Package", width = 0}, {title = "Version", width = 10},
+            {title = "Part of", width = 12}}, cells = table_cells, keys = keys, kind = "row", selected = selected_index, offset = ui.offset})
+    end
+    if height >= 4 then
+        frame.actions(painter, height - 1, {{kind = "open", key = "Enter", label = "Details", enabled = chosen ~= nil, primary = true},
+            {kind = "back", key = "Esc", label = "Back", enabled = true}})
+    end
+    frame.footer(painter, text.bound(ui.status ~= "" and ui.status or state.notice, 8192), HINTS)
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter),
+        capacity = window.capacity, offset = window.offset, operation_detail_offset = 0}
 end
 
 local function draw_version(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, ui: Ui): Frame
@@ -304,6 +344,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         base = hub_view.draw(width, height, preferences, state.hub, ui.offset, ui.editor and "" or ui.status, ui.reading, nil, ui.content,
             {tabs = TABS, active = "tab_" .. state.tab, technical = state.governed.technical})
     elseif screen == "version" then base = draw_version(width, height, preferences, state, ui)
+    elseif screen == "platform" then base = draw_platform(width, height, preferences, state, ui)
     else base = draw_list(width, height, preferences, state, ui) end
     local editor = ui.editor
     if editor then return hub_view.overlay(base, width, height, preferences, ui.status, editor) end

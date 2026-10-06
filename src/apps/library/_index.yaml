@@ -31,6 +31,8 @@ entries:
   imports:
     governed: bee.apps.library:governed
     hub: bee.apps.library:hub
+    drivers: bee.gov.types:drivers
+    glyphs: bee.ui:glyphs
 - name: hub_view
   kind: library.lua
   source: file://hub_view.lua
@@ -53,6 +55,7 @@ entries:
     hub: bee.apps.library:hub
     hub_view: bee.apps.library:hub_view
     contents: bee.apps.library:contents
+    glyphs: bee.ui:glyphs
     text: bee.ui:text
 - name: destination_client
   kind: security.policy

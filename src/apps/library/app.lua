@@ -667,7 +667,11 @@ local function main(options: unknown)
 
     -- The row a click or key acts on, activated by its origin.
     local function open_row(row: model.Row)
-        if row.origin == "hub" then
+        if row.kind == "platform" then
+            model.show_platform(state, true); ui.offset = 0; changed()
+        elseif row.kind == "section" then
+            state.hub_open = not state.hub_open; changed()
+        elseif row.origin == "hub" then
             if row.component then choose(row.component) end
         else
             perform(function() open_version_now(row) end)
@@ -731,10 +735,15 @@ local function main(options: unknown)
         elseif kind == "install" and row then install_row(row)
         elseif kind == "open" and row then open_row(row)
         elseif kind == "update" and row then update_row(row)
-        elseif kind == "remove" and row and row.component and row.origin == "hub" then remove_package(row.component)
+        elseif kind == "remove" and row and row.component and model.can_remove_package(row) then remove_package(row.component)
         elseif kind == "remove" and row and row.origin == "governed" then ask_remove(row, "remove")
         elseif kind == "go_back" and row then ask_remove(row, "back")
         elseif kind == "launch" and row then launch_row(row)
+        elseif kind == "hub_catalog" then
+            state.hub_open = not state.hub_open
+            changed()
+        elseif kind == "platform" then
+            model.show_platform(state, true); ui.offset = 0; changed()
         elseif kind == "search" then begin_editor("query")
         elseif kind == "keyword" then begin_editor("keyword")
         elseif kind == "developer_packages" then hub.toggle_developer_packages(hubs); changed()
@@ -859,6 +868,22 @@ local function main(options: unknown)
             end
         end
     end
+    local function platform_hit(kind: string, key: string)
+        ui.status = ""
+        local row = model.selected_row(state)
+        if kind == "row" then
+            local was = row and row.key == key
+            model.select(state, key)
+            row = model.selected_row(state)
+            if was and row then open_row(row) end
+            changed()
+        elseif kind == "open" and row then open_row(row)
+        elseif kind == "back" then model.show_platform(state, false); ui.offset = 0; changed()
+        else
+            local tab = view.tab_of(kind)
+            if tab then show_tab(tab) end
+        end
+    end
     local function handle_hit(kind: string, key: string)
         local screen = view.screen(state)
         local removal = state.removal
@@ -870,6 +895,7 @@ local function main(options: unknown)
         elseif ui.editor then package_hit(kind, key)
         elseif screen == "package" then package_hit(kind, key)
         elseif screen == "version" then version_hit(kind)
+        elseif screen == "platform" then platform_hit(kind, key)
         else list_hit(kind, key) end
     end
     local function direction(data: {[string]: unknown}): integer
@@ -1021,6 +1047,12 @@ local function main(options: unknown)
                                 elseif letter == "i" then version_hit("status")
                                 elseif letter == "g" then version_hit("recover")
                                 elseif key == "esc" or key == "escape" then version_hit("back") end
+                            elseif screen == "platform" then
+                                ui.status = ""
+                                if key == "up" or letter == "k" then move_selection(-1)
+                                elseif key == "down" or letter == "j" then move_selection(1)
+                                elseif key == "enter" then platform_hit("open", "")
+                                elseif key == "esc" or key == "escape" then platform_hit("back", "") end
                             else
                                 ui.status = ""
                                 local row = model.selected_row(state)
@@ -1044,9 +1076,10 @@ local function main(options: unknown)
                                 elseif (letter == "o" or letter == "d") and row then open_row(row)
                                 elseif letter == "u" then if row then update_row(row) end
                                 elseif letter == "x" and row and state.tab == "installed" then
-                                    if row.origin == "hub" and row.component then remove_package(row.component) else ask_remove(row, "remove") end
+                                    if model.can_remove_package(row) and row.component then remove_package(row.component) elseif row.origin == "governed" then ask_remove(row, "remove") end
                                 elseif letter == "b" and row and state.tab == "installed" then ask_remove(row, "back")
                                 elseif letter == "g" and state.tab == "history" then list_hit("recover", "")
+                                elseif letter == "h" and state.tab == "shared" then list_hit("hub_catalog", "")
                                 elseif letter == "/" then begin_editor("query")
                                 elseif letter == "t" then model.toggle_technical(state); changed()
                                 elseif letter == "r" or letter == "f" then load_tab()
@@ -1066,6 +1099,7 @@ local function main(options: unknown)
                                 elseif phase == "details" and hubs.requirements_open then hub.select_requirement(hubs, hubs.selected_requirement + delta); changed()
                                 elseif phase == "details" then version_relative(delta) end
                             elseif screen == "version" then ui.offset = math.floor(math.max(0, ui.offset + delta * 3)); changed()
+                            elseif screen == "platform" then move_selection(delta)
                             else move_selection(delta) end
                         end
                     end

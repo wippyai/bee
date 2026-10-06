@@ -102,6 +102,32 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
   screen: `Live · 1s · 42 processes`. It is muted and truncated before the
   title.
 
+## 5a. Glyphs
+
+Beside a name or a state word an application may draw one small glyph from
+`bee.ui:glyphs`, the single set Bee defines:
+
+| Glyph | Name | Means |
+|---|---|---|
+| ▣ | `app` | an application |
+| ⌁ | `driver` | an agent driver |
+| ◫ | `package` | a package, and Bee's platform |
+| ⬡ | `hive` | shared by a bee of the hive |
+| ◆ | `capability` | one thing an install lets an app do |
+| ✓ | `installed` | installed, approved |
+| ↑ | `update` | an update is available |
+| ◷ | `waiting` | waiting for the person |
+| ⇣ | `installing` | on its way |
+| ✗ | `removed` | removed, denied |
+| ⚠ | `warning` | needs attention |
+
+Rules: draw a glyph in the text role of its row, never in a color of its own
+and never as an emoji (no emoji-presentation code points, no variation
+selectors); a glyph never replaces its word, it precedes it (`✓ Installed`);
+every glyph is one cell wide in `tty.text.width`, which `tests/lua/ui/glyphs_test.lua`
+checks; an application adds a glyph to the set in `bee.ui:glyphs` and nowhere
+else. The toolkit has no no-Unicode mode, so there is no ASCII fallback.
+
 ## 6. Color roles
 
 Use `bee.ui:appearance` roles; never write a hex value in an

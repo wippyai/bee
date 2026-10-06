@@ -154,7 +154,7 @@ local function define_tests()
             local state = staged("tally", "2.0.0", true)
             local rendered = table.concat(plain(view.draw(100, 24, appearance.defaults(), state, ui()).rows), "\n")
             test.is_true(rendered:find("LIBRARY  TALLY", 1, true) ~= nil)
-            test.is_true(rendered:find("Status   Shared", 1, true) ~= nil)
+            test.is_true(rendered:find("Status   ⬡ Shared", 1, true) ~= nil)
             test.is_true(rendered:find("Source   from bee node-laptop", 1, true) ~= nil)
             test.is_true(rendered:find("Checks   Passed", 1, true) ~= nil)
             for _, word in ipairs({"overlay", "staged", "preflight", "activation", "destination", "artifact", "digest", "descriptor", "receipt"}) do
@@ -325,6 +325,85 @@ local function define_tests()
             test.is_false(kinds(view.draw(100, 24, appearance.defaults(), state, ui()).hits).confirm_remove == true)
         end)
 
+        test.it("draws each row's kind and status as glyphs and the platform as one row", function()
+            local state = fresh()
+            local notes = {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i2", overlay_owner = "owner-notes",
+                source_node = NODE, source_workspace = "notes", version = "1.0.1", revision = 3, phase = "settled",
+                outcome = "applied", observed_intent_id = "i2", observed_outcome = "applied", title = "Notes"}
+            local stub = {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i3", overlay_owner = "bee.gov.drivers:w.stub",
+                source_node = NODE, source_workspace = "driver_stub", version = "0.2.0", revision = 1, phase = "approval_bound"}
+            test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {notes, stub}})))
+            local modules: {{[string]: unknown}} = {{component = "bee/bee", version = "0.1.0-dev", source = "hub", direct = true, used_by = {}}}
+            for _, name in ipairs({"bootloader", "migration", "security", "terminal", "test"}) do
+                modules[#modules + 1] = {component = "wippy/" .. name, version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}}
+            end
+            hub.apply_installed(state.hub, hub_reply({modules = modules, roots = {}}))
+            local text = table.concat(plain(view.draw(120, 36, appearance.defaults(), state, ui()).rows), "\n")
+            test.is_true(text:find("▣ Notes", 1, true) ~= nil, text)
+            test.is_true(text:find("✓ Installed", 1, true) ~= nil)
+            test.is_true(text:find("⌁ Driver stub", 1, true) ~= nil)
+            test.is_true(text:find("◷ Waiting for your approval", 1, true) ~= nil)
+            test.is_true(text:find("◫ Bee", 1, true) ~= nil)
+            test.is_true(text:find("0.1.0-dev", 1, true) ~= nil)
+            test.is_true(text:find("built in · 6 packages", 1, true) ~= nil)
+            for _, word in ipairs({"wippy/bootloader", "wippy/migration", "wippy/security", "wippy/terminal", "wippy/test", "needed by"}) do
+                test.is_true(text:find(word, 1, true) == nil, word)
+            end
+            test.is_true(model.rows(state, "installed")[3].kind == "platform")
+            for _, line in ipairs(plain(view.draw(120, 36, appearance.defaults(), state, ui()).rows)) do
+                test.is_true(tty.text.width(line) == 120)
+            end
+        end)
+
+        test.it("opens the platform on its own screen and never offers to remove it", function()
+            local state = fresh()
+            hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "bee/bee", version = "0.1.0-dev", source = "hub", direct = true, used_by = {}},
+                {component = "wippy/bootloader", version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}},
+                {component = "userspace/editor", version = "1.0.0", source = "hub", direct = true, used_by = {"userspace/suite"}},
+                {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}}}, roots = {}}))
+            local function remove_enabled(): boolean
+                for _, button in ipairs(view.actions(state, model.selected_row(state))) do
+                    if button.kind == "remove" and button.enabled then return true end
+                end
+                return false
+            end
+            local rows = model.rows(state, "installed")
+            model.select(state, rows[1].key)
+            test.is_true(remove_enabled())
+            model.select(state, rows[2].key)
+            test.is_false(remove_enabled())
+            model.select(state, rows[3].key)
+            test.eq(rows[3].kind, "platform")
+            test.is_false(remove_enabled())
+            local primary = view.actions(state, model.selected_row(state))[1]
+            test.eq(primary.kind, "platform")
+            model.show_platform(state, true)
+            test.eq(view.screen(state), "platform")
+            local screen = table.concat(plain(view.draw(120, 36, appearance.defaults(), state, ui()).rows), "\n")
+            test.is_true(screen:find("LIBRARY  BEE", 1, true) ~= nil)
+            test.is_true(screen:find("◫ wippy/bootloader", 1, true) ~= nil)
+            test.is_true(screen:find("◫ bee/bee", 1, true) ~= nil)
+            test.is_true(screen:find("userspace/calc", 1, true) == nil)
+            model.show_platform(state, false)
+            test.eq(view.screen(state), "list")
+        end)
+
+        test.it("collapses the Hub catalog into one row with a Browse action", function()
+            local state = fresh()
+            hub.apply_catalog(state.hub, hub_reply({total = 45, items = {
+                {component = "kickside/core", title = "Kickside Core", description = "x", latest_version = "0.1.126"}}}))
+            model.show_tab(state, "shared")
+            local rows = model.rows(state, "shared")
+            test.eq(#rows, 1)
+            test.eq(rows[1].kind, "section")
+            local primary = view.actions(state, rows[1])[1]
+            test.eq(primary.kind, "hub_catalog")
+            local text = table.concat(plain(view.draw(100, 24, appearance.defaults(), state, ui()).rows), "\n")
+            test.is_true(text:find("45 packages", 1, true) ~= nil)
+            test.is_true(text:find("Kickside Core", 1, true) == nil)
+        end)
+
         test.it("keeps the list title whole when an installed name is long and marks the selected one", function()
             local state = fresh()
             local long = "acme/" .. string.rep("very-long-package-name-", 4)
@@ -358,8 +437,8 @@ local function define_tests()
             local state = fresh()
             local modules: {{[string]: unknown}} = {}
             for index = 1, 20 do
-                modules[index] = {component = "bee/package" .. tostring(index), version = "1.0.0", source = "hub", direct = index == 1,
-                    used_by = index == 1 and {} or {"bee/package1"}}
+                modules[index] = {component = "bee/package" .. tostring(index), version = "1.0.0", source = "hub", direct = true,
+                    used_by = {}}
             end
             hub.apply_installed(state.hub, hub_reply({modules = modules, roots = {}}))
             model.select(state, "h:bee/package20")
@@ -371,9 +450,6 @@ local function define_tests()
                     test.is_true(hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= 18)
                 end
                 test.is_true(found)
-                if width >= 80 then
-                    test.is_true(table.concat(frame.rows, "\n"):find("needed by bee/package1", 1, true) ~= nil)
-                end
             end
         end)
 
@@ -396,10 +472,17 @@ local function define_tests()
                 local installed = view.draw(w, h, appearance.defaults(), state, ui())
                 test.eq(#installed.rows, h)
                 local installed_text = table.concat(plain(installed.rows), "\n")
-                test.is_true(installed_text:find("bee/terminal", 1, true) ~= nil)
-                test.is_true(installed_text:find("built in", 1, true) ~= nil)
-                test.is_true(installed_text:find("from Hub", 1, true) ~= nil)
+                test.is_true(installed_text:find("◫ Bee", 1, true) ~= nil, installed_text)
+                test.is_true(installed_text:find("built in · 1 package", 1, true) ~= nil, installed_text)
+                test.is_true(installed_text:find("Calculator", 1, true) ~= nil, installed_text)
+                test.is_true(installed_text:find("from Hub", 1, true) ~= nil, installed_text)
+                test.is_true(installed_text:find("bee/terminal", 1, true) == nil, installed_text)
                 model.show_tab(state, "shared")
+                state.hub_open = false
+                local collapsed = table.concat(plain(view.draw(w, h, appearance.defaults(), state, ui()).rows), "\n")
+                test.is_true(collapsed:find("Hub catalog", 1, true) ~= nil)
+                test.is_true(collapsed:find("Editor", 1, true) == nil)
+                state.hub_open = true
                 local shared = view.draw(w, h, appearance.defaults(), state, ui())
                 test.eq(#shared.rows, h)
                 for _, row in ipairs(shared.rows) do test.eq(tty.text.width(row), w) end
@@ -409,7 +492,7 @@ local function define_tests()
                 test.is_true(text:find("Test Framework", 1, true) == nil)
                 test.is_true(text:find("Developer packages", 1, true) ~= nil, "missing Developer packages in " .. tostring(w))
                 local found = kinds(shared.hits)
-                test.is_true(found.developer_packages and found.install)
+                test.is_true(found.developer_packages and found.install and found.hub_catalog)
                 for _, hit in ipairs(shared.hits) do
                     test.is_true(hit.x >= 1 and hit.y >= 1 and hit.x + hit.width - 1 <= w and hit.y + hit.height - 1 <= h)
                 end
@@ -421,6 +504,7 @@ local function define_tests()
             hub.apply_catalog(only_libraries.hub, hub_reply({total = 1, items = {
                 {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false}}}))
             model.show_tab(only_libraries, "shared")
+            only_libraries.hub_open = true
             for _, dims in ipairs({{120, 36}, {80, 24}}) do
                 local text = table.concat(plain(view.draw(dims[1], dims[2], appearance.defaults(), only_libraries, ui()).rows), "\n")
                 test.is_true(text:find("Only developer packages are shared", 1, true) ~= nil)
@@ -437,6 +521,7 @@ local function define_tests()
                 {component = "wippy/test", title = "Test Framework", description = "Testing library", latest_version = "1.0.0"},
             }}))
             model.show_tab(state, "shared")
+            state.hub_open = true
             for _, dimensions in ipairs({{120, 36}, {80, 24}}) do
                 local rendered = table.concat(view.draw(dimensions[1], dimensions[2], appearance.defaults(), state, ui()).rows, "\n")
                 test.is_true(rendered:find("wippy/arbitrary", 1, true) ~= nil or rendered:find("Library", 1, true) ~= nil)

@@ -784,10 +784,19 @@ end
 
 -- The bee.app definition an activation's artifact declares, which is what a
 -- person opens to use the installed application.
-function M.application_of(bytes: unknown, digest: unknown): string?
+function M.application_of(bytes: unknown, digest: unknown): (string?, string?)
     local entries = artifact.decode(bytes, digest)
-    if not entries then return nil end
-    return (workspace_applications.application(entries))
+    if not entries then return nil, nil end
+    local id = workspace_applications.application(entries)
+    if not id then return nil, nil end
+    for _, raw in ipairs(entries) do
+        local entry = bounds.object(raw)
+        local meta = entry and entry.id == id and bounds.object(entry.meta) or nil
+        local declared = meta and bounds.object(meta.application)
+        local title = declared and bounds.line(declared.title, 80)
+        if title then return id, title end
+    end
+    return id, nil
 end
 
 -- Each applied activation says which application it runs; one that cannot be
@@ -801,7 +810,7 @@ local function annotate(store: activations.Store, listing: Result): Result
         if row and row.intent_id ~= nil and row.intent_id == row.observed_intent_id then
             local read = activations.get(store, row.intent_id)
             local intent = read.ok and bounds.object(read.value) or nil
-            if intent then row.application = M.application_of(intent.artifact_bytes, intent.artifact_digest) end
+            if intent then row.application, row.title = M.application_of(intent.artifact_bytes, intent.artifact_digest) end
         end
     end
     return listing

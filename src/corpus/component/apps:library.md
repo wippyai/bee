@@ -11,7 +11,13 @@ driver a person can install. Three sources fold into one list per tab:
 The tabs are Installed (what runs here, with Update available when a newer
 version is shared or on the Hub), Shared (what could be installed, from a bee
 or from the Hub) and History (past installs and removals, with the recovery
-action of an interrupted Hub change). A row carries one status: Shared, Waiting
+action of an interrupted Hub change). Installed lists what the person uses (applications and drivers by the title
+they declare, Hub packages the person installed) and Bee's platform as one row
+("Bee 0.1.0-dev, built in, 6 packages", Enter lists them); packages other
+installed things need are never offered for removal. Shared lists what the
+hive made first and keeps the Hub catalog behind one collapsed row, because Hub
+metadata does not say which uninstalled packages Bee can run as applications.
+Rows carry the glyphs of `bee.ui:glyphs`. A row carries one status: Shared, Waiting
 for your approval, Installing, Installed, Update available or Removed, and one
 source: made on this bee, from bee `<node>` or from Hub. Words of the
 machinery (overlay, staged, plan, preflight, activation, destination,

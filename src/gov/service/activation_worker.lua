@@ -1,7 +1,7 @@
 -- MIT. Applies each activation the person approved: approvals wakes this
 -- worker on every decision, and each approved activation goes to its owner,
 -- which consumes the approval and applies the exact intent. A refusal leaves
--- that activation for the person to see in Overlays.
+-- that activation for the person to see in the Library.
 local funcs = require("funcs")
 local bounds = require("bounds")
 local logger = require("logger")

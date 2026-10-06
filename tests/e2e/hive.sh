@@ -55,8 +55,8 @@ expect display "Desktop 1 · beta" "beta's desktop works in beta's folder"
 keys display F1
 expect display "System" "the Start panel opens on beta"
 keys display Down Enter
-expect display "Keyboard help" "the System menu opens with Keyboard help, Modules, Overlays, Process Manager and Settings"
-keys display Down Down Down Down Enter
+expect display "Keyboard help" "the System menu opens with Keyboard help, Library, Process Manager and Settings"
+keys display Down Down Down Enter
 expect display "BEE SETTINGS" "Settings runs on beta in a window here"
 
 keys beta C-c

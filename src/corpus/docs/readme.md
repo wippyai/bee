@@ -23,7 +23,7 @@ checks that they match the files.
 | Hub package inspection and installation | `docs/hub_inspection`, `component/hub` |
 | Node state, sync and the hive | `component/node`, `component/sync`, `component/hive`, `docs/sync_and_inbox` |
 | Shared bounds, canonical JSON and reply decoding | `component/values` |
-| Stock applications and the application menu | `component/apps:help`, `component/apps:modules`, `component/apps:overlays`, `component/apps:processes`, `component/apps:settings`, `component/apps:terminal`, `component/shell` |
+| Stock applications and the application menu | `component/apps:help`, `component/apps:library`, `component/apps:processes`, `component/apps:settings`, `component/apps:terminal`, `component/shell` |
 | Environment and resource entries | `component/env`, `component/resources` |
 | Lua runtime modules (process, channel, registry, sql, fs, http, tty and others) | `runtime/lua/...` |
 

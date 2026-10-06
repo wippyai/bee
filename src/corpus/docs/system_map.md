@@ -37,7 +37,7 @@ Aggregates and caches are projections an owner can rebuild.
 | `app` | `bee.app` | The application SDK: launch values, `client`, arguments, descriptors, interaction; `bee.app.threads` carries thread requests from an app through its broker |
 | `shell` | `bee.shell` | The display: windows, Start menu, taskbar, workspace menu, dialogs |
 | `ui` | `bee.ui` | The application frame, appearance and themes, visualization (`viz`), diagrams, forms and the folder picker |
-| `apps` | `bee.apps.*` | The stock applications: Help, Modules, Overlays, Processes, Settings, Terminal |
+| `apps` | `bee.apps.*` | The stock applications: Help, Library, Processes, Settings, Terminal |
 | `hive` | `bee.hive` | The call protocol between nodes: one supervisor per node routes an operation by its prefix to the node-local service that serves it |
 | `sync` | `bee.sync` | Typed projection feeds and replicas between nodes |
 | `threads` | `bee.threads` | Durable thread records, membership, delivery, notices, action inboxes, carrier checkpoints and the Sessions work journal |

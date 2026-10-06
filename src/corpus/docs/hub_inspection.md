@@ -1,7 +1,7 @@
 # Hub installation and package reads
 
 Bee's Hub component provides scoped package inspection and host-authorized local
-installation. Modules (`bee.apps.modules`) is the corresponding terminal application. Hub inspection
+installation. The Library (`bee.apps.library`) is the corresponding terminal application. Hub inspection
 never grants package capabilities, writes registry history, starts code or
 creates an application overlay.
 
@@ -172,7 +172,7 @@ requires the same measured definitions and host grants. Partial migration or
 rollback results stay in the receipt for review and recovery; no automatic
 retry is scheduled.
 
-Modules presents the same read, plan, review, confirmation and receipt flow.
+The Library presents the same read, plan, review, confirmation and receipt flow.
 Replanning clears the previous measured plan before dispatch, so confirmation
 becomes available only after the fresh plan reply arrives.
 Its package contents browser is read-only and binds resource reads to the
@@ -204,7 +204,7 @@ adds, replaces or removes with their actions and resources, migrations and
 auto-start entries; the plan digest binds all of them. Filing changes nothing
 and returns `request_id` and `status: pending`. A retry for the same plan by the
 same attempt replays the same request. A package whose plan needs requirement
-values is refused with `INCOMPLETE`; the person installs it in Modules.
+values is refused with `INCOMPLETE`; the person installs it in the Library.
 
 `install_status` reports `pending`, `refused` (with `DENIED`, `EXPIRED` or
 `WITHDRAWN`), `approved`, `applied` or `failed` with the Hub code and message.
@@ -271,7 +271,7 @@ See [package boundaries](package_boundaries.md),
 [MCP configuration](mcp_configuration.md).
 
 Package and application discovery uses declared registry metadata and ownership,
-not package names. The Modules catalog classifies installed applications from
+not package names. The Library classifies Hub packages and installed applications from
 `process.lua` entries tagged `meta.type: bee.app` and their registry owner.
 Remote packages without that information remain visible. Update status reads the
 catalog for each exact host-selected component. Authored application publication

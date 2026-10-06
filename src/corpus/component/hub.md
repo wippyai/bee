@@ -11,7 +11,7 @@ and returns `{ok, value?, code?, message?, replayed}`. The host grants
 `bee.hub.read` or `bee.hub.manage` for ordinary package operations. Planning
 also requires installed-catalog read authority. The host deployment root
 `bee/bee` has a separate `bee.hub.self_update` grant, host-selected only for
-the person-operated Modules app; agents and overlays receive no such grant.
+the person-operated Library app; agents and overlays receive no such grant.
 The app presents an exact plan and requires the person to confirm each update. Apply
 uses the same durable receipt and migration path as other Hub root changes. The facade
 validates and authorizes the operation before entering its fixed private scope.
@@ -98,7 +98,7 @@ It is not used to discover installed roots. No SQL or application-state migratio
 is involved. Required host roots and the Hub dependency graph derive protection
 at plan time; refusal identifies the dependent.
 
-Modules can install, update and remove optional Bee components through ordinary
+The Library can install, update and remove optional Bee components through ordinary
 review and confirmation. Unconverted hosts without the host selection refuse Bee
 component management. Required roots and the installer dependency closure refuse
 independent replacement or removal. Dependency constraints and entry collisions
@@ -172,7 +172,7 @@ and an operation receipt to durable registry history. Registry history retains
 the selected pack graph for an owner restart; a newer executable baseline is
 reconciled by the runtime's dependency resolver. Status reads one receipt
 by digest or pages through the caller's operation history with `{page = 1}`.
-Modules opens that history with Operations (O); recovery reviews the stored
+The Library lists that history under History; recovery reviews the stored
 request and digest before a separate confirmation. The worker serializes Bee
 Hub operations, not all registry writers.
 

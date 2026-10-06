@@ -24,7 +24,7 @@ local function define_tests()
                 services = {
                     {id = "bee.threads.service:service", title = "Threads · owner", state = "running", desired = "running", restarts = 0},
                     {id = "bee.approvals.service:worker_service", title = "Approvals · delivery", state = "running", desired = "running", restarts = 1},
-                    {id = "bee.gov.service:recovery_service", title = "Overlays · boot recovery", state = "exited", desired = "running", restarts = 0},
+                    {id = "bee.gov.service:recovery_service", title = "Library · boot recovery", state = "exited", desired = "running", restarts = 0},
                     {id = "bee.sync.service:service", state = "exited", desired = "running", restarts = 3, detail = "sync store unavailable"},
                     {id = "bee:db", state = "running", desired = "running", restarts = 0},
                     {id = "wippy.terminal:host", state = "running", desired = "running", restarts = 0},
@@ -33,7 +33,7 @@ local function define_tests()
             local rows = view.items(listed, true)
             local labels: {string} = {}
             for _, row in ipairs(rows) do labels[#labels + 1] = row.source .. "=" .. row.state end
-            test.eq(table.concat(labels, "|"), "Approvals · delivery=running|bee.sync.service:service=exited|Overlays · boot recovery=done|Threads · owner=running|Runtime=2 running · 1 done")
+            test.eq(table.concat(labels, "|"), "Approvals · delivery=running|bee.sync.service:service=exited|Library · boot recovery=done|Threads · owner=running|Runtime=2 running · 1 done")
             test.eq(rows[#rows].steps, 0)
         end)
         test.it("fits every responsive geometry in both modes and strips hostile text", function()

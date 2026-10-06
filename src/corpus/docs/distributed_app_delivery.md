@@ -34,7 +34,8 @@ not leave that destination.
 
 ## Review and activation
 
-Overlays shows the destination-local plan. It displays the measured artifact,
+The Library shows the destination-local plan: a person-facing version screen,
+and, under Details (T), the measured artifact,
 preflight report and report digest, diagnostics and remedies, pending migrations,
 and entries added, changed or removed against the captured composed base. It
 also shows selection, approval and activation state. A malformed report,
@@ -169,8 +170,9 @@ storage fields, but those are not public authoring vocabulary.
 A session without the separately gated `publish` tool can still deliver: after
 local review, approval and successful apply, the person publishes the locally
 applied version through Governance's publication owner, not a direct registry
-write. The destination sees it in Overlays and reviews, selects, prepares and
-approves its own activation. Content travels; grants and decisions remain
+write. The destination sees it in the Library under Shared, from the bee that
+published it, and Install there reviews, selects and prepares it; the person
+approves its own activation in Needs you. Content travels; grants and decisions remain
 destination-local.
 
 ## Workspace applications
@@ -356,9 +358,9 @@ The opt-in application checkpoint of at most 65,536 bytes remains for small
 resume state. Closing the live view removes its resume record, while the
 database file persists.
 
-A person reviews the staged plan in Overlays (System menu), selects and prepares
-it there, approves the request in Needs you, and lets Overlays step the
-activation owner until it settles; the application then appears in the menus
+A person installs the shared version from the Library (System menu), which
+stages, reviews, selects and prepares it, approves the request in Needs you,
+and follows the version until the activation owner settles it; the application then appears in the menus
 its `menus` field names.
 
 ## Limits

@@ -30,7 +30,7 @@ entries:
     service: bee.gov.binding:destination_service
 - name: recovery_service
   meta:
-    title: Overlays · boot recovery
+    title: Library · boot recovery
   kind: process.service
   process: bee.gov.service:recovery
   host: bee:workers
@@ -58,7 +58,7 @@ entries:
     approval_service: bee.approvals.binding:service
 - name: activation_service
   meta:
-    title: Overlays · activation
+    title: Library · activation
   kind: process.service
   process: bee.gov.service:activation_worker
   host: bee:workers

@@ -86,7 +86,7 @@ An agent authors an application or an agent driver as an overlay, freezes it
 and requests delivery. Bee checks it, and **Needs you** opens on your desktop
 with one approval that names the version and the permissions it adds. Approving
 it installs the overlay into the running node; an application opens on your
-desktop right away. **Overlays** keeps the history and reverts a version.
+desktop right away. **Library** lists every application and driver you can install, whether your agents made it, another bee shared it or it comes from the Hub, and keeps the history of what was installed.
 
 ## Documentation
 

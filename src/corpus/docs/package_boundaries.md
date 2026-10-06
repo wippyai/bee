@@ -22,7 +22,7 @@ and bindings that the host admits under its own policies.
 |---|---|
 | `bee.values`, `bee.app`, `bee.ui` | Shared value contracts, the application SDK (`bee.app:client`) and the terminal UI kit (frame, appearance, text, forms, visualization, diagram, picker) |
 | `bee.node`, `bee.shell`, `bee.process` | The node owner and broker, workspaces and desktops; the desktop shell display; the shared process worker library |
-| `bee.apps` | Stock applications: Terminal, Settings, Modules, Overlays, Process Manager, Keyboard help |
+| `bee.apps` | Stock applications: Terminal, Settings, Library, Process Manager, Keyboard help |
 | `bee.threads`, `bee.threads.sessions` | Thread records, delivery, the carrier contract and managed sessions |
 | `bee.harness`, `bee.driver`, `bee.credentials`, `bee.resources`, `bee.placement`, `bee.executor` | Managed agent launch, drivers, credentials, resource grants, native and Docker placement and external executors |
 | `bee.gateway`, `bee.docs` | The scoped MCP gateway and hooks; the offline documentation tool |

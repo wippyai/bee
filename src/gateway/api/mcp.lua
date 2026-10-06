@@ -124,7 +124,7 @@ local TOOLS: {Tool} = {
             {operation = "read_file", request = {component = "acme/tool", version = "1.2.3",
                 resource = "package", path = "init.lua", offset = 0, limit = 16384}},
         }}},
-    {name = "install_request", description = "Ask the person to install or update one Hub package in this agent's workspace. The host resolves the exact plan (the newest release when version is omitted, an update when the package is already installed through the Hub) and files one approval showing the package, version, source, dependency changes, the security policies it adds, replaces or removes, migrations and auto-start entries. Filing changes nothing; poll install_status with the returned request_id. A retry for the same plan replays the same request. A package that needs requirement values is refused; the person installs it in Modules.",
+    {name = "install_request", description = "Ask the person to install or update one Hub package in this agent's workspace. The host resolves the exact plan (the newest release when version is omitted, an update when the package is already installed through the Hub) and files one approval showing the package, version, source, dependency changes, the security policies it adds, replaces or removes, migrations and auto-start entries. Filing changes nothing; poll install_status with the returned request_id. A retry for the same plan replays the same request. A package that needs requirement values is refused; the person installs it in the Library.",
         operation = "bee.gateway.binding:install_request",
         policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"component"}, properties = {
@@ -158,7 +158,7 @@ local TOOLS: {Tool} = {
         schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
             request_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
-    {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner. Request and preflight stage and check; status only reads.",
+    {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: review in the Library, approval in Approvals and apply by the activation owner. Request and preflight stage and check; status only reads.",
         operation = "bee.gov.binding:delivery_call",
         policies = {TOOL_POLICY_REFS.delivery}, annotations = WRITE_ANNOTATIONS,
         schema = delivery_protocol.schema()},

@@ -29,7 +29,7 @@ The MCP server is `bee` (protocol `2025-06-18`, `tools/list`, `tools/call`).
 | `overlay` | Caller-owned Governance overlay: a read-only `guide` (index, sections, worked example) and create, list, read, put, append, remove, freeze. A `put` carries at most 64 KiB of text or 87,384 bytes of base64 |
 | `docs` | Offline platform documentation: list by topic, search, and read bounded windows by stable id |
 | `components` | Read-only inspection of installed components, Hub packages and installation plans |
-| `delivery` | `preflight`, `request` and `status` for a frozen overlay pack; names the human steps it cannot take (review in Overlays, approval in Approvals) |
+| `delivery` | `preflight`, `request` and `status` for a frozen overlay pack; names the human steps it cannot take (review in the Library, approval in Approvals) |
 | `publish` | Publishes the exact application version a person has reviewed, approved and applied at this destination |
 | `application_open` | Opens an already admitted application with literal arguments; workspace and origin view come from the binding |
 | `request_capability`, `capability_status` | Ask the person to elevate one attempt with one host catalog capability for a bounded time; approval consumption writes one Resources grant for that thread actor, which the attempt's placement resolves and no child inherits. A capability the catalog exercises through tools (`process.exec`, `http.api`) writes no row: the consumed approval is the grant until its TTL from consumption ends, and `capability_status` returns its `tools` |

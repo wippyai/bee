@@ -157,7 +157,7 @@ function M.proposal(plan_raw: unknown, context: Context): (Object?, string?, str
     local digest = plan and hex(plan.digest) or nil
     local request = plan and bounds.object(plan.request) or nil
     if not plan or not digest or not request then return nil, nil, "Hub plan is malformed" end
-    if plan.ready ~= true then return nil, nil, "package needs requirement values the person selects in Modules" end
+    if plan.ready ~= true then return nil, nil, "package needs requirement values the person selects in the Library" end
     local action = bounds.member(request.action, {"install", "update", "uninstall"})
     local component = component_name(request.component)
     local migration_policy = bounds.member(request.migration_policy, {"up", "block"})

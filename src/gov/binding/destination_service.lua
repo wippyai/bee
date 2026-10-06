@@ -692,10 +692,10 @@ local function request_identity(request: Object): (string?, string?, string?)
     return bounds.id(request.source_node), bounds.id(request.source_workspace), bounds.id(request.version)
 end
 
-local OPERATIONS: Set = {available = true, stage = true, list = true, get = true, changes = true,
+local OPERATIONS: Set = {available = true, stage = true, list = true, activations = true, get = true, changes = true,
     review = true, select = true, prepare = true, step = true, status = true, recover = true,
     lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
-local READS: Set = {available = true, list = true, get = true, changes = true, status = true}
+local READS: Set = {available = true, list = true, activations = true, get = true, changes = true, status = true}
 local MANAGES: Set = {stage = true, review = true, select = true}
 local LEASES: Set = {lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
 
@@ -896,6 +896,9 @@ function M.call(raw: unknown): Result
     elseif operation == "list" then
         if exact(request, {}) then result = failure("INVALID", "list has unknown fields")
         else result = plans.call(plan_store, actor_id, {operation = "list"}) end
+    elseif operation == "activations" then
+        if exact(request, {}) then result = failure("INVALID", "activations has unknown fields")
+        else result = activations.listing(activation_store) end
     elseif operation == "get" then
         local source_node, source_workspace, version = request_identity(request)
         if exact(request, {"source_node", "source_workspace", "version"})

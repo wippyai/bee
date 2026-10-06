@@ -1029,6 +1029,49 @@ function M.applied(store: Store, component_raw: unknown): Result
         return transaction.success({migrations = migrations, databases = databases}, false)
     end)
 end
+-- listing: the workspace's activations, newest first, each with the pointers of
+-- its overlay slot. It carries no evidence bytes, so a person-facing list reads
+-- every install, update and attempt without loading their artifacts.
+function M.listing(store: Store): Result
+    if store.closed then return failure("CLOSED", "governance activation store is closed") end
+    return transaction.read(store.db, "governance activation", function(tx): Result
+        local slot_rows, slot_error = tx:query("SELECT overlay_owner, revision, desired_intent_id, observed_intent_id, observed_outcome FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? LIMIT ?",
+            {store.node, store.workspace, MAX_INTENTS})
+        if slot_error or not slot_rows then return storage(slot_error, "list activation slots") end
+        local slots: {[string]: Object} = {}
+        for _, slot_row in ipairs(slot_rows) do
+            local owner = id(slot_row.overlay_owner)
+            if not owner then return failure("INTERNAL", "activation slot is malformed") end
+            slots[owner] = slot_row
+        end
+        local rows, err = tx:query("SELECT i.intent_id, i.overlay_owner, i.source_node, i.source_workspace, i.version, e.revision, e.phase, e.approval_id, e.outcome, e.diagnostics FROM bee_governance_activation_intents i JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id WHERE i.owner_node = ? AND i.workspace_id = ? ORDER BY i.created_at DESC, i.intent_id DESC LIMIT ?",
+            {store.node, store.workspace, MAX_INTENTS})
+        if err or not rows then return storage(err, "list activations") end
+        local activations: {Object} = {}
+        for _, row in ipairs(rows) do
+            local intent_id, overlay_owner = id(row.intent_id), id(row.overlay_owner)
+            local revision = count(row.revision, true)
+            if not intent_id or not overlay_owner or revision == nil or type(row.phase) ~= "string"
+                or type(row.source_node) ~= "string" or type(row.source_workspace) ~= "string"
+                or type(row.version) ~= "string" then
+                return failure("INTERNAL", "activation intent is malformed")
+            end
+            local item: Object = {owner_node = store.node, workspace_id = store.workspace, intent_id = intent_id,
+                overlay_owner = overlay_owner, source_node = row.source_node, source_workspace = row.source_workspace,
+                version = row.version, revision = revision, phase = row.phase, approval_id = row.approval_id,
+                outcome = row.outcome, diagnostics = row.diagnostics}
+            local current_slot = slots[overlay_owner]
+            if current_slot then
+                item.slot_revision = current_slot.revision
+                item.desired_intent_id = current_slot.desired_intent_id
+                item.observed_intent_id = current_slot.observed_intent_id
+                item.observed_outcome = current_slot.observed_outcome
+            end
+            activations[#activations + 1] = item
+        end
+        return transaction.success({workspace_id = store.workspace, activations = activations}, false)
+    end)
+end
 -- baseline: the retained last good generation for one overlay slot. It is
 -- the exact applied intent a one-step revert restores. An observed pointer
 -- with no retained baseline has nothing to revert to.

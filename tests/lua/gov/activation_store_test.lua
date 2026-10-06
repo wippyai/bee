@@ -241,6 +241,56 @@ local function define_tests()
             test.eq(store.desired(state, "bee.apps:missing").code, "NOT_FOUND")
             assert(store.close(state))
         end)
+        test.it("lists the workspace's activations with their slot pointers and no evidence bytes", function()
+            local state = assert(store.open("bee:db", "node-a", "workspace-listing"))
+            test.eq(#assert(bounds.array(ok(store.listing(state)).activations)), 0)
+            local function prepare_app(intent_id: string, overlay_owner: string, source_workspace: string, version: string)
+                local input = {operation = "prepare_activation", intent_id = intent_id,
+                    expected_revision = 0, idempotency_key = intent_id .. "-prepare",
+                    overlay_owner = overlay_owner, source_node = "source-a",
+                    source_workspace = source_workspace, version = version,
+                    plan_digest = string.rep("a", 64), plan_revision = 2, selection_revision = 2,
+                    artifact = blob("artifact-" .. intent_id), resolution = blob("resolution-" .. intent_id),
+                    preflight = blob("preflight-" .. intent_id), migration_work = prepare().migration_work}
+                return ok(store.call(state, "actor-a", input))
+            end
+            local first = prepare_app("intent-list-1", "bee.apps:list", "notes", "1.0.0")
+            local bound = ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = "intent-list-1",
+                expected_revision = 1, idempotency_key = "list-bind", approval_id = "approval-list",
+                approval_proposal_digest = string.rep("d", 64), approval_owner_incarnation = 1}))
+            ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = "intent-list-1",
+                expected_revision = bound.revision, idempotency_key = "list-consume"}))
+            ok(store.call(state, "actor-a", {operation = "record_consumption", intent_id = "intent-list-1",
+                expected_revision = 3, idempotency_key = "list-record", consumer_id = "host",
+                proposal_digest = string.rep("d", 64), effect_key = first.effect_key}))
+            ok(store.call(state, "actor-a", {operation = "begin_apply", intent_id = "intent-list-1",
+                expected_revision = 4, idempotency_key = "list-apply"}))
+            ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = "intent-list-1",
+                expected_revision = 5, idempotency_key = "list-outcome", outcome = "applied", diagnostics = "observed"}))
+            prepare_app("intent-list-2", "bee.apps:other", "tally", "1.0.0")
+
+            local rows = assert(bounds.array(ok(store.listing(state)).activations))
+            test.eq(#rows, 2)
+            local by_id: {[string]: {[string]: unknown}} = {}
+            for _, raw in ipairs(rows) do
+                local row = assert(bounds.object(raw))
+                by_id[tostring(row.intent_id)] = row
+                test.is_nil(row.artifact_bytes)
+                test.is_nil(row.resolution_bytes)
+                test.is_nil(row.preflight_bytes)
+            end
+            local installed = by_id["intent-list-1"]
+            test.eq(installed.phase, "settled")
+            test.eq(installed.outcome, "applied")
+            test.eq(installed.source_workspace, "notes")
+            test.eq(installed.observed_intent_id, "intent-list-1")
+            test.eq(installed.observed_outcome, "applied")
+            local waiting = by_id["intent-list-2"]
+            test.eq(waiting.phase, "prepared")
+            test.is_nil(waiting.outcome)
+            test.is_nil(waiting.observed_intent_id)
+            assert(store.close(state))
+        end)
         test.it("records exact partial migration progress before overlay settlement", function()
             local state, open_error = store.open("bee:db", "node-a", "workspace-migrations")
             if not state then error(tostring(open_error)) end

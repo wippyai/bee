@@ -13,7 +13,7 @@ entries:
     command:
       name: gov
       host: bee:terminal
-      short: Revert one governed overlay to its retained baseline without a display
+      short: Restore an installed application's previous version without a display
       security:
         actor:
           id: bee.gov.recovery

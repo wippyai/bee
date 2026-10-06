@@ -106,7 +106,7 @@ func TestInviteAndJoinMergeTheHivesOfTwoMachines(t *testing.T) {
 	}
 	_, _, err = Prepare(joiner, t.TempDir(), *right, &Members{})
 	require.NoError(t, err)
-	require.Contains(t, mustSeeds(t, joiner, *right), left.Advertise+":"+strconv.Itoa(left.Port))
+	require.Contains(t, mustSeeds(t, joiner, *right), net.JoinHostPort(left.Advertise, strconv.Itoa(left.Port)))
 
 	err = Join(context.Background(), t.TempDir(), token, &bytes.Buffer{})
 	require.Error(t, err, "a redeemed or expired invite admits nobody")

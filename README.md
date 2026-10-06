@@ -17,12 +17,12 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-ffc963"></a>
 </p>
 
-Bee is a terminal desktop for coding agents, built on the
+Bee is a persistent workspace your coding agents extend, built on the
 [Wippy runtime](https://github.com/wippyai/runtime). Claude Code, Codex,
-Antigravity, Grok, Muse and OpenCode run as sessions with their own terminal
-windows, next to a shell, your applications, and an inbox for everything that
-needs you. Agents can drive other agents, and can build applications and
-drivers that you approve into the running desktop.
+Antigravity, Grok, Muse and OpenCode run as sessions with their own live
+terminal windows, next to a shell, your applications and **Needs you**, where
+every decision waits for you. Agents drive other agents and build applications
+that you and they both use, and bees on all your machines join one hive.
 
 > [!IMPORTANT]
 > Bee is alpha software. Contracts still change between releases.
@@ -74,7 +74,7 @@ maximizes, **Ctrl+W** closes the focused app, **Ctrl+Q** leaves the desktop.
 | `bee hive invite` | Print a token that joins another machine to this hive; it is single use and valid ten minutes to join, and a joined machine stays in the hive. Keep it running until the other machine joins |
 | `bee hive join TOKEN` | Join this machine to the hive the token names; bees already running restart themselves into it |
 | `bee help` | Show the commands |
-| `bee gov` | Revert a governed overlay to its retained baseline |
+| `bee gov revert OWNER` | Restore an installed application's previous version from the command line |
 
 ### Agents working together
 
@@ -83,13 +83,32 @@ other agents' sessions, sends them work, waits for or joins their results, and
 closes them. Permission prompts and approvals from every session land in
 **Needs you**.
 
-### Applications and drivers made by agents
+### Applications made by agents
 
-An agent authors an application or an agent driver as an overlay, freezes it
-and requests delivery. Bee checks it, and **Needs you** opens on your desktop
-with one approval that names the version and the permissions it adds. Approving
-it installs the overlay into the running node; an application opens on your
-desktop right away. **Library** lists every application and driver you can install, whether your agents made it, another bee shared it or it comes from the Hub, and keeps the history of what was installed.
+Ask an agent for a tool and it builds a real Wippy application: a terminal
+window for you, tools other agents call, its own database with migrations, and
+Lua tests it runs inside Bee. An application asks for exactly what it needs,
+such as a database, agent tools, one HTTP origin or one exact command in a
+folder. **Needs you** shows one install question that names who made it, what
+it can do and what data it changes; approve it and the application opens from
+Start → Apps. Agents can also write drivers for other CLI agents the same way.
+
+**Library** lists everything you can install: applications and drivers your
+agents made, versions other bees in your hive share, and Hub packages. It shows
+updates and history, goes back to an earlier version, and removes an
+application while keeping its data.
+
+### Bees on every machine
+
+```sh
+bee hive invite          # on a machine whose bees should be shared
+bee hive join TOKEN      # on the other machine
+```
+
+The token is single use and valid ten minutes to join; the joined machine
+stays in the hive and every bee on it joins on its own, across LAN, Tailscale
+and WSL. Displays open any bee's desktops, and an application one bee shares
+installs on another with that bee's own approval.
 
 ## Documentation
 
@@ -115,7 +134,8 @@ make build
 ```
 
 Releases build from the runtime commit pinned in `wippy.build.json`;
-`make runtime-pin RUNTIME_VERSION=<commit>` moves the pin.
+`make runtime-pin RUNTIME_VERSION=<commit>` moves the pin and
+`make native-pin` pins Bee's native module to the pushed commit that holds it.
 
 ## License
 

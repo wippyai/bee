@@ -4,7 +4,7 @@ package hive
 
 import "io"
 
-const usage = `Bee: a terminal desktop for agents and apps.
+const usage = `Bee: a persistent workspace your coding agents extend.
 
 Usage:
   bee                   open this folder's desktop
@@ -14,7 +14,7 @@ Usage:
   bee hive init         join every bee on this machine into one hive
   bee hive invite       print a token that joins another machine to this hive
   bee hive join TOKEN   join this machine to the hive the token names
-  bee gov               revert a governed overlay to its retained baseline
+  bee gov revert OWNER  restore an installed application's previous version
   bee help              show this help
 `
 

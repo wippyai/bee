@@ -71,6 +71,8 @@ maximizes, **Ctrl+W** closes the focused app, **Ctrl+Q** leaves the desktop.
 | `bee client` | Display a running node's desktops |
 | `bee node` | Run this folder's node without a display |
 | `bee hive init` | Join every Bee node on this machine into one hive |
+| `bee hive invite` | Print a token, valid for ten minutes and single use, that joins another machine to this hive; keep it running until the other machine joins |
+| `bee hive join TOKEN` | Join this machine to the hive the token names; restart running bees afterwards |
 | `bee gov` | Revert a governed overlay to its retained baseline |
 
 ### Agents working together

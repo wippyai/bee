@@ -4,7 +4,12 @@ The cross-node call protocol. Every node runs one supervisor; a caller on any
 node sends it a request and waits for the reply on a topic of its own. The
 supervisor routes the operation to the node-local service that serves its
 prefix, passing the caller's authenticated PID. `bee hive init` joins the Bee
-nodes on a machine into one hive.
+nodes on a machine into one hive; `bee hive invite` on one machine and
+`bee hive join TOKEN` on another join their hives. The token carries every
+endpoint the inviting machine is reachable at (LAN, Tailscale, virtual
+interfaces); the joiner dials them concurrently, pins the first whose identity
+matches the token, and the inviting machine dials back to verify the joiner's
+address. Bees started after a join listen on the network.
 
 | Entry | Responsibility |
 |---|---|

@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"testing"
 
-
 	"github.com/stretchr/testify/require"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	ctxapi "github.com/wippyai/runtime/api/context"
@@ -77,13 +76,13 @@ func TestPrepareKeepsOneIdentityPerFolder(t *testing.T) {
 	require.NoError(t, err)
 	state := t.TempDir()
 
-	_, first, err := Prepare(dir, state, *hive)
+	_, first, err := Prepare(dir, state, *hive, &Members{})
 	require.NoError(t, err)
-	_, again, err := Prepare(dir, state, *hive)
+	_, again, err := Prepare(dir, state, *hive, &Members{})
 	require.NoError(t, err)
 	require.Equal(t, first, again)
 
-	_, other, err := Prepare(dir, t.TempDir(), *hive)
+	_, other, err := Prepare(dir, t.TempDir(), *hive, &Members{})
 	require.NoError(t, err)
 	require.NotEqual(t, first, other)
 }
@@ -94,12 +93,12 @@ func TestPrepareJoinsTheHive(t *testing.T) {
 	hive, err := ReadHive(dir)
 	require.NoError(t, err)
 
-	_, peer, err := Prepare(dir, t.TempDir(), *hive)
+	_, peer, err := Prepare(dir, t.TempDir(), *hive, &Members{})
 	require.NoError(t, err)
 	require.NoError(t, writeFile(filepath.Join(dir, nodesDir, peer+addressSuffix), []byte("127.0.0.1:40001")))
 
 	state := t.TempDir()
-	config, name, err := Prepare(dir, state, *hive)
+	config, name, err := Prepare(dir, state, *hive, &Members{})
 	require.NoError(t, err)
 	cluster := config.Sub("cluster")
 	require.True(t, cluster.GetBool("enabled", false))
@@ -176,7 +175,7 @@ func TestAnOwnedFolderInAHiveStartsAnInMemoryClient(t *testing.T) {
 	hive, err := ReadHive(dir)
 	require.NoError(t, err)
 	state := t.TempDir()
-	_, folderNode, err := Prepare(dir, state, *hive)
+	_, folderNode, err := Prepare(dir, state, *hive, &Members{})
 	require.NoError(t, err)
 	holdState(t, state)
 
@@ -288,7 +287,7 @@ func TestPlanOpensAnAppCommandOnTheRunningFolderNode(t *testing.T) {
 	hive, err := ReadHive(dir)
 	require.NoError(t, err)
 	state := t.TempDir()
-	_, node, err := Prepare(dir, state, *hive)
+	_, node, err := Prepare(dir, state, *hive, &Members{})
 	require.NoError(t, err)
 	holdState(t, state)
 

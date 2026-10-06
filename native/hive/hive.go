@@ -11,11 +11,14 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/wippyai/runtime/api/boot"
@@ -36,6 +39,17 @@ const (
 // Hive is the machine-wide hive configuration created by `bee hive init`.
 type Hive struct {
 	Secret string `json:"secret"`
+	// Machine names this machine in invites.
+	Machine string `json:"machine,omitempty"`
+	// Port is the gossip port the first node of this machine binds, so other
+	// machines know where to dial.
+	Port int `json:"port,omitempty"`
+	// Advertise is the address other machines reach this machine at. It is
+	// set once the machine joined another, or another joined it; until then
+	// nodes listen on loopback only.
+	Advertise string `json:"advertise,omitempty"`
+	// Seeds are gossip addresses of nodes on other machines.
+	Seeds []string `json:"seeds,omitempty"`
 }
 
 // Node is one folder's node identity, kept in its state directory.
@@ -68,6 +82,7 @@ type Host struct {
 	// ephemeral marks an in-memory client node, whose key is withdrawn with
 	// its address.
 	ephemeral bool
+	members   Members
 }
 
 // Component returns the Bee native host.
@@ -79,8 +94,14 @@ func (h *Host) Name() string { return "bee.hive" }
 // DependsOn implements boot.Component: the address exists once the cluster runs.
 func (h *Host) DependsOn() []string { return []string{"cluster"} }
 
-// Load implements boot.Component.
-func (h *Host) Load(ctx context.Context) (context.Context, error) { return ctx, nil }
+// Load implements boot.Component: the cluster created its membership, which
+// resolves the keys of nodes on other machines.
+func (h *Host) Load(ctx context.Context) (context.Context, error) {
+	if membership := clusterapi.GetMembership(ctx); membership != nil {
+		h.members.bind(membership)
+	}
+	return ctx, nil
+}
 
 // Start records this node's membership address so other nodes can join it.
 func (h *Host) Start(ctx context.Context) error {
@@ -138,10 +159,16 @@ func (h *Host) Plan(_ context.Context, launch app.Launch) (app.Plan, error) {
 	}
 	h.dir = dir
 	if len(launch.Args) > 0 && launch.Args[0] == "hive" {
-		if len(launch.Args) == 2 && launch.Args[1] == "init" {
+		switch {
+		case len(launch.Args) == 2 && launch.Args[1] == "init":
 			return app.Plan{Run: func(context.Context) error { return Init(dir) }}, nil
+		case len(launch.Args) == 2 && launch.Args[1] == "invite":
+			return app.Plan{Run: func(ctx context.Context) error { return Invite(ctx, dir, os.Stdout, os.Stderr) }}, nil
+		case len(launch.Args) == 3 && launch.Args[1] == "join":
+			token := launch.Args[2]
+			return app.Plan{Run: func(ctx context.Context) error { return Join(ctx, dir, token, os.Stdout) }}, nil
 		}
-		return app.Plan{}, fmt.Errorf("bee hive: unknown command %q; available: bee hive init", strings.Join(launch.Args[1:], " "))
+		return app.Plan{}, fmt.Errorf("bee hive: unknown command %q; available: bee hive init, bee hive invite, bee hive join TOKEN", strings.Join(launch.Args[1:], " "))
 	}
 	hive, err := ReadHive(dir)
 	if err != nil {
@@ -181,7 +208,7 @@ func (h *Host) nodePlan(dir, state string, hive *Hive) app.Plan {
 		return app.Plan{}
 	}
 	return app.Plan{Prepare: func(context.Context) (boot.Config, func() error, error) {
-		config, node, err := Prepare(dir, state, *hive)
+		config, node, err := Prepare(dir, state, *hive, &h.members)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -217,7 +244,7 @@ func (h *Host) clientPlan(dir, state string, hive *Hive, owned bool, command []s
 			if err := os.Setenv(RoleVariable, ClientRole); err != nil {
 				return nil, nil, fmt.Errorf("bee client: set %s: %w", RoleVariable, err)
 			}
-			config, node, err := PrepareClient(dir, *hive)
+			config, node, err := PrepareClient(dir, *hive, &h.members)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -262,19 +289,75 @@ func Init(dir string) error {
 		fmt.Printf("Hive already initialized in %s\n", dir)
 		return nil
 	}
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return err
-	}
-	data, err := json.Marshal(Hive{Secret: base64.StdEncoding.EncodeToString(secret)})
-	if err != nil {
-		return err
-	}
-	if err := writeFile(filepath.Join(dir, hiveFile), data); err != nil {
+	if _, err := Ensure(dir); err != nil {
 		return err
 	}
 	fmt.Printf("Hive initialized in %s\nEvery bee started on this machine now joins it.\n", dir)
 	return nil
+}
+
+// Ensure returns the machine's hive, creating it when there is none and
+// completing a record that lacks its machine name or gossip port.
+func Ensure(dir string) (*Hive, error) {
+	hive, err := ReadHive(dir)
+	if err != nil {
+		return nil, err
+	}
+	if hive == nil {
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return nil, err
+		}
+		hive = &Hive{Secret: base64.StdEncoding.EncodeToString(secret)}
+	}
+	complete := hive.Machine != "" && hive.Port != 0
+	if hive.Machine == "" {
+		hive.Machine = randomHex(8)
+	}
+	if hive.Port == 0 {
+		port, err := randomPort()
+		if err != nil {
+			return nil, err
+		}
+		hive.Port = port
+	}
+	if complete {
+		return hive, nil
+	}
+	return hive, WriteHive(dir, *hive)
+}
+
+// WriteHive stores the machine's hive configuration.
+func WriteHive(dir string, hive Hive) error {
+	data, err := json.Marshal(hive)
+	if err != nil {
+		return err
+	}
+	return writeFile(filepath.Join(dir, hiveFile), data)
+}
+
+func randomHex(size int) string {
+	data := make([]byte, size)
+	if _, err := rand.Read(data); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(data)
+}
+
+// randomPort picks a gossip port below the operating system's ephemeral range.
+func randomPort() (int, error) {
+	value, err := rand.Int(rand.Reader, big.NewInt(20000))
+	if err != nil {
+		return 0, err
+	}
+	return 30000 + int(value.Int64()), nil
+}
+
+func appendUnique(list []string, value string) []string {
+	if slices.Contains(list, value) {
+		return list
+	}
+	return append(list, value)
 }
 
 // ReadHive returns the machine's hive, or nil when none was initialized.
@@ -295,28 +378,28 @@ func ReadHive(dir string) (*Hive, error) {
 
 // Prepare returns the boot configuration that joins this folder's node into
 // the hive, and the node's name.
-func Prepare(dir, state string, hive Hive) (boot.Config, string, error) {
+func Prepare(dir, state string, hive Hive, members *Members) (boot.Config, string, error) {
 	node, key, err := loadNode(state)
 	if err != nil {
 		return nil, "", err
 	}
-	config, err := configure(dir, hive, node, key)
+	config, err := configure(dir, hive, node, key, members)
 	return config, node.Name, err
 }
 
 // PrepareClient returns the boot configuration of an in-memory client node:
 // a fresh identity that is never written to disk, joined into the hive.
-func PrepareClient(dir string, hive Hive) (boot.Config, string, error) {
+func PrepareClient(dir string, hive Hive, members *Members) (boot.Config, string, error) {
 	node, key, err := newNode("bee-client-")
 	if err != nil {
 		return nil, "", err
 	}
-	config, err := configure(dir, hive, node, key)
+	config, err := configure(dir, hive, node, key, members)
 	return config, node.Name, err
 }
 
 // configure publishes node's public key and builds its cluster configuration.
-func configure(dir string, hive Hive, node Node, key ed25519.PrivateKey) (boot.Config, error) {
+func configure(dir string, hive Hive, node Node, key ed25519.PrivateKey, members *Members) (boot.Config, error) {
 	public := base64.StdEncoding.EncodeToString(key.Public().(ed25519.PublicKey))
 	if err := writeFile(filepath.Join(dir, nodesDir, node.Name+keySuffix), []byte(public)); err != nil {
 		return nil, err
@@ -324,6 +407,9 @@ func configure(dir string, hive Hive, node Node, key ed25519.PrivateKey) (boot.C
 	joins, err := peerAddresses(dir, node.Name)
 	if err != nil {
 		return nil, err
+	}
+	for _, seed := range hive.Seeds {
+		joins = appendUnique(joins, seed)
 	}
 	cluster := map[string]any{
 		"enabled":                true,
@@ -336,9 +422,21 @@ func configure(dir string, hive Hive, node Node, key ed25519.PrivateKey) (boot.C
 		"internode.bind_addr":    "127.0.0.1",
 		"internode.identity_key": node.Seed,
 		"internode.peer_key_source": clusterapi.PeerKeySource(func(id clusterapi.NodeID) (ed25519.PublicKey, bool) {
-			return peerKey(dir, string(id))
+			if key, ok := peerKey(dir, string(id)); ok {
+				return key, true
+			}
+			if hive.Advertise == "" {
+				return nil, false
+			}
+			return members.advertisedKey(string(id))
 		}),
 		"internode.trusted_peer_keys." + node.Name: public,
+	}
+	if hive.Advertise != "" {
+		cluster["membership.bind_addr"] = "0.0.0.0"
+		cluster["membership.advertise_addr"] = hive.Advertise
+		cluster["membership.bind_port"] = freeGossipPort(hive.Port)
+		cluster["internode.bind_addr"] = "0.0.0.0"
 	}
 	return boot.NewConfig(
 		boot.WithSection("relay", map[string]any{"node_name": node.Name}),

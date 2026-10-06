@@ -191,6 +191,17 @@ function M.application_checkpoint_invalid(value: unknown): boolean
         or (restart ~= "never" and schema == "")
 end
 
+-- The desktop opens an application from the menus its declaration names, so
+-- one that names none cannot be opened by the person.
+function M.application_unplaced(value: unknown): boolean
+    local entry = object(value)
+    local meta = entry and object(entry.meta) or nil
+    local application = meta and object(meta.application) or nil
+    if not meta or meta.type ~= "bee.app" or not application then return false end
+    local menus = application.menus
+    return type(menus) ~= "table" or menus[1] == nil
+end
+
 -- The runtime unpacks an entry's configuration into a typed config, so review
 -- answers for the shape each declared field reaches that config as.
 function M.config_shapes(value: unknown): ({string}?, {string}?, {string}?, string?)

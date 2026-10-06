@@ -200,7 +200,7 @@ return {main = main}
 
 -- The example entries.json value: one application definition, the exact shape
 -- the freeze and publication path measures. Its metadata is the minimum
--- docs/reference/applications.md requires for an admitted, listed application,
+-- corpus document docs/application_contracts requires for an admitted, listed application,
 -- and its identity follows the workspace-application naming rule, so the
 -- example delivers to the author's own workspace unchanged.
 M.OVERLAY_ID = "counter"
@@ -216,7 +216,8 @@ function M.example(): {{[string]: unknown}}
                 frame = "bee.ui:frame"}},
         meta = {type = "bee.app", application = {api_version = 1, lifetime = "view",
             revision = "1", title = M.TITLE, instance_policy = "multiple",
-            resume_schema = "guide-counter.v1", restart_policy = "automatic"}}}}
+            resume_schema = "guide-counter.v1", restart_policy = "automatic",
+            menus = {"bee.shell:apps_menu"}}}}}
 end
 
 function M.example_json(): (string?, string?)
@@ -258,7 +259,10 @@ end
 function M.application_shape(): string
     return "An application is one process.lua entry with meta.type bee.app and a"
         .. " meta.application record declaring api_version 1, lifetime view, a nonempty revision and title,"
-        .. " and instance_policy singleton or multiple. Metadata describes the application; it never"
+        .. " and instance_policy singleton or multiple, and menus listing the bee.menu entries it appears in:"
+        .. " bee.shell:apps_menu places it in the Start panel's Apps menu, the way the person opens it."
+        .. " Preflight reports APPLICATION_MENU for an application that names no menu."
+        .. " Metadata describes the application; it never"
         .. " authorizes it. The host separately admits the definition, and the broker lists it only once"
         .. " the effective catalog carries it. Advance the application revision whenever executable source"
         .. " or configuration changes; a revision identifies one exact runnable definition."
@@ -438,7 +442,7 @@ function M.workspace_delivery(): string
         .. " bee.gov.binding:contract_call and bee.gov.binding:http_request; never embed a grant identity."
 end
 
--- The application archetypes of docs/guides/app-style.md: the request each
+-- The application archetypes of corpus document docs/app_style: the request each
 -- one answers and the frame and visualization kit calls that compose it.
 type Archetype = {name: string, request: string, calls: {string}}
 local ARCHETYPES: {Archetype} = {
@@ -462,7 +466,7 @@ function M.visual_style(): string
     for _, archetype in ipairs(ARCHETYPES) do
         routes[#routes + 1] = archetype.name .. ": " .. archetype.request .. " (" .. table.concat(archetype.calls, ", ") .. ")"
     end
-    return "Read the visual style, docs/guides/app-style.md (corpus document docs/app_style), before drawing:"
+    return "Read the visual style, corpus document docs/app_style, before drawing:"
         .. " it fixes the rows, gaps, color roles, states and mouse targets, and every rule names its frame call."
         .. " Layouts change only at the size classes frame.size reports, compact from 80x24, standard from 120x36"
         .. " and wide from 160x48, and frame.layout returns the header, tabs, work, action bar and footer rows."
@@ -492,7 +496,7 @@ function M.platform_documentation(): string
         .. " contracts (application, threads, hive, placement and subscriptions, gateway, carrier, storage,"
         .. " UI) and the terminal toolkit. For an application that works across every node, search the "
         .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
-        .. " matches. The authored UI rules are in docs/guides/ui.md, and the toolkit reference gives compact"
+        .. " matches. The authored UI rules are corpus document docs/ui_brand_book, and the toolkit reference gives compact"
         .. " examples built on bee.ui:frame. For"
         .. " a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
         .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every"

@@ -10,7 +10,8 @@ local driver_admission = require("driver_admission")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
-    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_checkpoint_invalid: boolean?}
+    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_checkpoint_invalid: boolean?,
+    application_unplaced: boolean?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
 type CapabilityRequest = {capability: string, parameters: {[string]: string | {string}}, reason: string,
     target: string, path: string, catalog_revision: integer, template_revision: integer}
@@ -235,7 +236,8 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
     local allowed: {[string]: boolean} = {id = true, kind = true, package = true, digest = true,
         references = true, auto_start = true, grants = true, modules = true,
         config_objects = true, config_lists = true, config_empty = true,
-        security_actor = true, security_groups = true, application_checkpoint_invalid = true}
+        security_actor = true, security_groups = true, application_checkpoint_invalid = true,
+        application_unplaced = true}
     local result: {Entry} = {}
     for index = 1, count do
         local row = (raw)[index]
@@ -262,7 +264,8 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
             or type(item.auto_start) ~= "boolean"
             or (item.security_actor ~= nil and type(item.security_actor) ~= "boolean")
             or (item.security_groups ~= nil and type(item.security_groups) ~= "boolean")
-            or (item.application_checkpoint_invalid ~= nil and type(item.application_checkpoint_invalid) ~= "boolean") then
+            or (item.application_checkpoint_invalid ~= nil and type(item.application_checkpoint_invalid) ~= "boolean")
+            or (item.application_unplaced ~= nil and type(item.application_unplaced) ~= "boolean") then
             return nil, "candidate entry is malformed"
         end
         local entry: Entry = {id = item.id, kind = item.kind, package = item.package,
@@ -273,6 +276,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         if item.security_actor ~= nil then measured.security_actor = item.security_actor end
         if item.security_groups ~= nil then measured.security_groups = item.security_groups end
         if item.application_checkpoint_invalid ~= nil then measured.application_checkpoint_invalid = item.application_checkpoint_invalid end
+        if item.application_unplaced ~= nil then measured.application_unplaced = item.application_unplaced end
         result[index] = entry
     end
     return result, nil
@@ -521,6 +525,10 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if item.application_checkpoint_invalid == true then
             issue("APPLICATION_CHECKPOINT", item.id, "application checkpoint metadata cannot be opened by the desktop",
                 "use restart_policy never for an app without checkpoints; automatic or manual requires a nonempty resume_schema of at most 80 characters without control characters")
+        end
+        if item.application_unplaced == true then
+            issue("APPLICATION_MENU", item.id, "application names no menu, so the person has no way to open it",
+                "list a bee.menu entry in meta.application.menus, such as bee.shell:apps_menu for the Start panel's Apps menu")
         end
         if selectors.security_actor == true or selectors.security_groups == true then
             issue("SECURITY_DENIED", item.id, "application content selects an actor or security groups",

@@ -62,6 +62,15 @@ local function has(report: preflight.Report, code: string): boolean
 end
 local function define_tests()
     test.describe("Governance preflight", function()
+        test.it("blocks an application that names no menu, since the person has no way to open it", function()
+            local candidate, context = fixture()
+            candidate.entries[1].application_unplaced = true
+            local report = checked(candidate, context)
+            test.is_false(report.ready)
+            test.is_true(has(report, "APPLICATION_MENU"))
+            candidate.entries[1].application_unplaced = false
+            test.is_false(has(checked(candidate, context), "APPLICATION_MENU"))
+        end)
         test.it("blocks an application restart policy without a checkpoint schema", function()
             local candidate, context = fixture()
             candidate.entries[1].application_checkpoint_invalid = true

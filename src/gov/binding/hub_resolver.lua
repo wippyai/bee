@@ -237,6 +237,7 @@ local function measured_entry(entry: Entry, package: string): (preflight.Entry?,
     return {id = id, kind = kind, package = package, digest = digest,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
         application_checkpoint_invalid = artifact.application_checkpoint_invalid(clean),
+        application_unplaced = artifact.application_unplaced(clean),
         grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
         config_empty = config_empty}, nil
 end

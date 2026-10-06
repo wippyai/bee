@@ -137,6 +137,7 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
     return {id = id, kind = kind, package = package, digest = digest,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
         application_checkpoint_invalid = artifact.application_checkpoint_invalid(clean),
+        application_unplaced = artifact.application_unplaced(clean),
         security_actor = security ~= nil and security.actor ~= nil,
         security_groups = security ~= nil and security.groups ~= nil,
         grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,

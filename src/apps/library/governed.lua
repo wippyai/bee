@@ -1,5 +1,7 @@
 -- MIT. Typed local projection and request builder for the destination delivery
--- facade. This model has no authority beyond the app's own call.
+-- facade, the Library's source of delivered application versions. A notice is
+-- what a person reads; fault keeps the owner's own words for the details view.
+-- This model has no authority beyond the app's own call.
 local bounds = require("bounds")
 local preflight = require("preflight")
 
@@ -7,6 +9,7 @@ local M = {}
 M.CALL = "bee.gov.binding:destination_call"
 M.MAX_PLANS = 128
 M.MAX_AVAILABLE = 512
+M.MAX_ACTIVATIONS = 128
 M.MAX_CHANGES = 512
 type Object = {[string]: unknown}
 type Fault = {code: string, message: string}
@@ -36,10 +39,9 @@ type ReviewRow = {text: string, heading: boolean, summary: string?}
 type PendingPrepare = {plan_key: string, intent_id: string, receipt_key: string}
 type PendingStep = {intent_id: string, receipt_key: string}
 type PendingStage = {available_key: string, idempotency_key: string}
-type Pane = "available" | "plans" | "review"
-type State = {workspace_id: string, available: {Available}, selected_available_key: string?, pane: Pane,
-    plans: {Plan}, selected_key: string?, detail: Plan?, intent: Intent?,
-    offset: integer, technical: boolean, notice: string, pending_prepare: PendingPrepare?,
+type State = {workspace_id: string, owner_node: string?, available: {Available}, selected_available_key: string?,
+    plans: {Plan}, activations: {Intent}, selected_key: string?, detail: Plan?, intent: Intent?,
+    technical: boolean, notice: string, fault: string, pending_prepare: PendingPrepare?,
     pending_step: PendingStep?, pending_recover_key: string?, restored_intent_id: string?, pending_stage: PendingStage?,
     review_key: string?, report: preflight.Report?, report_error: string?,
     changes: Changes?, changes_error: string?}
@@ -314,13 +316,25 @@ function M.reply(raw: unknown): Reply?
     local refused: Fault = {code = code, message = detail}
     return {ok = false, error = refused, value = nil}
 end
-local function message(reply: Reply?): string
-    if not reply then return "No answer from the destination; check status before retrying" end
+local UNREADABLE = "This version can't be read; try Refresh"
+-- What a person reads for a reply that carries no value, then the owner's
+-- words for it.
+local function message(reply: Reply?): (string, string)
+    if not reply then return "No answer yet; try Refresh", "No answer from the destination; check status before retrying" end
     if reply.error then
         local detail = bounds.line(reply.error.message, 240) or "destination refused the request"
-        return bounds.line(reply.error.code, 40) and (reply.error.code .. ": " .. detail) or detail
+        local technical = bounds.line(reply.error.code, 40) and (reply.error.code .. ": " .. detail) or detail
+        return "That did not go through; Details (T) says why", technical
     end
-    return "Destination returned an invalid reply"
+    return UNREADABLE, "Destination returned an invalid reply"
+end
+-- fail records one problem for the person and for the details view.
+local function fail(state: State, person: string, technical: string?)
+    state.notice, state.fault = person, technical or person
+end
+local function refuse(state: State, reply: Reply?)
+    local person, technical = message(reply)
+    fail(state, person, technical)
 end
 local function result_object(reply: Reply?): Object?
     if not reply or not reply.ok then return nil end
@@ -337,9 +351,9 @@ function M.available_plan_key(item: Available): string
     return item.owner_id .. "\0" .. item.source_workspace .. "\0" .. item.version
 end
 function M.new(workspace_id: string): State
-    return {workspace_id = workspace_id, available = {}, selected_available_key = nil, pane = "available",
-        plans = {}, selected_key = nil, detail = nil, intent = nil,
-        offset = 0, technical = false, notice = "", pending_prepare = nil, pending_step = nil,
+    return {workspace_id = workspace_id, owner_node = nil, available = {}, selected_available_key = nil,
+        plans = {}, activations = {}, selected_key = nil, detail = nil, intent = nil,
+        technical = false, notice = "", fault = "", pending_prepare = nil, pending_step = nil,
         pending_recover_key = nil, restored_intent_id = nil, pending_stage = nil,
         review_key = nil, report = nil, report_error = nil, changes = nil, changes_error = nil}
 end
@@ -361,64 +375,35 @@ function M.selected_available(state: State): Available?
 end
 function M.select_available(state: State, key: string?)
     state.selected_available_key = key
-    state.notice = ""
-end
-function M.toggle_pane(state: State)
-    if state.pane == "available" then state.pane = "plans"
-    elseif state.pane == "plans" then state.pane = "review"
-    else state.pane = "available" end
-    state.notice = ""
-end
-function M.show_pane(state: State, pane: Pane)
-    state.pane = pane
-    state.notice = ""
+    state.notice, state.fault = "", ""
 end
 function M.select(state: State, key: string?)
     state.selected_key = key
     if state.detail and M.key(state.detail) ~= key then state.detail = nil end
     if state.review_key and state.review_key ~= key then M.forget_review(state) end
-    state.notice = ""
-end
-function M.move(state: State, step: integer)
-    if #state.plans == 0 then return end
-    local index = 1
-    for current, item in ipairs(state.plans) do if M.key(item) == state.selected_key then index = current; break end end
-    index = math.floor(math.max(1, math.min(#state.plans, index + step)))
-    M.select(state, M.key(state.plans[index]))
-end
-function M.move_available(state: State, step: integer)
-    if #state.available == 0 then return end
-    local index = 1
-    for current, item in ipairs(state.available) do
-        if M.available_key(item) == state.selected_available_key then index = current; break end
-    end
-    index = math.floor(math.max(1, math.min(#state.available, index + step)))
-    M.select_available(state, M.available_key(state.available[index]))
-end
-local function visible(state: State)
-    local index = 1
-    for current, item in ipairs(state.plans) do if M.key(item) == state.selected_key then index = current; break end end
-    if index <= state.offset then state.offset = index - 1 end
+    state.notice, state.fault = "", ""
 end
 function M.apply_list(state: State, reply: Reply?)
     local value = result_object(reply)
-    if not value then state.notice = message(reply); return false end
+    if not value then refuse(state, reply); return false end
     local extra = bounds.fields(value, {"owner_node", "workspace_id", "plans"})
-    if extra or bounds.id(value.owner_node) == nil or value.workspace_id ~= state.workspace_id then
-        state.notice = "Destination returned an invalid plan list"; return false
+    local owner_node = bounds.id(value.owner_node)
+    if extra or owner_node == nil or value.workspace_id ~= state.workspace_id then
+        fail(state, UNREADABLE, "Destination returned an invalid plan list"); return false
     end
     local rows = dense(value.plans, M.MAX_PLANS)
-    if not rows then state.notice = "Destination returned an invalid plan list"; return false end
+    if not rows then fail(state, UNREADABLE, "Destination returned an invalid plan list"); return false end
     local decoded: {Plan} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
         local item, err = plan(raw, state.workspace_id)
-        if not item then state.notice = err or "Destination returned an invalid plan"; return false end
+        if not item then fail(state, UNREADABLE, err or "Destination returned an invalid plan"); return false end
         local key = M.key(item)
-        if seen[key] then state.notice = "Destination returned duplicate plans"; return false end
+        if seen[key] then fail(state, UNREADABLE, "Destination returned duplicate plans"); return false end
         seen[key] = true
         decoded[#decoded + 1] = item
     end
+    state.owner_node = owner_node
     state.plans = decoded
     if not state.selected_key or not seen[state.selected_key] then
         state.selected_key = decoded[1] and M.key(decoded[1]) or nil
@@ -430,25 +415,24 @@ function M.apply_list(state: State, reply: Reply?)
         if not found then state.detail = nil end
     end
     if state.review_key and state.review_key ~= state.selected_key then M.forget_review(state) end
-    visible(state)
-    state.notice = #decoded == 0 and "No staged overlay versions in this workspace" or ""
+    state.notice, state.fault = "", ""
     return true
 end
 function M.apply_available(state: State, reply: Reply?)
     local value = result_object(reply)
-    if not value then state.notice = message(reply); return false end
+    if not value then refuse(state, reply); return false end
     if bounds.fields(value, {"workspace_id", "versions"}) or value.workspace_id ~= state.workspace_id then
-        state.notice = "Destination returned an invalid available version list"; return false
+        fail(state, UNREADABLE, "Destination returned an invalid available version list"); return false
     end
     local rows = dense(value.versions, M.MAX_AVAILABLE)
-    if not rows then state.notice = "Destination returned an invalid available version list"; return false end
+    if not rows then fail(state, UNREADABLE, "Destination returned an invalid available version list"); return false end
     local decoded: {Available} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
         local item, err = available(raw)
-        if not item then state.notice = err or "Destination returned an invalid available version"; return false end
+        if not item then fail(state, UNREADABLE, err or "Destination returned an invalid available version"); return false end
         local key = M.available_key(item)
-        if seen[key] then state.notice = "Destination returned duplicate available versions"; return false end
+        if seen[key] then fail(state, UNREADABLE, "Destination returned duplicate available versions"); return false end
         seen[key] = true
         decoded[#decoded + 1] = item
     end
@@ -456,14 +440,32 @@ function M.apply_available(state: State, reply: Reply?)
     if not state.selected_available_key or not seen[state.selected_available_key] then
         state.selected_available_key = decoded[1] and M.available_key(decoded[1]) or nil
     end
-    state.notice = #decoded == 0 and "No overlay versions are available from configured sources" or ""
+    state.notice, state.fault = "", ""
+    return true
+end
+function M.apply_activations(state: State, reply: Reply?)
+    local value = result_object(reply)
+    if not value then refuse(state, reply); return false end
+    if bounds.fields(value, {"workspace_id", "activations"}) or value.workspace_id ~= state.workspace_id then
+        fail(state, UNREADABLE, "Destination returned an invalid activation list"); return false
+    end
+    local rows = dense(value.activations, M.MAX_ACTIVATIONS)
+    if not rows then fail(state, UNREADABLE, "Destination returned an invalid activation list"); return false end
+    local decoded: {Intent} = {}
+    for _, raw in ipairs(rows) do
+        local item, err = intent(raw, state.workspace_id)
+        if not item then fail(state, UNREADABLE, err or "Destination returned an invalid activation"); return false end
+        decoded[#decoded + 1] = item
+    end
+    state.activations = decoded
+    state.notice, state.fault = "", ""
     return true
 end
 function M.apply_plan(state: State, reply: Reply?)
     local value = result_object(reply)
-    if not value then state.notice = message(reply); return false end
+    if not value then refuse(state, reply); return false end
     local item, err = plan(value, state.workspace_id)
-    if not item then state.notice = err or "Destination returned an invalid plan"; return false end
+    if not item then fail(state, UNREADABLE, err or "Destination returned an invalid plan"); return false end
     state.detail = item
     for index, current in ipairs(state.plans) do
         if M.key(current) == M.key(item) then state.plans[index] = item; break end
@@ -478,13 +480,14 @@ function M.apply_plan(state: State, reply: Reply?)
         if report then state.report_error = nil
         else state.report_error = report_error or "preflight report could not be decoded" end
     end
-    state.notice = "Plan details refreshed"
+    state.notice, state.fault = "", ""
     return true
 end
 function M.apply_changes(state: State, reply: Reply?, item: Plan): boolean
     local value = result_object(reply)
     if not value then
-        state.changes, state.changes_error = nil, message(reply)
+        local _, technical = message(reply)
+        state.changes, state.changes_error = nil, technical
         return false
     end
     local decoded, err = changes(value, state.workspace_id, item)
@@ -497,12 +500,12 @@ function M.apply_changes(state: State, reply: Reply?, item: Plan): boolean
 end
 function M.apply_stage(state: State, reply: Reply?, source: Available): boolean
     local value = result_object(reply)
-    if not value then state.notice = message(reply); return false end
+    if not value then refuse(state, reply); return false end
     local item, err = plan(value, state.workspace_id)
-    if not item then state.notice = err or "Destination returned an invalid staged plan"; return false end
+    if not item then fail(state, UNREADABLE, err or "Destination returned an invalid staged plan"); return false end
     if item.status ~= "staged" or item.source_node ~= source.owner_id
         or item.source_workspace ~= source.source_workspace or item.version ~= source.version then
-        state.notice = "Destination returned a staged plan for a different version"; return false
+        fail(state, UNREADABLE, "Destination returned a staged plan for a different version"); return false
     end
     local found = false
     for index, current in ipairs(state.plans) do
@@ -510,25 +513,37 @@ function M.apply_stage(state: State, reply: Reply?, source: Available): boolean
     end
     if not found then
         if #state.plans >= M.MAX_PLANS then
-            state.notice = "Destination plan list is full; refresh before staging another version"; return false
+            fail(state, "Too many versions are waiting; Refresh, then try again",
+                "Destination plan list is full; refresh before staging another version")
+            return false
         end
         state.plans[#state.plans + 1] = item
     end
     state.selected_key = M.key(item)
     state.detail = nil
     M.forget_review(state)
-    state.pane = "plans"
-    state.notice = "Staged for local review; no installation performed"
+    state.notice, state.fault = "", "Staged for local review; no installation performed"
     return true
+end
+-- What a person reads for one activation phase.
+function M.phase_notice(item: Intent): string
+    if item.phase == "prepared" or item.phase == "approval_bound" then return "Waiting for your approval in Needs you" end
+    if item.phase ~= "settled" then return "Installing" end
+    if item.outcome == "applied" then return "Installed" end
+    if item.outcome == "uncertain" then return "Installing; Refresh to see how it ended" end
+    return "This version could not be installed; Details (T) says why"
 end
 function M.apply_activation(state: State, reply: Reply?): boolean
     local value = result_object(reply)
-    if not value then state.notice = message(reply); return false end
+    if not value then refuse(state, reply); return false end
     local item, err = intent(value, state.workspace_id)
-    if not item then state.notice = err or "Destination returned an invalid activation"; return false end
+    if not item then fail(state, UNREADABLE, err or "Destination returned an invalid activation"); return false end
     state.intent = item
-    state.notice = "Activation " .. item.phase
+    fail(state, M.phase_notice(item), "Activation " .. item.phase)
     return true
+end
+function M.activations_request(state: State): Object
+    return {operation = "activations", workspace_id = state.workspace_id}
 end
 function M.list_request(state: State): Object
     return {operation = "list", workspace_id = state.workspace_id}
@@ -553,7 +568,7 @@ function M.review_request(state: State, item: Plan, accepted: boolean, key: stri
     return {operation = "review", workspace_id = state.workspace_id, source_node = item.source_node,
         source_workspace = item.source_workspace, version = item.version, expected_revision = item.revision,
         idempotency_key = key, review_status = accepted and "accepted" or "rejected",
-        review_reason = "Reviewed in Bee Overlays"}
+        review_reason = "Reviewed in Bee Library"}
 end
 function M.select_request(state: State, item: Plan, key: string): Object
     return {operation = "select", workspace_id = state.workspace_id, source_node = item.source_node,
@@ -594,18 +609,25 @@ function M.verdict(state: State, item: Plan?): Verdict
     return "blocked"
 end
 -- Selecting and accepting act on the plan. Neither is offered while the report
--- is unread, fails its digest check, or refuses the plan.
-function M.refusal(state: State, item: Plan?): string?
-    if not item then return "Choose a staged version first" end
+-- is unread, fails its digest check, or refuses the plan. The first result is
+-- what a person reads; the second keeps the destination's words for details.
+function M.refusal(state: State, item: Plan?): (string?, string?)
+    if not item then return "Choose a version first", "Choose a staged version first" end
     local verdict = M.verdict(state, item)
-    if verdict == "ready" then return nil end
-    if verdict == "unread" then return "Read this version's preflight report first; press Enter" end
+    if verdict == "ready" then return nil, nil end
+    if verdict == "unread" then
+        return "This version is still being checked; try again in a moment",
+            "Read this version's preflight report first; press Enter"
+    end
     if verdict == "unreadable" then
-        return "Preflight report does not match its digest: " .. (state.report_error or "report could not be decoded")
+        return "The check of this version can't be trusted; try Refresh",
+            "Preflight report does not match its digest: " .. (state.report_error or "report could not be decoded")
     end
     local report = state.report
     local count = report and #report.diagnostics or 0
-    return "Preflight blocks this version with " .. tostring(count) .. " diagnostics; it cannot be selected"
+    return "This version can't be installed here: it fails " .. tostring(count) .. (count == 1 and " check" or " checks")
+        .. "; Details (T) lists them",
+        "Preflight blocks this version with " .. tostring(count) .. " diagnostics; it cannot be selected"
 end
 local function short(state: State, value: string): string
     if state.technical then return value end
@@ -709,11 +731,12 @@ function M.can_prepare(state: State, item: Plan?): boolean
     if not item or not item.selected or not M.can_select(item) then return false end
     return state.intent == nil or M.key(item) ~= (state.intent.source_node .. "\0" .. state.intent.source_workspace .. "\0" .. state.intent.version)
 end
-function M.available_status(state: State, item: Available): string
+-- The plan staged for an available version, once it is staged.
+function M.staged_plan(state: State, item: Available): Plan?
     for _, staged in ipairs(state.plans) do
-        if M.key(staged) == M.available_plan_key(item) then return staged.status end
+        if M.key(staged) == M.available_plan_key(item) then return staged end
     end
-    return "available"
+    return nil
 end
 function M.set_pending_prepare(state: State, item: Plan, intent_id: string, receipt_key: string)
     state.pending_prepare = {plan_key = M.key(item), intent_id = intent_id, receipt_key = receipt_key}
@@ -723,17 +746,5 @@ function M.set_pending_step(state: State, intent_id: string, receipt_key: string
 end
 function M.set_pending_recover(state: State, receipt_key: string)
     state.pending_recover_key = receipt_key
-end
-function M.set_pending_stage(state: State, available_key: string, idempotency_key: string)
-    state.pending_stage = {available_key = available_key, idempotency_key = idempotency_key}
-end
-function M.finish_mutation(state: State, operation: string, reply: Reply?)
-    if operation == "review" or operation == "select" then
-        if M.apply_plan(state, reply) then
-            if state.detail then state.detail = nil end
-        end
-    elseif operation == "prepare" or operation == "step" or operation == "recover" or operation == "status" then
-        M.apply_activation(state, reply)
-    end
 end
 return M

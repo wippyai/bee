@@ -1,4 +1,4 @@
--- MIT. Overlays presents destination-owned state and emits only facade requests.
+-- MIT. The Library presents destination-owned versions and emits only facade requests.
 local test = require("test")
 local model = require("model")
 local preflight = require("preflight")
@@ -78,7 +78,7 @@ local function activation(): {[string]: unknown}
 end
 
 local function define_tests()
-    test.describe("Overlays model", function()
+    test.describe("Library governed model", function()
         test.it("keeps replicated versions staged until explicit destination actions", function()
             local state = model.new("workspace-destination")
             test.is_true(model.apply_list(state, reply({
@@ -91,7 +91,7 @@ local function define_tests()
                 test.eq(selected.version, "1.0.0")
                 test.is_true(model.can_prepare(state, selected))
             end
-            model.move(state, 1)
+            model.select(state, model.key(state.plans[2]))
             local available = model.selected(state)
             test.not_nil(available)
             if available then
@@ -164,9 +164,9 @@ local function define_tests()
                 test.eq(request.idempotency_key, "stage-key")
                 test.is_true(model.apply_stage(state, reply(plan("2.0.0", "staged", false, 1)), item))
                 test.eq(#state.plans, 1)
-                test.eq(model.available_status(state, item), "staged")
-                test.eq(state.pane, "plans")
-                test.is_true(state.notice:find("no installation", 1, true) ~= nil)
+                test.not_nil(model.staged_plan(state, item))
+                test.eq(state.notice, "")
+                test.is_true(state.fault:find("no installation", 1, true) ~= nil)
             end
         end)
 
@@ -188,7 +188,9 @@ local function define_tests()
             test.is_true(model.apply_list(state, reply({owner_node = "node-destination",
                 workspace_id = "workspace-destination", plans = {plan("1.0.0", "staged", false, 1)}})))
             test.eq(model.verdict(state, model.selected(state)), "unread")
-            test.is_true(model.refusal(state, model.selected(state)):find("preflight report first", 1, true) ~= nil)
+            local unread, unread_detail = model.refusal(state, model.selected(state))
+            test.is_true(assert(unread):find("still being checked", 1, true) ~= nil)
+            test.is_true(assert(unread_detail):find("preflight report first", 1, true) ~= nil)
             test.is_true(model.apply_plan(state, reply(detail("1.0.0", ready_bytes, ready_digest))))
             test.eq(model.verdict(state, model.selected(state)), "ready")
             test.is_nil(model.refusal(state, model.selected(state)))
@@ -201,7 +203,9 @@ local function define_tests()
                 workspace_id = "workspace-destination", plans = {plan("1.0.0", "staged", false, 1)}})))
             test.is_true(model.apply_plan(state, reply(detail("1.0.0", blocked_bytes, blocked_digest))))
             test.eq(model.verdict(state, model.selected(state)), "blocked")
-            test.is_true(model.refusal(state, model.selected(state)):find("Preflight blocks", 1, true) ~= nil)
+            local blocked, blocked_detail = model.refusal(state, model.selected(state))
+            test.is_true(assert(blocked):find("fails 1 check", 1, true) ~= nil)
+            test.is_true(assert(blocked_detail):find("Preflight blocks", 1, true) ~= nil)
             local rows = model.review_rows(state)
             local rendered = ""
             for _, row in ipairs(rows) do rendered = rendered .. row.text .. "\n" end
@@ -210,7 +214,9 @@ local function define_tests()
             -- The same bytes under another plan's digest are not that plan's report.
             test.is_true(model.apply_plan(state, reply(detail("1.0.0", blocked_bytes, string.rep("e", 64)))))
             test.eq(model.verdict(state, model.selected(state)), "unreadable")
-            test.is_true(model.refusal(state, model.selected(state)):find("does not match its digest", 1, true) ~= nil)
+            local unreadable, unreadable_detail = model.refusal(state, model.selected(state))
+            test.is_true(assert(unreadable):find("can't be trusted", 1, true) ~= nil)
+            test.is_true(assert(unreadable_detail):find("does not match its digest", 1, true) ~= nil)
         end)
 
         test.it("decodes the entry set of one plan against the composed base", function()
@@ -240,6 +246,62 @@ local function define_tests()
                 workspace_id = "workspace-other", plans = {}})))
             test.is_false(model.apply_list(state, reply({owner_node = "node-destination",
                 workspace_id = "workspace-destination", plans = {plan("1.0.0", "staged", false, 0)}})))
+        end)
+
+        test.it("tells a person a version can't be read and keeps the owner's words for details", function()
+            local state = model.new("workspace-destination")
+            test.is_false(model.apply_list(state, reply({owner_node = "node-destination",
+                workspace_id = "workspace-other", plans = {}})))
+            test.eq(state.notice, "This version can't be read; try Refresh")
+            test.eq(state.fault, "Destination returned an invalid plan list")
+            local refused = assert(model.reply({ok = false, replayed = false,
+                error = {code = "BLOCKED", message = "no activation profile"}}))
+            test.is_false(model.apply_available(state, refused))
+            test.eq(state.notice, "That did not go through; Details (T) says why")
+            test.eq(state.fault, "BLOCKED: no activation profile")
+            test.is_false(model.apply_available(state, nil))
+            test.eq(state.notice, "No answer yet; try Refresh")
+        end)
+
+        test.it("reads the activations of the workspace with their slot pointers", function()
+            local state = model.new("workspace-destination")
+            test.eq(model.activations_request(state).operation, "activations")
+            local installed = {owner_node = "node-destination", workspace_id = "workspace-destination",
+                intent_id = "intent-1", overlay_owner = "overlay", source_node = "node-source",
+                source_workspace = "notes", version = "1.0.0", revision = 6, phase = "settled", outcome = "applied",
+                slot_revision = 4, desired_intent_id = "intent-1", observed_intent_id = "intent-1", observed_outcome = "applied"}
+            test.is_true(model.apply_activations(state, reply({workspace_id = "workspace-destination",
+                activations = {installed}})))
+            test.eq(#state.activations, 1)
+            test.eq(state.activations[1].observed_outcome, "applied")
+            test.is_false(model.apply_activations(state, reply({workspace_id = "workspace-other", activations = {}})))
+            test.eq(#state.activations, 1)
+            local malformed = {owner_node = "node-destination", workspace_id = "workspace-destination",
+                intent_id = "intent-2", overlay_owner = "overlay", source_node = "node-source",
+                source_workspace = "notes", version = "1.0.1", revision = 1, phase = "unknown"}
+            test.is_false(model.apply_activations(state, reply({workspace_id = "workspace-destination",
+                activations = {malformed}})))
+        end)
+
+        test.it("names each activation phase in the words a person reads", function()
+            local base = {owner_node = "node-destination", workspace_id = "workspace-destination",
+                intent_id = "intent-1", overlay_owner = "overlay", source_node = "node-source",
+                source_workspace = "notes", version = "1.0.0", revision = 1}
+            local function phrase(phase: string, outcome: string?): string
+                local state = model.new("workspace-destination")
+                local value: {[string]: unknown} = {}
+                for key, item in pairs(base) do value[key] = item end
+                value.phase, value.outcome = phase, outcome
+                test.is_true(model.apply_activation(state, reply(value)))
+                test.is_true(state.fault:find("Activation " .. phase, 1, true) == 1)
+                return state.notice
+            end
+            test.eq(phrase("prepared"), "Waiting for your approval in Needs you")
+            test.eq(phrase("approval_bound"), "Waiting for your approval in Needs you")
+            test.eq(phrase("authorized"), "Installing")
+            test.eq(phrase("applying"), "Installing")
+            test.eq(phrase("settled", "applied"), "Installed")
+            test.is_true(phrase("settled", "failed"):find("could not be installed", 1, true) ~= nil)
         end)
 
         test.it("accepts the complete destination activation evidence", function()

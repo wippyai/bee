@@ -1,5 +1,6 @@
--- MIT. Modules renders model state only. Hit rectangles become application
--- events; this frame neither opens Hub nor confirms an install.
+-- MIT. The Hub package screens of the Library: details, changes, confirmation,
+-- result and the editors. This view renders model state only; hit rectangles
+-- become application events and nothing here opens Hub or confirms an install.
 local tty = require("tty")
 local json = require("json")
 local appearance = require("appearance")
@@ -12,6 +13,9 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capa
 -- One line of a plan review: a heading with an optional summary, or an item;
 -- missing names the requirement an item configures.
 type ReviewLine = {text: string, heading: boolean, summary: string?, missing: string?}
+-- The Library tabs drawn above a package screen and the one it belongs to.
+type Chrome = {tabs: {frame.Tab}, active: string, technical: boolean}
+local TITLES: {[string]: string} = {details = "PACKAGE", plan = "CHANGES", confirm = "CONFIRM", result = "RESULT"}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 -- align pads value to width cells and keeps a longer value whole.
@@ -33,7 +37,30 @@ local function request_lines(request: {[string]: unknown}): {string}
     return lines
 end
 
-local function draw_base(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, content: contents.State?): Frame
+-- One history row's result as lines: what happened to the package, then, for
+-- the details view, the request, digest and migration work behind it.
+function M.receipt_lines(operation: model.Operation, technical: boolean): {string}
+    local lines: {string} = {
+        align("Package", 10) .. operation.action .. "  " .. operation.component,
+        align("State", 10) .. operation.state .. "  " .. operation.message,
+    }
+    if not technical then return lines end
+    lines[#lines + 1] = align("Digest", 10) .. operation.digest:sub(1, 16) .. "  baseline revision " .. tostring(operation.baseline_revision)
+    if operation.request then
+        for _, line_text in ipairs(request_lines(operation.request)) do lines[#lines + 1] = line_text end
+    else
+        lines[#lines + 1] = "Request unavailable; this receipt is view-only"
+    end
+    if #operation.migration_work > 0 then
+        lines[#lines + 1] = "Migration work"
+        for _, row in ipairs(operation.migration_work) do
+            lines[#lines + 1] = "  " .. model.text(row.id, 256) .. " · " .. model.text(row.status, 32) .. " · " .. model.text(row.target_db, 256)
+        end
+    end
+    return lines
+end
+
+local function draw_base(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, content: contents.State?, chrome: Chrome): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
     -- Splits each value into rows that fit the body width.
@@ -64,199 +91,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         return frame.button(painter, x, y, {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active,
             primary = kind == "confirm" or kind == "review" or kind == "plan" or kind == "recover"})
     end
-    frame.header(painter, "MODULES  " .. string.upper(state.phase), state.selected or "Browse the Hub")
-    local x = 2
-    x = button(x, 2, "catalog", " Catalog ", true)
-    x = button(x, 2, "installed", " Installed ", true)
-    x = button(x, 2, "operations", " Operations ", true)
-    if state.phase ~= "catalog" and state.phase ~= "installed" then
-        x = button(x, 2, "details", " Package ", state.selected ~= nil)
-    end
-    if state.phase == "catalog" then
-        local filters = "Keyword " .. (state.keyword == "" and "all" or state.keyword) .. " · Search " .. (state.query == "" and "none" or state.query)
-        if width < 56 then filters = "Keyword " .. (state.keyword == "" and "all" or state.keyword) end
-        frame.line(painter, 3, filters, theme.muted)
-        local roomy = width >= 48 and height >= 16
-        local first = roomy and 6 or 4
-        local stride = roomy and 3 or 1
-        local catalog_items = model.visible_catalog(state)
-        local capacity = maximum(0, (height - 2 - first) // stride)
-        local next_offset = math.floor(math.max(0, math.min(maximum(0, #catalog_items - capacity), offset)))
-        if roomy then
-            local search_x = button(2, 4, "search", " Search packages… ", true)
-            search_x = button(search_x, 4, "keyword", " Change keyword ", true)
-            local dev_label = state.developer_packages and " Developer packages [x] " or " Developer packages "
-            if width < 76 then
-                dev_label = state.developer_packages and " Dev pkgs [x] " or " Dev pkgs "
-            end
-            button(search_x, 4, "developer_packages", dev_label, true)
-            local count_str = tostring(#catalog_items) .. (state.all_catalog and #state.all_catalog > #catalog_items and ("/" .. tostring(state.total)) or "") .. " packages"
-            frame.section(painter, 5, "Packages", count_str .. " · page " .. tostring(state.page))
-        end
-        if #catalog_items == 0 then
-            if state.all_catalog and #state.all_catalog > 0 then
-                frame.line(painter, first, "No packages on this page", theme.text)
-                if roomy then frame.line(painter, first + 1, "Developer packages are hidden · enable Developer packages to show libraries.", theme.muted) end
-            else
-                frame.empty(painter, first, "No packages found", "/ change the search · K change the keyword")
-            end
-        end
-        for slot = 1, capacity do
-            local item = catalog_items[next_offset + slot]
-            if not item then break end
-            local y, selected = first + (slot - 1) * stride, item.component == state.selected
-            local label = item.title ~= "" and item.title or item.component
-            local status = model.component_status(state, item.component)
-            local foreground = selected and appearance.selection_text(theme) or theme.text
-            local background = selected and theme.accent or theme.surface
-            local row_label = roomy and (" " .. label) or label
-            if not roomy then
-                if status == "built-in" then row_label = label .. " [built-in]"
-                elseif status == "installed" then row_label = label .. " [installed]"
-                else row_label = label .. " [install]" end
-            end
-            frame.row(painter, y, row_label, selected, "component", 0, item.component, nil, nil, stride)
-            if roomy then
-                local action_tag = ""
-                if status == "built-in" then
-                    action_tag = item.latest_version ~= "" and ("Built-in · Open " .. item.latest_version) or "Built-in · Open"
-                elseif status == "installed" then
-                    action_tag = item.latest_version ~= "" and ("Installed · Open " .. item.latest_version) or "Installed · Open"
-                else
-                    action_tag = item.latest_version ~= "" and ("Install " .. item.latest_version) or "Install"
-                end
-                local tag_width = tty.text.width(action_tag)
-                if tag_width > 0 and tty.text.width(label) + tag_width + 6 < width then
-                    frame.put(painter, width - tag_width - 2, y, action_tag, tag_width, foreground, background)
-                elseif tty.text.width(item.latest_version) > 0 and tty.text.width(label) + tty.text.width(item.latest_version) + 6 < width then
-                    frame.put(painter, width - tty.text.width(item.latest_version) - 2, y, item.latest_version, tty.text.width(item.latest_version), foreground, background)
-                end
-                frame.line(painter, y + 1, " " .. item.component .. "  ·  " .. (item.description ~= "" and item.description or "No description provided"), theme.muted)
-            end
-        end
-        local sel_status = state.selected and model.component_status(state, state.selected)
-        local actions = 2
-        actions = button(actions, height - 1, "previous", " ‹ Previous ", state.page > 1)
-        actions = button(actions, height - 1, "next", " Next › ", #state.catalog > 0 and state.total > state.page * #state.catalog)
-        actions = button(actions, height - 1, "details", (sel_status == "built-in" or sel_status == "installed") and " Open " or " Install ", state.selected ~= nil)
-        local action_hint = (sel_status == "built-in" or sel_status == "installed") and "Enter open" or "Enter install"
-        frame.footer(painter, status, "/ search · K keyword · " .. action_hint .. " · ←/→ page")
-        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
-    end
-    if state.phase == "installed" then
-        local roomy = width >= 48 and height >= 16
-        if roomy then frame.section(painter, 4, "Installed packages", tostring(#state.installed) .. (#state.installed == 1 and " package" or " packages"))
-        else frame.line(painter, 3, "Your installed packages · " .. tostring(#state.installed), theme.muted) end
-        local first, stride = roomy and 5 or 4, roomy and 3 or 1
-        local capacity = maximum(0, (height - 1 - first) // stride)
-        local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.installed - capacity), offset)))
-        if #state.installed == 0 then
-            frame.empty(painter, first, "No packages installed", "Browse the catalog to choose a package")
-            if roomy then frame.line(painter, first + 1, "Browse the catalog to find your first package.", theme.muted) end
-        end
-        for slot = 1, capacity do
-            local item = state.installed[next_offset + slot]
-            if not item then break end
-            local y, selected = first + (slot - 1) * stride, item.component == state.selected
-            local foreground = selected and appearance.selection_text(theme) or theme.text
-            local background = selected and theme.accent or theme.surface
-            if roomy then
-                local update: model.PackUpdate? = nil
-                for _, candidate in ipairs(state.pack_updates) do
-                    if candidate.component == item.component then update = candidate; break end
-                end
-                local version_width = tty.text.width(item.version)
-                local name_width = maximum(0, width - version_width - 7)
-                frame.row(painter, y, " " .. tty.text.truncate(item.component, name_width, "…"), selected, "component", 0, item.component, nil, nil, stride)
-                frame.put(painter, width - version_width - 2, y, item.version, version_width, foreground, background)
-                local description = item.direct and "Direct installation" or "Dependency"
-                if #item.used_by > 0 then description = description .. " · Required by " .. table.concat(item.used_by, ", ") end
-                if update then
-                    if update.available_version ~= "" then
-                        description = description .. " · Hub " .. update.available_version
-                        if item.component == "bee/bee" and state.bee_update and state.bee_update.needs_new_binary then
-                            description = description .. " · needs a newer Bee binary"
-                        elseif item.component == "bee/bee" and state.bee_update and state.bee_update.update_available then
-                            description = description .. " · U updates the Bee deployment"
-                        elseif update.update_available then description = description .. " · component update available" end
-                    elseif state.update_status == "pending" then description = description .. " · checking Hub version…" end
-                end
-                frame.line(painter, y + 1, " " .. description, theme.muted)
-            else
-                local label = item.component .. "  " .. item.version
-                for _, candidate in ipairs(state.pack_updates) do
-                    if candidate.component == item.component and candidate.available_version ~= "" then
-                        label = label .. " · Hub " .. candidate.available_version
-                        if candidate.update_available then label = label .. " · update available" end
-                        break
-                    end
-                end
-                frame.row(painter, y, label, selected, "component", 0, item.component)
-            end
-        end
-        local actions = button(2, height - 1, "refresh", " Refresh ", true)
-        local update = state.bee_update
-        if update and update.update_available then
-            actions = button(actions, height - 1, "bee_update", " Update Bee ", not update.needs_new_binary)
-        end
-        frame.footer(painter, status, "↑↓ select · Enter details · U update Bee · R refresh")
-        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
-    end
-    if state.phase == "operations" then
-        frame.section(painter, 4, "Operations", "Actor-owned operation history")
-        local selected_operation = state.selected_operation
-        local first = 5
-        -- A selected receipt takes the rows below the list: a gap, its heading and its detail.
-        local list_last = selected_operation and math.max(first - 1, height - 13) or height - 2
-        local capacity = maximum(0, math.floor(list_last - first + 1))
-        local next_offset = math.floor(math.max(0, math.min(math.max(0, #state.operations - capacity), offset)))
-        local page_size = math.max(1, state.operation_page_size)
-        local total_pages = math.max(1, math.ceil(state.operation_total / page_size))
-        local selected_detail_offset = 0
-        if #state.operations == 0 then
-            frame.empty(painter, first, "No package changes recorded", "Choose a package in the catalog to review a change")
-        end
-        for slot = 1, capacity do
-            local item = state.operations[next_offset + slot]
-            if not item then break end
-            local y, selected = first + slot - 1, selected_operation and selected_operation.digest == item.digest
-            local label = align(item.action, 10) .. "  " .. align(item.component, 28) .. "  " .. item.state
-            if width >= 72 then label = label .. string.rep(" ", maximum(0, 18 - tty.text.width(item.state))) .. "  r" .. tostring(item.baseline_revision) end
-            frame.row(painter, y, label, selected == true, "operation", 0, item.digest)
-        end
-        if selected_operation then
-            local detail_first = first + capacity + 2
-            local detail: {string} = {
-                align("Selected", 10) .. selected_operation.action .. "  " .. selected_operation.component,
-                align("Digest", 10) .. selected_operation.digest:sub(1, 16) .. "  baseline revision " .. tostring(selected_operation.baseline_revision),
-                align("State", 10) .. selected_operation.state .. "  " .. selected_operation.message,
-            }
-            if selected_operation.request then
-                for _, line_text in ipairs(request_lines(selected_operation.request)) do detail[#detail + 1] = line_text end
-            else
-                detail[#detail + 1] = "Request unavailable; this receipt is view-only"
-            end
-            if #selected_operation.migration_work > 0 then
-                detail[#detail + 1] = "Migration work"
-                for _, row in ipairs(selected_operation.migration_work) do detail[#detail + 1] = "  " .. model.text(row.id, 256) .. " · " .. model.text(row.status, 32) .. " · " .. model.text(row.target_db, 256) end
-            end
-            local detail_capacity = maximum(0, height - 3 - detail_first + 1)
-            local detail_offset = math.floor(math.max(0, math.min(math.max(0, #detail - detail_capacity), state.operation_detail_offset)))
-            selected_detail_offset = detail_offset
-            for slot = 1, math.min(detail_capacity, #detail - detail_offset) do frame.line(painter, detail_first + slot - 1, "  " .. detail[detail_offset + slot], theme.text) end
-            local range = ""
-            if #detail > detail_capacity and detail_capacity > 0 then range = tostring(detail_offset + 1) .. "–" .. tostring(math.min(#detail, detail_offset + detail_capacity)) .. "/" .. tostring(#detail) .. " · PgUp/PgDn scroll" end
-            if detail_capacity > 0 then frame.section(painter, detail_first - 1, "Receipt", range) end
-        end
-        local actions = 2
-        actions = button(actions, height - 1, "operations_previous", " Prev ", state.operation_page > 1)
-        actions = button(actions, height - 1, "operations_next", " Next ", state.operation_page < total_pages)
-        if selected_operation and (selected_operation.state == "prepared" or selected_operation.state == "published" or selected_operation.state == "recovery_required") and selected_operation.request then
-            button(actions, height - 1, "recover", " Review recovery… ", true)
-        end
-        frame.footer(painter, status, ("Page " .. tostring(state.operation_page) .. "/" .. tostring(total_pages) .. " · select a receipt to inspect its measured result"))
-        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = selected_detail_offset}
-    end
+    frame.header(painter, "LIBRARY  " .. (TITLES[state.phase] or "PACKAGE"), state.selected or "")
+    if height >= 6 then frame.tabs(painter, 2, chrome.tabs, chrome.active) end
     local detail = state.detail
     if state.phase == "details" then
         local detail_status = detail and model.component_status(state, detail.component)
@@ -400,7 +236,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 local action_x = button(2, height - 1, "versions", " Choose version ", true)
                 action_x = button(action_x, height - 1, "requirements", " Configure ", true)
                 action_x = button(action_x, height - 1, "plan", " Review installation ", state.selected_version ~= nil)
-                frame.footer(painter, status, "↑↓ scroll · V versions · C contents · Esc catalog")
+                frame.footer(painter, status, "↑↓ scroll · V versions · C contents · Esc back")
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
             local first, last = 6, height - 4
@@ -437,9 +273,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     if state.phase == "confirm" and state.recovery then
         local recovery = state.recovery
         local operation = recovery.operation
-        frame.line(painter, 3, "Review recovery · immutable receipt", theme.accent)
+        frame.line(painter, 3, "Finish an interrupted change", theme.accent)
         frame.line(painter, 4, operation.action .. "  " .. operation.component .. "  " .. operation.state, theme.text)
-        local body: {string} = {"The stored request will be sent with this digest; no new plan will be prepared."}
+        local body: {string} = {"The change that was recorded is sent again exactly as it was; nothing new is prepared."}
         for _, request_line in ipairs(request_lines(recovery.request)) do body[#body + 1] = request_line end
         body[#body + 1] = "Migration work"
         if #operation.migration_work > 0 then
@@ -450,13 +286,13 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         body = wrap(body)
         local body_capacity = maximum(0, height - 8)
         local body_offset = math.floor(math.max(0, math.min(math.max(0, #body - body_capacity), offset)))
-        frame.line(painter, 5, "Digest " .. recovery.digest .. (#body > body_capacity and (" · detail " .. tostring(body_offset + 1) .. "–" .. tostring(math.min(#body, body_offset + body_capacity)) .. "/" .. tostring(#body)) or ""), theme.muted)
+        frame.line(painter, 5, (chrome.technical and ("Digest " .. recovery.digest) or "Recorded change") .. (#body > body_capacity and (" · detail " .. tostring(body_offset + 1) .. "–" .. tostring(math.min(#body, body_offset + body_capacity)) .. "/" .. tostring(#body)) or ""), theme.muted)
         for slot = 1, math.min(body_capacity, #body - body_offset) do frame.line(painter, 6 + slot - 1, body[body_offset + slot], theme.text) end
-        frame.line(painter, height - 2, "Confirming recovery reuses the exact stored request and measured digest.", theme.text)
+        frame.line(painter, height - 2, "Confirming repeats exactly the recorded change.", theme.text)
         local actions = 2
         actions = button(actions, height - 1, "confirm", " Confirm recovery ", true)
         button(actions, height - 1, "cancel", " Back ", true)
-        frame.footer(painter, status, "Enter confirms · Esc returns to operation history")
+        frame.footer(painter, status, "Enter confirms · Esc back to history")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
     end
     local plan = state.plan
@@ -472,18 +308,18 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             if slot == message_capacity and #message > message_capacity then value = tty.text.truncate(value .. " …", maximum(0, width - 2), "…") end
             frame.line(painter, 3 + slot, value, theme.text)
         end
-        frame.line(painter, 5 + shown, "Receipt state: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
+        frame.line(painter, 5 + shown, "State: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
         button(2, height - 1, "status", " Check status ", state.plan ~= nil or state.selected_operation ~= nil)
-        button(18, height - 1, "catalog", " Catalog ", true)
-        frame.footer(painter, status, "R checks this measured operation · Esc returns to catalog")
+        button(18, height - 1, "back", " Back ", true)
+        frame.footer(painter, status, "R checks again · Esc back")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
     if not plan then
-        frame.empty(painter, 3, "No changes prepared", "Choose a package and press P to review changes")
-        frame.footer(painter, status, "P prepares a plan from the selected package")
+        frame.empty(painter, 3, "No changes to review", "Choose a package and press P to review its changes")
+        frame.footer(painter, status, "P reviews the changes of the selected package")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
-    frame.line(painter, 3, "Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision), theme.muted)
+    frame.line(painter, 3, chrome.technical and ("Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision)) or "Changes this package makes", theme.muted)
     frame.line(painter, 4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
     -- The review lists each part of the plan under its heading, a gap before
     -- each heading but the first, items indented under it.
@@ -552,7 +388,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     end
     local actions = 2
     if state.phase == "confirm" then
-        frame.line(painter, height - 2, "Duration: once, for this exact digest; edits clear confirmation.", theme.text)
+        frame.line(painter, height - 2, "Applies once, to exactly these changes; any edit clears the confirmation.", theme.text)
         actions = button(actions, height - 1, "confirm", " Confirm ", plan.ready)
         actions = button(actions, height - 1, "cancel", " Back ", true)
         frame.footer(painter, status, "Enter confirms · Esc returns to the plan")
@@ -560,15 +396,16 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         actions = button(actions, height - 1, "review", " Confirm… ", plan.ready)
         actions = button(actions, height - 1, "refresh_plan", " Replan ", true)
         button(actions, height - 1, "missing", " Configure required ", #plan.missing > 0)
-        frame.footer(painter, status, "Enter reviews immutable plan · R replans · edits invalidate it")
+        frame.footer(painter, status, "Enter reviews these changes · R refreshes them · edits clear them")
     end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
 end
 
 type Editor = {field: string, buffer: string, name: string?}
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?, content: contents.State?): Frame
-    local base = draw_base(width, height, preferences, state, offset, editor and "" or status, reading, content)
-    if not editor then return base end
+-- overlay floats the editor above a drawn screen. The editor stays the active
+-- mode after a resize, so a compact canvas keeps it visible and never exposes
+-- the page's hit targets while keystrokes still edit the buffer.
+function M.overlay(base: Frame, width: integer, height: integer, preferences: appearance.Preferences, status: string, editor: Editor): Frame
     local theme = preferences.theme
     local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword"
         or "Configure package")
@@ -638,5 +475,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         {kind = "cancel_editor", index = 0, key = "", x = left + 15, y = top + h - 2, width = math.floor(math.min(12, w - 17)), height = 1},
     }
     return {rows = frame.rows(editor_painter), hits = hits, capacity = base.capacity, offset = base.offset, operation_detail_offset = base.operation_detail_offset}
+end
+
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?, content: contents.State?, chrome: Chrome): Frame
+    local base = draw_base(width, height, preferences, state, offset, editor and "" or status, reading, content, chrome)
+    if not editor then return base end
+    return M.overlay(base, width, height, preferences, status, editor)
 end
 return M

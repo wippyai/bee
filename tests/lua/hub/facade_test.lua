@@ -26,12 +26,12 @@ local function call(executor: funcs.Executor, request: {[string]: unknown}): Res
     return {ok = reply.ok, code = reply.code, message = reply.message, value = reply.value, replayed = reply.replayed}
 end
 
-local MODULES = {"bee.apps.modules:hub_client", "bee.apps.modules:hub_operations", "bee.apps.modules:self_update"}
+local MODULES = {"bee.apps.library:hub_client", "bee.apps.library:hub_operations", "bee.apps.library:self_update"}
 
 local function define_tests()
     test.describe("Hub facade", function()
         test.it("denies an operation the caller holds no Hub grant for", function()
-            local result = call(caller({"bee.apps.modules:hub_client"}), {operation = "installed"})
+            local result = call(caller({"bee.apps.library:hub_client"}), {operation = "installed"})
             test.eq(result.ok, false)
             test.eq(result.code, "DENIED")
         end)
@@ -44,7 +44,7 @@ local function define_tests()
             test.eq(call(about, {operation = "installed"}).code, "DENIED")
         end)
         test.it("refuses a Bee self-update plan without the self-update grant", function()
-            local planner = caller({"bee.apps.modules:hub_client", "bee.apps.modules:hub_operations"})
+            local planner = caller({"bee.apps.library:hub_client", "bee.apps.library:hub_operations"})
             local result = call(planner, {operation = "plan", request = {action = "update", component = "bee/bee", version = "9.0.0"}})
             test.eq(result.ok, false)
             test.eq(result.code, "DENIED")

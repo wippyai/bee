@@ -1,9 +1,9 @@
--- MIT. Modules only describes Hub calls and retains no authority itself.
+-- MIT. The Library's Hub model only describes Hub calls and retains no authority itself.
 local test = require("test")
 local model = require("model")
 local function ok(value: unknown): model.Reply return {ok = true, code = nil, message = nil, value = value, replayed = false} end
 local function define_tests()
-    test.describe("Modules model", function()
+    test.describe("Library Hub model", function()
         test.it("discovers typed defaults without submitting them and rejects stale requirements", function()
             local state = model.new()
             model.select(state, "acme/app")
@@ -293,7 +293,7 @@ local function define_tests()
             model.apply_plan(state, ok({digest = string.rep("c", 64), ready = true, base_revision = 7, modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {},
                 request = {action = "install", component = "userspace/docker", version = "0.5.12", parameters = {}, migration_policy = "none"}}))
             test.is_nil(state.plan)
-            test.eq(state.notice, "plan belongs to an earlier package selection; ignored")
+            test.eq(state.notice, "Those changes were for an earlier choice and were ignored")
         end)
         test.it("requires a completed receipt before presenting a successful operation", function()
             local state = model.new()

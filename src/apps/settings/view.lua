@@ -202,7 +202,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local page = ""
         local bee_update = live and live.bee_update
         if bee_update and bee_update.update_available and not bee_update.needs_new_binary then
-            page = "Bee " .. bee_update.available_version .. " is available · update it in Modules"
+            page = "Bee " .. bee_update.available_version .. " is available · update it in the Library"
         end
         if capacity == 0 then page = "Resize to read build details"
         elseif #details > capacity then

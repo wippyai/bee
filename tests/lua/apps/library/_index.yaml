@@ -1,0 +1,75 @@
+version: '1.0'
+namespace: bee.tests.apps.library
+entries:
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.apps.library:model
+    governed: bee.apps.library:governed
+    hub: bee.apps.library:hub
+- name: governed_test
+  kind: function.lua
+  source: file://governed_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.apps.library:governed
+    preflight: bee.gov.binding:preflight
+- name: hub_test
+  kind: function.lua
+  source: file://hub_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    model: bee.apps.library:hub
+- name: hub_view_test
+  kind: function.lua
+  source: file://hub_view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [tty]
+  imports:
+    test: wippy.test:test
+    model: bee.apps.library:hub
+    view: bee.apps.library:hub_view
+    appearance: bee.ui:appearance
+    contents: bee.apps.library:contents
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [tty]
+  imports:
+    test: wippy.test:test
+    model: bee.apps.library:model
+    governed: bee.apps.library:governed
+    hub: bee.apps.library:hub
+    view: bee.apps.library:view
+    contents: bee.apps.library:contents
+    appearance: bee.ui:appearance
+    preflight: bee.gov.binding:preflight
+- name: app_test
+  kind: function.lua
+  source: file://app_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time, tty]
+  imports:
+    test: wippy.test:test
+- name: contents_test
+  kind: function.lua
+  source: file://contents_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [base64]
+  imports:
+    test: wippy.test:test
+    contents: bee.apps.library:contents

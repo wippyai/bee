@@ -81,7 +81,7 @@ local function package_policy(grant: Object, id: string, app: string): Object?
         and grant.resource == "components" then
         return plain({"bee.hub.read", "bee.hub.manage"}, "*", "Host-generated Hub management grant", id)
     end
-    if app == "bee.apps.modules:app" and grant.capability == "hub.self_update"
+    if app == "bee.apps.library:app" and grant.capability == "hub.self_update"
         and grant.operation == "hub.self_update" and grant.resource == "bee/bee" then
         return plain({"bee.hub.self_update"}, {"bee/bee"}, "Host-generated Bee deployment self-update grant", id)
     end

@@ -857,15 +857,15 @@ local function matches_request(state: State, raw: unknown): boolean
 end
 
 function M.apply_plan(state: State, reply: Reply)
-    if not reply.ok or type(reply.value) ~= "table" then state.plan = nil; state.phase = "plan"; state.notice = M.text((reply.code or "INVALID") .. ": " .. (reply.message or "cannot prepare plan")); return end
+    if not reply.ok or type(reply.value) ~= "table" then state.plan = nil; state.phase = "plan"; state.notice = M.text((reply.code or "INVALID") .. ": " .. (reply.message or "cannot review these changes")); return end
     local value = object(reply.value)
-    if not value then state.notice = "Hub returned a malformed plan"; return end
+    if not value then state.notice = "The Hub answered something unreadable; try Refresh"; return end
     local measured_digest = digest(value.digest)
-    if not measured_digest then state.notice = "Hub returned an unmeasured plan"; return end
+    if not measured_digest then state.notice = "The Hub answered something unreadable; try Refresh"; return end
     local base_revision = integer(value.base_revision)
-    if base_revision == nil then state.notice = "Hub returned a plan with an invalid base revision"; return end
-    if type(value.ready) ~= "boolean" then state.notice = "Hub returned a plan with an invalid readiness value"; return end
-    if not matches_request(state, value.request) then state.notice = "plan belongs to an earlier package selection; ignored"; return end
+    if base_revision == nil then state.notice = "The Hub answered something unreadable; try Refresh"; return end
+    if type(value.ready) ~= "boolean" then state.notice = "The Hub answered something unreadable; try Refresh"; return end
+    if not matches_request(state, value.request) then state.notice = "Those changes were for an earlier choice and were ignored"; return end
     local modules, modules_error = object_list(value.modules, "plan modules", M.MAX_PLAN_ITEMS)
     local migrations, migrations_error = object_list(value.migrations, "plan migrations", M.MAX_PLAN_ITEMS)
     local missing, missing_error = string_list(value.missing, "plan missing requirements", M.MAX_PLAN_ITEMS)
@@ -873,7 +873,7 @@ function M.apply_plan(state: State, reply: Reply)
     local capabilities, capabilities_error = string_list(value.capabilities, "plan capabilities", M.MAX_PLAN_ITEMS)
     if not modules or not migrations or not missing or not starts or not capabilities then
         state.notice = modules_error or migrations_error or missing_error or starts_error or capabilities_error
-            or "Hub returned malformed plan details"
+            or "The Hub answered something unreadable; try Refresh"
         return
     end
     local conversion: {roots: {RootSelection}}? = nil

@@ -1,0 +1,242 @@
+-- MIT. The Library folds governed versions and Hub packages into one list per tab
+-- and names every row's status in the person-facing vocabulary only.
+local test = require("test")
+local model = require("model")
+local governed = require("governed")
+local hub = require("hub")
+
+local WORKSPACE = "workspace-destination"
+local NODE = "node-destination"
+
+local function reply(value: unknown): governed.Reply
+    local result = governed.reply({ok = true, value = value, replayed = false})
+    if not result then error("valid fixture reply was rejected") end
+    return result
+end
+
+local function hub_reply(value: unknown): hub.Reply
+    return {ok = true, code = nil, message = nil, value = value, replayed = false}
+end
+
+local function version(source_workspace: string, release: string, owner: string): {[string]: unknown}
+    return {schema = "bee.sync-version@1", owner_id = owner, feed = "governance.application_versions",
+        key = "key-" .. source_workspace .. "-" .. release, object_id = "app." .. source_workspace, version_id = release,
+        content_digest = string.rep("a", 64), manifest_digest = string.rep("b", 64),
+        content_kind = "bee.governance-application-version@2", total_bytes = 2048,
+        manifest = {schema_revision = "bee.governance-application-version@2", source_workspace = source_workspace,
+            component = "app." .. source_workspace, artifact_digest = string.rep("c", 64)}, digest = string.rep("d", 64)}
+end
+
+local function activation(id: string, source_workspace: string, release: string, phase: string, outcome: string?,
+    observed: string?, source_node: string?): {[string]: unknown}
+    return {owner_node = NODE, workspace_id = WORKSPACE, intent_id = id, overlay_owner = "owner-" .. source_workspace,
+        source_node = source_node or NODE, source_workspace = source_workspace, version = release, revision = 3,
+        phase = phase, outcome = outcome, observed_intent_id = observed,
+        observed_outcome = observed and "applied" or nil}
+end
+
+local function fresh(): model.State
+    local state = model.new(WORKSPACE)
+    test.is_true(governed.apply_list(state.governed, reply({owner_node = NODE, workspace_id = WORKSPACE, plans = {}})))
+    return state
+end
+
+local function load(state: model.State, available: {unknown}, activations: {unknown})
+    test.is_true(governed.apply_available(state.governed, reply({workspace_id = WORKSPACE, versions = available})))
+    test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = activations})))
+end
+
+local function define_tests()
+    test.describe("Library model", function()
+        test.it("speaks only the person-facing status words", function()
+            test.eq(model.STATUS_SHARED, "Shared")
+            test.eq(model.STATUS_WAITING, "Waiting for your approval")
+            test.eq(model.STATUS_INSTALLING, "Installing")
+            test.eq(model.STATUS_INSTALLED, "Installed")
+            test.eq(model.STATUS_UPDATE, "Update available")
+            test.eq(model.STATUS_REMOVED, "Removed")
+        end)
+
+        test.it("lists an installed application made on this bee", function()
+            local state = fresh()
+            load(state, {}, {activation("i1", "notes", "1.0.1", "settled", "applied", "i1")})
+            local rows = model.rows(state, "installed")
+            test.eq(#rows, 1)
+            test.eq(rows[1].name, "Notes")
+            test.eq(rows[1].version, "1.0.1")
+            test.eq(rows[1].status, "Installed")
+            test.eq(rows[1].source, "made on this bee")
+            test.eq(model.summary(state), "1 installed · 0 shared")
+        end)
+
+        test.it("offers the newer shared version of an installed application as an update", function()
+            local state = fresh()
+            load(state, {version("todo", "1.0.1", "node-laptop"), version("todo", "0.9.0", "node-laptop")},
+                {activation("i1", "todo", "1.0.0", "settled", "applied", "i1", "node-laptop")})
+            local rows = model.rows(state, "installed")
+            test.eq(#rows, 1)
+            test.eq(rows[1].status, "Update available")
+            test.eq(rows[1].update, "1.0.1")
+            test.eq(rows[1].source, "from bee node-laptop")
+            test.eq(#model.rows(state, "shared"), 0)
+        end)
+
+        test.it("says an install is waiting for approval, then installing", function()
+            local state = fresh()
+            load(state, {version("tally", "1.0.0", "node-laptop")}, {activation("i2", "tally", "1.0.0", "approval_bound", nil, nil, "node-laptop")})
+            local rows = model.rows(state, "installed")
+            test.eq(#rows, 1)
+            test.eq(rows[1].status, "Waiting for your approval")
+            test.eq(#model.rows(state, "shared"), 0)
+            for _, phase in ipairs({"consuming", "authorized", "applying"}) do
+                load(state, {}, {activation("i2", "tally", "1.0.0", phase, nil, nil, "node-laptop")})
+                test.eq(model.rows(state, "installed")[1].status, "Installing")
+            end
+        end)
+
+        test.it("keeps the installed version while its update waits for approval", function()
+            local state = fresh()
+            load(state, {}, {activation("i3", "notes", "1.0.2", "prepared", nil, "i1"),
+                activation("i1", "notes", "1.0.1", "settled", "applied", "i1")})
+            local rows = model.rows(state, "installed")
+            test.eq(#rows, 1)
+            test.eq(rows[1].status, "Waiting for your approval")
+            test.eq(rows[1].version, "1.0.2")
+        end)
+
+        test.it("shares a version another bee made as a row from that bee", function()
+            local state = fresh()
+            load(state, {version("tally", "1.0.0", "node-laptop"), version("tally", "1.1.0", "node-laptop")}, {})
+            local rows = model.rows(state, "shared")
+            test.eq(#rows, 1)
+            test.eq(rows[1].name, "Tally")
+            test.eq(rows[1].version, "1.1.0")
+            test.eq(rows[1].status, "Shared")
+            test.eq(rows[1].source, "from bee node-laptop")
+            test.eq(model.summary(state), "0 installed · 1 shared")
+        end)
+
+        test.it("returns a version that could not be installed to Shared", function()
+            local state = fresh()
+            load(state, {version("tally", "1.0.0", "node-laptop")}, {activation("i4", "tally", "1.0.0", "settled", "failed", nil, "node-laptop")})
+            test.eq(#model.rows(state, "installed"), 0)
+            test.eq(#model.rows(state, "shared"), 1)
+            local history = model.rows(state, "history")
+            test.eq(#history, 1)
+            test.eq(history[1].status, "Shared")
+            test.eq(history[1].note, "could not be installed")
+        end)
+
+        test.it("lists Hub packages with their Hub update and what is built in", function()
+            local state = fresh()
+            hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "bee/terminal", version = "0.4.6", source = "builtin", direct = true, used_by = {}},
+                {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+                {component = "userspace/lib", version = "1.0.0", source = "hub", direct = false, used_by = {"userspace/calc"}},
+            }, roots = {}}))
+            hub.apply_updates(state.hub, hub_reply({modules = {
+                {component = "userspace/calc", installed_version = "1.0.0", available_version = "1.2.0", update_available = true}},
+                bee_update = {installed_version = "1.0.0", available_version = "1.0.0", update_available = false,
+                    needs_new_binary = false, reason = ""}, catalog_error = ""}))
+            local rows = model.rows(state, "installed")
+            test.eq(#rows, 3)
+            local by_name: {[string]: model.Row} = {}
+            for _, row in ipairs(rows) do by_name[row.name] = row end
+            test.eq(by_name["userspace/calc"].status, "Update available")
+            test.eq(by_name["userspace/calc"].update, "1.2.0")
+            test.eq(by_name["userspace/calc"].source, "from Hub")
+            test.eq(by_name["bee/terminal"].source, "built in")
+            test.eq(by_name["userspace/lib"].note, "needed by userspace/calc")
+            test.eq(rows[3].name, "userspace/lib")
+        end)
+
+        test.it("does not offer an update of Bee that needs a newer binary", function()
+            local state = fresh()
+            hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "bee/bee", version = "1.0.0", source = "hub", direct = true, used_by = {}}}, roots = {}}))
+            hub.apply_updates(state.hub, hub_reply({modules = {
+                {component = "bee/bee", installed_version = "1.0.0", available_version = "2.0.0", update_available = true}},
+                bee_update = {installed_version = "1.0.0", available_version = "2.0.0", update_available = true,
+                    needs_new_binary = true, reason = "needs a newer Bee binary"}, catalog_error = ""}))
+            test.eq(model.rows(state, "installed")[1].status, "Installed")
+        end)
+
+        test.it("shares the Hub packages that are not installed, applications first", function()
+            local state = fresh()
+            hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}}}, roots = {}}))
+            hub.apply_catalog(state.hub, hub_reply({total = 4, items = {
+                {component = "wippy/test", title = "Test Framework", description = "BDD", latest_version = "0.4.19", application = false},
+                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
+                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
+            }}))
+            local rows = model.rows(state, "shared")
+            test.eq(#rows, 1)
+            test.eq(rows[1].name, "Editor")
+            test.eq(rows[1].component, "userspace/editor")
+            test.eq(rows[1].source, "from Hub")
+            test.eq(rows[1].status, "Shared")
+            hub.set_developer_packages(state.hub, true)
+            test.eq(#model.rows(state, "shared"), 2)
+        end)
+
+        test.it("records installs, removals and unfinished work in History", function()
+            local state = fresh()
+            load(state, {}, {activation("i5", "notes", "1.0.2", "settled", "applied", "i5"),
+                activation("i1", "notes", "1.0.1", "settled", "applied", "i5")})
+            hub.apply_history(state.hub, hub_reply({page = 1, total = 3, page_size = 25, operations = {
+                {digest = string.rep("a", 64), component = "acme/app", action = "uninstall", state = "complete", message = "done", baseline_revision = 3},
+                {digest = string.rep("b", 64), component = "acme/new", action = "install", state = "complete", message = "done", baseline_revision = 2,
+                    request = {action = "install", component = "acme/new", version = "1.4.0", parameters = {}, migration_policy = "none"}},
+                {digest = string.rep("c", 64), component = "acme/stuck", action = "update", state = "recovery_required", message = "paused", baseline_revision = 1},
+            }}))
+            local rows = model.rows(state, "history")
+            test.eq(#rows, 5)
+            test.eq(rows[1].status, "Installed")
+            test.eq(rows[2].status, "Removed")
+            test.eq(rows[3].status, "Removed")
+            test.eq(rows[4].status, "Installed")
+            test.eq(rows[4].version, "1.4.0")
+            test.eq(rows[5].status, "Shared")
+            test.eq(rows[5].note, "needs to be finished")
+        end)
+
+        test.it("keeps a selection through a refresh and moves within the list", function()
+            local state = fresh()
+            load(state, {version("a", "1.0.0", "node-x"), version("b", "1.0.0", "node-x"), version("c", "1.0.0", "node-x")}, {})
+            model.show_tab(state, "shared")
+            test.eq(assert(model.selected_row(state)).name, "A")
+            model.move(state, 1)
+            test.eq(assert(model.selected_row(state)).name, "B")
+            model.move(state, 9)
+            test.eq(assert(model.selected_row(state)).name, "C")
+            load(state, {version("a", "1.0.0", "node-x"), version("b", "1.0.0", "node-x"), version("c", "1.0.0", "node-x")}, {})
+            test.eq(assert(model.selected_row(state)).name, "C")
+        end)
+
+        test.it("orders dotted versions by their numbers", function()
+            test.eq(model.compare("1.10.0", "1.9.0"), 1)
+            test.eq(model.compare("1.0", "1.0.0"), 0)
+            test.eq(model.compare("2.0.0", "10.0.0"), -1)
+            test.eq(model.compare("1.0.0-beta", "1.0.0-alpha"), 1)
+        end)
+
+        test.it("describes a version in person words and keeps technical words for details", function()
+            local state = fresh()
+            load(state, {version("tally", "1.0.0", "node-laptop")}, {})
+            model.show_tab(state, "shared")
+            local row = assert(model.selected_row(state))
+            local lines = model.version_lines(state, row)
+            test.eq(lines[1].label, "Status")
+            test.eq(lines[1].value, "Shared")
+            test.eq(lines[2].value, "from bee node-laptop")
+            for _, line in ipairs(lines) do
+                for _, word in ipairs({"overlay", "staged", "plan", "preflight", "activation", "destination", "artifact", "digest", "descriptor", "receipt"}) do
+                    test.is_nil(((line.label .. " " .. line.value):lower():find(word, 1, true)))
+                end
+            end
+        end)
+    end)
+end
+
+return test.run_cases(define_tests)

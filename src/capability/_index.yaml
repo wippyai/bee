@@ -13,7 +13,7 @@ entries:
     comment: Host-owned review vocabulary and templates for the capabilities a governed application or an agent attempt may request; declarations are not grants. modules names the runtime modules a granted
       application may load; tools names the gateway tools through which an agent attempt exercises the grant
   data:
-    revision: 4
+    revision: 5
     never:
     - env
     - credentials
@@ -165,6 +165,18 @@ entries:
       - kind: exec.native
         mode: scoped
         source: host_generated_executor
+    - id: agent.tools
+      revision: 1
+      parameters:
+        tools: own_functions
+      text: Let agents you enable call {tools} as this application, with this application's grants
+      confirm: explicit
+      policies:
+      - operation: agent.tools
+        resource: application
+        scope:
+          tools: $tools
+      resources: []
     - id: hive.expose
       revision: 2
       parameters:

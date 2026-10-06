@@ -256,6 +256,17 @@ local function define_tests()
             installed_entries[executor.id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
         end)
+        test.it("lets the application scope call exactly its approved agent tools", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("agent.tools", {tools = {"app.notes:search", "app.notes:add"}})}))
+            test.eq(proposed.capabilities[1].operation, "agent.tools")
+            test.eq(proposed.policies[1].kind, "security.policy")
+            local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
+            test.eq(table.concat(principals.strings(body.actions), ","), "funcs.call")
+            test.eq(table.concat(principals.strings(body.resources), ","), "app.notes:add,app.notes:search")
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-tools", 1))
+            test.eq(assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary())).digest, proposed.digest)
+        end)
         test.it("grants scoped HTTP only through the host gateway", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("http.api", {origin = "https://api.example.com",

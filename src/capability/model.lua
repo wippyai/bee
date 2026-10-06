@@ -39,11 +39,11 @@ M.identity = identity
 local KINDS: {[string]: boolean} = {relative_subpath = true, name = true, owned_scope = true,
     children_scope = true, definitions = true, methods = true, http_methods = true,
     https_origin = true, url_path_prefix = true, binding = true, contract = true,
-    hive_operations = true, hive_mode = true, hive_audiences = true, command = true}
+    hive_operations = true, hive_mode = true, hive_audiences = true, command = true, own_functions = true}
 local HIVE_MODES: {[string]: boolean} = {open = true, policy = true}
 local function collection_kind(kind: string): boolean
     return kind == "definitions" or kind == "methods" or kind == "http_methods"
-        or kind == "hive_operations" or kind == "hive_audiences"
+        or kind == "hive_operations" or kind == "hive_audiences" or kind == "own_functions"
 end
 
 M.collection_kind = collection_kind
@@ -228,7 +228,7 @@ local function set_values(raw: unknown, kind: string): {string}?
     for _, value in ipairs(result) do
         if kind == "http_methods" then
             if not ({GET = true, POST = true, PUT = true, PATCH = true, DELETE = true, HEAD = true})[value] then return nil end
-        elseif kind == "definitions" or kind == "methods" or kind == "hive_operations" then
+        elseif kind == "definitions" or kind == "methods" or kind == "hive_operations" or kind == "own_functions" then
             if kind == "methods" and not value:match("^[A-Za-z][A-Za-z0-9_]*$") then return nil end
             if kind ~= "methods" and not value:match("^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$") then return nil end
         end
@@ -255,7 +255,7 @@ local function parameter(raw: unknown, kind: string): Parameter?
     end
     if kind == "hive_audiences" then return audience_list(raw) end
     if kind == "definitions" or kind == "methods" or kind == "http_methods"
-        or kind == "hive_operations" then return set_values(raw, kind) end
+        or kind == "hive_operations" or kind == "own_functions" then return set_values(raw, kind) end
     local value = word(raw, 160)
     if not value then return nil end
     if kind == "https_origin" then
@@ -400,9 +400,9 @@ type Diff = {added: {Change}, widened: {Change}, narrowed: {Change},
 
 local SCOPE_FIELDS: {[string]: boolean} = {subpath = true, path_prefix = true, methods = true,
     definitions = true, operations = true, traits = true, audiences = true, scope = true,
-    name = true, access = true, workspace_id = true}
+    name = true, access = true, workspace_id = true, tools = true}
 local SET_FIELDS: {[string]: boolean} = {methods = true, definitions = true, operations = true,
-    traits = true, audiences = true}
+    traits = true, audiences = true, tools = true}
 local function valid_path(value: string, absolute: boolean): boolean
     return (value == "" and not absolute) or clean_path(value, absolute) == value
 end

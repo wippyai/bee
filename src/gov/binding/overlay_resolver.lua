@@ -16,6 +16,7 @@ local lists = require("lists")
 local resolution = require("resolution")
 local drivers = require("drivers")
 local driver_admission = require("driver_admission")
+local agent_tool = require("agent_tool")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -202,6 +203,33 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
                 or candidate_meta.type ~= "bee.launch_definition" then
                 return nil, "managed agent launch definition " .. tostring(ref) .. " is not a launch definition"
             end
+        end
+    end
+    -- An agent tools request names this artifact's own tool functions. Each
+    -- decodes as a tool with schemas Bee advertises and declares no security
+    -- of its own: it runs only with the application's scope.
+    if capability == "agent.tools" and capability_request then
+        local tools = capability_request.parameters.tools
+        if type(tools) ~= "table" then return nil, "agent tool parameters are invalid" end
+        local aliases: {[string]: string} = {}
+        for _, ref in ipairs(tools) do
+            local candidate = type(ref) == "string" and object(final[ref]) or nil
+            if not candidate or not owned[ref] then
+                return nil, "agent tool " .. tostring(ref) .. " is not this artifact's own tool function"
+            end
+            local decoded, decode_error = agent_tool.decode(ref, candidate)
+            if not decoded then return nil, decode_error end
+            if not agent_tool.valid_schema(decoded.input_schema)
+                or (decoded.output_schema ~= nil and not agent_tool.valid_schema(decoded.output_schema)) then
+                return nil, "agent tool " .. ref .. " uses a schema Bee does not advertise"
+            end
+            local data = object(candidate.data)
+            if data and data.security ~= nil then
+                return nil, "agent tool " .. ref .. " declares its own security; it runs only with the application's grants"
+            end
+            local prior = aliases[decoded.alias]
+            if prior then return nil, "agent tools " .. prior .. " and " .. ref .. " share the alias " .. decoded.alias end
+            aliases[decoded.alias] = ref
         end
     end
     -- A Hive exposure request names this artifact's own operations at the

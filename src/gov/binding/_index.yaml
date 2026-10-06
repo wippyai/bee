@@ -537,6 +537,7 @@ entries:
   - registry
   - hash
   imports:
+    agent_tool: bee.values:agent_tool
     drivers: bee.gov.types:drivers
     driver_admission: bee.gov.types:driver_admission
     workspace_applications: bee.gov.types:workspace_applications

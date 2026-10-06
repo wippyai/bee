@@ -374,6 +374,54 @@ local function define_tests()
             changes(spec, {app, request})
             test.is_nil((resolver.resolve_with(deps, spec)))
         end)
+        test.it("requires every agent tool to be one of this artifact's own tool functions with no authority of its own", function()
+            local deps, spec = fixture(nil)
+            local captured = (deps.capture)()
+            captured.entries[#captured.entries + 1] = {id = "bee.capability:catalog", kind = "registry.entry",
+                meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                data = {revision = 5, never = {"env"}, capabilities = {{id = "agent.tools",
+                    revision = 1, confirm = "explicit", parameters = {tools = "own_functions"},
+                    text = "Let agents you enable call {tools} as this application",
+                    policies = {{operation = "agent.tools", resource = "application", scope = {tools = "$tools"}}},
+                    resources = {}}}}}
+            captured.entries[#captured.entries + 1] = {id = "bee.host:helper", kind = "function.lua",
+                meta = {type = "tool", llm_alias = "helper", llm_description = "Host helper",
+                    input_schema = '{"type":"object"}'}, data = {source = "return true"}, registry = {owner = "bee/host"}}
+            local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
+                data = {source = "return true"}}
+            local function tool(name: string, alias: string, data: Entry?): Entry
+                return {id = "private.app:" .. name, kind = "function.lua",
+                    meta = {type = "tool", llm_alias = alias, llm_description = "Adds a note",
+                        input_schema = '{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}'},
+                    data = data or {source = "return {handle = function() return {ok = true} end}", method = "handle"}}
+            end
+            local function request(tools: {string}): Entry
+                return {id = "private.app:agents", kind = "ns.requirement",
+                    meta = {value_kind = "security.policy", capability = "agent.tools",
+                        parameters = {tools = tools}, reason = "Let agents add notes"},
+                    data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
+            end
+            local function refusal(entries: {Entry}): string
+                changes(spec, entries)
+                local candidate, _, err = resolver.resolve_with(deps, spec)
+                test.is_nil(candidate)
+                return tostring(err)
+            end
+            changes(spec, {app, tool("add", "add_note"), request({"private.app:add"})})
+            test.not_nil((resolver.resolve_with(deps, spec)))
+            test.contains(refusal({app, tool("add", "add_note"), request({"bee.host:helper"})}),
+                "agent tool bee.host:helper is not this artifact's own tool function")
+            local plain: Entry = {id = "private.app:plain", kind = "function.lua", data = {source = "return true"}}
+            test.contains(refusal({app, plain, request({"private.app:plain"})}), "is not a function tool")
+            test.contains(refusal({app, tool("add", "add_note", {source = "return true", security = {policies = {"bee.host:read_policy"}}}),
+                request({"private.app:add"})}), "declares its own security")
+            test.contains(refusal({app, tool("add", "notes"), tool("list", "notes"), request({"private.app:add", "private.app:list"})}),
+                "share the alias notes")
+            local wide = tool("add", "add_note")
+            local wide_meta = assert(bounds.object(wide.meta))
+            wide_meta.input_schema = '{"type":"object","$ref":"#/x"}'
+            test.contains(refusal({app, wide, request({"private.app:add"})}), "schema Bee does not advertise")
+        end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture)()

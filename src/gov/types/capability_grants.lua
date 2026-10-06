@@ -174,6 +174,13 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
             data = {policy = {actions = {"contract.get", "contract.open", "contract.call", "funcs.call", "bee.harness.launch"},
                 resources = "*", expression = expression, effect = "allow"}}})
     end
+    -- Agent tools run as the application: its scope may call exactly the
+    -- approved tool functions, and the gateway reaches them only through it.
+    if grant.capability == "agent.tools" and grant.operation == "agent.tools" then
+        local tools = capability_model.strings(scope.tools)
+        if not tools then return nil, "resolved agent tool list is malformed" end
+        return only(plain({"funcs.call"}, tools, "Host-generated agent tool grant", id))
+    end
     -- The runtime cannot pair a contract binding with its method or an HTTP
     -- method with its origin, so these grants let the application call the
     -- host gateway, which checks the exact approved scope from this record.

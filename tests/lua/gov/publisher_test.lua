@@ -65,6 +65,25 @@ local function define_tests()
             test.eq(conflict.code, "CONFLICT")
         end)
 
+        test.it("keeps a prepared version immutable: other bytes under the same version are refused", function()
+            local source = "publisher-" .. assert(uuid.v7())
+            local first = assert(artifact.create({{id = "prepared.app:main", kind = "function.lua",
+                data = {source = "return 'first'"}}}))
+            local request = {source_workspace = "workspace/prepared", component = "app.prepared",
+                version = "1.0.0", artifact = {bytes = first.bytes, digest = first.digest}}
+            test.is_true(publisher.prepare(source, request).ok)
+            test.is_true(publisher.prepare(source, request).ok)
+            local changed = assert(artifact.create({{id = "prepared.app:main", kind = "function.lua",
+                data = {source = "return 'changed'"}}}))
+            local refused = publisher.prepare(source, {source_workspace = request.source_workspace,
+                component = request.component, version = request.version,
+                artifact = {bytes = changed.bytes, digest = changed.digest}})
+            test.eq(refused.code, "CONFLICT")
+            test.is_true(tostring(refused.message):find("higher version", 1, true) ~= nil, tostring(refused.message))
+            test.is_true(publisher.prepare(source, {source_workspace = request.source_workspace,
+                component = request.component, version = "1.0.1",
+                artifact = {bytes = changed.bytes, digest = changed.digest}}).ok)
+        end)
         test.it("lets a host-selected publisher read an exact foreign-owned frozen file", function()
             local suffix = assert(uuid.v7())
             local node = "publication-node-" .. suffix

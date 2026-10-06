@@ -52,6 +52,17 @@ local function prepare(source_node: unknown, raw: unknown): (delivery.Delivery?,
     if not descriptor then return nil, nil, failure("INTERNAL", descriptor_error or "create application descriptor") end
     local replica_store, replica_error = replicas.open()
     if not replica_store then return nil, nil, failure("UNAVAILABLE", replica_error or "open published replica store") end
+    -- A version names exactly one artifact: other bytes under a version this
+    -- source already prepared are refused, so review never shows two.
+    local held = replicas.slot(replica_store, descriptor.owner_id, descriptor.feed, item.value.component, item.value.version)
+    if not held.ok then replicas.close(replica_store); return nil, nil, held end
+    for _, existing in ipairs((bounds.object(held.value) or {}).keys :: {string}) do
+        if existing ~= descriptor.key then
+            replicas.close(replica_store)
+            return nil, nil, failure("CONFLICT", item.value.component .. " " .. item.value.version
+                .. " already holds other bytes; freeze the change and deliver it as a higher version")
+        end
+    end
     local stored = put(replica_store, item, descriptor)
     replicas.close(replica_store)
     if not stored.ok then return nil, nil, stored end

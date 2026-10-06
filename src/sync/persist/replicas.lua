@@ -391,6 +391,31 @@ LIMIT ?]], {selected.source_owner, selected.feed, limit})
     end)
 end
 
+-- slot names the version keys this store holds from one source and feed for
+-- one object at one version, in any transfer state, so a publisher can keep a
+-- version's bytes immutable.
+function M.slot(store: Store, source_owner_raw: unknown, feed_raw: unknown, object_id_raw: unknown, version_id_raw: unknown): Result
+    if store.closed then return fail("CLOSED", "replica store is closed") end
+    local selected, source_error = source(source_owner_raw, feed_raw)
+    local object_id, version_id = bounds.text(object_id_raw, 160), bounds.id(version_id_raw)
+    if not selected or not object_id or object_id == "" or not version_id then
+        return fail("INVALID", source_error or "replica slot query is invalid")
+    end
+    return transaction.read(store.db, "sync replica", function(tx: sql.Transaction): Result
+        local rows, query_error = tx:query([[SELECT version_key FROM bee_sync_replica_transfers
+WHERE source_owner = ? AND feed = ? AND json_extract(descriptor_json, '$.object_id') = ?
+  AND json_extract(descriptor_json, '$.version_id') = ?
+ORDER BY version_key]], {selected.source_owner, selected.feed, object_id, version_id})
+        if query_error or not rows then return fail("INTERNAL", "read replica version slot") end
+        local keys: {string} = {}
+        for _, row in ipairs(rows) do
+            if type(row.version_key) ~= "string" then return fail("INTERNAL", "replica version slot row is corrupt") end
+            keys[#keys + 1] = row.version_key
+        end
+        return transaction.success({keys = keys}, false)
+    end)
+end
+
 function M.close(store: Store): boolean
     if store.closed then return true end
     store.closed = true

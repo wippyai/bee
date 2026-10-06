@@ -76,10 +76,8 @@ function M.decode(raw: unknown): (Request?, string?)
         allowed[#allowed + 1] = "content"
         allowed[#allowed + 1] = "content_base64"
     end
-    if op == "append" then
-        allowed[#allowed + 1] = "offset"
-        allowed[#allowed + 1] = "result_digest"
-    end
+    if op == "put" or op == "append" then allowed[#allowed + 1] = "result_digest" end
+    if op == "append" then allowed[#allowed + 1] = "offset" end
     local extra = bounds.fields(value, allowed)
     if extra then return nil, extra end
     local owned = op == "list" and value.owned == true and value.workspace_id == ""
@@ -114,15 +112,18 @@ function M.decode(raw: unknown): (Request?, string?)
         if not selected then return nil, "path must be a canonical relative path of at most 240 bytes" end
         request.path = selected
     end
-    if op == "append" then
-        local offset = bounds.count(value.offset)
+    if op == "put" or op == "append" then
         local result_digest = value.result_digest
-        if not offset or offset > 4194304 then return nil, "append requires a file offset" end
         if result_digest ~= nil and (type(result_digest) ~= "string" or #result_digest ~= 64
             or not result_digest:match("^[0-9a-f]+$")) then
             return nil, "result_digest must be a lowercase SHA-256 measurement"
         end
-        request.offset, request.result_digest = offset, result_digest
+        request.result_digest = result_digest
+    end
+    if op == "append" then
+        local offset = bounds.count(value.offset)
+        if not offset or offset > 4194304 then return nil, "append requires a file offset" end
+        request.offset = offset
     end
     if op == "put" or op == "append" then
         if (value.content == nil) == (value.content_base64 == nil) then return nil, "provide exactly one of content or content_base64" end

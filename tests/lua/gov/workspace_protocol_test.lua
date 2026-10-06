@@ -35,6 +35,14 @@ local function define_tests()
             test.is_nil(protocol.decode_overlay({operation = "append", overlay_id = "demo", expected_revision = 2,
                 idempotency_key = "append-1", path = "entries.json", offset = -1, content = "more", result_digest = digest}))
         end)
+        test.it("lets a put assert the digest of the file it writes", function()
+            local digest = string.rep("b", 64)
+            local request = protocol.decode_overlay({operation = "put", overlay_id = "demo", expected_revision = 2,
+                idempotency_key = "put-1", path = "entries.json", content = "[]", result_digest = digest})
+            test.eq(request and request.result_digest, digest)
+            test.is_nil(protocol.decode_overlay({operation = "put", overlay_id = "demo", expected_revision = 2,
+                idempotency_key = "put-1", path = "entries.json", content = "[]", result_digest = "ABC"}))
+        end)
         test.it("bounds read windows for files larger than a carrier frame", function()
             local request = protocol.decode_overlay({operation = "read", overlay_id = "demo",
                 path = "entries.json", offset = 16384, limit = 8192})

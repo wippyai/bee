@@ -96,7 +96,9 @@ local function request_identity(input: protocol.Request): (string?, Result?)
         if type(input.content) ~= "string" then return nil, failure("INVALID", "put content is missing or exceeds the workspace limit") end
         if #input.content > MAX_FILE_BYTES then return nil, failure("INVALID", "put content is missing or exceeds the workspace limit") end
         local receipt_bytes = input.content
-        if input.operation == "append" then
+        if input.operation == "put" and input.result_digest then
+            receipt_bytes = input.result_digest .. ":" .. input.content
+        elseif input.operation == "append" then
             receipt_bytes = tostring(input.offset) .. ":" .. (input.result_digest or "") .. ":" .. input.content
         end
         content_digest = digest(receipt_bytes)
@@ -386,7 +388,11 @@ local function mutation(store: Store, tx: sql.Transaction, actor: string, input:
         if type(input.content) ~= "string" then return failure("INVALID", "put content is missing") end
         if not content_digest then return failure("INVALID", "put content is missing") end
         local content = input.content
-        local file_digest = content_digest
+        local file_digest, file_error = digest(content)
+        if not file_digest then return file_error or failure("INTERNAL", "calculate workspace content digest") end
+        if input.operation == "put" and input.result_digest and file_digest ~= input.result_digest then
+            return failure("INVALID", "put result_digest does not match the written file")
+        end
         if input.operation == "append" then
             local row, read_error = one(tx, "SELECT path, content_base64, content_sha256, bytes FROM bee_governance_workspace_files WHERE owner_node = ? AND workspace_id = ? AND path = ?",
                 {store.node, input.workspace_id, path}, "workspace file")

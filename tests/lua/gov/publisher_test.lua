@@ -105,8 +105,12 @@ local function define_tests()
             test.eq(#(principals.items((assert(bounds.object(foreign.value))).overlays)), 0)
             local first = string.rep("x", 65536)
             local tail = string.rep("y", 20000)
-            test.is_true(store:call("author-a", {operation = "put", workspace_id = id,
-                expected_revision = 1, idempotency_key = "put", path = "entries.json", content = first}).ok)
+            test.eq(store:call("author-a", {operation = "put", workspace_id = id, expected_revision = 1,
+                idempotency_key = "put-wrong", path = "entries.json", content = first,
+                result_digest = string.rep("0", 64)}).code, "INVALID")
+            test.is_true(store:call("author-a", {operation = "put", workspace_id = id, expected_revision = 1,
+                idempotency_key = "put", path = "entries.json", content = first,
+                result_digest = assert(hash.sha256(first))}).ok)
             local complete_digest = assert(hash.sha256(first .. tail))
             local appended = store:call("author-a", {operation = "append", workspace_id = id, expected_revision = 2,
                 idempotency_key = "append", path = "entries.json", offset = #first,

@@ -9,6 +9,8 @@ entries:
   imports:
     protocol: bee.hive:protocol
 - name: supervisor_service
+  meta:
+    title: Hive · supervisor
   kind: process.service
   process: bee.hive.service:supervisor
   host: bee:workers

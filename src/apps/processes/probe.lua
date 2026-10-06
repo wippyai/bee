@@ -1,13 +1,14 @@
 -- On-demand runtime samples. Missing source values remain unavailable.
 local system = require("system")
 local bounds = require("bounds")
+local registry = require("registry")
 local M = {}
 M.MAX_HOSTS = 128
 M.MAX_PROCESSES = 2048
 M.MAX_SERVICES = 1024
 
 type Process = {pid: string, source: string, host: string, state: string, steps: integer?}
-type Service = {id: string, state: string, desired: string, restarts: integer?}
+type Service = {id: string, state: string, desired: string, restarts: integer?, title: string?, detail: string?}
 type Snapshot = {
     processes: {Process}, services: {Service}, heap: integer?, heap_objects: integer?, reserved: integer?,
     gc_cycles: integer?, goroutines: integer?, queue: integer?, executed: integer?,
@@ -17,6 +18,8 @@ type Sources = {
     hosts: () -> (unknown, unknown?),
     processes: (string) -> (unknown, unknown?),
     services: () -> (unknown, unknown?),
+    -- titles names a service by its registry title, when it has one.
+    titles: ((string) -> string?)?,
     memory: () -> (unknown, unknown?),
     goroutines: () -> (unknown, unknown?),
 }
@@ -62,7 +65,11 @@ local function service_record(raw: unknown): (Service?, string?)
     if not id or not state or not desired then return nil, "malformed service identity" end
     local problem: string? = nil
     if value.retry_count == nil or not restarts then problem = "service restart counter unavailable for " .. id end
-    return {id = id, state = state, desired = desired, restarts = restarts}, problem
+    -- Any reported detail means the service stopped with an error; its text
+    -- is shown on one line.
+    local detail: string? = nil
+    if value.details ~= nil then detail = (tostring(value.details):gsub("%c", " ")):sub(1, 200) end
+    return {id = id, state = state, desired = desired, restarts = restarts, detail = detail}, problem
 end
 
 local function aggregate_hosts(snapshot: Snapshot, errors: {string}, sources: Sources)
@@ -130,7 +137,10 @@ local function aggregate_services(snapshot: Snapshot, errors: {string}, sources:
             break
         end
         local service, problem = service_record(raw)
-        if service then snapshot.services[#snapshot.services + 1] = service end
+        if service then
+            if sources.titles then service.title = sources.titles(service.id) end
+            snapshot.services[#snapshot.services + 1] = service
+        end
         add_error(errors, problem)
     end
 end
@@ -172,6 +182,11 @@ function M.sample(): Snapshot
         hosts = function(): (unknown, unknown?) return system.hosts.list() end,
         processes = function(host_id: string): (unknown, unknown?) return system.hosts.processes(host_id) end,
         services = function(): (unknown, unknown?) return system.supervisor.states() end,
+        titles = function(id: string): string?
+            local entry = registry.get(id)
+            local meta = entry and bounds.object(entry.meta)
+            return meta and display_text(meta.title, 80, false) or nil
+        end,
         memory = function(): (unknown, unknown?) return system.memory.stats() end,
         goroutines = function(): (unknown, unknown?) return system.runtime.goroutines() end,
     })

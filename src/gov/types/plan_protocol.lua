@@ -9,7 +9,6 @@ M.MAX_CANDIDATE_BYTES = 1048576
 M.MAX_ARTIFACT_BYTES = 262144
 M.MAX_PREFLIGHT_BYTES = 131072
 M.MAX_REVIEW_BYTES = 8192
-M.MAX_APPROVAL_BYTES = 160
 M.MAX_RECEIPT_BYTES = 160
 
 type Blob = {bytes: string, digest: string}
@@ -20,10 +19,7 @@ type StageRequest = {operation: "stage", version: string, source_node: string, s
     candidate: Blob, artifact: Blob, preflight: Blob, expected_revision: integer, idempotency_key: string}
 type ReviewRequest = {operation: "record_review", version: string, source_node: string, source_workspace: string,
     expected_revision: integer, idempotency_key: string, review_status: "accepted" | "rejected", review_reason: string}
-type ApprovalRequest = {operation: "bind_approval", version: string, source_node: string, source_workspace: string,
-    expected_revision: integer, idempotency_key: string, approval_id: string, approval_plan_digest: string,
-    approval_proposal_digest: string, approval_owner_incarnation: integer}
-type Request = Identity | Mutation | StageRequest | ReviewRequest | ApprovalRequest | {operation: "list"}
+type Request = Identity | Mutation | StageRequest | ReviewRequest | {operation: "list"}
 
 local function object(value: unknown): {[string]: unknown}?
     return bounds.object(value)
@@ -66,7 +62,7 @@ function M.decode(raw: unknown): (Request?, string?)
     if not value then return nil, "governance plan request must be an object" end
     local operation = value.operation
     if operation ~= "stage" and operation ~= "get" and operation ~= "list"
-        and operation ~= "record_review" and operation ~= "select" and operation ~= "bind_approval" then
+        and operation ~= "record_review" and operation ~= "select" then
         return nil, "unsupported governance plan operation"
     end
 
@@ -134,30 +130,6 @@ function M.decode(raw: unknown): (Request?, string?)
         local result: Request = {operation = "record_review", version = version, expected_revision = expected,
             idempotency_key = key, source_node = source_node, source_workspace = source_workspace,
             review_status = review_status, review_reason = reason}
-        return result
-    end
-
-    if operation == "bind_approval" then
-        local extra = mutation_fields(value, {"source_node", "source_workspace", "approval_id", "approval_plan_digest", "approval_proposal_digest", "approval_owner_incarnation"})
-        if extra then return nil, extra end
-        local source_node, source_workspace = bounds.id(value.source_node), bounds.id(value.source_workspace)
-        if not source_node then return nil, "source identity is required" end
-        if not source_workspace then return nil, "source identity is required" end
-        local approval_id = bounds.id(value.approval_id)
-        if not approval_id then return nil, "approval_id is invalid" end
-        if #approval_id > M.MAX_APPROVAL_BYTES then return nil, "approval_id is invalid" end
-        local approval_plan_digest = digest(value.approval_plan_digest)
-        if not approval_plan_digest then return nil, "approval_plan_digest must be a lowercase SHA-256 digest" end
-        local approval_proposal_digest = digest(value.approval_proposal_digest)
-        if not approval_proposal_digest then return nil, "approval_proposal_digest must be a lowercase SHA-256 digest" end
-        local approval_owner_incarnation = bounds.count(value.approval_owner_incarnation)
-        if not approval_owner_incarnation then return nil, "approval_owner_incarnation must be positive" end
-        if approval_owner_incarnation < 1 then return nil, "approval_owner_incarnation must be positive" end
-        local result: Request = {operation = "bind_approval", version = version, expected_revision = expected,
-            idempotency_key = key, source_node = source_node, source_workspace = source_workspace,
-            approval_id = approval_id, approval_plan_digest = approval_plan_digest,
-            approval_proposal_digest = approval_proposal_digest,
-            approval_owner_incarnation = approval_owner_incarnation}
         return result
     end
 

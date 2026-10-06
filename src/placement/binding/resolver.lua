@@ -10,11 +10,11 @@ local M = {}
 M.CONTRACT = "bee.placement:placement"
 M.TYPE = "placement"
 M.DEFAULT = "bee.placement.native.binding:binding"
--- The lifecycle methods are the public placement contract. The last three
--- are used by the carrier's measured capability and session-end paths and
--- therefore must be selected by the same binding rather than falling back to
--- native targets.
-M.METHODS = {"prepare", "start", "status", "stop", "reconcile", "cleanup", "evidence", "attach", "capabilities", "measure_executable", "close_stdin"}
+-- The lifecycle methods are the public placement contract. The last four
+-- serve the carrier's measured capability and session-end paths and the idle
+-- check, and therefore must be selected by the same binding rather than
+-- falling back to native targets.
+M.METHODS = {"prepare", "start", "status", "stop", "reconcile", "cleanup", "evidence", "attach", "capabilities", "measure_executable", "close_stdin", "activity"}
 type Entry = {[string]: unknown}
 local function digest(value: unknown): (string?, string?)
     local encoded, encode_error = canonical.encode(value)

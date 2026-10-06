@@ -30,15 +30,12 @@ local function define_tests()
                 source_node = "node-a", source_workspace = "workspace-a", expected_revision = 1,
                 idempotency_key = "review-3", review_status = "accepted", extra = true}))
         end)
-        test.it("requires source-qualified identities and exact approval binding", function()
-            local binding = assert(protocol.decode({operation = "bind_approval", version = "v1",
+        test.it("requires source-qualified identities and has no approval binding", function()
+            test.is_nil(protocol.decode({operation = "bind_approval", version = "v1",
                 source_node = "node-a", source_workspace = "workspace-a", expected_revision = 2,
                 idempotency_key = "bind-1", approval_id = "approval-1",
                 approval_plan_digest = DIGEST, approval_proposal_digest = string.rep("b", 64),
                 approval_owner_incarnation = 7}))
-            test.eq(binding.approval_plan_digest, DIGEST)
-            test.eq(binding.approval_proposal_digest, string.rep("b", 64))
-            test.eq(binding.approval_owner_incarnation, 7)
             test.is_nil(protocol.decode({operation = "get", version = "v1"}))
             test.is_nil(protocol.decode({operation = "select", version = "v1", source_node = "node-a",
                 source_workspace = "workspace-a", expected_revision = 2, idempotency_key = "select-1",

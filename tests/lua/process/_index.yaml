@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.tests.process
+entries:
+- name: probe_worker
+  kind: process.lua
+  source: file://probe_worker.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    worker: bee.process:worker
+- name: worker_test
+  kind: function.lua
+  source: file://worker_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time]
+  imports:
+    test: wippy.test:test

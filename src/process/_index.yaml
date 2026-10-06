@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.process
+entries:
+- name: worker
+  kind: library.lua
+  source: file://worker.lua
+  modules: [process, channel, time]

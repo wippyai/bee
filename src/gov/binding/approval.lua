@@ -1,5 +1,5 @@
--- MIT. Exact bridge from a selected destination plan to the existing local
--- Approvals owner. It neither decides a request nor applies an overlay.
+-- MIT. Exact bridge from a measured activation intent to the local Approvals
+-- owner. It neither decides a request nor applies an overlay.
 local canonical = require("canonical")
 local bounds = require("bounds")
 
@@ -51,92 +51,8 @@ local function hex(value: unknown): string?
     return measured
 end
 
-local function plan(value: unknown): (Object?, string?)
-    local item = object(value)
-    if not item then return nil, "governance plan is not an object" end
-    local workspace = bounds.id(item.workspace_id)
-    local source_node, source_workspace = bounds.id(item.source_node), bounds.id(item.source_workspace)
-    local version, revision = bounds.id(item.version), bounds.count(item.revision)
-    local plan_digest = bounds.text(item.plan_digest, 64)
-    local artifact_digest = bounds.text(item.artifact_digest, 64)
-    local preflight_digest = bounds.text(item.preflight_digest, 64)
-    if not workspace or not source_node or not source_workspace or not version or not revision or revision < 1
-        or not plan_digest or not plan_digest:match("^[0-9a-f]+$")
-        or not artifact_digest or not artifact_digest:match("^[0-9a-f]+$")
-        or not preflight_digest or not preflight_digest:match("^[0-9a-f]+$") then
-        return nil, "governance plan identity is malformed"
-    end
-    return {workspace_id = workspace, source_node = source_node, source_workspace = source_workspace,
-        version = version, revision = revision, plan_digest = plan_digest,
-        artifact_digest = artifact_digest, preflight_digest = preflight_digest,
-        approval_id = item.approval_id, approval_proposal_digest = item.approval_proposal_digest,
-        owner_incarnation = item.approval_owner_incarnation}, nil
-end
-
-function M.proposal(value: unknown): (Object?, string?)
-    local item, err = plan(value)
-    if not item then return nil, err end
-    return {kind = "operation", ref = "bee.gov:apply", revision = item.plan_digest,
-        input_digest = item.plan_digest, payload = {workspace_id = item.workspace_id,
-            source_node = item.source_node, source_workspace = item.source_workspace,
-            version = item.version, artifact_digest = item.artifact_digest,
-            preflight_digest = item.preflight_digest}}, nil
-end
-
-function M.request(executor: Executor, value: unknown, policy_raw: unknown, key_raw: unknown): (Object?, string?)
-    local item, plan_error = plan(value)
-    if not item then return nil, plan_error end
-    local policy, key = bounds.id(policy_raw), bounds.id(key_raw)
-    if not policy or not key then return nil, "approval policy and idempotency key are required" end
-    local proposal, proposal_error = M.proposal(item)
-    if not proposal then return nil, proposal_error end
-    local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
-        idempotency_key = key, request_kind = "permission", policy = policy,
-        proposal = proposal, prompt = {text = "Apply Bee application " .. tostring(item.source_workspace)
-            .. " version " .. tostring(item.version) .. " in workspace " .. tostring(item.workspace_id)
-            .. "?\nScope: this exact reviewed version. Duration: one operation."}})
-    local approval, approval_error = reply(raw, call_error)
-    if not approval then return nil, approval_error end
-    local approval_id = bounds.id(approval.approval_id)
-    local proposal_digest = bounds.text(approval.proposal_digest, 64)
-    local incarnation = bounds.count(approval.owner_incarnation)
-    local recorded = object(approval.proposal)
-    local encoded_recorded = recorded and canonical.encode(recorded) or nil
-    local encoded_expected = canonical.encode(proposal)
-    if not approval_id or not proposal_digest or not proposal_digest:match("^[0-9a-f]+$")
-        or not incarnation or incarnation < 1 or not encoded_recorded or encoded_recorded ~= encoded_expected then
-        return nil, "approval owner returned a request for another proposal"
-    end
-    return {approval_id = approval_id, approval_proposal_digest = proposal_digest,
-        approval_plan_digest = item.plan_digest, owner_incarnation = incarnation}, nil
-end
-
-local function effect(executor: Executor, method: string, value: unknown, effect_key_raw: unknown): (Object?, string?)
-    local item, plan_error = plan(value)
-    if not item then return nil, plan_error end
-    local approval_id = bounds.id(item.approval_id)
-    local proposal_digest = bounds.text(item.approval_proposal_digest, 64)
-    local incarnation = bounds.count(item.owner_incarnation)
-    local effect_key = bounds.id(effect_key_raw)
-    if not approval_id or not proposal_digest or not proposal_digest:match("^[0-9a-f]+$")
-        or not incarnation or incarnation < 1 or not effect_key then return nil, "approval effect identity is malformed" end
-    local request: Object = {approval_id = approval_id, proposal_digest = proposal_digest,
-        owner_incarnation = incarnation}
-    if method == CONSUME then request.effect_key = effect_key end
-    local raw, call_error = executor:call(method, request)
-    return reply(raw, call_error)
-end
-
-function M.consume(executor: Executor, value: unknown, effect_key: unknown): (Object?, string?)
-    return effect(executor, CONSUME, value, effect_key)
-end
-
-function M.revalidate(executor: Executor, value: unknown): (Object?, string?)
-    return effect(executor, REVALIDATE, value, "revalidate")
-end
-
 -- Activation approvals bind the destination's freshly measured immutable
--- intent. They are separate from the earlier source-plan review approval.
+-- intent.
 local function activation(value: unknown): (Object?, string?)
     local item = object(value)
     if not item then return nil, "activation intent is not an object" end

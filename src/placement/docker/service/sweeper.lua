@@ -1,21 +1,10 @@
 -- SPDX-License-Identifier: MIT
-local process = require("process")
-local channel = require("channel")
-local time = require("time")
+local worker = require("worker")
 local service = require("service")
 local function main()
-    local registered, register_error = process.registry.register(service.SWEEPER_NAME)
-    if not registered then error("register sweeper: " .. tostring(register_error)) end
-    local events = assert(process.events())
-    local ticker = time.ticker(tostring(service.SWEEP_INTERVAL_MS) .. "ms")
-    while true do
-        local selected = channel.select({ticker:channel():case_receive(), events:case_receive()})
-        if not selected.ok then return end
-        if selected.channel == events then
-            if selected.value.kind == process.event.CANCEL then return end
-        else
-            service.sweep()
-        end
-    end
+    worker.run({name = service.SWEEPER_NAME, every = tostring(service.SWEEP_INTERVAL_MS) .. "ms", pass = function(): boolean
+        service.sweep()
+        return true
+    end})
 end
 return {main = main}

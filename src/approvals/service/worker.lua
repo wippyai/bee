@@ -3,9 +3,8 @@
 -- ingress under its own lease name. It never touches the authority
 -- incarnation; a worker restart changes delivery ownership only.
 local process = require("process")
-local channel = require("channel")
-local time = require("time")
 local logger = require("logger")
+local worker = require("worker")
 local service = require("service")
 local outbox = require("outbox")
 local M = {}
@@ -34,25 +33,13 @@ function M.pass(): string?
         return drain_error
     end)
 end
-local function pass_and_report()
+-- A failed pass is reported and runs again on the next tick or wake.
+local function pass_and_report(): boolean
     local pass_error = M.pass()
     if pass_error then logger:error("Approval worker pass failed", {cause = pass_error}) end
+    return true
 end
 local function main()
-    local events = assert(process.events())
-    local inbox = assert(process.listen(service.TOPIC_WAKE, {message = true}))
-    local registered, register_error = process.registry.register(service.WORKER_NAME)
-    if not registered then error("register approval worker: " .. tostring(register_error)) end
-    local ticker = time.ticker(tostring(M.INTERVAL_MS) .. "ms")
-    pass_and_report()
-    while true do
-        local selected = channel.select({ticker:channel():case_receive(), inbox:case_receive(), events:case_receive()})
-        if not selected.ok then return end
-        if selected.channel == events then
-            if selected.value.kind == process.event.CANCEL then return end
-        else
-            pass_and_report()
-        end
-    end
+    worker.run({name = service.WORKER_NAME, wake = service.TOPIC_WAKE, every = tostring(M.INTERVAL_MS) .. "ms", pass = pass_and_report})
 end
 return {main = main, pass = M.pass, run_pass = M.run_pass}

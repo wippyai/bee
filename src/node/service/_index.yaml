@@ -20,6 +20,8 @@ entries:
     appearance: bee.ui:appearance
     client: bee.node:client
 - name: owner_service
+  meta:
+    title: Node · owner
   kind: process.service
   process: bee.node.service:owner
   host: bee:workers

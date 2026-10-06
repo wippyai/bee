@@ -7,10 +7,9 @@ entries:
   method: main
   modules:
   - process
-  - channel
-  - time
   - logger
   imports:
+    worker: bee.process:worker
     service: bee.approvals.binding:service
     outbox: bee.approvals.persist:outbox
 - name: authority
@@ -22,6 +21,8 @@ entries:
   imports:
     service: bee.approvals.binding:service
 - name: authority_service
+  meta:
+    title: Approvals · authority
   kind: process.service
   process: bee.approvals.service:authority
   lifecycle:
@@ -35,6 +36,8 @@ entries:
       - bee.security.approvals:approval_owner_policy
   host: bee:workers
 - name: worker_service
+  meta:
+    title: Approvals · delivery
   kind: process.service
   process: bee.approvals.service:worker
   lifecycle:

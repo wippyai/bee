@@ -23,15 +23,11 @@ type StageRequest = {operation: string, source_node: string, source_workspace: s
     expected_revision: integer, idempotency_key: string, candidate: Blob, artifact: Blob, preflight: Blob}
 type ReviewRequest = {operation: string, source_node: string, source_workspace: string, version: string,
     expected_revision: integer, idempotency_key: string, review_status: "accepted" | "rejected", review_reason: string}
-type ApprovalRequest = {operation: string, source_node: string, source_workspace: string, version: string,
-    expected_revision: integer, idempotency_key: string, approval_id: string,
-    approval_plan_digest: string, approval_proposal_digest: string, approval_owner_incarnation: integer}
 type Store = {db: sql.DB, node: string, workspace: string, closed: boolean}
 type Row = {source_node: string, source_workspace: string, version: string,
     identity_digest_owner_node: string, identity_digest_source_node: string,
     candidate: Blob, artifact: Blob, preflight: Blob, revision: integer, status: string,
-    plan_digest: string, review_status: string?, review_reason: string?, reviewer_id: string?, approval_id: string?,
-    approval_plan_digest: string?, approval_proposal_digest: string?, approval_owner_incarnation: integer?,
+    plan_digest: string, review_status: string?, review_reason: string?, reviewer_id: string?,
     selected: boolean, selection_revision: integer?}
 
 local function failure(code: string, message: string, value: unknown?): Result
@@ -114,22 +110,8 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
     if not preflight then return nil, preflight_error end
     local plan_digest_value = bounds.text(raw.plan_digest, 64)
     if not plan_digest_value or #plan_digest_value ~= 64 or not plan_digest_value:match("^[0-9a-f]+$") then return nil, failure("INTERNAL", "governance plan digest is corrupt") end
-    local approval_plan_digest: string? = nil
-    if raw.approval_digest ~= nil then
-        approval_plan_digest = bounds.text(raw.approval_digest, 64)
-        if not approval_plan_digest or #approval_plan_digest ~= 64 or not approval_plan_digest:match("^[0-9a-f]+$") then
-            return nil, failure("INTERNAL", "governance approval plan digest is corrupt")
-        end
-    end
-    local approval_proposal_digest: string? = nil
-    if raw.approval_proposal_digest ~= nil then
-        approval_proposal_digest = bounds.text(raw.approval_proposal_digest, 64)
-        if not approval_proposal_digest or #approval_proposal_digest ~= 64 or not approval_proposal_digest:match("^[0-9a-f]+$") then
-            return nil, failure("INTERNAL", "governance approval proposal digest is corrupt")
-        end
-    end
     local status = raw.status
-    if status ~= "staged" and status ~= "reviewed" and status ~= "rejected" and status ~= "approval_bound" then return nil, failure("INTERNAL", "governance plan status is corrupt") end
+    if status ~= "staged" and status ~= "reviewed" and status ~= "rejected" then return nil, failure("INTERNAL", "governance plan status is corrupt") end
     local row_status: string = status
     local selected = raw.selected == 1 or raw.selected == true
     local selection_revision: integer? = nil
@@ -143,17 +125,6 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
         if value ~= "accepted" and value ~= "rejected" then return nil, failure("INTERNAL", "governance review status is corrupt") end
         review_status = value
     end
-    local approval_owner_incarnation = integer(raw.approval_owner_incarnation)
-    if status == "approval_bound" and (not approval_plan_digest or not approval_proposal_digest
-        or not approval_owner_incarnation or approval_owner_incarnation < 1) then
-        return nil, failure("INTERNAL", "bound governance approval identity is incomplete")
-    end
-    local approval_id: string? = nil
-    if raw.approval_id ~= nil then
-        local value = raw.approval_id
-        if type(value) ~= "string" then return nil, failure("INTERNAL", "bound governance approval identity is incomplete") end
-        approval_id = value
-    end
     local review_reason, reviewer_id = raw.review_reason, raw.reviewer_id
     if (review_reason ~= nil and type(review_reason) ~= "string") or (reviewer_id ~= nil and type(reviewer_id) ~= "string") then
         return nil, failure("INTERNAL", "governance review status is corrupt")
@@ -164,10 +135,7 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
         identity_digest_source_node = identity_digest_source_node,
         candidate = candidate, artifact = artifact, preflight = preflight,
         plan_digest = verified_plan_digest, revision = revision, status = row_status, review_status = review_status,
-        review_reason = review_reason, reviewer_id = reviewer_id,
-        approval_id = approval_id, approval_plan_digest = approval_plan_digest,
-        approval_proposal_digest = approval_proposal_digest,
-        approval_owner_incarnation = approval_owner_incarnation, selected = selected,
+        review_reason = review_reason, reviewer_id = reviewer_id, selected = selected,
         selection_revision = selection_revision}
     return decoded, nil
 end
@@ -178,10 +146,7 @@ local function view(store: Store, row: Row, include_bytes: boolean): {[string]: 
         plan_digest = row.plan_digest,
         candidate_digest = row.candidate.digest, artifact_digest = row.artifact.digest,
         preflight_digest = row.preflight.digest, revision = row.revision, status = row.status,
-        review_status = row.review_status, review_reason = row.review_reason, reviewer_id = row.reviewer_id,
-        approval_id = row.approval_id, approval_plan_digest = row.approval_plan_digest,
-        approval_proposal_digest = row.approval_proposal_digest,
-        approval_owner_incarnation = row.approval_owner_incarnation, selected = row.selected,
+        review_status = row.review_status, review_reason = row.review_reason, reviewer_id = row.reviewer_id, selected = row.selected,
         selection_revision = row.selection_revision}
     if include_bytes then
         result.candidate_bytes, result.artifact_bytes, result.preflight_bytes = row.candidate.bytes, row.artifact.bytes, row.preflight.bytes
@@ -324,40 +289,12 @@ function M.record_review(store: Store, actor_raw: string, input: ReviewRequest):
     end)
 end
 
-function M.bind_approval(store: Store, actor_raw: string, input: ApprovalRequest): Result
-    if store.closed then return failure("CLOSED", "governance plan store is closed") end
-    local actor = bounds.id(actor_raw)
-    if not actor then return failure("INVALID", "plan actor is invalid") end
-    return transition(store, actor, input, function(tx: sql.Transaction, row: Row): Result
-        if not row.selected then return failure("CONFLICT", "governance plan must be selected before approval binding") end
-        if row.status ~= "reviewed" and row.status ~= "approval_bound" then return failure("CONFLICT", "governance plan requires an accepted review") end
-        if input.approval_plan_digest ~= row.plan_digest then return failure("CONFLICT", "approval is not bound to the exact plan digest") end
-        if row.status == "approval_bound" and (row.approval_id ~= input.approval_id
-            or row.approval_plan_digest ~= input.approval_plan_digest
-            or row.approval_proposal_digest ~= input.approval_proposal_digest
-            or row.approval_owner_incarnation ~= input.approval_owner_incarnation) then
-            return failure("CONFLICT", "governance plan is bound to another approval")
-        end
-        local next_revision: integer = (row.revision) + 1
-        local _, err = tx:execute("UPDATE bee_governance_plans SET revision = ?, status = 'approval_bound', approval_id = ?, approval_digest = ?, approval_proposal_digest = ?, approval_owner_incarnation = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND source_node = ? AND source_workspace = ? AND version = ? AND revision = ?", {next_revision, input.approval_id, input.approval_plan_digest, input.approval_proposal_digest, input.approval_owner_incarnation, store.node, store.workspace, row.source_node, row.source_workspace, row.version, row.revision})
-        if err then return storage(err, "bind governance approval") end
-        if not _ or integer(_.rows_affected) ~= 1 then return failure("CONFLICT", "governance plan changed during approval binding") end
-        local changed, changed_error = find(tx, store, row.source_node, row.source_workspace, row.version)
-        if changed_error or not changed then return changed_error or failure("INTERNAL", "read bound governance plan") end
-        local measured = request_digest(input)
-        if not measured then return failure("INTERNAL", "measure approval receipt") end
-        local receipt_error = insert_receipt(store, tx, actor, input, measured, changed)
-        if receipt_error then return receipt_error end
-        return transaction.success(view(store, changed, false), false)
-    end)
-end
-
 function M.select(store: Store, actor_raw: string, input: Mutation): Result
     if store.closed then return failure("CLOSED", "governance plan store is closed") end
     local actor = bounds.id(actor_raw)
     if not actor then return failure("INVALID", "plan actor is invalid") end
     return transition(store, actor, input, function(tx: sql.Transaction, row: Row): Result
-        if row.status ~= "reviewed" and row.status ~= "approval_bound" then return failure("CONFLICT", "governance plan is not eligible for selection") end
+        if row.status ~= "reviewed" then return failure("CONFLICT", "governance plan is not eligible for selection") end
         local next_revision: integer = (row.revision) + 1
         local _, plan_error = tx:execute("UPDATE bee_governance_plans SET revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND source_node = ? AND source_workspace = ? AND version = ? AND revision = ?", {next_revision, store.node, store.workspace, row.source_node, row.source_workspace, row.version, row.revision})
         if plan_error then return storage(plan_error, "select governance plan") end
@@ -403,7 +340,6 @@ function M.call(store: Store, actor: string, raw: unknown): Result
     if not input then return failure("INVALID", decode_error or "invalid governance plan request") end
     if input.operation == "stage" then return M.stage(store, actor, input) end
     if input.operation == "record_review" then return M.record_review(store, actor, input) end
-    if input.operation == "bind_approval" then return M.bind_approval(store, actor, input) end
     if input.operation == "select" then return M.select(store, actor, input) end
     if input.operation == "get" then return M.get(store, input) end
     return M.list(store)

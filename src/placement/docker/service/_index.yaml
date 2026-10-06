@@ -46,13 +46,12 @@ entries:
   kind: process.lua
   source: file://sweeper.lua
   method: main
-  modules:
-  - process
-  - channel
-  - time
   imports:
+    worker: bee.process:worker
     service: bee.placement.docker.binding:methods
 - name: sweeper_service
+  meta:
+    title: Docker · supervision
   kind: process.service
   process: bee.placement.docker.service:sweeper
   lifecycle:
@@ -104,6 +103,8 @@ entries:
     image: bee.placement.docker.service:image
     environment: bee.placement.docker.service:environment
 - name: image_owner_service
+  meta:
+    title: Docker · images
   kind: process.service
   process: bee.placement.docker.service:image_owner
   lifecycle:

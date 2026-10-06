@@ -107,32 +107,4 @@ function M.stage_replica(target: Store, replica_store: ReplicaStore, actor: unkn
         preflight = {bytes = report_bytes, digest = report_digest}})
 end
 
-function M.request_approval(target: Store, actor_raw: unknown, executor: Executor, identity_raw: unknown,
-    policy_raw: unknown, request_key_raw: unknown, bind_key_raw: unknown): transaction.Result
-    local actor, policy = bounds.id(actor_raw), bounds.id(policy_raw)
-    local request_key, bind_key = bounds.id(request_key_raw), bounds.id(bind_key_raw)
-    local selected, identity_error = identity(identity_raw)
-    if not actor then return failure("INVALID", identity_error or "approval request identity is invalid") end
-    if not policy then return failure("INVALID", identity_error or "approval request identity is invalid") end
-    if not request_key then return failure("INVALID", identity_error or "approval request identity is invalid") end
-    if not bind_key then return failure("INVALID", identity_error or "approval request identity is invalid") end
-    if not selected then return failure("INVALID", identity_error or "approval request identity is invalid") end
-    local found = store.call(target, actor, selected)
-    if not found.ok then return found end
-    local plan = bounds.object(found.value)
-    if not plan then return failure("INTERNAL", "plan store returned no plan") end
-    if plan.selected ~= true then return failure("CONFLICT", "plan must be selected after an accepted review") end
-    if plan.status ~= "reviewed" then return failure("CONFLICT", "plan must be selected after an accepted review") end
-    if plan.review_status ~= "accepted" then return failure("CONFLICT", "plan must be selected after an accepted review") end
-    local bound, approval_error = approval.request(executor, plan, policy, request_key)
-    if not bound then return failure("APPROVAL", approval_error or "request local approval") end
-    local request: Object = {operation = "bind_approval", source_node = plan.source_node,
-        source_workspace = plan.source_workspace, version = plan.version,
-        expected_revision = plan.revision, idempotency_key = bind_key,
-        approval_id = bound.approval_id, approval_plan_digest = bound.approval_plan_digest,
-        approval_proposal_digest = bound.approval_proposal_digest,
-        approval_owner_incarnation = bound.owner_incarnation}
-    return store.call(target, actor, request)
-end
-
 return M

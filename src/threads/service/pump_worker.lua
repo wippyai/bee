@@ -4,10 +4,8 @@
 -- reply, sent through the node's Hive sender. Delivery is at least once — the destination
 -- deduplicates on the sender's stable idempotency key — so an unknown
 -- outcome settles nothing and the row's lease simply lapses.
-local process = require("process")
-local channel = require("channel")
-local time = require("time")
 local logger = require("logger")
+local worker = require("worker")
 local database = require("database")
 local outbox = require("outbox")
 local pump = require("pump")
@@ -25,7 +23,6 @@ local function settle(outbox_id: string, delivered: boolean, receipt: unknown, e
 end
 
 local function main()
-    local lifecycle = assert(process.events())
     local function once()
         local db, open_error = database.open()
         if not db then logger:warn("Forwarding pump cannot open its store", {cause = tostring(open_error)}); return end
@@ -49,13 +46,12 @@ local function main()
             end
         end
     end
-    while true do
+    -- A failed round is reported and the next round runs on the next tick.
+    worker.run({every = "1s", pass = function(): boolean
         local ok, err = pcall(once)
         if not ok then logger:error("Forwarding pump round failed", {cause = tostring(err)}) end
-        local tick = time.after("1s")
-        local selected = channel.select({lifecycle:case_receive(), tick:case_receive()})
-        if not selected.ok or selected.channel == lifecycle then break end
-    end
+        return true
+    end})
 end
 
 return {main = main}

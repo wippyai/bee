@@ -14,25 +14,6 @@ local artifact = require("artifact")
 local preflight = require("preflight")
 local version = require("version")
 
-local function blob(bytes: string): {[string]: string}
-    local digest, err = hash.sha256(bytes)
-    if not digest then error(tostring(err)) end
-    return {bytes = bytes, digest = digest}
-end
-
-local function executor(): destination.Executor
-    local selected = {}
-    function selected.call(self: destination.Executor, method: string, raw: unknown): (unknown?, unknown?)
-        if method ~= "bee.approvals.binding:request" then return nil, "unexpected method" end
-        local request = assert(bounds.object(raw))
-        local proposal = request.proposal
-        local bytes = assert(canonical.encode(proposal))
-        return {ok = true, replayed = false, value = {approval_id = "approval-destination",
-            proposal = proposal, proposal_digest = assert(hash.sha256(bytes)), owner_incarnation = 4}}, nil
-    end
-    return selected
-end
-
 local function ok(result: {[string]: unknown}): {[string]: unknown}
     if result.ok ~= true then error(tostring(result.code) .. ": " .. tostring(result.message)) end
     return assert(bounds.object(result.value))
@@ -95,41 +76,6 @@ end
 
 local function define_tests()
     test.describe("Governance destination owner", function()
-        test.it("binds a selected reviewed plan to an exact local approval", function()
-            local target, open_error = store.open("bee:db", "node-d", "workspace-d")
-            if not target then error(tostring(open_error)) end
-            local stage = {operation = "stage", source_node = "node-s", source_workspace = "application-s", version = "v1",
-                expected_revision = 0, idempotency_key = "stage-d", candidate = blob("candidate-d"),
-                artifact = blob("artifact-d"), preflight = blob("preflight-d")}
-            ok(store.call(target, "local-user", stage))
-            ok(store.call(target, "local-user", {operation = "record_review", source_node = "node-s",
-                source_workspace = "application-s", version = "v1", expected_revision = 1,
-                idempotency_key = "review-d", review_status = "accepted", review_reason = "reviewed"}))
-            ok(store.call(target, "local-user", {operation = "select", source_node = "node-s",
-                source_workspace = "application-s", version = "v1", expected_revision = 2,
-                idempotency_key = "select-d"}))
-            local bound = ok(destination.request_approval(target, "local-user", executor(),
-                {source_node = "node-s", source_workspace = "application-s", version = "v1"},
-                "user-approval", "approval-request-d", "approval-bind-d"))
-            test.eq(bound.status, "approval_bound")
-            test.eq(bound.approval_owner_incarnation, 4)
-            test.eq(bound.approval_plan_digest, bound.plan_digest)
-            assert(store.close(target))
-        end)
-
-        test.it("does not request approval before local selection", function()
-            local target, open_error = store.open("bee:db", "node-d", "workspace-r")
-            if not target then error(tostring(open_error)) end
-            ok(store.call(target, "local-user", {operation = "stage", source_node = "node-s",
-                source_workspace = "application-s", version = "v1", expected_revision = 0,
-                idempotency_key = "stage-r", candidate = blob("candidate-r"), artifact = blob("artifact-r"), preflight = blob("preflight-r")}))
-            local refused = destination.request_approval(target, "local-user", executor(),
-                {source_node = "node-s", source_workspace = "application-s", version = "v1"},
-                "user-approval", "approval-request-r", "approval-bind-r")
-            test.is_false(refused.ok == true)
-            assert(store.close(target))
-        end)
-
         test.it("stages only verified destination replicas and preserves local authority", function()
             local plans, plan_error = store.open("bee:db", "node-d", "workspace-d")
             if not plans then error(tostring(plan_error)) end

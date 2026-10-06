@@ -6,12 +6,6 @@ local canonical = require("canonical")
 local hash = require("hash")
 
 local DIGEST = string.rep("a", 64)
-local function plan(): {[string]: unknown}
-    return {workspace_id = "workspace-a", source_node = "source-a", source_workspace = "application-a",
-        version = "v1", revision = 3, plan_digest = DIGEST,
-        artifact_digest = string.rep("b", 64), preflight_digest = string.rep("c", 64)}
-end
-
 local function executor(change: boolean?, inspect_prompt: boolean?): approval.Executor
     local selected = {}
     function selected.call(self: approval.Executor, method: string, request: unknown): (unknown?, unknown?)
@@ -46,25 +40,6 @@ end
 
 local function define_tests()
     test.describe("Governance approval bridge", function()
-        test.it("requests and consumes an exact plan without gaining decision authority", function()
-            local item = plan()
-            local bound, err = approval.request(executor(), item, "user-approval", "request-1")
-            if not bound then error(tostring(err)) end
-            test.eq(bound.approval_plan_digest, DIGEST)
-            test.eq(bound.owner_incarnation, 7)
-            item.approval_id = bound.approval_id
-            item.approval_proposal_digest = bound.approval_proposal_digest
-            item.approval_owner_incarnation = bound.owner_incarnation
-            local consumed, consume_error = approval.consume(executor(), item, "apply-v1")
-            if not consumed then error(tostring(consume_error)) end
-            test.eq(consumed.consumed_effect, "apply-v1")
-        end)
-
-        test.it("refuses a reply for another proposal", function()
-            local bound = approval.request(executor(true), plan(), "user-approval", "request-2")
-            test.is_true(bound == nil)
-        end)
-
         test.it("binds activation and validates the exact consumption receipt", function()
             local intent = {workspace_id = "workspace-a", overlay_owner = "bee.gov:overlay",
                 source_node = "source-a", source_workspace = "application-a", version = "v1",

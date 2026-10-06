@@ -360,6 +360,14 @@ local function define_tests()
         if not added then error(tostring(add_error)) end
         local workspace = tostring(added.workspace)
         prepare_host(workspace)
+        test.it("routes every placement method a session uses, including the activity check that idles agents", function()
+            local plan = assert((admission.resolve("bee.driver.claude.profiles:default_window", "window")))
+            local methods = assert(bounds.object(plan.placement_methods))
+            for _, name in ipairs({"prepare", "start", "status", "stop", "reconcile", "cleanup", "activity"}) do
+                test.not_nil(methods[name], name)
+            end
+            test.eq(methods.activity, "bee.placement.native.binding:activity")
+        end)
         test.it("decodes dedicated worktrees without mutable or untyped definition options", function()
             local entry = assert(registry.get(DEFINITION))
             local data = assert(bounds.object(entry.data))

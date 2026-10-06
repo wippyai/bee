@@ -6,11 +6,9 @@ entries:
   source: file://worker.lua
   method: main
   modules:
-  - process
-  - channel
-  - time
   - logger
   imports:
+    worker: bee.process:worker
     installation: bee.gateway.security:installation
     approval_service: bee.approvals.binding:service
 - name: publication_worker
@@ -18,14 +16,14 @@ entries:
   source: file://publication_worker.lua
   method: main
   modules:
-  - process
-  - channel
-  - time
   - logger
   imports:
+    worker: bee.process:worker
     publish: bee.gateway.security:publish
     approval_service: bee.approvals.binding:service
 - name: gateway_installation_service
+  meta:
+    title: Gateway · Hub installs
   kind: process.service
   process: bee.gateway.service:worker
   host: bee:workers
@@ -51,6 +49,8 @@ entries:
       - bee.security.approvals:approval_consume_policy
       - bee.gateway.security:worker_host_policy
 - name: gateway_publication_service
+  meta:
+    title: Gateway · Hub publishing
   kind: process.service
   process: bee.gateway.service:publication_worker
   host: bee:workers

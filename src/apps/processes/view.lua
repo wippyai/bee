@@ -9,11 +9,41 @@ local hive = require("hive")
 type Row = {pid: string, source: string, state: string, steps: integer?}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
+-- A service that exited without an error finished its work, as a boot gate
+-- does; one that exited with an error stopped.
+local function service_state(item: probe.Service): string
+    if item.state == "exited" and not item.detail then return "done" end
+    return item.state
+end
+-- Bee's own services are listed by title in title order; the runtime's
+-- services fold into one row that counts them by state.
 function M.items(snapshot: probe.Snapshot, services: boolean): {Row}
     local rows: {Row} = {}
     if services then
+        local runtime: {[string]: integer} = {}
+        local runtime_restarts = 0
+        local runtime_count = 0
         for _, item in ipairs(snapshot.services) do
-            rows[#rows + 1] = {pid = item.id, source = item.id, state = item.state, steps = item.restarts}
+            local state = service_state(item)
+            if item.id:sub(1, 4) == "bee." then
+                rows[#rows + 1] = {pid = item.id, source = item.title or item.id, state = state, steps = item.restarts}
+            else
+                runtime[state] = (runtime[state] or 0) + 1
+                runtime_restarts = runtime_restarts + (item.restarts or 0)
+                runtime_count = runtime_count + 1
+            end
+        end
+        table.sort(rows, function(left: Row, right: Row): boolean return left.source:lower() < right.source:lower() end)
+        if runtime_count > 0 then
+            local parts: {string} = {}
+            local states: {string} = {}
+            for state in pairs(runtime) do states[#states + 1] = state end
+            table.sort(states, function(left: string, right: string): boolean
+                if left == "running" or right == "running" then return left == "running" end
+                return left < right
+            end)
+            for _, state in ipairs(states) do parts[#parts + 1] = tostring(runtime[state]) .. " " .. state end
+            rows[#rows + 1] = {pid = "runtime", source = "Runtime", state = table.concat(parts, " · "), steps = runtime_restarts}
         end
     else
         for _, item in ipairs(snapshot.processes) do

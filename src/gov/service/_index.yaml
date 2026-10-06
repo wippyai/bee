@@ -29,6 +29,8 @@ entries:
   imports:
     service: bee.gov.binding:destination_service
 - name: recovery_service
+  meta:
+    title: Overlays · boot recovery
   kind: process.service
   process: bee.gov.service:recovery
   host: bee:workers
@@ -47,16 +49,16 @@ entries:
   source: file://activation_worker.lua
   method: main
   modules:
-  - process
-  - channel
-  - time
   - funcs
   - logger
   imports:
+    worker: bee.process:worker
     bounds: bee.values:bounds
     service: bee.gov.binding:destination_service
     approval_service: bee.approvals.binding:service
 - name: activation_service
+  meta:
+    title: Overlays · activation
   kind: process.service
   process: bee.gov.service:activation_worker
   host: bee:workers

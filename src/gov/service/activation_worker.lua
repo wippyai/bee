@@ -2,15 +2,12 @@
 -- worker on every decision, and each approved activation goes to its owner,
 -- which consumes the approval and applies the exact intent. A refusal leaves
 -- that activation for the person to see in Overlays.
-local process = require("process")
-local channel = require("channel")
-local time = require("time")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local logger = require("logger")
+local worker = require("worker")
 local service = require("service")
 local approval_service = require("approval_service")
-type Channel = channel.Channel
 
 local EFFECTS = "bee.approvals.binding:activation_effects"
 
@@ -46,24 +43,7 @@ local function drain(): boolean
 end
 
 local function main()
-    local lifecycle = assert(process.events())
-    local wakes = assert(process.listen(approval_service.TOPIC_WAKE, {message = true}))
-    local registered, register_error = process.registry.register(approval_service.ACTIVATION_WORKER_NAME)
-    if not registered then error("register activation worker: " .. tostring(register_error)) end
-    local retry_ms = 1000
-    local retrying = not drain()
-    while true do
-        local cases = {lifecycle:case_receive(), wakes:case_receive()}
-        if retrying then cases[#cases + 1] = time.after(tostring(retry_ms) .. "ms"):case_receive() end
-        local selected = channel.select(cases)
-        if not selected.ok then return end
-        if selected.channel == lifecycle then
-            if selected.value.kind == process.event.CANCEL then return end
-        else
-            retrying = not drain()
-            retry_ms = retrying and math.min(retry_ms * 2, 30000) or 1000
-        end
-    end
+    worker.run({name = approval_service.ACTIVATION_WORKER_NAME, wake = approval_service.TOPIC_WAKE, pass = drain})
 end
 
 return {main = main}

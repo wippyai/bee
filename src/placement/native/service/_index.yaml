@@ -196,13 +196,12 @@ entries:
   kind: process.lua
   source: file://sweeper.lua
   method: main
-  modules:
-  - process
-  - channel
-  - time
   imports:
+    worker: bee.process:worker
     service: bee.placement.native.service:service
 - name: sweeper_service
+  meta:
+    title: Native agents · supervision
   kind: process.service
   process: bee.placement.native.service:sweeper
   lifecycle:

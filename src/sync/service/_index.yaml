@@ -32,6 +32,8 @@ entries:
     distributor: bee.sync.service:distributor
     replica_protocol: bee.sync:replica_protocol
 - name: service
+  meta:
+    title: Sync
   kind: process.service
   process: bee.sync.service:sync
   host: bee:workers

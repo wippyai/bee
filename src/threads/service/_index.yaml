@@ -94,6 +94,8 @@ entries:
     notices: bee.threads.service:notices
     commits: bee.threads.delivery:commits
 - name: service
+  meta:
+    title: Threads · owner
   kind: process.service
   process: bee.threads.service:threads
   host: bee:workers
@@ -183,17 +185,17 @@ entries:
   source: file://pump_worker.lua
   method: main
   modules:
-  - process
-  - channel
-  - time
   - logger
   imports:
+    worker: bee.process:worker
     database: bee.threads.persist:database
     outbox: bee.threads.service:outbox
     pump: bee.threads.service:pump
     bounds: bee.values:bounds
     sender: bee.threads.service:pump_sender
 - name: pump_service
+  meta:
+    title: Threads · forwarding
   kind: process.service
   process: bee.threads.service:pump_worker
   host: bee:workers

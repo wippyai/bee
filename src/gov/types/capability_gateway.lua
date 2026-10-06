@@ -1,5 +1,6 @@
 -- MIT. Pure checks for the host gateway through which applications make the
--- contract calls and HTTP requests their installed grants allow. The runtime
+-- contract calls and HTTP requests their installed grants allow, and agent
+-- attempts the HTTP requests their held elevations allow. The runtime
 -- authorizes contract.call on the bare method name and http_client.request on
 -- the URL alone, so an application never holds those actions; it calls the
 -- gateway, which authenticates the broker-created principal, reads that
@@ -29,7 +30,8 @@ function M.caller(actor_raw: unknown, meta_raw: unknown): (Caller?, string?)
     return {actor_id = actor_raw, workspace_id = workspace, definition_id = definition}, nil
 end
 
-local function own(record_raw: unknown, caller_raw: unknown, live: unknown): ({unknown}?, string?)
+-- The capabilities of the caller's own live grant record.
+function M.own(record_raw: unknown, caller_raw: unknown, live: unknown): ({unknown}?, string?)
     local record, caller = bounds.object(record_raw), bounds.object(caller_raw)
     if not record or not caller or live ~= true then return nil, "no live grant authorizes this caller" end
     if record.workspace_id ~= caller.workspace_id or record.application ~= caller.definition_id then
@@ -49,7 +51,7 @@ end
 -- Only the caller's own live grant for this exact binding and method passes.
 function M.contract(record_raw: unknown, caller_raw: unknown, binding_raw: unknown, method_raw: unknown,
     live: unknown): (boolean?, string?)
-    local capabilities, refusal = own(record_raw, caller_raw, live)
+    local capabilities, refusal = M.own(record_raw, caller_raw, live)
     if not capabilities then return nil, refusal end
     local binding = bounds.id(binding_raw)
     local method = type(method_raw) == "string" and (method_raw):match("^[A-Za-z][A-Za-z0-9_]*$") or nil
@@ -115,8 +117,13 @@ end
 -- passes.
 function M.http(record_raw: unknown, caller_raw: unknown, method_raw: unknown, url_raw: unknown,
     live: unknown): (boolean?, string?)
-    local capabilities, refusal = own(record_raw, caller_raw, live)
+    local capabilities, refusal = M.own(record_raw, caller_raw, live)
     if not capabilities then return nil, refusal end
+    return M.http_granted(capabilities, method_raw, url_raw)
+end
+
+-- Only a grant among these for this origin, method and path prefix passes.
+function M.http_granted(capabilities: {unknown}, method_raw: unknown, url_raw: unknown): (boolean?, string?)
     local method = type(method_raw) == "string" and (method_raw):upper() or nil
     local origin, path = target(url_raw)
     if not method or not origin or not path then return nil, "HTTP request target is malformed" end
@@ -130,7 +137,12 @@ end
 -- path prefix of the record, whatever method a redirect used.
 function M.located(record_raw: unknown, url_raw: unknown): (boolean?, string?)
     local record = bounds.object(record_raw)
-    local capabilities = record and record.capabilities or nil
+    return M.located_in(record and record.capabilities or nil, url_raw)
+end
+
+-- Whether the URL stays under an approved origin and path prefix of these
+-- grants.
+function M.located_in(capabilities: unknown, url_raw: unknown): (boolean?, string?)
     local origin, path = target(url_raw)
     if type(capabilities) ~= "table" or not origin or not path then return nil, "response location is malformed" end
     if #http_grants(capabilities, origin, path) > 0 then return true, nil end

@@ -7,11 +7,11 @@
 local registry = require("registry")
 local security = require("security")
 local contract = require("contract")
-local http_client = require("http_client")
 local bounds = require("bounds")
 local gateway = require("capability_gateway")
 local access = require("capability_access")
 local files = require("capability_files")
+local capability_http = require("capability_http")
 
 type Object = {[string]: unknown}
 type Fault = {code: string, message: string}
@@ -20,9 +20,6 @@ type Reply = {ok: boolean, error: Fault?, value: unknown}
 local function succeed(value: unknown): Reply
     return {ok = true, error = nil, value = value}
 end
-
-local MAX_BODY = 1048576
-local MAX_RESPONSE = 4194304
 
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -81,47 +78,13 @@ end
 -- Performs one approved HTTP request for the calling application:
 -- {method, url, headers?, body?, timeout?}.
 local function http_request(request_raw: unknown): Reply
-    local request = bounds.object(request_raw)
-    if not request or bounds.fields(request, {"method", "url", "headers", "body", "timeout"}) then
-        return fail("INVALID", "HTTP request is malformed")
-    end
-    local headers: {[string]: string} = {}
-    if request.headers ~= nil then
-        local supplied = bounds.object(request.headers)
-        if not supplied then return fail("INVALID", "HTTP headers are malformed") end
-        for key, value in pairs(supplied) do
-            if type(value) ~= "string" or #key > 128 or #value > 8192
-                or key:find("[%c:]") or value:find("[\r\n]") then
-                return fail("INVALID", "HTTP headers are malformed")
-            end
-            headers[key] = value
-        end
-    end
-    local body: string? = nil
-    if request.body ~= nil then
-        if type(request.body) ~= "string" or #request.body > MAX_BODY then
-            return fail("INVALID", "HTTP body is malformed")
-        end
-        body = request.body
-    end
-    local timeout = request.timeout
-    if timeout == nil then timeout = 30 end
-    if type(timeout) ~= "number" or timeout <= 0 or timeout > 60 then
-        return fail("INVALID", "HTTP timeout is malformed")
-    end
-    local caller, record, live, refusal = access.granted()
-    if refusal then return refusal end
-    local allowed, denied = gateway.http(record, caller, request.method, request.url, live)
-    if not allowed then return fail("DENIED", tostring(denied)) end
-    local method, url = request.method, request.url
-    if type(method) ~= "string" or type(url) ~= "string" then return fail("DENIED", "HTTP request target is malformed") end
-    local response, request_error = http_client.request(method:upper(), url,
-        {headers = headers, body = body, timeout = timeout, max_response_body = MAX_RESPONSE})
-    if not response then return fail("FAILED", tostring(request_error)) end
-    local arrived = response.url or request.url
-    local located, location_error = gateway.located(record, arrived)
-    if not located then return fail("DENIED", tostring(location_error)) end
-    return succeed({status_code = response.status_code, headers = response.headers, body = response.body})
+    return capability_http.perform(request_raw, function(): ({unknown}?, Reply?)
+        local caller, record, live, refusal = access.granted()
+        if refusal then return nil, refusal end
+        local capabilities, denied = gateway.own(record, caller, live)
+        if not capabilities then return nil, fail("DENIED", tostring(denied)) end
+        return capabilities, nil
+    end)
 end
 
 -- The registry identities of the calling application's own installed file

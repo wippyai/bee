@@ -125,13 +125,13 @@ entries:
   - registry
   - security
   - contract
-  - http_client
   - hash
   imports: &id002
     bounds: bee.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_access: bee.gov.binding:capability_access
     capability_files: bee.gov.types:capability_files
+    capability_http: bee.gov.binding:capability_http
   security:
     policies:
     - bee.gov.security:gateway_policy
@@ -143,7 +143,6 @@ entries:
   - registry
   - security
   - contract
-  - http_client
   - hash
   imports: *id002
   security:
@@ -157,7 +156,6 @@ entries:
   - registry
   - security
   - contract
-  - http_client
   - hash
   imports: *id002
   security:
@@ -562,6 +560,14 @@ entries:
   - security
   imports:
     bounds: bee.values:bounds
+- name: capability_http
+  kind: library.lua
+  source: file://capability_http.lua
+  modules:
+  - http_client
+  imports:
+    bounds: bee.values:bounds
+    capability_gateway: bee.gov.types:capability_gateway
 - name: capability_access
   kind: library.lua
   source: file://capability_access.lua

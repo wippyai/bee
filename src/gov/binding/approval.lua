@@ -174,7 +174,7 @@ local function activation_prompt(item: Object, changes: {string}?, migrations: {
         subject = "agent driver " .. tostring(item.source_workspace)
         login = " Its sessions may use your machine login for its own provider."
     end
-    local maker = shown and shown.maker and (" (" .. shown.maker .. ")") or ""
+    local maker = shown and shown.maker and shown.maker ~= "this bee" and (" (" .. shown.maker .. ")") or ""
     local permissions = " It adds no permissions."
     if changes and #changes > 0 then permissions = " It adds: " .. table.concat(changes, "; ") .. "." end
     local schema = ""

@@ -87,14 +87,16 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         if row and row.status == model.STATUS_UPDATE then
             buttons[#buttons + 1] = {kind = "update", key = "U", label = "Update", enabled = true, primary = true}
         end
-        buttons[#buttons + 1] = {kind = "open", key = "Enter", label = row and row.origin == "hub" and "Open" or "Details",
-            enabled = row ~= nil, primary = row == nil or row.status ~= model.STATUS_UPDATE}
+        buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = row ~= nil, primary = row == nil or row.status ~= model.STATUS_UPDATE}
         buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = row ~= nil and row.origin == "hub" and row.app == nil}
     elseif tab == "shared" then
         buttons[#buttons + 1] = {kind = "install", key = "Enter", label = "Install", enabled = row ~= nil, primary = true}
-        buttons[#buttons + 1] = {kind = "open", key = "D", label = "Details", enabled = row ~= nil}
+        buttons[#buttons + 1] = {kind = "open", key = "O", label = "Open", enabled = row ~= nil}
     else
-        local operation = state.hub.selected_operation
+        local operation: hub.Operation? = nil
+        for _, candidate in ipairs(state.hub.operations) do
+            if row and candidate.digest == row.operation then operation = candidate end
+        end
         buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide details" or "Details", enabled = true}
         buttons[#buttons + 1] = {kind = "operations_previous", label = "Prev", enabled = state.hub.operation_page > 1}
         buttons[#buttons + 1] = {kind = "operations_next", label = "Next",

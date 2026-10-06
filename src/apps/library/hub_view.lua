@@ -87,7 +87,6 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             or (kind == "requirements" and state.requirements_open) or kind == state.action
             or kind == "policy_" .. state.policy or kind == "confirm" or kind == "review" or kind == "plan"
             or kind == "recover"
-            or (kind == "developer_packages" and state.developer_packages)
         return frame.button(painter, x, y, {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active,
             primary = kind == "confirm" or kind == "review" or kind == "plan" or kind == "recover"})
     end

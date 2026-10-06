@@ -21,7 +21,6 @@ local contents = require("contents")
 type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
 type Pending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, apply: boolean}
 type ReadPending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, retired: boolean}
-type Editor = {field: string, buffer: string, name: string?}
 
 local POLL = "2s"
 
@@ -105,6 +104,13 @@ local function main(options: unknown)
     local function changed()
         dirty = true
     end
+    -- The notice the screen in front of the person shows: the Hub's on its
+    -- package screens, else this app's, else the Hub's last word.
+    local function current_notice(): string
+        if view.screen(state) == "package" then return hubs.notice end
+        if state.notice ~= "" then return state.notice end
+        return hubs.notice
+    end
     local function wake()
         dirty = true
         if running then updates:send(true) end
@@ -135,6 +141,17 @@ local function main(options: unknown)
         end)
         return true
     end
+    -- background runs a read without announcing work, so the footer stays still
+    -- while the list follows an install.
+    local function background(operation: () -> ())
+        if busy then return end
+        busy = true
+        coroutine.spawn(function()
+            pcall(operation)
+            busy = false
+            if running then wake() end
+        end)
+    end
     local function invoke(request: unknown): governed.Reply?
         local raw, err = funcs.new():call(governed.CALL, request)
         if err then return nil end
@@ -153,8 +170,7 @@ local function main(options: unknown)
         governed.apply_available(gov, invoke(governed.available_request(gov))); note()
         governed.apply_list(gov, invoke(governed.list_request(gov))); note()
         governed.apply_activations(gov, invoke(governed.activations_request(gov))); note()
-        gov.notice = failures[1] or ""
-        if gov.notice ~= "" then state.notice = gov.notice else state.notice = "" end
+        state.notice = failures[1] or ""
     end
     local function stage_now(item: governed.Available): boolean
         local staged = governed.staged_plan(gov, item)
@@ -316,7 +332,7 @@ local function main(options: unknown)
             end
         elseif row.app then
             for _, candidate in ipairs(gov.plans) do
-                if candidate.source_workspace == row.app then plan = candidate end
+                if candidate.source_workspace == row.app and candidate.version == row.version then plan = candidate end
             end
         end
         if plan then
@@ -350,7 +366,6 @@ local function main(options: unknown)
         elseif operation == "plan" then hub.apply_plan(hubs, value)
         elseif operation == "status" then hub.apply_result(hubs, value)
         elseif operation == "history" then hub.apply_history(hubs, value) end
-        if hubs.notice ~= "" and hubs.phase ~= "details" then state.notice = hubs.notice end
     end
     local function start_next()
         if reading then return end
@@ -546,7 +561,7 @@ local function main(options: unknown)
     end
     local function cancel_confirmation()
         if hubs.recovery then
-            state.tab = "history"
+            model.show_tab(state, "history")
             operation_history()
         else hub.show(hubs, "plan"); changed() end
     end
@@ -670,6 +685,7 @@ local function main(options: unknown)
         elseif kind == "recover" then
             if apply_pending then ui.status = "An apply is still pending"
             else
+                if row and row.operation then hub.select_operation(hubs, row.operation) end
                 local problem = hub.recover(hubs)
                 if problem then ui.status = problem else ui.offset = 0; invalidate() end
             end
@@ -792,7 +808,7 @@ local function main(options: unknown)
     show_tab("installed")
     while running do
         if dirty then
-            local display_ui: view.Ui = {offset = ui.offset, status = ui.editor and ui.status or (ui.status ~= "" and ui.status or state.notice),
+            local display_ui: view.Ui = {offset = ui.offset, status = ui.editor and ui.status or (ui.status ~= "" and ui.status or current_notice()),
                 reading = ui.reading, editor = ui.editor, content = ui.content}
             local drawn = view.draw(width, height, preferences, state, display_ui)
             frame.render(drawn, menu, preferences)
@@ -817,7 +833,7 @@ local function main(options: unknown)
             if not busy and view.screen(state) ~= "package" then
                 for _, row in ipairs(model.rows(state, "installed")) do
                     if row.status == model.STATUS_WAITING or row.status == model.STATUS_INSTALLING then
-                        perform(refresh_activations)
+                        background(refresh_activations)
                         break
                     end
                 end
@@ -934,11 +950,11 @@ local function main(options: unknown)
                                 if key == "tab" or letter == "\t" then
                                     local order = {installed = "shared", shared = "history", history = "installed"}
                                     show_tab(order[state.tab] :: model.Tab)
-                                elseif key == "up" or letter == "k" and state.tab ~= "shared" then move_selection(-1)
+                                elseif letter == "k" and hub.keyword_phase(tab_phase(state.tab)) then begin_editor("keyword")
+                                elseif key == "up" or letter == "k" then move_selection(-1)
                                 elseif key == "down" or letter == "j" then move_selection(1)
                                 elseif key == "pgup" then move_selection(-8)
                                 elseif key == "pgdown" then move_selection(8)
-                                elseif letter == "k" then begin_editor("keyword")
                                 elseif key == "left" and state.tab == "shared" then hub.set_page(hubs, hubs.page - 1); invalidate(); load_tab()
                                 elseif key == "right" and state.tab == "shared" then hub.set_page(hubs, hubs.page + 1); invalidate(); load_tab()
                                 elseif key == "left" and state.tab == "history" then list_hit("operations_previous", "")
@@ -947,7 +963,7 @@ local function main(options: unknown)
                                     if state.tab == "shared" then install_row(row)
                                     elseif state.tab == "installed" then open_row(row)
                                     else changed() end
-                                elseif letter == "d" and row then open_row(row)
+                                elseif (letter == "o" or letter == "d") and row then open_row(row)
                                 elseif letter == "u" then if row then update_row(row) end
                                 elseif letter == "x" and row and row.component and row.origin == "hub" and state.tab == "installed" then remove_package(row.component)
                                 elseif letter == "g" and state.tab == "history" then list_hit("recover", "")

@@ -1,6 +1,6 @@
--- MIT. Modules is a presentation model. It never calls Hub or the registry:
--- the application sends typed intents to the public Hub facade and folds its
--- replies back here.
+-- MIT. The Library's Hub package model, a presentation model. It never calls
+-- Hub or the registry: the application sends typed intents to the public Hub
+-- facade and folds its replies back here.
 local json = require("json")
 local canonical = require("canonical")
 local hash = require("hash")

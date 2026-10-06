@@ -27,7 +27,6 @@ M.STATUS_INSTALLING = "Installing"
 M.STATUS_INSTALLED = "Installed"
 M.STATUS_UPDATE = "Update available"
 M.STATUS_REMOVED = "Removed"
-M.TABS = {"installed", "shared", "history"}
 
 function M.new(workspace_id: string): State
     return {workspace_id = workspace_id, tab = "installed", screen = "list", selected = {installed = nil, shared = nil, history = nil},
@@ -270,10 +269,6 @@ end
 
 function M.toggle_technical(state: State)
     state.governed.technical = not state.governed.technical
-end
-
-function M.technical(state: State): boolean
-    return state.governed.technical
 end
 
 type Line = {label: string, value: string}

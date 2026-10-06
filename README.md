@@ -88,6 +88,17 @@ with one approval that names the version and the permissions it adds. Approving
 it installs the overlay into the running node; an application opens on your
 desktop right away. **Overlays** keeps the history and reverts a version.
 
+## Documentation
+
+Bee carries its documentation inside the binary, so agents read it offline
+through the `docs` MCP tool and can also search the live
+[Wippy docs](https://wippy.ai/llm/toc). The same pages are in
+[`src/corpus`](src/corpus); start with the
+[documentation map](src/corpus/docs/readme.md). For building applications,
+read [application contracts](src/corpus/docs/application_contracts.md),
+[delivery](src/corpus/docs/distributed_app_delivery.md) and the
+[terminal toolkit](src/corpus/toolkit.md).
+
 ## Build
 
 Requires Git, Go and a C compiler.

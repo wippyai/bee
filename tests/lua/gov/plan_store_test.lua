@@ -58,6 +58,29 @@ local function define_tests()
             test.eq(restored.selection_revision, 3)
             assert(store.close(reopened))
         end)
+        test.it("keeps the name of the agent that made a staged version", function()
+            local state, open_error = store.open("bee:db", "node-a", "workspace-made")
+            if not state then error(tostring(open_error)) end
+            local stage = identity("stage", 0, "stage-made", "author-made")
+            stage.candidate, stage.artifact, stage.preflight = blob("candidate"), blob("artifact"), blob("preflight")
+            stage.author = "Claude Code"
+            test.eq(ok(store.call(state, "reviewer-a", stage)).author, "Claude Code")
+            local unnamed = identity("stage", 0, "stage-unnamed", "author-unnamed")
+            unnamed.candidate, unnamed.artifact, unnamed.preflight = blob("candidate"), blob("artifact"), blob("preflight")
+            test.is_nil(ok(store.call(state, "reviewer-a", unnamed)).author)
+            assert(store.close(state))
+
+            local reopened = assert(store.open("bee:db", "node-a", "workspace-made"))
+            test.eq(ok(store.call(reopened, "reader-a", {operation = "get", source_node = "source-a",
+                source_workspace = "author-made", version = "v1"})).author, "Claude Code")
+            -- One version has one maker: the same bytes staged under another name conflict.
+            local renamed = identity("stage", 0, "stage-renamed", "author-made")
+            renamed.candidate, renamed.artifact, renamed.preflight = blob("candidate"), blob("artifact"), blob("preflight")
+            renamed.author = "Codex"
+            test.eq(store.call(reopened, "reviewer-a", renamed).code, "CONFLICT")
+            assert(store.close(reopened))
+        end)
+
         test.it("selects two applications independently in one workspace", function()
             local state, open_error = store.open("bee:db", "node-a", "workspace-multi")
             if not state then error(tostring(open_error)) end

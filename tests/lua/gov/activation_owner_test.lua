@@ -66,13 +66,13 @@ local function migration_effect(): MigrationEffects
     }
 end
 
-local function selected_plan(store: plan_store.Store, version: string, entry_blob: {[string]: unknown}): {[string]: unknown}
+local function selected_plan(store: plan_store.Store, version: string, entry_blob: {[string]: unknown}, author: string?): {[string]: unknown}
     local identity = {source_node = "source-a", source_workspace = "app-a", version = version}
     local staged = ok(plan_store.call(store, "host-a", {operation = "stage", expected_revision = 0,
         idempotency_key = "stage-" .. version, source_node = identity.source_node,
         source_workspace = identity.source_workspace, version = version,
         candidate = blob("candidate-" .. version), artifact = entry_blob,
-        preflight = blob("source-preflight-" .. version)}))
+        preflight = blob("source-preflight-" .. version), author = author}))
     local reviewed = ok(plan_store.call(store, "host-a", {operation = "record_review",
         expected_revision = staged.revision, idempotency_key = "review-" .. version,
         source_node = identity.source_node, source_workspace = identity.source_workspace,
@@ -422,6 +422,44 @@ local function authority_tests()
             test.eq(ok(owner.step(config, "intent-widened", "widened")).phase, "consuming")
             expect_code(owner.step(config, "intent-widened", "widened"), "DENIED")
             test.is_false(applied)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("asks the person about the version under the name of the agent that made it", function()
+            local workspace = "workspace-made-by"
+            local plans = assert(plan_store.open("bee:db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee:db", "node-owner", workspace))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest}, "Claude Code")
+            local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {},
+                requires_approval = true, revocation = {grants = {}, fenced_attempts = {}},
+                lines = {"widened: Read owned threads"}, resolved = {"Read owned threads"},
+                delta = {"widened: Read owned threads"}}
+            local world: ResolverWorld = {revision = 4, digest = SHA, capability = installed_capability(review)}
+            local prompt: string? = nil
+            local executor = {}
+            function executor.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
+                local input = assert(bounds.object(request))
+                local proposal = assert(bounds.object(input.proposal))
+                prompt = tostring((assert(bounds.object(input.prompt))).text)
+                return {ok = true, value = {approval_id = "made-by-approval", proposal = proposal,
+                    proposal_digest = assert(hash.sha256(assert(canonical.encode(proposal)))),
+                    owner_incarnation = 3}}, nil
+            end
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world), approvals = executor,
+                actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
+                migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): (boolean?, string?) return false, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): ({[string]: unknown}?, string?) return {changed = true}, nil end}
+            test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-made-by", receipt_key = "made-by"})).phase, "approval_bound")
+            local asked = tostring(prompt)
+            test.eq(asked:sub(1, asked:find("?", 1, true)), "Install app-a v1 (made by Claude Code, from bee source-a)?")
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)

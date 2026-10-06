@@ -10,13 +10,16 @@ M.MAX_ARTIFACT_BYTES = 262144
 M.MAX_PREFLIGHT_BYTES = 131072
 M.MAX_REVIEW_BYTES = 8192
 M.MAX_RECEIPT_BYTES = 160
+M.MAX_AUTHOR = 80
 
 type Blob = {bytes: string, digest: string}
 type Identity = {operation: "get", version: string, source_node: string, source_workspace: string}
 type Mutation = {operation: "select", version: string, source_node: string, source_workspace: string,
     expected_revision: integer, idempotency_key: string}
+-- author is the person-facing name of the agent that made the version, when its
+-- delivery names one.
 type StageRequest = {operation: "stage", version: string, source_node: string, source_workspace: string,
-    candidate: Blob, artifact: Blob, preflight: Blob, expected_revision: integer, idempotency_key: string}
+    candidate: Blob, artifact: Blob, preflight: Blob, author: string?, expected_revision: integer, idempotency_key: string}
 type ReviewRequest = {operation: "record_review", version: string, source_node: string, source_workspace: string,
     expected_revision: integer, idempotency_key: string, review_status: "accepted" | "rejected", review_reason: string}
 type Request = Identity | Mutation | StageRequest | ReviewRequest | {operation: "list"}
@@ -94,7 +97,7 @@ function M.decode(raw: unknown): (Request?, string?)
     if operation == "stage" and expected ~= 0 then return nil, "stage requires expected_revision zero" end
 
     if operation == "stage" then
-        local extra = mutation_fields(value, {"source_node", "source_workspace", "candidate", "artifact", "preflight"})
+        local extra = mutation_fields(value, {"source_node", "source_workspace", "candidate", "artifact", "preflight", "author"})
         if extra then return nil, extra end
         local source_node, source_workspace = bounds.id(value.source_node), bounds.id(value.source_workspace)
         if not source_node then return nil, "source identity is invalid" end
@@ -105,9 +108,11 @@ function M.decode(raw: unknown): (Request?, string?)
         if not artifact then return nil, artifact_error end
         local preflight, preflight_error = blob(value.preflight, M.MAX_PREFLIGHT_BYTES, "preflight")
         if not preflight then return nil, preflight_error end
+        local author = bounds.line(value.author, M.MAX_AUTHOR)
+        if value.author ~= nil and (not author or author == "") then return nil, "author must be one short line" end
         local result: Request = {operation = "stage", version = version, expected_revision = expected, idempotency_key = key,
             source_node = source_node, source_workspace = source_workspace, candidate = candidate,
-            artifact = artifact, preflight = preflight}
+            artifact = artifact, preflight = preflight, author = author}
         return result
     end
 

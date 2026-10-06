@@ -19,12 +19,12 @@ local function ok(result: {[string]: unknown}): {[string]: unknown}
     return assert(bounds.object(result.value))
 end
 
-local function application(source_node: string, source_workspace: string, component: string): delivery.Delivery
+local function application(source_node: string, source_workspace: string, component: string, author: string?): delivery.Delivery
     local exact = assert(artifact.create({{id = "replicated.app:main", kind = "function.lua",
         data = {source = "--" .. string.rep("x", 40000) .. "\nreturn true"}}}))
     local result, result_error = delivery.create({schema_revision = delivery.SCHEMA,
         source_node = source_node, source_workspace = source_workspace,
-        component = component, version = "v1", artifact = {bytes = exact.bytes, digest = exact.digest}})
+        component = component, version = "v1", author = author, artifact = {bytes = exact.bytes, digest = exact.digest}})
     if not result then error(tostring(result_error)) end
     return result
 end
@@ -76,6 +76,18 @@ end
 
 local function define_tests()
     test.describe("Governance destination owner", function()
+        test.it("stages a replica with the name of the agent that made it", function()
+            local plans = assert(store.open("bee:db", "node-d", "workspace-d"))
+            local replica_store = assert(replicas.open())
+            local descriptor = replicate(replica_store, application("source-made", "source/application", "sample/app", "Claude Code"))
+            local staged = ok(destination.stage_replica(plans, replica_store, "local-reviewer",
+                {source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
+                    descriptor_digest = descriptor.digest, idempotency_key = "stage-made"}, resolver(), "sample/app"))
+            test.eq(staged.author, "Claude Code")
+            assert(store.close(plans))
+            assert(replicas.close(replica_store))
+        end)
+
         test.it("stages only verified destination replicas and preserves local authority", function()
             local plans, plan_error = store.open("bee:db", "node-d", "workspace-d")
             if not plans then error(tostring(plan_error)) end

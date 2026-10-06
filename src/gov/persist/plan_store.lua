@@ -20,13 +20,13 @@ type Identity = {operation: string, source_node: string, source_workspace: strin
 type Mutation = {operation: string, source_node: string, source_workspace: string, version: string,
     expected_revision: integer, idempotency_key: string}
 type StageRequest = {operation: string, source_node: string, source_workspace: string, version: string,
-    expected_revision: integer, idempotency_key: string, candidate: Blob, artifact: Blob, preflight: Blob}
+    expected_revision: integer, idempotency_key: string, candidate: Blob, artifact: Blob, preflight: Blob, author: string?}
 type ReviewRequest = {operation: string, source_node: string, source_workspace: string, version: string,
     expected_revision: integer, idempotency_key: string, review_status: "accepted" | "rejected", review_reason: string}
 type Store = {db: sql.DB, node: string, workspace: string, closed: boolean}
 type Row = {source_node: string, source_workspace: string, version: string,
     identity_digest_owner_node: string, identity_digest_source_node: string,
-    candidate: Blob, artifact: Blob, preflight: Blob, revision: integer, status: string,
+    candidate: Blob, artifact: Blob, preflight: Blob, author: string?, revision: integer, status: string,
     plan_digest: string, review_status: string?, review_reason: string?, reviewer_id: string?,
     selected: boolean, selection_revision: integer?}
 
@@ -129,11 +129,16 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
     if (review_reason ~= nil and type(review_reason) ~= "string") or (reviewer_id ~= nil and type(reviewer_id) ~= "string") then
         return nil, failure("INTERNAL", "governance review status is corrupt")
     end
+    local author: string? = nil
+    if raw.author ~= nil and raw.author ~= sql.NULL then
+        author = bounds.line(raw.author, protocol.MAX_AUTHOR)
+        if not author or author == "" then return nil, failure("INTERNAL", "governance plan author is corrupt") end
+    end
     local verified_plan_digest = plan_digest_value
     local decoded: Row = {source_node = source_node, source_workspace = source_workspace, version = version,
         identity_digest_owner_node = identity_digest_owner_node,
         identity_digest_source_node = identity_digest_source_node,
-        candidate = candidate, artifact = artifact, preflight = preflight,
+        candidate = candidate, artifact = artifact, preflight = preflight, author = author,
         plan_digest = verified_plan_digest, revision = revision, status = row_status, review_status = review_status,
         review_reason = review_reason, reviewer_id = reviewer_id, selected = selected,
         selection_revision = selection_revision}
@@ -143,7 +148,7 @@ end
 local function view(store: Store, row: Row, include_bytes: boolean): {[string]: unknown}
     local result: {[string]: unknown} = {owner_node = store.node, workspace_id = store.workspace,
         source_node = row.source_node, source_workspace = row.source_workspace, version = row.version,
-        plan_digest = row.plan_digest,
+        plan_digest = row.plan_digest, author = row.author,
         candidate_digest = row.candidate.digest, artifact_digest = row.artifact.digest,
         preflight_digest = row.preflight.digest, revision = row.revision, status = row.status,
         review_status = row.review_status, review_reason = row.review_reason, reviewer_id = row.reviewer_id, selected = row.selected,
@@ -230,7 +235,7 @@ function M.stage(store: Store, actor_raw: string, input: StageRequest): Result
             if existing.source_workspace ~= input.source_workspace or existing.candidate.digest ~= input.candidate.digest
                 or existing.artifact.digest ~= input.artifact.digest or existing.preflight.digest ~= input.preflight.digest
                 or existing.candidate.bytes ~= input.candidate.bytes or existing.artifact.bytes ~= input.artifact.bytes or existing.preflight.bytes ~= input.preflight.bytes
-                or existing.plan_digest ~= measured_plan then
+                or existing.plan_digest ~= measured_plan or existing.author ~= input.author then
                 return failure("CONFLICT", "version already contains different governance plan bytes")
             end
             local receipt_error = insert_receipt(store, tx, actor, input, measured, existing)
@@ -243,7 +248,7 @@ function M.stage(store: Store, actor_raw: string, input: StageRequest): Result
         if count == nil then return failure("INTERNAL", "governance plan count is corrupt") end
         if count >= MAX_PLANS then return failure("CAPACITY_EXHAUSTED", "governance plan capacity is exhausted") end
         local now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
-        local _, insert_error = tx:execute("INSERT INTO bee_governance_plans (owner_node, workspace_id, source_node, source_workspace, version, candidate_bytes, candidate_digest, artifact_bytes, artifact_digest, preflight_bytes, preflight_digest, plan_digest, identity_digest_owner_node, identity_digest_source_node, revision, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'staged', " .. now .. ", " .. now .. ")", {store.node, store.workspace, input.source_node, input.source_workspace, input.version, input.candidate.bytes, input.candidate.digest, input.artifact.bytes, input.artifact.digest, input.preflight.bytes, input.preflight.digest, measured_plan, store.node, input.source_node})
+        local _, insert_error = tx:execute("INSERT INTO bee_governance_plans (owner_node, workspace_id, source_node, source_workspace, version, candidate_bytes, candidate_digest, artifact_bytes, artifact_digest, preflight_bytes, preflight_digest, plan_digest, identity_digest_owner_node, identity_digest_source_node, author, revision, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'staged', " .. now .. ", " .. now .. ")", {store.node, store.workspace, input.source_node, input.source_workspace, input.version, input.candidate.bytes, input.candidate.digest, input.artifact.bytes, input.artifact.digest, input.preflight.bytes, input.preflight.digest, measured_plan, store.node, input.source_node, input.author or sql.NULL})
         if insert_error then return storage(insert_error, "stage governance plan") end
         local row, row_error = find(tx, store, input.source_node, input.source_workspace, input.version)
         if row_error or not row then return row_error or failure("INTERNAL", "read staged governance plan") end

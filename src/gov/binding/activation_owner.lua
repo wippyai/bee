@@ -199,7 +199,7 @@ end
 
 -- What the person installs, as they know it: the application's own title, and
 -- the node that shared it when another node made it.
-local function presentation(config: Config, intent: Object): approval.Presentation
+local function presentation(config: Config, intent: Object, plan: Object): approval.Presentation
     local shown: approval.Presentation = {title = nil, maker = nil}
     local entries = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
     for _, raw in ipairs(entries or {}) do
@@ -209,8 +209,13 @@ local function presentation(config: Config, intent: Object): approval.Presentati
         local title = declared and bounds.line(declared.title, 80) or nil
         if title and title ~= "" then shown.title = title end
     end
+    -- The person reads who made the version and, when another bee sent it,
+    -- which one.
+    local author = bounds.line(plan.author, 80)
     local source = bounds.id(intent.source_node)
-    if source and source ~= config.activations.node then shown.maker = "from bee " .. source end
+    local made = author and author ~= "" and ("made by " .. author) or nil
+    local remote = source and source ~= config.activations.node and ("from bee " .. source) or nil
+    if made and remote then shown.maker = made .. ", " .. remote else shown.maker = made or remote end
     return shown
 end
 
@@ -297,7 +302,7 @@ function M.prepare(raw_config: Config, raw: unknown): Result
         end
     end
     local bound, approval_error = approval.request_activation(config.approvals, intent,
-        config.approval_policy, request_key, review, pending, presentation(config, intent))
+        config.approval_policy, request_key, review, pending, presentation(config, intent, plan))
     if not bound then return failure("APPROVAL", tostring(approval_error)) end
     return activations.call(config.activations, config.actor_id, {operation = "bind_approval",
         intent_id = intent_id, expected_revision = intent.revision, idempotency_key = bind_key,

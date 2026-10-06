@@ -103,7 +103,7 @@ function M.stage_replica(target: Store, replica_store: ReplicaStore, actor: unkn
         idempotency_key = input.idempotency_key, source_node = application.value.source_node,
         source_workspace = application.value.source_workspace, version = application.value.version,
         candidate = {bytes = candidate_bytes, digest = candidate_digest},
-        artifact = application.value.artifact,
+        artifact = application.value.artifact, author = application.value.author,
         preflight = {bytes = report_bytes, digest = report_digest}})
 end
 

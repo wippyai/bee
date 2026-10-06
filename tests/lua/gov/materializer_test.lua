@@ -295,6 +295,23 @@ local function define_tests()
                     executors = {private}, record = record}))
         end)
 
+        test.it("leaves governed migration definitions out of the application overlay", function()
+            -- Governance runs a version's migrations itself; installed, a
+            -- migration definition would be found and run again by the
+            -- runtime's boot migration runner.
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            local portable = {{id = "app.notes:app", kind = "process.lua",
+                meta = {type = "bee.app"}, data = {source = "return true"}},
+                {id = "app.notes:create_notes", kind = "function.lua",
+                    meta = {type = "migration", target_db = "notes", ordinal = 1},
+                    data = {source = "return true", method = "run"}}}
+            local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, nil))
+            test.eq(applied.overlay_entries, 1)
+            test.not_nil(state.entries["app.notes:app"])
+            test.is_nil(state.entries["app.notes:create_notes"])
+            test.is_true(materializer.matches_composed_with(api(state), "bee.gov:overlay", portable, nil, nil))
+        end)
         test.it("measures and reconciles an overlay entry near the 256 KiB artifact limit", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local desired = {{id = "app:large", kind = "function.lua",

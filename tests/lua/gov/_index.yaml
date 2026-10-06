@@ -1076,6 +1076,15 @@ entries:
     - registry.snapshot
     resources: '*'
     effect: allow
+- name: unplaced_menu
+  kind: registry.entry
+  meta:
+    type: bee.menu
+    comment: A menu no display places; the application database suite lists its installed application here so the Start panel later display suites read stays unchanged
+  data:
+    title: Unplaced
+    location: nowhere
+    order: 1
 - name: app_database_test
   kind: function.lua
   source: file://app_database_test.lua

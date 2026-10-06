@@ -257,8 +257,14 @@ end
 local function composed(raw: unknown, admission_raw: unknown, generated_raw: unknown?): ({Entry}?, {Entry}?, string?, string?)
     local portable, artifact_digest, portable_error = desired(raw)
     if not portable or not artifact_digest then return nil, nil, nil, portable_error end
+    -- Governance runs a version's migrations from its frozen migration work;
+    -- installed, a migration definition would be discovered and run again by
+    -- the runtime's boot migration runner, outside governance.
     local complete: {Entry} = table.create(#portable + (admission_raw == nil and 0 or 1), 0)
-    for index, entry in ipairs(portable) do complete[index] = entry end
+    for _, entry in ipairs(portable) do
+        local meta = bounds.object(entry.meta)
+        if not (meta and meta.type == "migration") then complete[#complete + 1] = entry end
+    end
     if admission_raw ~= nil then
         local blob = bounds.object(admission_raw)
         if not blob or bounds.fields(blob, {"bytes", "digest", "identity_generation"}) then

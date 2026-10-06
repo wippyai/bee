@@ -21,6 +21,9 @@ local application = require("application")
 local OVERLAY = "countdb"
 local NAMESPACE = "app." .. OVERLAY
 local APP = NAMESPACE .. ":app"
+-- A menu no display places, so the installed application stays out of the
+-- Start panel later display suites read.
+local MENU = "bee.tests.gov:unplaced_menu"
 type Object = {[string]: unknown}
 
 -- The guide's own example: the counter with its counts database, first
@@ -31,6 +34,7 @@ local function first_version(): {Object}
     for _, entry in ipairs(guide.database_example()) do entries[#entries + 1] = entry end
     local encoded = assert(json.encode(entries))
     local renamed = encoded:gsub(guide.NAMESPACE:gsub("%p", "%%%0"), NAMESPACE)
+        :gsub("bee%.shell:apps_menu", MENU)
     return assert(json.decode(renamed)) :: {Object}
 end
 
@@ -74,6 +78,29 @@ local function isolated(): string
     local added, err = client.call(assert(system.node.id()), "workspace_add", {path = path, label = "notesdb"})
     if not added then error("workspace_add: " .. tostring(err)) end
     return tostring(added.workspace)
+end
+
+-- The node presents Needs you for an installation waiting for the person and
+-- opens the application once it is installed, on desktops of the workspace;
+-- the suite closes what it caused so later suites find the desktops as they
+-- were.
+local function running(): {[string]: boolean}
+    local listed, err = client.call(assert(system.node.id()), "list", {})
+    if not listed then error("list: " .. tostring(err)) end
+    local ids: {[string]: boolean} = {}
+    for _, raw in ipairs((listed.running or {}) :: {unknown}) do
+        local instance = bounds.object(raw)
+        if instance then ids[tostring(instance.id)] = true end
+    end
+    return ids
+end
+local function close_presented(before: {[string]: boolean})
+    for id in pairs(running()) do
+        if not before[id] then
+            local _, err = client.call(assert(system.node.id()), "close", {id = id, force = true})
+            if err then error("close " .. id .. ": " .. tostring(err)) end
+        end
+    end
 end
 
 local function author(workspace: string): funcs.Executor
@@ -180,6 +207,7 @@ local function define_tests()
         test.it("installs the database, runs its migrations forward only and shares the table with agents", function()
             local workspace = isolated()
             local writer = author(workspace)
+            local before = running()
 
             local first = value(deliver(writer, workspace, first_version(), "1.0.0"))
             test.eq(first.pending_migrations, 1)
@@ -192,7 +220,9 @@ local function define_tests()
             local prompt = tostring((assert(bounds.object(shown.prompt))).text)
             test.eq(prompt:sub(1, #("Install " .. guide.TITLE .. " 1.0.0?")), "Install " .. guide.TITLE .. " 1.0.0?")
             test.is_true(prompt:find("It runs 1 database migration: " .. NAMESPACE .. ":create_counts on counts.", 1, true) ~= nil)
-            test.eq(installed(writer, workspace, "1.0.0", first.intent_id).outcome, "applied")
+            local first_outcome = installed(writer, workspace, "1.0.0", first.intent_id).outcome
+            close_presented(before)
+            test.eq(first_outcome, "applied")
 
             as_application(workspace, NAMESPACE .. ":count_record", {value = 1})
             test.eq(as_agent(workspace, "counter_record", {value = 2}).recorded, 2)
@@ -206,8 +236,11 @@ local function define_tests()
             local upgrade_migrations = assert(bounds.array(upgrade_payload.migrations, 8))
             test.eq(#upgrade_migrations, 1)
             test.eq((assert(bounds.object(upgrade_migrations[1]))).id, NAMESPACE .. ":add_note")
-            test.eq(installed(writer, workspace, "1.0.1", second.intent_id).outcome, "applied")
-            test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
+            local second_outcome = installed(writer, workspace, "1.0.1", second.intent_id).outcome
+            close_presented(before)
+            test.eq(second_outcome, "applied")
+            local listed = counts(as_agent(workspace, "counter_list", {}))
+            test.eq(listed, "1:kept,2:kept")
         end)
     end)
 end

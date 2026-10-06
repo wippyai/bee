@@ -181,7 +181,10 @@ then reconciles the captured pending function definitions under a
 deterministic prerequisite owner, executes them through the shared Hub runner
 with Governance's private policies removed, persists partial or complete
 ledger-confirmed receipts, clears the prerequisites, and only then reconciles
-the complete application overlay. A version that runs migrations always asks
+the complete application overlay. The application overlay leaves migration
+definitions out: governance runs them from the frozen work, and installed they
+would be found and run again by the runtime's boot migration runner. A version
+that runs migrations always asks
 the person: the approval proposal lists each pending migration with its
 database, and the Needs you card shows them, even when the grants are
 unchanged. Delivery prepares such a version as soon as preflight is ready and

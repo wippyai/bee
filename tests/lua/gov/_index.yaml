@@ -1051,3 +1051,73 @@ entries:
     test: wippy.test:test
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
+- name: app_database_test_policy
+  kind: security.policy
+  meta:
+    type: test_support
+    comment: The application database suite adds a workspace, acts as the authoring agent and as the person's Needs you app, and runs the application's functions as the application
+  policy:
+    actions:
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    - security.policy_group.get
+    - bee.approvals.decide
+    - bee.approvals.read
+    - env.get
+    - process.send
+    - process.listen
+    - system.read
+    - registry.get
+    - registry.find
+    - registry.version
+    - registry.snapshot
+    resources: '*'
+    effect: allow
+- name: app_database_test
+  kind: function.lua
+  source: file://app_database_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - json
+  - time
+  - env
+  - system
+  - process
+  - registry
+  meta:
+    type: test
+    suite: bee
+    timeout: 180s
+  security:
+    policies:
+    - bee.tests.gov:app_database_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    client: bee.node:client
+    principal: bee.node:principal
+    application: bee.node:application
+    guide: bee.gov.traits:guide
+- name: activation_drain_probe
+  kind: function.lua
+  source: file://activation_drain_probe.lua
+  method: drain
+  modules:
+  - funcs
+  meta:
+    type: test_support
+    comment: One activation worker pass under the worker's own policies
+  security:
+    policies:
+    - bee.gov.security:destination_service_policy
+    - bee.security.approvals:approval_activation_effects_policy
+    - bee.gov.security:activation_announce_policy
+    - bee.gov.security:activation_worker_policy
+  imports:
+    bounds: bee.values:bounds
+    service: bee.gov.binding:destination_service

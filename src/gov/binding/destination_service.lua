@@ -328,7 +328,11 @@ local function destination_resolver(config: Configuration, profile_value: Profil
                 if not captured then return nil, "stored applied migration has no database evidence" end
                 local binding, binding_error = migration_binding(profile_value, fact.target_db)
                 if binding_error then return nil, binding_error end
-                local current_database = binding and binding.database_id or fact.target_db
+                -- An application database the grant provisions is bound
+                -- by its host-derived identity, as the resolver binds it.
+                local provisioned = capability_files.database_id(profile_value.overlay_owner, fact.target_db)
+                local current_database = binding and binding.database_id
+                    or (captured.database_id == provisioned and provisioned) or fact.target_db
                 local current_prefix = binding and binding.table_prefix or nil
                 if captured.database_id ~= current_database or captured.table_prefix ~= current_prefix then
                     return nil, "activation profile changes an applied migration database binding: " .. fact.target_db
@@ -430,8 +434,12 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         end
         local compared, compare_error = capability_grants.diff(vocabulary, prior, proposed)
         if not compared then return nil, compare_error end
+        -- A contained upgrade either reuses the installed grant exactly or,
+        -- when the person approved it afresh, as for a version that runs
+        -- migrations, carries that approval.
         if prior and not compared.requires_approval then
-            if intent.grant_reuse_digest ~= prior.record_digest or approval_id ~= prior.approval_id then
+            if intent.grant_reuse_digest ~= nil and (intent.grant_reuse_digest ~= prior.record_digest
+                or approval_id ~= prior.approval_id) then
                 return nil, "contained upgrade has no matching installed grant reuse"
             end
         elseif intent.grant_reuse_digest ~= nil then
@@ -539,11 +547,11 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     if not executor then return {ok = false, error = tostring(executor_error or "approval executor is unavailable")} end
     local resolved = destination_resolver(config, profile_value, activation_store.node,
         profile_value.workspace_id, activation_store)
-    -- An application database the intent's grant provisions is staged with
-    -- the grant that reaches it before its migrations run, and its migrations
-    -- run with that grant; the application overlay installs both for good.
-    local function database_grants(work: migration_work.Work, intent: unknown): ({unknown}?, {string}?, string?)
-        local staged: {unknown} = {}
+    -- An application database the intent's grant provisions joins the
+    -- application's overlay with the grant that reaches it before its
+    -- migrations run, and its migrations run with that grant.
+    local function database_grants(work: migration_work.Work, intent: unknown): (migration_effect.Provisioned?, {string}?, string?)
+        local staged: migration_effect.Provisioned = {databases = {}, policies = {}}
         local policies: {string} = {}
         local wanted: {[string]: migration_work.Database} = {}
         local any = false
@@ -568,12 +576,12 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
             if policy and reaches then
                 policies[#policies + 1] = tostring(policy.id)
                 granted[reaches.database_id] = true
-                if reaches.planned then staged[#staged + 1] = policy end
+                if reaches.planned then staged.policies[#staged.policies + 1] = policy end
             end
         end
         for id, item in pairs(wanted) do
             if not granted[id] then return nil, nil, "no approved grant reaches application database " .. id end
-            if item.planned then staged[#staged + 1] = item.definition end
+            if item.planned then staged.databases[#staged.databases + 1] = item.definition end
         end
         table.sort(policies)
         return staged, policies, nil

@@ -168,14 +168,24 @@ blocks restoration.
 The resolver, approval executor, overlay owner, apply and exact-observation functions
 remain host-selected inputs; replicated content supplies none of them.
 
-Migration work stays inside the same durable `applying` effect. For the current
-accepted slice, migration functions target an existing host-admitted SQL
-database, have no newly authored dependencies, and cannot auto-start consumers.
-Governance temporarily reconciles only the captured pending function definitions
-under a deterministic prerequisite owner, executes them through the shared Hub
-runner with Governance's private policies removed, persists partial or complete
+Migration work stays inside the same durable `applying` effect. A migration
+targets a host-admitted SQL database, or the application's own database by the
+name its `app.database` request gives (`meta.target_db = <name>`); it has no newly
+authored dependencies and cannot auto-start consumers. A workspace
+application's component is its namespace, as a Hub package's is `org/module`.
+For an application database the intent provisions, migration work records it as
+planned until an earlier version installed it: before the migrations run,
+Governance installs that database and the grant that reaches it into the
+application's own overlay, and the migrations run with that grant. Governance
+then reconciles the captured pending function definitions under a
+deterministic prerequisite owner, executes them through the shared Hub runner
+with Governance's private policies removed, persists partial or complete
 ledger-confirmed receipts, clears the prerequisites, and only then reconciles
-the complete application overlay. A crash after SQL commit is resumed from the
+the complete application overlay. A version that runs migrations always asks
+the person: the approval proposal lists each pending migration with its
+database, and the Needs you card shows them, even when the grants are
+unchanged. Delivery prepares such a version as soon as preflight is ready and
+carries an intent authorized without a new decision on to installed. A crash after SQL commit is resumed from the
 frozen work and target ledger. Removing an overlay restores registry state; it
 never claims to roll back committed schema effects. Applied definitions are
 immutable and updates append migrations.

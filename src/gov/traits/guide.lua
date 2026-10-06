@@ -12,7 +12,7 @@ local drivers = require("drivers")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@15"
+M.REVISION = "bee.governance-component-guide@16"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -245,6 +245,103 @@ function M.test_example(): {{[string]: unknown}}
         meta = {type = "test", suite = M.OVERLAY_ID}}}
 end
 
+-- The example application's own database: the capability request, its first
+-- migration, and the tools that keep and list counts in it, so the person's
+-- UI and an agent share one table.
+M.DATABASE_NAME = "counts"
+M.MIGRATION_SOURCE = [==[return require("migration").define(function()
+    migration("Create counts", function()
+        database("sqlite", function()
+            up(function(db)
+                local _, err = db:execute("CREATE TABLE counts (value INTEGER NOT NULL)")
+                if err then error(err) end
+            end)
+            down(function(db)
+                local _, err = db:execute("DROP TABLE IF EXISTS counts")
+                if err then error(err) end
+            end)
+        end)
+    end)
+end)
+]==]
+M.COUNTS_SOURCE = [==[local funcs = require("funcs")
+local sql = require("sql")
+
+local function database()
+    local reply = funcs.call("bee.gov.binding:granted_resources", {})
+    local id = type(reply) == "table" and reply.ok == true and reply.value.databases.counts or nil
+    if not id then return nil, "the counts database is not granted" end
+    return sql.get(id)
+end
+
+local function record(arguments)
+    local db, err = database()
+    if not db then return {ok = false, error = {code = "UNAVAILABLE", message = tostring(err)}} end
+    local _, insert_error = db:execute("INSERT INTO counts (value) VALUES (?)", {arguments.value})
+    db:release()
+    if insert_error then return {ok = false, error = {code = "FAILED", message = tostring(insert_error)}} end
+    return {ok = true, value = {recorded = arguments.value}}
+end
+
+local function list()
+    local db, err = database()
+    if not db then return {ok = false, error = {code = "UNAVAILABLE", message = tostring(err)}} end
+    local rows, query_error = db:query("SELECT value FROM counts ORDER BY rowid")
+    db:release()
+    if not rows then return {ok = false, error = {code = "FAILED", message = tostring(query_error)}} end
+    local values = {}
+    for index, row in ipairs(rows) do values[index] = row.value end
+    return {ok = true, value = {counts = values}}
+end
+
+return {record = record, list = list}
+]==]
+
+function M.database_example(): {{[string]: unknown}}
+    return {
+        {id = M.NAMESPACE .. ":database", kind = "ns.requirement",
+            meta = {value_kind = "security.policy", capability = "app.database",
+                parameters = {name = M.DATABASE_NAME}, reason = "Keep the counts the counter saves"},
+            data = {targets = {{entry = M.NAMESPACE .. ":app", path = ".security.policies +="}}}},
+        {id = M.NAMESPACE .. ":agent_tools", kind = "ns.requirement",
+            meta = {value_kind = "security.policy", capability = "agent.tools",
+                parameters = {tools = {M.NAMESPACE .. ":count_list", M.NAMESPACE .. ":count_record"}},
+                reason = "Let agents read and record counts"},
+            data = {targets = {{entry = M.NAMESPACE .. ":app", path = ".security.policies +="}}}},
+        {id = M.NAMESPACE .. ":create_counts", kind = "function.lua",
+            meta = {type = "migration", target_db = M.DATABASE_NAME, ordinal = 1},
+            data = {source = M.MIGRATION_SOURCE, method = "run", imports = {migration = "wippy.migration:migration"}}},
+        {id = M.NAMESPACE .. ":count_record", kind = "function.lua",
+            meta = {type = "tool", llm_alias = "counter_record", llm_description = "Record one count in the counter's database",
+                input_schema = '{"type":"object","additionalProperties":false,"required":["value"],"properties":{"value":{"type":"integer"}}}',
+                mcp = {annotations = {readOnlyHint = false, idempotentHint = false}}},
+            data = {source = M.COUNTS_SOURCE, method = "record", modules = {"funcs", "sql"}}},
+        {id = M.NAMESPACE .. ":count_list", kind = "function.lua",
+            meta = {type = "tool", llm_alias = "counter_list", llm_description = "List the counts the counter keeps",
+                input_schema = '{"type":"object","additionalProperties":false,"properties":{}}',
+                mcp = {annotations = {readOnlyHint = true}}},
+            data = {source = M.COUNTS_SOURCE, method = "list", modules = {"funcs", "sql"}}},
+    }
+end
+
+-- How an application keeps its own data.
+function M.database(): string
+    return "An application keeps its data in its own database. Request it with an ns.requirement whose meta names"
+        .. " value_kind security.policy, capability app.database, parameters {name = <database name>} and a reason,"
+        .. " targeting the application at .security.policies +=. Create and change its tables with migrations:"
+        .. " each is a function.lua entry with meta.type migration, meta.target_db equal to that database name and"
+        .. " meta.ordinal, data.method run and the import migration = wippy.migration:migration; its source returns"
+        .. " require(\"migration\").define(function() migration(\"<what it does>\", function() database(\"sqlite\","
+        .. " function() up(function(db) ... end) down(function(db) ... end) end) end) end). Ordinals are append-only:"
+        .. " a later version keeps every earlier migration unchanged and adds the next ordinal; an applied migration"
+        .. " never runs again and changing or removing one is refused. The person approves the database and every"
+        .. " migration a version runs in Needs you; Bee installs the database, runs the migrations once, then opens"
+        .. " the application. At run time call bee.gov.binding:granted_resources and open databases[<name>] with"
+        .. " sql.get, from the application and from its agent tools alike, so the person and agents work on the same"
+        .. " tables. The example (include_example) carries database_entries_json: the counter's counts database, its"
+        .. " first migration and the agent tools that record and list counts."
+end
+
 local DELIVERY_STEPS = {"approve it in Needs you, which opens on the person's desktop and lists the permissions and database migrations it adds",
     "Bee installs it once approved; Library shows installed versions and their history", "open it from Start, Apps"}
 
@@ -430,6 +527,7 @@ local SECTIONS: {Section} = {
     {id = "transport", title = "Overlay transport, freeze", body = function(): string return M.transport() end},
     {id = "delivery", title = "Delivery after freeze", body = function(): string return M.after_freeze() end},
     {id = "tests", title = "Testing your application", body = function(): string return M.tests() end},
+    {id = "database", title = "Your application's database", body = function(): string return M.database() end},
     {id = "agent_tools", title = "Tools agents call", body = function(): string return M.agent_tools() end},
     {id = "workspace", title = "Delivering to your own workspace", body = function(): string return M.workspace_delivery() end},
     {id = "drivers", title = "Custom CLI drivers and source inspection", body = function(): string return M.driver_delivery() end},
@@ -611,10 +709,14 @@ function M.value(request: {[string]: unknown}?): {[string]: unknown}
     local test_encoded, test_error = json.encode(M.test_example()[1])
     if not test_encoded then return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
         example_error = tostring(test_error)} end
+    local database_encoded, database_error = json.encode(M.database_example())
+    if not database_encoded then return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
+        example_error = tostring(database_error)} end
     return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
         example = {path = M.ENTRIES_PATH, entries_json = encoded, definition_id = "app.counter:app",
             title = M.TITLE, version = M.VERSION, source = M.SOURCE,
-            test_entry_json = test_encoded, test_entry_id = M.test_example()[1].id}}
+            test_entry_json = test_encoded, test_entry_id = M.test_example()[1].id,
+            database_entries_json = database_encoded}}
 end
 
 return M

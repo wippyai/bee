@@ -138,6 +138,118 @@ local function desired(raw: unknown): ({Entry}?, string?, string?)
     return measured.entries, measured.digest, nil
 end
 
+-- provision validates the host-generated resources and policies a grant
+-- installs and appends them to complete. An expression policy is admitted
+-- only for a policy capability_of names a capability enforced through one.
+type Provisioned = {volumes: unknown?, databases: unknown?, executors: unknown?, policies: unknown}
+local function provision(complete: {Entry}, generated: Provisioned, capability_of: {[string]: unknown}): string?
+    local volumes, databases, executors, policies = generated.volumes, generated.databases, generated.executors, generated.policies
+    if type(policies) ~= "table" or (volumes ~= nil and type(volumes) ~= "table")
+        or (databases ~= nil and type(databases) ~= "table")
+        or (executors ~= nil and type(executors) ~= "table") then
+        return "generated capability entries are invalid"
+    end
+    local volume_ids: {[string]: boolean} = {}
+    for _, raw_volume in ipairs((volumes or {})) do
+        local volume = bounds.object(raw_volume)
+        local id = volume and bounds.id(volume.id) or nil
+        local config = volume and bounds.object(volume.data) or nil
+        local directory = config and config.directory or nil
+        if not volume or not id or not id:match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+            or volume.kind ~= "fs.directory" or type(directory) ~= "string"
+            or (config.base ~= nil and config.base ~= "project") or type(config.auto_init) ~= "boolean"
+            or type(config.readonly) ~= "boolean"
+            or (config.readonly and config.auto_init) then
+            return "generated capability volume is invalid"
+        end
+        local location: string = directory
+        if location == "." or location == "/" then
+            return "generated capability volume exposes private state"
+        end
+        for segment in location:gmatch("[^/]+") do
+            if segment == ".wippy" or segment == ".." then
+                return "generated capability volume exposes private state"
+            end
+        end
+        if volume_ids[id] then return "generated capability volume is duplicated" end
+        volume_ids[id] = true
+        complete[#complete + 1] = volume
+    end
+    local database_ids: {[string]: boolean} = {}
+    for _, raw_database in ipairs((databases or {})) do
+        local database = bounds.object(raw_database)
+        local id = database and bounds.id(database.id) or nil
+        local database_config = database and bounds.object(database.data) or nil
+        local file = database_config and database_config.file or nil
+        if not database or not id or not id:match("^bee%.gov%.grants:database%.[0-9a-f]+$")
+            or database.kind ~= "db.sql.sqlite" or not capability_files.database_file(file) then
+            return "generated capability database is invalid"
+        end
+        if database_ids[id] then return "generated capability database is duplicated" end
+        database_ids[id] = true
+        complete[#complete + 1] = database
+    end
+    local executor_ids: {[string]: boolean} = {}
+    for _, raw_executor in ipairs((executors or {})) do
+        local executor = bounds.object(raw_executor)
+        local id = executor and bounds.id(executor.id) or nil
+        local config = executor and bounds.object(executor.data) or nil
+        local directory = config and config.default_work_dir or nil
+        local environment = config and bounds.object(config.default_env) or nil
+        if not executor or not id or not id:match("^bee%.gov%.grants:executor%.[0-9a-f]+$")
+            or executor.kind ~= "exec.native" or not config or type(directory) ~= "string"
+            or #directory == 0 or bounds.fields(config, {"default_work_dir", "default_env"})
+            or not environment or bounds.fields(environment, {"PATH"})
+            or environment.PATH ~= capability_files.EXEC_PATH then
+            return "generated capability executor is invalid"
+        end
+        for segment in directory:gmatch("[^/]+") do
+            if segment == ".wippy" or segment == ".." then
+                return "generated capability executor runs in private state"
+            end
+        end
+        if executor_ids[id] then return "generated capability executor is duplicated" end
+        executor_ids[id] = true
+        complete[#complete + 1] = executor
+    end
+    local policy_ids: {[string]: boolean} = {}
+    for _, raw_policy in ipairs(policies) do
+        local policy = bounds.object(raw_policy)
+        local id = policy and bounds.id(policy.id) or nil
+        if not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
+            and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
+            or (policy.kind ~= "security.policy" and not (policy.kind == "security.policy.expr"
+                and capability_grants.expression(capability_of[id]))) or policy_ids[id] then
+            return "generated capability policy is invalid"
+        end
+        policy_ids[id] = true
+        local data = bounds.object(policy.data)
+        local inner = data and bounds.object(data.policy) or nil
+        local expression = inner and inner.expression or nil
+        if type(expression) == "string" then
+            for executor_id in expression:gmatch("bee%.gov%.grants:executor%.[0-9a-f]+") do
+                if not executor_ids[executor_id] then
+                    return "generated capability policy references an absent executor"
+                end
+            end
+        end
+        local resources = inner and inner.resources or nil
+        if type(resources) == "table" then
+            for _, resource in ipairs(resources) do
+                if type(resource) == "string"
+                    and ((resource):match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+                        or (resource):match("^bee%.gov%.grants:database%.[0-9a-f]+$"))
+                    and not volume_ids[resource]
+                    and not database_ids[resource] then
+                    return "generated capability policy references an absent resource"
+                end
+            end
+        end
+        complete[#complete + 1] = policy
+    end
+    return nil
+end
+
 -- A governed application admission is one derived registry entry beside the
 -- portable artifact.  Measure its bytes separately so adding it does not turn
 -- a valid 512-entry artifact into an invalid 513-entry artifact or alter the
@@ -172,69 +284,6 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             or (executors ~= nil and type(executors) ~= "table") then
             return nil, nil, nil, "generated capability entries are invalid"
         end
-        local volume_ids: {[string]: boolean} = {}
-        for _, raw_volume in ipairs((volumes or {})) do
-            local volume = bounds.object(raw_volume)
-            local id = volume and bounds.id(volume.id) or nil
-            local config = volume and bounds.object(volume.data) or nil
-            local directory = config and config.directory or nil
-            if not volume or not id or not id:match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
-                or volume.kind ~= "fs.directory" or type(directory) ~= "string"
-                or (config.base ~= nil and config.base ~= "project") or type(config.auto_init) ~= "boolean"
-                or type(config.readonly) ~= "boolean"
-                or (config.readonly and config.auto_init) then
-                return nil, nil, nil, "generated capability volume is invalid"
-            end
-            local location: string = directory
-            if location == "." or location == "/" then
-                return nil, nil, nil, "generated capability volume exposes private state"
-            end
-            for segment in location:gmatch("[^/]+") do
-                if segment == ".wippy" or segment == ".." then
-                    return nil, nil, nil, "generated capability volume exposes private state"
-                end
-            end
-            if volume_ids[id] then return nil, nil, nil, "generated capability volume is duplicated" end
-            volume_ids[id] = true
-            complete[#complete + 1] = volume
-        end
-        local database_ids: {[string]: boolean} = {}
-        for _, raw_database in ipairs((databases or {})) do
-            local database = bounds.object(raw_database)
-            local id = database and bounds.id(database.id) or nil
-            local database_config = database and bounds.object(database.data) or nil
-            local file = database_config and database_config.file or nil
-            if not database or not id or not id:match("^bee%.gov%.grants:database%.[0-9a-f]+$")
-                or database.kind ~= "db.sql.sqlite" or not capability_files.database_file(file) then
-                return nil, nil, nil, "generated capability database is invalid"
-            end
-            if database_ids[id] then return nil, nil, nil, "generated capability database is duplicated" end
-            database_ids[id] = true
-            complete[#complete + 1] = database
-        end
-        local executor_ids: {[string]: boolean} = {}
-        for _, raw_executor in ipairs((executors or {})) do
-            local executor = bounds.object(raw_executor)
-            local id = executor and bounds.id(executor.id) or nil
-            local config = executor and bounds.object(executor.data) or nil
-            local directory = config and config.default_work_dir or nil
-            local environment = config and bounds.object(config.default_env) or nil
-            if not executor or not id or not id:match("^bee%.gov%.grants:executor%.[0-9a-f]+$")
-                or executor.kind ~= "exec.native" or not config or type(directory) ~= "string"
-                or #directory == 0 or bounds.fields(config, {"default_work_dir", "default_env"})
-                or not environment or bounds.fields(environment, {"PATH"})
-                or environment.PATH ~= capability_files.EXEC_PATH then
-                return nil, nil, nil, "generated capability executor is invalid"
-            end
-            for segment in directory:gmatch("[^/]+") do
-                if segment == ".wippy" or segment == ".." then
-                    return nil, nil, nil, "generated capability executor runs in private state"
-                end
-            end
-            if executor_ids[id] then return nil, nil, nil, "generated capability executor is duplicated" end
-            executor_ids[id] = true
-            complete[#complete + 1] = executor
-        end
         -- An expression grant is installable only for a requirement whose
         -- capability the host enforces through one.
         local capability_of: {[string]: unknown} = {}
@@ -248,40 +297,14 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
                 end
             end
         end
+        local provision_error = provision(complete, {volumes = volumes, databases = databases,
+            executors = executors, policies = policies}, capability_of)
+        if provision_error then return nil, nil, nil, provision_error end
         local policy_ids: {[string]: boolean} = {}
         for _, raw_policy in ipairs(policies) do
             local policy = bounds.object(raw_policy)
             local id = policy and bounds.id(policy.id) or nil
-            if not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
-                and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
-                or (policy.kind ~= "security.policy" and not (policy.kind == "security.policy.expr"
-                    and capability_grants.expression(capability_of[id]))) or policy_ids[id] then
-                return nil, nil, nil, "generated capability policy is invalid"
-            end
-            policy_ids[id] = true
-            local data = bounds.object(policy.data)
-            local inner = data and bounds.object(data.policy) or nil
-            local expression = inner and inner.expression or nil
-            if type(expression) == "string" then
-                for executor_id in expression:gmatch("bee%.gov%.grants:executor%.[0-9a-f]+") do
-                    if not executor_ids[executor_id] then
-                        return nil, nil, nil, "generated capability policy references an absent executor"
-                    end
-                end
-            end
-            local resources = inner and inner.resources or nil
-            if type(resources) == "table" then
-                for _, resource in ipairs(resources) do
-                    if type(resource) == "string"
-                        and ((resource):match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
-                            or (resource):match("^bee%.gov%.grants:database%.[0-9a-f]+$"))
-                        and not volume_ids[resource]
-                        and not database_ids[resource] then
-                        return nil, nil, nil, "generated capability policy references an absent resource"
-                    end
-                end
-            end
-            complete[#complete + 1] = policy
+            if id then policy_ids[id] = true end
         end
         local requirement_ids: {[string]: boolean} = {}
         for _, raw_binding in ipairs(bindings) do
@@ -381,6 +404,59 @@ function M.matches_composed_with(open: Open, owner_raw: unknown, entries_raw: un
     return matches_wanted_with(open, owner_raw, complete)
 end
 
+-- The host-generated database and grant an application's migrations need
+-- join the application's own overlay before those migrations run, beside
+-- whatever it holds, so the database is installed exactly once, by its owner,
+-- and the application itself is exposed only when the overlay is applied.
+local function provided(provisioned_raw: unknown): ({Entry}?, string?)
+    local provisioned = bounds.object(provisioned_raw)
+    if not provisioned or bounds.fields(provisioned, {"databases", "policies"}) then
+        return nil, "provisioned entries are invalid"
+    end
+    local entries: {Entry} = {}
+    local provision_error = provision(entries, {databases = provisioned.databases,
+        policies = provisioned.policies or {}}, {})
+    if provision_error then return nil, provision_error end
+    return entries, nil
+end
+
+function M.provide_with(open: Open, conflict: Conflict, owner_raw: unknown, provisioned_raw: unknown): ({[string]: unknown}?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local entries, provided_error = provided(provisioned_raw)
+    if not entries then return nil, provided_error end
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    local current, current_error = current_entries(raw_snapshot)
+    if not current then return nil, current_error end
+    local wanted: {Entry} = {}
+    local added: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do added[entry.id] = true end
+    for id, entry in pairs(current) do if not added[id] then wanted[#wanted + 1] = entry end end
+    for _, entry in ipairs(entries) do wanted[#wanted + 1] = entry end
+    return reconcile_wanted_with(open, conflict, owner, wanted, "", #wanted)
+end
+
+function M.provided_with(open: Open, owner_raw: unknown, provisioned_raw: unknown): (boolean?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local entries, provided_error = provided(provisioned_raw)
+    if not entries then return nil, provided_error end
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    local current, current_error = current_entries(raw_snapshot)
+    if not current then return nil, current_error end
+    for _, entry in ipairs(entries) do
+        local present = current[entry.id]
+        if not present then return false, nil end
+        local before, before_error = encoded(present)
+        local after, after_error = encoded(entry)
+        if not before or not after then return nil, before_error or after_error end
+        if before ~= after then return false, nil end
+    end
+    return true, nil
+end
+
 local function open(owner: string): (Snapshot?, unknown?)
     local composed, composed_error = registry.snapshot()
     if not composed then return nil, composed_error end
@@ -433,6 +509,14 @@ end
 function M.matches_composed(owner: unknown, entries: unknown,
     admission_raw: unknown, generated_raw: unknown?): (boolean?, string?)
     return M.matches_composed_with(open, owner, entries, admission_raw, generated_raw)
+end
+
+function M.provide(owner: unknown, provisioned: unknown): ({[string]: unknown}?, string?)
+    return M.provide_with(open, conflict, owner, provisioned)
+end
+
+function M.provides(owner: unknown, provisioned: unknown): (boolean?, string?)
+    return M.provided_with(open, owner, provisioned)
 end
 
 return M

@@ -43,6 +43,14 @@ For an agent attempt, the approval itself is the grant: `process_run` runs the
 command through `bee.gateway.env:process_executor` in the approved folder of
 the bound workspace.
 
+## Application database
+
+`app.database` (parameter `name`) provisions one SQLite database for the
+application under `bee.capability:app_database_root`, outside every readable
+workspace tree. Its migrations name it as `meta.target_db = <name>`; the
+application and its agent tools open it by the id
+`bee.gov.binding:granted_resources` returns under `databases[<name>]`.
+
 ## Agent tools
 
 `agent.tools` (confirm `explicit`) takes `tools` (kind `own_functions`): the

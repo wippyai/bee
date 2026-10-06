@@ -127,6 +127,24 @@ local function define_tests()
             test.eq(entry.definition_id, assert(naming.application(guide.example())))
             test.not_nil((string.find(entry.entries_json, "process.lua", 1, true)))
         end)
+        test.it("teaches an application's own database and carries it in the example", function()
+            local text = assert(guide.section_text("database"))
+            for _, needle in ipairs({"app.database", "ns.requirement", "meta.type migration", "meta.target_db",
+                "meta.ordinal", "wippy.migration:migration", "append-only", "Needs you", "bee.gov.binding:granted_resources",
+                "sql.get", "database_entries_json"}) do
+                test.not_nil((string.find(text, needle, 1, true)), needle)
+            end
+            test.not_nil((string.find(guide.index(), "database:", 1, true)))
+            local example = assert(bounds.object((assert(bounds.object(guide.value({include_example = true})))).example))
+            local decoded = assert(json.decode(tostring(example.database_entries_json)))
+            local ids: {string} = {}
+            for _, raw in ipairs(decoded :: {unknown}) do ids[#ids + 1] = tostring((assert(bounds.object(raw))).id) end
+            test.eq(table.concat(ids, ","), "app.counter:database,app.counter:agent_tools,app.counter:create_counts,app.counter:count_record,app.counter:count_list")
+            local pack: {{[string]: unknown}} = {guide.example()[1]}
+            for _, entry in ipairs(guide.database_example()) do pack[#pack + 1] = entry end
+            local _, measure_error = artifact.create(pack)
+            test.is_nil(measure_error)
+        end)
         test.it("teaches offering application tools to agents on the application's own state", function()
             local text = assert(guide.section_text("agent_tools"))
             for _, needle in ipairs({"meta.type tool", "llm_alias", "llm_description", "input_schema", "output_schema",

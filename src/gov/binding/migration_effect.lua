@@ -24,25 +24,32 @@ local function staging_owner(overlay_owner: string): (string?, string?)
     return value, nil
 end
 
--- The staged prerequisites: the captured migration definitions and the
--- provisioned entries they need before the application overlay exists.
-local function definitions(work: migration_work.Work, provisioned: {unknown}): {unknown}
+local function definitions(work: migration_work.Work): {unknown}
     local entries: {unknown} = {}
     for _, item in ipairs(work.migrations) do entries[#entries + 1] = item.definition end
-    for _, entry in ipairs(provisioned) do entries[#entries + 1] = entry end
     return entries
 end
 
-function M.matches(overlay_owner: string, work: migration_work.Work, provisioned: {unknown}): (boolean?, string?)
+-- The prerequisites of the captured migrations: the application database and
+-- grant the intent provisions, installed in the application's own overlay,
+-- and the migration definitions, staged apart and cleared before the
+-- application is exposed.
+type Provisioned = {databases: {unknown}, policies: {unknown}}
+
+function M.matches(overlay_owner: string, work: migration_work.Work, provisioned: Provisioned): (boolean?, string?)
     local owner, owner_error = staging_owner(overlay_owner)
     if not owner then return nil, owner_error end
-    return materializer.matches(owner, definitions(work, provisioned))
+    local present, present_error = materializer.provides(overlay_owner, provisioned)
+    if present ~= true then return present, present_error end
+    return materializer.matches(owner, definitions(work))
 end
 
-function M.prepare(overlay_owner: string, work: migration_work.Work, provisioned: {unknown}): ({[string]: unknown}?, string?)
+function M.prepare(overlay_owner: string, work: migration_work.Work, provisioned: Provisioned): ({[string]: unknown}?, string?)
     local owner, owner_error = staging_owner(overlay_owner)
     if not owner then return nil, owner_error end
-    return materializer.reconcile(owner, definitions(work, provisioned))
+    local provided, provide_error = materializer.provide(overlay_owner, provisioned)
+    if not provided then return nil, provide_error end
+    return materializer.reconcile(owner, definitions(work))
 end
 
 function M.clear(overlay_owner: string): ({[string]: unknown}?, string?)

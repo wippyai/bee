@@ -137,11 +137,6 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         {schema_revision = artifact.SCHEMA, entries = entries, bytes = artifact_blob.bytes,
             digest = artifact_blob.digest}, durable_context)
     if not work then return nil, work_error or "capture exact migration work" end
-    for _, database_binding in ipairs(work.databases) do
-        if database_binding.planned then
-            return nil, "migration-enabled activation currently requires an existing host-admitted database"
-        end
-    end
     for _, migration in ipairs(work.migrations) do
         local summary: preflight.Entry? = nil
         for _, entry in ipairs(candidate.entries) do

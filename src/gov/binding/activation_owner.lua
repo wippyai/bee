@@ -232,7 +232,13 @@ function M.prepare(raw_config: Config, raw: unknown): Result
     if intent.phase ~= "prepared" then return prepared end
     local review = object(facts.capability_review)
     local installed = object(facts.capability_installed)
-    if review and review.requires_approval == false and installed then
+    -- Migrations change the database for good, so a version that runs any
+    -- always asks the person, even when its grants are already approved.
+    local work, work_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
+    if not work then return failure("INTERNAL", tostring(work_error or "decode activation migration work")) end
+    local pending: {approval.Migration} = {}
+    for _, item in ipairs(work.migrations) do pending[#pending + 1] = {id = item.id, target_db = item.target_db} end
+    if review and review.requires_approval == false and installed and #pending == 0 then
         local prior_digest = bounds.text(installed.record_digest, 64)
         local prior_approval = bounds.id(installed.approval_id)
         if not prior_digest or not prior_approval then
@@ -259,7 +265,7 @@ function M.prepare(raw_config: Config, raw: unknown): Result
             effect_key = consuming.effect_key})
     end
     local proposal = object(facts.capability_proposal)
-    if review and review.requires_approval == true and installed and proposal and config.leases then
+    if review and review.requires_approval == true and installed and proposal and config.leases and #pending == 0 then
         local proposed = bounds.dense_list(proposal.capabilities, bounds.MAX_ARRAY_ITEMS, "capabilities")
         if not proposed then return failure("INVALID", "capability proposal is invalid") end
         local lease = lease_store.find_active(config.leases, config.overlay_owner, proposed)
@@ -274,7 +280,7 @@ function M.prepare(raw_config: Config, raw: unknown): Result
         end
     end
     local bound, approval_error = approval.request_activation(config.approvals, intent,
-        config.approval_policy, request_key, review)
+        config.approval_policy, request_key, review, pending)
     if not bound then return failure("APPROVAL", tostring(approval_error)) end
     return activations.call(config.activations, config.actor_id, {operation = "bind_approval",
         intent_id = intent_id, expected_revision = intent.revision, idempotency_key = bind_key,

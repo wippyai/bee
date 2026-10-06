@@ -784,6 +784,16 @@ function M.permission_lines(value: unknown): {string}
     end
     if view.proposal.ref ~= "bee.gov:grant-lease" then append(payload.permission_changes, "Change: ") end
     append(payload.resolved_capabilities, "Capability: ")
+    -- A migration changes the application's database for good; the person
+    -- sees each one the installation runs before approving it.
+    if type(payload.migrations) == "table" then
+        for _, raw in ipairs(payload.migrations :: {unknown}) do
+            local row = bounds.object(raw)
+            if #lines >= M.MAX_PAYLOAD_LINES or not row then break end
+            lines[#lines + 1] = "Migration: " .. M.text(row.id, 160) .. " on " .. M.text(row.target_db, 160)
+                .. ", changes the database for good"
+        end
+    end
     return lines
 end
 function M.checkpoint(state: State): string

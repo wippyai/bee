@@ -12,6 +12,9 @@ local REVALIDATE = "bee.approvals.binding:revalidate"
 type Object = {[string]: unknown}
 type Executor = {call: (Executor, string, unknown) -> (unknown?, unknown?)}
 type Fault = {code: string, message: string, value: Object?}
+-- A pending migration the activation runs: its definition and the database
+-- it changes.
+type Migration = {id: string, target_db: string}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -93,7 +96,21 @@ local function review_lines(raw: unknown): ({string}?, string?)
     return result, nil
 end
 
-function M.activation_proposal(value: unknown, review_raw: unknown?): (Object?, string?)
+-- The pending migrations as the person reviews them, bounded and in run
+-- order.
+local function migration_rows(raw: {Migration}?): ({Object}?, string?)
+    if raw == nil then return {}, nil end
+    if #raw > 128 then return nil, "pending migrations exceed their bound" end
+    local rows: {Object} = {}
+    for index, item in ipairs(raw) do
+        local id, target = bounds.id(item.id), bounds.text(item.target_db, 160)
+        if not id or not target or target == "" or target:find("%c") then return nil, "pending migration is malformed" end
+        rows[index] = {id = id, target_db = target}
+    end
+    return rows, nil
+end
+
+function M.activation_proposal(value: unknown, review_raw: unknown?, migrations_raw: {Migration}?): (Object?, string?)
     local item, intent_error = activation(value)
     if not item then return nil, intent_error end
     local payload: Object = {workspace_id = item.workspace_id, overlay_owner = item.overlay_owner,
@@ -112,6 +129,9 @@ function M.activation_proposal(value: unknown, review_raw: unknown?): (Object?, 
         payload.resolved_capabilities = resolved
         payload.permission_changes = delta
     end
+    local migrations, migrations_error = migration_rows(migrations_raw)
+    if not migrations then return nil, migrations_error end
+    if #migrations > 0 then payload.migrations = migrations end
     return {kind = "operation", ref = "bee.gov:establish-overlay",
         revision = item.authorization_digest, input_digest = item.authorization_digest,
         payload = payload}, nil
@@ -121,7 +141,7 @@ end
 -- permissions it adds, and its scope and duration. A driver may declare a
 -- login format for its own provider; approving it lets that driver's sessions
 -- use the person's machine login for that provider.
-local function activation_prompt(item: Object, changes: {string}?): string
+local function activation_prompt(item: Object, changes: {string}?, migrations: {Object}): string
     local subject = "Bee application " .. tostring(item.source_workspace)
     local login = ""
     if type(item.overlay_owner) == "string" and (item.overlay_owner :: string):sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then
@@ -130,23 +150,39 @@ local function activation_prompt(item: Object, changes: {string}?): string
     end
     local permissions = " It adds no permissions."
     if changes and #changes > 0 then permissions = " It adds: " .. table.concat(changes, "; ") .. "." end
-    return "Install " .. subject .. " " .. tostring(item.version) .. "." .. permissions .. login
+    local schema = ""
+    if #migrations > 0 then
+        local named: {string} = {}
+        for index, row in ipairs(migrations) do
+            if index > 8 then named[#named + 1] = "and " .. tostring(#migrations - 8) .. " more"; break end
+            named[#named + 1] = tostring(row.id) .. " on " .. tostring(row.target_db)
+        end
+        schema = " It runs " .. tostring(#migrations) .. " database migration" .. (#migrations == 1 and "" or "s")
+            .. ": " .. table.concat(named, "; ") .. ". Migrations change the database for good."
+    end
+    return "Install " .. subject .. " " .. tostring(item.version) .. "." .. permissions .. schema .. login
         .. " Applies to this exact version in this workspace until replaced or removed."
 end
 
 function M.request_activation(executor: Executor, value: unknown, policy_raw: unknown, key_raw: unknown,
-    review_raw: unknown?): (Object?, string?)
+    review_raw: unknown?, migrations_raw: {Migration}?): (Object?, string?)
     local item, intent_error = activation(value)
     if not item then return nil, intent_error end
     local policy, key = bounds.id(policy_raw), bounds.id(key_raw)
     if not policy or not key then return nil, "approval policy and idempotency key are required" end
-    local proposal, proposal_error = M.activation_proposal(value, review_raw)
+    local proposal, proposal_error = M.activation_proposal(value, review_raw, migrations_raw)
     if not proposal then return nil, proposal_error end
     local payload = object(proposal.payload)
     local changes = payload and payload.permission_changes
+    local migrations = payload and bounds.array(payload.migrations or {}, 128) or {}
+    local shown: {Object} = {}
+    for _, raw in ipairs(migrations or {}) do
+        local row = object(raw)
+        if row then shown[#shown + 1] = row end
+    end
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,
-        prompt = {text = activation_prompt(item, type(changes) == "table" and changes :: {string} or nil)}})
+        prompt = {text = activation_prompt(item, type(changes) == "table" and changes :: {string} or nil, shown)}})
     local approved, approved_error = reply(raw, call_error)
     if not approved then return nil, approved_error end
     local approval_id, proposal_digest = bounds.id(approved.approval_id), hex(approved.proposal_digest)

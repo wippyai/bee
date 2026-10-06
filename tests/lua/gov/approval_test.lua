@@ -72,6 +72,34 @@ local function define_tests()
             if not validated then error(tostring(validation_error and validation_error.message)) end
             test.eq(validated.validated_incarnation, 9)
         end)
+        test.it("shows the person each migration the activation runs before they approve", function()
+            local intent = {workspace_id = "workspace-a", overlay_owner = "bee.gov:overlay",
+                source_node = "source-a", source_workspace = "application-a", version = "v1",
+                authorization_digest = DIGEST, artifact_digest = string.rep("b", 64),
+                resolution_digest = string.rep("c", 64), preflight_digest = string.rep("d", 64),
+                effect_key = string.rep("e", 64)}
+            local migrations = {{id = "app.notes:create_notes", target_db = "notes"}}
+            local proposal = assert(approval.activation_proposal(intent, nil, migrations))
+            local payload = assert(bounds.object(proposal.payload))
+            local rows = assert(bounds.array(payload.migrations, 8))
+            test.eq((assert(bounds.object(rows[1]))).id, "app.notes:create_notes")
+            test.eq((assert(bounds.object(rows[1]))).target_db, "notes")
+            local plain = assert(approval.activation_proposal(intent))
+            test.is_nil((assert(bounds.object(plain.payload))).migrations)
+            local seen: string? = nil
+            local recorder = {}
+            function recorder.call(self: approval.Executor, _method: string, request: unknown): (unknown?, unknown?)
+                local value = assert(bounds.object(request))
+                seen = bounds.text((assert(bounds.object(value.prompt))).text, 4096)
+                local recorded = assert(bounds.object(value.proposal))
+                local digest = assert(hash.sha256(assert(canonical.encode(recorded))))
+                return {ok = true, value = {approval_id = "approval-2", proposal = recorded, proposal_digest = digest,
+                    owner_incarnation = 1}}, nil
+            end
+            assert(approval.request_activation(recorder, intent, "user-approval", "activation-2", nil, migrations))
+            test.is_true(tostring(seen):find("It runs 1 database migration: app.notes:create_notes on notes.", 1, true) ~= nil)
+            test.is_true(tostring(seen):find("change the database for good", 1, true) ~= nil)
+        end)
     end)
 end
 

@@ -22,6 +22,7 @@ local frame = require("frame")
 local forms = require("forms")
 local profile_view = require("profile_view")
 local terminal_view = require("terminal_view")
+local text = require("text")
 local M = {}
 type Channel = channel.Channel
 -- The form's owner calls run as this Agent's own actor.
@@ -353,8 +354,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if result.conversation then
                     if result.conversation.session.snapshot.terminal == true then
                         output:close()
+                        client.title(launch, text.bound(result.conversation.title, 76))
                         local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes)
                         if closing then return finish(nil, view_error) end
+                        client.title(launch, "Sessions")
                         output = assert(tty.surface())
                         leave_session()
                         attachment_error = view_error
@@ -373,7 +376,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     ticks = 0
                     if ticker then ticker:stop() end
                     ticker = time.ticker("1s")
-                    client.title(launch, conversation.title)
+                    client.title(launch, text.bound(conversation.title, 76))
                 else
                     status = result.error or "Agent session did not open"
                 end
@@ -386,7 +389,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 for index, row in ipairs(directory) do
                     if row.session == conversation.session:ref() then directory[index] = conversation.session.snapshot end
                 end
-                client.title(launch, conversation.title)
+                client.title(launch, text.bound(conversation.title, 76))
                 if result.error then status = "Session operation failed: " .. result.error end
                 local next_task = table.remove(queued_tasks, 1)
                 if next_task then start_task(next_task) end

@@ -100,7 +100,9 @@ local function define_tests()
             test.is_true(text:find("bee.apps.settings:app · 0x00017 ", 1, true) ~= nil)
             test.is_true(text:find("bee.apps.settings:app · 0x00018 ", 1, true) ~= nil)
             test.is_nil(text:find("0x00017}", 1, true) and text:find("· 0x00017}", 1, true))
-            test.is_true(plain[24]:find("↑↓ select · Tab switch · S sort · P pause · Del stop · Esc close", 1, true) ~= nil)
+            -- Sort, pause and stop are buttons; the footer names the rest.
+            test.is_true(plain[24]:find("Tab switch · Esc close", 1, true) ~= nil)
+            test.is_nil((plain[24]:find("P pause", 1, true)))
             test.is_true(plain[23]:find("Pause", 1, true) ~= nil and plain[23]:find("Stop app", 1, true) ~= nil)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(drawn.hits) do kinds[hit.kind] = true end

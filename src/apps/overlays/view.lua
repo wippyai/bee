@@ -10,9 +10,10 @@ type Action = {kind: string, label: string}
 local M = {}
 local PANES: {frame.Tab} = {{kind = "pane_available", label = "Available", short = "A"},
     {kind = "pane_plans", label = "Staged", short = "S"}, {kind = "pane_review", label = "Review", short = "R"}}
-local HINTS = frame.hints({{key = "Tab", verb = "view"}, {key = "↑↓", verb = "choose"}, {key = "Enter", verb = "next"},
-    {key = "T", verb = "details"}, {key = "R", verb = "refresh"}, {key = "Esc", verb = "close"}})
-local TECHNICAL_HINTS = frame.hints({{key = "N", verb = "reject"}, {key = "I", verb = "status"}, {key = "G", verb = "recover"},
+-- The footer names only keys the buttons above it do not show; help lists
+-- them all.
+local HINTS = frame.hints({{key = "Tab", verb = "view"}, {key = "↑↓", verb = "choose"}, {key = "Esc", verb = "close"}})
+local TECHNICAL_HINTS = frame.hints({{key = "Enter", verb = "next"}, {key = "T", verb = "details"}, {key = "R", verb = "refresh"}, {key = "N", verb = "reject"}, {key = "I", verb = "status"}, {key = "G", verb = "recover"},
     {key = "X", verb = "apply"}, {key = "A", verb = "accept"}, {key = "S", verb = "select"}, {key = "P", verb = "prepare"}})
 
 -- Button labels here carry their padding; the frame adds its own.

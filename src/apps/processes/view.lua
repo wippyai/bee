@@ -66,10 +66,12 @@ end
 -- The panes: this node's processes and services, and the hive's nodes.
 local TABS = {{kind = "processes", label = "Processes", short = "Proc"}, {kind = "services", label = "Services", short = "Svc"},
     {kind = "hive", label = "Hive", short = "Hive"}}
-local HIVE_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Tab", verb = "switch"}, {key = "P", verb = "pause"},
-    {key = "Esc", verb = "close"}})
-local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Tab", verb = "switch"}, {key = "S", verb = "sort"},
-    {key = "P", verb = "pause"}, {key = "Del", verb = "stop"}, {key = "Esc", verb = "close"}})
+local HIVE_HINTS = frame.hints({{key = "Tab", verb = "switch"}, {key = "Esc", verb = "close"}})
+local HIVE_MORE = frame.hints({{key = "↑↓", verb = "select"}, {key = "P", verb = "pause"}})
+-- The footer names only keys the buttons above it do not show; help lists
+-- them all.
+local HINTS = frame.hints({{key = "Tab", verb = "switch"}, {key = "Esc", verb = "close"}})
+local MORE = frame.hints({{key = "↑↓", verb = "select"}, {key = "S", verb = "sort"}, {key = "P", verb = "pause"}, {key = "Del", verb = "stop"}})
 function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, history: history_values.History,
     preferences: appearance.Preferences, selected: string, offset: integer, paused: boolean,
     status: string, confirming: boolean, services: boolean, rows: {Row}, by_steps: boolean): Frame
@@ -134,7 +136,7 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
     end
     local footer = text.bound(status ~= "" and status or (snapshot.error or ""), 512)
     if confirming then footer = "Stop selected app?" end
-    frame.footer(painter, footer, confirming and "Enter confirms · Esc cancels" or HINTS)
+    frame.footer(painter, footer, confirming and "Enter confirms · Esc cancels" or HINTS, MORE)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 
@@ -212,7 +214,7 @@ function M.draw_hive(width: integer, height: integer, nodes: {hive.Node}, prefer
             {kind = "pause", key = "P", label = paused and "Resume" or "Pause", enabled = true, active = paused},
         })
     end
-    frame.footer(painter, text.bound(status, 512), HIVE_HINTS)
+    frame.footer(painter, text.bound(status, 512), HIVE_HINTS, HIVE_MORE)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

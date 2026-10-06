@@ -237,14 +237,17 @@ entries:
   - time
   - funcs
   - uuid
+  - events
   imports:
     machine: bee.harness.carrier:machine
     placement_protocol: bee.placement.native:protocol
+    commits: bee.threads.delivery:commits
   security:
     policies:
     - bee.harness.security:carrier_policy
     - bee.harness.security:carrier_process_registry_policy
     - bee.harness.security:carrier_environment_policy
+    - bee.threads.security:waits
 - name: session_idle_stop
   kind: env.variable
   meta:

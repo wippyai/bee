@@ -8,6 +8,8 @@ local funcs = require("funcs")
 local uuid = require("uuid")
 local machine = require("machine")
 local placement_protocol = require("placement_protocol")
+local eventbus = require("events")
+local commits = require("commits")
 type Mode = "open" | "resume"
 local function io_for(after: ((string) -> ())?): machine.IO
     return {
@@ -63,42 +65,24 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local poll_ms = 0
     if plan.exchange then poll_ms = plan.exchange.poll_ms end
     local poll_timer = time.ticker(tostring(math.max(poll_ms, 50)) .. "ms")
-    -- Wakeup hints: a private topic registered with the thread waiter, and
-    -- the approval-transition subscription paged on every wake or tick.
-    local hints_topic = "bee.carrier.hints." .. process.pid()
-    local hints = assert(process.listen(hints_topic, {message = true}))
-    local waiter_id = io.key()
-    local hint_after = 0
-    local function register_hints()
-        local pid, lookup_error = process.registry.lookup(machine.WAITER_NAME)
-        if lookup_error or not pid then return end
-        local deadline = io.now_ms() + machine.HINT_REGISTRATION_MS
-        process.send(tostring(pid), "bee.threads.wait.register", {version = 1, waiter_id = waiter_id, topic = hints_topic, thread_id = request.thread_id, after_sequence = hint_after, deadline_at = deadline})
-    end
-    local function unregister_hints()
-        local pid, lookup_error = process.registry.lookup(machine.WAITER_NAME)
-        if lookup_error or not pid then return end
-        process.send(tostring(pid), "bee.threads.wait.unregister", {version = 1, waiter_id = waiter_id})
-    end
+    -- Wakeup hints: a commit on the thread, announced by the Threads
+    -- service, pages the approval-transition subscription. The carrier hears
+    -- commits before it first pages, so a transition committed after any
+    -- page wakes it.
+    local hints = plan.exchange and assert(eventbus.subscribe(commits.system(request.thread_id), commits.KIND)) or nil
     -- One coalesced refresh: page the hints, read the owner when a hint or
     -- the tick asks for it, then acknowledge the page.
     local function refresh(poll: boolean)
-        local hinted, after, hints_error = machine.take_hints(io, session)
+        local hinted, hints_error = machine.take_hints(io, session)
         if hints_error then error("hints: " .. hints_error) end
         if hinted or poll then advance(true) end
         local _, acknowledgment_error = machine.acknowledge_hints(io, session)
         if acknowledgment_error then error("hints: " .. acknowledgment_error) end
-        if after then hint_after = after end
-        if poll and not session.checkpoint.hint_subscription and plan.exchange then
-            local opened = machine.open_hints(io, session)
-            if opened then hint_after = opened end
-        end
-        register_hints()
+        if poll and not session.checkpoint.hint_subscription and plan.exchange then machine.open_hints(io, session) end
     end
     if plan.exchange then
-        local opened, hints_error = machine.open_hints(io, session)
+        local hints_error = machine.open_hints(io, session)
         if hints_error then error("hints: " .. tostring(hints_error)) end
-        if opened then hint_after = opened end
         refresh(true)
     end
     -- Hook intake: the gateway's queue for this binding is drained on a
@@ -141,9 +125,9 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     while true do
         local cases = {states:case_receive(), outputs:case_receive(), exits:case_receive(), acks:case_receive(), inputs:case_receive(), attached:case_receive(), statuses:case_receive(), events:case_receive()}
         if close_grace then cases[#cases + 1] = close_grace:case_receive() end
-        if poll_ms > 0 then
+        if hints then
             cases[#cases + 1] = poll_timer:channel():case_receive()
-            cases[#cases + 1] = hints:case_receive()
+            cases[#cases + 1] = hints:channel():case_receive()
         end
         if hooking then cases[#cases + 1] = hooks_ticker:channel():case_receive() end
         -- A supervised EXIT seals delivery; consume its queued messages before settlement.
@@ -229,15 +213,18 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
                 local _, stop_error = machine.stop_session(io, session)
                 if stop_error then error("stdin-close grace elapsed before exit: " .. tostring(stop_error)) end
             end
-        elseif poll_ms > 0 and selected.channel == poll_timer:channel() then
+        elseif hints and selected.channel == poll_timer:channel() then
             refresh(true)
-        elseif poll_ms > 0 and selected.channel == hints then
+        elseif hints and selected.channel == hints:channel() then
+            -- Commits announced meanwhile are covered by this one page.
+            local queued_commit = channel.select({hints:channel():case_receive(), default = true})
+            while queued_commit.ok and not queued_commit.default do queued_commit = channel.select({hints:channel():case_receive(), default = true}) end
             refresh(false)
         elseif selected.channel == events then
             if selected.value.kind == process.event.CANCEL then break end
             if selected.value.kind == process.event.EXIT then machine.on_runner_exit(session, tostring(selected.value.from)) end
         end
-        if selected.channel ~= poll_timer:channel() and selected.channel ~= hints then advance(false) end
+        if selected.channel ~= poll_timer:channel() and not (hints and selected.channel == hints:channel()) then advance(false) end
         drain_hooks()
         if not ended and not session.terminal then
             for _, permission in ipairs(session.checkpoint.permissions) do
@@ -275,11 +262,10 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     process.unlisten(statuses)
     poll_timer:stop()
     hooks_ticker:stop()
-    if plan.exchange then
+    if hints then
         machine.close_hints(io, session)
-        unregister_hints()
+        hints:close()
     end
-    process.unlisten(hints)
     process.unlisten(states)
     local attempt = machine.close(io, session)
     return {settlement = settlement, placement = attempt, epoch = session.epoch, revision = session.revision}

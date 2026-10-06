@@ -98,10 +98,11 @@ entries:
 - name: placement_host_files
   kind: fs.directory
   meta:
-    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
+    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access, and follows links only through files and directories owned by this user or root that no one else may write, as a user-local CLI installer's link is
   directory: /
   auto_init: false
   readonly: true
+  link_policy: owner_safe
 - name: placement_path
   kind: env.variable
   meta:

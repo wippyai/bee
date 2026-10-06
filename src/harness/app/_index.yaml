@@ -162,6 +162,7 @@ entries:
     sessions_protocol: bee.threads.sessions.types:protocol
     admission: bee.harness.launch:admission
     view: bee.harness.app:picker_view
+    text: bee.ui:text
     forms: bee.harness.app:profile_form
     profile_view: bee.harness.app:profile_view
     terminal_view: bee.harness.app:terminal_view

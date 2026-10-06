@@ -135,22 +135,28 @@ local function draw_windows(width: integer, height: integer, preferences: appear
     frame.footer(painter, status, frame.hints({{key = "↑↓", verb = "select"}, {key = "X", verb = "revoke"}, {key = "U", verb = "requests"}}))
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
+-- A pending permission leads with the question and what it lets the agent
+-- do; who asks and the exact capability are details (T). An exact version to
+-- install is approved once or denied; a repeatable permission may also be
+-- allowed for a while.
 local function draw_prompt(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, detail: model.ApprovalView, status: string): Frame
     local painter = frame.new(width, height, preferences)
     local group = model.decision_group(state)
     local prefix = detail.reallow and "Re-allow" or "Allow"
+    local one_time = detail.proposal.ref == leases.ACTIVATION
+    local cap = one_time and 0 or model.window_cap(state)
     frame.header(painter, "NEEDS YOU", tostring(#group) .. (#group == 1 and " request" or " requests · one decision"))
-    local lines: {string} = {"Subject: " .. model.text(detail.requester_id, 160), "Duration: choose once, 30 minutes or longer below"}
+    local lines: {string} = {}
     for _, item in ipairs(group) do
         local summary = model.summary(item, 0)
-        lines[#lines + 1] = "Capability: " .. summary.effect .. " · " .. model.text(item.proposal.ref, 120)
-        lines[#lines + 1] = "Scope: " .. summary.target
-        if not item.proposal.payload.adapter_ref then
+        for _, line in ipairs(prompt_lines(summary.prompt, width)) do lines[#lines + 1] = line end
+        if not one_time then lines[#lines + 1] = "Capability: " .. summary.effect end
+        for _, line in ipairs(model.permission_lines(item)) do lines[#lines + 1] = line end
+        if not item.proposal.payload.adapter_ref and not one_time then
             lines[#lines + 1] = model.text(table.concat(model.payload_lines(item), " · "), 512)
         end
-        for _, line in ipairs(prompt_lines(summary.prompt, width)) do lines[#lines + 1] = line end
-        for _, line in ipairs(model.permission_lines(item)) do lines[#lines + 1] = line end
     end
+    if cap >= 1800000 then lines[#lines + 1] = "Allow it once, or for a while with the choices below" end
     local y = 3
     local reserved = state.longer and (1 + #state.longer_choices) or 0
     for _, line in ipairs(lines) do
@@ -165,22 +171,17 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
         end
     end
     local idle = state.pending == nil
-    local cap = model.window_cap(state)
-    local buttons: {frame.Button} = {{kind = "approve", key = "A", label = "Allow once", enabled = idle, primary = true}}
+    local buttons: {frame.Button} = {{kind = "approve", key = "A", label = one_time and "Approve" or "Allow once", enabled = idle, primary = true}}
     if cap >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = prefix .. " 30 min", enabled = idle} end
     if cap > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = prefix .. " longer", enabled = idle} end
     buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
-    if detail.proposal.ref == leases.ACTIVATION then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
+    if one_time then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
     buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Details", enabled = true, more = true}
     buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your grants", enabled = true, more = true}
     if detail.requesting_session then buttons[#buttons + 1] = {kind = "source", key = "S", label = "Return to source", enabled = true, more = true} end
     if height >= 4 then frame.actions(painter, height - 1, buttons) end
     if status ~= "" or state.notice ~= "" then frame.line(painter, height - 2, status ~= "" and status or state.notice, painter.theme.text) end
-    local hints: {frame.Hint} = {{key = "A", verb = "allow once"}}
-    if cap >= 1800000 then hints[#hints + 1] = {key = "F", verb = "30 min"} end
-    if cap > 1800000 then hints[#hints + 1] = {key = "L", verb = "longer"} end
-    hints[#hints + 1] = {key = "D", verb = "deny"}
-    frame.footer(painter, "", frame.hints(hints))
+    frame.footer(painter, "", frame.hints({{key = "T", verb = "details"}}))
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0}
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice, workspace_names: {[string]: model.Workspace}?): Frame

@@ -106,9 +106,9 @@ local function hints_call(io: IO, target: string, request: unknown): ({[string]:
     return value, nil, nil
 end
 -- open_hints: resume the checkpointed subscription under this carrier's
--- lease, or subscribe afresh; returns the cursor to register wakeups from.
-function M.open_hints(ctx: Context, io: IO, session: Session): (integer?, string?)
-    if not session.plan.exchange then return nil, nil end
+-- lease, or subscribe afresh.
+function M.open_hints(ctx: Context, io: IO, session: Session): string?
+    if not session.plan.exchange then return nil end
     local request = session.plan.request
     local key = "launch:" .. request.attempt_id .. ":hints:" .. tostring(session.epoch)
     local existing = session.checkpoint.hint_subscription
@@ -116,17 +116,17 @@ function M.open_hints(ctx: Context, io: IO, session: Session): (integer?, string
         local resumed, resume_code, resume_error = hints_call(io, ctx.delivery .. ":resume", {thread_id = request.thread_id, idempotency_key = key, subscription_id = existing})
         if resumed then
             local view, view_error = subscription_view(resumed, existing)
-            if not view then return nil, "delivery resume returned malformed data: " .. tostring(view_error) end
-            return view.after_sequence, nil
+            if not view then return "delivery resume returned malformed data: " .. tostring(view_error) end
+            return nil
         end
         -- A subscription that cannot be resumed is closed before another is
         -- opened, so superseded rows never accumulate.
         local closed, close_code, close_error = hints_call(io, ctx.delivery .. ":unsubscribe", {thread_id = request.thread_id, idempotency_key = key .. ":close", subscription_id = existing})
         if closed then
             local view, view_error = subscription_view(closed, existing)
-            if not view then return nil, "delivery unsubscribe returned malformed data: " .. tostring(view_error) end
+            if not view then return "delivery unsubscribe returned malformed data: " .. tostring(view_error) end
         elseif close_code ~= "NOT_FOUND" and close_code ~= "INVALID_STATE" and close_code ~= "CONFLICT" then
-            return nil, "delivery unsubscribe: " .. tostring(close_code) .. ": " .. tostring(close_error or resume_code or resume_error)
+            return "delivery unsubscribe: " .. tostring(close_code) .. ": " .. tostring(close_error or resume_code or resume_error)
         end
         session.checkpoint.hint_subscription = nil
     end
@@ -137,35 +137,35 @@ function M.open_hints(ctx: Context, io: IO, session: Session): (integer?, string
     local created, code, message = hints_call(io, ctx.delivery .. ":subscribe", {thread_id = request.thread_id, idempotency_key = key, consumer_id = "carrier:" .. request.attempt_id,
         after_sequence = 0, filter = {kinds = kinds}, durability = "durable"})
     if not created then
-        if code == "CONFLICT" then return nil, nil end
-        return nil, tostring(code) .. ": " .. tostring(message)
+        if code == "CONFLICT" then return nil end
+        return tostring(code) .. ": " .. tostring(message)
     end
     local view, view_error = subscription_view(created, nil)
-    if not view then return nil, "delivery subscribe returned malformed data: " .. tostring(view_error) end
+    if not view then return "delivery subscribe returned malformed data: " .. tostring(view_error) end
     session.checkpoint.hint_subscription = view.subscription_id
     local committed, commit_error = ctx.commit(io, session, {})
-    if not committed then return nil, commit_error end
+    if not committed then return commit_error end
     ctx.step(io, "hints_opened")
-    return view.after_sequence, nil
+    return nil
 end
 -- take_hints: the outstanding or next page; true when it carries any
 -- transition, which is the one reason to read the owner now. A lost
 -- subscription leaves polling as the only source until the next tick
 -- reopens it.
-function M.take_hints(ctx: Context, io: IO, session: Session): (boolean, integer?, string?)
+function M.take_hints(ctx: Context, io: IO, session: Session): (boolean, string?)
     local subscription = session.checkpoint.hint_subscription
-    if not subscription then return false, nil, nil end
+    if not subscription then return false, nil end
     local request = session.plan.request
     local page, code = hints_call(io, ctx.delivery .. ":page", {thread_id = request.thread_id, subscription_id = subscription, limit = 64})
     if not page then
         if code == "NOT_FOUND" or code == "INVALID_STATE" or code == "DENIED" then session.checkpoint.hint_subscription = nil end
-        if code == "INTERNAL" then return false, nil, "delivery page returned malformed data" end
-        return false, nil, nil
+        if code == "INTERNAL" then return false, "delivery page returned malformed data" end
+        return false, nil
     end
     local decoded, page_error = delivery_page(page, subscription)
-    if not decoded then return false, nil, "delivery page is malformed: " .. tostring(page_error) end
+    if not decoded then return false, "delivery page is malformed: " .. tostring(page_error) end
     if decoded.page_id then session.pending_hint = {page_id = decoded.page_id, scanned_through = decoded.scanned_through} end
-    return decoded.has_records, decoded.scanned_through, nil
+    return decoded.has_records, nil
 end
 -- acknowledge_hints: after the hints were processed; an acknowledgment the
 -- owner refuses for an earlier incarnation is answered by resuming the

@@ -775,6 +775,7 @@ entries:
   security:
     policies:
     - bee.harness.security:carrier_policy
+    - bee.threads.security:waits
 - name: carrier_test
   kind: function.lua
   source: file://carrier_test.lua

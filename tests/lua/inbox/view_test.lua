@@ -33,10 +33,16 @@ local function define_tests()
             model.apply_read(state, "window", reply({ok = true, value = item}))
             local drawn = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
             local text = table.concat(drawn.rows):gsub("\27%[[0-9;]*m", "")
-            test.ok(text:find("Subject:", 1, true) ~= nil)
-            test.ok(text:find("Capability:", 1, true) ~= nil)
-            test.ok(text:find("Scope:", 1, true) ~= nil)
+            -- The prompt leads with the question; identities and scope are details.
+            test.ok(text:find("Write exactly one file", 1, true) ~= nil)
+            test.is_nil((text:find("Subject:", 1, true)))
+            test.ok(text:find("Capability: Bash", 1, true) ~= nil)
+            test.is_nil((text:find("attempt-window", 1, true)))
             test.ok(text:find("Re-allow 30 min", 1, true) ~= nil)
+            state.technical = true
+            local technical = table.concat(view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows):gsub("\27%[[0-9;]*m", "")
+            test.ok(technical:find("bee.test.requester", 1, true) ~= nil)
+            state.technical = false
             for _, hit in ipairs(drawn.hits) do test.ok(hit.kind ~= "allow_longer") end
             item.window_max_ttl_ms = 14400000
             model.apply_read(state, "window", reply({ok = true, value = item}))
@@ -69,6 +75,25 @@ local function define_tests()
                 test.is_true(table.concat(drawn.rows):find("V  Leases", 1, true) ~= nil)
                 test.is_nil((table.concat(drawn.rows):find("Approve 0", 1, true)))
             end
+        end)
+        test.it("asks to install an exact app version with approve or deny only, the question first", function()
+            local state = model.new({"ws-1"})
+            local item = request("install", "pending", "Install Bee application tally 1.0.0. It adds no permissions.")
+            item.proposal = {kind = "operation", ref = leases.ACTIVATION, revision = "r1", payload = {version = "1.0.0"}}
+            item.window_max_ttl_ms = 14400000
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+            model.select(state, "install")
+            model.apply_read(state, "install", reply({ok = true, value = item}))
+            local drawn = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.ok(rows[3]:find("Install Bee application tally 1.0.0", 1, true) ~= nil)
+            local text = table.concat(rows)
+            test.is_nil((text:find("Duration:", 1, true)))
+            test.ok(rows[23]:find("A Approve", 1, true) ~= nil)
+            test.ok(rows[23]:find("D Deny", 1, true) ~= nil)
+            for _, hit in ipairs(drawn.hits) do test.ok(hit.kind ~= "allow_30" and hit.kind ~= "allow_longer") end
+            test.is_nil((rows[24]:find("allow once", 1, true)))
         end)
         test.it("keeps lease and grant decisions out of the primary row", function()
             for _, size in ipairs({{120, 36}, {80, 24}}) do

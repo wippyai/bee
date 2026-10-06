@@ -386,9 +386,6 @@ function bounds_text(value: unknown): string
     if type(value) ~= "table" then return "" end
     return tostring((assert(bounds.object(value))).text or "")
 end
-local function hint(pid: string, thread_id: string)
-    process.send(pid, "bee.carrier.hints." .. pid, {woke = true, thread_id = thread_id})
-end
 local function settlement_of(outcome: Outcome, label: string): Object
     if not outcome.value then error(label .. ": " .. tostring(outcome.error)) end
     return assert(bounds.object(outcome.value.settlement))
@@ -402,7 +399,8 @@ local function define_tests()
         progress = assert(process.listen("bee.test.carrier.progress", {message = true}))
         local stream = prepare_host()
         test.it("asks, waits, consumes and answers an allowed request through one deterministic write, woken by a hint rather than the poll", function()
-            -- The approval hint wakes this exchange before its next periodic poll.
+            -- The commit of the approval transition on the thread wakes this
+            -- exchange; its poll comes only after the approval has expired.
             local policy = assert(registry.get(POLICY))
             local exchange = (assert(bounds.object((assert(bounds.object(policy.data))).permission_exchange)))
             exchange.poll_ms = 120000
@@ -412,9 +410,7 @@ local function define_tests()
             local view = await_request(workspace, pid)
             test.eq(view.request_kind, "permission")
             test.eq((assert(bounds.object(view.proposal))).kind, "attempt")
-            for _ = 1, 3 do hint(pid, thread_id) end
             decide(view, "approved")
-            for _ = 1, 3 do hint(pid, thread_id) end
             local finished, outcome = pcall(function(): Outcome return await_carrier(pid) end)
             exchange.poll_ms = 2000
             apply(policy)

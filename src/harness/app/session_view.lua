@@ -8,7 +8,10 @@ local agents = require("agents")
 local protocol = require("protocol")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
-local HINTS = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
+-- The footer names only keys the buttons above it do not show; help lists
+-- them all.
+local HINTS = frame.hints({{key = "Ctrl+D", verb = "details"}})
+local MORE = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
     {key = "Ctrl+X", verb = "close session"}, {key = "Esc", verb = "sessions"}})
 local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "warn"}
 local STATE_ROLE = {starting = "muted", queued = "muted", working = "muted", ready = "text", failed = "error", blocked = "warn", uncertain = "warn", budget_exceeded = "error"}
@@ -172,7 +175,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         message = "No progress for " .. tostring(conv.activity_evidence.quiet_for_ms) .. " ms · " .. conv.activity_evidence.turn
     end
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start new"}, {key = "Esc", verb = "sessions"}}) or HINTS) end
+    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start new"}, {key = "Esc", verb = "sessions"}}) or MORE) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

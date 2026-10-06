@@ -184,7 +184,9 @@ local function define_tests()
                 test.is_true(screen(shown.rows):find("Conversation", 1, true) ~= nil)
                 test.is_nil((screen(shown.rows):find("bs:", 1, true)))
                 test.is_true(screen(shown.rows):find("Stop current work", 1, true) ~= nil)
-                test.is_true(shown.rows[size[2]]:find("Ctrl+K stop work", 1, true) ~= nil)
+                -- Stop is a button; the footer names only keys no button shows.
+                test.is_nil((shown.rows[size[2]]:find("Ctrl+K stop work", 1, true)))
+                test.is_true(shown.rows[size[2]]:find("Ctrl+D details", 1, true) ~= nil)
             end
         end)
         test.it("updates the sidebar marker from the session snapshot", function()

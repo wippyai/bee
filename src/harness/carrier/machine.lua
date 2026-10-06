@@ -56,8 +56,6 @@ M.MAX_RECORDS_PER_COMMIT = 64
 M.MAX_FRAME_BYTES = placement_protocol.MAX_OUTSTANDING_CHUNKS * placement_protocol.MAX_CHUNK_BYTES
 M.APPROVALS = "bee.approvals.binding"
 M.DELIVERY = hints.DELIVERY
-M.WAITER_NAME = "bee.threads.waiter"
-M.HINT_REGISTRATION_MS = 60000
 type Object = {[string]: unknown}
 type Reply = service_reply.Reply
 type IO = carrier_types.IO
@@ -74,10 +72,10 @@ local function inbox_context(): hints.Context
     return inbox_context_value
 end
 
-function M.open_hints(io: IO, session: Session): (integer?, string?)
+function M.open_hints(io: IO, session: Session): string?
     return hints.open_hints(inbox_context(), io, session)
 end
-function M.take_hints(io: IO, session: Session): (boolean, integer?, string?)
+function M.take_hints(io: IO, session: Session): (boolean, string?)
     return hints.take_hints(inbox_context(), io, session)
 end
 function M.acknowledge_hints(io: IO, session: Session): (boolean, string?)

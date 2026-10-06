@@ -35,7 +35,7 @@ type Context = {node_id: string, registry_revision: integer, registry_digest: st
     database_bindings: {[string]: DatabaseBinding}?,
     entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
     migration_barrier: boolean, auto_start: boolean, super_edit: boolean?, protected: protected_kernel.Manifest?, host_evidence: HostEvidence,
-    driver_requirements: {[string]: DriverRequirement}?}
+    driver_requirements: {[string]: DriverRequirement}?, module_capabilities: {[string]: {string}}?}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
     base_revision: integer, policy_digest: string, ready: boolean, diagnostics: {Diagnostic}, pending_migrations: {string}}
@@ -538,7 +538,15 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             if not context.grants[grant] then issue("GRANT_DENIED", item.id, "unadmitted security policy " .. grant, "remove the grant or request host policy review") end
         end
         for _, module in ipairs(item.modules) do
-            if not context.modules[module] then issue("MODULE_DENIED", item.id, "unadmitted runtime module " .. module, "remove the module or request host policy review") end
+            if not context.modules[module] then
+                local authorizing = context.module_capabilities and context.module_capabilities[module] or nil
+                local remedy = "remove the module or request host policy review"
+                if authorizing and #authorizing > 0 then
+                    remedy = "request capability " .. table.concat(authorizing, " or ")
+                        .. " with an ns.requirement whose meta.capability names it and whose target appends to the application's .security.policies, so the person can approve it; or remove the module"
+                end
+                issue("MODULE_DENIED", item.id, "unadmitted runtime module " .. module, remedy)
+            end
         end
         local config_objects, config_lists = item.config_objects, item.config_lists
         local config_empty = item.config_empty

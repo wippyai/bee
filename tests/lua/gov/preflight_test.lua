@@ -446,6 +446,26 @@ local function define_tests()
             test.is_true(has(report, "GRANT_DENIED"))
             test.is_true(has(report, "MODULE_DENIED"))
         end)
+        test.it("names the capability whose approval admits a refused runtime module", function()
+            local candidate, context = fixture()
+            candidate.entries[1].modules = {"exec", "os"}
+            context.module_capabilities = {exec = {"process.exec"}, contract = {"agents.launch", "contract.call"}}
+            local report = checked(candidate, context)
+            local remedies: {[string]: string} = {}
+            for _, diagnostic in ipairs(report.diagnostics) do
+                if diagnostic.code == "MODULE_DENIED" then remedies[diagnostic.message] = diagnostic.remedy end
+            end
+            local exec = assert(remedies["unadmitted runtime module exec"])
+            test.is_true(exec:find("process.exec", 1, true) ~= nil)
+            test.is_true(exec:find("ns.requirement", 1, true) ~= nil)
+            local os = assert(remedies["unadmitted runtime module os"])
+            test.is_true(os:find("process.exec", 1, true) == nil)
+            context.modules.exec = true
+            local admitted = checked(candidate, context)
+            for _, diagnostic in ipairs(admitted.diagnostics) do
+                test.is_false(diagnostic.message == "unadmitted runtime module exec")
+            end
+        end)
         test.it("round trips canonical source evidence without granting readiness", function()
             local candidate, context = fixture()
             local report = checked(candidate, context)

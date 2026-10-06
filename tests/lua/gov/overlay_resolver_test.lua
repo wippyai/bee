@@ -544,6 +544,63 @@ local function define_tests()
             test.is_true((assert(bounds.object(volume.data))).readonly)
         end)
 
+        test.it("admits a native module only through the approved capability that authorizes it", function()
+            local function app_policy(): Policy
+                return {node_id = "node-destination", policy_digest = SHA,
+                    base_policy_digest = SHA, workspace_application = true,
+                    packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                    kinds = {["process.lua"] = true, ["ns.requirement"] = true}, databases = {},
+                    grants = {}, modules = {json = true}, applied = {}, migration_barrier = false,
+                    workspace_id = "workspace-destination", overlay_owner = "bee.apps:workspace-destination",
+                    source_node = "node-source", source_workspace = "author/app",
+                    applications = {{definition_id = "private.app:main", policies = {}, thread_access = "none"}}}
+            end
+            local function prepared(policy: Policy, requested: boolean): (Deps, Object)
+                local deps, spec = fixture(policy)
+                local captured = (deps.capture)()
+                captured.entries[#captured.entries + 1] = {id = "bee.capability:catalog", kind = "registry.entry",
+                    meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                    data = {revision = 4, never = {"env"}, capabilities = {{id = "process.exec",
+                        revision = 1, confirm = "explicit", parameters = {command = "command", directory = "relative_subpath"},
+                        text = "Run {command} in workspace folder {directory}", modules = {"exec"}, tools = {"process_run"},
+                        policies = {{operation = "process.exec", resource = "$command", scope = {subpath = "$directory"}}},
+                        resources = {}}}}}
+                deps.folder = function(): (unknown?, string?)
+                    return {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = "alpha"}, nil
+                end
+                local entries: {Entry} = {{id = "private.app:main", kind = "process.lua",
+                    meta = {type = "bee.app"}, data = {source = "return true", modules = {"exec", "json"}}}}
+                if requested then
+                    entries[#entries + 1] = {id = "private.app:run", kind = "ns.requirement",
+                        meta = {value_kind = "security.policy", capability = "process.exec",
+                            parameters = {command = "make test", directory = "."}, reason = "Run the test suite"},
+                        data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
+                end
+                changes(spec, entries)
+                return deps, spec
+            end
+            local function module_denials(facts: Facts): {preflight.Diagnostic}
+                local report = assert(preflight.check(facts.candidate, facts.context))
+                local denied: {preflight.Diagnostic} = {}
+                for _, diagnostic in ipairs(report.diagnostics) do
+                    if diagnostic.code == "MODULE_DENIED" then denied[#denied + 1] = diagnostic end
+                end
+                return denied
+            end
+            local host = app_policy()
+            local granted = resolve(prepared(host, true))
+            test.is_true(granted.context.modules.exec)
+            test.is_true(granted.context.modules.json)
+            test.is_nil(host.modules.exec)
+            test.eq(#module_denials(granted), 0)
+            local refused = resolve(prepared(app_policy(), false))
+            test.is_nil(refused.context.modules.exec)
+            local denied = module_denials(refused)
+            test.eq(#denied, 1)
+            test.eq(denied[1].message, "unadmitted runtime module exec")
+            test.is_true(denied[1].remedy:find("request capability process.exec", 1, true) ~= nil)
+        end)
+
         test.it("binds an application database grant to its provisioned store", function()
             local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
                 base_policy_digest = SHA, workspace_application = true,

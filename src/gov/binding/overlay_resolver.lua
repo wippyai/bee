@@ -510,6 +510,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local capability_installed: capability_grants.Installed? = nil
     local capability_review: capability_grants.Review? = nil
     local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
+    local module_capabilities: {[string]: {string}}? = nil
     if policy.workspace_application then
         local app_binding = policy.applications and object(policy.applications[1]) or nil
         local app_id, application_error = workspace_applications.application(incoming)
@@ -592,6 +593,15 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                     target_db = target}
             end
         end
+        -- A runtime module outside the profile ceiling is admitted by the
+        -- requested capability the catalog says authorizes it, so the person
+        -- approves the module together with that capability.
+        local admitted_modules: {[string]: boolean} = {}
+        for name, allowed in pairs(original_policy.modules) do admitted_modules[name] = allowed end
+        for name in pairs(capability_model.modules(model_vocabulary, proposed.capabilities)) do
+            admitted_modules[name] = true
+        end
+        module_capabilities = capability_model.module_capabilities(model_vocabulary)
         local source_binding = app_binding
         local prospective_binding: Object = {definition_id = app_id,
             policies = selected_policies, thread_access = proposed.thread_access,
@@ -607,7 +617,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         if not prospective_digest then return nil, nil, "measure prospective capability policy" end
         policy = {node_id = original_policy.node_id, policy_digest = prospective_digest,
             packages = original_policy.packages, namespaces = original_policy.namespaces, kinds = original_policy.kinds,
-            databases = original_policy.databases, grants = original_policy.grants, modules = original_policy.modules,
+            databases = original_policy.databases, grants = original_policy.grants, modules = admitted_modules,
             applied = original_policy.applied, applied_databases = original_policy.applied_databases,
             database_bindings = database_bindings, migration_barrier = original_policy.migration_barrier,
             auto_start = original_policy.auto_start, super_edit = original_policy.super_edit, applications = applications, workspace_id = original_policy.workspace_id,
@@ -692,6 +702,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         current, installed, kernel, evidence)
     if not context then return nil, nil, context_error end
     context.driver_requirements = driver_requirements
+    context.module_capabilities = module_capabilities
     local dependencies: {string} = {}
     local artifacts: {preflight.Artifact} = {{component = component, version = version, digest = artifact_digest,
         dependencies = dependencies, namespaces = names}}

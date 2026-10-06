@@ -442,7 +442,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         intent.artifact_digest, intent.version, uses_prior)
     if not record then return nil, record_error end
     return {policies = proposed.policies, bindings = proposed.bindings, record = record,
-        volumes = proposed.volumes, databases = proposed.databases}, nil
+        volumes = proposed.volumes, databases = proposed.databases, executors = proposed.executors}, nil
 end
 
 -- approved_drivers visits every consumed driver artifact whose host-selected

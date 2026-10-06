@@ -15,11 +15,11 @@ M.PREFIX = "bee.gov.grants:"
 local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}
 type Proposal = {capabilities: {capability_model.Grant}, policies: {Object}, bindings: {Object},
-    volumes: {Object}, databases: {Object}, folder: Object?, thread_access: string, digest: string}
+    volumes: {Object}, databases: {Object}, executors: {Object}, folder: Object?, thread_access: string, digest: string}
 type Installed = {schema_revision: string, overlay_owner: string, workspace_id: string, application: string,
     capabilities: {capability_model.Grant}, bindings: {Object}, policies: {Object}, thread_access: string, digest: string,
     approval_id: string, revision: integer, artifact_digest: string?, version: string?, volumes: {Object}?,
-    databases: {Object}?, folder: Object?, record_digest: string}
+    databases: {Object}?, executors: {Object}?, folder: Object?, record_digest: string}
 type Change = {before: capability_model.Grant?, after: capability_model.Grant?}
 type Review = {added: {Change}, widened: {Change}, narrowed: {Change}, removed: {Change}, changed: {Change},
     requires_approval: boolean, revocation: capability_model.Revocation,
@@ -96,18 +96,30 @@ local function package_policy(grant: Object, id: string, app: string): Object?
     return nil
 end
 
+-- The capabilities whose generated enforcement is a policy expression: the
+-- runtime pairs their actions with the approved resources and request
+-- metadata only through one.
+local EXPRESSION_CAPABILITIES: {[string]: boolean} = {["agents.launch"] = true, ["process.exec"] = true}
+function M.expression(capability: unknown): boolean
+    return type(capability) == "string" and EXPRESSION_CAPABILITIES[capability] == true
+end
+
 -- Each installable catalog entry materializes into generated host entries: a
--- policy plus the host-created volume or database it authorizes. A Hive
--- exposure grant materializes into an exposure-scope policy over exactly the
--- approved operations; other review-vocabulary entries have no app grant.
-local function policy(owner: string, grant: capability_model.Grant, id: string, folder: unknown, app: string): (Object?, Object?, Object?, string?)
+-- policy plus the host-created volume, database or executor it authorizes. A
+-- Hive exposure grant materializes into an exposure-scope policy over exactly
+-- the approved operations; other review-vocabulary entries have no app grant.
+type Generated = {policy: Object, volume: Object?, database: Object?, executor: Object?}
+local function only(generated: Object): (Generated?, string?)
+    return {policy = generated}, nil
+end
+local function policy(owner: string, grant: capability_model.Grant, id: string, folder: unknown, app: string): (Generated?, string?)
     local scope = grant.scope
     if grant.capability == "threads.read" and grant.operation == "threads.read"
         and grant.resource == "threads" and scope.scope == "owned" then
-        return {id = id, kind = "security.policy", meta = {comment = "Host-generated owned thread read grant"},
+        return only({id = id, kind = "security.policy", meta = {comment = "Host-generated owned thread read grant"},
             data = {policy = {actions = {"funcs.call"},
                 resources = {"bee.threads.binding:get", "bee.threads.binding:list",
-                    "bee.threads.binding:read_after"}, effect = "allow"}}}, nil, nil, nil
+                    "bee.threads.binding:read_after"}, effect = "allow"}}})
     end
     if (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write")
         and (grant.operation == "files.read" or grant.operation == "files.write")
@@ -116,54 +128,64 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
         local volume, volume_error = files.volume(owner, folder, scope.subpath, writable)
         local generated, policy_error = volume and files.file_policy(owner, folder, scope.subpath, writable, id) or nil
         if not volume or not generated then
-            return nil, nil, nil, volume_error or policy_error or "workspace file grant is not installable"
+            return nil, volume_error or policy_error or "workspace file grant is not installable"
         end
-        return generated, volume, nil, nil
+        return {policy = generated, volume = volume}, nil
     end
     if grant.capability == "app.database" and grant.operation == "database.use"
         and grant.resource == scope.name and type(scope.name) == "string" then
         local database, database_error = files.database(owner, scope.name)
         local generated, policy_error = database and files.database_policy(owner, scope.name, id) or nil
         if not database or not generated then
-            return nil, nil, nil, database_error or policy_error or "application database grant is not installable"
+            return nil, database_error or policy_error or "application database grant is not installable"
         end
-        return generated, nil, database, nil
+        return {policy = generated, database = database}, nil
+    end
+    if grant.capability == "process.exec" and grant.operation == "process.exec"
+        and type(scope.subpath) == "string" then
+        local executor, executor_error = files.executor(owner, folder, scope.subpath, grant.resource)
+        local generated, policy_error = executor and files.process_policy(owner, folder, scope.subpath,
+            grant.resource, id) or nil
+        if not executor or not generated then
+            return nil, executor_error or policy_error or "process grant is not installable"
+        end
+        return {policy = generated, executor = executor}, nil
     end
     if grant.capability == "threads.message" and grant.operation == "threads.message"
         and grant.resource == "threads" and scope.scope == "children" then
-        return {id = id, kind = "security.policy", meta = {comment = "Host-generated child thread message grant"},
+        return only({id = id, kind = "security.policy", meta = {comment = "Host-generated child thread message grant"},
             data = {policy = {actions = {"funcs.call"},
                 resources = {"bee.threads.binding:send", "bee.threads.binding:notify"},
-                effect = "allow"}}}, nil, nil, nil
+                effect = "allow"}}})
     end
     if grant.capability == "agents.launch" and grant.operation == "agents.launch"
         and grant.resource == "managed_agents" then
         local definitions = capability_model.strings(scope.definitions)
-        if not definitions then return nil, nil, nil, "resolved agent definition list is malformed" end
+        if not definitions then return nil, "resolved agent definition list is malformed" end
         local names: {string} = {}
         for _, ref in ipairs(definitions) do
-            if not ref:match("^[A-Za-z0-9_.:-]+$") then return nil, nil, nil, "resolved agent definition name is malformed" end
+            if not ref:match("^[A-Za-z0-9_.:-]+$") then return nil, "resolved agent definition name is malformed" end
             names[#names + 1] = '"' .. ref .. '"'
         end
         table.sort(names)
         local expression = SESSIONS_EXPRESSION .. ' || (action == "bee.harness.launch" && resource in [' .. table.concat(names, ", ") .. '])'
-        return {id = id, kind = "security.policy.expr",
+        return only({id = id, kind = "security.policy.expr",
             meta = {comment = "Host-generated managed agent session grant"},
             data = {policy = {actions = {"contract.get", "contract.open", "contract.call", "funcs.call", "bee.harness.launch"},
-                resources = "*", expression = expression, effect = "allow"}}}, nil, nil, nil
+                resources = "*", expression = expression, effect = "allow"}}})
     end
     -- The runtime cannot pair a contract binding with its method or an HTTP
     -- method with its origin, so these grants let the application call the
     -- host gateway, which checks the exact approved scope from this record.
     if grant.capability == "contract.call" and grant.operation == "contract.call" then
-        return {id = id, kind = "security.policy", meta = {comment = "Host-generated contract gateway grant"},
+        return only({id = id, kind = "security.policy", meta = {comment = "Host-generated contract gateway grant"},
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.CONTRACT_CALL},
-                effect = "allow"}}}, nil, nil, nil
+                effect = "allow"}}})
     end
     if grant.capability == "http.api" and grant.operation == "http.request" then
-        return {id = id, kind = "security.policy", meta = {comment = "Host-generated HTTP gateway grant"},
+        return only({id = id, kind = "security.policy", meta = {comment = "Host-generated HTTP gateway grant"},
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
-                effect = "allow"}}}, nil, nil, nil
+                effect = "allow"}}})
     end
     -- A Hive exposure grant authorizes exactly the approved operations under
     -- the requested mode. The supervisor joins it through its exposure
@@ -172,17 +194,17 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
     if grant.capability == "hive.expose" and grant.operation == "hive.expose" then
         local mode = grant.resource
         local operations = capability_model.strings(scope.operations)
-        if not operations then return nil, nil, nil, "resolved Hive operation list is malformed" end
-        return {id = id, kind = "security.policy", groups = {"bee.security.hive:hive_exposure_scope"},
+        if not operations then return nil, "resolved Hive operation list is malformed" end
+        return only({id = id, kind = "security.policy", groups = {"bee.security.hive:hive_exposure_scope"},
             meta = {comment = "Host-generated Hive operation exposure grant"},
             data = {policy = {actions = {"hive.expose." .. (mode)},
-                resources = operations, effect = "allow"}}}, nil, nil, nil
+                resources = operations, effect = "allow"}}})
     end
     if next(scope) == nil then
         local generated = package_policy(grant, id, app)
-        if generated then return generated, nil, nil, nil end
+        if generated then return only(generated) end
     end
-    return nil, nil, nil, "capability has no application-installable enforcement"
+    return nil, "capability has no application-installable enforcement"
 end
 
 -- Runtime requests use the same host policy generator as installation before
@@ -191,7 +213,7 @@ end
 function M.installable(operations: {capability_model.Grant}): (boolean?, string?)
     if #operations ~= 1 then return nil, "capability template needs unsupported policy count" end
     local folder: Object = {root_ref = "bee.resources:capability_check", directory = ".", subpath = ""}
-    local generated, _, _, realize_error = policy("capability_check", operations[1],
+    local generated, realize_error = policy("capability_check", operations[1],
         M.PREFIX .. "policy.check", folder, "capability_check:app")
     if not generated then return nil, realize_error or "capability has no application-installable enforcement" end
     return true, nil
@@ -200,10 +222,12 @@ end
 -- The workspace folder is part of the measured set whenever a volume is
 -- rooted in it, so a moved workspace cannot reuse a grant for its old tree.
 local function digest_shape(capabilities: {Object}, bindings: {Object}, policies: {Object},
-    volumes: {Object}, databases: {Object}, folder: unknown): Object
+    volumes: {Object}, databases: {Object}, executors: {Object}, folder: unknown): Object
     local shape: Object = {capabilities = capabilities, bindings = bindings, policies = policies,
         thread_access = "none"}
-    if #volumes > 0 then shape.volumes, shape.folder = volumes, folder end
+    if #volumes > 0 then shape.volumes = volumes end
+    if #executors > 0 then shape.executors = executors end
+    if #volumes > 0 or #executors > 0 then shape.folder = folder end
     if #databases > 0 then shape.databases = databases end
     return shape
 end
@@ -220,8 +244,10 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
     local bindings: {Object} = table.create(capacity, 0)
     local volumes: {Object} = table.create(1, 0)
     local databases: {Object} = table.create(1, 0)
+    local executors: {Object} = table.create(1, 0)
     local volume_ids: {[string]: boolean} = {}
     local database_ids: {[string]: boolean} = {}
+    local executor_ids: {[string]: boolean} = {}
     local requirement_of: {[capability_model.Grant]: string} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
@@ -258,12 +284,13 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
         if #resolved_operations ~= 1 then return nil, "capability template needs unsupported policy count" end
         local id = policy_id(owner, requirement_id, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
-        local generated, volume, database, policy_error = policy(owner, resolved_operations[1], id, folder, app)
+        local generated, policy_error = policy(owner, resolved_operations[1], id, folder, app)
         if not generated then return nil, policy_error end
+        local volume, database, executor = generated.volume, generated.database, generated.executor
         seen[requirement_id] = true
         requirement_of[resolved_operations[1]] = requirement_id
         capabilities[#capabilities + 1] = resolved_operations[1]
-        policies[#policies + 1] = generated
+        policies[#policies + 1] = generated.policy
         bindings[#bindings + 1] = {requirement_id = requirement_id, policy_id = id}
         if volume then
             local volume_id = (volume).id
@@ -279,6 +306,13 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
                 databases[#databases + 1] = database
             end
         end
+        if executor then
+            local executor_id = (executor).id
+            if not executor_ids[executor_id] then
+                executor_ids[executor_id] = true
+                executors[#executors + 1] = executor
+            end
+        end
     end
     -- Capabilities follow their bindings' requirement order, so a record
     -- pairs each grant with the requirement that asked for it.
@@ -291,12 +325,14 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
     end)
     table.sort(volumes, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
     table.sort(databases, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
+    table.sort(executors, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
     local rooted: Object? = nil
-    if #volumes > 0 then rooted = bounds.object(folder) end
-    local set_digest = digest(digest_shape(capabilities, bindings, policies, volumes, databases, rooted))
+    if #volumes > 0 or #executors > 0 then rooted = bounds.object(folder) end
+    local set_digest = digest(digest_shape(capabilities, bindings, policies, volumes, databases, executors, rooted))
     if not set_digest then return nil, "measure capability proposal" end
     return {capabilities = capabilities, policies = policies, bindings = bindings,
-        volumes = volumes, databases = databases, folder = rooted, thread_access = "none", digest = set_digest}, nil
+        volumes = volumes, databases = databases, executors = executors, folder = rooted,
+        thread_access = "none", digest = set_digest}, nil
 end
 
 function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
@@ -317,7 +353,9 @@ function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
         policies = proposal.policies, thread_access = proposal.thread_access,
         digest = proposal.digest, approval_id = approval_id, revision = revision,
         artifact_digest = artifact_digest, version = version}
-    if #proposal.volumes > 0 then stored.volumes, stored.folder = proposal.volumes, proposal.folder end
+    if #proposal.volumes > 0 then stored.volumes = proposal.volumes end
+    if #proposal.executors > 0 then stored.executors = proposal.executors end
+    if #proposal.volumes > 0 or #proposal.executors > 0 then stored.folder = proposal.folder end
     if #proposal.databases > 0 then stored.databases = proposal.databases end
     return {id = id, kind = "registry.entry", meta = {type = M.SCHEMA}, data = stored}, nil
 end
@@ -352,7 +390,8 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     local capabilities, bindings, policies = list(data.capabilities, 128), list(data.bindings, 128), list(data.policies, 128)
     local volumes = list(data.volumes or {}, 8)
     local databases = list(data.databases or {}, 8)
-    if not capabilities or not bindings or not policies or not volumes or not databases
+    local executors = list(data.executors or {}, 8)
+    if not capabilities or not bindings or not policies or not volumes or not databases or not executors
         or #capabilities ~= #bindings or #bindings ~= #policies then
         return nil, "installed capability grant set is malformed"
     end
@@ -372,8 +411,16 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
             return nil, "installed capability database is malformed"
         end
     end
+    for _, raw_executor in ipairs(executors) do
+        local executor = bounds.object(raw_executor)
+        local id = executor and bounds.text(executor.id, 160) or nil
+        if not executor or not id or id:sub(1, #files.EXECUTOR_PREFIX) ~= files.EXECUTOR_PREFIX
+            or executor.kind ~= "exec.native" then
+            return nil, "installed capability executor is malformed"
+        end
+    end
     local actual = digest(digest_shape(capabilities, bindings,
-        policies, volumes, databases, data.folder))
+        policies, volumes, databases, executors, data.folder))
     if actual ~= stored_digest then return nil, "installed capability digest differs from the stored set" end
     local capacity: integer = #bindings > 0 and #bindings or 1
     local reproduced: {Object} = table.create(capacity, 0)
@@ -411,6 +458,7 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
         artifact_digest = artifact_digest, version = version, record_digest = measured_record}
     if data.volumes ~= nil then installed.volumes = resolved.volumes end
     if data.databases ~= nil then installed.databases = resolved.databases end
+    if data.executors ~= nil then installed.executors = resolved.executors end
     if data.folder ~= nil then installed.folder = resolved.folder end
     return installed, nil
 end
@@ -421,12 +469,12 @@ function M.installed(record_raw: unknown, record: Installed): Object
     local entry: Object = {}
     for key, value in pairs((record_raw)) do if key ~= "registry" then entry[key] = value end end
     return {policies = record.policies, bindings = record.bindings, volumes = record.volumes,
-        databases = record.databases, record = entry}
+        databases = record.databases, executors = record.executors, record = entry}
 end
 
 -- A registry record is live only while its generated policies, volumes,
--- databases and requirement defaults are installed beside it. An orphaned
--- record cannot authorize reuse.
+-- databases, executors and requirement defaults are installed beside it. An
+-- orphaned record cannot authorize reuse.
 function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
     for _, raw_policy in ipairs(record.policies) do
         local expected = bounds.object(raw_policy)
@@ -437,7 +485,7 @@ function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
         for key, value in pairs(current) do if key ~= "registry" then clean[key] = value end end
         if digest(clean) ~= digest(expected) then return false, "installed grant policy differs from approval" end
     end
-    for _, field in ipairs({"volumes", "databases"}) do
+    for _, field in ipairs({"volumes", "databases", "executors"}) do
         for _, raw_entry in ipairs((record[field] or {})) do
             local expected = bounds.object(raw_entry)
             local id = expected and bounds.id(expected.id) or nil

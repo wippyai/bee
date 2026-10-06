@@ -102,14 +102,15 @@ local function located(root: Folder, subpath: string): string
     return root.directory .. "/" .. relative
 end
 
--- Whether measured capability requirements ask for workspace files, whose
--- grants root in the destination workspace's folder.
+-- Whether measured capability requirements ask for workspace files or a
+-- process, whose grants root in the destination workspace's folder.
 function M.rooted(requirements: {unknown}): boolean
     for _, raw in ipairs(requirements) do
         local item = bounds.object(raw)
         local request = item and bounds.object(item.capability_request) or nil
         local capability = request and request.capability or nil
-        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
+        if type(capability) == "string" and (capability:sub(1, 16) == "workspace.files."
+            or capability == "process.exec") then return true end
     end
     return false
 end
@@ -154,7 +155,80 @@ function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
         data = config}, nil
 end
 
-local DATABASE_FILE_PATTERN = "^" .. (M.DATABASE_ROOT:gsub("%p", "%%%0")) .. "/[0-9a-f]+%.db$"
+M.EXECUTOR_PREFIX = "bee.gov.grants:executor."
+-- Approved processes start with the host PATH and nothing else from Bee.
+M.EXEC_PATH = "${env:bee.capability:exec_path}"
+
+-- The folder relative to the workspace root a process grant runs in: the
+-- workspace folder itself for ".", else a verified subroot of it.
+local function process_relative(root: Folder, subpath_raw: unknown): (string?, string?)
+    if subpath_raw == "." then return root.subpath, nil end
+    local subpath, subpath_error = M.verify_subpath(subpath_raw)
+    if not subpath then return nil, subpath_error end
+    return root.subpath == "" and subpath or root.subpath .. "/" .. subpath, nil
+end
+
+-- A command the catalog normalized holds no quote or escape, so it embeds
+-- in a policy expression literal as is.
+local function literal_command(raw: unknown): string?
+    if type(raw) ~= "string" or #raw == 0 or #raw > 160 or raw:find('["\\%c]') then return nil end
+    return raw
+end
+
+function M.executor_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
+    command_raw: unknown): (string?, string?)
+    if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
+        return nil, "process grant owner is invalid"
+    end
+    local root, root_error = folder(folder_raw)
+    if not root then return nil, root_error end
+    local relative, relative_error = process_relative(root, subpath_raw)
+    local command = literal_command(command_raw)
+    if not relative or not command then return nil, relative_error or "process grant command is invalid" end
+    local suffix, suffix_error = hex(owner_raw .. "\n" .. root.root_ref .. "\n" .. relative .. "\n" .. command)
+    if not suffix then return nil, suffix_error end
+    return M.EXECUTOR_PREFIX .. suffix, nil
+end
+
+-- The host-created executor an approved command runs through: its working
+-- directory is the approved folder and its environment the host PATH, both
+-- fixed in the entry so the application cannot choose either.
+type ExecutorConfig = {default_work_dir: string, default_env: {[string]: string}}
+type Executor = {id: string, kind: "exec.native", meta: {comment: string}, data: ExecutorConfig}
+function M.executor(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
+    command_raw: unknown): (Executor?, string?)
+    local id, id_error = M.executor_id(owner_raw, folder_raw, subpath_raw, command_raw)
+    if not id then return nil, id_error end
+    local root = assert(folder(folder_raw))
+    local relative = assert(process_relative(root, subpath_raw))
+    local directory = relative == "" and root.directory or located({root_ref = root.root_ref,
+        directory = root.directory, base = root.base, subpath = ""}, relative)
+    return {id = id, kind = "exec.native", meta = {comment = "Host-created executor for one approved command"},
+        data = {default_work_dir = directory, default_env = {PATH = M.EXEC_PATH}}}, nil
+end
+
+-- The application acquires only its own executor and runs only the approved
+-- command, alone or followed by further arguments, in the executor's fixed
+-- folder with no caller environment.
+type ExprPolicy = {id: string, kind: "security.policy.expr", meta: {comment: string},
+    data: {policy: {actions: {string}, resources: string, expression: string, effect: "allow"}}}
+function M.process_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, command_raw: unknown,
+    policy_id_raw: unknown): (ExprPolicy?, string?)
+    local executor, executor_error = M.executor(owner_raw, folder_raw, subpath_raw, command_raw)
+    local id = bounds.id(policy_id_raw)
+    local command = literal_command(command_raw)
+    if not executor or not id or not command then
+        return nil, executor_error or "process grant policy identity is invalid"
+    end
+    local expression = '(action == "exec.get" && resource == "' .. executor.id .. '") || (action == "exec.run"'
+        .. ' && meta.executor == "' .. executor.id .. '" && meta.work_dir == "" && len(meta.env_names) == 0'
+        .. ' && (resource == "' .. command .. '" || resource startsWith "' .. command .. ' "))'
+    return {id = id, kind = "security.policy.expr", meta = {comment = "Host-generated approved command grant"},
+        data = {policy = {actions = {"exec.get", "exec.run"}, resources = "*", expression = expression,
+            effect = "allow"}}}, nil
+end
+
+local DATABASE_FILE_PATTERN ="^" .. (M.DATABASE_ROOT:gsub("%p", "%%%0")) .. "/[0-9a-f]+%.db$"
 
 function M.database_file(file: unknown): boolean
     return type(file) == "string" and file:find(DATABASE_FILE_PATTERN) ~= nil

@@ -257,3 +257,11 @@ entries:
   base: project
   auto_init: true
   mode: '0700'
+- name: exec_path
+  kind: env.variable
+  meta:
+    comment: The executable search path every approved application command starts with; it is the only environment such a process receives from Bee
+  storage: bee:os
+  variable: PATH
+  default: /usr/local/bin:/usr/bin:/bin
+  readonly: true

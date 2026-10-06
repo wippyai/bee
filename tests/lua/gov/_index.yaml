@@ -893,3 +893,43 @@ entries:
   modules: [registry, security]
   imports:
     test: wippy.test:test
+- name: process_grant_call_policy
+  kind: security.policy
+  meta:
+    type: test_support
+    comment: The test app may call the probe that runs a command under its own scope
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.tests.gov:process_grant_probe
+    effect: allow
+- name: process_grant_probe
+  kind: function.lua
+  source: file://process_grant_probe.lua
+  method: run
+  modules:
+  - exec
+  meta:
+    type: test_support
+- name: process_grant_test
+  kind: function.lua
+  source: file://process_grant_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - registry
+  meta:
+    type: test
+    suite: bee
+  security:
+    policies:
+    - bee.tests.principals:application_scope_policy
+    - bee.tests.gov:gateway_test_policy
+  imports:
+    app_scope: bee.tests.principals:application
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model

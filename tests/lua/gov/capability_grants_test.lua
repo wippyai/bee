@@ -205,6 +205,56 @@ local function define_tests()
             test.is_true(expression:find("bee.threads.sessions.binding:run", 1, true) ~= nil)
             test.is_true(expression:find('"history", "await"', 1, true) ~= nil)
         end)
+        test.it("materializes process execution as a dedicated executor and an exact command policy", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("process.exec", {command = "/usr/bin/git status", directory = "src"})}, nil, FOLDER))
+            test.eq(#proposed.capabilities, 1)
+            test.eq(proposed.capabilities[1].operation, "process.exec")
+            test.eq(#proposed.executors, 1)
+            local executor = proposed.executors[1]
+            test.eq(executor.kind, "exec.native")
+            test.is_true(tostring(executor.id):find("^bee%.gov%.grants:executor%.[0-9a-f]+$") ~= nil)
+            local config = assert(bounds.object(executor.data))
+            test.eq(config.default_work_dir, "alpha/src")
+            local environment = assert(bounds.object(config.default_env))
+            test.eq(environment.PATH, "${env:bee.capability:exec_path}")
+            local names = 0
+            for _ in pairs(environment) do names = names + 1 end
+            test.eq(names, 1)
+            test.eq(proposed.policies[1].kind, "security.policy.expr")
+            test.is_true(grants.expression("process.exec"))
+            test.is_true(grants.expression("agents.launch"))
+            test.is_false(grants.expression("contract.call"))
+            local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
+            local actions = principals.strings(body.actions)
+            test.eq(table.concat(actions, ","), "exec.get,exec.run")
+            local expression = tostring(body.expression)
+            test.is_true(expression:find('action == "exec.get" && resource == "' .. executor.id .. '"', 1, true) ~= nil)
+            test.is_true(expression:find('meta.executor == "' .. executor.id .. '"', 1, true) ~= nil)
+            test.is_true(expression:find('meta.work_dir == ""', 1, true) ~= nil)
+            test.is_true(expression:find("len(meta.env_names) == 0", 1, true) ~= nil)
+            test.is_true(expression:find('resource == "/usr/bin/git status" || resource startsWith "/usr/bin/git status "', 1, true) ~= nil)
+            test.is_nil(grants.propose(vocabulary(), OWNER, APP,
+                {request("process.exec", {command = "make", directory = "src"})}))
+            test.is_nil(grants.propose(vocabulary(), OWNER, APP,
+                {request("process.exec", {command = "make", directory = ".wippy"})}, nil, FOLDER))
+            local root = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("process.exec", {command = "make", directory = "."})}, nil, FOLDER))
+            test.eq((assert(bounds.object(root.executors[1].data))).default_work_dir, "alpha")
+            test.is_true(root.executors[1].id ~= executor.id)
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-exec", 1))
+            local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
+            test.eq(#(principals.items(decoded.executors)), 1)
+            test.eq(decoded.digest, proposed.digest)
+            local installed_entries: {[string]: unknown} = {}
+            installed_entries[proposed.policies[1].id] = proposed.policies[1]
+            installed_entries[executor.id] = executor
+            installed_entries["app.notes:request"] = {kind = "ns.requirement",
+                data = {default = proposed.policies[1].id}}
+            test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
+            installed_entries[executor.id] = nil
+            test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
+        end)
         test.it("grants scoped HTTP only through the host gateway", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("http.api", {origin = "https://api.example.com",

@@ -4,12 +4,12 @@ local delivery = require("delivery")
 local artifact = require("artifact")
 local version = require("version")
 
-local function application(selected_version: string): delivery.Delivery
+local function application(selected_version: string, author: string?): delivery.Delivery
     local exact = assert(artifact.create({{id = "sample.app:definition", kind = "registry.entry",
         data = {value = selected_version}}}))
     local result, result_error = delivery.create({schema_revision = delivery.SCHEMA,
         source_node = "node-source", source_workspace = "team/application",
-        component = "sample/app", version = selected_version,
+        component = "sample/app", version = selected_version, author = author,
         artifact = {bytes = exact.bytes, digest = exact.digest}})
     if not result then error(tostring(result_error)) end
     return result
@@ -34,6 +34,33 @@ local function define_tests()
             test.eq(decoded.value.artifact.bytes, item.value.artifact.bytes)
             test.is_nil(decoded.manifest.destination_node)
             test.is_nil(decoded.manifest.destination_workspace)
+        end)
+
+        test.it("names the authoring agent in the version and its manifest, and keeps older versions unchanged", function()
+            local plain = application("v1")
+            test.is_nil(plain.value.author)
+            test.is_nil(plain.manifest.author)
+            local named = application("v1", "Claude Code")
+            test.eq(named.value.author, "Claude Code")
+            test.eq(named.manifest.author, "Claude Code")
+            test.eq(named.key, plain.key)
+            test.eq(named.slot, plain.slot)
+            test.is_false(named.digest == plain.digest)
+            local decoded = assert(delivery.decode(named.bytes, named.digest))
+            test.eq(decoded.manifest.author, "Claude Code")
+            local descriptor = assert(delivery.descriptor(named))
+            test.not_nil(delivery.verify_descriptor(descriptor, decoded))
+            test.eq(descriptor.manifest.author, "Claude Code")
+        end)
+
+        test.it("refuses an author that is not one short line", function()
+            local exact = assert(artifact.create({{id = "sample.app:definition", kind = "registry.entry", data = {value = "v1"}}}))
+            for _, author in ipairs({"", "two\nlines", string.rep("x", 81)}) do
+                local created = delivery.create({schema_revision = delivery.SCHEMA, source_node = "node-source",
+                    source_workspace = "team/application", component = "sample/app", version = "v1", author = author,
+                    artifact = {bytes = exact.bytes, digest = exact.digest}})
+                test.is_nil(created)
+            end
         end)
 
         test.it("refuses content, descriptor, manifest and logical-key substitution", function()

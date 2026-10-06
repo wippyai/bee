@@ -36,6 +36,26 @@ local function define_tests()
             test.eq(#(compensation.digest), 64)
         end)
 
+        test.it("records the revert under the person who asked for it", function()
+            local seen_actor = ""
+            local activations: headless_revert.Activations = {
+                applied = function(_: activation_store.Store, _: string): transaction.Result
+                    return transaction.success({migrations = {}}, false)
+                end,
+                revert_activation = function(_: activation_store.Store, actor: string, _: activation_store.Request): transaction.Result
+                    seen_actor = actor
+                    return transaction.success({intent_id = "baseline"}, false)
+                end,
+            }
+            local store = assert(activation_store.open("bee:db", "node-headless", "headless-revert-person"))
+            local current = {overlay_owner = OWNER, component = "vendor/app", slot_revision = 7}
+            local baseline = {overlay_owner = OWNER, component = "vendor/app"}
+            test.is_true(headless_revert.revert(activations, store, OWNER, current, baseline, "revert-person", "person-1").ok)
+            test.eq(seen_actor, "person-1")
+            test.eq(headless_revert.revert(activations, store, OWNER, current, baseline, "revert-person-2", "bad actor\n").code, "INVALID")
+            assert(activation_store.close(store))
+        end)
+
         test.it("refuses migration facts without an applied compensation plan", function()
             local called = false
             local activations: headless_revert.Activations = {

@@ -285,6 +285,7 @@ local function define_tests()
             test.eq(installed.source_workspace, "notes")
             test.eq(installed.observed_intent_id, "intent-list-1")
             test.eq(installed.observed_outcome, "applied")
+            test.is_nil(installed.baseline_intent_id)
             local waiting = by_id["intent-list-2"]
             test.eq(waiting.phase, "prepared")
             test.is_nil(waiting.outcome)
@@ -358,6 +359,9 @@ local function define_tests()
             local baseline = ok(store.baseline(state, "bee.gov:overlay"))
             test.eq(baseline.intent_id, "intent-gen-1")
             test.eq(baseline.artifact_digest, blob("artifact-v1").digest)
+            for _, raw in ipairs(assert(bounds.array(ok(store.listing(state)).activations))) do
+                test.eq(assert(bounds.object(raw)).baseline_intent_id, "intent-gen-1")
+            end
             local compensation = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-receipt@1",
                 rows = {{id = "demo:001", target_db = "demo:db", module = "demo/app", status = "applied"}}})))
             local reverted = ok(store.call(state, "actor-a", {operation = "revert_activation",

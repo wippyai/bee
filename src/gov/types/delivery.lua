@@ -15,11 +15,13 @@ M.SLOT_SCHEMA = "bee.governance-application-version-slot@1"
 M.FEED = "governance.application_versions"
 M.CONTENT_KIND = M.SCHEMA
 M.MAX_BYTES = 393216
+M.MAX_AUTHOR = 80
 
 type Descriptor = version.Descriptor
 type Blob = {bytes: string, digest: string}
+-- author is the person-facing name of the agent that made the version, when known.
 type Envelope = {schema_revision: string, source_node: string,
-    source_workspace: string, component: string, version: string, artifact: Blob}
+    source_workspace: string, component: string, version: string, author: string?, artifact: Blob}
 type Delivery = {value: Envelope, bytes: string, digest: string,
     manifest: {[string]: unknown}, key: string, slot: string}
 
@@ -55,8 +57,10 @@ local function decode_envelope(raw: unknown): (Envelope?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application version must be an object" end
     local extra = bounds.fields(value, {"schema_revision", "source_node", "source_workspace",
-        "component", "version", "artifact"})
+        "component", "version", "author", "artifact"})
     if extra then return nil, "application version: " .. extra end
+    local author = bounds.line(value.author, M.MAX_AUTHOR)
+    if value.author ~= nil and not author then return nil, "application version author must be one short line" end
     local source_node = bounds.id(value.source_node)
     local source_workspace = bounds.id(value.source_workspace)
     local component = bounds.text(value.component, 160)
@@ -71,7 +75,7 @@ local function decode_envelope(raw: unknown): (Envelope?, string?)
     if not artifact_blob then return nil, artifact_error or "application version identity is malformed" end
     return {schema_revision = M.SCHEMA, source_node = source_node,
         source_workspace = source_workspace, component = component,
-        version = selected_version, artifact = artifact_blob}, nil
+        version = selected_version, author = author, artifact = artifact_blob}, nil
 end
 
 local function key(value: Envelope): (string?, string?)
@@ -101,6 +105,7 @@ local function finish(value: Envelope, bytes: string, digest: string): (Delivery
     local manifest: {[string]: unknown} = {schema_revision = M.SCHEMA,
         source_workspace = value.source_workspace, component = value.component,
         artifact_digest = value.artifact.digest}
+    if value.author then manifest.author = value.author end
     return {value = value, bytes = bytes, digest = digest, manifest = manifest,
         key = version_key, slot = version_slot}, nil
 end

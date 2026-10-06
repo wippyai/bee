@@ -95,3 +95,15 @@ entries:
   imports: *app_tools_imports
   security:
     policies: [bee.node.security:app_tools_runner, bee.node.security:identity]
+- name: names
+  kind: function.lua
+  meta:
+    comment: The name each node asked reports for itself; needs bee.node.names.read on nodes
+  source: file://names.lua
+  method: names
+  modules: [security]
+  imports:
+    bounds: bee.values:bounds
+    client: bee.node:client
+  security:
+    policies: [bee.hive.security:caller, bee.hive.security:messaging]

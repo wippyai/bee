@@ -65,6 +65,31 @@ local function define_tests()
             test.eq(conflict.code, "CONFLICT")
         end)
 
+        test.it("names the authoring agent and keeps that author for the version", function()
+            local source = "publisher-author-" .. assert(uuid.v7())
+            local exact = assert(artifact.create({{id = "authored.app:main", kind = "function.lua",
+                data = {source = "return 'authored'"}}}))
+            local request = {source_workspace = "workspace/authored", component = "authored/app",
+                version = "1.0.0", artifact = {bytes = exact.bytes, digest = exact.digest}}
+            local named: {[string]: unknown} = {}
+            for field, item in pairs(request) do named[field] = item end
+            named.author = "Claude Code"
+            local first = assert(bounds.object(publisher.prepare(source, named).value))
+            test.eq(assert(bounds.object(assert(bounds.object(first.descriptor)).manifest)).author, "Claude Code")
+            -- Another call for the same version, by anyone, names the same bytes.
+            local other: {[string]: unknown} = {}
+            for field, item in pairs(request) do other[field] = item end
+            other.author = "Codex"
+            local replay = publisher.publish(source, other)
+            test.is_true(replay.ok)
+            local descriptor = assert(bounds.object(assert(bounds.object(replay.value)).descriptor))
+            test.eq(assert(bounds.object(descriptor.manifest)).author, "Claude Code")
+            test.eq(descriptor.digest, assert(bounds.object(assert(bounds.object(first.descriptor)))).digest)
+            local unnamed = publisher.publish(source, request)
+            test.is_true(unnamed.ok)
+            test.eq(assert(bounds.object(assert(bounds.object(assert(bounds.object(unnamed.value)).descriptor)).manifest)).author, "Claude Code")
+        end)
+
         test.it("keeps a prepared version immutable: other bytes under the same version are refused", function()
             local source = "publisher-" .. assert(uuid.v7())
             local first = assert(artifact.create({{id = "prepared.app:main", kind = "function.lua",

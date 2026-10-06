@@ -25,6 +25,7 @@ local delivery = require("delivery")
 local destination = require("destination")
 local preflight = require("preflight")
 local materializer = require("materializer")
+local headless_revert = require("headless_revert")
 local artifact = require("artifact")
 local driver_admission = require("driver_admission")
 local migration_effect = require("migration_effect")
@@ -692,7 +693,7 @@ local function request_identity(request: Object): (string?, string?, string?)
     return bounds.id(request.source_node), bounds.id(request.source_workspace), bounds.id(request.version)
 end
 
-local OPERATIONS: Set = {available = true, stage = true, list = true, activations = true, get = true, changes = true,
+local OPERATIONS: Set = {available = true, stage = true, list = true, activations = true, get = true, changes = true, revert = true,
     review = true, select = true, prepare = true, step = true, status = true, recover = true,
     lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
 local READS: Set = {available = true, list = true, activations = true, get = true, changes = true, status = true}
@@ -714,6 +715,88 @@ local function exact(request: Object, fields: {string}): string?
     local allowed = {"operation", "workspace_id"}
     for _, field in ipairs(fields) do allowed[#allowed + 1] = field end
     return bounds.fields(request, allowed)
+end
+
+-- The bee.app definition an activation's artifact declares, which is what a
+-- person opens to use the installed application.
+function M.application_of(bytes: unknown, digest: unknown): string?
+    local entries = artifact.decode(bytes, digest)
+    if not entries then return nil end
+    return (workspace_applications.application(entries))
+end
+
+-- Each applied activation says which application it runs; one that cannot be
+-- read says nothing.
+local function annotate(store: activations.Store, listing: Result): Result
+    local value = listing.ok and bounds.object(listing.value) or nil
+    local rows = value and value.activations
+    if type(rows) ~= "table" then return listing end
+    for _, raw in ipairs(rows) do
+        local row = bounds.object(raw)
+        if row and row.intent_id ~= nil and row.intent_id == row.observed_intent_id then
+            local read = activations.get(store, row.intent_id)
+            local intent = read.ok and bounds.object(read.value) or nil
+            if intent then row.application = M.application_of(intent.artifact_bytes, intent.artifact_digest) end
+        end
+    end
+    return listing
+end
+
+local RECOVERY_ATTEMPTS = 4
+
+type RevertMethods = {
+    applied: (activations.Store, string) -> Result,
+    revert_activation: (activations.Store, string, activations.Request) -> Result,
+}
+
+-- A person's own revert of an application to the version before it: the
+-- activation store records it under the person, and the owner applies the
+-- earlier version's definitions. Applied migrations stay; a revert that would
+-- need a compensation plan is refused.
+local function revert_application(request: Object, workspace_id: string, actor_id: string?,
+    plan_store: plans.Store, activation_store: activations.Store, lease_handle: leases.Store): Result
+    if exact(request, {"source_workspace", "receipt_key"}) then return failure("INVALID", "revert has unknown fields") end
+    local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
+    local identity = source_workspace and workspace_applications.identity(workspace_id, source_workspace) or nil
+    if not source_workspace or not key or not identity then return failure("INVALID", "revert names no application") end
+    local overlay_owner: string? = nil
+    for _, candidate in ipairs({workspace_applications.prior_owner(workspace_id, source_workspace), identity.overlay_owner}) do
+        if overlay_owner == nil and activations.desired(activation_store, candidate).ok then overlay_owner = candidate end
+    end
+    if not overlay_owner then return failure("NOT_FOUND", "this application is not installed here") end
+    local desired = activations.desired(activation_store, overlay_owner)
+    local current = desired.ok and bounds.object(desired.value) or nil
+    local baseline_result = activations.baseline(activation_store, overlay_owner)
+    local baseline = baseline_result.ok and bounds.object(baseline_result.value) or nil
+    if not current then return desired end
+    if not baseline then return failure("BLOCKED", baseline_result.message or "there is no earlier version to go back to") end
+    local config, config_error = load()
+    if not config then return failure("BLOCKED", config_error or "activation configuration is unavailable") end
+    local current_source = bounds.id(current.source_node)
+    local chosen = current_source and selected(config, workspace_id, current_source, source_workspace, activation_store) or nil
+    if not chosen then return failure("BLOCKED", "activation profile is unavailable") end
+    current.component, baseline.component = chosen.component, chosen.component
+    local adapter: RevertMethods = {
+        applied = function(store: activations.Store, component: string): Result return activations.applied(store, component) end,
+        revert_activation = function(store: activations.Store, actor: string, input: activations.Request): Result
+            return activations.revert_activation(store, actor, input)
+        end,
+    }
+    local reverted = headless_revert.revert(adapter, activation_store, overlay_owner, current, baseline, key, actor_id)
+    if not reverted.ok then return reverted end
+    local restored = bounds.object(reverted.value)
+    local restored_source = restored and bounds.id(restored.source_node) or nil
+    local earlier = restored_source and selected(config, workspace_id, restored_source, source_workspace, activation_store) or nil
+    if not earlier then return failure("BLOCKED", "activation profile for the earlier version is unavailable") end
+    local configured = owner_config(config, earlier, plan_store, activation_store, lease_handle)
+    if not configured.ok then return failure("BLOCKED", configured.error or "activation configuration is unavailable") end
+    local result: Result = reverted
+    for attempt = 1, RECOVERY_ATTEMPTS do
+        result = owner.recover(configured.config, key .. "-recover-" .. tostring(attempt))
+        local value = result.ok and bounds.object(result.value) or nil
+        if not result.ok or (value and value.phase == "settled") then break end
+    end
+    return result
 end
 
 -- The host-selected vocabulary and the installed grant record of the profile's
@@ -898,7 +981,9 @@ function M.call(raw: unknown): Result
         else result = plans.call(plan_store, actor_id, {operation = "list"}) end
     elseif operation == "activations" then
         if exact(request, {}) then result = failure("INVALID", "activations has unknown fields")
-        else result = activations.listing(activation_store) end
+        else result = annotate(activation_store, activations.listing(activation_store)) end
+    elseif operation == "revert" then
+        result = revert_application(request, workspace_id, actor_id, plan_store, activation_store, lease_handle)
     elseif operation == "get" then
         local source_node, source_workspace, version = request_identity(request)
         if exact(request, {"source_node", "source_workspace", "version"})
@@ -992,6 +1077,21 @@ function M.call(raw: unknown): Result
             end
         end
     end
+    close(plan_store, activation_store, lease_handle)
+    return result
+end
+
+-- revert goes back to the version before the one an application runs, as the
+-- named person, or as the recovery actor when none is named. It opens the
+-- node's own stores for the workspace.
+function M.revert(workspace_id: string, source_workspace: string, receipt_key: string, actor_id: string?): Result
+    local config, config_error = load()
+    if not config then return failure("BLOCKED", config_error or "activation configuration is unavailable") end
+    local plan_store, activation_store, lease_handle, open_error = stores(config.node_id, workspace_id)
+    if not plan_store or not activation_store or not lease_handle then return failure("UNAVAILABLE", open_error or "open destination stores") end
+    local result = revert_application({operation = "revert", workspace_id = workspace_id,
+        source_workspace = source_workspace, receipt_key = receipt_key}, workspace_id, actor_id,
+        plan_store, activation_store, lease_handle)
     close(plan_store, activation_store, lease_handle)
     return result
 end

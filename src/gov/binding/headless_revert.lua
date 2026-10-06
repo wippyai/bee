@@ -1,4 +1,5 @@
--- MIT. Build a safe recovery-actor revert for an activation with no applied migrations.
+-- MIT. Build a safe revert for an activation with no applied migrations, by the
+-- recovery actor or, when a person asks for it, by that person.
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -27,7 +28,7 @@ local function has_facts(activations: Activations, store: Store, component: stri
 end
 
 function M.revert(activations: Activations, store: Store, owner_raw: unknown,
-    current_raw: unknown, baseline_raw: unknown, key_raw: unknown): Result
+    current_raw: unknown, baseline_raw: unknown, key_raw: unknown, actor_raw: unknown?): Result
     local owner = bounds.id(owner_raw)
     local current, baseline = bounds.object(current_raw), bounds.object(baseline_raw)
     local key = bounds.id(key_raw)
@@ -54,7 +55,9 @@ function M.revert(activations: Activations, store: Store, owner_raw: unknown,
     if not bytes then return transaction.failure("INTERNAL", tostring(encode_error or "measure empty migration receipt")) end
     local digest, hash_error = hash.sha256(bytes)
     if not digest or hash_error then return transaction.failure("INTERNAL", "measure empty migration receipt") end
-    return activations.revert_activation(store, RECOVERY_ACTOR, {operation = "revert_activation",
+    local actor = actor_raw == nil and RECOVERY_ACTOR or bounds.id(actor_raw)
+    if not actor then return transaction.failure("INVALID", "headless revert actor is invalid") end
+    return activations.revert_activation(store, actor, {operation = "revert_activation",
         overlay_owner = owner, expected_revision = revision, idempotency_key = key,
         compensation = {bytes = bytes, digest = digest},
         diagnostics = "headless recovery revert; no applied migration facts exist"})

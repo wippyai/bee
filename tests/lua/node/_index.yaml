@@ -258,3 +258,21 @@ entries:
     capability_grants: bee.gov.types:capability_grants
   security:
     policies: [bee.tests.node:app_tools_test_policy]
+- name: names_test
+  kind: function.lua
+  source: file://names_test.lua
+  method: run
+  modules: [funcs, system]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+  security:
+    policies: [bee.tests.node:names_test_policy]
+- name: names_test_policy
+  kind: security.policy
+  meta: {comment: The names test calls the names read and holds its action}
+  policy:
+    actions: [funcs.call, bee.node.names.read]
+    resources: '*'
+    effect: allow

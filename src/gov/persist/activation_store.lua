@@ -1035,7 +1035,7 @@ end
 function M.listing(store: Store): Result
     if store.closed then return failure("CLOSED", "governance activation store is closed") end
     return transaction.read(store.db, "governance activation", function(tx): Result
-        local slot_rows, slot_error = tx:query("SELECT overlay_owner, revision, desired_intent_id, observed_intent_id, observed_outcome FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? LIMIT ?",
+        local slot_rows, slot_error = tx:query("SELECT overlay_owner, revision, desired_intent_id, observed_intent_id, observed_outcome, baseline_intent_id FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? LIMIT ?",
             {store.node, store.workspace, MAX_INTENTS})
         if slot_error or not slot_rows then return storage(slot_error, "list activation slots") end
         local slots: {[string]: Object} = {}
@@ -1066,6 +1066,7 @@ function M.listing(store: Store): Result
                 item.desired_intent_id = current_slot.desired_intent_id
                 item.observed_intent_id = current_slot.observed_intent_id
                 item.observed_outcome = current_slot.observed_outcome
+                item.baseline_intent_id = current_slot.baseline_intent_id
             end
             activations[#activations + 1] = item
         end

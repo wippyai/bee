@@ -2,6 +2,7 @@
 -- application and version; the host profile chooses the source workspace and
 -- overlay. Remote identities and destination policy never enter publication.
 local registry = require("registry")
+local contract = require("contract")
 local security = require("security")
 local system = require("system")
 local base64 = require("base64")
@@ -9,6 +10,7 @@ local json = require("json")
 local bounds = require("bounds")
 local artifact = require("artifact")
 local publisher = require("publisher")
+local author = require("author")
 local staging = require("staging")
 local activations = require("activation_store")
 local resources = require("resources")
@@ -140,6 +142,29 @@ local function same_intent(before: Object, after: Object): boolean
     return true
 end
 
+-- The Sessions contract answers for the caller's own session; the definition's
+-- registry entry titles the agent.
+local function session_source(caller: security.Actor): author.Source
+    return {
+        session = function(id: string): unknown
+            local definition = contract.get("bee.threads.sessions:contract")
+            if not definition then return nil end
+            local acted = definition:with_actor(caller)
+            if not acted then return nil end
+            local owner = acted:open()
+            if not owner then return nil end
+            local reply = bounds.object(owner:get({session = id}))
+            local value = reply and reply.ok == true and bounds.object(reply.value) or nil
+            return value and value.value or nil
+        end,
+        title = function(ref: string): string?
+            local entry = registry.get(ref)
+            local data = entry and bounds.object(entry.data)
+            return data and bounds.line(data.title, author.MAX_NAME) or nil
+        end,
+    }
+end
+
 function M.call(raw: unknown): Result
     local request = bounds.object(raw)
     if not request or bounds.fields(request, {"operation", "workspace_id", "component", "version", "snapshot_digest"})
@@ -191,6 +216,7 @@ function M.call(raw: unknown): Result
         end
         return publisher.prepare(node_id, {source_workspace = chosen.source_workspace,
             component = chosen.component, version = selected_version,
+            author = author.name(actor:id(), session_source(actor)),
             artifact = {bytes = value.bytes, digest = value.digest}})
     end
 
@@ -248,6 +274,7 @@ function M.call(raw: unknown): Result
     end
     return publisher.publish(node_id, {source_workspace = chosen.source_workspace,
         component = chosen.component, version = selected_version,
+        author = author.name(actor:id(), session_source(actor)),
         artifact = {bytes = intent.artifact_bytes, digest = intent.artifact_digest}})
 end
 

@@ -38,15 +38,35 @@ local function put(store: replicas.Store, item: delivery.Delivery, descriptor: d
         version_key = decoded.key, descriptor_digest = decoded.digest})
 end
 
+type Adopted = {name: string?}
+
+-- The author of the version this source already holds in the slot, when it
+-- holds one: its descriptor's manifest names it, or names no one.
+local function adopted_author(store: replicas.Store, descriptor: delivery.Descriptor, held: Result): Adopted?
+    local slot = bounds.object(held.value)
+    local keys = slot and slot.keys
+    if type(keys) ~= "table" or #keys == 0 then return nil end
+    local listed = replicas.available(store, descriptor.owner_id, descriptor.feed, 128)
+    local rows = listed.ok and bounds.object(listed.value) or nil
+    for _, raw in ipairs(rows and rows.items or {}) do
+        local existing = bounds.object(raw)
+        local manifest = existing and bounds.object(existing.manifest)
+        if existing and manifest and existing.key == descriptor.key then
+            return {name = bounds.line(manifest.author, delivery.MAX_AUTHOR)}
+        end
+    end
+    return nil
+end
+
 local function prepare(source_node: unknown, raw: unknown): (delivery.Delivery?, delivery.Descriptor?, Result?)
     local node = bounds.id(source_node)
     local value = bounds.object(raw)
     if not node or not value then return nil, nil, failure("INVALID", "application publication is invalid") end
-    local extra = bounds.fields(value, {"source_workspace", "component", "version", "artifact"})
+    local extra = bounds.fields(value, {"source_workspace", "component", "version", "artifact", "author"})
     if extra then return nil, nil, failure("INVALID", "application publication: " .. extra) end
     local item, create_error = delivery.create({schema_revision = delivery.SCHEMA,
         source_node = node, source_workspace = value.source_workspace, component = value.component,
-        version = value.version, artifact = value.artifact})
+        version = value.version, author = value.author, artifact = value.artifact})
     if not item then return nil, nil, failure("INVALID", create_error or "create application version") end
     local descriptor, descriptor_error = delivery.descriptor(item)
     if not descriptor then return nil, nil, failure("INTERNAL", descriptor_error or "create application descriptor") end
@@ -56,6 +76,18 @@ local function prepare(source_node: unknown, raw: unknown): (delivery.Delivery?,
     -- source already prepared are refused, so review never shows two.
     local held = replicas.slot(replica_store, descriptor.owner_id, descriptor.feed, item.value.component, item.value.version)
     if not held.ok then replicas.close(replica_store); return nil, nil, held end
+    -- A version keeps the author it was first prepared under, so a later call
+    -- for the same version, whoever makes it, names the same bytes.
+    local adopted = adopted_author(replica_store, descriptor, held)
+    if adopted ~= nil and adopted.name ~= item.value.author then
+        local again, again_error = delivery.create({schema_revision = delivery.SCHEMA, source_node = node,
+            source_workspace = value.source_workspace, component = value.component, version = value.version,
+            author = adopted.name, artifact = value.artifact})
+        if not again then replicas.close(replica_store); return nil, nil, failure("INTERNAL", again_error or "recreate application version") end
+        local again_descriptor, descriptor_failure = delivery.descriptor(again)
+        if not again_descriptor then replicas.close(replica_store); return nil, nil, failure("INTERNAL", descriptor_failure or "create application descriptor") end
+        item, descriptor = again, again_descriptor
+    end
     for _, existing in ipairs((bounds.object(held.value) or {}).keys :: {string}) do
         if existing ~= descriptor.key then
             replicas.close(replica_store)

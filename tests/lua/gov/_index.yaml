@@ -136,6 +136,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     destination_service: bee.gov.binding:destination_service
+    artifact: bee.gov.types:artifact
 - name: super_edit_test
   kind: function.lua
   source: file://super_edit_test.lua
@@ -548,6 +549,16 @@ entries:
     preflight: bee.gov.binding:preflight
     governed: bee.apps.library:governed
     library: bee.apps.library:model
+- name: author_test
+  kind: function.lua
+  source: file://author_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    author: bee.gov.binding:author
 - name: delivery_test
   kind: function.lua
   source: file://delivery_test.lua

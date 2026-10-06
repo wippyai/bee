@@ -262,6 +262,22 @@ entries:
     - system.read
     resources: '*'
     effect: allow
+- name: publication_author_policy
+  kind: security.policy.expr
+  groups:
+  - publication_execution_scope
+  meta:
+    comment: Publication names the authoring agent by asking the public Sessions contract for the caller's own session
+  policy:
+    actions:
+    - contract.get
+    - contract.open
+    - contract.call
+    - contract.security
+    - funcs.security
+    resources: '*'
+    expression: (action == "contract.get" && resource == "bee.threads.sessions:contract") || (action == "contract.security" && resource == "security") || action == "contract.open" || (action == "contract.call" && resource == "get") || action == "funcs.security"
+    effect: allow
 - name: publication_profiles_read_policy
   kind: security.policy
   meta:

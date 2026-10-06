@@ -100,9 +100,7 @@ entries:
     bounds: bee.values:bounds
     resources: bee.gov.binding:staging_resources
     activation_store: bee.gov.persist:activation_store
-    headless_revert: bee.gov.binding:headless_revert
     destination_service: bee.gov.binding:destination_service
-    transaction: bee.persist:transaction
 - name: destination_call
   kind: function.lua
   source: file://destination_method.lua
@@ -220,11 +218,17 @@ entries:
     replicas: bee.sync.persist:replicas
     sync: bee.sync.persist:store
     transaction: bee.persist:transaction
+- name: author
+  kind: library.lua
+  source: file://author.lua
+  imports:
+    bounds: bee.values:bounds
 - name: publication_service
   kind: library.lua
   source: file://publication_service.lua
   modules:
   - registry
+  - contract
   - security
   - system
   - base64
@@ -240,6 +244,7 @@ entries:
     activation_profiles: bee.gov.types:activation_profile_decoder
     capability_model: bee.capability:model
     publisher: bee.gov.binding:publisher
+    author: bee.gov.binding:author
     staging: bee.gov.persist:staging
     activation_store: bee.gov.persist:activation_store
     resources: bee.gov.binding:staging_resources
@@ -323,6 +328,7 @@ entries:
     capability_model: bee.capability:model
     capability_files: bee.gov.types:capability_files
     workspace_applications: bee.gov.types:workspace_applications
+    headless_revert: bee.gov.binding:headless_revert
     preflight: bee.gov.binding:preflight
 - name: destination_backend_call
   kind: function.lua
@@ -402,6 +408,7 @@ entries:
     capability_model: bee.capability:model
     capability_files: bee.gov.types:capability_files
     workspace_applications: bee.gov.types:workspace_applications
+    headless_revert: bee.gov.binding:headless_revert
     preflight: bee.gov.binding:preflight
   security:
     policies:
@@ -445,6 +452,7 @@ entries:
     capability_model: bee.capability:model
     capability_files: bee.gov.types:capability_files
     workspace_applications: bee.gov.types:workspace_applications
+    headless_revert: bee.gov.binding:headless_revert
     preflight: bee.gov.binding:preflight
   security:
     policies:

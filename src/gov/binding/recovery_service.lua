@@ -1,29 +1,14 @@
--- MIT. Headless native recovery of one host activation slot.
+-- MIT. Headless native recovery of one host activation slot: the slot goes back
+-- to the version before the one it runs, through the same revert the Library asks for.
 local system = require("system")
 local uuid = require("uuid")
 local bounds = require("bounds")
 local resources = require("resources")
 local activations = require("activation_store")
-local headless_revert = require("headless_revert")
 local destination = require("destination_service")
-local transaction = require("transaction")
 
 local M = {}
 type Object = {[string]: unknown}
-type RecoveryMethods = {
-    applied: (activations.Store, string) -> transaction.Result,
-    revert_activation: (activations.Store, string, activations.Request) -> transaction.Result,
-}
-local recovery_methods: RecoveryMethods = {
-    applied = function(store: activations.Store, component: string): transaction.Result
-        return activations.applied(store, component)
-    end,
-    revert_activation = function(store: activations.Store, actor: string,
-        request: activations.Request): transaction.Result
-        return activations.revert_activation(store, actor, request)
-    end,
-}
-
 function M.revert(owner_raw: unknown): (string?, string?)
     local overlay_owner = bounds.id(owner_raw)
     if not overlay_owner then return nil, "usage: bee gov revert OWNER (OWNER is the exact activation overlay owner)" end
@@ -56,24 +41,16 @@ function M.revert(owner_raw: unknown): (string?, string?)
         activations.close(store)
         return nil, desired.message or "read desired activation"
     end
-    local baseline_result = activations.baseline(store, overlay_owner)
-    local baseline: Object? = baseline_result.ok and bounds.object(baseline_result.value) or nil
-    if not baseline then
-        activations.close(store)
-        return nil, baseline_result.message or "read retained baseline"
-    end
     local key, key_error = uuid.v7()
     if not key or key_error then
         activations.close(store)
         return nil, "allocate recovery receipt identity"
     end
-    local reverted = headless_revert.revert(recovery_methods, store, overlay_owner, current, baseline, key)
-    local closed, close_error = activations.close(store)
+    local source_workspace = bounds.id(current.source_workspace)
+    activations.close(store)
+    if not source_workspace then return nil, "desired activation names no source overlay" end
+    local reverted = destination.revert(workspace_id, source_workspace, key)
     if not reverted.ok then return nil, reverted.message or reverted.code or "activation revert failed" end
-    if not closed or close_error then return nil, "revert was recorded but the activation store did not close" end
-
-    local recovered, recovery_error = destination.recover_all()
-    if not recovered then return nil, "revert was recorded; baseline recovery failed: " .. tostring(recovery_error) end
     return "Reverted " .. overlay_owner .. " to its retained baseline", nil
 end
 

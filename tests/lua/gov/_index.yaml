@@ -1110,10 +1110,9 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    client: bee.node:client
-    principal: bee.node:principal
     application: bee.node:application
     guide: bee.gov.traits:guide
+    harness: bee.tests.gov:delivery_harness
 - name: activation_drain_probe
   kind: function.lua
   source: file://activation_drain_probe.lua
@@ -1130,5 +1129,74 @@ entries:
     - bee.gov.security:activation_announce_policy
     - bee.gov.security:activation_worker_policy
   imports:
+    pass: bee.gov.service:activation_pass
+- name: delivery_harness
+  kind: library.lua
+  source: file://delivery_harness.lua
+  meta:
+    type: test_support
+    comment: The person and the agent around a delivered application, for the delivery end-to-end suites
+  modules:
+  - funcs
+  - security
+  - json
+  - time
+  - env
+  - system
+  imports:
     bounds: bee.values:bounds
-    service: bee.gov.binding:destination_service
+    client: bee.node:client
+    principal: bee.node:principal
+- name: app_expiry_test_policy
+  kind: security.policy
+  meta:
+    type: test_support
+    comment: The expiry suite adds a workspace, acts as the authoring agent, the person in Needs you and the Library, and the approval owner's reconcile, and shortens the approval window for workspace applications
+  policy:
+    actions:
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    - security.policy_group.get
+    - bee.approvals.decide
+    - bee.approvals.read
+    - env.get
+    - process.send
+    - process.listen
+    - system.read
+    - registry.get
+    - registry.find
+    - registry.version
+    - registry.snapshot
+    - registry.apply
+    - registry.update
+    resources: '*'
+    effect: allow
+- name: app_expiry_test
+  kind: function.lua
+  source: file://app_expiry_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - registry
+  - json
+  - time
+  - uuid
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  security:
+    policies:
+    - bee.tests.gov:app_expiry_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.gov:delivery_harness
+    guide: bee.gov.traits:guide
+    governed: bee.apps.library:governed
+    library: bee.apps.library:model
+    principals: bee.tests.principals:bound

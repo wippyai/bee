@@ -146,6 +146,16 @@ local function apps(state: State): {App}
     return result
 end
 
+-- What the person reads about a version whose install did not happen.
+local ENDED: {[string]: string} = {
+    expired = "Approval expired — install again",
+    withdrawn = "Withdrawn — install again",
+    denied = "Denied",
+}
+local function ended_note(item: governed.Intent): string
+    return ENDED[tostring(item.outcome)] or "could not be installed"
+end
+
 local function waiting(item: governed.Intent): boolean
     return item.phase == "prepared" or item.phase == "approval_bound"
 end
@@ -304,12 +314,19 @@ local function shared_rows(state: State): {Row}
             if current == nil or M.compare(item.version, current.version) > 0 then best[group] = item end
         end
     end
+    -- The newest activation of a name it is not holding, when its install did not happen.
+    local last: {[string]: governed.Intent} = {}
+    for _, item in ipairs(state.governed.activations) do
+        if not last[item.source_workspace] then last[item.source_workspace] = item end
+    end
     for _, group in ipairs(order) do
         local item = assert(best[group])
+        local attempt = last[item.source_workspace]
         local spec: Spec = {key = "g:ver:" .. governed.available_key(item), origin = "governed", kind = "app",
             name = M.title(item.source_workspace), version = item.version, status = M.STATUS_SHARED,
             source = M.source(state, item.owner_id, item.author), available_key = governed.available_key(item),
-            app = item.source_workspace}
+            app = item.source_workspace,
+            note = attempt and attempt.phase == "settled" and attempt.outcome ~= "applied" and ended_note(attempt) or nil}
         rows[#rows + 1] = make(spec)
     end
     local catalog: {hub.Item} = {}
@@ -334,7 +351,7 @@ local function history_rows(state: State): {Row}
     for _, item in ipairs(state.governed.activations) do
         if item.phase == "settled" and item.outcome ~= "uncertain" then
             local status: Status = M.STATUS_SHARED
-            local note = "could not be installed"
+            local note = ended_note(item)
             if item.outcome == "applied" then
                 note = ""
                 status = (item.intent_id == item.observed_intent_id and item.observed_outcome == "applied")
@@ -373,12 +390,16 @@ function M.rows(state: State, tab: Tab?): {Row}
     return history_rows(state)
 end
 
--- The header's summary: how many applications and packages this bee holds and
--- how many others it could install.
+-- The header's summary: how many applications and packages this bee holds
+-- installed, leaving out installs still waiting or on their way, and how many
+-- others it could install.
 function M.summary(state: State): string
-    local shared = 0
+    local shared, installed = 0, 0
     for _, row in ipairs(shared_rows(state)) do if row.kind ~= "section" then shared = shared + 1 end end
-    return tostring(#installed_rows(state)) .. " installed · " .. tostring(shared) .. " shared"
+    for _, row in ipairs(installed_rows(state)) do
+        if row.status == M.STATUS_INSTALLED or row.status == M.STATUS_UPDATE then installed = installed + 1 end
+    end
+    return tostring(installed) .. " installed · " .. tostring(shared) .. " shared"
 end
 
 -- The rows the person is choosing among: the platform's packages on its

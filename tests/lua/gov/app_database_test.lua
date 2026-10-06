@@ -11,12 +11,8 @@ local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
 local json = require("json")
-local time = require("time")
-local env = require("env")
-local system = require("system")
-local client = require("client")
-local principal = require("principal")
 local application = require("application")
+local harness = require("harness")
 local registry = require("registry")
 
 -- The suite delivers the guide's example under an overlay of its own, so no
@@ -83,145 +79,18 @@ local function second_version(): {Object}
     return entries
 end
 
--- A workspace on the machine home folder no display watches, so the
--- approvals this suite raises present the Inbox on no desktop.
-local function isolated(): string
-    local path = assert(env.get("bee.env:machine_home"))
-    local added, err = client.call(assert(system.node.id()), "workspace_add", {path = path, label = "notesdb"})
-    if not added then error("workspace_add: " .. tostring(err)) end
-    return tostring(added.workspace)
-end
-
--- The node presents Needs you for an installation waiting for the person and
--- opens the application once it is installed, on desktops of the workspace;
--- the suite closes what it caused so later suites find the desktops as they
--- were.
-local function running(): {[string]: boolean}
-    local listed, err = client.call(assert(system.node.id()), "list", {})
-    if not listed then error("list: " .. tostring(err)) end
-    local ids: {[string]: boolean} = {}
-    for _, raw in ipairs((listed.running or {}) :: {unknown}) do
-        local instance = bounds.object(raw)
-        if instance then ids[tostring(instance.id)] = true end
-    end
-    return ids
-end
-local function close_presented(before: {[string]: boolean})
-    for id in pairs(running()) do
-        if not before[id] then
-            local _, err = client.call(assert(system.node.id()), "close", {id = id, force = true})
-            if err then error("close " .. id .. ": " .. tostring(err)) end
-        end
-    end
-end
-
-local function author(workspace: string): funcs.Executor
-    local actor = assert(security.new_actor("bee.tests.notesdb_author", {workspace_id = workspace}))
-    local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_overlay_policy")),
-        assert(security.policy("bee.security.gateway:gateway_tool_delivery_policy"))})
-    return funcs.new():with_actor(actor):with_scope(scope)
-end
-
-local function reply(raw: unknown, err: unknown): Object
-    if err then error(tostring(err)) end
-    return assert(bounds.object(raw))
-end
-
-local function value(answer: Object): Object
-    if answer.ok ~= true then
-        local fault = bounds.object(answer.error) or {}
-        error(tostring(fault.code or answer.code) .. ": " .. tostring(fault.message or answer.message))
-    end
-    return assert(bounds.object(answer.value))
-end
-
--- deliver writes the pack into the agent's overlay, freezes it and requests
--- delivery of the frozen snapshot.
-local function deliver(writer: funcs.Executor, workspace: string, entries: {Object}, version: string): Object
-    local listed = value(reply(writer:call("bee.gov.binding:overlay_call", {operation = "list"})))
-    local revision = 0
-    for _, raw in ipairs((listed.overlays or {}) :: {unknown}) do
-        local row = assert(bounds.object(raw))
-        if row.overlay_id == OVERLAY then revision = math.floor(tonumber(row.revision) or 0) end
-    end
-    if revision == 0 then
-        revision = math.floor(tonumber(value(reply(writer:call("bee.gov.binding:overlay_call", {operation = "create",
-            overlay_id = OVERLAY, expected_revision = 0, idempotency_key = OVERLAY .. "-create"}))).revision) or 0)
-    end
-    local put = value(reply(writer:call("bee.gov.binding:overlay_call", {operation = "put", overlay_id = OVERLAY,
-        expected_revision = revision, idempotency_key = OVERLAY .. "-put-" .. version, path = "entries.json",
-        content = assert(json.encode(entries))})))
-    local frozen = value(reply(writer:call("bee.gov.binding:overlay_call", {operation = "freeze", overlay_id = OVERLAY,
-        expected_revision = put.revision, idempotency_key = OVERLAY .. "-freeze-" .. version})))
-    return reply(writer:call("bee.gov.binding:delivery_call", {operation = "request", workspace_id = workspace,
-        source_overlay_id = OVERLAY, version = version, snapshot_digest = frozen.digest}))
-end
-
-local function inbox(workspace: string): funcs.Executor
-    local identity = assert(principal.value(workspace, "notesdb-inbox", "bee.approvals.inbox.app:app", "1", 1))
-    return funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata)))
-end
-
--- approve reads what Needs you shows for the installation and approves it.
-local function approve(workspace: string, approval_id: unknown): Object
-    local person = inbox(workspace)
-    local read = value(reply(person:call("bee.approvals.binding:read", {approval_id = approval_id})))
-    value(reply(person:call("bee.approvals.binding:decide", {approval_id = approval_id,
-        expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})))
-    return read
-end
-
--- installed runs the activation worker's pass the suites run themselves and
--- reads the delivery status until the activation settles.
-local function installed(writer: funcs.Executor, workspace: string, version: string, intent_id: unknown): Object
-    local worker = funcs.new():with_actor(assert(security.new_actor("bee.gov.activation")))
-    local drained, drain_error = worker:call("bee.tests.gov:activation_drain_probe", {})
-    if drain_error then error(tostring(drain_error)) end
-    local last: Object? = nil
-    for _ = 1, 8 do
-        local status = value(reply(writer:call("bee.gov.binding:delivery_call", {operation = "status",
-            workspace_id = workspace, source_overlay_id = OVERLAY, version = version, intent_id = intent_id})))
-        local activation = bounds.object(status.activation)
-        if activation and activation.phase == "settled" then
-            if activation.outcome ~= "applied" then
-                error("activation of " .. version .. " settled " .. tostring(activation.outcome) .. ": " .. tostring(json.encode(drained)))
-            end
-            return activation
-        end
-        last = activation
-        time.sleep("250ms")
-    end
-    error("activation of " .. version .. " did not settle: " .. tostring(json.encode(last)) .. " after " .. tostring(json.encode(drained)))
-end
-
 local function as_application(workspace: string, target: string, arguments: Object): Object
     local definition = assert(application.definition(APP))
     local actor = assert(application.actor(workspace, "notesdb-test", definition, 1))
     local scope = assert(application.scope(definition, workspace))
-    return value(reply(funcs.new():with_actor(actor):with_scope(scope):call(target, arguments)))
+    return harness.value(harness.reply(funcs.new():with_actor(actor):with_scope(scope):call(target, arguments)))
 end
 
 local function as_agent(workspace: string, tool: string, arguments: Object): Object
     local actor = assert(security.new_actor("bee.tests.notesdb_agent", {workspace_id = workspace}))
     local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_app_tools_policy"))})
-    return value(reply(funcs.new():with_actor(actor):with_scope(scope):call("bee.node.binding:app_tool_call",
+    return harness.value(harness.reply(funcs.new():with_actor(actor):with_scope(scope):call("bee.node.binding:app_tool_call",
         {tool = tool, arguments = arguments})))
-end
-
--- library acts as the person in the Library, which goes back and removes.
-local function library(workspace: string, request: Object): Object
-    local identity = assert(principal.value(workspace, "countdb-library", "bee.apps.library:app", "1", 1))
-    local scope = security.new_scope({assert(security.policy("bee.apps.library:destination_client")),
-        assert(security.policy("bee.apps.library:delivery_operations"))})
-    request.workspace_id = workspace
-    return reply(funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata))):with_scope(scope)
-        :call("bee.gov.binding:destination_call", request))
-end
-
--- settle installs a version through Needs you when it asks the person.
-local function settle(writer: funcs.Executor, workspace: string, delivered: Object, version: string): Object
-    if delivered.approval_id ~= nil then approve(workspace, delivered.approval_id) end
-    return installed(writer, workspace, version, delivered.intent_id)
 end
 
 local function counts(listed: Object): string
@@ -233,14 +102,14 @@ end
 local function define_tests()
     test.describe("application database through delivery", function()
         test.it("installs the database, runs its migrations forward only and shares the table with agents", function()
-            local workspace = isolated()
-            local writer = author(workspace)
-            local before = running()
+            local workspace = harness.isolated("notesdb")
+            local writer = harness.author(workspace, "notesdb")
+            local before = harness.running()
 
-            local first = value(deliver(writer, workspace, first_version(), "1.0.0"))
+            local first = harness.value(harness.deliver(writer, OVERLAY, workspace, first_version(), "1.0.0"))
             test.eq(first.pending_migrations, 1)
             test.eq(first.activation_phase, "approval_bound")
-            local shown = approve(workspace, first.approval_id)
+            local shown = harness.approve(workspace, first.approval_id)
             local proposal = assert(bounds.object((assert(bounds.object(shown.proposal))).payload))
             local migrations = assert(bounds.array(proposal.migrations, 8))
             test.eq((assert(bounds.object(migrations[1]))).id, NAMESPACE .. ":create_counts")
@@ -248,24 +117,24 @@ local function define_tests()
             local prompt = tostring((assert(bounds.object(shown.prompt))).text)
             test.eq(prompt:sub(1, #("Install " .. guide.TITLE .. " 1.0.0?")), "Install " .. guide.TITLE .. " 1.0.0?")
             test.is_true(prompt:find("It runs 1 database migration: " .. NAMESPACE .. ":create_counts on counts.", 1, true) ~= nil)
-            local first_outcome = installed(writer, workspace, "1.0.0", first.intent_id).outcome
-            close_presented(before)
+            local first_outcome = harness.installed(writer, OVERLAY, workspace, "1.0.0", first.intent_id).outcome
+            harness.close_presented(before)
             test.eq(first_outcome, "applied")
 
             as_application(workspace, NAMESPACE .. ":count_record", {value = 1})
             test.eq(as_agent(workspace, "counter_record", {value = 2}).recorded, 2)
             test.eq(counts(as_application(workspace, NAMESPACE .. ":count_list", {})), "1,2")
 
-            local second = value(deliver(writer, workspace, second_version(), "1.0.1"))
+            local second = harness.value(harness.deliver(writer, OVERLAY, workspace, second_version(), "1.0.1"))
             test.eq(second.pending_migrations, 1)
             test.eq(second.activation_phase, "approval_bound")
-            local upgrade = approve(workspace, second.approval_id)
+            local upgrade = harness.approve(workspace, second.approval_id)
             local upgrade_payload = assert(bounds.object((assert(bounds.object(upgrade.proposal))).payload))
             local upgrade_migrations = assert(bounds.array(upgrade_payload.migrations, 8))
             test.eq(#upgrade_migrations, 1)
             test.eq((assert(bounds.object(upgrade_migrations[1]))).id, NAMESPACE .. ":add_note")
-            local second_outcome = installed(writer, workspace, "1.0.1", second.intent_id).outcome
-            close_presented(before)
+            local second_outcome = harness.installed(writer, OVERLAY, workspace, "1.0.1", second.intent_id).outcome
+            harness.close_presented(before)
             test.eq(second_outcome, "applied")
             local listed = counts(as_agent(workspace, "counter_list", {}))
             test.eq(listed, "1:kept,2:kept")
@@ -273,7 +142,7 @@ local function define_tests()
 
             -- 1.0.0 came before add_note: going back would run it on a column it
             -- does not know, and the person reads why it stops.
-            local back = library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-1"})
+            local back = harness.library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-1"})
             local fault = assert(bounds.object(back.error))
             test.eq(fault.code, "BLOCKED")
             test.eq(fault.message, "Going back to 1.0.0 is not possible: a later version changed the saved data in "
@@ -281,24 +150,24 @@ local function define_tests()
 
             -- 1.0.2 adds no migration; going back to 1.0.1, which defines both,
             -- runs none and keeps the rows.
-            local third = value(deliver(writer, workspace, revised(second_version(), "3"), "1.0.2"))
+            local third = harness.value(harness.deliver(writer, OVERLAY, workspace, revised(second_version(), "3"), "1.0.2"))
             test.eq(third.pending_migrations, 0)
-            test.eq(settle(writer, workspace, third, "1.0.2").outcome, "applied")
-            close_presented(before)
-            local returned = value(library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-2"}))
-            close_presented(before)
+            test.eq(harness.settle(writer, OVERLAY, workspace, third, "1.0.2").outcome, "applied")
+            harness.close_presented(before)
+            local returned = harness.value(harness.library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-2"}))
+            harness.close_presented(before)
             test.eq(returned.phase, "settled")
             test.eq(returned.version, "1.0.1")
             test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
 
             -- Removal takes the application off and keeps its data: installing it
             -- again finds the rows, with no migration to run.
-            value(library(workspace, {operation = "uninstall", source_workspace = source, receipt_key = "countdb-remove"}))
+            harness.value(harness.library(workspace, {operation = "uninstall", source_workspace = source, receipt_key = "countdb-remove"}))
             test.is_nil((registry.get(APP)))
-            local again = value(deliver(writer, workspace, revised(second_version(), "4"), "1.0.3"))
+            local again = harness.value(harness.deliver(writer, OVERLAY, workspace, revised(second_version(), "4"), "1.0.3"))
             test.eq(again.pending_migrations, 0)
-            test.eq(settle(writer, workspace, again, "1.0.3").outcome, "applied")
-            close_presented(before)
+            test.eq(harness.settle(writer, OVERLAY, workspace, again, "1.0.3").outcome, "applied")
+            harness.close_presented(before)
             test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
         end)
     end)

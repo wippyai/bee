@@ -46,7 +46,11 @@ and says so. The removed version is listed in History as Removed.
 Install on a shared version runs the local path in one move: it receives the
 version, reads its checks, reviews, chooses it and prepares its activation,
 which raises one approval in Needs you; the activation worker applies it once
-the person approves, and the row follows it. Install and update of a Hub
+the person approves, and the row follows it. An install whose approval expired,
+was withdrawn or was denied leaves Installed: its version is back in Shared,
+noted "Approval expired — install again" or "Denied", and History keeps the
+attempt; Install asks the person anew. The header counts only installed
+versions, not installs waiting or on their way. Install and update of a Hub
 package open the package screens: details, changes, confirmation and result.
 
 The app calls two facades and nothing else. `bee.gov.binding:destination_call`

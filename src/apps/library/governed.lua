@@ -74,7 +74,8 @@ local MANIFEST_FIELDS = {"schema_revision", "source_workspace", "component", "ar
 local STATUSES: {[string]: boolean} = {staged = true, reviewed = true, rejected = true}
 local PHASES: {[string]: boolean} = {prepared = true, approval_bound = true, consuming = true,
     authorized = true, applying = true, settled = true}
-local OUTCOMES: {[string]: boolean} = {applied = true, blocked = true, failed = true, uncertain = true}
+local OUTCOMES: {[string]: boolean} = {applied = true, blocked = true, failed = true, uncertain = true,
+    denied = true, expired = true, withdrawn = true}
 
 local function object(value: unknown): Object?
     return bounds.object(value)

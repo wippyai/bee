@@ -127,6 +127,34 @@ local function define_tests()
             test.eq(history[1].note, "could not be installed")
         end)
 
+        test.it("returns a version whose approval expired or was denied to Shared, to install again", function()
+            local state = fresh()
+            load(state, {version("tally", "1.0.0", "node-laptop"), version("notes", "1.0.0", "node-laptop")},
+                {activation("i6", "tally", "1.0.0", "settled", "expired", nil, "node-laptop"),
+                    activation("i7", "notes", "1.0.0", "settled", "denied", nil, "node-laptop")})
+            test.eq(#model.rows(state, "installed"), 0)
+            test.eq(model.summary(state), "0 installed · 2 shared")
+            local shared: {[string]: string} = {}
+            for _, row in ipairs(model.rows(state, "shared")) do
+                test.eq(row.status, "Shared")
+                shared[row.name] = row.note
+            end
+            test.eq(shared["Tally"], "Approval expired — install again")
+            test.eq(shared["Notes"], "Denied")
+            local history: {[string]: string} = {}
+            for _, row in ipairs(model.rows(state, "history")) do history[row.name] = row.note end
+            test.eq(history["Tally"], "Approval expired — install again")
+            test.eq(history["Notes"], "Denied")
+        end)
+
+        test.it("counts only installed versions in the header", function()
+            local state = fresh()
+            load(state, {}, {activation("i2", "tally", "1.0.0", "approval_bound", nil, nil, "node-laptop"),
+                activation("i1", "notes", "1.0.1", "settled", "applied", "i1")})
+            test.eq(#model.rows(state, "installed"), 2)
+            test.eq(model.summary(state), "1 installed · 0 shared")
+        end)
+
         test.it("lists what the person uses and folds Bee's platform into one row", function()
             local state = fresh()
             hub.apply_installed(state.hub, hub_reply({modules = {

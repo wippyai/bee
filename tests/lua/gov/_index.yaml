@@ -518,6 +518,36 @@ entries:
     preflight: bee.gov.binding:preflight
     version: bee.sync.values:version
     canonical: bee.values:canonical
+- name: hive_delivery_test
+  kind: function.lua
+  source: file://hive_delivery_test.lua
+  method: run
+  modules:
+  - hash
+  - uuid
+  meta:
+    type: test
+    suite: bee
+  security:
+    policies:
+    - bee.tests.gov:plan_test_policy
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    delivery: bee.gov.types:delivery
+    publisher: bee.gov.binding:publisher
+    destination: bee.gov.binding:destination
+    activation_owner: bee.gov.binding:activation_owner
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    replicas: bee.sync.persist:replicas
+    sync: bee.sync.persist:store
+    preflight: bee.gov.binding:preflight
+    governed: bee.apps.library:governed
+    library: bee.apps.library:model
 - name: delivery_test
   kind: function.lua
   source: file://delivery_test.lua

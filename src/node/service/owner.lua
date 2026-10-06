@@ -25,8 +25,6 @@ local process = require("process")
 local channel = require("channel")
 local system = require("system")
 local registry = require("registry")
-local security = require("security")
-local principal = require("principal")
 local tty = require("tty")
 local uuid = require("uuid")
 local logger = require("logger")
@@ -37,8 +35,7 @@ local appearance = require("appearance")
 local client = require("client")
 local eventbus = require("events")
 local descriptor = require("descriptor")
-local governed_admission = require("governed_admission")
-local application_admissions = require("application_admissions")
+local application = require("application")
 local broker = require("broker")
 local command = require("command")
 local arguments = require("arguments")
@@ -62,7 +59,7 @@ type SavedInstance = {id: string, app: string, title: string, desktop: string, w
     singleton: boolean}
 type SavedWatcher = {pid: string, desktop: string}
 type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer}
-type Definition = {process: string, title: string, terminal: boolean, revision: string, resume_schema: string, singleton: boolean}
+type Definition = application.Definition
 
 local NAME = "bee.node"
 -- Bee components announce what needs the person on this event system: a
@@ -71,25 +68,7 @@ local ATTENTION = "bee.attention"
 local APPROVALS_ROLE = "approvals"
 local APP_TYPE = "bee.app"
 local MENU_TYPE = "bee.menu"
--- Every app runs inside one of these policy groups; its process entry and
--- its admission add what the app may do. An admission marked
--- scope_management selects the group that lets the app build call scopes.
-local APPLICATION_SCOPE = "bee.node.security:application"
-local SCOPE_MANAGING_SCOPE = "bee.node.security:scope_managing_application"
-local ADMISSION_TYPE = "bee.node.application_admission"
 local DEFAULT_WIDTH, DEFAULT_HEIGHT = 80, 24
-
--- app_definition is the app process entry id declares, from its
--- meta.application descriptor.
-local function app_definition(id: string): (Definition?, string?)
-    local entry, err = registry.get(id)
-    if not entry then return nil, "unknown app " .. id .. ": " .. tostring(err) end
-    if entry.kind ~= "process.lua" or entry.meta.type ~= descriptor.TYPE then return nil, id .. " is not an app" end
-    local declared = descriptor.decode(id, entry.meta.application)
-    if not declared then return nil, id .. " declares no valid application" end
-    return {process = id, title = declared.title, terminal = declared.terminal, revision = declared.definition_revision,
-        resume_schema = declared.resume_schema, singleton = declared.singleton}, nil
-end
 
 -- role_app is the installed app declaring role, the first by id.
 local function role_app(role: string): string?
@@ -100,43 +79,6 @@ local function role_app(role: string): string?
         if declared and declared.role == role and (found == nil or entry.id < found) then found = entry.id end
     end
     return found
-end
-
--- admission is the binding that admits definition_id in workspace_id: the
--- host's own admissions first, then the overlays governance admitted for the
--- workspace, then the packages it composes.
-local function admission(definition_id: string, workspace_id: string): (governed_admission.Binding?, string?)
-    for _, entry in ipairs(registry.find({[".kind"] = "registry.entry", ["meta.type"] = ADMISSION_TYPE}) or {}) do
-        local data: unknown = entry.data
-        local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
-        if not bindings then return nil, "admission " .. entry.id .. ": " .. tostring(bindings_error) end
-        for _, binding in ipairs(bindings) do
-            if binding.definition_id == definition_id then return binding, nil end
-        end
-    end
-    local pinned = assert(registry.snapshot())
-    local selection, selection_error = application_admissions.read(pinned, pinned:version():string(), workspace_id,
-        assert(system.node.id()))
-    if not selection then return nil, selection_error end
-    for _, source in ipairs({selection.governed, selection.packages}) do
-        for _, measured in ipairs(source) do
-            for _, binding in ipairs(measured.record.bindings) do
-                if binding.definition_id == definition_id then return binding, nil end
-            end
-        end
-    end
-    return nil, nil
-end
-
--- application_actor is the actor an app instance runs as; owners such as
--- Threads and the approval owner authorize by the workspace and definition it
--- carries.
-local function application_actor(workspace_id: string, instance_id: string, definition: Definition, generation: integer): (security.Actor?, string?)
-    local value = principal.value(workspace_id, instance_id, definition.process, definition.revision, generation)
-    if not value then return nil, "application principal is invalid" end
-    local actor, err = security.new_actor(value.id, value.metadata)
-    if not actor then return nil, "application principal: " .. tostring(err) end
-    return actor, nil
 end
 
 -- words are the string arguments an open passed, in order.
@@ -287,25 +229,6 @@ local function main(saved: unknown)
             error("publish node owner: " .. tostring(publish_error))
         end
     end
-    local application_scope, scope_error = security.named_scope(APPLICATION_SCOPE)
-    if not application_scope then error("application scope: " .. tostring(scope_error)) end
-    local managing_scope, managing_error = security.named_scope(SCOPE_MANAGING_SCOPE)
-    if not managing_scope then error("scope-managing application scope: " .. tostring(managing_error)) end
-
-    -- app_scope is the scope an app instance runs in: its boundary group and
-    -- the policies its admission names.
-    local function app_scope(definition: Definition, workspace_id: string): (security.Scope?, string?)
-        local binding, admission_error = admission(definition.process, workspace_id)
-        if admission_error then return nil, "admission: " .. admission_error end
-        if not binding then return application_scope, nil end
-        local scope = binding.scope_management and managing_scope or application_scope
-        for _, id in ipairs(binding.policies) do
-            local policy, policy_error = security.policy(id)
-            if not policy then return nil, "admitted policy " .. id .. ": " .. tostring(policy_error) end
-            scope = scope:with(policy)
-        end
-        return scope, nil
-    end
     local folder = assert(system.process.cwd())
     local home, home_error = workspaces.ensure(folder, nil)
     if not home then error("register folder workspace: " .. tostring(home_error)) end
@@ -420,7 +343,7 @@ local function main(saved: unknown)
     -- the one given; a kept instance reopens under its own id in the
     -- workspace it was opened in.
     local function start(id: string, app: string, desktop_id: string, app_args: {[string]: unknown}, workspace_id: string?): (Instance?, string?)
-        local definition, problem = app_definition(app)
+        local definition, problem = application.definition(app)
         if not definition then return nil, problem end
         local desktop, desktop_error = workspaces.desktop(desktop_id)
         if not desktop then return nil, desktop_error end
@@ -430,12 +353,12 @@ local function main(saved: unknown)
             page = appearance.page(current.theme, definition.terminal)})
         if not view then return nil, "viewport: " .. tostring(view_error) end
         local grant = assert(view:grant())
-        local actor, actor_error = application_actor(workspace.id, id, definition, 1)
+        local actor, actor_error = application.actor(workspace.id, id, definition, 1)
         if not actor then
             view:close()
             return nil, actor_error
         end
-        local scope, scope_problem = app_scope(definition, workspace.id)
+        local scope, scope_problem = application.scope(definition, workspace.id)
         if not scope then
             view:close()
             return nil, scope_problem
@@ -606,7 +529,7 @@ local function main(saved: unknown)
         end
         -- A singleton app already running on the desktop is the one opened;
         -- the arguments it is opened with reach it as navigation.
-        local definition = app_definition(app)
+        local definition = application.definition(app)
         if definition and definition.singleton then
             for _, running in pairs(instances) do
                 if running.app == app and running.desktop == desktop then

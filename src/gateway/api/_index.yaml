@@ -173,6 +173,7 @@ entries:
     node_tests: bee.node:tests
     docs_protocol: bee.docs:protocol
     json_schema: bee.gateway.catalog:json_schema
+    gateway_protocol: bee.gateway:protocol
     canonical: bee.values:canonical
     record_bounds: bee.threads.records:bounds
 - name: gateway_endpoint

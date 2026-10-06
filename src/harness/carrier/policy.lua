@@ -11,6 +11,7 @@ local placement_types = require("placement_types")
 local configuration = require("configuration")
 local preferences = require("preferences")
 local mcp = require("mcp")
+local gateway_protocol = require("gateway_protocol")
 local surface = require("surface")
 local M = {}
 M.MAX_AGENT_DELEGATES = 16
@@ -276,20 +277,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not effective then return nil, effective_error end
         gateway_tools = effective
     else
-        -- Without the person's own selection a launch leaves out the tools
-        -- that need their consent, unless the declared surface offers the
-        -- tool's trait as requestable access for the person to approve.
-        local requestable: {[string]: boolean} = {}
-        local declared_surface = bounds.object(data.gateway_surface)
-        local declared_access = declared_surface and bounds.object(declared_surface.access) or nil
-        local traits = declared_access and bounds.ids(declared_access.traits, true) or nil
-        for _, id in ipairs(traits or {}) do requestable[id] = true end
-        local offered: {string} = {}
-        for _, name in ipairs(admitted_tools) do
-            local trait = mcp.consent_trait(name)
-            if not trait or requestable[trait] then offered[#offered + 1] = name end
-        end
-        gateway_tools = offered
+        gateway_tools = gateway_protocol.offered_tools(admitted_tools, data.gateway_surface, false)
     end
     local agent_model_map: {[string]: string} = {}
     if data.agent_model_map ~= nil then

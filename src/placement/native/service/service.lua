@@ -397,6 +397,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if not hooks then return nil, nil, "launch policy gateway_hooks: " .. tostring(hooks_error) end
     hooks = resolver.select_hooks(selected_profile, hooks)
     table.sort(tools)
+    tools = gateway_protocol.offered_tools(tools, data.gateway_surface, request.preferences ~= nil)
     local gateway: configuration_protocol.GatewayInput? = nil
     if #tools > 0 or #hooks > 0 then
         local endpoint, endpoint_error = gateway_configuration.endpoint()

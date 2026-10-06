@@ -7,6 +7,7 @@ local record_bounds = require("record_bounds")
 local message = require("message")
 local workspace_protocol = require("workspace_protocol")
 local docs_protocol = require("docs_protocol")
+local gateway_protocol = require("gateway_protocol")
 local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local session_tools = require("session_tools")
@@ -342,15 +343,9 @@ M.APPLICATION_RUNTIME_TRAIT = {id = "bee.app:runtime", title = "Application runt
     tools = {"application_open"}}
 -- The built-in trait that offers the application tools of the bound
 -- workspace; a person enables it in the profile or approves it as access.
-M.APPLICATION_TOOLS_TRAIT = {id = "bee.app:tools", title = "Application tools",
+M.APPLICATION_TOOLS_TRAIT = {id = gateway_protocol.APPLICATION_TOOLS_TRAIT_ID, title = "Application tools",
     prompt = "Call the tools this workspace's applications offer agents. Each runs as its application with only the grants the person approved for it; app_tools lists them.",
     tools = {"app_tools"}}
--- Tools a launch offers only when the person chose them in the profile or
--- the launch policy offers their trait as requestable access.
-local CONSENT_TOOLS: {[string]: string} = {app_tools = M.APPLICATION_TOOLS_TRAIT.id}
-function M.consent_trait(name: string): string?
-    return CONSENT_TOOLS[name]
-end
 -- Each advertised tool carries its own annotations.
 M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
 function M.tool(name: string): Tool?

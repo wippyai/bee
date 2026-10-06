@@ -206,4 +206,28 @@ function M.hook_claim(value: unknown, expected_binding: string, expected_epoch: 
     return {binding_id = binding_id, carrier_epoch = carrier_epoch, hooks = hooks}, nil
 end
 
+-- The trait a person approves before an agent may use application tools.
+M.APPLICATION_TOOLS_TRAIT_ID = "bee.app:tools"
+-- Tools a launch offers only with the person's consent, by the trait the
+-- person approves as requestable access.
+M.CONSENT_TOOLS = {app_tools = M.APPLICATION_TOOLS_TRAIT_ID}
+-- offered_tools is the gateway tool list a launch hands its child. With the
+-- person's profile selection it is every declared tool, which the gateway
+-- narrows per call; without one it leaves out each consent tool whose trait
+-- the declared surface does not offer as requestable access. The planner and
+-- placement both derive the list here, so their configuration digests agree.
+function M.offered_tools(declared: {string}, surface: unknown, selected: boolean): {string}
+    if selected then return declared end
+    local requestable: {[string]: boolean} = {}
+    local declared_surface = bounds.object(surface)
+    local access = declared_surface and bounds.object(declared_surface.access) or nil
+    local traits = access and bounds.ids(access.traits, true) or nil
+    for _, id in ipairs(traits or {}) do requestable[id] = true end
+    local offered: {string} = {}
+    for _, name in ipairs(declared) do
+        local trait = M.CONSENT_TOOLS[name]
+        if not trait or requestable[trait] then offered[#offered + 1] = name end
+    end
+    return offered
+end
 return M

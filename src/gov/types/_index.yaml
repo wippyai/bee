@@ -154,6 +154,7 @@ entries:
   - hash
   imports:
     bounds: bee.values:bounds
+    clock: bee.values:clock
     canonical: bee.values:canonical
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants

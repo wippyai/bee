@@ -23,6 +23,11 @@ local function fixture(): {[string]: unknown}
                     text = "Use an isolated application database named {name}",
                     policies = {{operation = "database.use", resource = "$name", scope = {name = "$name"}}},
                     resources = {{kind = "db.sql.sqlite", mode = "dedicated", source = "$name"}}},
+                {id = "process.exec", revision = 1, confirm = "explicit",
+                    parameters = {command = "command", directory = "relative_subpath"},
+                    text = "Run {command} in workspace folder {directory}", modules = {"exec"}, tools = {"process_run"},
+                    policies = {{operation = "process.exec", resource = "$command", scope = {subpath = "$directory"}}},
+                    resources = {{kind = "exec.native", mode = "scoped", source = "host_generated_executor"}}},
             }}}
 end
 
@@ -125,6 +130,33 @@ local function define_tests()
             test.eq(write.ttl_ms, 60000)
             test.eq(write.purpose, "session")
             test.eq(write.audience, "thread-actor-1")
+        end)
+        test.it("realizes a tool-exercised capability as the approval itself, with no resource row", function()
+            local decoded = fixture()
+            local request = assert(capability.request(decoded, CONTEXT,
+                {capability = "process.exec", parameters = {command = "/usr/bin/make test", directory = "src"}, ttl_ms = 60000}))
+            test.eq(table.concat(request.tools, ","), "process_run")
+            test.is_nil(request.grant_source)
+            test.is_true(capability.wording(request):find("Run /usr/bin/make test in workspace folder src", 1, true) ~= nil)
+            local _, no_row = capability.grant_write(request, "ws-1", "thread-actor-1")
+            test.eq(no_row, "capability names no workspace resource grant")
+            local consumed_at = "2026-10-06T10:00:00.000Z"
+            local base = 1791280800000
+            local view = {approval_id = "approval-1", state = "decided", decision = "approved",
+                consumer_id = "agent-1", consumed_effect = "capability:approval-1", consumed_at = consumed_at}
+            test.eq(capability.held(request, view, "agent-1", "process_run", base + 1000), base + 60000)
+            local _, expired = capability.held(request, view, "agent-1", "process_run", base + 60000)
+            test.eq(expired, "the approved capability has expired")
+            local _, other_tool = capability.held(request, view, "agent-1", "http_request", base + 1000)
+            test.eq(other_tool, "the approved capability is not exercised through http_request")
+            local _, other_subject = capability.held(request, view, "agent-2", "process_run", base + 1000)
+            test.eq(other_subject, "the approval is not consumed for this grant")
+            view.consumed_effect = "hub-install:approval-1"
+            local _, other_effect = capability.held(request, view, "agent-1", "process_run", base + 1000)
+            test.eq(other_effect, "the approval is not consumed for this grant")
+            view.consumed_effect, view.decision = "capability:approval-1", "denied"
+            local _, denied = capability.held(request, view, "agent-1", "process_run", base + 1000)
+            test.eq(denied, "the capability is not approved")
         end)
         test.it("rejects capabilities that the install-time generator cannot realize", function()
             local decoded = fixture()

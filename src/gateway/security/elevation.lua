@@ -3,11 +3,14 @@
 -- agent attempt asks for one host catalog capability; the person decides
 -- on the catalog's own wording bound to that thread and attempt. On
 -- approval the gateway consumes the decision and writes one resources
--- grant row for the authenticated thread actor. Decisions remain in the
--- approval owner; the gateway records only the resulting grant effect.
+-- grant row for the authenticated thread actor, or, for a capability the
+-- catalog exercises through gateway tools, the consumed decision is the
+-- grant those tools check on every use until its TTL ends. Decisions
+-- remain in the approval owner; the gateway records only the grant effect.
 local hash = require("hash")
 local registry = require("registry")
 local bounds = require("bounds")
+local clock = require("clock")
 local canonical = require("canonical")
 local capability = require("capability")
 local subject_call = require("subject_call")
@@ -21,6 +24,7 @@ type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, workspace_id: string?}
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
 type Approvals = (string, Object) -> Reply
+type Held = capability.Request
 local fail = subject_call.fail
 -- The approval bound to this thread and attempt is the authority for every
 -- effect; the scope is server-side plumbing.
@@ -33,11 +37,15 @@ local function grant(binding: Binding, value: Object): Reply
     return subject_call.call(binding, {M.ELEVATION_CALL_POLICY, linked[1], linked[2], M.GRANT_THREAD_POLICY},
         M.GRANT_CALL, value)
 end
+-- A resource-backed capability needs a grantable workspace association; a
+-- tool-exercised one names none.
 local function check_resource(binding: Binding, request: capability.Request): Reply
     local workspace_id = binding.workspace_id
     if not workspace_id then return fail("DENIED", "this binding names no workspace to elevate a capability in") end
+    local source, access = request.grant_source, request.grant_access
+    if not source or not access then return {ok = true, value = nil} end
     return subject_call.call(binding, {M.ELEVATION_CALL_POLICY, M.GRANT_THREAD_POLICY}, M.RESOURCE_CHECK,
-        {workspace_id = workspace_id, name = request.grant_source, access = request.grant_access})
+        {workspace_id = workspace_id, name = source, access = access})
 end
 local function catalog_entry(): (unknown?, Reply?)
     local entry, entry_error = registry.get(M.CATALOG_ENTRY)
@@ -125,8 +133,16 @@ function M.status(binding: Binding, policy_name: string, approval_id_raw: unknow
     end
     local resource = check_resource(binding, request)
     if not resource.ok then return resource end
-    local consumed = subject_call.consume(owner, approval_id, expected, "capability:" .. approval_id, view.owner_incarnation)
+    local consumed = subject_call.consume(owner, approval_id, expected, capability.held_effect(approval_id),
+        view.owner_incarnation)
     if not consumed.ok then return consumed end
+    if not request.grant_source then
+        local expires, held_error = capability.held(request, consumed.value, binding.subject, request.tools[1],
+            clock.milliseconds())
+        if not expires then return fail("DENIED", held_error or "approved capability is not held") end
+        return {ok = true, value = {approval_id = approval_id, status = "granted", expires_at = clock.stamp(expires),
+            tools = request.tools}}
+    end
     local write, write_error = capability.grant_write(request, binding.workspace_id, binding.subject)
     if not write then return fail("DENIED", write_error or "approved capability writes no grant") end
     local granted = grant(binding, write)
@@ -136,5 +152,23 @@ function M.status(binding: Binding, policy_name: string, approval_id_raw: unknow
     if not grant_id then return fail("UNAVAILABLE", "grant write returned no grant") end
     return {ok = true, value = {approval_id = approval_id, status = "granted", grant_id = grant_id,
         expires_at = row.expires_at, authorization_epoch = row.authorization_epoch}}
+end
+-- held: the approved capability a tool exercises, re-measured against the
+-- current catalog and checked as approved, consumed by this subject and not
+-- expired on every use.
+function M.held(binding: Binding, policy_name: string, approval_id_raw: unknown, tool: string): (capability.Request?, Reply?)
+    local approval_id = bounds.id(approval_id_raw)
+    if not approval_id then return nil, fail("INVALID", "approval_id is required") end
+    local entry, entry_error = catalog_entry()
+    if not entry then return nil, entry_error end
+    local read = approvals(binding)("read", {approval_id = approval_id})
+    if not read.ok then return nil, read end
+    local view = bounds.object(read.value)
+    if not view then return nil, fail("UNAVAILABLE", "invalid approval read") end
+    local request, _, verify_error = verified(binding, policy_name, entry, view)
+    if not request then return nil, verify_error or fail("DENIED", "approval carries no capability proposal") end
+    local expires, held_error = capability.held(request, view, binding.subject, tool, clock.milliseconds())
+    if not expires then return nil, fail("DENIED", held_error or "approved capability is not held") end
+    return request, nil
 end
 return M

@@ -365,10 +365,8 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
 
     local pending: {preflight.Migration} = {}
     for _, key in ipairs(report.pending_migrations) do
-        local separator = key:find("\n", 1, true)
-        local target_db = separator and key:sub(1, separator - 1) or ""
-        local id = separator and key:sub(separator + 1) or ""
-        local item = migrations_by_key[target_db .. "\n" .. id]
+        local target_db, id = preflight.migration_parts(key)
+        local item = target_db and id and migrations_by_key[preflight.migration_key({target_db = target_db, id = id})] or nil
         if not item then return nil, "preflight migration is outside the exact candidate" end
         pending[#pending + 1] = item
     end

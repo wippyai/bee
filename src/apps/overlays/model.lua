@@ -647,7 +647,8 @@ function M.review_rows(state: State): {ReviewRow}
             put("    remedy " .. bounds.line(diagnostic.remedy, 240), false)
         end
         for _, pending in ipairs(report.pending_migrations) do
-            put("PENDING_MIGRATION  " .. bounds.line(pending, 200), false)
+            local target_db, id = preflight.migration_parts(pending)
+            put("PENDING_MIGRATION  " .. (bounds.line(id, 200) or "unreadable") .. " on " .. (bounds.line(target_db, 160) or "unreadable"), false)
         end
         if #report.diagnostics == 0 and #report.pending_migrations == 0 then
             put("No diagnostics and no pending migrations", false)

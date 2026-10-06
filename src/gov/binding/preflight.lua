@@ -65,8 +65,14 @@ local CONFIG_OBJECTS: {[string]: {[string]: boolean}} = {
 -- configuration-shape rule from the tables that enforce it, not from memory.
 M.CONFIG_LISTS = CONFIG_LISTS
 M.CONFIG_OBJECTS = CONFIG_OBJECTS
-local function migration_key(item: Migration): string
+-- A pending migration is reported as its target database and its entry id,
+-- joined by a newline; migration_parts reads one back.
+function M.migration_key(item: {target_db: string, id: string}): string
     return item.target_db .. "\n" .. item.id
+end
+function M.migration_parts(key: string): (string?, string?)
+    local target_db, id = key:match("^([^\n]+)\n([^\n]+)$")
+    return target_db, id
 end
 local function normalize_report(raw: unknown): (Report?, string?)
     if type(raw) ~= "table" then return nil, "preflight report must be an object" end
@@ -639,7 +645,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     local pending: {Migration} = {}
     for _, item in ipairs(candidate.migrations) do
         if not identifier(item.id) or not identifier(item.target_db) or not digest(item.checksum) or item.ordinal < 1 then return nil, "invalid migration measurement" end
-        local key = migration_key(item)
+        local key = M.migration_key(item)
         local ordinal = item.target_db .. "\n" .. tostring(item.ordinal)
         if migrations[key] or ordinals[ordinal] then issue("MIGRATION_COLLISION", item.id, "duplicate migration identity or order", "append a uniquely ordered migration") end
         migrations[key], ordinals[ordinal] = item, true
@@ -697,7 +703,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     local measured, measure_error = hash.sha256(measurement)
     if not measured then return nil, tostring(measure_error) end
     local pending_ids: {string} = {}
-    for _, item in ipairs(pending) do pending_ids[#pending_ids + 1] = migration_key(item) end
+    for _, item in ipairs(pending) do pending_ids[#pending_ids + 1] = M.migration_key(item) end
     return {schema_revision = "bee.governance-preflight@1", plan_digest = measured, destination_node = context.node_id,
         base_revision = candidate.base_revision, policy_digest = context.policy_digest, ready = #diagnostics == 0,
         diagnostics = diagnostics, pending_migrations = pending_ids}, nil

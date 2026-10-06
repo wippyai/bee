@@ -520,7 +520,6 @@ local function main(value: unknown)
         end
     end
     ticker:stop()
-    mesh:close()
     process.unlisten(states)
     process.unlisten(answers); process.unlisten(navigations)
     output:close()

@@ -102,6 +102,31 @@ local function define_tests()
             test.is_true(rendered:find("unbound", 1, true) ~= nil)
         end)
 
+        test.it("lists each pending migration by its id and the database it changes", function()
+            local state = model.new("workspace-destination")
+            local digest = string.rep("a", 64)
+            local bytes, measured = preflight.encode_report({schema_revision = "bee.governance-preflight@1",
+                plan_digest = digest, destination_node = "node-destination", base_revision = 7,
+                policy_digest = digest, ready = true, diagnostics = {},
+                pending_migrations = {preflight.migration_key({target_db = "notes", id = "app.notes:create_notes"})}})
+            if not bytes or not measured then error("valid preflight report fixture was rejected") end
+            local row: {[string]: unknown} = {owner_node = "node-destination",
+                workspace_id = "workspace-destination", source_node = "node-source",
+                source_workspace = "notes", version = "1.0.0", plan_digest = digest,
+                candidate_digest = digest, artifact_digest = digest, preflight_digest = measured,
+                revision = 1, status = "staged", selected = false}
+            model.toggle_pane(state)
+            model.apply_list(state, {ok = true, error = nil, replayed = false, value = {owner_node = "node-destination",
+                workspace_id = "workspace-destination", plans = {row}}})
+            local detail: {[string]: unknown} = {}
+            for key, value in pairs(row) do detail[key] = value end
+            detail.preflight_bytes = bytes
+            model.apply_plan(state, {ok = true, error = nil, replayed = false, value = detail})
+            model.toggle_pane(state)
+            local rendered = table.concat(view.draw(100, 26, appearance.defaults(), state, 0).rows, "\n")
+            test.is_true(rendered:find("PENDING_MIGRATION  app.notes:create_notes on notes", 1, true) ~= nil, rendered)
+        end)
+
         test.it("fills every compact canvas without leaking control text", function()
             local state = model.new("workspace-destination")
             state.notice = "unsafe \27[31m notice \7"

@@ -660,7 +660,7 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
     if not policies then return storage(policies_error or "approver policies") end
     local policy = policies[policy_name]
     if not policy then return failure("NOT_FOUND", "approver policy " .. policy_name .. " is not configured on this host") end
-    local ttl = math.min(M.DEFAULT_TTL_MS, policy.max_ttl_ms)
+    local ttl = math.min(policy.request_ttl_ms or M.DEFAULT_TTL_MS, policy.max_ttl_ms)
     if object.ttl_ms ~= nil then
         local declared = bounds.integer(object.ttl_ms)
         if not declared or declared < 1 then return failure("INVALID_ARGUMENT", "ttl_ms must be a positive integer") end

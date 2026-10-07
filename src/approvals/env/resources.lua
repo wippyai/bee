@@ -8,7 +8,7 @@ M.THREAD_APPEND = "bee.threads.binding:append"
 type DefinitionSelector = {definition_id: string}
 type Approver = string | DefinitionSelector
 type Confirmation = "standard" | "explicit"
-type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer, confirm: Confirmation}
+type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer, request_ttl_ms: integer?, confirm: Confirmation}
 M.MAX_POLICIES = 64
 M.MAX_APPROVERS = 64
 M.MAX_TTL_MS = 31536000000
@@ -41,7 +41,7 @@ function M.policies(): ({[string]: Policy}?, string?)
     for _, raw in ipairs(listed) do
         local item = bounds.object(raw)
         if not item then return nil, "approver policy is not an object" end
-        local extra = bounds.fields(item, {"name", "approvers", "max_ttl_ms", "confirm"})
+        local extra = bounds.fields(item, {"name", "approvers", "max_ttl_ms", "request_ttl_ms", "confirm"})
         if extra then return nil, "approver policy: " .. extra end
         local name = bounds.id(item.name)
         if not name then return nil, "approver policy has no valid name" end
@@ -51,6 +51,15 @@ function M.policies(): ({[string]: Policy}?, string?)
         if #approvers == 0 then return nil, "approver policy " .. name .. " has no approvers" end
         local ttl = bounds.integer(item.max_ttl_ms)
         if not ttl or ttl < 1 or ttl > M.MAX_TTL_MS then return nil, "approver policy " .. name .. " has invalid max_ttl_ms" end
+        -- How long a request under the policy waits for its approvers when its
+        -- requester names no lifetime: a person's decision waits for the person.
+        local request_ttl: integer? = nil
+        if item.request_ttl_ms ~= nil then
+            request_ttl = bounds.integer(item.request_ttl_ms)
+            if not request_ttl or request_ttl < 1 or request_ttl > M.MAX_TTL_MS then
+                return nil, "approver policy " .. name .. " has invalid request_ttl_ms"
+            end
+        end
         -- A host may demand an explicit confirmation for a policy; the default
         -- is a standard decision. The owner records the value so a consumer
         -- such as the super-edit admission can require it.
@@ -85,7 +94,7 @@ function M.policies(): ({[string]: Policy}?, string?)
                 return nil, "approver policy " .. name .. " lists an invalid approver selector"
             end
         end
-        policies[name] = {name = name, approvers = subjects, max_ttl_ms = ttl, confirm = confirm}
+        policies[name] = {name = name, approvers = subjects, max_ttl_ms = ttl, request_ttl_ms = request_ttl, confirm = confirm}
     end
     return policies, nil
 end

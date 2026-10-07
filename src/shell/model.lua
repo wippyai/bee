@@ -29,8 +29,10 @@ type Scene = {
 
 local M = {}
 
-local DEFAULT_WIDTH = 64
-local DEFAULT_HEIGHT = 20
+-- The smallest window a display hands an application: the compact frame size,
+-- where an application draws its action bar and footer.
+local DEFAULT_WIDTH = 80
+local DEFAULT_HEIGHT = 24
 local CASCADE_X = 4
 local CASCADE_Y = 2
 

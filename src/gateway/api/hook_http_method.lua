@@ -26,13 +26,14 @@ local function admitted(request: http.Request, response: http.Response): (gatewa
     return result.binding, result.action_id
 end
 local function submit(): nil
-    local request = http.request()
+    local request = http.request({max_body = hooks.MAX_PAYLOAD_BYTES})
     local response = http.response()
     if not request or not response then return nil end
     local binding = admitted(request, response)
     if not binding then return nil end
-    local raw = request:body() or ""
-    if #raw > hooks.MAX_PAYLOAD_BYTES then refuse(response, 413, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes"); return nil end
+    local raw, read_error = request:body()
+    if read_error and read_error:kind() == errors.INVALID then refuse(response, 413, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes"); return nil end
+    if read_error or not raw then refuse(response, http.STATUS.BAD_REQUEST, "hook payload is unreadable"); return nil end
     local body: unknown, body_error = json.decode(raw)
     if body_error or type(body) ~= "table" then refuse(response, http.STATUS.BAD_REQUEST, "hook payload is not a JSON object"); return nil end
     local payload = bounds.object(body)

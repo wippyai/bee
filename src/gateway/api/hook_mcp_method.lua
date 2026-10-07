@@ -22,7 +22,7 @@ local HOOK_TOOL = {name = "hook", description = "Submit one hook observation abo
                 properties = {code = {type = "string"}, message = {type = "string"},
                     field = {type = "string"}, retryable = {type = "boolean"}, remedy = {type = "string"}}}}}}
 local function handle(): nil
-    local request = http.request()
+    local request = http.request({max_body = hooks.MAX_PAYLOAD_BYTES})
     local response = http.response()
     if not request or not response then return nil end
     local admitted = transport_admission.check(request, "hook")
@@ -31,8 +31,9 @@ local function handle(): nil
         return nil
     end
     local binding = admitted.binding
-    local raw = request:body() or ""
-    if #raw > hooks.MAX_PAYLOAD_BYTES then answer(response, 413, mcp.failure(nil, mcp.INVALID_REQUEST, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes")); return nil end
+    local raw, read_error = request:body()
+    if read_error and read_error:kind() == errors.INVALID then answer(response, 413, mcp.failure(nil, mcp.INVALID_REQUEST, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes")); return nil end
+    if read_error or not raw then answer(response, http.STATUS.BAD_REQUEST, mcp.failure(nil, mcp.INVALID_REQUEST, "hook payload is unreadable")); return nil end
     local body: unknown, body_error = json.decode(raw)
     if body_error then answer(response, http.STATUS.BAD_REQUEST, mcp.failure(nil, mcp.PARSE_ERROR, "body is not JSON")); return nil end
     local call, decode_error = mcp.decode(body)

@@ -8,7 +8,15 @@ local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local M = {}
-M.MAX_PAYLOAD_BYTES = 32768
+-- The transport ceiling of one hook submission. Harnesses send tool content
+-- whole: Claude Code's PostToolUse carries the complete tool_response, which
+-- for a Read is the file content it returned (up to 256 KiB of text, larger
+-- once JSON-escaped) and for an Edit or Write the file before and after the
+-- change, and a Codex PostToolUse carries the command's aggregated output.
+-- The ceiling admits those bodies with room to spare while keeping one
+-- submission bounded in memory; the record keeps only sizes and digests of
+-- the content, so what is stored stays small whatever arrives.
+M.MAX_PAYLOAD_BYTES = 4194304
 M.MAX_QUEUE = 64
 M.RETRY_AFTER_MS = 500
 type Object = {[string]: unknown}

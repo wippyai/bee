@@ -2488,3 +2488,33 @@ entries:
   security:
     policies:
     - bee.harness.catalog:probe_cache_test_policy
+- name: hook_transport_test_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The hook transport suite posts hooks to the loopback gateway listener as a harness does}
+  policy:
+    actions: [http_client.request, http_client.private_ip]
+    resources: '*'
+    effect: allow
+- name: hook_transport_test
+  kind: function.lua
+  source: file://hook_transport_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  modules:
+  - funcs
+  - security
+  - registry
+  - time
+  - json
+  - http_client
+  security:
+    policies:
+    - bee.harness.catalog:hook_transport_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    hooks: bee.gateway.hooks:hooks
+    principals: bee.tests.principals:bound

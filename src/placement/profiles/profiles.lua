@@ -4,6 +4,9 @@ local hash = require("hash")
 local canonical = require("canonical")
 local registry = require("registry")
 local M = {}
+-- HOST_USER runs a Docker profile's containers as the user the node runs as,
+-- so the container owns the files it shares with the host.
+M.HOST_USER = "host"
 M.DEFAULT = "bee.placement.profiles:native"
 M.TYPE = "bee.placement_profile"
 M.SCHEMA = "bee.placement-profile@1"
@@ -42,7 +45,9 @@ function M.decode(value: unknown): (Profile?, string?)
     local digest = image and (image:match("^sha256:([0-9a-f]+)$") or image:match("^[A-Za-z0-9_.:/%-]+@sha256:([0-9a-f]+)$")) or nil
     if image and (not digest or #digest ~= 64) then return nil, "Docker image must be digest-pinned" end
     local user = bounds.line(object.user, 64)
-    if not user or not user:match("^[1-9][0-9]*:[1-9][0-9]*$") then return nil, "Docker user must be a non-root uid:gid" end
+    if not user or (user ~= M.HOST_USER and not user:match("^[1-9][0-9]*:[1-9][0-9]*$")) then
+        return nil, "Docker user must be host or a non-root uid:gid"
+    end
     local network = bounds.line(object.network, 128)
     if not network or not network:match("^[A-Za-z0-9][A-Za-z0-9_.%-]*$") or network == "host" or network == "default" or network == "bridge" then
         return nil, "Docker network must name a host-selected network or none"

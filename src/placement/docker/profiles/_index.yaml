@@ -10,7 +10,7 @@ entries:
     schema_revision: bee.placement-profile@1
     placement_binding: bee.placement.docker.binding:binding
     image_recipe_ref: bee.placement.docker.profiles:coding_recipe
-    user: 1000:1000
+    user: host
     network: bee-coding
     limits:
       memory: 4294967296

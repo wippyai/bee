@@ -57,6 +57,10 @@ local function configure()
     roots.data.roots = {{root_ref = ROOT, access = "write"}}; changes:update(roots)
     local policy = assert(registry.get(POLICY))
     policy.data.placement_profiles = {PROFILE, REFUSED_PROFILE}; changes:update(policy)
+    -- The fixture's executor stands in for the one image preparation creates,
+    -- so it runs as the user the host-user profile resolves to on this node.
+    local executor = assert(registry.get("bee.placement.docker.tests:executor"))
+    executor.data.user = assert(spec.user("host")); changes:update(executor)
     local activation = assert(registry.get("bee.harness.launch:harness_activation"))
     local bindings = principals.strings(activation.data.bindings)
     activation.data.bindings = bindings
@@ -316,7 +320,7 @@ local function isolated_cases(definition: () -> ())
     return function(options)
         local originals: {[string]: unknown} = {}
         for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots",
-            POLICY, "bee.harness.launch:harness_activation"}) do
+            POLICY, "bee.harness.launch:harness_activation", "bee.placement.docker.tests:executor"}) do
             originals[ref] = assert(registry.get(ref)).data
         end
         local ok, result = pcall(cases, options)

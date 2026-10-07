@@ -2,6 +2,7 @@
 local profiles = require("profiles")
 local types = require("types")
 local bounds = require("bounds")
+local system = require("system")
 local M = {}
 M.BINDING = "bee.placement.docker.binding:binding"
 M.HOME = "/home/bee"
@@ -24,12 +25,33 @@ function M.admit(profile: profiles.Resolved, request: types.LaunchRequest): stri
     end
     return nil
 end
+-- container_user is the user a container runs as: the declared uid:gid, or
+-- for a host-user profile the node's own uid and gid, which must not be root.
+function M.container_user(declared: string, uid: number?, gid: number?): (string?, string?)
+    if declared ~= profiles.HOST_USER then return declared, nil end
+    local user, group = bounds.integer(uid), bounds.integer(gid)
+    if not user or not group or user < 0 or group < 0 then return nil, "the host user is unavailable on this platform" end
+    if user == 0 or group == 0 then return nil, "Docker containers never run as root; run Bee as a regular user" end
+    return tostring(user) .. ":" .. tostring(group), nil
+end
+
+-- user is the user a profile's containers run as on this node.
+function M.user(declared: string): (string?, string?)
+    if declared ~= profiles.HOST_USER then return M.container_user(declared, nil, nil) end
+    local uid, uid_error = system.process.uid()
+    local gid, gid_error = system.process.gid()
+    if uid_error or gid_error then return nil, "the host user is unavailable: " .. tostring(uid_error or gid_error) end
+    return M.container_user(declared, uid, gid)
+end
+
 function M.resolve(profile: profiles.Resolved, request: types.LaunchRequest, admitted_digest: string?, resolved_image: string?, resolved_route: string?): (Spec?, string?)
     local reason = M.admit(profile, request)
     if reason then return nil, reason end
     local value = profile.profile
     if not value.image_ref and not resolved_image then return nil, "runtime image is not prepared" end
-    return {profile_ref = profile.ref, profile_digest = profile.digest, image = value.image_ref or assert(resolved_image), user = assert(value.user), network = assert(value.network),
+    local user, user_error = M.user(assert(value.user))
+    if not user then return nil, user_error end
+    return {profile_ref = profile.ref, profile_digest = profile.digest, image = value.image_ref or assert(resolved_image), user = user, network = assert(value.network),
         limits = assert(value.limits), mounts = value.mounts, attempt_id = request.attempt_id, interactive_route_ref = value.interactive_route_ref or resolved_route}, nil
 end
 function M.decode(value: unknown, request: types.LaunchRequest, admitted_digest: string?): (Spec?, string?)

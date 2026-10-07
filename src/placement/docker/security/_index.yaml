@@ -99,3 +99,14 @@ entries:
     resources:
     - supervisor
     effect: allow
+- name: host_user_policy
+  kind: security.policy
+  meta:
+    comment: Docker placement reads the user and group the node runs as, for profiles whose containers run as the host user
+  policy:
+    actions:
+    - system.read
+    resources:
+    - uid
+    - gid
+    effect: allow

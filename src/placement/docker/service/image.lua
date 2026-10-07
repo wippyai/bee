@@ -11,6 +11,7 @@ local profiles = require("profiles")
 local resources = require("resources")
 local homes = require("homes")
 local daemon = require("daemon")
+local spec = require("spec")
 local channel = require("channel")
 local uuid = require("uuid")
 local security = require("security")
@@ -214,7 +215,9 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
         if not image then return nil, nil, "built runtime image has no immutable digest" end
     end
     progress("Runtime image ready: " .. image)
-    local identity = hash.sha256(assert(canonical.encode({profile = profile, image = image})))
+    local user, user_error = spec.user(tostring(profile.profile.user))
+    if not user then return nil, nil, tostring(user_error) end
+    local identity = hash.sha256(assert(canonical.encode({profile = profile, image = image, user = user})))
     if not identity then return nil, nil, "runtime executor identity failed" end
     local name = "runtime-" .. identity
     local executor_id = "bee.placement.docker:" .. name .. "-executor"
@@ -227,7 +230,7 @@ function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel
         if not limits then return nil, nil, "runtime profile has no limits" end
         local changes = overlay:changes()
         changes:create({id = executor_id, kind = "exec.docker", data = {host = "unix:///var/run/docker.sock", image = image,
-            user = selected.user, network_mode = selected.network, memory_limit = limits.memory, cpu_quota = limits.cpu, pids_limit = limits.pids,
+            user = user, network_mode = selected.network, memory_limit = limits.memory, cpu_quota = limits.cpu, pids_limit = limits.pids,
             read_only_rootfs = true, no_new_privileges = true, auto_remove = false, cap_drop = {"ALL"}, tmpfs = {["/tmp"] = "rw,nosuid,nodev,size=128m"}}})
         changes:create({id = route_id, kind = "registry.entry", meta = {type = "docker.interactive_executor"}, data = {image_ref = image, executor_ref = executor_id}})
         local _, apply_error = changes:apply()

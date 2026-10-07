@@ -25,6 +25,12 @@ local function run()
             value = docker(); value.user = "0:0"
             test.is_nil(profiles.decode(value))
         end)
+        test.it("lets a profile run its containers as the host's own user", function()
+            local value = docker(); value.user = profiles.HOST_USER
+            test.eq((assert(profiles.decode(value))).user, "host")
+            value.user = "hosts"
+            test.is_nil(profiles.decode(value))
+        end)
         test.it("admits a host-selected image recipe without accepting a mutable tag", function()
             local value = docker(); value.image_ref = nil; value.image_recipe_ref = "bee.placement.docker.profiles:coding_recipe"
             local decoded = assert(profiles.decode(value))

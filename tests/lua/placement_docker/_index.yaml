@@ -30,7 +30,7 @@ entries:
     schema_revision: bee.placement-profile@1
     placement_binding: bee.placement.docker.binding:binding
     image_ref: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
-    user: 1000:1000
+    user: host
     network: none
     limits:
       memory: 536870912
@@ -113,6 +113,7 @@ entries:
     policies:
     - bee.placement.native:apply_test_policy
     - bee.placement.docker.tests:creator_policy
+    - bee.placement.docker.security:host_user_policy
 - name: stdin_test
   kind: function.lua
   source: file://lifecycle_test.lua
@@ -149,6 +150,7 @@ entries:
     policies:
     - bee.placement.native:apply_test_policy
     - bee.placement.docker.tests:creator_policy
+    - bee.placement.docker.security:host_user_policy
 - name: readiness_test
   kind: function.lua
   source: file://lifecycle_test.lua
@@ -185,6 +187,7 @@ entries:
     policies:
     - bee.placement.native:apply_test_policy
     - bee.placement.docker.tests:creator_policy
+    - bee.placement.docker.security:host_user_policy
 - name: projection_test
   kind: function.lua
   source: file://projection_test.lua
@@ -294,6 +297,7 @@ entries:
     policies:
     - bee.placement.native:apply_test_policy
     - bee.placement.docker.tests:creator_policy
+    - bee.placement.docker.security:host_user_policy
 - name: refused_profile
   kind: registry.entry
   meta:

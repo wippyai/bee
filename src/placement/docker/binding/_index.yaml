@@ -50,6 +50,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
     - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:host_user_policy
     - bee.placement.docker.security:docker_socket_policy
     - bee.placement.docker.security:image_client_policy
   modules: &id002
@@ -72,6 +73,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
     - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:host_user_policy
     - bee.placement.docker.security:docker_socket_policy
   modules: *id002
 - name: status
@@ -165,6 +167,8 @@ entries:
 - name: spec
   kind: library.lua
   source: file://spec.lua
+  modules:
+  - system
   imports:
     request_codec: bee.placement:request
     profiles: bee.placement.profiles:profiles

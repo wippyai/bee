@@ -4,7 +4,8 @@ go 1.27.0
 
 require (
 	github.com/stretchr/testify v1.12.1
-	github.com/wippyai/runtime v0.1.14-0.20261005190006-5bc0e08b94c6
+	github.com/wippyai/runtime v0.1.14-0.20261007011850-2bb9e144ab06
+	golang.org/x/sys v0.48.0
 )
 
 require (
@@ -58,7 +59,7 @@ require (
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
-	github.com/docker/go-connections v0.7.0 // indirect
+	github.com/docker/go-connections v0.8.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/expr-lang/expr v1.17.8 // indirect
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
@@ -117,8 +118,8 @@ require (
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.56.0 // indirect
-	github.com/moby/moby/client v0.6.0 // indirect
+	github.com/moby/moby/api v1.56.1 // indirect
+	github.com/moby/moby/client v0.6.1 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nexus-rpc/nexus-proto-annotations v0.1.1-0.20260629224316-835bd8d49cb4 // indirect
@@ -137,7 +138,7 @@ require (
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
-	github.com/rqlite/go-sqlite3 v1.50.0 // indirect
+	github.com/rqlite/go-sqlite3 v1.51.0 // indirect
 	github.com/safchain/ethtool v0.3.0 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
@@ -162,7 +163,7 @@ require (
 	github.com/tree-sitter/tree-sitter-php v0.25.0 // indirect
 	github.com/tree-sitter/tree-sitter-python v0.25.0 // indirect
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2 // indirect
-	github.com/wippyai/go-lua v1.6.2 // indirect
+	github.com/wippyai/go-lua v1.6.4 // indirect
 	github.com/wippyai/module-registry-proto-go v0.0.2-0.20260908140534-f6e2910c835f // indirect
 	github.com/wippyai/tree-sitter-markdown v0.0.3 // indirect
 	github.com/wippyai/tree-sitter-sql v0.0.4 // indirect
@@ -182,7 +183,7 @@ require (
 	go.bytecodealliance.org v0.7.0 // indirect
 	go.etcd.io/bbolt v1.4.3 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.46.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0 // indirect
@@ -209,7 +210,6 @@ require (
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.16.0 // indirect

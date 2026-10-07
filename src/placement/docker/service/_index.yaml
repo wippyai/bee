@@ -35,6 +35,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
     - bee.security.gateway:gateway_materialize_policy
     - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:host_user_policy
     - bee.placement.docker.security:docker_socket_policy
 - name: window
   kind: library.lua
@@ -69,6 +70,7 @@ entries:
       - bee.placement.native.security:placement_sweeper_policy
       - bee.security.gateway:gateway_supervision_policy
       - bee.placement.docker.security:docker_policy
+      - bee.placement.docker.security:host_user_policy
       - bee.placement.docker.security:docker_socket_policy
   host: bee:workers
 - name: image
@@ -91,6 +93,7 @@ entries:
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
     daemon: bee.placement.docker.service:daemon
+    spec: bee.placement.docker.binding:spec
 - name: image_owner
   kind: process.lua
   source: file://image_owner.lua
@@ -118,6 +121,7 @@ entries:
       - bee.placement.native.security:placement_exec_policy
       - bee.placement.native.security:placement_runner_policy
       - bee.placement.docker.security:docker_policy
+      - bee.placement.docker.security:host_user_policy
       - bee.placement.docker.security:docker_socket_policy
       - bee.placement.docker.security:image_policy
       - bee.placement.docker.security:image_client_policy

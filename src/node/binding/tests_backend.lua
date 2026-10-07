@@ -1,9 +1,4 @@
--- MIT. The private side of the application test facade. It runs only under
--- the node's test backend scope, takes a request the facade authorized (the
--- caller's workspace and actor, and the overlay it verified the caller owns),
--- plans the tests of the application admitted from that overlay, writes the
--- run into the node database and wakes the runner with the run's id. Status
--- reads the stored results.
+-- MIT. Plans associated application tests and records authenticated runs.
 local process = require("process")
 local registry = require("registry")
 local uuid = require("uuid")
@@ -11,37 +6,56 @@ local application = require("application")
 local tests = require("tests")
 local test_runs = require("test_runs")
 local discovery = require("discovery")
+local bounds = require("bounds")
+local application_tests = require("application_tests")
 
 type Object = {[string]: unknown}
-type Found = {id: string, name: string, group: string, meta: {[string]: any}}
 type Plan = {definition: application.Definition, tests: {test_runs.Planned}}
 
-local APP_ROOT = "app."
-
--- plan finds the bee.app entry in namespace app.<overlay> admitted in the
--- workspace, from that overlay when governance admitted it, and its test
--- entries narrowed by filter.
-local function plan(workspace_id: string, overlay: string, filter: string?): (Plan?, tests.Reply?)
-    local namespace = APP_ROOT .. overlay
+local function plan(workspace_id: string, selector: string, owned: {[string]: boolean}, filter: string?): (Plan?, tests.Reply?)
+    local snapshot, snapshot_error = registry.snapshot()
+    local state = snapshot and snapshot:state() or nil
+    if not state then return nil, tests.fail("UNAVAILABLE", tostring(snapshot_error or "registry state is unavailable")) end
     local definition: application.Definition? = nil
-    for _, entry in ipairs(registry.find({[".kind"] = "process.lua", ["meta.type"] = "bee.app"}) or {}) do
-        if entry.id:match("^([^:]+):") == namespace then
-            definition = application.definition(entry.id)
-            break
+    local associated: {[string]: boolean} = {}
+    for _, entry in ipairs(state.entries) do
+        local meta = bounds.object(entry.meta)
+        if entry.kind == "process.lua" and meta and meta.type == "bee.app" then
+            local binding, record, admission_error = application.admission(entry.id, workspace_id)
+            if admission_error then return nil, tests.fail("UNAVAILABLE", admission_error) end
+            local alias = record and record.source_workspace or bounds.id(meta.test_overlay)
+            if entry.id == selector or alias == selector then
+                if not binding then return nil, tests.fail("DENIED", "application is not admitted in your workspace") end
+                if meta.test_overlay and not owned[tostring(meta.test_overlay)] then
+                    return nil, tests.fail("DENIED", "application is not delivered from an overlay you own")
+                end
+                if record then
+                    local overlay, overlay_error = registry.overlay(record.overlay_owner)
+                    local rows = overlay and overlay:entries() or nil
+                    if not rows then return nil, tests.fail("UNAVAILABLE", tostring(overlay_error or "application entries are unavailable")) end
+                    for _, raw in ipairs(rows) do associated[raw.id] = true end
+                    if associated[entry.id] and not owned[record.source_workspace] then
+                        return nil, tests.fail("DENIED", "application is not delivered from an overlay you own")
+                    end
+                end
+                if not record then
+                    local declared, declared_error = application.test_entries(entry.id)
+                    if declared_error then return nil, tests.fail("UNAVAILABLE", declared_error) end
+                    if declared then
+                        associated[entry.id] = true
+                        for _, id in ipairs(declared) do associated[id] = true end
+                    end
+                end
+                definition = application.definition(entry.id)
+                break
+            end
         end
     end
-    if not definition then return nil, tests.fail("NOT_FOUND", "application " .. namespace .. " is not installed") end
-    local binding, record, admission_error = application.admission(definition.process, workspace_id)
-    if admission_error then return nil, tests.fail("UNAVAILABLE", admission_error) end
-    if not binding or (record and record.source_workspace ~= overlay) then
-        return nil, tests.fail("DENIED", "application " .. definition.process .. " is not admitted in your workspace from your overlay")
+    if not definition then
+        return nil, tests.fail(owned[selector] and "NOT_FOUND" or "DENIED", "application " .. selector .. " is not installed or admitted")
     end
-    local found: {Found} = {}
-    for _, entry in ipairs(registry.find({[".kind"] = "function.lua", ["meta.type"] = "test"}) or {}) do
-        if entry.id:match("^([^:]+):") == namespace then
-            found[#found + 1] = {id = entry.id, name = entry.id, group = namespace, meta = entry.meta or {}}
-        end
-    end
+    local found, discovery_error = application_tests.select(state.entries, definition.process, associated)
+    if not found then return nil, tests.fail("UNAVAILABLE", discovery_error or "application tests are unavailable") end
     if filter then found = discovery.filter_tests(found, {filter}) end
     local suites, no_suite = discovery.group_by_suite(found)
     local planned: {test_runs.Planned} = {}
@@ -66,17 +80,17 @@ local function handle(raw: unknown): tests.Reply
         return tests.succeed(run.result or {run_id = run.run_id, application = run.application, state = "running",
             progress = {done = 0, total = #run.plan}})
     end
-    local planned, fault = plan(workspace_id, request.overlay :: string, request.filter :: string?)
+    local planned, fault = plan(workspace_id, request.application :: string, request.owned :: {[string]: boolean}, request.filter :: string?)
     if not planned then return fault or tests.fail("INTERNAL", "unresolved application") end
     if request.operation == "list" then
         return tests.succeed({application = planned.definition.process, tests = planned.tests})
     end
-    if #planned.tests == 0 then return tests.fail("NOT_FOUND", "no tests in " .. APP_ROOT .. tostring(request.overlay) .. " match") end
+    if #planned.tests == 0 then return tests.fail("NOT_FOUND", "no tests in " .. tostring(request.application) .. " match") end
     if #planned.tests > tests.MAX_TESTS then
         return tests.fail("INVALID", #planned.tests .. " tests match; at most " .. tests.MAX_TESTS .. " run at once, narrow the filter")
     end
     local run: test_runs.Row = {run_id = tostring(uuid.v7()), workspace_id = workspace_id, actor_id = actor_id,
-        overlay = request.overlay :: string, application = planned.definition.process, plan = planned.tests,
+        overlay = request.application :: string, application = planned.definition.process, plan = planned.tests,
         state = "pending", result = nil}
     local created, code, message = test_runs.create(run)
     if not created then return tests.fail(code or "UNAVAILABLE", message or "the run was not recorded") end

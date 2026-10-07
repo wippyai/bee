@@ -67,19 +67,24 @@ processes, change the registry, or start the node's own services.
 
 ## Application tests
 
-An application's pack may carry tests: `function.lua` entries of `meta.type: test`
-(optional `meta.suite`, `meta.timeout` default `30s`) in its namespace, written
-with `wippy.test:test`. The `tests` MCP tool (`list`, `run`, `status`) reaches the
-runner through `bee.node.binding:tests_call`, which takes the caller's workspace
-and actor from the authenticated context and lists the overlays the caller owns
-through the overlay facade. The runner admits only an application installed in
-that workspace under the namespace `app.<overlay>` of one of those overlays;
-anything else is `DENIED`.
+An application's pack may carry `function.lua` entries with `meta.type: test`,
+optional `meta.suite` and `meta.timeout` (default `30s`), written with
+`wippy.test:test`. The `tests` MCP tool accepts `list`, `run` and `status`.
+Name an admitted application by its definition ID; an owned overlay name
+remains accepted for overlay deliveries.
 
-The facade verifies the caller owns the overlay, then enters the private scope
-`bee.node.security:tests_backend` (the only holder of database access here; no
-application scope has it) and calls `bee.node.binding:tests_backend`. The backend
-plans the tests, writes the run (workspace, actor, application, plan) as a row of
+Discovery follows the installed application's registry ownership or admitted
+overlay membership, across namespaces. A package with one application owns
+its unqualified tests. A package with multiple applications associates each
+test through `meta.application: <definition_id>`. An association cannot reach
+another package or overlay. Host admissions associate tests explicitly through
+`data.tests[definition_id]`, a list of registry IDs. Admitted applications delivered from Hub use the same
+runner as overlay applications.
+
+The facade takes the authenticated caller's workspace and actor and supplies
+overlay ownership evidence to `bee.node.binding:tests_backend` under its private
+scope. The backend verifies workspace admission and, for overlay delivery,
+caller ownership before planning. It plans the tests, writes the run (workspace, actor, application, plan) as a row of
 `bee_node_test_runs` and wakes the runner with the run id. A message to the runner
 is only a hint that a row waits: the runner reads the request from the row, trusts
 no message field, and a forged message starts nothing.

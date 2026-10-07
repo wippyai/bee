@@ -231,7 +231,7 @@ entries:
   meta:
     comment: The test backend finds an application, its admission and its tests in the registry
   policy:
-    actions: [registry.get, registry.version, registry.find, security.policy_group.get, security.policy.get]
+    actions: [registry.get, registry.version, registry.find, registry.snapshot, registry.overlay.get, security.policy_group.get, security.policy.get]
     resources: '*'
     effect: allow
 - name: tests_backend_node

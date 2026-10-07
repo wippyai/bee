@@ -8,6 +8,7 @@ entries:
   modules: [process]
   meta:
     type: bee.app
+    test_overlay: runner_fixture
     application: {api_version: 1, title: Runner fixture, lifetime: view, revision: '1', instance_policy: multiple, menus: [bee.shell:apps_menu]}
 - name: admission
   kind: registry.entry
@@ -15,6 +16,8 @@ entries:
     type: bee.node.application_admission
     comment: Admits the fixture application with one grant, as a delivered application is admitted
   data:
+    tests:
+      app.runner_fixture:app: [app.runner_fixture:authority_test, app.runner_fixture:failing_test, app.runner_fixture:slow_test]
     bindings:
     - definition_id: app.runner_fixture:app
       policies: [app.runner_fixture:grant]
@@ -30,14 +33,14 @@ entries:
   source: file://authority_test.lua
   method: run
   modules: [security]
-  meta: {type: app_test, suite: fixture, order: 1}
+  meta: {type: app_test, application: app.runner_fixture:app, suite: fixture, order: 1}
   imports:
     test: wippy.test:test
 - name: failing_test
   kind: function.lua
   source: file://failing_test.lua
   method: run
-  meta: {type: app_test, suite: fixture, order: 2}
+  meta: {type: app_test, application: app.runner_fixture:app, suite: fixture, order: 2}
   imports:
     test: wippy.test:test
 - name: slow_test
@@ -45,6 +48,6 @@ entries:
   source: file://slow_test.lua
   method: run
   modules: [time]
-  meta: {type: app_test, suite: fixture, order: 3, timeout: 1s}
+  meta: {type: app_test, application: app.runner_fixture:app, suite: fixture, order: 3, timeout: 1s}
   imports:
     test: wippy.test:test

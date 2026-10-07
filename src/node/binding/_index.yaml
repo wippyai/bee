@@ -51,7 +51,7 @@ entries:
 - name: tests_call
   kind: function.lua
   meta:
-    comment: Run and read the tests an application the caller delivered carries; it verifies the caller owns the overlay the application is delivered from, then enters the private test backend scope
+    comment: Runs and reads an admitted application's associated tests with authenticated workspace and overlay ownership evidence
   source: file://tests_call.lua
   method: handle
   modules: [funcs, security]
@@ -72,6 +72,8 @@ entries:
     tests: bee.node:tests
     test_runs: bee.node:test_runs
     discovery: wippy.test:discovery
+    application_tests: bee.node:application_tests
+    bounds: bee.values:bounds
 - name: app_tools
   kind: function.lua
   meta:

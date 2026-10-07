@@ -9,6 +9,7 @@ local principal = require("principal")
 local descriptor = require("descriptor")
 local governed_admission = require("governed_admission")
 local application_admissions = require("application_admissions")
+local bounds = require("bounds")
 
 local M = {}
 
@@ -33,19 +34,45 @@ function M.definition(id: string): (Definition?, string?)
         resume_schema = declared.resume_schema, singleton = declared.singleton}, nil
 end
 
+local function host_binding(definition_id: string): (governed_admission.Binding?, {[string]: unknown}?, string?)
+    for _, entry in ipairs(registry.find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}) or {}) do
+        local data = bounds.object(entry.data)
+        local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
+        if not bindings then return nil, nil, "admission " .. entry.id .. ": " .. tostring(bindings_error) end
+        for _, binding in ipairs(bindings) do
+            if binding.definition_id == definition_id then return binding, data, nil end
+        end
+    end
+    return nil, nil, nil
+end
+
+function M.test_entries(definition_id: string): ({string}?, string?)
+    local binding, data, problem = host_binding(definition_id)
+    if problem then return nil, problem end
+    if not binding or not data or data.tests == nil then return nil, nil end
+    local associations = bounds.object(data.tests)
+    if not associations then return nil, "host application test associations are invalid" end
+    local raw = associations[definition_id]
+    if raw == nil then return nil, nil end
+    local rows, rows_error = bounds.dense_list(raw, 64, "host application tests")
+    if not rows then return nil, rows_error end
+    local result: {string} = {}
+    for _, value in ipairs(rows) do
+        local id = bounds.id(value)
+        if not id then return nil, "host application test identity is invalid" end
+        result[#result + 1] = id
+    end
+    return result, nil
+end
+
 -- admission is the binding that admits definition_id in workspace_id: the
 -- host's own admissions first, then the overlays governance admitted for the
 -- workspace, then the packages it composes. The record is the governed
 -- admission the binding came from; a host admission has none.
 function M.admission(definition_id: string, workspace_id: string): (governed_admission.Binding?, governed_admission.Record?, string?)
-    for _, entry in ipairs(registry.find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}) or {}) do
-        local data: unknown = entry.data
-        local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
-        if not bindings then return nil, nil, "admission " .. entry.id .. ": " .. tostring(bindings_error) end
-        for _, binding in ipairs(bindings) do
-            if binding.definition_id == definition_id then return binding, nil, nil end
-        end
-    end
+    local host, _, host_error = host_binding(definition_id)
+    if host_error then return nil, nil, host_error end
+    if host then return host, nil, nil end
     local pinned = assert(registry.snapshot())
     local selection, selection_error = application_admissions.read(pinned, pinned:version():string(), workspace_id,
         assert(system.node.id()))

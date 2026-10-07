@@ -140,7 +140,7 @@ def managed_gateway(src):
 
 def runner_fixture_type(src):
     """The runner finds the fixture applications' tests by their own type, so the suites' unrestricted runner leaves them alone."""
-    replace_once(src / "node/binding/tests_backend.lua", '["meta.type"] = "test"', '["meta.type"] = "app_test"')
+    replace_once(src / "node/application_tests.lua", 'meta.type == "test"', 'meta.type == "app_test"')
 
 
 def host_environment():

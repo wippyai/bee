@@ -10,6 +10,7 @@ local process = require("process")
 local sql = require("sql")
 local tests = require("tests")
 local application = require("application")
+local registry = require("registry")
 
 local WORKSPACE = string.rep("c", 32)
 local OVERLAY = "runner_fixture"
@@ -78,11 +79,40 @@ local function runs(): integer
     return math.floor(tonumber(rows[1].count) or 0)
 end
 
+local function association_facts(application_id: string): string
+    local rows: {string} = {}
+    local snapshot = assert(registry.snapshot())
+    for _, entry in ipairs(assert(snapshot:state()).entries) do
+        local meta = bounds.object(entry.meta)
+        if entry.id == application_id or (meta and meta.application == application_id) then
+            local provenance = bounds.object(entry.registry)
+            rows[#rows + 1] = entry.id .. " kind=" .. tostring(entry.kind) .. " type=" .. tostring(meta and meta.type)
+                .. " owner=" .. tostring(provenance and provenance.owner)
+        end
+    end
+    return table.concat(rows, "; ")
+end
+
 local function define_tests()
     local author = agent("runner-author", WORKSPACE)
     local other = agent("runner-other", string.rep("d", 32))
 
     test.describe("application test runs", function()
+        test.it("runs tests associated with an admitted package application across namespaces", function()
+            local app = "bee.tests.node.hub_tests_fixture:application"
+            local listed = value_of(tests_call(author, {operation = "list", application = app}))
+            test.eq(listed.application, app)
+            local entries = listed.tests :: {Object}
+            test.eq(#entries, 1, association_facts(app))
+            test.eq(entries[1].id, "bee.tests.node:package_application_probe")
+            local started = value_of(tests_call(author, {operation = "run", application = app}))
+            local result = completed(author, tostring(started.run_id))
+            local results = result.entries :: {Object}
+            test.eq(assert(bounds.object(result.totals)).errors, 0, tostring(results[1] and results[1].error))
+            test.eq(assert(bounds.object(result.totals)).failed, 0)
+            test.eq(assert(bounds.object(result.totals)).passed, 1)
+        end)
+
         test.before_all(function()
             local created = overlay(author, {operation = "create", overlay_id = OVERLAY, expected_revision = 0, idempotency_key = OVERLAY .. "-create"})
             test.is_true(created.ok == true, tostring(created.message))
@@ -93,7 +123,7 @@ local function define_tests()
             test.eq(value.application, APPLICATION)
             local ids: {string} = {}
             for _, raw in ipairs(value.tests :: {unknown}) do ids[#ids + 1] = tostring((assert(bounds.object(raw))).id) end
-            test.eq(table.concat(ids, " "), "app.runner_fixture:authority_test app.runner_fixture:failing_test app.runner_fixture:slow_test")
+            test.eq(table.concat(ids, " "), "app.runner_fixture:authority_test app.runner_fixture:failing_test app.runner_fixture:slow_test", association_facts(APPLICATION))
             local named = value_of(tests_call(author, {operation = "list", application = APPLICATION, filter = "failing"}))
             test.eq(#(named.tests :: {unknown}), 1)
         end)

@@ -47,6 +47,7 @@ entries:
   source: file://application.lua
   modules: [registry, security, system]
   imports:
+    bounds: bee.values:bounds
     principal: bee.node:principal
     descriptor: bee.app:descriptor
     governed_admission: bee.gov.types:governed_application_admission
@@ -107,3 +108,8 @@ entries:
   modules: [registry]
   imports:
     arguments: bee.app:arguments
+- name: application_tests
+  kind: library.lua
+  source: file://application_tests.lua
+  imports:
+    bounds: bee.values:bounds

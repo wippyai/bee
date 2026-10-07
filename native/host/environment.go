@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -33,6 +34,7 @@ type hostResolver struct {
 	getwd            func() (string, error)
 	executable       func() (string, error)
 	environmentNames func() []string
+	buildInfo        func() (*debug.BuildInfo, bool)
 }
 
 func systemHostResolver() hostResolver {
@@ -42,6 +44,7 @@ func systemHostResolver() hostResolver {
 		getwd:            os.Getwd,
 		executable:       os.Executable,
 		environmentNames: systemEnvironmentNames,
+		buildInfo:        debug.ReadBuildInfo,
 	}
 }
 
@@ -92,7 +95,49 @@ func newHostEnvironment(resolver hostResolver) (*hostEnvironment, error) {
 		return nil, fmt.Errorf("encode host environment names: %w", err)
 	}
 	facts := map[string]string{"home": home, "cwd": cwd, "self": self, "environment_names": string(encodedNames)}
+	if identity := resolvedBinaryIdentity(resolver.buildInfo); identity != "" {
+		facts["binary_identity"] = identity
+	}
 	return &hostEnvironment{resolver: resolver, facts: facts}, nil
+}
+
+func resolvedBinaryIdentity(read func() (*debug.BuildInfo, bool)) string {
+	if read == nil {
+		return ""
+	}
+	info, ok := read()
+	if !ok || info == nil {
+		return ""
+	}
+	modules := make(map[string]string)
+	for _, module := range append([]*debug.Module{&info.Main}, info.Deps...) {
+		selected := module
+		if module.Replace != nil {
+			if module.Replace.Path != module.Path {
+				continue
+			}
+			selected = module.Replace
+		}
+		if strings.HasPrefix(selected.Version, "v") {
+			modules[module.Path] = selected.Version
+		}
+	}
+	const nativeModule = "github.com/wippyai/bee/native"
+	runtimeVersion := modules["github.com/wippyai/runtime"]
+	nativeVersion := modules[nativeModule]
+	if runtimeVersion == "" || nativeVersion == "" {
+		return ""
+	}
+	encoded, err := json.Marshal(struct {
+		NativeModule  string            `json:"native_module"`
+		NativeVersion string            `json:"native_version"`
+		NativeModules map[string]string `json:"native_modules"`
+		RuntimeCommit string            `json:"runtime_commit"`
+	}{nativeModule, nativeVersion, modules, runtimeVersion})
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }
 
 func safeExecutableName(name string) bool {

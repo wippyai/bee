@@ -1,6 +1,11 @@
 version: '1.0'
 namespace: bee.env
 entries:
+- name: running_binary_identity
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_identity
+  readonly: true
 - name: workspace_environment
   kind: env.storage.os
   lifecycle:

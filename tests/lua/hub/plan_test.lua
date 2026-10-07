@@ -4,6 +4,7 @@ local plan = require("plan")
 local graph = require("graph")
 local inspect = require("inspect")
 local requirements = require("requirements")
+local identity_decoder = require("identity_decoder")
 
 local function root(component: string, version: string): {[string]: unknown}
     local id, problem = plan.root_id(component)
@@ -73,6 +74,30 @@ end
 
 local function define_tests()
     test.describe("Hub dependency plan", function()
+        for _, matches in ipairs({true, false}) do
+            test.it(matches and "plans a pack matching decoded executable facts" or "refuses another runtime commit from executable facts", function()
+                local running, decode_error = identity_decoder.decode_baked('{"native_module":"github.com/wippyai/bee/native","native_version":"v1.0.0","native_modules":{"github.com/wippyai/bee/native":"v1.0.0"},"runtime_commit":"v0.1.14-0.20261007011850-2bb9e144ab06"}')
+                test.is_nil(decode_error); test.not_nil(running)
+                local entry = binary_identity("github.com/wippyai/bee/native", "v1.0.0")
+                entry.data.runtime_commit = matches and "v0.1.14-0.20261007011850-2bb9e144ab06" or "v0.1.14-0.20261004132348-0ba471579107"
+                local prepared, problem = plan.prepare(state({root("bee/bee", "1.0.0")}), 1,
+                    request({action = "update", component = "bee/bee", version = "2.0.0"}),
+                    source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {entry})}), running)
+                if matches then test.is_nil(problem); test.not_nil(prepared)
+                else test.is_nil(prepared); test.is_true(tostring(problem):find("needs a newer Bee binary", 1, true) ~= nil) end
+            end)
+        end
+        test.it("reads the running identity through the host environment fact", function()
+            local running, problem = identity_decoder.read_baked()
+            test.is_nil(problem); test.not_nil(running)
+            if running then test.eq(running.runtime_commit, "v0.1.14-0.20261007011850-2bb9e144ab06") end
+        end)
+        test.it("rejects malformed or inconsistent executable facts", function()
+            for _, raw in ipairs({'bad json', '{}', '{"native_module":"github.com/wippyai/bee/native","native_version":"v2.0.0","native_modules":{"github.com/wippyai/bee/native":"v1.0.0"},"runtime_commit":"v1.0.0"}'}) do
+                local running, problem = identity_decoder.decode_baked(raw)
+                test.is_nil(running); test.not_nil(problem)
+            end
+        end)
         for _, changed in ipairs({false, true}) do
             test.it(changed and "requires bindings when a kept version's artifact changes" or "preserves untouched dependency requirement holes", function()
                 local captured = state({root("acme/app", "1.0.0"),

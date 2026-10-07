@@ -182,6 +182,7 @@ entries:
   imports:
     test: wippy.test:test
     plan: bee.hub.package:plan
+    identity_decoder: bee.hub.package:binary_identity
     graph: bee.hub.package:graph
     inspect: bee.hub.package:inspection
     requirements: bee.hub.package:requirements

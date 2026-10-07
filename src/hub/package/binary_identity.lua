@@ -2,6 +2,8 @@
 -- the running executable's identity.
 local bounds = require("bounds")
 local semver = require("semver")
+local json = require("json")
+local env = require("env")
 local M = {}
 -- TYPE is the registry type of the entry a Bee pack carries to name the
 -- native binary it was built with.
@@ -61,6 +63,41 @@ local function decode_pack_entry(raw_entry: unknown): (Identity?, string?)
         source_revision = source_revision, runtime = runtime, runtime_commit = runtime_commit,
         native = native, native_version = native_version, website = website,
         native_components = components}, nil
+end
+
+function M.decode_baked(raw: unknown): (Baked?, string?)
+    if type(raw) ~= "string" or #raw > 262144 then return nil, "running binary identity is invalid" end
+    local decoded, problem = json.decode(raw)
+    if problem then return nil, "running binary identity is invalid JSON" end
+    local value = bounds.object(decoded)
+    if not value or bounds.fields(value, {"native_module", "native_version", "native_modules", "runtime_commit"}) then
+        return nil, "running binary identity is invalid"
+    end
+    local native_module = package_name(value.native_module)
+    local native_version = bounds.line(value.native_version, 128)
+    local runtime_commit = bounds.line(value.runtime_commit, 128)
+    local modules = bounds.object(value.native_modules)
+    if not native_module or not native_version or not semver.parse(native_version) or not runtime_commit
+        or not semver.parse(runtime_commit) or not modules then return nil, "running binary identity is incomplete" end
+    local native_modules: {[string]: string} = {}
+    local count = 0
+    for name, raw_version in pairs(modules) do
+        local version = bounds.line(raw_version, 128)
+        count = count + 1
+        if count > 1024 or not package_name(name) or not version or not semver.parse(version) then
+            return nil, "running binary identity has invalid modules"
+        end
+        native_modules[name] = version
+    end
+    if native_modules[native_module] ~= native_version then return nil, "running binary identity is inconsistent" end
+    return {native_module = native_module, native_version = native_version, native_modules = native_modules,
+        runtime_commit = runtime_commit}, nil
+end
+
+function M.read_baked(): (Baked?, string?)
+    local raw, problem = env.get("bee.env:running_binary_identity")
+    if not raw then return nil, tostring(problem) end
+    return M.decode_baked(raw)
 end
 
 function M.read_packages(raw_packages: unknown): (Identity?, string?)

@@ -26,6 +26,7 @@ entries:
 - name: binary_identity
   kind: library.lua
   source: file://binary_identity.lua
+  modules: [json, env]
   imports:
     bounds: bee.values:bounds
     semver: bee.hub.package:semver

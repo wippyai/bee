@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime/debug"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,4 +86,44 @@ func TestComponentLoadsAfterTheEnvironmentRegistry(t *testing.T) {
 		}
 	}
 	t.Fatalf("bee.host depends on %v, want the env component that creates the environment registry", deps)
+}
+
+func TestHostEnvironmentExposesResolvedBinaryIdentity(t *testing.T) {
+	r := resolver()
+	r.buildInfo = func() (*debug.BuildInfo, bool) {
+		return &debug.BuildInfo{Deps: []*debug.Module{
+			{Path: "github.com/wippyai/runtime", Version: "v0.1.14-0.20261007011850-2bb9e144ab06"},
+			{Path: "github.com/wippyai/bee/native", Version: "v0.0.0-20261007013720-bdd1c66d0ea1"},
+			{Path: "example.test/native", Version: "v1.2.3"},
+		}}, true
+	}
+	storage, err := newHostEnvironment(r)
+	require.NoError(t, err)
+	raw, err := storage.Get(context.Background(), "binary_identity")
+	require.NoError(t, err)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal([]byte(raw), &got))
+	require.Equal(t, "v0.1.14-0.20261007011850-2bb9e144ab06", got["runtime_commit"])
+	require.Equal(t, "github.com/wippyai/bee/native", got["native_module"])
+	require.Equal(t, "v0.0.0-20261007013720-bdd1c66d0ea1", got["native_version"])
+	require.Equal(t, map[string]any{
+		"github.com/wippyai/runtime":    "v0.1.14-0.20261007011850-2bb9e144ab06",
+		"github.com/wippyai/bee/native": "v0.0.0-20261007013720-bdd1c66d0ea1",
+		"example.test/native":           "v1.2.3",
+	}, got["native_modules"])
+}
+
+func TestHostEnvironmentOmitsUnverifiableBinaryIdentity(t *testing.T) {
+	for _, info := range []*debug.BuildInfo{nil, {Deps: []*debug.Module{
+		{Path: "github.com/wippyai/runtime", Version: "v1.2.3", Replace: &debug.Module{Path: "../runtime"}},
+		{Path: "github.com/wippyai/bee/native", Version: "v1.0.0"},
+	}}} {
+		r := resolver()
+		r.buildInfo = func() (*debug.BuildInfo, bool) { return info, info != nil }
+		storage, err := newHostEnvironment(r)
+		require.NoError(t, err)
+		facts, err := storage.List(context.Background())
+		require.NoError(t, err)
+		require.NotContains(t, facts, "binary_identity")
+	}
 }

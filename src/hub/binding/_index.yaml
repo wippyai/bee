@@ -15,6 +15,7 @@ entries:
     catalog: bee.hub.binding:catalog
     inventory: bee.hub.package:inventory
     publication: bee.hub.binding:publication
+    binary_identity: bee.hub.package:binary_identity
     semver: bee.hub.package:semver
 - name: inspect
   kind: library.lua
@@ -46,6 +47,7 @@ entries:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
     plan: bee.hub.package:plan
+    binary_identity: bee.hub.package:binary_identity
     catalog: bee.hub.binding:catalog
     inspect: bee.hub.binding:inspect
     inspection: bee.hub.package:inspection

@@ -158,9 +158,21 @@ installer code. Both paths preserve deployment parameters and third-party roots.
 A pack can declare native needs in `ns.definition.meta.native_requirements`
 as `{package = "native/module", version = "1.2.3"}` rows. The planner compares
 those semantic versions against the executable's Go module build list, exposed
-only through the native launch host's read-only environment facts. The release
-source builder adds a `bee.binary_identity` entry to the target root pack from
-the build manifest; planning checks its native components and runtime commit
+through the native host's read-only `binary_identity` environment fact.
+`bee.env:running_binary_identity` reads its JSON into `binary_identity.Baked`;
+publication passes it to the planner for About checks, Library plans and the
+worker's apply replan. The fact comes from `debug.ReadBuildInfo`, never from
+installed registry metadata. Missing build information and local module
+replacements supply no verified identity.
+
+The canonical identity uses exact resolved Go module versions, including the
+leading `v`. The field named `runtime_commit` holds the resolved runtime module
+version; its Go pseudo-version identifies the pinned commit without comparing
+a full Git hash with Go's abbreviated revision. Native requirements match Go
+module paths by longest prefix. `.wippy/bin/wippy.go.mod` records the builder's
+resolved versions; `wippy.provenance.json` binds that file's checksum and the
+requested runtime and native pins. The release source builder adds a
+`bee.binary_identity` entry to the target root pack from the build manifest; planning checks its native components and runtime commit
 against those executable facts. A target that needs an unavailable native
 version or another runtime commit is refused with `needs a newer Bee binary`
 before apply. Select an earlier `bee/bee` version in its version history to plan

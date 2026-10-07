@@ -8,5 +8,6 @@ entries:
     comment: Unit tests provide the host facts without loading Bee's native host component.
   data:
     values:
+      binary_identity: '{"native_module":"github.com/wippyai/bee/native","native_version":"v1.0.0","native_modules":{"github.com/wippyai/bee/native":"v1.0.0"},"runtime_commit":"v0.1.14-0.20261007011850-2bb9e144ab06"}'
       environment_names: '["PATH"]'
       self: /usr/local/bin/bee

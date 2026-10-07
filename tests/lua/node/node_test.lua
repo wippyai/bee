@@ -326,6 +326,45 @@ local function define_tests()
             close_all(events, presented(events, desktop, "bee.tests.node:", count))
             process.unlisten(events)
         end)
+        test.it("restarts a window running an earlier revision of an applied application in place", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local state = watched()
+            local desktop = tostring(state.desktop)
+            local id = tostring(call("open", {app = PROBE, desktop = desktop}).id)
+            while next_event(events, "opened").id ~= id do end
+            local function revise(revision: string)
+                local entry = assert(registry.get(PROBE))
+                entry.meta.application.revision = revision
+                local changes = assert(registry.snapshot()):changes()
+                changes:update(entry)
+                assert(changes:apply())
+            end
+            revise("2")
+            local restored, failure = pcall(function()
+                assert(events_bus.send("bee.attention", "application.applied", home_workspace(state).id, {component = "bee.tests.node"}))
+                local others = installed(state, "bee.tests.node:") - 1
+                local closed, reopened = false, false
+                local presented_ids: {string} = {}
+                local deadline = time.after("5s")
+                while not (closed and reopened and #presented_ids == others) do
+                    local selected = channel.select({(events :: channel.Channel):case_receive(), deadline:case_receive()})
+                    if selected.channel == deadline then error("the window was not restarted on its applied revision") end
+                    local event = client.event(selected.value:payload():data())
+                    if event and event.kind == "closed" and event.id == id then closed = true end
+                    if event and event.kind == "opened" and event.id == id then
+                        test.is_true(closed)
+                        test.eq(event.instance and event.instance.app, PROBE)
+                        reopened = true
+                    end
+                    if event and event.kind == "attention" and event.id ~= id then presented_ids[#presented_ids + 1] = tostring(event.id) end
+                end
+                presented_ids[#presented_ids + 1] = id
+                close_all(events, presented_ids)
+            end)
+            revise("1")
+            process.unlisten(events)
+            if not restored then error(tostring(failure)) end
+        end)
     end)
 
     test.describe("catalog", function()

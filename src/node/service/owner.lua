@@ -53,7 +53,7 @@ type Dialog = {request_id: string, client_request_id: string, kind: string, titl
 -- answering; args are what it was opened with, kept with its checkpoint.
 type Instance = {id: string, app: string, title: string, desktop: string, workspace: string, view: tty.Viewport, pid: string, terminal: boolean,
     token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
-    singleton: boolean}
+    singleton: boolean, revision: string?, relaunch: boolean?}
 type SavedInstance = {id: string, app: string, title: string, desktop: string, workspace: string, handle: string, pid: string, terminal: boolean,
     token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
     singleton: boolean}
@@ -386,7 +386,7 @@ local function main(saved: unknown)
         local instance: Instance = {id = id, app = app, title = definition.title, desktop = desktop.id, workspace = workspace.id,
             view = view, pid = tostring(pid),
             terminal = definition.terminal, token = token, negotiate = false, closing = nil, dialog = nil, args = app_args,
-            resume_schema = definition.resume_schema, singleton = definition.singleton}
+            resume_schema = definition.resume_schema, singleton = definition.singleton, revision = definition.revision}
         instances[id] = instance
         by_pid[instance.pid] = id
         return instance, nil
@@ -911,9 +911,26 @@ local function main(saved: unknown)
         elseif event.kind == "application.applied" and type(data.component) == "string" then
             refresh()
             local prefix = tostring(data.component) .. ":"
+            -- A window already running an earlier revision of the application
+            -- restarts in place on the applied one; the others are presented.
+            local running: {[string]: boolean} = {}
+            for _, instance in pairs(instances) do
+                if instance.workspace == workspace_id and instance.app:sub(1, #prefix) == prefix then
+                    running[instance.app] = true
+                    local definition = application.definition(instance.app)
+                    if definition and definition.revision ~= instance.revision and not instance.relaunch then
+                        instance.relaunch = true
+                        local stopped = stop(instance)
+                        if not stopped.ok then
+                            instance.relaunch = nil
+                            logger:warn("App not restarted on its applied revision", {id = instance.id, error = stopped.error})
+                        end
+                    end
+                end
+            end
             for _, app in ipairs(installed_apps) do
                 local id = app.id
-                if type(id) == "string" and id:sub(1, #prefix) == prefix then present(workspace_id, id, {}) end
+                if type(id) == "string" and id:sub(1, #prefix) == prefix and not running[id] then present(workspace_id, id, {}) end
             end
         end
     end
@@ -961,9 +978,20 @@ local function main(saved: unknown)
         instances[id] = nil
         workspaces.forget(id)
         if instance then
-            if problem then logger:warn("App failed", {id = id, app = instance.app, error = problem}) end
+            if problem and not instance.relaunch then logger:warn("App failed", {id = id, app = instance.app, error = problem}) end
             instance.view:close()
             broadcast({kind = "closed", id = id})
+            if instance.relaunch then
+                local restarted, restart_error = start(id, instance.app, instance.desktop, instance.args, instance.workspace)
+                if not restarted then
+                    logger:warn("App not restarted on its applied revision", {id = id, app = instance.app, error = restart_error})
+                    return
+                end
+                local kept, keep_error = workspaces.keep({id = restarted.id, desktop_id = restarted.desktop,
+                    workspace_id = restarted.workspace, app = restarted.app, args = restarted.args})
+                if not kept then logger:warn("App instance not kept", {id = restarted.id, error = keep_error}) end
+                broadcast({kind = "opened", instance = describe(restarted)})
+            end
         end
     end
 

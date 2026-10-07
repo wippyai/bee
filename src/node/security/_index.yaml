@@ -234,6 +234,15 @@ entries:
     actions: [registry.get, registry.version, registry.find, security.policy_group.get, security.policy.get]
     resources: '*'
     effect: allow
+- name: tests_backend_node
+  kind: security.policy
+  groups: [tests_backend]
+  meta:
+    comment: The test backend reads this node's identity, which selects the governed admissions of an overlay-delivered application
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
 - name: tests_backend_wake
   kind: security.policy
   groups: [tests_backend]

@@ -1,8 +1,9 @@
 -- MIT. An application with its own database, end to end through delivery: an
 -- agent authors and delivers a pack declaring app.database, a migration and
--- an agent tool; the person approves the installation in Needs you, reading
+-- an agent tool and a test; the person approves the installation in Needs you, reading
 -- the migration it runs; Bee installs the database, runs the migration and
--- exposes the application. The application and the agent tool then share
+-- exposes the application. The agent lists and runs the pack's test through
+-- the tests tool. The application and the agent tool then share
 -- the table. A later version appends a migration that runs forward only; going
 -- back past it is refused, going back to a version that defines it runs none,
 -- and removing the application keeps its data for the next install. A node
@@ -16,6 +17,7 @@ local json = require("json")
 local application = require("application")
 local harness = require("harness")
 local registry = require("registry")
+local time = require("time")
 local workspace_applications = require("workspace_applications")
 
 -- The suite delivers the guide's example under an overlay of its own, so no
@@ -34,9 +36,12 @@ local function first_version(): {Object}
     local entries: {Object} = {}
     for _, entry in ipairs(guide.example()) do entries[#entries + 1] = entry end
     for _, entry in ipairs(guide.database_example()) do entries[#entries + 1] = entry end
+    for _, entry in ipairs(guide.test_example()) do entries[#entries + 1] = entry end
     local encoded = assert(json.encode(entries))
+    -- The node's test runner finds application tests by app_test in the
+    -- suites' composition, so the suites' own runner leaves them alone.
     local renamed = encoded:gsub(guide.NAMESPACE:gsub("%p", "%%%0"), NAMESPACE)
-        :gsub("bee%.shell:apps_menu", MENU)
+        :gsub("bee%.shell:apps_menu", MENU):gsub('"type":"test"', '"type":"app_test"')
     return assert(json.decode(renamed)) :: {Object}
 end
 
@@ -96,6 +101,23 @@ local function as_agent(workspace: string, tool: string, arguments: Object): Obj
         {tool = tool, arguments = arguments})))
 end
 
+-- as_tester calls the tests tool as the authoring agent, scoped exactly as the
+-- gateway's tests tool.
+local function as_tester(workspace: string, request: Object): Object
+    local actor = assert(security.new_actor("bee.tests.notesdb_author", {workspace_id = workspace}))
+    local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_tests_policy"))})
+    return harness.value(harness.reply(funcs.new():with_actor(actor):with_scope(scope):call("bee.node.binding:tests_call", request)))
+end
+
+local function tests_completed(workspace: string, run_id: unknown): Object
+    for _ = 1, 80 do
+        local value = as_tester(workspace, {operation = "status", run_id = run_id})
+        if value.state == "complete" then return value end
+        time.sleep("250ms")
+    end
+    error("test run " .. tostring(run_id) .. " did not complete")
+end
+
 local function counts(listed: Object): string
     local found: {string} = {}
     for _, value in ipairs(listed.counts :: {unknown}) do found[#found + 1] = tostring(value) end
@@ -123,6 +145,14 @@ local function define_tests()
             local first_outcome = harness.installed(writer, OVERLAY, workspace, "1.0.0", first.intent_id).outcome
             harness.close_presented(before)
             test.eq(first_outcome, "applied")
+
+            local listed_tests = as_tester(workspace, {operation = "list", application = OVERLAY})
+            test.eq(listed_tests.application, APP)
+            test.eq((assert(bounds.object((assert(bounds.array(listed_tests.tests, 8)))[1]))).id, NAMESPACE .. ":counter_test")
+            local started = as_tester(workspace, {operation = "run", application = OVERLAY})
+            test.eq(started.total, 1)
+            local run = tests_completed(workspace, started.run_id)
+            test.eq((assert(bounds.object(run.totals))).passed, 1)
 
             as_application(workspace, NAMESPACE .. ":count_record", {value = 1})
             test.eq(as_agent(workspace, "counter_record", {value = 2}).recorded, 2)

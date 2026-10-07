@@ -98,6 +98,45 @@ end
 
 local function define_tests()
     test.describe("Library frame", function()
+        test.it("reads a version an update replaced as replaced and keeps Removed for removals", function()
+            local state = fresh()
+            test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {
+                {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i2", overlay_owner = "owner-tasks", source_node = NODE,
+                    source_workspace = "tasks", version = "1.0.1", revision = 3, phase = "settled", outcome = "applied",
+                    observed_intent_id = "i2", observed_outcome = "applied"},
+                {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i1", overlay_owner = "owner-tasks", source_node = NODE,
+                    source_workspace = "tasks", version = "1.0.0", revision = 3, phase = "settled", outcome = "applied",
+                    observed_intent_id = "i2", observed_outcome = "applied"}}})))
+            model.show_tab(state, "history")
+            local rendered = table.concat(plain(view.draw(100, 18, appearance.defaults(), state, ui()).rows), "\n")
+            test.is_true(rendered:find("Tasks  ", 1, true) ~= nil)
+            test.is_true(rendered:find("Replaced by 1.0.1", 1, true) ~= nil)
+            test.is_false(rendered:find("Removed", 1, true) ~= nil)
+        end)
+
+        test.it("keeps internal workflow words off a shared version's Details until Technical", function()
+            local state = fresh()
+            test.is_true(governed.apply_available(state.governed, reply({workspace_id = WORKSPACE,
+                versions = {version("tally", "2.0.0", "node-laptop")}})))
+            model.show_tab(state, "shared")
+            model.show_version(state, true)
+            local rendered = table.concat(plain(view.draw(100, 24, appearance.defaults(), state, ui()).rows), "\n")
+            for _, internal in ipairs({"Accept", "Reject", "Select", "Prepare", "staged", "Apply", "Recover"}) do
+                test.is_false(rendered:find(internal, 1, true) ~= nil, internal)
+            end
+            test.is_true(rendered:find("Install", 1, true) ~= nil)
+            test.is_true(rendered:find("Technical", 1, true) ~= nil)
+        end)
+
+        test.it("shows Bee's full version in the Installed table", function()
+            local state = fresh()
+            hub.apply_installed(state.hub, hub_reply({modules = {
+                {component = "bee/bee", version = "0.0.1-alpha.8", source = "hub", direct = true, used_by = {}}}, roots = {}}))
+            local rendered = table.concat(plain(view.draw(100, 18, appearance.defaults(), state, ui()).rows), "\n")
+            test.is_true(rendered:find("0.0.1-alpha.8", 1, true) ~= nil)
+            test.is_false(rendered:find("…", 1, true) ~= nil)
+        end)
+
         test.it("shows a shared version as shared and never as installed", function()
             local state = fresh()
             test.is_true(governed.apply_available(state.governed, reply({workspace_id = WORKSPACE,

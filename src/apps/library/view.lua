@@ -142,7 +142,7 @@ end
 local function lines_of(state: model.State, row: model.Row): {string}
     local lines: {string} = {}
     if row.origin == "governed" and state.tab == "history" then
-        lines[#lines + 1] = "Status   " .. row.status .. (row.note ~= "" and (" · " .. row.note) or "")
+        lines[#lines + 1] = "Status   " .. row.status .. (row.replaced_by and (" by " .. row.replaced_by) or "") .. (row.note ~= "" and (" · " .. row.note) or "")
         lines[#lines + 1] = "Source   " .. row.source
         if state.governed.technical then
             for _, item in ipairs(state.governed.activations) do
@@ -167,13 +167,13 @@ end
 -- The row's cells: name, version, status with the newer version it offers,
 -- and where it came from.
 local function cells(row: model.Row): {string}
-    local status = row.kind == "section" and "" or (model.status_glyph(row.status) .. " " .. row.status .. (row.update and (" " .. row.update) or ""))
+    local status = row.kind == "section" and "" or (model.status_glyph(row.status) .. " " .. row.status .. (row.update and (" " .. row.update) or "") .. (row.replaced_by and (" by " .. row.replaced_by) or ""))
     local source = row.source
     if row.note ~= "" then source = source .. " · " .. row.note end
     return {model.kind_glyph(row.kind) .. " " .. row.name, row.version, status, source}
 end
 
-local COLUMNS: {frame.Column} = {{title = "Name", width = 0}, {title = "Version", width = 10},
+local COLUMNS: {frame.Column} = {{title = "Name", width = 0}, {title = "Version", width = 14},
     {title = "Status", width = 28}, {title = "Source", width = 34}}
 
 local function empty_title(state: model.State): (string, string)
@@ -254,7 +254,7 @@ local function draw_platform(width: integer, height: integer, preferences: appea
     end
     local window = {offset = 0, capacity = 0}
     if #rows > 0 and height >= 6 then
-        window = frame.table(painter, 4, height - 2, {columns = {{title = "Package", width = 0}, {title = "Version", width = 10},
+        window = frame.table(painter, 4, height - 2, {columns = {{title = "Package", width = 0}, {title = "Version", width = 14},
             {title = "Part of", width = 12}}, cells = table_cells, keys = keys, kind = "row", selected = selected_index, offset = ui.offset})
     end
     if height >= 4 then

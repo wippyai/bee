@@ -16,10 +16,11 @@ M.update = "↑"
 M.waiting = "◷"
 M.installing = "⇣"
 M.removed = "✗"
+M.replaced = "↻"
 M.warning = "⚠"
 
 -- The glyphs in one list, for the checks that every one is a single cell.
 M.all = {M.app, M.driver, M.package, M.hive, M.capability, M.installed, M.update, M.waiting,
-    M.installing, M.removed, M.warning}
+    M.installing, M.removed, M.replaced, M.warning}
 
 return M

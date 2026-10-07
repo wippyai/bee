@@ -391,6 +391,13 @@ function M.select(state: State, key: string?)
     if state.review_key and state.review_key ~= key then M.forget_review(state) end
     state.notice, state.fault = "", ""
 end
+-- The node this bee is: the destination the plan list named, else the one its
+-- activations record.
+function M.own_node(state: State): string?
+    if state.owner_node then return state.owner_node end
+    local first = state.activations[1]
+    return first and first.owner_node or nil
+end
 function M.apply_list(state: State, reply: Reply?)
     local value = result_object(reply)
     if not value then refuse(state, reply); return false end

@@ -11,7 +11,7 @@ local M = {}
 
 type Tab = "installed" | "shared" | "history"
 -- The only words a row's status uses.
-type Status = "Shared" | "Waiting for your approval" | "Installing" | "Installed" | "Update available" | "Removed"
+type Status = "Shared" | "Waiting for your approval" | "Installing" | "Installed" | "Update available" | "Replaced" | "Removed"
 type Origin = "governed" | "hub"
 -- What a row stands for: an application or a driver Bee runs for the person,
 -- the one row for Bee's own platform, a Hub package, or the collapsed Hub
@@ -21,13 +21,15 @@ type RowKind = "app" | "driver" | "package" | "platform" | "section"
 -- an Update available row offers; component names the Hub package;
 -- application is the definition that opens an installed application and
 -- baseline the version a removal goes back to; removable says a Hub package
--- nothing else needs may be removed.
+-- nothing else needs may be removed; replaced_by names the version a Replaced
+-- row gave way to.
 type Row = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, update: string?,
+    replaced_by: string?,
     source: string, note: string, component: string?, available_key: string?, intent_id: string?,
     operation: string?, app: string?, application: string?, baseline: string?, removable: boolean}
 -- What a row needs to say; the rest is empty.
 type Spec = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, source: string,
-    update: string?, note: string?, component: string?, available_key: string?, intent_id: string?,
+    update: string?, replaced_by: string?, note: string?, component: string?, available_key: string?, intent_id: string?,
     operation: string?, app: string?, application: string?, baseline: string?, removable: boolean?}
 type Selection = {installed: string?, shared: string?, history: string?, platform: string?}
 type Screen = "list" | "version" | "platform"
@@ -43,6 +45,7 @@ M.STATUS_WAITING = "Waiting for your approval"
 M.STATUS_INSTALLING = "Installing"
 M.STATUS_INSTALLED = "Installed"
 M.STATUS_UPDATE = "Update available"
+M.STATUS_REPLACED = "Replaced"
 M.STATUS_REMOVED = "Removed"
 
 function M.new(workspace_id: string): State
@@ -95,7 +98,7 @@ end
 -- Where a version came from: this bee's own work, naming its agent when it is
 -- known, or another bee of the hive.
 function M.source(state: State, node: string, author: string?): string
-    if node == state.governed.owner_node then
+    if node == governed.own_node(state.governed) then
         return author and ("made by " .. author) or "made on this bee"
     end
     return "from bee " .. M.bee(state, node)
@@ -107,7 +110,7 @@ function M.sources(state: State): {string}
     local seen: {[string]: boolean} = {}
     local nodes: {string} = {}
     local function note(node: string)
-        if node ~= state.governed.owner_node and not seen[node] and #nodes < governed.MAX_NODES then
+        if node ~= governed.own_node(state.governed) and not seen[node] and #nodes < governed.MAX_NODES then
             seen[node] = true
             nodes[#nodes + 1] = node
         end
@@ -171,7 +174,7 @@ end
 
 local function make(spec: Spec): Row
     return {key = spec.key, origin = spec.origin, kind = spec.kind, name = spec.name, version = spec.version,
-        status = spec.status, update = spec.update, source = spec.source, note = spec.note or "",
+        status = spec.status, update = spec.update, replaced_by = spec.replaced_by, source = spec.source, note = spec.note or "",
         component = spec.component, available_key = spec.available_key, intent_id = spec.intent_id,
         operation = spec.operation, app = spec.app, application = spec.application, baseline = spec.baseline,
         removable = spec.removable == true}
@@ -352,14 +355,23 @@ local function history_rows(state: State): {Row}
         if item.phase == "settled" and item.outcome ~= "uncertain" then
             local status: Status = M.STATUS_SHARED
             local note = ended_note(item)
+            local replaced_by: string? = nil
             if item.outcome == "applied" then
                 note = ""
-                status = (item.intent_id == item.observed_intent_id and item.observed_outcome == "applied")
-                    and M.STATUS_INSTALLED or M.STATUS_REMOVED
+                if item.intent_id == item.observed_intent_id and item.observed_outcome == "applied" then
+                    status = M.STATUS_INSTALLED
+                else
+                    status = M.STATUS_REMOVED
+                    for _, later in ipairs(state.governed.activations) do
+                        if later.intent_id == item.observed_intent_id and later.version ~= item.version then
+                            status, replaced_by = M.STATUS_REPLACED, later.version
+                        end
+                    end
+                end
             end
             rows[#rows + 1] = make({key = "g:act:" .. item.intent_id, origin = "governed",
                 kind = driver_owner(item.overlay_owner) and "driver" or "app", name = titled(item, item.source_workspace),
-                version = item.version, status = status,
+                version = item.version, status = status, replaced_by = replaced_by,
                 source = M.source(state, item.source_node, M.author(state, item.source_node, item.source_workspace, item.version)),
                 note = note, intent_id = item.intent_id, app = item.source_workspace})
         end
@@ -461,6 +473,7 @@ function M.status_glyph(status: Status): string
     if status == M.STATUS_UPDATE then return glyphs.update end
     if status == M.STATUS_WAITING then return glyphs.waiting end
     if status == M.STATUS_INSTALLING then return glyphs.installing end
+    if status == M.STATUS_REPLACED then return glyphs.replaced end
     if status == M.STATUS_REMOVED then return glyphs.removed end
     return glyphs.hive
 end

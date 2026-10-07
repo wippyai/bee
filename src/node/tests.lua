@@ -31,14 +31,6 @@ function M.succeed(value: unknown): Reply
     return {ok = true, value = value, error = nil}
 end
 
--- overlay_of names the overlay an application argument refers to: an
--- application definition id app.<overlay>:<name> or the overlay id itself.
-function M.overlay_of(application: string): string
-    local namespace = application:match("^([^:]+):")
-    if namespace then return namespace:match("^app%.([^.]+)$") or "" end
-    return application
-end
-
 -- truncate bounds one error text and reports whether it was cut.
 function M.truncate(text: string): (string, boolean)
     if #text <= M.MAX_ERROR_BYTES then return text, false end

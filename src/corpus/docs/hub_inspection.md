@@ -5,6 +5,24 @@ installation. The Library (`bee.apps.library`) is the corresponding terminal app
 never grants package capabilities, writes registry history, starts code or
 creates an application overlay.
 
+Application packages use the same registry declarations as overlay applications:
+`ns.definition` describes the package, `process.lua` with `meta.type: bee.app`
+declares the application and its menus, and `function.lua` entries carry tools,
+migrations and tests. The application and package kind ceilings admit those
+metadata and callable entries.
+
+A requirement with `meta.capability` requests a host grant. Inspection leaves
+it for host review rather than listing it as missing dependency configuration.
+Governance's Hub and overlay resolvers share capability parameter, target and
+owned-tool validation. Admitted package applications run their tests through
+`tests` by definition ID, using registry ownership or explicit `meta.application`
+association across namespaces.
+
+The ordinary Library Hub publication path still lacks application grant
+provisioning and admission integration. These validation and discovery changes
+do not yet establish a complete `app.database` and `agent.tools` installation
+with one approval and migrations.
+
 The public facade is:
 
 ```lua

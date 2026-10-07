@@ -8,6 +8,12 @@ driver a person can install. Three sources fold into one list per tab:
   `governance.application_versions`;
 - Hub packages.
 
+Hub inspection distinguishes host capability requests from missing dependency
+parameters. Admitted Hub applications use the application's test runner by
+registry association, including tests outside the application's namespace.
+Capability-bearing Hub application installation still needs the publication
+path to provision its grants and admission; see [Hub installation](../docs/hub_inspection.md).
+
 The tabs are Installed (what runs here, with Update available when a newer
 version is shared or on the Hub), Shared (what could be installed, from a bee
 or from the Hub) and History (past installs and removals, with the recovery

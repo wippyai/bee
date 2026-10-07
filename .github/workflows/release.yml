@@ -23,6 +23,8 @@ jobs:
       run: |
         version="${GITHUB_REF_NAME#v}"
         printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
+    - name: Release build contracts
+      run: make release-build-check
     - name: Pinned toolchain
       run: make tools
     - name: Lint
@@ -63,7 +65,12 @@ jobs:
         TARGET: ${{ matrix.goos }}-${{ matrix.goarch }}
       run: |
         .wippy/bin/wippy-builder package dist/bee -o "dist/bee-$TARGET.tar.gz"
+        version="${GITHUB_REF_NAME#v}"
+        if [ "$TARGET" = linux-amd64 ]; then cp dist/bee.wapp "dist/bee-$version.wapp"; fi
         cd dist
+        if command -v sha256sum >/dev/null 2>&1; then sha256sum bee.wapp
+        else shasum -a 256 bee.wapp; fi | sed "s/bee.wapp/bee-$version.wapp/" > "bee-$TARGET.wapp.sha256"
+        if [ "$TARGET" = linux-amd64 ]; then cp "bee-$TARGET.wapp.sha256" "bee-$version.wapp.sha256"; fi
         if command -v sha256sum >/dev/null 2>&1; then sha256sum "bee-$TARGET.tar.gz" > "bee-$TARGET.tar.gz.sha256"
         else shasum -a 256 "bee-$TARGET.tar.gz" > "bee-$TARGET.tar.gz.sha256"; fi
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -72,6 +79,9 @@ jobs:
         path: |
           dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
           dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.wapp.sha256
+          dist/bee-*.wapp
+          dist/bee-*.wapp.sha256
   release:
     name: Publish
     needs: build
@@ -83,10 +93,14 @@ jobs:
       with:
         path: dist
         merge-multiple: true
+    - name: Verify every binary embeds the release pack
+      run: |
+        cd dist
+        for proof in bee-*.wapp.sha256; do sha256sum --check "$proof"; done
     - name: Create the release
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         # Every Bee release so far is an alpha the installer serves as latest.
         gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Bee ${GITHUB_REF_NAME#v}" \
-          --generate-notes --latest dist/*.tar.gz dist/*.tar.gz.sha256
+          --generate-notes --latest dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.wapp "dist/bee-${GITHUB_REF_NAME#v}.wapp.sha256"

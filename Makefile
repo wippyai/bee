@@ -42,7 +42,7 @@ export GIT_CONFIG_VALUE_1 := https://github.com/wippyai/bee
 $(shell python3 build/local_manifest.py $(RUNTIME_SOURCE) .)
 endif
 
-.PHONY: tools runtime-pin native-pin compose lint test e2e footprint build install binary-identity binary-identity-check
+.PHONY: tools runtime-pin native-pin compose lint test e2e footprint build install binary-identity binary-identity-check hub-publish release-build-check
 
 $(BUILDER):
 	GOBIN=$(abspath $(BIN)) go install github.com/wippyai/builder/cmd/wippy-builder@$(BUILDER_VERSION)
@@ -67,7 +67,7 @@ native-pin:
 
 # tests/compose.py writes the copy of src the suites load, with their
 # test-only seams; it never changes src or a pack.
-compose:
+compose: binary-identity
 	python3 tests/compose.py
 
 binary-identity: $(WIPPY)
@@ -75,6 +75,13 @@ binary-identity: $(WIPPY)
 
 binary-identity-check:
 	python3 build/binary_identity_test.py
+
+release-build-check: binary-identity-check
+	python3 build/release_contract_test.py
+	python3 build/hub_publish_test.py
+
+hub-publish:
+	python3 build/hub_publish.py --version "$(VERSION)" --wippy "$(abspath $(WIPPY))"
 
 lint: binary-identity compose
 	python3 tools/corpus.py --check

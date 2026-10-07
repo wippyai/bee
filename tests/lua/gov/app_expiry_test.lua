@@ -105,6 +105,13 @@ local function define_tests()
                 harness.drain()
                 harness.close_presented(before)
 
+                -- The agent asking about its delivery reads that the install ended.
+                local reported = harness.value(harness.reply(writer:call("bee.gov.binding:delivery_call", {operation = "status",
+                    workspace_id = workspace, source_overlay_id = OVERLAY, version = "1.0.0"})))
+                local ended_activation = assert(bounds.object(reported.activation), tostring(json.encode(reported)))
+                test.eq(ended_activation.outcome, "expired")
+                test.eq(ended_activation.diagnostics, "The approval request expired before the person answered; install again to ask anew.")
+
                 local expired = shown(workspace)
                 test.is_nil(row_of(expired, "installed"))
                 local shared = assert(row_of(expired, "shared"))

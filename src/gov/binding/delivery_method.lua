@@ -269,11 +269,28 @@ local function status_operation(workspace_id: string, source_workspace: string, 
     local value: Object = {version = version, source_overlay_id = source_workspace, plan_digest = plan.plan_digest,
         artifact_digest = plan.artifact_digest, plan_status = plan.status,
         review_status = plan.review_status, selected = plan.selected}
+    -- The activation reported is the named one, else this version's latest,
+    -- so an install that ended without the person's approval reads as ended.
+    local intent: Object? = nil
     if intent_id then
-        local intent, intent_error = forward(DESTINATION, {operation = "status", workspace_id = workspace_id,
+        local named, intent_error = forward(DESTINATION, {operation = "status", workspace_id = workspace_id,
             intent_id = intent_id})
-        if not intent then return intent_error end
-        value.activation = {phase = intent.phase, outcome = intent.outcome, plan_digest = intent.plan_digest}
+        if not named then return intent_error end
+        intent = named
+    else
+        local listed, list_error = forward(DESTINATION, {operation = "activations", workspace_id = workspace_id})
+        if not listed then return list_error end
+        for _, raw in ipairs(bounds.dense_list(listed.activations, 1024, "activations") or {}) do
+            local item = bounds.object(raw)
+            if item and item.source_node == node and item.source_workspace == source_workspace and item.version == version then
+                intent = item
+                break
+            end
+        end
+    end
+    if intent then
+        value.activation = {intent_id = intent.intent_id, phase = intent.phase, outcome = intent.outcome,
+            plan_digest = intent.plan_digest, diagnostics = intent.diagnostics}
     end
     return transaction.success(value, false)
 end

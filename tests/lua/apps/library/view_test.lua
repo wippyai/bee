@@ -131,9 +131,9 @@ local function define_tests()
         test.it("shows Bee's full version in the Installed table", function()
             local state = fresh()
             hub.apply_installed(state.hub, hub_reply({modules = {
-                {component = "bee/bee", version = "0.0.1-alpha.8", source = "hub", direct = true, used_by = {}}}, roots = {}}))
+                {component = "bee/bee", version = "0.2.0-alpha.8", source = "hub", direct = true, used_by = {}}}, roots = {}}))
             local rendered = table.concat(plain(view.draw(100, 18, appearance.defaults(), state, ui()).rows), "\n")
-            test.is_true(rendered:find("0.0.1-alpha.8", 1, true) ~= nil)
+            test.is_true(rendered:find("0.2.0-alpha.8", 1, true) ~= nil)
             test.is_false(rendered:find("…", 1, true) ~= nil)
         end)
 
@@ -372,7 +372,7 @@ local function define_tests()
             local stub = {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "i3", overlay_owner = "bee.gov.drivers:w.stub",
                 source_node = NODE, source_workspace = "driver_stub", version = "0.2.0", revision = 1, phase = "approval_bound"}
             test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {notes, stub}})))
-            local modules: {{[string]: unknown}} = {{component = "bee/bee", version = "0.1.0-dev", source = "hub", direct = true, used_by = {}}}
+            local modules: {{[string]: unknown}} = {{component = "bee/bee", version = "0.2.0-dev", source = "hub", direct = true, used_by = {}}}
             for _, name in ipairs({"bootloader", "migration", "security", "terminal", "test"}) do
                 modules[#modules + 1] = {component = "wippy/" .. name, version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}}
             end
@@ -383,7 +383,7 @@ local function define_tests()
             test.is_true(text:find("⌁ Driver stub", 1, true) ~= nil)
             test.is_true(text:find("◷ Waiting for your approval", 1, true) ~= nil)
             test.is_true(text:find("◫ Bee", 1, true) ~= nil)
-            test.is_true(text:find("0.1.0-dev", 1, true) ~= nil)
+            test.is_true(text:find("0.2.0-dev", 1, true) ~= nil)
             test.is_true(text:find("built in · 6 packages", 1, true) ~= nil)
             for _, word in ipairs({"wippy/bootloader", "wippy/migration", "wippy/security", "wippy/terminal", "wippy/test", "needed by"}) do
                 test.is_true(text:find(word, 1, true) == nil, word)
@@ -397,7 +397,7 @@ local function define_tests()
         test.it("opens the platform on its own screen and never offers to remove it", function()
             local state = fresh()
             hub.apply_installed(state.hub, hub_reply({modules = {
-                {component = "bee/bee", version = "0.1.0-dev", source = "hub", direct = true, used_by = {}},
+                {component = "bee/bee", version = "0.2.0-dev", source = "hub", direct = true, used_by = {}},
                 {component = "wippy/bootloader", version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}},
                 {component = "userspace/editor", version = "1.0.0", source = "hub", direct = true, used_by = {"userspace/suite"}},
                 {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}}}, roots = {}}))

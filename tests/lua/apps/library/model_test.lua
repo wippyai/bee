@@ -159,7 +159,7 @@ local function define_tests()
         test.it("lists what the person uses and folds Bee's platform into one row", function()
             local state = fresh()
             hub.apply_installed(state.hub, hub_reply({modules = {
-                {component = "bee/bee", version = "0.1.0-dev", source = "hub", direct = true, used_by = {}},
+                {component = "bee/bee", version = "0.2.0-dev", source = "hub", direct = true, used_by = {}},
                 {component = "wippy/bootloader", version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}},
                 {component = "wippy/terminal", version = "1.0.0", source = "hub", direct = false, used_by = {"wippy/bootloader", "bee/bee"}},
                 {component = "bee/terminal", version = "0.4.6", source = "builtin", direct = true, used_by = {}},
@@ -181,7 +181,7 @@ local function define_tests()
             test.is_true(model.can_remove_package(rows[1]))
             test.eq(rows[2].kind, "platform")
             test.eq(rows[2].name, "Bee")
-            test.eq(rows[2].version, "0.1.0-dev")
+            test.eq(rows[2].version, "0.2.0-dev")
             test.eq(rows[2].source, "built in · 4 packages")
             test.is_false(model.can_remove_package(rows[2]))
             local names: {string} = {}

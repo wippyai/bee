@@ -3,7 +3,7 @@ directories:
     src: ./lua
 modules:
     - name: bee/bee
-      version: 0.1.0-dev
+      version: 0.2.0-dev
     - name: wippy/bootloader
       version: 0.3.17
       hash: d4506b7733ba079fb05f5e055c0e58b3f89905f7d627ac2244a819164a0507a0

@@ -18,7 +18,7 @@
 # checkouts through git URL rewrites scoped to the build's processes.
 
 BUILDER_VERSION ?= 0c58e22a3f242b183298872e770e406d111d3242
-VERSION ?= 0.1.0-dev
+VERSION ?= 0.2.0-dev
 BIN := .wippy/bin
 BUILDER := $(BIN)/wippy-builder
 WIPPY := $(BIN)/wippy

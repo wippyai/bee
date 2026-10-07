@@ -13,7 +13,7 @@ version is shared or on the Hub), Shared (what could be installed, from a bee
 or from the Hub) and History (past installs and removals, with the recovery
 action of an interrupted Hub change). Installed lists what the person uses (applications and drivers by the title
 they declare, Hub packages the person installed) and Bee's platform as one row
-("Bee 0.1.0-dev, built in, 6 packages", Enter lists them); packages other
+("Bee 0.2.0-dev, built in, 6 packages", Enter lists them); packages other
 installed things need are never offered for removal. Shared lists what the
 hive made first and keeps the Hub catalog behind one collapsed row, because Hub
 metadata does not say which uninstalled packages Bee can run as applications.

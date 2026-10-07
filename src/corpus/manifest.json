@@ -309,7 +309,7 @@
     {
       "bytes": 4473,
       "id": "component/apps:library",
-      "sha256": "637ead3e6538f628421372c4aab1035f9553312be7fc68b99d257fa74ea9789c",
+      "sha256": "1fd4d6c6168d62dc6d7263723ce646789997ee20781b88e6584b2ebf08d0c216",
       "source": "generated: src/apps/library",
       "title": "bee.apps.library",
       "topic": "component"

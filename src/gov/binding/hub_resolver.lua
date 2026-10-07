@@ -11,6 +11,8 @@ local protected_kernel = require("protected_kernel")
 local preflight = require("preflight")
 local lists = require("lists")
 local resolution = require("resolution")
+local requirement = require("requirement")
+local capability_model = require("capability_model")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -242,47 +244,6 @@ local function measured_entry(entry: Entry, package: string): (preflight.Entry?,
         config_empty = config_empty}, nil
 end
 
-local function path_value(entry: Entry, path: unknown): (unknown?, string?)
-    if type(path) ~= "string" or not path:match("^%.[A-Za-z_][A-Za-z0-9_%.]*$") then
-        return nil, "requirement target path is invalid"
-    end
-    local value: unknown = entry
-    for name in path:gmatch("[A-Za-z_][A-Za-z0-9_]*") do
-        local parent = object(value)
-        if not parent then return nil, "requirement target path does not resolve" end
-        value = parent[name]
-    end
-    return value, nil
-end
-
-local function requirement(entry: Entry, package: string, final: {[string]: Entry}): (preflight.Requirement?, string?)
-    local id = bounds.id(entry.id)
-    if not id then return nil, "requirement identity is invalid" end
-    local data = object(entry.data) or entry
-    local targets, targets_error = bounds.dense_list(data.targets, 64, "requirement targets")
-    if not targets then return nil, targets_error end
-    local result_targets: {string} = {}
-    local selected: string? = nil
-    for _, raw in ipairs(targets) do
-        local target = object(raw)
-        local target_entry = target and bounds.id(target.entry) or nil
-        if not target_entry then return nil, "requirement target is invalid" end
-        result_targets[#result_targets + 1] = target_entry
-        local destination = object(final[target_entry])
-        if not destination then return nil, "requirement target entry is absent: " .. target_entry end
-        local bound, bound_error = path_value(destination, target.path)
-        local value = bounds.id(bound)
-        if not value then return nil, bound_error or "requirement target has no selected binding" end
-        if selected and selected ~= value then return nil, "requirement targets disagree on the selected binding" end
-        selected = value
-    end
-    table.sort(result_targets)
-    local meta = object(entry.meta)
-    local expected: string? = meta and bounds.id(meta.value_kind) or nil
-    return {id = id, package = package, value = selected,
-        expected_kind = expected, targets = result_targets}, nil
-end
-
 local function migration(entry: Entry): (preflight.Migration?, string?)
     local meta = object(entry.meta)
     local target = meta and bounds.id(meta.target_db) or nil
@@ -374,6 +335,14 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local selected, closure_error = closure(component, edges, modules)
     if not selected then return nil, nil, closure_error end
 
+    local catalog: capability_model.Vocabulary? = nil
+    for _, entry in ipairs(captured.entries) do
+        if entry.id == "bee.capability:catalog" then
+            local decoded, catalog_error = capability_model.decode(entry)
+            if not decoded then return nil, nil, catalog_error end
+            catalog = decoded
+        end
+    end
     local flattened: {Entry} = {}
     local package_entries: {[string]: {Entry}} = {}
     local final_by_id: {[string]: Entry} = {}
@@ -408,6 +377,8 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         local namespaces: {string} = {}
         local namespace_set: {[string]: boolean} = {}
         local entries: {Entry} = package_entries[package] or {}
+        local owned: {[string]: boolean} = {}
+        for _, entry in ipairs(entries) do owned[entry.id] = true end
         for _, raw_entry in ipairs(entries) do
             local entry, entry_error = copy_entry(raw_entry)
             if not entry then return nil, nil, entry_error end
@@ -420,7 +391,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             if not measured then return nil, nil, measured_error end
             candidate_entries[#candidate_entries + 1] = measured
             if entry.kind == "ns.requirement" then
-                local item, item_error = requirement(entry, package, final_by_id)
+                local item, item_error = requirement.resolve(entry, package, final_by_id, owned, catalog)
                 if not item then return nil, nil, item_error end
                 requirements[#requirements + 1] = item
             end
@@ -480,6 +451,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     end
     for _, item in ipairs(requirements) do
         for _, target in ipairs(item.targets) do relevant_ids[target] = true end
+        if item.capability_request then relevant_ids["bee.capability:catalog"] = true end
     end
     if policy.database_bindings ~= nil then
         if type(policy.database_bindings) ~= "table" then return nil, nil, "host policy database bindings are malformed" end

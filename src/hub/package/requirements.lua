@@ -15,6 +15,7 @@ type Requirement = {
     id: string,
     default: unknown?,
     has_default: boolean,
+    capability: string?,
     targets: {Target},
     selected: unknown?,
     has_selected: boolean,
@@ -122,7 +123,9 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
                     return nil, encode_error or "requirement default exceeds its bound"
                 end
             end
-            requirements[#requirements + 1] = {id = id, default = data.default, has_default = has_default, targets = targets, has_selected = false}
+            local meta = bounds.object(entry.meta)
+            local capability = meta and bounds.text(meta.capability, 80) or nil
+            requirements[#requirements + 1] = {capability = capability, id = id, default = data.default, has_default = has_default, targets = targets, has_selected = false}
             by_id[id] = #requirements
             local bare = id:match(":([^:]+)$")
             if bare then
@@ -145,7 +148,7 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
     end
     local missing: {string} = {}
     for _, requirement in ipairs(requirements) do
-        if not requirement.has_selected and not requirement.has_default then missing[#missing + 1] = requirement.id end
+        if not requirement.capability and not requirement.has_selected and not requirement.has_default then missing[#missing + 1] = requirement.id end
     end
     return {requirements = requirements, missing = missing}, nil
 end

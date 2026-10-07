@@ -21,6 +21,18 @@ end
 
 local function define_tests()
     test.describe("Hub requirements", function()
+        test.it("leaves application capabilities to host admission rather than dependency parameters", function()
+            local result = assert(requirements.read({
+                {id = "app.progress:database", kind = "ns.requirement",
+                    meta = {value_kind = "security.policy", capability = "app.database",
+                        parameters = {name = "progress"}, reason = "Keep tasks"},
+                    data = {targets = {{entry = "app.progress:app", path = ".security.policies +="}}}},
+            }, {}))
+            test.eq(#result.missing, 0)
+            test.is_false(result.requirements[1].has_default)
+            test.is_false(result.requirements[1].has_selected)
+        end)
+
         test.it("projects selected migration database holes without changing artifact entries", function()
             local entries: {requirements.Entry} = {
                 {id = "demo:first", kind = "function.lua", meta = {type = "migration", target_db = "demo:raw"}, data = {}},

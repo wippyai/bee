@@ -114,6 +114,47 @@ end
 
 local function define_tests()
     test.describe("Hub registry resolver", function()
+        test.it("resolves an application database capability from the host catalog", function()
+            local deps, spec, observed = deps_fixture(nil)
+            local captured = assert(observed.captured)
+            captured.entries[#captured.entries + 1] = {id = "bee.capability:catalog", kind = "registry.entry",
+                registry = {owner = "host/base"}, meta = {type = "bee.capability_catalog"},
+                data = {revision = 1, never = {"exec"}, capabilities = {{id = "app.database", revision = 1,
+                    confirm = "standard", parameters = {name = "name"},
+                    text = "Use database {name}", resources = {},
+                    policies = {{operation = "database.use", resource = "$name", scope = {name = "$name"}}},
+                    modules = {"sql"}}}}}
+            local entries: {Object} = {
+                {id = "app.progress:database", kind = "ns.requirement",
+                    meta = {value_kind = "security.policy", capability = "app.database",
+                        parameters = {name = "progress"}, reason = "Keep tasks"},
+                    data = {targets = {{entry = "app.progress:app", path = ".security.policies +="}}}},
+                {id = "app.progress:app", kind = "process.lua", meta = {type = "bee.app"}, data = {}},
+            }
+            local made = assert(artifact.create(entries))
+            spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
+            captured.preview = function(_: Object): (resolver.RegistryPlan?, string?)
+                local changes: {resolver.RegistryChange} = {}
+                for _, raw in ipairs(entries) do
+                    local value: Object = {}
+                    for key, child in pairs(raw) do value[key] = child end
+                    value.registry = {owner = "bee/progress"}
+                    changes[#changes + 1] = {op = "create", entry = value}
+                end
+                return {digest = SHA, changes = changes,
+                    resolution = {modules = {{name = "bee/progress", version = "1.0.0", digest = SHA}}}}, nil
+            end
+            deps.root = function(_: unknown): (resolver.Root?, string?)
+                return {component = "bee/progress", version = "1.0.0", parameters = {}}, nil
+            end
+            local resolved = facts(deps, spec)
+            local request = assert(resolved.candidate.requirements[1].capability_request)
+            test.eq(request.capability, "app.database")
+            test.eq(request.parameters.name, "progress")
+            test.eq(request.target, "app.progress:app")
+            test.eq(request.path, ".security.policies +=")
+        end)
+
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec, observed = deps_fixture(nil)
             local captured = observed.captured

@@ -534,6 +534,16 @@ entries:
     capability_files: bee.gov.types:capability_files
     canonical: bee.values:canonical
     bounds: bee.values:bounds
+- name: requirement
+  kind: library.lua
+  source: file://requirement.lua
+  imports:
+    bounds: bee.values:bounds
+    capability_model: bee.capability:model
+    agent_tool: bee.values:agent_tool
+    drivers: bee.gov.types:drivers
+    driver_admission: bee.gov.types:driver_admission
+    preflight: bee.gov.binding:preflight
 - name: hub_resolver
   kind: library.lua
   source: file://hub_resolver.lua
@@ -541,6 +551,8 @@ entries:
   - registry
   - hash
   imports:
+    requirement: bee.gov.binding:requirement
+    capability_model: bee.capability:model
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
     canonical: bee.values:canonical
@@ -556,7 +568,7 @@ entries:
   - registry
   - hash
   imports:
-    agent_tool: bee.values:agent_tool
+    requirement: bee.gov.binding:requirement
     drivers: bee.gov.types:drivers
     driver_admission: bee.gov.types:driver_admission
     workspace_applications: bee.gov.types:workspace_applications

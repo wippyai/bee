@@ -137,3 +137,58 @@ entries:
     - bee.approvals.decide
     resources: '*'
     effect: allow
+- name: approval_hive_names
+  kind: security.policy
+  meta:
+    comment: The approvals hive service holds its node-local name, checks requests come from the Hive supervisor and reads this node's identity and role
+  policy:
+    actions:
+    - process.registry.register
+    - process.registry.lookup
+    - system.read
+    - env.get
+    resources:
+    - bee.approvals
+    - bee.hive.supervisor
+    - node
+    - cluster
+    - bee:role
+    effect: allow
+- name: approval_hive_admission
+  kind: security.policy
+  meta:
+    comment: The approvals hive service runs a mapped owner operation as the calling node under the peer policies
+  policy:
+    actions:
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    resources: '*'
+    effect: allow
+- name: approval_hive_peer
+  kind: security.policy
+  meta:
+    comment: A peer node reaches only the mapped owner operations; the destination approver policy decides what its actor may read or settle
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.approvals.binding:feed_snapshot
+    - bee.approvals.binding:feed_read_after
+    - bee.approvals.binding:read
+    - bee.approvals.binding:decide
+    - bee.approvals.binding:decide_batch
+    - bee.approvals.binding:withdraw
+    - bee.approvals.binding:grant_window
+    effect: allow
+- name: approval_hive_peer_decide
+  kind: security.policy
+  meta:
+    comment: A peer node passes the workspace decision gate; the destination approver policy still has to list its actor
+  policy:
+    actions:
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow

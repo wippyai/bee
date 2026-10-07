@@ -20,6 +20,28 @@ entries:
   - process
   imports:
     service: bee.approvals.binding:service
+- name: hive
+  kind: process.lua
+  source: file://hive.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - system
+  - env
+  - funcs
+  - security
+  - logger
+  imports:
+    protocol: bee.hive:protocol
+- name: hive_route
+  kind: registry.entry
+  meta:
+    type: bee.hive.route
+    comment: Hive operations approvals.* go to this node's approval owner service
+  data:
+    prefix: approvals
+    name: bee.approvals
 - name: authority_service
   meta:
     title: Approvals · authority
@@ -34,6 +56,24 @@ entries:
       policies:
       - bee.security.approvals:approval_store_policy
       - bee.security.approvals:approval_owner_policy
+  host: bee:workers
+- name: hive_service
+  meta:
+    title: Approvals · hive
+  kind: process.service
+  process: bee.approvals.service:hive
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service]
+    security:
+      actor:
+        id: bee.approvals.hive
+      policies:
+      - bee.security.approvals:approval_hive_names
+      - bee.security.approvals:approval_hive_admission
+      - bee.hive.security:messaging
+    restart:
+      max_attempts: 10
   host: bee:workers
 - name: worker_service
   meta:

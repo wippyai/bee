@@ -49,6 +49,19 @@ entries:
     actions: [events.subscribe]
     resources: [bee.attention]
     effect: allow
+- name: hive_test
+  kind: function.lua
+  source: file://hive_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, uuid, system, process, channel, time]
+  security:
+    policies: [bee.approvals:apply_test_policy, bee.approvals:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy]
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    protocol: bee.hive:protocol
 - name: service_test
   kind: function.lua
   source: file://service_test.lua

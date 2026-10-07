@@ -26,7 +26,7 @@
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee.wapp",
-        "sha256": "8ab533312d9a4abdc480ae37da46baca76d1ed79dae13a10f186827ea0d41001"
+        "sha256": "eec2d9a816ca9821901da62bd4b408a77ad369ef476cf4d7ae9aa34e6d1c9143"
       },
       {
         "module": "wippy/bootloader",
@@ -63,7 +63,7 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261006131642-27ff2f2d5b66",
+      "version": "v0.0.0-20261006235938-c223d417438e",
       "package": "github.com/wippyai/bee/native/hive",
       "factory": "Component",
       "private": true,
@@ -71,7 +71,7 @@
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261006131642-27ff2f2d5b66",
+      "version": "v0.0.0-20261006235938-c223d417438e",
       "package": "github.com/wippyai/bee/native/host",
       "factory": "New",
       "private": true

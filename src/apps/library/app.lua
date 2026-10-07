@@ -217,6 +217,21 @@ local function main(options: unknown)
             state.notice = "That did not go through; Technical says why"
         end
     end
+    -- share_now publishes the installed version of an application made on
+    -- this bee to its hive, as the person.
+    local function share_now(row: model.Row)
+        if not model.can_share(row) or not row.app then state.notice = "Only an application made on this bee can be shared from here"; return end
+        local raw, err = funcs.new():call(governed.SHARE, governed.share_request(gov, row.app, row.version))
+        local answer = not err and governed.reply(raw) or nil
+        if not answer then state.notice = "No answer yet; try again"; gov.fault = tostring(err or "no reply"); return end
+        if answer.ok then
+            state.notice = row.name .. " " .. row.version .. " is shared with your hive"
+            return
+        end
+        local fault = answer.error
+        gov.fault = fault and (fault.code .. ": " .. fault.message) or "share failed"
+        state.notice = "Sharing " .. row.name .. " did not go through; Technical says why"
+    end
     local function stage_now(item: governed.Available): boolean
         local staged = governed.staged_plan(gov, item)
         if staged then governed.select(gov, governed.key(staged)); return true end
@@ -738,6 +753,7 @@ local function main(options: unknown)
         elseif kind == "remove" and row and row.component and model.can_remove_package(row) then remove_package(row.component)
         elseif kind == "remove" and row and row.origin == "governed" then ask_remove(row, "remove")
         elseif kind == "go_back" and row then ask_remove(row, "back")
+        elseif kind == "share" and row then perform(function() share_now(row) end)
         elseif kind == "launch" and row then launch_row(row)
         elseif kind == "hub_catalog" then
             state.hub_open = not state.hub_open
@@ -775,6 +791,7 @@ local function main(options: unknown)
         elseif kind == "technical" then model.toggle_technical(state); ui.offset = 0; changed()
         elseif kind == "remove" then ask_remove(row, "remove")
         elseif kind == "go_back" then ask_remove(row, "back")
+        elseif kind == "share" and row then perform(function() share_now(row) end)
         elseif kind == "launch" and row then launch_row(row)
         elseif kind == "back" then model.show_version(state, false); ui.offset = 0; changed()
         elseif kind == "accept" then perform(function() review_transition(true) end)
@@ -1044,6 +1061,7 @@ local function main(options: unknown)
                                 elseif letter == "x" then version_hit(state.governed.technical and "step" or "remove")
                                 elseif letter == "l" then version_hit("launch")
                                 elseif letter == "b" then version_hit("go_back")
+                                elseif letter == "h" then version_hit("share")
                                 elseif letter == "i" then version_hit("status")
                                 elseif letter == "g" then version_hit("recover")
                                 elseif key == "esc" or key == "escape" then version_hit("back") end
@@ -1078,6 +1096,7 @@ local function main(options: unknown)
                                 elseif letter == "x" and row and state.tab == "installed" then
                                     if model.can_remove_package(row) and row.component then remove_package(row.component) elseif row.origin == "governed" then ask_remove(row, "remove") end
                                 elseif letter == "b" and row and state.tab == "installed" then ask_remove(row, "back")
+                                elseif letter == "h" and row and state.tab == "installed" then list_hit("share", "")
                                 elseif letter == "g" and state.tab == "history" then list_hit("recover", "")
                                 elseif letter == "h" and state.tab == "shared" then list_hit("hub_catalog", "")
                                 elseif letter == "/" then begin_editor("query")

@@ -26,11 +26,11 @@ type RowKind = "app" | "driver" | "package" | "platform" | "section"
 type Row = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, update: string?,
     replaced_by: string?,
     source: string, note: string, component: string?, available_key: string?, intent_id: string?,
-    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean}
+    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean, made_here: boolean?}
 -- What a row needs to say; the rest is empty.
 type Spec = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, source: string,
     update: string?, replaced_by: string?, note: string?, component: string?, available_key: string?, intent_id: string?,
-    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean?}
+    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean?, made_here: boolean?}
 type Selection = {installed: string?, shared: string?, history: string?, platform: string?}
 type Screen = "list" | "version" | "platform"
 -- A removal waits for the person's confirmation. Remove takes the application
@@ -177,7 +177,7 @@ local function make(spec: Spec): Row
         status = spec.status, update = spec.update, replaced_by = spec.replaced_by, source = spec.source, note = spec.note or "",
         component = spec.component, available_key = spec.available_key, intent_id = spec.intent_id,
         operation = spec.operation, app = spec.app, application = spec.application, baseline = spec.baseline,
-        removable = spec.removable == true}
+        removable = spec.removable == true, made_here = spec.made_here}
 end
 
 -- Whether a Bee application is a driver, by the overlay that owns it.
@@ -243,7 +243,8 @@ local function installed_rows(state: State): {Row}
                 kind = driver_owner(app.owner) and "driver" or "app", name = titled(current or shown, app.name),
                 version = shown.version, status = M.STATUS_INSTALLED,
                 source = M.source(state, origin_node, M.author(state, origin_node, app.name, (current or shown).version)),
-                intent_id = shown.intent_id, app = app.name, application = current and current.application or nil})
+                intent_id = shown.intent_id, app = app.name, application = current and current.application or nil,
+                made_here = origin_node == state.governed.owner_node})
             if current and current.baseline_intent_id then
                 for _, earlier in ipairs(state.governed.activations) do
                     if earlier.intent_id == current.baseline_intent_id then row.baseline = earlier.version end
@@ -489,6 +490,12 @@ end
 function M.can_remove(row: Row?): boolean
     return row ~= nil and row.origin == "governed" and row.app ~= nil
         and (row.status == M.STATUS_INSTALLED or row.status == M.STATUS_UPDATE)
+end
+
+-- Whether an installed application made on this bee can be shared with the
+-- hive: the installed version is the one shared.
+function M.can_share(row: Row?): boolean
+    return M.can_remove(row) and row ~= nil and row.made_here == true
 end
 
 -- Whether an installed application has an earlier version to go back to.

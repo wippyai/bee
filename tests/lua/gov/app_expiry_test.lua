@@ -2,7 +2,8 @@
 -- delivers, the approval expires in Needs you, the activation worker settles
 -- the install as expired and the Library offers the version in Shared again.
 -- Installing again from the Library asks anew; the person denies it; the agent
--- requests delivery again, the person approves and the application installs.
+-- requests delivery again, the person approves and the application installs,
+-- and the person shares it with the hive from the Library.
 local test = require("test")
 local funcs = require("funcs")
 local security = require("security")
@@ -135,8 +136,17 @@ local function define_tests()
                 test.eq(harness.settle(writer, OVERLAY, workspace, again, "1.0.0").outcome, "applied")
                 harness.close_presented(before)
                 local installed = shown(workspace)
-                test.eq(assert(row_of(installed, "installed")).status, "Installed")
+                local row = assert(row_of(installed, "installed"))
+                test.eq(row.status, "Installed")
                 test.is_nil(row_of(installed, "shared"))
+
+                -- The person shares the installed version with the hive from the Library.
+                test.is_true(library.can_share(row), "made here " .. tostring(row.made_here) .. " source " .. row.source)
+                local shared_request = governed.share_request(installed.governed, OVERLAY, "1.0.0")
+                test.eq(shared_request.operation, "publish")
+                local published = harness.value(harness.share(workspace, OVERLAY, "1.0.0"))
+                test.is_true(published.published == true, json.encode(published))
+                test.eq(published.version, "1.0.0")
             end)
             restore()
             if not done then error(tostring(failure)) end

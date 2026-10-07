@@ -158,6 +158,16 @@ function M.restart(owners: {string}): {unknown}
     return assert(bounds.array(refused, 64))
 end
 
+-- share acts as the person sharing an installed application from the Library,
+-- with the Library's own delivery policies.
+function M.share(workspace: string, overlay: string, version: string): Object
+    local identity = assert(principal.value(workspace, "delivery-library", "bee.apps.library:app", "1", 1))
+    local scope = security.new_scope({assert(security.policy("bee.apps.library:destination_client")),
+        assert(security.policy("bee.apps.library:delivery_operations")), assert(security.policy("bee.apps.library:delivery_share"))})
+    return M.reply(funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata))):with_scope(scope)
+        :call("bee.gov.binding:delivery_call", {operation = "publish", workspace_id = workspace, source_overlay_id = overlay, version = version}))
+end
+
 -- library acts as the person in the Library.
 function M.library(workspace: string, request: Object): Object
     local identity = assert(principal.value(workspace, "delivery-library", "bee.apps.library:app", "1", 1))

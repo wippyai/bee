@@ -78,6 +78,7 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         if row and row.application and state.can_open then
             buttons[#buttons + 1] = {kind = "launch", key = "L", label = "Open", enabled = true}
         end
+        if model.can_share(row) then buttons[#buttons + 1] = {kind = "share", key = "H", label = "Share with your hive", enabled = true} end
         if model.can_go_back(row) then buttons[#buttons + 1] = {kind = "go_back", key = "B", label = "Go back", enabled = true} end
         if model.can_remove(row) then buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = true} end
         if state.governed.technical then
@@ -105,6 +106,9 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         elseif own then
             buttons[#buttons + 1] = {kind = "launch", key = "Enter", label = "Open", enabled = launchable, primary = launchable and not updating}
             buttons[#buttons + 1] = {kind = "open", key = "D", label = "Details", enabled = true, primary = not launchable and not updating}
+            if row ~= nil and row.made_here then
+                buttons[#buttons + 1] = {kind = "share", key = "H", label = "Share with your hive", enabled = model.can_share(row)}
+            end
             buttons[#buttons + 1] = {kind = "go_back", key = "B", label = "Go back", enabled = model.can_go_back(row)}
             buttons[#buttons + 1] = {kind = "remove", key = "X", label = "Remove", enabled = model.can_remove(row)}
         else

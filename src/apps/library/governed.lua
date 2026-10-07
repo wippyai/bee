@@ -7,6 +7,8 @@ local preflight = require("preflight")
 
 local M = {}
 M.CALL = "bee.gov.binding:destination_call"
+-- The delivery facade publishes an installed version to the hive.
+M.SHARE = "bee.gov.binding:delivery_call"
 M.MAX_PLANS = 128
 M.MAX_AVAILABLE = 512
 M.MAX_ACTIVATIONS = 128
@@ -576,6 +578,11 @@ function M.apply_names(state: State, reply: Reply?): boolean
     end
     for node, name in pairs(decoded) do state.names[node] = name end
     return true
+end
+-- share_request publishes the installed version of an application made on
+-- this bee, so the bees of its hive see it in Shared.
+function M.share_request(state: State, source_workspace: string, version: string): Object
+    return {operation = "publish", workspace_id = state.workspace_id, source_overlay_id = source_workspace, version = version}
 end
 function M.uninstall_request(state: State, source_workspace: string, key: string): Object
     return {operation = "uninstall", workspace_id = state.workspace_id, source_workspace = source_workspace,

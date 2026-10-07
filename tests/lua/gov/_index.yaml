@@ -1203,7 +1203,7 @@ entries:
   meta:
     type: test
     suite: bee
-    timeout: 120s
+    timeout: 240s
   security:
     policies:
     - bee.tests.gov:app_expiry_test_policy

@@ -78,6 +78,15 @@ entries:
     - bee.gov.delivery.activate
     resources: '*'
     effect: allow
+- name: delivery_share
+  kind: security.policy.expr
+  meta:
+    comment: The person shares the installed version of an application made on this bee with the hive through the delivery facade, which publishes only a version the person installed
+  policy:
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || (action == "bee.gov.delivery.publish" && resource != "")
+    actions: [funcs.call, bee.gov.delivery.publish]
+    resources: [bee.gov.binding:delivery_call, '*']
+    effect: allow
 - name: hub_client
   kind: security.policy
   meta:
@@ -161,6 +170,7 @@ entries:
     policies:
     - bee.apps.library:destination_client
     - bee.apps.library:delivery_operations
+    - bee.apps.library:delivery_share
     - bee.apps.library:hub_client
     - bee.apps.library:hub_operations
     - bee.apps.library:names_client

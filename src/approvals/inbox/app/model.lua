@@ -621,6 +621,23 @@ function M.withdraw_intent(state: State, request_id: string): (Intent?, string?)
     state.pending = {kind = "withdraw", request_id = request_id, approval_id = selected, revision = detail.revision, decision = nil}
     return {target = "bee.approvals.binding:withdraw", request = {approval_id = selected}}, nil
 end
+-- Who decided, as the person reads it: the person's own Bee application is
+-- "you"; any other approver is named by the last part of its identity.
+function M.decider(decider_id: string?): string
+    if not decider_id then return "unknown" end
+    if decider_id:sub(1, #"bee.application:") == "bee.application:" then return "you" end
+    return M.text(decider_id:match("([^:]+)$") or decider_id, 40)
+end
+-- The decision line of a request: what was decided and by whom, or why it is
+-- not pending any more.
+function M.decision_line(view: ApprovalView): string
+    if view.state == "decided" and view.decision then
+        return (view.decision == "approved" and "Approved" or "Denied") .. " by " .. M.decider(view.decider_id)
+    end
+    if view.state == "pending" then return "Waiting for your decision" end
+    if view.state == "withdrawn" then return "Withdrawn" end
+    return "Expired"
+end
 local function outcome_text(view: ApprovalView): string
     if view.state == "decided" and view.decision then return M.text(view.decision, 40) .. " by " .. M.text(view.decider_id, 120) end
     return view.state

@@ -135,6 +135,20 @@ local function draw_windows(width: integer, height: integer, preferences: appear
     frame.footer(painter, status, frame.hints({{key = "↑↓", verb = "select"}, {key = "X", verb = "revoke"}, {key = "U", verb = "requests"}}))
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
+-- The install card as lines: the title, who made it, each fact once and the
+-- scope.
+local function card_lines(card: model.Card): {string}
+    local lines: {string} = {card.glyph .. " " .. card.title}
+    if card.maker then lines[#lines + 1] = "  " .. card.maker end
+    for _, section in ipairs(card.sections) do
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "  " .. section.heading
+        for _, line in ipairs(section.lines) do lines[#lines + 1] = "  " .. line end
+    end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "  " .. card.scope
+    return lines
+end
 -- A pending permission leads with the question and what it lets the agent
 -- do; who asks and the exact capability are details (T). An exact version to
 -- install is approved once or denied; a repeatable permission may also be
@@ -151,15 +165,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
         local summary = model.summary(item, 0)
         local card = model.card(item)
         if card then
-            lines[#lines + 1] = card.glyph .. " " .. card.title
-            if card.maker then lines[#lines + 1] = "  " .. card.maker end
-            for _, section in ipairs(card.sections) do
-                lines[#lines + 1] = ""
-                lines[#lines + 1] = "  " .. section.heading
-                for _, line in ipairs(section.lines) do lines[#lines + 1] = "  " .. line end
-            end
-            lines[#lines + 1] = ""
-            lines[#lines + 1] = "  " .. card.scope
+            for _, line in ipairs(card_lines(card)) do lines[#lines + 1] = line end
         else
             for _, line in ipairs(prompt_lines(summary.prompt, width)) do lines[#lines + 1] = line end
             if not one_time then lines[#lines + 1] = "Capability: " .. summary.effect end
@@ -219,10 +225,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local detail_rows = 0
     local permission_lines: {string} = {}
     local asked_lines: {string} = {}
+    local installing = detail ~= nil and not state.technical and model.card(detail) or nil
     if detail and selected and detail.approval_id == selected.approval_id and height >= 12 then
         permission_lines = model.permission_lines(detail)
         asked_lines = prompt_lines(selected.prompt, width)
         local needed = 4 + #asked_lines + #permission_lines
+        if installing then needed = #card_lines(installing) + 3 end
         if state.technical then needed = needed + 2 + #model.payload_lines(detail) end
         detail_rows = math.floor(math.max(6, math.min(height - 5, needed)))
     end
@@ -251,16 +259,22 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if detail and selected and detail_rows > 0 then
         local y = list_last + 1
         frame.rule(painter, y)
-        local lines: {string} = {
-            "Effect: " .. selected.effect,
-        }
-        for _, asked_line in ipairs(asked_lines) do lines[#lines + 1] = asked_line end
-        for _, permission_line in ipairs(permission_lines) do
-            lines[#lines + 1] = permission_line
+        local lines: {string} = {}
+        if installing then
+            for _, card_line in ipairs(card_lines(installing)) do lines[#lines + 1] = card_line end
+            lines[#lines + 1] = ""
+            lines[#lines + 1] = model.decision_line(detail) .. (detail.state == "pending" and ("  expires " .. selected.expires_at) or "")
+        else
+            lines[#lines + 1] = "Effect: " .. selected.effect
+            for _, asked_line in ipairs(asked_lines) do lines[#lines + 1] = asked_line end
+            for _, permission_line in ipairs(permission_lines) do
+                lines[#lines + 1] = permission_line
+            end
+            if detail.requesting_session then lines[#lines + 1] = "Source: Session · S returns to the conversation" end
+            lines[#lines + 1] = "State: " .. state_label(selected) .. (selected.decider_id and (" by " .. model.decider(selected.decider_id)) or "") .. "  expires " .. selected.expires_at
         end
-        if detail.requesting_session then lines[#lines + 1] = "Source: Session · S returns to the conversation" end
-        lines[#lines + 1] = "State: " .. state_label(selected) .. (selected.decider_id and (" by " .. selected.decider_id) or "") .. "  expires " .. selected.expires_at
         if state.technical then
+            if selected.decider_id then lines[#lines + 1] = "Decided by: " .. selected.decider_id end
             lines[#lines + 1] = "Requester: " .. selected.requester_id .. " · Owner: " .. selected.owner_node .. " · Policy: " .. selected.policy
             lines[#lines + 1] = "Target: " .. selected.target
             lines[#lines + 1] = "Request " .. selected.approval_id .. "  revision " .. tostring(selected.revision) .. "  incarnation observed " .. tostring(selected.owner_incarnation)

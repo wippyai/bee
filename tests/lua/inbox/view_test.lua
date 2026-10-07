@@ -234,6 +234,43 @@ local function define_tests()
             test.is_true(rows[36]:find("T technical", 1, true) ~= nil)
             for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), 120) end
         end)
+        test.it("shows a decided install with the same card, one decision line and raw ids only under T", function()
+            local state = model.new({"ws-1"})
+            local item = request("decided-1", "decided", "Install Tasks 1.0.0 (made by Claude Code · this bee)? It adds: ...")
+            item.decision = "approved"
+            item.decider_id = "bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance"
+            item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
+                input_digest = string.rep("a", 64), payload = {title = "Tasks", version = "1.0.0",
+                    maker = "made by Claude Code · this bee", source_workspace = "tasks",
+                    permission_changes = {"added: Use an isolated application database named tasks"},
+                    resolved_capabilities = {"Use an isolated application database named tasks"},
+                    migrations = {{id = "app.tasks:create_tasks", target_db = "tasks"}}}}
+            model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {
+                changes = {{seq = 1, approval_id = "decided-1", revision = 1, request = item}}, next_seq = 1, more = false}, replayed = false}))
+            model.select(state, "decided-1")
+            model.apply_read(state, "decided-1", reply({ok = true, error = nil, value = item, replayed = false}))
+            local function drawn_text(): string
+                local rows = view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows
+                local plain: {string} = {}
+                for index, row in ipairs(rows) do plain[index] = row:gsub("\27%[[0-9;]*m", "") end
+                return table.concat(plain, "\n")
+            end
+            local text = drawn_text()
+            test.is_true(text:find("▣ Install Tasks 1.0.0", 1, true) ~= nil)
+            test.is_true(text:find("made by Claude Code · this bee", 1, true) ~= nil)
+            test.is_true(text:find("It can", 1, true) ~= nil)
+            test.is_true(text:find("It changes your data", 1, true) ~= nil)
+            test.is_true(text:find("For this version in this workspace.", 1, true) ~= nil)
+            test.is_true(text:find("Approved by you", 1, true) ~= nil)
+            test.is_nil((text:find("Change:", 1, true)))
+            test.is_nil((text:find("Capability:", 1, true)))
+            test.is_nil((text:find("Migration:", 1, true)))
+            test.is_nil((text:find("bee.application:", 1, true)))
+            local first = text:find("Use an isolated application database named tasks", 1, true)
+            test.is_nil((text:find("Use an isolated application database named tasks", (first or 0) + 1, true)))
+            model.toggle_technical(state)
+            test.is_true(drawn_text():find("bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance", 1, true) ~= nil)
+        end)
         test.it("names what an upgrade adds under Now also and keeps the technical lines behind T", function()
             local state = model.new({"ws-1"})
             local item = request("upgrade-1", "pending", "Install Notes 1.1.0?")

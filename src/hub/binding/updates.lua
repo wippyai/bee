@@ -3,7 +3,6 @@ local registry = require("registry")
 local inventory = require("inventory")
 local catalog = require("catalog")
 local publication = require("publication")
-local binary_identity = require("binary_identity")
 local semver = require("semver")
 local M = {}
 
@@ -71,7 +70,7 @@ function M.read(): (Result?, string?)
     self_update.update_available = order ~= nil and order > 0
     if installed_root ~= "" and order and order > 0 then
         local _, compatibility_error = publication.prepare({action = "update", component = "bee/bee",
-            version = available_root, parameters = root_parameters, migration_policy = "none"}, (binary_identity.read_baked()))
+            version = available_root, parameters = root_parameters, migration_policy = "none"})
         if compatibility_error and compatibility_error:find("needs a newer Bee binary", 1, true) then
             self_update.needs_new_binary = true
             self_update.reason = compatibility_error

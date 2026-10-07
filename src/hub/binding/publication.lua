@@ -82,7 +82,7 @@ local function source(state: unknown, installed: inventory.Result, target: strin
         end}
 end
 
-function M.prepare(raw: unknown, baked: binary_identity.Baked?): (plan.Prepared?, string?)
+function M.prepare(raw: unknown): (plan.Prepared?, string?)
     local request, request_error = plan.decode(raw)
     if not request then return nil, request_error end
     local snapshot, snapshot_error = registry.snapshot()
@@ -93,7 +93,7 @@ function M.prepare(raw: unknown, baked: binary_identity.Baked?): (plan.Prepared?
     if revision == nil then return nil, "invalid registry revision" end
     local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, inventory_error end
-    return plan.prepare(state, revision, request, source(state, installed, request.component), baked or (binary_identity.read_baked()))
+    return plan.prepare(state, revision, request, source(state, installed, request.component), (binary_identity.read_baked()))
 end
 
 local function expected_modules(raw: unknown): {ExpectedModule}?

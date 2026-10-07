@@ -17,6 +17,7 @@ local resolution = require("resolution")
 local drivers = require("drivers")
 local driver_admission = require("driver_admission")
 local requirement = require("requirement")
+local application_capabilities = require("application_capabilities")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -381,125 +382,13 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             end
         end
     end
-    local capability_proposal: capability_grants.Proposal? = nil
-    local capability_installed: capability_grants.Installed? = nil
-    local capability_review: capability_grants.Review? = nil
-    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
-    local module_capabilities: {[string]: {string}}? = nil
-    if policy.workspace_application then
-        local app_binding = policy.applications and object(policy.applications[1]) or nil
-        local app_id, application_error = workspace_applications.application(incoming)
-        if not app_id then return nil, nil, application_error end
-        if app_binding then app_binding.definition_id = app_id end
-        local owner = bounds.id(policy.overlay_owner)
-        local catalog_entry = current_raw["bee.capability:catalog"]
-        local vocabulary, catalog_error = capability_model.decode(catalog_entry)
-        if not app_id or not owner or not vocabulary or not sha(policy.base_policy_digest) then
-            return nil, nil, catalog_error or "workspace application capability profile is invalid"
-        end
-        local model_vocabulary = vocabulary
-        local requested: {Object} = {}
-        for _, item in ipairs(requirements) do
-            if item.capability_request then requested[#requested + 1] = item end
-        end
-        local folder: unknown = nil
-        if capability_files.rooted(requested) then
-            local resolve_folder = deps.folder
-            if not resolve_folder then return nil, nil, "workspace folder is unavailable for a file grant" end
-            local resolved_folder, folder_error = resolve_folder()
-            if not resolved_folder then return nil, nil, folder_error or "workspace folder is unavailable" end
-            folder = resolved_folder
-        end
-        local proposed, proposed_error = capability_grants.propose(model_vocabulary, owner, app_id, requested, nil, folder)
-        if not proposed then return nil, nil, proposed_error end
-        capability_proposal = proposed
-        local record_id = capability_grants.record_id(owner)
-        local prior = record_id and current_raw[record_id] or nil
-        if not prior then
-            local old_id = capability_grants.prior_record_id(owner)
-            prior = old_id and current_raw[old_id] or nil
-        end
-        if prior then
-            local decoded, decoded_error = capability_grants.decode(prior, owner, spec.workspace_id,
-                app_id, model_vocabulary)
-            if not decoded then return nil, nil, decoded_error end
-            capability_installed = decoded
-        end
-        local compared, compare_error = capability_grants.diff(model_vocabulary, capability_installed, proposed)
-        if not compared then return nil, nil, compare_error end
-        capability_review = {added = compared.added, widened = compared.widened,
-            narrowed = compared.narrowed, removed = compared.removed, changed = compared.changed,
-            requires_approval = compared.requires_approval or prior == nil, revocation = compared.revocation,
-            lines = compared.lines, resolved = compared.resolved, delta = compared.delta}
-        local selected_policies: {unknown} = table.create(16, 0)
-        for _, raw_id in ipairs(app_binding.policies) do
-            if not capability_grants.reserved(raw_id) then selected_policies[#selected_policies + 1] = raw_id end
-        end
-        for grant_id in pairs(policy.grants) do
-            if capability_grants.reserved(grant_id) then policy.grants[grant_id] = nil end
-        end
-        for _, generated in ipairs(proposed.policies) do
-            local generated_id = generated.id
-            selected_policies[#selected_policies + 1] = generated_id
-            policy.grants[generated_id] = true
-        end
-        -- An application database grant binds its logical name to the
-        -- host-provisioned database, so the application's own migrations run
-        -- against that dedicated store and no other target is admitted.
-        local generated_databases: {Object} = {}
-        for _, raw_grant in ipairs(proposed.capabilities) do
-            local grant = object(raw_grant)
-            local scope = grant and object(grant.scope) or nil
-            local target: string? = nil
-            if grant and scope and grant.capability == "app.database" then
-                target = bounds.id(scope.name)
-            end
-            if target then
-                local database_id, database_error = capability_files.database_id(owner, target)
-                if not database_id then return nil, nil, database_error end
-                policy.databases[target] = true
-                local bindings = database_bindings
-                if not bindings then
-                    bindings = {}
-                    database_bindings = bindings
-                end
-                bindings[target] = {database_id = database_id}
-                generated_databases[#generated_databases + 1] = {database_id = database_id,
-                    target_db = target}
-            end
-        end
-        -- A runtime module outside the profile ceiling is admitted by the
-        -- requested capability the catalog says authorizes it, so the person
-        -- approves the module together with that capability.
-        local admitted_modules: {[string]: boolean} = {}
-        for name, allowed in pairs(original_policy.modules) do admitted_modules[name] = allowed end
-        for name in pairs(capability_model.modules(model_vocabulary, proposed.capabilities)) do
-            admitted_modules[name] = true
-        end
-        module_capabilities = capability_model.module_capabilities(model_vocabulary)
-        local source_binding = app_binding
-        local prospective_binding: Object = {definition_id = app_id,
-            policies = selected_policies, thread_access = proposed.thread_access,
-            appearance_write = source_binding.appearance_write == true,
-            application_stop = source_binding.application_stop == true,
-            scope_management = source_binding.scope_management == true,
-            close_grace_ms = source_binding.close_grace_ms == nil and 250
-                or source_binding.close_grace_ms}
-        local applications: {Object} = {prospective_binding}
-        local prospective_bytes = canonical.encode({base_policy_digest = policy.base_policy_digest,
-            capability_digest = proposed.digest, database_bindings = database_bindings or {}})
-        local prospective_digest = prospective_bytes and hash.sha256(prospective_bytes) or nil
-        if not prospective_digest then return nil, nil, "measure prospective capability policy" end
-        policy = {node_id = original_policy.node_id, policy_digest = prospective_digest,
-            packages = original_policy.packages, namespaces = original_policy.namespaces, kinds = original_policy.kinds,
-            databases = original_policy.databases, grants = original_policy.grants, modules = admitted_modules,
-            applied = original_policy.applied, applied_databases = original_policy.applied_databases,
-            database_bindings = database_bindings, migration_barrier = original_policy.migration_barrier,
-            auto_start = original_policy.auto_start, super_edit = original_policy.super_edit, applications = applications, workspace_id = original_policy.workspace_id,
-            overlay_owner = original_policy.overlay_owner, source_node = original_policy.source_node,
-            source_workspace = original_policy.source_workspace, workspace_application = original_policy.workspace_application,
-            base_policy_digest = original_policy.base_policy_digest, generated_databases = generated_databases}
-    end
+    local prepared, capability_error = application_capabilities.prepare(policy, spec, incoming,
+        requirements, current_raw, deps.folder)
+    if not prepared then return nil, nil, capability_error end
+    policy = prepared.policy
+    local capability_proposal = prepared.proposal
+    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"},
+        capability = application_capabilities.evidence(prepared)}
     -- The approval base is the external registry state that can affect this
     -- candidate. Keep the complete external context above for preflight and
     -- collision checks, but omit unrelated boot-local definitions and the
@@ -563,21 +452,11 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         if not projection then return nil, nil, projection_error or "application admission projection is absent" end
         evidence.application_admission = {kind = "measured", value = projection}
     end
-    if capability_proposal then
-        if not capability_review then return nil, nil, "capability review evidence is absent" end
-        if capability_installed then
-            evidence.capability = {kind = "installed", proposal = capability_proposal,
-                installed = capability_installed, review = capability_review}
-        else
-            evidence.capability = {kind = "new", proposal = capability_proposal,
-                review = capability_review}
-        end
-    end
     local context, context_error = policy_context(policy, captured, base_digest,
         current, installed, kernel, evidence)
     if not context then return nil, nil, context_error end
     context.driver_requirements = driver_requirements
-    context.module_capabilities = module_capabilities
+    context.module_capabilities = prepared.module_capabilities
     local dependencies: {string} = {}
     local artifacts: {preflight.Artifact} = {{component = component, version = version, digest = artifact_digest,
         dependencies = dependencies, namespaces = names}}

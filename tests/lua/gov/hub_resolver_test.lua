@@ -12,7 +12,7 @@ local preflight = require("preflight")
 
 type Object = {[string]: unknown}
 type Spec = {owner_node: string, source_node: string, artifact_bytes: string, artifact_digest: string,
-    parameters: {unknown}?}
+    parameters: {unknown}?, workspace_id: string?, source_workspace: string?}
 type Artifact = artifact.Artifact
 type CandidateEntry = preflight.Entry
 type Candidate = preflight.Candidate
@@ -147,7 +147,20 @@ local function define_tests()
             deps.root = function(_: unknown): (resolver.Root?, string?)
                 return {component = "bee/progress", version = "1.0.0", parameters = {}}, nil
             end
+            spec.workspace_id, spec.source_workspace = "workspace", "hub:bee/progress"
+            deps.policy = function(_: unknown, _: unknown, _: unknown): (Policy?, string?)
+                return {node_id = "node-destination", policy_digest = SHA, base_policy_digest = SHA,
+                    packages = {["bee/progress"] = true}, namespaces = {["app.progress"] = true},
+                    kinds = {["ns.requirement"] = true, ["process.lua"] = true},
+                    databases = {}, grants = {}, modules = {}, applied = {}, migration_barrier = true,
+                    workspace_application = true, applications = {{policies = {}}},
+                    workspace_id = "workspace", overlay_owner = "bee.gov.hub:workspace.progress",
+                    source_node = "node-source", source_workspace = "hub:bee/progress"} :: Policy, nil
+            end
             local resolved = facts(deps, spec)
+            test.eq(resolved.context.host_evidence.capability.kind, "new")
+            test.not_nil(resolved.context.database_bindings)
+            test.not_nil(resolved.context.database_bindings and resolved.context.database_bindings.progress)
             local request = assert(resolved.candidate.requirements[1].capability_request)
             test.eq(request.capability, "app.database")
             test.eq(request.parameters.name, "progress")

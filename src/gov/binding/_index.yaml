@@ -551,6 +551,7 @@ entries:
   - registry
   - hash
   imports:
+    application_capabilities: bee.gov.binding:application_capabilities
     requirement: bee.gov.binding:requirement
     capability_model: bee.capability:model
     resolution: bee.gov.types:resolver
@@ -568,6 +569,7 @@ entries:
   - registry
   - hash
   imports:
+    application_capabilities: bee.gov.binding:application_capabilities
     requirement: bee.gov.binding:requirement
     drivers: bee.gov.types:drivers
     driver_admission: bee.gov.types:driver_admission
@@ -624,3 +626,16 @@ entries:
     bounds: bee.values:bounds
     protocol: bee.gov.types:workspace_protocol
     transaction: bee.persist:transaction
+
+- name: application_capabilities
+  kind: library.lua
+  source: file://application_capabilities.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    workspace_applications: bee.gov.types:workspace_applications
+    capability_model: bee.capability:model
+    capability_grants: bee.gov.types:capability_grants
+    capability_files: bee.gov.types:capability_files
+    preflight: bee.gov.binding:preflight

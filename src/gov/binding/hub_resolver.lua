@@ -13,6 +13,7 @@ local lists = require("lists")
 local resolution = require("resolution")
 local requirement = require("requirement")
 local capability_model = require("capability_model")
+local application_capabilities = require("application_capabilities")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -25,14 +26,9 @@ type Captured = {revision: integer, entries: {Entry}, resolution: Object?,
 type Root = {component: string, version: string, parameters: {unknown}}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
 type DatabaseBindings = {[string]: DatabaseBinding}
-type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
-    namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
-    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: preflight.Migration},
-    applied_databases: {[string]: preflight.DatabaseEvidence}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
-    auto_start: boolean?,
-    applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
+type Policy = application_capabilities.Policy
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
-    policy: (unknown, unknown, unknown) -> (Policy?, string?)}
+    policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 type Resolver = resolution.Resolver
 type Instance = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?),
@@ -290,10 +286,16 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
             bindings[target] = {database_id = database_id, table_prefix = prefix}
         end
     end
+    local generated: {[string]: string} = {}
+    for _, raw in ipairs(policy.generated_databases or {}) do
+        local id, target = bounds.id(raw.database_id), bounds.id(raw.target_db)
+        if not id or not target then return nil, "host generated database is invalid" end
+        generated[id] = target
+    end
     local context: preflight.Context = {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
         policy_digest = policy.policy_digest, packages = policy.packages, namespaces = policy.namespaces,
         kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
-        database_bindings = bindings, entries = current, applied = policy.applied,
+        database_bindings = bindings, generated_databases = generated, entries = current, applied = policy.applied,
         applied_databases = policy.applied_databases or {}, exact_expansion = true,
         migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true,
         protected = protected, host_evidence = evidence}
@@ -434,6 +436,12 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     if not policy then return nil, nil, policy_error or "read destination Hub policy" end
     if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
 
+    local current_raw: {[string]: Entry} = {}
+    for _, entry in ipairs(captured.entries) do current_raw[entry.id] = entry end
+    local prepared, capability_error = application_capabilities.prepare(policy, spec, flattened,
+        requirements, current_raw, deps.folder)
+    if not prepared then return nil, nil, capability_error end
+    policy = prepared.policy
     -- Measure only the existing definitions that can affect this closure:
     -- owned namespaces, external references, and requirement targets. This
     -- excludes unrelated boot-local registry state while retaining every
@@ -472,7 +480,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local base_digest, base_measure_error = hash.sha256(base_bytes)
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
 
-    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
+    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = application_capabilities.evidence(prepared)}
     if policy.applications then
         if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
             or policy.source_workspace ~= spec.source_workspace or not bounds.id(policy.overlay_owner) then
@@ -482,18 +490,20 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
             source_workspace = policy.source_workspace, artifact_digest = spec.artifact_digest,
             bindings = policy.applications, artifact_entries = expected,
-            registry_entries = captured.entries, overlay_ids = captured.overlay_ids})
+            registry_entries = captured.entries, overlay_ids = captured.overlay_ids,
+            generated_policies = prepared.proposal and prepared.proposal.policies or nil})
         if not projection then return nil, nil, projection_error or "application admission projection is absent" end
         evidence.application_admission = {kind = "measured", value = projection}
     end
     local context, context_error = policy_context(policy, captured, base_digest, current, kernel, evidence)
     if not context then return nil, nil, context_error end
+    context.module_capabilities = prepared.module_capabilities
     return {destination_node = destination, source_node = source, base_revision = captured.revision,
         base_digest = base_digest, artifacts = artifacts, entries = candidate_entries,
         requirements = requirements, migrations = migrations}, context, nil
 end
 
-type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?)}
+type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 
 function M.new(config: Config): Resolver
     local function capture(): (Captured?, string?)
@@ -555,7 +565,7 @@ function M.new(config: Config): Resolver
         return captured, nil
     end
     local value: Instance
-    value = {capture = capture, root = config.root, policy = config.policy,
+    value = {capture = capture, root = config.root, policy = config.policy, folder = config.folder,
         resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
             return M.resolve_with(value, spec)
         end}

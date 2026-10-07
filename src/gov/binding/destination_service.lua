@@ -1301,12 +1301,52 @@ end
 -- review again. Only such refusals let recovery continue.
 local REFUSALS: {[string]: boolean} = {CONFLICT = true, DENIED = true}
 
+-- An application database the host provisioned is registered only in its
+-- owner's process-local overlay, while its data and migration ledger outlive
+-- the process. Boot registers every such database applied migrations wrote
+-- again before anything reads its ledger, whether its application is
+-- installed, went back, or was removed.
+local function restore_databases(resource: string, node_id: string): string?
+    local listed = activations.applied_databases(resource, node_id)
+    local value = listed.ok and bounds.object(listed.value) or nil
+    local rows = value and bounds.dense_list(value.databases, 1024, "applied migration databases") or nil
+    if not rows then return listed.message or "applied migration databases are malformed" end
+    local by_owner: {[string]: {Object}} = {}
+    local owners: {string} = {}
+    for _, raw in ipairs(rows) do
+        local row = assert(bounds.object(raw))
+        local owner_id, target, database_id = tostring(row.overlay_owner), tostring(row.target_db), tostring(row.database_id)
+        if database_id:sub(1, #capability_files.DATABASE_PREFIX) == capability_files.DATABASE_PREFIX then
+            local database, database_error = capability_files.database(owner_id, target)
+            if not database then return database_error end
+            if database.id ~= database_id then
+                return "applied database " .. database_id .. " is not the one its owner provisions for " .. target
+            end
+            if not by_owner[owner_id] then by_owner[owner_id], owners[#owners + 1] = {}, owner_id end
+            local list = by_owner[owner_id]
+            list[#list + 1] = database
+        end
+    end
+    for _, owner_id in ipairs(owners) do
+        local provisioned = {databases = by_owner[owner_id], policies = {}}
+        local present, present_error = materializer.provides(owner_id, provisioned)
+        if present == nil then return present_error end
+        if not present then
+            local provided, provide_error = materializer.provide(owner_id, provisioned)
+            if not provided then return "restore application databases of " .. owner_id .. ": " .. tostring(provide_error) end
+        end
+    end
+    return nil
+end
+
 function M.recover_all(): (boolean, string?, {string}?)
     local config, config_error = load()
     if not config then return false, config_error end
     local node_id = config.node_id
     local resource, resource_error = resources.database()
     if not resource then return false, resource_error end
+    local databases_error = restore_databases(resource, node_id)
+    if databases_error then return false, databases_error end
     local listed = activations.desired_slots(resource, node_id)
     if not listed.ok then return false, listed.message end
     local value = bounds.object(listed.value)

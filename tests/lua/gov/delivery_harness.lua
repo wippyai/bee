@@ -149,6 +149,15 @@ function M.settle(writer: funcs.Executor, overlay: string, workspace: string, de
     return M.installed(writer, overlay, workspace, version, delivered.intent_id)
 end
 
+-- restart drops the named owners' process-local overlays and runs boot
+-- recovery as a restarted node does; it answers the overlays recovery refused.
+function M.restart(owners: {string}): {unknown}
+    local node = funcs.new():with_actor(assert(security.new_actor("bee.gov.activation")))
+    local refused, restart_error = node:call("bee.tests.gov:boot_recovery_probe", {owners = owners})
+    if restart_error then error(tostring(restart_error)) end
+    return assert(bounds.array(refused, 64))
+end
+
 -- library acts as the person in the Library.
 function M.library(workspace: string, request: Object): Object
     local identity = assert(principal.value(workspace, "delivery-library", "bee.apps.library:app", "1", 1))

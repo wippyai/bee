@@ -1383,6 +1383,47 @@ function M.desired_slots(resource: string, node_raw: string): Result
     end)
     return transaction.release(db, "governance activation", result)
 end
+
+-- applied_databases: every database this node's applied migrations wrote,
+-- once per overlay owner and logical target, with the physical database the
+-- applying intent bound. Migration ledgers live in these databases, so they
+-- hold data whether or not their application is installed.
+function M.applied_databases(resource: string, node_raw: string): Result
+    if type(resource) ~= "string" or resource == "" then return failure("UNAVAILABLE", "governance activation database is not linked") end
+    local node = id(node_raw)
+    if not node then return failure("INVALID", "governance activation node is invalid") end
+    local db, err = sql.get(resource)
+    if not db then return failure("UNAVAILABLE", transaction.error_message("open governance activation database", err)) end
+    local result = transaction.read(db, "governance activation", function(tx): Result
+        local rows, query_error = tx:query("SELECT DISTINCT a.workspace_id, i.overlay_owner, a.target_db, a.intent_id, i.migration_work_bytes, i.migration_work_digest FROM bee_governance_applied_migrations a JOIN bee_governance_activation_intents i ON i.owner_node = a.owner_node AND i.workspace_id = a.workspace_id AND i.intent_id = a.intent_id WHERE a.owner_node = ? ORDER BY a.workspace_id, i.overlay_owner, a.target_db, a.intent_id LIMIT ?",
+            {node, MAX_DESIRED_SLOTS + 1})
+        if query_error or not rows then return storage(query_error, "list applied migration databases") end
+        if #rows > MAX_DESIRED_SLOTS then return failure("CAPACITY", "applied migration databases exceed their bound") end
+        local databases: {Object} = {}
+        local seen: {[string]: string} = {}
+        for _, row in ipairs(rows) do
+            local workspace_id, overlay_owner = id(row.workspace_id), id(row.overlay_owner)
+            local work, work_error = migration_work.decode(row.migration_work_bytes, row.migration_work_digest)
+            if not workspace_id or not overlay_owner or not work then
+                return failure("INTERNAL", tostring(work_error or "applied migration database is malformed"))
+            end
+            local database, database_error = migration_work.database(work, row.target_db)
+            if not database then return failure("INTERNAL", tostring(database_error)) end
+            local key = workspace_id .. "\n" .. overlay_owner .. "\n" .. database.target_db
+            local prior = seen[key]
+            if prior and prior ~= database.database_id then
+                return failure("CONFLICT", "applied migration database evidence differs: " .. database.target_db)
+            end
+            if not prior then
+                seen[key] = database.database_id
+                databases[#databases + 1] = {workspace_id = workspace_id, overlay_owner = overlay_owner,
+                    target_db = database.target_db, database_id = database.database_id}
+            end
+        end
+        return transaction.success({databases = databases}, false)
+    end)
+    return transaction.release(db, "governance activation", result)
+end
 function M.open(resource: string, node_raw: string, workspace_raw: string): (Store?, string?)
     if type(resource) ~= "string" or resource == "" then return nil, "governance activation database is not linked" end
     local node, workspace = id(node_raw), id(workspace_raw)

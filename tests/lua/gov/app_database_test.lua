@@ -5,7 +5,9 @@
 -- exposes the application. The application and the agent tool then share
 -- the table. A later version appends a migration that runs forward only; going
 -- back past it is refused, going back to a version that defines it runs none,
--- and removing the application keeps its data for the next install.
+-- and removing the application keeps its data for the next install. A node
+-- restart after a contained upgrade, after going back and after removal boots
+-- with the application as it was and its data kept.
 local test = require("test")
 local funcs = require("funcs")
 local security = require("security")
@@ -14,6 +16,7 @@ local json = require("json")
 local application = require("application")
 local harness = require("harness")
 local registry = require("registry")
+local workspace_applications = require("workspace_applications")
 
 -- The suite delivers the guide's example under an overlay of its own, so no
 -- other suite's copy of the example shares its owner.
@@ -154,15 +157,24 @@ local function define_tests()
             test.eq(third.pending_migrations, 0)
             test.eq(harness.settle(writer, OVERLAY, workspace, third, "1.0.2").outcome, "applied")
             harness.close_presented(before)
+            local owner = assert(workspace_applications.identity(workspace, OVERLAY)).overlay_owner
+            test.eq(#harness.restart({owner}), 0)
+            test.is_true(registry.get(APP) ~= nil)
+            test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
             local returned = harness.value(harness.library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-2"}))
             harness.close_presented(before)
             test.eq(returned.phase, "settled")
             test.eq(returned.version, "1.0.1")
             test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
+            test.eq(#harness.restart({owner}), 0)
+            test.is_true(registry.get(APP) ~= nil)
+            test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
 
             -- Removal takes the application off and keeps its data: installing it
             -- again finds the rows, with no migration to run.
             harness.value(harness.library(workspace, {operation = "uninstall", source_workspace = source, receipt_key = "countdb-remove"}))
+            test.is_nil((registry.get(APP)))
+            test.eq(#harness.restart({owner}), 0)
             test.is_nil((registry.get(APP)))
             local again = harness.value(harness.deliver(writer, OVERLAY, workspace, revised(second_version(), "4"), "1.0.3"))
             test.eq(again.pending_migrations, 0)

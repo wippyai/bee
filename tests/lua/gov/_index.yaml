@@ -1113,6 +1113,7 @@ entries:
     application: bee.node:application
     guide: bee.gov.traits:guide
     harness: bee.tests.gov:delivery_harness
+    workspace_applications: bee.gov.types:workspace_applications
 - name: activation_drain_probe
   kind: function.lua
   source: file://activation_drain_probe.lua
@@ -1130,6 +1131,20 @@ entries:
     - bee.gov.security:activation_worker_policy
   imports:
     pass: bee.gov.service:activation_pass
+- name: boot_recovery_probe
+  kind: function.lua
+  source: file://boot_recovery_probe.lua
+  method: restart
+  modules:
+  - registry
+  meta:
+    type: test_support
+    comment: A node restart drops the named process-local overlays and runs boot recovery under the recovery service's policy
+  security:
+    policies:
+    - bee.gov.security:destination_service_policy
+  imports:
+    service: bee.gov.binding:destination_service
 - name: delivery_harness
   kind: library.lua
   source: file://delivery_harness.lua

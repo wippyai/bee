@@ -17,6 +17,10 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-ffc963"></a>
 </p>
 
+<p align="center">
+  <img src="docs/assets/bee.gif" alt="Claude Code fixes failing tests and builds a Test Watch app; Codex joins and builds a Test Lint app; both are approved once in Needs you and open as windows next to the work" width="960">
+</p>
+
 Bee is a persistent workspace your coding agents extend, built on the
 [Wippy runtime](https://github.com/wippyai/runtime). Claude Code, Codex,
 Antigravity, Grok, Muse and OpenCode run as sessions with their own live
@@ -26,6 +30,20 @@ that you and they both use, and bees on all your machines join one hive.
 
 > [!IMPORTANT]
 > Bee is alpha software. Contracts still change between releases.
+
+## Features
+
+- **Every coding agent in one workspace:** Claude Code, Codex, Antigravity, Grok, Muse and OpenCode run as sessions with live terminal windows; close a window and the agent keeps working.
+- **Agents drive agents:** a scoped MCP server lets any agent open other agents' sessions, send them work, wait for results and talk on durable threads.
+- **Apps built on demand:** ask in plain words and an agent builds a real Wippy application: a terminal UI for you, tools for agents, its own SQLite database with migrations, and Lua tests it runs inside Bee.
+- **One approval, exact permissions:** an app asks for only what it needs, such as a database, agent tools, one HTTP origin or one command in a folder; **Needs you** shows what it can do and what data it changes, and nothing is decided twice.
+- **Library:** apps and drivers your agents made, versions other bees share and Hub packages in one place, with updates, history, going back and removing while keeping data.
+- **Bees on every machine:** `bee hive invite` and `bee hive join` connect machines across LAN, Tailscale and WSL; displays open any bee's desktops and apps install across the hive with each bee's own approval.
+- **Agent-written drivers:** agents can add support for another CLI agent as a driver you approve.
+- **Docs inside:** agents read Bee's documentation offline and search the live Wippy docs before they guess.
+- **Local and in Docker:** agents run natively or in Docker as your own user, with private homes and granted folders only.
+- **Durable:** sessions, threads, approvals and apps survive restarts; a session resumes where it stopped.
+- **Single binary:** Linux and macOS, amd64 and arm64, verified install with one command.
 
 ## Install
 

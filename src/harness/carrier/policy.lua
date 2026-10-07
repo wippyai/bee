@@ -138,6 +138,37 @@ local function decode_gateway_tools(data: {[string]: unknown}, ref: string): ({s
     table.sort(declared)
     return declared, nil
 end
+-- access_surface is the gateway surface of a policy that offers the built-in
+-- consent traits as access a person approves during a session. It is composed
+-- from the launch's effective tools, after a saved profile narrowed them: a
+-- consent tool the person's profile lists is a base tool the person already
+-- chose, one the profile leaves out is not offered, and without a saved
+-- profile each consent tool waits for the person's approval of its trait.
+local function access_surface(raw: unknown, tools: {string}, selected: boolean): ({[string]: unknown}?, string?)
+    local declared = bounds.object(raw)
+    if not declared or bounds.fields(declared, {"policy", "traits"}) then return nil, "must be {policy, traits}" end
+    local approver = bounds.id(declared.policy)
+    local traits, traits_error = bounds.ids(declared.traits, true)
+    if not approver or not traits or #traits == 0 then return nil, traits_error or "names no approver policy or trait" end
+    local consent: {[string]: boolean} = {}
+    for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent[trait.id] = true end
+    local offered: {[string]: boolean} = {}
+    for _, id in ipairs(traits) do
+        if not consent[id] then return nil, id .. " is not a built-in consent trait" end
+        offered[id] = true
+    end
+    local base: {string} = {}
+    local requestable: {string} = {}
+    for _, name in ipairs(tools) do
+        local trait = gateway_protocol.CONSENT_TOOLS[name]
+        if trait and offered[trait] and not selected then requestable[#requestable + 1] = trait
+        else base[#base + 1] = name end
+    end
+    table.sort(requestable)
+    local composed: {[string]: unknown} = {tools = {}, traits = {}, base_tools = base, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+    if #requestable > 0 then composed.access = {policy = approver, traits = requestable} end
+    return composed, nil
+end
 function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?): (Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
@@ -155,7 +186,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         revised.schema_revision = M.SCHEMA
         data = revised
     end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "gateway_access", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -277,7 +308,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not effective then return nil, effective_error end
         gateway_tools = effective
     else
-        gateway_tools = gateway_protocol.offered_tools(admitted_tools, data.gateway_surface, false)
+        gateway_tools = gateway_protocol.offered_tools(admitted_tools, data, false)
     end
     local agent_model_map: {[string]: string} = {}
     if data.agent_model_map ~= nil then
@@ -321,7 +352,14 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not hook_command_ref or #gateway_hooks == 0 then return nil, ref .. ": hook_command_ref requires hooks and an env.variable identifier" end
     end
     local gateway_surface: {[string]: unknown}? = nil
-    if data.gateway_surface ~= nil then
+    if data.gateway_access ~= nil then
+        if data.gateway_surface ~= nil then return nil, ref .. ": gateway_access and gateway_surface cannot both declare access" end
+        local synthesized, access_error = access_surface(data.gateway_access, gateway_tools, selected ~= nil)
+        if not synthesized then return nil, ref .. ": gateway_access: " .. tostring(access_error) end
+        local configured, _, surface_error = surface.prepare(synthesized, mcp.TOOLS, gateway_tools)
+        if not configured then return nil, ref .. ": gateway_access: " .. tostring(surface_error) end
+        gateway_surface = synthesized
+    elseif data.gateway_surface ~= nil then
         gateway_surface = bounds.object(data.gateway_surface)
         if not gateway_surface then return nil, ref .. ": gateway_surface must be an object" end
         local configured, _, surface_error = surface.prepare(gateway_surface, mcp.TOOLS, admitted_tools)

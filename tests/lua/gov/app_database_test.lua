@@ -19,6 +19,9 @@ local harness = require("harness")
 local registry = require("registry")
 local time = require("time")
 local workspace_applications = require("workspace_applications")
+local http_client = require("http_client")
+local launch_policy = require("launch_policy")
+local principals = require("principals")
 
 -- The suite delivers the guide's example under an overlay of its own, so no
 -- other suite's copy of the example shares its owner.
@@ -118,9 +121,87 @@ local function tests_completed(workspace: string, run_id: unknown): Object
     error("test run " .. tostring(run_id) .. " did not complete")
 end
 
-local function counts(listed: Object): string
+-- A stock Claude Code session in the workspace: the shipped window launch
+-- policy as a launch without a saved profile decodes it, its gateway binding
+-- admitted with that policy's own surface, and an MCP client over the
+-- gateway listener with the binding's token.
+local STOCK_POLICY = "bee.driver.claude.security:launch_policy_claude_window"
+local GATEWAY_SCOPE = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy",
+    "bee.harness.security:carrier_policy", "bee.threads.security:create", "bee.threads.security:observe",
+    "bee.threads.security:lifecycle", "bee.threads.security:carrier",
+    "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy", "bee.security.gateway:gateway_materialize_policy"}
+type Session = {url: string, token: string}
+local function gateway_call(subject: string, workspace: string, target: string, request: Object): Object
+    local policies: {security.Policy} = {}
+    for index, name in ipairs(GATEWAY_SCOPE) do policies[index] = assert(security.policy(name)) end
+    local executor = funcs.new():with_actor(principals.actor(subject, workspace)):with_scope(security.new_scope(policies))
+    return harness.value(harness.reply(executor:call(target, request)))
+end
+-- Opening the listener starts a new epoch that retires earlier bindings, so
+-- the sessions share one opening.
+local listener_open = false
+local function stock_session(workspace: string, name: string): Session
+    local decoded = assert(launch_policy.decode(STOCK_POLICY, assert(registry.get(STOCK_POLICY)),
+        function(_ref: string): (string?, string?) return "/usr/bin/claude-fixture", nil end))
+    local surface = assert(launch_policy.with_workspace(decoded.gateway_surface, workspace))
+    local subject = "bee.tests.notesdb_session_" .. name
+    local address = tostring((assert(bounds.object((assert(registry.get("bee.gateway.api:gateway_endpoint"))).data))).address)
+    if not listener_open then
+        gateway_call(subject, workspace, "bee.gateway.binding:open", {address = address})
+        listener_open = true
+    end
+    local thread = gateway_call(subject, workspace, "bee.threads.binding:create", {thread_id = "notesdb-" .. name,
+        idempotency_key = "notesdb-thread-" .. name, title = "Stock session " .. name})
+    local attempt_id = "notesdb-attempt-" .. name
+    local action_id = "notesdb-action-" .. name
+    gateway_call(subject, workspace, "bee.threads.binding:admit_action", {thread_id = thread.thread_id,
+        idempotency_key = "notesdb-admit-" .. name, action_id = action_id, admitted = {request_id = "notesdb-request-" .. name,
+            principal_id = subject, binding_ref = "bee.driver.claude.binding:binding", binding_digest = "stock", grant_refs = {},
+            budget_ref = "stock", input = {text = "work with the counter"}}})
+    gateway_call(subject, workspace, "bee.threads.binding:prepare_attempt", {thread_id = thread.thread_id,
+        idempotency_key = "notesdb-prepare-" .. name, action_id = action_id, attempt_id = attempt_id,
+        prepared = {binding_ref = "bee.driver.claude.binding:binding", binding_digest = "stock", profile_id = "window",
+            profile_digest = "stock", placement_binding = "bee.placement.native.binding:binding",
+            placement_attempt_id = "notesdb-placement-" .. name, plan_digest = "stock"}})
+    local admitted = gateway_call(subject, workspace, "bee.gateway.binding:admit", {subject = subject, action_id = action_id,
+        attempt_id = attempt_id, thread_id = thread.thread_id, owner_incarnation = 1, carrier_epoch = 1,
+        tools = decoded.gateway_tools, hooks = {}, surface = surface, policy_ref = STOCK_POLICY, workspace_id = workspace})
+    local binding_id = tostring((assert(bounds.object(admitted.binding))).binding_id)
+    local authorized = gateway_call(subject, workspace, "bee.gateway.binding:authorize_materialization",
+        {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id})
+    local minted = gateway_call(subject, workspace, "bee.gateway.binding:materialize", {attempt_id = attempt_id,
+        carrier_epoch = 1, binding_id = binding_id, materialization_key = authorized.materialization_key})
+    return {url = "http://" .. address .. "/mcp/" .. action_id, token = tostring(minted.token)}
+end
+local rpc_id = 0
+local function rpc(session: Session, method: string, params: Object): Object
+    rpc_id = rpc_id + 1
+    local response, err = http_client.post(session.url, {headers = {["Content-Type"] = "application/json",
+        Authorization = "Bearer " .. session.token}, body = assert(json.encode({jsonrpc = "2.0", id = rpc_id, method = method, params = params})),
+        timeout = 30})
+    if err or not response then error("mcp " .. method .. ": " .. tostring(err)) end
+    return assert(bounds.object(json.decode(tostring(response.body))))
+end
+local function listed(session: Session): {[string]: boolean}
+    local names: {[string]: boolean} = {}
+    local answer = rpc(session, "tools/list", {})
+    local result = assert(bounds.object(answer.result), tostring(json.encode(answer)))
+    for _, tool in ipairs(principals.objects(result.tools)) do names[tostring(tool.name)] = true end
+    return names
+end
+local function tool_call(session: Session, name: string, arguments: Object): Object
+    return rpc(session, "tools/call", {name = name, arguments = arguments})
+end
+local function structured(answer: Object): Object
+    local result = assert(bounds.object(answer.result), tostring(json.encode(answer)))
+    test.is_true(result.isError ~= true, tostring(json.encode(result)))
+    local content = assert(bounds.object(result.structuredContent))
+    return content.ok == true and assert(bounds.object(content.value)) or content
+end
+
+local function counts(listed_counts: Object): string
     local found: {string} = {}
-    for _, value in ipairs(listed.counts :: {unknown}) do found[#found + 1] = tostring(value) end
+    for _, value in ipairs(listed_counts.counts :: {unknown}) do found[#found + 1] = tostring(value) end
     return table.concat(found, ",")
 end
 
@@ -135,6 +216,10 @@ local function define_tests()
             test.eq(first.pending_migrations, 1)
             test.eq(first.activation_phase, "approval_bound")
             local shown = harness.approve(workspace, first.approval_id)
+            -- The install question waits a day for the person, not minutes.
+            local stamp = "2006-01-02T15:04:05.000Z07:00"
+            local asked_at = assert(time.parse(stamp, tostring(shown.created_at)))
+            test.eq(assert(time.parse(stamp, tostring(shown.expires_at))):sub(asked_at):milliseconds(), 86400000)
             local proposal = assert(bounds.object((assert(bounds.object(shown.proposal))).payload))
             local migrations = assert(bounds.array(proposal.migrations, 8))
             test.eq((assert(bounds.object(migrations[1]))).id, NAMESPACE .. ":create_counts")
@@ -157,6 +242,40 @@ local function define_tests()
             as_application(workspace, NAMESPACE .. ":count_record", {value = 1})
             test.eq(as_agent(workspace, "counter_record", {value = 2}).recorded, 2)
             test.eq(counts(as_application(workspace, NAMESPACE .. ":count_list", {})), "1,2")
+
+            -- A stock session asks for the application tools; the person
+            -- approves them in Needs you, for that session only.
+            local asking = stock_session(workspace, "asking")
+            local other = stock_session(workspace, "other")
+            local before_access = listed(asking)
+            test.is_true(before_access.session and before_access.delivery)
+            test.is_nil(before_access.app_tools)
+            test.is_nil(before_access.counter_list)
+            test.is_nil(before_access.publish)
+            local requested = structured(tool_call(asking, "session", {operation = "request_access",
+                idempotency_key = "notesdb-access", traits = {"bee.app:tools"}, reason = "Use the counter's tools"}))
+            local approval_id = assert(bounds.id(requested.approval_id), tostring(json.encode(requested)))
+            local asked_person = harness.approve(workspace, approval_id)
+            test.eq((assert(bounds.object(asked_person.prompt))).text, "Let this agent session use Application tools? It asks: Use the counter's tools")
+            local granted = structured(tool_call(asking, "session", {operation = "access_status", approval_id = approval_id}))
+            test.eq(granted.status, "granted")
+            local after_access = listed(asking)
+            test.is_true(after_access.app_tools and after_access.counter_list and after_access.counter_record)
+            test.eq(counts(structured(tool_call(asking, "counter_list", {}))), "1,2")
+            local unapproved = listed(other)
+            test.is_nil(unapproved.app_tools)
+            test.is_nil(unapproved.counter_list)
+            local refused = assert(bounds.object(tool_call(other, "counter_list", {}).error))
+            test.eq(refused.message, "tool is not admitted for this binding")
+            -- Sharing with the hive reaches the session the same way.
+            local share = structured(tool_call(asking, "session", {operation = "request_access",
+                idempotency_key = "notesdb-share", traits = {"bee.app:share"}, reason = "Share the counter with the hive"}))
+            harness.approve(workspace, share.approval_id)
+            test.eq(structured(tool_call(asking, "session", {operation = "access_status", approval_id = share.approval_id})).status, "granted")
+            test.is_true(listed(asking).publish)
+            local published = structured(tool_call(asking, "publish", {source_overlay_id = OVERLAY, version = "1.0.0"}))
+            test.is_true(published.published == true, tostring(json.encode(published)))
+            test.is_nil(listed(other).publish)
 
             local second = harness.value(harness.deliver(writer, OVERLAY, workspace, second_version(), "1.0.1"))
             test.eq(second.pending_migrations, 1)

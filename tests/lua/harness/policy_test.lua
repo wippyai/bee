@@ -183,6 +183,30 @@ local function define_tests()
             local requestable = assert(policy.decode("test:policy", raw))
             test.eq(table.concat(requestable.gateway_tools, ","), "app_tools,thread_read")
         end)
+        test.it("offers consent traits as access independent of a saved profile's tool narrowing", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = assert(bounds.object(raw.data))
+            data.gateway_tools = {"thread_read", "app_tools", "publish"}
+            data.gateway_access = {policy = "agent-access", traits = {"bee.app:tools", "bee.app:share"}}
+            local stock = assert(policy.decode("test:policy", raw))
+            test.eq(table.concat(stock.gateway_tools, ","), "app_tools,publish,thread_read")
+            local surface = assert(stock.gateway_surface)
+            test.eq(table.concat(surface.base_tools :: {string}, ","), "thread_read")
+            test.eq(table.concat((surface.access :: {traits: {string}}).traits, ","), "bee.app:share,bee.app:tools")
+            -- A profile that leaves application tools out is not offered them.
+            local narrowed = assert(policy.decode("test:policy", raw, nil,
+                {options = {}, mcp_tools = {"thread_read"}, instructions = ""}))
+            test.eq(table.concat(narrowed.gateway_tools, ","), "thread_read")
+            test.is_nil((assert(narrowed.gateway_surface)).access)
+            -- A profile that lists them is the person's choice: they are base tools.
+            local chosen = assert(policy.decode("test:policy", raw, nil,
+                {options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = ""}))
+            test.eq(table.concat((assert(chosen.gateway_surface)).base_tools :: {string}, ","), "app_tools,thread_read")
+            test.is_nil((assert(chosen.gateway_surface)).access)
+            data.gateway_access = {policy = "agent-access", traits = {"research:notes"}}
+            local _, refused = policy.decode("test:policy", raw)
+            test.eq(refused, "test:policy: gateway_access: research:notes is not a built-in consent trait")
+        end)
         test.it("rejects legacy harness turn ceilings in host and profile preferences", function()
             local raw = entry({claude = "/bin/claude"})
             local data = assert(bounds.object(raw.data))

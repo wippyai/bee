@@ -1076,6 +1076,8 @@ entries:
     - registry.find
     - registry.version
     - registry.snapshot
+    - http_client.request
+    - http_client.private_ip
     resources: '*'
     effect: allow
 - name: unplaced_menu
@@ -1100,10 +1102,11 @@ entries:
   - system
   - process
   - registry
+  - http_client
   meta:
     type: test
     suite: bee
-    timeout: 300s
+    timeout: 480s
   security:
     policies:
     - bee.tests.gov:app_database_test_policy
@@ -1114,6 +1117,8 @@ entries:
     guide: bee.gov.traits:guide
     harness: bee.tests.gov:delivery_harness
     workspace_applications: bee.gov.types:workspace_applications
+    launch_policy: bee.harness.carrier:policy
+    principals: bee.tests.principals:bound
 - name: activation_drain_probe
   kind: function.lua
   source: file://activation_drain_probe.lua

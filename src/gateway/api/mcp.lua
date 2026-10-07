@@ -347,6 +347,15 @@ M.APPLICATION_RUNTIME_TRAIT = {id = "bee.app:runtime", title = "Application runt
 M.APPLICATION_TOOLS_TRAIT = {id = gateway_protocol.APPLICATION_TOOLS_TRAIT_ID, title = "Application tools",
     prompt = "Call the tools this workspace's applications offer agents. Each runs as its application with only the grants the person approved for it; app_tools lists them.",
     tools = {"app_tools"}}
+-- The built-in trait that lets an agent share an installed application made
+-- on this bee with the hive; a person enables it in the profile or approves
+-- it as access.
+M.APPLICATION_SHARE_TRAIT = {id = gateway_protocol.APPLICATION_SHARE_TRAIT_ID, title = "Share with your hive",
+    prompt = "Share the installed version of an application made on this bee with the hive, so the bees of the hive see it in Shared.",
+    tools = {"publish"}}
+-- The built-in traits behind which a tool reaches an agent only through a
+-- person, each with the one tool it offers.
+M.CONSENT_TRAITS = {M.APPLICATION_TOOLS_TRAIT, M.APPLICATION_SHARE_TRAIT}
 -- Each advertised tool carries its own annotations.
 M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
 function M.tool(name: string): Tool?

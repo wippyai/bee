@@ -57,25 +57,29 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     -- re-declare it through an ordinary trait or present it as a base tool.
     local declared_traits = value.traits
     if type(declared_traits) ~= "table" then return nil, nil, "expected list" end
+    local consent_of: {[string]: catalog.Trait} = {}
+    for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent_of[trait.tools[1]] = trait end
     for _, raw_trait in ipairs(declared_traits) do
         local trait = bounds.object(raw_trait)
         local trait_tools = trait and bounds.ids(trait.tools, true)
         if trait_tools then
             for _, name in ipairs(trait_tools) do
                 if name == "application_open" then return nil, nil, "application_open belongs only to bee.app:runtime" end
-                if name == "app_tools" then return nil, nil, "app_tools belongs only to bee.app:tools" end
+                local consent = consent_of[name]
+                if consent then return nil, nil, name .. " belongs only to " .. consent.id end
             end
         end
     end
-    local has_open, has_tools = false, false
+    local has_open = false
+    local consents: {catalog.Trait} = {}
     for _, name in ipairs(ceiling) do
         if name == "application_open" then has_open = true end
-        if name == "app_tools" then has_tools = true end
+        if consent_of[name] then consents[#consents + 1] = consent_of[name] end
     end
     local traits: {unknown} = {}
     for _, trait in ipairs(declared_traits) do traits[#traits + 1] = trait end
     if has_open then traits[#traits + 1] = mcp.APPLICATION_RUNTIME_TRAIT end
-    if has_tools then traits[#traits + 1] = mcp.APPLICATION_TOOLS_TRAIT end
+    for _, trait in ipairs(consents) do traits[#traits + 1] = trait end
     local complete, complete_error = catalog.decode({tools = combined, traits = traits})
     if not complete then return nil, nil, complete_error end
     local base, base_error = bounds.ids(value.base_tools, true)
@@ -97,15 +101,15 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         for _, id in ipairs(access.traits) do if id == mcp.APPLICATION_RUNTIME_TRAIT.id then declared = true end end
         if not declared then return nil, nil, "application_open requires bee.app:runtime access" end
     end
-    -- Application tools reach an agent only through a person: the profile
-    -- the person saved lists app_tools as a base tool, or the person approves
-    -- the requestable bee.app:tools access during the session.
-    if has_tools then
+    -- A consent tool reaches an agent only through a person: the profile the
+    -- person saved lists it as a base tool, or the person approves its
+    -- requestable trait during the session.
+    for _, trait in ipairs(consents) do
+        local name = trait.tools[1]
         local enabled = false
-        for _, name in ipairs(base) do if name == "app_tools" then enabled = true end end
-        local requestable_tools = access ~= nil and requestable[mcp.APPLICATION_TOOLS_TRAIT.id] == true
-        if not enabled and not requestable_tools then
-            return nil, nil, "app_tools needs a person: enable it in the profile or offer bee.app:tools as requestable access"
+        for _, base_name in ipairs(base) do if base_name == name then enabled = true end end
+        if not enabled and not requestable[trait.id] then
+            return nil, nil, name .. " needs a person: enable it in the profile or offer " .. trait.id .. " as requestable access"
         end
     end
     local gated_tools: {[string]: boolean} = {}

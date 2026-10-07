@@ -38,9 +38,17 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     if not capability then return fail("INVALID", capability_error or "invalid MCP capability") end
     local request_key, key_error = hash.sha256(binding.binding_id .. ":" .. key)
     if not request_key then return fail("INVALID", tostring(key_error)) end
+    -- The person reads what the agent could do by the traits' titles; the
+    -- trait ids stay in the proposal.
+    local titles: {string} = {}
+    for _, id in ipairs(traits) do
+        local title = id
+        for _, trait in ipairs(configuration.catalog.traits) do if trait.id == id then title = trait.title end end
+        titles[#titles + 1] = title
+    end
     return subject_call.approvals(binding, M.ACCESS_CALL_POLICY)("request", {workspace_id = workspace_id, idempotency_key = "mcp:" .. request_key,
         request_kind = "permission", policy = access.policy, proposal = proposal(binding, configuration, digest, capability),
-        prompt = {text = "Agent " .. binding.action_id .. " requests MCP access in " .. workspace_id .. ": " .. table.concat(traits, ", ") .. "\n" .. reason}, thread_id = binding.thread_id})
+        prompt = {text = "Let this agent session use " .. table.concat(titles, ", ") .. "? It asks: " .. reason}, thread_id = binding.thread_id})
 end
 -- Re-read the authoritative decision; the agent never supplies a proposal or digest.
 function M.approved(binding: Binding, configuration: surface.Surface, digest: string, approval_id: string): (Grant?, Reply?)

@@ -84,6 +84,12 @@ entries:
     - delivery
     - tests
     - app_tools
+    - publish
+    gateway_access:
+      policy: agent-access
+      traits:
+      - bee.app:share
+      - bee.app:tools
     gateway_hooks: []
     prepare_options: {}
     placement_profiles:

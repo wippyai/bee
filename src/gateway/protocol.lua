@@ -208,21 +208,31 @@ end
 
 -- The trait a person approves before an agent may use application tools.
 M.APPLICATION_TOOLS_TRAIT_ID = "bee.app:tools"
+-- The trait a person approves before an agent may share an installed
+-- application with the hive.
+M.APPLICATION_SHARE_TRAIT_ID = "bee.app:share"
 -- Tools a launch offers only with the person's consent, by the trait the
 -- person approves as requestable access.
-M.CONSENT_TOOLS = {app_tools = M.APPLICATION_TOOLS_TRAIT_ID}
+M.CONSENT_TOOLS = {app_tools = M.APPLICATION_TOOLS_TRAIT_ID, publish = M.APPLICATION_SHARE_TRAIT_ID}
+-- access_traits names the traits a launch policy's data offers as requestable
+-- access: its own gateway_access, or the access of the surface it declares.
+function M.access_traits(policy_data: unknown): {string}
+    local data = bounds.object(policy_data)
+    local declared_surface = data and bounds.object(data.gateway_surface) or nil
+    local access = data and bounds.object(data.gateway_access) or nil
+    if not access and declared_surface then access = bounds.object(declared_surface.access) end
+    return access and bounds.ids(access.traits, true) or {}
+end
 -- offered_tools is the gateway tool list a launch hands its child. With the
 -- person's profile selection it is every declared tool, which the gateway
 -- narrows per call; without one it leaves out each consent tool whose trait
--- the declared surface does not offer as requestable access. The planner and
+-- the launch policy does not offer as requestable access. The planner and
 -- placement both derive the list here, so their configuration digests agree.
-function M.offered_tools(declared: {string}, surface: unknown, selected: boolean): {string}
+function M.offered_tools(declared: {string}, policy_data: unknown, selected: boolean): {string}
     if selected then return declared end
     local requestable: {[string]: boolean} = {}
-    local declared_surface = bounds.object(surface)
-    local access = declared_surface and bounds.object(declared_surface.access) or nil
-    local traits = access and bounds.ids(access.traits, true) or nil
-    for _, id in ipairs(traits or {}) do requestable[id] = true end
+    local traits = M.access_traits(policy_data)
+    for _, id in ipairs(traits) do requestable[id] = true end
     local offered: {string} = {}
     for _, name in ipairs(declared) do
         local trait = M.CONSENT_TOOLS[name]

@@ -55,7 +55,9 @@ jobs:
     - name: Pinned toolchain
       run: make tools
     - name: Build
-      run: make build VERSION="${GITHUB_REF_NAME#v}"
+      run: |
+        python3 build/release_version.py "${GITHUB_REF_NAME#v}"
+        make build VERSION="${GITHUB_REF_NAME#v}"
     - name: Package with checksum
       env:
         TARGET: ${{ matrix.goos }}-${{ matrix.goarch }}

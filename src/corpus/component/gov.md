@@ -370,7 +370,7 @@ it refuses when a later version applied a migration the retained version does
 not define.
 
 The configuration may also carry one `packages` rule with the wider ceiling
-for installed package delivery (`security.policy`, `registry.entry`,
+for installed package delivery (`function.lua`, `ns.definition`, `security.policy`, `registry.entry`,
 `contract.binding` and `env.variable` beside the workspace-application kinds).
 It names one application entry per host-composed package: the component,
 application definition, capability IDs, base admission policies, runtime

@@ -25,6 +25,7 @@ entries:
       - process.lua
       - function.lua
       - library.lua
+      - ns.definition
       - ns.requirement
       - registry.entry
       modules:
@@ -51,7 +52,7 @@ entries:
       hive: false
     packages:
       approval_policy: workspace-application-delivery
-      kinds: [process.lua, library.lua, ns.requirement, security.policy, registry.entry, contract.binding, env.variable]
+      kinds: [process.lua, function.lua, library.lua, ns.definition, ns.requirement, security.policy, registry.entry, contract.binding, env.variable]
       modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, registry, system]
       policies: []
       thread_access: none

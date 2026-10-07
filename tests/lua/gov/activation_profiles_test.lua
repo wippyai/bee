@@ -33,10 +33,11 @@ local function define_tests()
             local narrow = assert(configuration.workspace_applications)
             test.eq(narrow.approval_policy, "workspace-application-delivery")
             test.is_true(contains(narrow.kinds, "process.lua"))
+            test.is_true(contains(narrow.kinds, "ns.definition"))
             test.is_false(contains(narrow.kinds, "security.policy"))
             local wide = assert(configuration.packages)
             test.eq(wide.approval_policy, "workspace-application-delivery")
-            for _, kind in ipairs({"process.lua", "library.lua", "ns.requirement",
+            for _, kind in ipairs({"process.lua", "function.lua", "library.lua", "ns.definition", "ns.requirement",
                 "security.policy", "registry.entry", "contract.binding", "env.variable"}) do
                 test.is_true(contains(wide.kinds, kind))
             end

@@ -343,7 +343,9 @@ and installs only the requested subset. Widening asks the person to approve
 the delta; refusal leaves the installed version and grant intact.
 
 The shipped `workspace_applications` ceiling admits `process.lua`,
-`library.lua`, `ns.requirement` and `registry.entry` entries. Native imports are limited to
+`function.lua`, `library.lua`, `ns.definition`, `ns.requirement` and `registry.entry` entries.
+`ns.definition` describes the package; it carries no executable authority.
+`function.lua` includes declared tools, migrations and tests. Native imports are limited to
 `tty`, `process`, `channel`, `json`, `time`, `uuid`, `base64`, `hash`, `funcs`,
 `fs` and `sql`; contract and HTTP reach goes through the gateway. The application binding gets
 the `bee.node.security:application` policy group and `thread_access: none`; the

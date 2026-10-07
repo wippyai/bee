@@ -162,8 +162,9 @@ through the native host's read-only `binary_identity` environment fact.
 `bee.env:running_binary_identity` reads its JSON into `binary_identity.Baked`;
 publication passes it to the planner for About checks, Library plans and the
 worker's apply replan. The fact comes from `debug.ReadBuildInfo`, never from
-installed registry metadata. Missing build information and local module
-replacements supply no verified identity.
+installed registry metadata. Missing build information or a local replacement
+of the runtime or Bee native module supplies no verified identity. Other replaced
+modules supply no version for native-requirement checks.
 
 The canonical identity uses exact resolved Go module versions, including the
 leading `v`. The field named `runtime_commit` holds the resolved runtime module
@@ -171,14 +172,32 @@ version; its Go pseudo-version identifies the pinned commit without comparing
 a full Git hash with Go's abbreviated revision. Native requirements match Go
 module paths by longest prefix. `.wippy/bin/wippy.go.mod` records the builder's
 resolved versions; `wippy.provenance.json` binds that file's checksum and the
-requested runtime and native pins. The release source builder adds a
-`bee.binary_identity` entry to the target root pack from the build manifest; planning checks its native components and runtime commit
-against those executable facts. A target that needs an unavailable native
+requested runtime and native pins. `make build` runs
+`build/binary_identity.py` before packing. It verifies those pins and the
+resolved module file against toolchain provenance, then writes the generated
+`bee.env:binary_identity` registry entry with type `bee.binary_identity`.
+The entry carries the release version, source revision, runtime identity,
+Bee native module version and every native module selected by the manifest.
+Generated source stays out of Git; the entry travels inside `dist/bee.wapp`.
+Planning checks its native components and runtime identity against the
+executable facts. A target that needs an unavailable native
 version or another runtime commit is refused with `needs a newer Bee binary`
 before apply. Select an earlier `bee/bee` version in its version history to plan
-a rollback as another root update. The About page reads the native module version and runtime commit
-from those same executable facts, while showing current and available pack
-versions from Hub inventory.
+a rollback as another root update. About uses those same executable facts
+for compatibility checks and shows current and available pack versions from
+Hub inventory.
+
+Releases use `0.2.0-alpha.N`, above the legacy `0.1.0-selfupdate.18` Hub line;
+the source version is `0.2.0-dev`. Each platform binary embeds the pack built
+in its release job. The workflow checks that every platform pack matches the
+published `bee-<version>.wapp` and attaches it and its SHA-256 checksum beside
+the binary tarballs. On an authenticated publishing machine,
+`make hub-publish VERSION=<version>` downloads that release asset, checks the
+checksum and publishes those exact bytes as `bee/bee` with
+`wippy publish --wapp <file> --version <version>`. It does not rebuild the pack.
+A release's native pin names a pushed commit that contains the host-fact code;
+changing native code requires advancing that pin before releasing.
+
 Apply replans in a private worker before publishing the dependency-root change
 and an operation receipt to durable registry history. Registry history retains
 the selected pack graph for an owner restart; a newer executable baseline is

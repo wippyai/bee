@@ -116,6 +116,20 @@ agents made, versions other bees in your hive share, and Hub packages. It shows
 updates and history, goes back to an earlier version, and removes an
 application while keeping its data.
 
+### Bee updates
+
+Settings → About checks the installed Bee pack against Hub. Library reviews
+and applies the update. Compatible Lua updates keep the running executable;
+a different runtime or a newer required native module reports **needs a newer
+Bee binary**. Install a newer binary with the installer when that happens.
+
+Release packs use `0.2.0-alpha.N`, above the older Hub self-update versions.
+Each GitHub release includes `bee-<version>.wapp` and its SHA-256 checksum,
+containing the same pack the release binaries embed. On a publishing machine
+with the pinned Wippy toolchain and an existing `wippy auth` login, run
+`make hub-publish VERSION=<version>` to verify and publish that asset to
+`bee/bee`.
+
 ### Bees on every machine
 
 ```sh

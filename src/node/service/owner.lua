@@ -519,7 +519,9 @@ local function main(saved: unknown)
             execution_generation = 1, launch_token = instance.token, arguments = given})
     end
 
-    local function open(app: unknown, desktop: unknown, app_args: unknown): protocol.Reply
+    -- open starts app on desktop; attention marks an app opened to ask for the
+    -- person, which displays bring forward without taking the keyboard.
+    local function open(app: unknown, desktop: unknown, app_args: unknown, attention: boolean?): protocol.Reply
         if type(app) ~= "string" then return protocol.fail("open needs an app id") end
         if type(desktop) ~= "string" then return protocol.fail("open needs a desktop") end
         local opened_args: {[string]: unknown} = {}
@@ -546,7 +548,7 @@ local function main(saved: unknown)
         local kept, keep_error = workspaces.keep({id = instance.id, desktop_id = instance.desktop, workspace_id = instance.workspace,
             app = instance.app, args = opened_args})
         if not kept then logger:warn("App instance not kept", {id = instance.id, error = keep_error}) end
-        broadcast({kind = "opened", instance = describe(instance)})
+        broadcast({kind = "opened", instance = describe(instance), attention = attention == true or nil})
         return protocol.ok(describe(instance))
     end
 
@@ -885,7 +887,7 @@ local function main(saved: unknown)
                 seen[desktop_id] = true
                 local desktop = workspaces.desktop(desktop_id)
                 if desktop and desktop.workspace_id == workspace_id then
-                    local opened = open(app, desktop_id, {arguments = arguments})
+                    local opened = open(app, desktop_id, {arguments = arguments}, true)
                     local value = opened.value
                     if opened.ok and value then broadcast({kind = "attention", id = value.id})
                     else logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error}) end

@@ -316,6 +316,15 @@ function M.focus(scene: Scene, id: string): Scene
     return commit(scene, scene.width, scene.height, id, windows)
 end
 
+-- attend brings forward a window that asks for the person, such as Needs you
+-- with a new request. With no window holding the keyboard it takes focus;
+-- otherwise it opens directly beneath the focused window, so what the person
+-- types keeps reaching the window they are typing in.
+function M.attend(scene: Scene, id: string): Scene
+    if scene.focus == "" or scene.focus == id or find_index(scene.windows, scene.focus) == nil then return M.focus(scene, id) end
+    return M.focus(M.focus(scene, id), scene.focus)
+end
+
 -- A snapped window keeps its side and its share of the viewport: the saved
 -- bounds only remember the last computed geometry, never the intent.
 local function snapped_bounds(window: Window, area: Rect): Rect

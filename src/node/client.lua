@@ -25,7 +25,7 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- whose dialog is gone and "attention" the id of an app that needs the
 -- person, which a display brings forward.
 type Event = {kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
-    workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?}
+    workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?}
 -- What a node reports to list and watch; owner is the PID of the node's
 -- owner process, which a watcher monitors to learn that the node stopped,
 -- supervisor is the node's Hive supervisor, whose exit means the node
@@ -176,6 +176,7 @@ function M.event(data: unknown): Event?
         event.instance = instance(data.instance)
         if not event.instance then return nil end
         event.id = event.instance.id
+        if data.kind == "opened" and data.attention == true then event.attention = true end
     elseif data.kind == "closed" or data.kind == "dialog_closed" or data.kind == "attention" then
         if type(data.id) ~= "string" then return nil end
         event.id = data.id

@@ -291,7 +291,11 @@ local function define_tests()
                 if selected.channel == deadline then error("not every " .. app_prefix .. " app was presented") end
                 local event = client.event(selected.value:payload():data())
                 if event and event.kind == "opened" and event.instance and event.instance.desktop == desktop
-                    and event.instance.app:sub(1, #app_prefix) == app_prefix then opened[event.instance.id] = true end
+                    and event.instance.app:sub(1, #app_prefix) == app_prefix then
+                    -- Displays bring it forward without taking the person's keyboard.
+                    test.is_true(event.attention == true)
+                    opened[event.instance.id] = true
+                end
                 if event and event.kind == "attention" and event.id and opened[event.id] then forward[#forward + 1] = event.id end
             end
             return forward

@@ -99,10 +99,13 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     -- node; full holds the app instances to show full-pane when they come.
     local pending_launch = launch
     local full: {[string]: boolean} = {}
-    -- Windows this display opened, or that ask for the person, take the
-    -- keyboard once they arrive. While the person works in a full-pane
-    -- window, a window another display opened joins without it.
+    -- Windows this display opened take the keyboard once they arrive. While
+    -- the person works in a full-pane window, a window another display opened
+    -- joins without it.
     local focus_pending: {[string]: boolean} = {}
+    -- Windows that ask for the person arrive beneath the window the person
+    -- types in, and take the keyboard only when no window holds it.
+    local attention_pending: {[string]: boolean} = {}
     -- app_dialogs holds the dialogs apps ask, by app instance; the display
     -- shows those of the apps on its desktop, one at a time.
     local app_dialogs: {[string]: client.Dialog} = {}
@@ -375,7 +378,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             end
             local focused = focus_pending[id] == true or not immersed
             focus_pending[id] = nil
-            set_scene(model.add(current, id, id, title, nil, nil, focused))
+            if attention_pending[id] then
+                attention_pending[id] = nil
+                set_scene(model.attend(model.add(current, id, id, title, nil, nil, false), id))
+            else
+                set_scene(model.add(current, id, id, title, nil, nil, focused))
+            end
             local list = order()
             list[#list + 1] = id
         end
@@ -722,10 +730,11 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     local function node_event(event: client.Event)
         if event.kind == "opened" and event.instance then
             local instance = event.instance
+            if event.attention then attention_pending[instance.id] = true end
             running[#running + 1] = instance
             if instance.desktop == desktop then attach(instance.id) end
         elseif event.kind == "attention" and event.id then
-            if views[event.id] then focus(event.id) else focus_pending[event.id] = true end
+            if views[event.id] then set_scene(model.attend(scene(), event.id)) else attention_pending[event.id] = true end
         elseif event.kind == "moved" and event.instance then
             local instance = event.instance
             for index, item in ipairs(running) do

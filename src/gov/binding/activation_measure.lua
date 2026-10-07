@@ -44,8 +44,11 @@ local function preflight_failure(report: preflight.Report, label: string): strin
     return label .. ": " .. table.concat(reasons, ", ")
 end
 
+-- measure returns the activation facts, or the cause and whether destination
+-- preflight refused the candidate on this host as opposed to failing to
+-- measure it.
 function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
-    context: preflight.Context): ({[string]: unknown}?, string?)
+    context: preflight.Context): ({[string]: unknown}?, string?, boolean?)
     local plan = bounds.object(plan_raw)
     if not plan then return nil, "selected governance plan is malformed" end
     local owner, workspace = bounds.id(plan.owner_node), bounds.id(plan.workspace_id)
@@ -95,7 +98,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     if next(measured_entries) then return nil, "resolved candidate omits an exact artifact entry" end
     local report, report_error = preflight.check(candidate, context)
     if not report then return nil, report_error end
-    if not report.ready then return nil, preflight_failure(report, "destination preflight is not ready") end
+    if not report.ready then return nil, preflight_failure(report, "destination preflight is not ready"), true end
     if #candidate.migrations > 0 then
         for _, entry in ipairs(candidate.entries) do
             if entry.auto_start then
@@ -124,7 +127,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         driver_requirements = context.driver_requirements}
     local durable_report, durable_error = preflight.check(durable_candidate, durable_context)
     if not durable_report then return nil, durable_error or "cannot normalize destination preflight" end
-    if not durable_report.ready then return nil, preflight_failure(durable_report, "normalized destination preflight is not ready") end
+    if not durable_report.ready then return nil, preflight_failure(durable_report, "normalized destination preflight is not ready"), true end
     local report_bytes, report_digest, encode_error = preflight.encode_report(durable_report)
     if not report_bytes then return nil, encode_error end
     if not report_digest then return nil, encode_error end

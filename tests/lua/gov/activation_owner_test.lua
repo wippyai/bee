@@ -1168,7 +1168,7 @@ local function recovery_tests()
             applied = false
             world.blocked = true
             local blocked = owner.recover(config_with(again_plans, again_activations), "composed-restart-v1")
-            expect_code(blocked, "BLOCKED")
+            expect_code(blocked, "CONFLICT")
             test.eq(apply_count, 2)
             assert(activation_store.close(again_activations))
             assert(plan_store.close(again_plans))

@@ -104,6 +104,19 @@ local function define_tests()
             end
         end)
 
+        test.it("lists, reads and stages a version an agent made with the agent's name the destination keeps", function()
+            local state = model.new("workspace-destination")
+            local made = plan("1.0.0", "reviewed", true, 3)
+            made.author = "Claude Code"
+            test.is_true(model.apply_list(state, reply({owner_node = "node-destination",
+                workspace_id = "workspace-destination", plans = {made}})), state.fault)
+            local selected = assert(model.selected(state))
+            test.eq(selected.author, "Claude Code")
+            test.is_true(model.can_prepare(state, selected))
+            test.is_true(model.apply_plan(state, reply(made)), state.fault)
+            made.author = string.rep("x", 200)
+            test.is_false(model.apply_plan(state, reply(made)))
+        end)
         test.it("routes every operation through the one destination facade contract", function()
             local state = model.new("workspace-destination")
             local item = plan("2.0.0", "reviewed", true, 7)

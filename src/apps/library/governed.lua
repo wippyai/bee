@@ -25,7 +25,7 @@ type Plan = {owner_node: string, workspace_id: string, source_node: string, sour
     version: string, plan_digest: string, candidate_digest: string, artifact_digest: string,
     preflight_digest: string, revision: integer, status: Status, review_status: string?,
     review_reason: string?, reviewer_id: string?, selected: boolean,
-    selection_revision: integer?, preflight_bytes: string?}
+    selection_revision: integer?, preflight_bytes: string?, author: string?}
 type Intent = {owner_node: string, workspace_id: string, intent_id: string, overlay_owner: string,
     source_node: string, source_workspace: string, version: string, revision: integer,
     phase: string, outcome: string?, diagnostics: string?, approval_id: string?,
@@ -52,7 +52,7 @@ type State = {workspace_id: string, owner_node: string?, names: {[string]: strin
 local PLAN_FIELDS = {"owner_node", "workspace_id", "source_node", "source_workspace", "version", "plan_digest",
     "candidate_digest", "artifact_digest", "preflight_digest", "revision", "status", "review_status",
     "review_reason", "reviewer_id", "selected", "selection_revision", "candidate_bytes", "artifact_bytes",
-    "preflight_bytes"}
+    "preflight_bytes", "author"}
 local CHANGE_FIELDS = {"owner_node", "workspace_id", "source_node", "source_workspace", "version",
     "plan_digest", "candidate_digest", "artifact_digest", "base_revision", "base_digest",
     "composed_base_revision", "composed_base_digest", "added", "changed", "removed"}
@@ -161,12 +161,15 @@ local function plan(raw: unknown, workspace_id: string): (Plan?, string?)
     end
     if not valid_blob(value.candidate_bytes, 262144) or not valid_blob(value.artifact_bytes, 262144)
         or not valid_blob(value.preflight_bytes, 131072) then return nil, "plan evidence is malformed" end
+    -- The name of the agent that made the version, as the destination keeps it.
+    local author = bounds.line(value.author, 80)
+    if value.author ~= nil and not author then return nil, "plan author is malformed" end
     local decoded: Plan = {owner_node = owner_node, workspace_id = workspace, source_node = source_node,
         source_workspace = source_workspace, version = version, plan_digest = plan_digest,
         candidate_digest = candidate_digest, artifact_digest = artifact_digest, preflight_digest = preflight_digest,
         revision = revision, status = status, review_status = review_status,
         review_reason = review_reason, reviewer_id = reviewer_id, selected = selected, selection_revision = selection_revision,
-        preflight_bytes = optional_text(value.preflight_bytes, 131072)}
+        preflight_bytes = optional_text(value.preflight_bytes, 131072), author = author}
     return decoded, nil
 end
 local function available(raw: unknown): (Available?, string?)

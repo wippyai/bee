@@ -215,6 +215,15 @@ scopes and fixed application context. The approval workspace is the binding's
 workspace, which the launch selects; a binding without a workspace cannot
 request access.
 
+Some tools reach an agent only through a person: `app_tools` behind the
+built-in trait `bee.app:tools` and `publish` behind `bee.app:share`. A launch
+policy offers them with `gateway_access: {policy, traits}` naming those
+traits. The session surface is composed after a saved profile narrows the
+tools: without a saved profile each such tool waits for the person to approve
+its trait in Needs you, a profile that lists it has chosen it, and a profile
+that leaves it out is not offered it. The shipped window policies offer both
+under the `agent-access` approver policy.
+
 An agent sends `session` `request_access` with an idempotency key, requested
 traits and a bounded reason. The gateway creates a durable request bound to its
 binding, action, attempt, thread, configuration digest and fixed context.

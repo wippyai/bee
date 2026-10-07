@@ -29,10 +29,12 @@ type Scene = {
 
 local M = {}
 
--- The smallest window a display hands an application: the compact frame size,
--- where an application draws its action bar and footer.
-local DEFAULT_WIDTH = 80
-local DEFAULT_HEIGHT = 24
+local DEFAULT_WIDTH = 64
+local DEFAULT_HEIGHT = 20
+-- The compact frame size, where an application draws its action bar and
+-- footer; a display that holds it never opens a window smaller.
+local COMPACT_WIDTH = 80
+local COMPACT_HEIGHT = 24
 local CASCADE_X = 4
 local CASCADE_Y = 2
 
@@ -119,13 +121,17 @@ local function same_rect(left: Rect, right: Rect): boolean
 end
 
 -- A new window takes three quarters of the display, never less than the
--- default size the display can hold.
+-- compact frame size when the display holds one, else the default size the
+-- display can hold.
 local function default_bounds(area: Rect, index: integer): Rect
+    local holds_compact = area.width >= COMPACT_WIDTH and area.height >= COMPACT_HEIGHT
+    local least_width = holds_compact and COMPACT_WIDTH or DEFAULT_WIDTH
+    local least_height = holds_compact and COMPACT_HEIGHT or DEFAULT_HEIGHT
     local width = area.width * 3 // 4
-    if width < DEFAULT_WIDTH then width = DEFAULT_WIDTH end
+    if width < least_width then width = least_width end
     if width > area.width then width = area.width end
     local height = area.height * 3 // 4
-    if height < DEFAULT_HEIGHT then height = DEFAULT_HEIGHT end
+    if height < least_height then height = least_height end
     if height > area.height then height = area.height end
 
     local last_x = area.x + area.width - width

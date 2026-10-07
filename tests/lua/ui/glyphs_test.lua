@@ -22,7 +22,7 @@ end
 local function define_tests()
     test.describe("glyph set", function()
         test.it("draws every glyph in exactly one cell", function()
-            test.eq(#glyphs.all, 11)
+            test.eq(#glyphs.all, 12)
             for _, glyph in ipairs(glyphs.all) do
                 test.eq(tty.text.width(glyph), 1, glyph)
                 test.eq(#points(glyph), 1, glyph)

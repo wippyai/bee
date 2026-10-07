@@ -24,7 +24,7 @@ local ATTRIBUTED: {[string]: boolean} = {
 local ACTIVITY: {[string]: string} = {
     SessionStart = "Session started", UserPromptSubmit = "Working",
     PreToolUse = "Using tool", PostToolUse = "Working",
-    PostToolUseFailure = "Tool failed", Stop = "Stopped",
+    PostToolUseFailure = "Tool failed", Stop = "Idle",
     StopFailure = "Needs attention", SessionEnd = "Session ended",
 }
 

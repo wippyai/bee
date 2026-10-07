@@ -330,7 +330,7 @@ local function define_tests()
             local batch_amb, err_amb = hook_records.batch(binding_id, nil, {amb_item})
             test.is_nil(err_amb)
             if not batch_amb then error("batch_amb is nil") end
-            test.eq(batch_amb.activity, "Stopped")
+            test.eq(batch_amb.activity, "Idle")
             -- A stop reports that the harness ended its turn: beside the hook
             -- record it carries a hook-sourced turn signal, which is what a
             -- thread notice watching the session recognizes. A stop failure
@@ -361,7 +361,7 @@ local function define_tests()
                 make_valid_item("evt-012", "PostToolUse", false), make_valid_item("evt-013", "Stop", true)}
             local batch_sequence = hook_records.batch(binding_id, nil, sequence)
             if not batch_sequence then error("batch_sequence is nil") end
-            test.eq(batch_sequence.activity, "Stopped")
+            test.eq(batch_sequence.activity, "Idle")
             test.eq((assert(bounds.object(batch_amb.records[1].body))).event_key, "hook:evt-002")
             local ref_amb = reference_hook_record(binding_id, nil, amb_item)
             test.eq((assert(bounds.object(batch_amb.records[1].body))).event_key, (assert(bounds.object(ref_amb.body))).event_key)

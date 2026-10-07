@@ -238,3 +238,12 @@ entries:
     test: wippy.test:test
     lifecycle: bee.hub.types:lifecycle
     service_lifecycle: bee.hub.binding:lifecycle
+- name: binary_identity_test
+  kind: function.lua
+  source: file://binary_identity_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test
+    binary_identity: bee.hub.package:binary_identity

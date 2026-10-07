@@ -42,7 +42,7 @@ export GIT_CONFIG_VALUE_1 := https://github.com/wippyai/bee
 $(shell python3 build/local_manifest.py $(RUNTIME_SOURCE) .)
 endif
 
-.PHONY: tools runtime-pin native-pin compose lint test e2e footprint build install
+.PHONY: tools runtime-pin native-pin compose lint test e2e footprint build install binary-identity binary-identity-check
 
 $(BUILDER):
 	GOBIN=$(abspath $(BIN)) go install github.com/wippyai/builder/cmd/wippy-builder@$(BUILDER_VERSION)
@@ -70,7 +70,13 @@ native-pin:
 compose:
 	python3 tests/compose.py
 
-lint: $(WIPPY) compose
+binary-identity: $(WIPPY)
+	python3 build/binary_identity.py --manifest $(MANIFEST) --toolchain $(WIPPY) --version $(VERSION)
+
+binary-identity-check:
+	python3 build/binary_identity_test.py
+
+lint: binary-identity compose
 	python3 tools/corpus.py --check
 	$(WIPPY) lint
 	cd tests && $(abspath $(WIPPY)) install && $(abspath $(WIPPY)) lint
@@ -93,7 +99,7 @@ TESTS ?=
 $(TEST_FIXTURES)/harness/bin/gateway-client: $(TEST_FIXTURES)/harness/gateway_client.go
 	go build -o $@ $<
 
-test: $(WIPPY) compose $(TEST_FIXTURES)/harness/bin/gateway-client
+test: binary-identity compose $(TEST_FIXTURES)/harness/bin/gateway-client
 	find tests/.wippy -mindepth 1 -maxdepth 1 ! -name vendor ! -name cache ! -name composition ! -name .artifacts.lock -exec rm -rf {} +
 	mkdir -p $(TEST_ROOT)/home/.claude $(TEST_ROOT)/tmp $(TEST_ROOT)/bin && touch $(TEST_ROOT)/home/.claude/.credentials.json
 	ln -sfn $(TEST_FIXTURES)/harness/bin/claude $(TEST_ROOT)/bin/absolute-claude

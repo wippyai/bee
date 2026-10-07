@@ -8,3 +8,6 @@ tests/fixtures/harness/bin/gateway-client
 tests/lua/placement_publication/materialization.lua
 tests/lua/harness/host/_index.yaml
 .bee/
+
+src/env/binary_identity/_index.yaml
+__pycache__/

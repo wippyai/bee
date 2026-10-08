@@ -18,10 +18,21 @@ owned-tool validation. Admitted package applications run their tests through
 `tests` by definition ID, using registry ownership or explicit `meta.application`
 association across namespaces.
 
-The ordinary Library Hub publication path still lacks application grant
-provisioning and admission integration. These validation and discovery changes
-do not yet establish a complete `app.database` and `agent.tools` installation
-with one approval and migrations.
+The Library routes packages of type `application`, packages declaring a
+`bee.app`, and packages requesting capabilities through governed delivery.
+`stage_hub` captures verified catalog bytes; `hub_resolver` resolves their exact
+closure and preflights the host's package ceiling. Review, selection and the
+activation owner use the same path as overlay delivery. One person approval
+covers the application, its capabilities and its pending migrations.
+
+`app.database` provisions the application's own database through the shared
+capability grant projection. Migrations use that logical-to-physical binding,
+run forward in ordinal order and retain their data on removal. `agent.tools`
+exposes the granted functions to agents. Application tests run through `tests`
+by registry ownership or admitted application association, and declared menus
+place the installed application in the shell. The dependency-root publisher
+handles library packages and `bee/bee` self-update; it refuses application
+installation.
 
 The public facade is:
 
@@ -96,8 +107,14 @@ A management plan has this request shape:
 {action, component, version?, parameters?, migration_policy?}
 ```
 
-Install and update require an exact version. Uninstall accepts neither version
-nor parameters. Planning resolves the dependency closure against the current
+Install and update require an exact version. An application plan returns a
+`governed` route with the measured artifact digest. The Library stages that
+artifact through `bee.gov.binding:destination_call` and uses the governed
+review and activation flow. Applications receive host-selected grants rather
+than caller-selected capability parameters.
+
+For library packages, uninstall accepts neither version nor parameters.
+Dependency-root planning resolves the dependency closure against the current
 installed base, preserves unrelated roots and refuses changes to host-configured
 roots. It reports requirements, migrations, automatic starts and declared
 capabilities. A capability declaration does not grant the capability.

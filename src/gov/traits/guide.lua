@@ -373,6 +373,10 @@ function M.pack_contents(): string
         .. " native modules, policy grants and resource bindings during preflight, and the activation owner alone"
         .. " applies the reviewed overlay. Use the read-only components tool to inspect the effective installed"
         .. " registry and exact Hub package entries, documentation and examples before authoring."
+        .. " Hub packages of type application, declaring bee.app or requesting capabilities install through the"
+        .. " Library's governed stage, preflight, person approval and activation path. Their app.database grants"
+        .. " provision dedicated databases, their migrations run against those databases, and agent.tools grants"
+        .. " expose their tools. ns.definition is package metadata admitted by the package ceiling."
         .. " While you work, request_capability asks the person in Needs you for one catalog capability for this"
         .. " attempt and a bounded time: process.exec to run one exact command in a folder of this workspace, or"
         .. " http.api to reach one https origin under a path prefix with named methods. Poll capability_status"
@@ -476,7 +480,7 @@ end
 
 -- How an application ships tests and runs them in the node.
 function M.tests(): string
-    return "An application's tests ship in its own pack: a function.lua entry in the application's namespace with"
+    return "An application's tests ship in its own pack: a function.lua entry associated with the application by registry ownership or meta.application, with"
         .. " meta.type test, an optional meta.suite that groups it and an optional meta.timeout such as 30s that"
         .. " bounds the one test (30s by default), method run and the import test = wippy.test:test. Its source"
         .. " describes cases with test.describe and test.it, asserts with test.eq, test.neq, test.is_true,"
@@ -487,7 +491,8 @@ function M.tests(): string
         .. " the delivery, call the tests tool: list names the application's tests, run starts a run and returns its"
         .. " run_id at once (filter keeps tests whose id contains it), and status with that run_id returns progress and,"
         .. " when complete, each test's cases with pass, fail or skip, the error and the duration. Name the application by"
-        .. " its overlay id or its definition id; it must be delivered from an overlay you own. A test runs inside the node as"
+        .. " its definition id, or its owned overlay id for authored delivery. Hub-installed applications are admitted by"
+        .. " the host's governed delivery association; discovery never matches namespaces. A test runs inside the node as"
         .. " your application, with the scope the person approved for it and no more, so a case that needs a module or"
         .. " grant the application lacks fails with a denial; change the application and deliver again. Only the delivered"
         .. " version has tests to run: change, freeze and deliver again to test new code."

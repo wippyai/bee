@@ -6,6 +6,14 @@ publishes packages. It has no Keeper dependency. Update Bee updates the
 `bee/bee` core artifact and host-selected component roots in the existing
 publication transaction.
 
+The Library routes packages of type `application`, packages declaring `bee.app`
+and packages requesting capabilities through governance's shared stage,
+preflight, person approval and activation owner path. `hub_resolver` resolves
+verified catalog artifacts there. Application database grants provision the
+store their migrations use; agent tool grants, associated tests and declared
+menus become available after activation. Libraries and Bee self-update retain
+the dependency-root publication path.
+
 The public `bee.hub.binding:call` function accepts `{operation, request?, expected_digest?}`
 and returns `{ok, value?, code?, message?, replayed}`. The host grants
 `bee.hub.read` or `bee.hub.manage` for ordinary package operations. Planning

@@ -206,14 +206,20 @@ whose compensation cannot complete stops in recovery rather than booting
 incompatible code against newer data.
 
 `bee.gov.binding:hub_resolver` provides the destination resolution adapter.
-It captures one atomic registry state, asks the runtime to plan a
-host-selected Hub dependency root, reconstructs the complete selected closure
-from the planned final state, and retains definitions absent from the plan
-delta. It strips all `ns.dependency` directives before overlay activation.
-Registry-owned metadata supplies package ownership. Destination configuration
-supplies package, namespace, kind, grant, runtime-module and database ceilings
-plus applied migration ledgers. The flattened artifact must equal the reviewed
-bytes exactly.
+It captures one atomic registry state and resolves the verified catalog closure
+through the shared Hub artifact source and dependency planner. Retained host
+dependencies remain in the base; new package definitions form the exact reviewed
+artifact. It strips `ns.dependency` directives before overlay activation.
+The host derives a workspace-local `hub:<org/module>` source and deterministic
+owner under the package ceiling. Catalog definitions supply package ownership;
+protected-kernel checks remain authoritative for every incoming entry.
+
+Hub and overlay resolvers share requirement validation and application capability
+projection. The projection supplies generated database bindings, grant review
+and application admission to preflight. The activation owner provisions those
+databases and runs the measured migrations before the complete application
+becomes visible. `stage_hub` and replica staging share the plan store, review,
+selection, approval and apply path; Hub installation creates no dependency root.
 
 The destination facade is split the way the authoring facade is: the public
 `destination_call` authenticates the caller's exact delivery operation and then

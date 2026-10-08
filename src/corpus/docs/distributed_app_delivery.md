@@ -33,6 +33,21 @@ consent to follow a source automatically is not implemented. A destination can
 stage the same source version independently from other destinations. Its plan,
 selection, approval, activation receipt and overlay stay on that destination.
 
+## Applications from Hub
+
+The Library stages a Hub application through the same destination plan and
+activation owner as an overlay application. Type `application`, a `bee.app`
+entry or an `ns.requirement` capability request selects governed delivery.
+Verified catalog entries supply the immutable artifact; `hub_resolver` resolves
+its closure against the destination registry and host package ceiling.
+
+One local approval covers the application, capability grants and pending
+migrations. `app.database` provisions the application's database, both its
+migrations and runtime code use that grant, `agent.tools` offers its selected
+functions, and `tests` discovers its tests by installed application association.
+The declared menus place the application in the shell. Library packages and
+Bee self-update retain their dependency-root publication path.
+
 ## Review and activation
 
 The Library shows the destination-local plan: a person-facing version screen,

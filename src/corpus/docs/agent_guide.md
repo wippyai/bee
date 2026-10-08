@@ -131,3 +131,11 @@ command; Bee checks existence only and leaves sign-in to the provider.
 Only a provider's login file may be returned to its original path after the
 child exits, and only when the source digest is unchanged; provider
 configuration and other home files are not copied back.
+
+Hub applications install through the Library's governed delivery path. Packages
+of type `application`, packages declaring `bee.app`, and packages requesting
+capabilities share overlay delivery's preflight, person approval and activation
+owner. `app.database` provisions the application's migration database;
+`agent.tools` offers its granted functions, `tests` runs its associated tests
+by definition ID, and declared menus place it in the shell. Library packages
+and `bee/bee` self-update retain Hub dependency-root publication.

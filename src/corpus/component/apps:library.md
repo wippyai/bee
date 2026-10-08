@@ -11,8 +11,12 @@ driver a person can install. Three sources fold into one list per tab:
 Hub inspection distinguishes host capability requests from missing dependency
 parameters. Admitted Hub applications use the application's test runner by
 registry association, including tests outside the application's namespace.
-Capability-bearing Hub application installation still needs the publication
-path to provision its grants and admission; see [Hub installation](../docs/hub_inspection.md).
+Hub application packages enter governed staging, preflight, review, selection
+and activation. One approval covers the application, its pending migrations and
+its capabilities. Application databases, agent tools, tests and menus use the
+same host provisioning and admission as overlay deliveries. Library packages
+and `bee/bee` self-update use the Hub dependency-root publisher; see
+[Hub installation](../docs/hub_inspection.md).
 
 The tabs are Installed (what runs here, with Update available when a newer
 version is shared or on the Hub), Shared (what could be installed, from a bee
@@ -57,11 +61,13 @@ was withdrawn or was denied leaves Installed: its version is back in Shared,
 noted "Approval expired — install again" or "Denied", and History keeps the
 attempt; Install asks the person anew. The header counts only installed
 versions, not installs waiting or on their way. Install and update of a Hub
-package open the package screens: details, changes, confirmation and result.
+library package open the package screens: details, changes, confirmation and
+result. Hub application plans enter the governed install flow and wait in Needs
+you for one approval.
 
 The app calls two facades and nothing else. `bee.gov.binding:destination_call`
 runs under `bee.gov.delivery.read`, `manage` and `activate`; the operations it
-uses are `available`, `list`, `activations`, `stage`, `get`, `changes`,
+uses are `available`, `list`, `activations`, `stage`, `stage_hub`, `get`, `changes`,
 `review`, `select`, `prepare`, `step`, `status`, `recover`, `revert` and `uninstall`. The public Hub
 facade `bee.hub.binding:call` runs under `bee.hub.read`, `bee.hub.manage` and,
 for the Bee deployment root, `bee.hub.self_update`. The approval decision

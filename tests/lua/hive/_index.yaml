@@ -1,6 +1,30 @@
 version: '1.0'
 namespace: bee.tests.hive
 entries:
+- name: exposure_scope_test
+  kind: function.lua
+  source: file://exposure_scope_test.lua
+  method: run
+  modules: [security, funcs, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    grants: bee.gov.types:capability_grants
+    capability: bee.capability:model
+- name: exposure_probe
+  kind: function.lua
+  source: file://exposure_probe.lua
+  method: probe
+  modules: [security]
+  meta: {type: test_support}
+- name: probe_invocation
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.tests.hive:exposure_probe]
+    effect: allow
 - name: routing_test
   kind: function.lua
   source: file://routing_test.lua

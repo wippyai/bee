@@ -12,8 +12,84 @@ local function entries(): {{[string]: unknown}}
     }
 end
 
+local function sdk(): {{[string]: unknown}}
+    return {
+        {id = "private.sdk:app", kind = "process.lua", meta = {type = "bee.app",
+            application = {title = "Project SDK", revision = "1", menus = {"bee.shell:apps_menu"}}},
+            data = {source = "return {main = function() end}", method = "main"}},
+        {id = "unrelated.tools:execute", kind = "function.lua", meta = {application_ref = "private.sdk:app",
+            hive = "policy", hive_service = "test-sdk", hive_operation = {name = "run", revision = "1",
+                input = {type = "object", properties = {configuration = {type = "string"}}, required = {"configuration"}},
+                output = {type = "object"}}},
+            data = {source = "return {run = function() return {} end}", method = "run"}},
+    }
+end
+
 local function define_tests()
     test.describe("Governance resolved registry artifact", function()
+        test.it("keeps authored Hive names and explicit application associations across namespaces", function()
+            local made = assert(artifact.create(sdk()))
+            local decoded = assert(artifact.decode(made.bytes, made.digest))
+            local operation = decoded[2].meta
+            test.eq(operation.hive_service, "test-sdk")
+            test.eq(operation.hive_operation.name, "run")
+            test.eq(operation.application_ref, "private.sdk:app")
+        end)
+        test.it("refuses partial, malformed or unnamed Hive declarations", function()
+            local invalid: {unknown} = {false, "run", {}, {name = "run", revision = "1", input = false, output = {}},
+                {name = "run", revision = "1", input = {}, output = "object"},
+                {name = "run", revision = "", input = {}, output = {}},
+                {name = "run\n", revision = "1", input = {}, output = {}},
+                {revision = "1", input = {}, output = {}}}
+            for _, value in ipairs(invalid) do
+                local input = sdk()
+                input[2].meta.hive_operation = value
+                local made, err = artifact.create(input)
+                test.is_nil(made)
+                test.contains(tostring(err), "Hive")
+            end
+            for _, field in ipairs({"hive", "hive_service", "hive_operation"}) do
+                local input = sdk()
+                input[2].meta[field] = nil
+                test.is_nil(artifact.create(input))
+            end
+            local input = sdk()
+            input[2].meta.hive = "public"
+            test.is_nil(artifact.create(input))
+            input = sdk()
+            input[2].kind = "library.lua"
+            test.is_nil(artifact.create(input))
+        end)
+        test.it("refuses duplicate authored operations within one application's service", function()
+            local input = sdk()
+            local duplicate = sdk()[2]
+            duplicate.id = "third.namespace:other"
+            input[#input + 1] = duplicate
+            local made, err = artifact.create(input)
+            test.is_nil(made)
+            test.contains(tostring(err), "duplicate Hive operation")
+        end)
+        test.it("refuses malformed schema definitions before measuring a Hive operation", function()
+            for _, schema in ipairs({{type = "unsupported"}, {properties = {configuration = {type = 7}}}}) do
+                local input = sdk()
+                input[2].meta.hive_operation.input = schema
+                local made, err = artifact.create(input)
+                test.is_nil(made)
+                test.contains(tostring(err), "valid input/output schemas")
+            end
+        end)
+        test.it("requires the explicit Hive application association to name an app in the measured artifact", function()
+            for _, target in ipairs({"absent:app", "unrelated.tools:execute", ""}) do
+                local input = sdk()
+                input[2].meta.application_ref = target
+                local made, err = artifact.create(input)
+                test.is_nil(made)
+                test.contains(tostring(err), "Hive application")
+            end
+            local input = sdk()
+            input[2].meta.application_ref = nil
+            test.is_nil(artifact.create(input))
+        end)
         test.it("measures the desktop checkpoint metadata invariant", function()
             local function invalid(restart: unknown, schema: unknown): boolean
                 return artifact.application_checkpoint_invalid({meta = {type = "bee.app",

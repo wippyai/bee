@@ -95,10 +95,14 @@ local function valid_schema(value: unknown, depth: integer, applicator: boolean)
         and not valid_schema(schema.additionalProperties, depth + 1, false) then return false end
     return true
 end
+function M.valid_definition(value: unknown): boolean
+    return valid_schema(value, 0, false)
+end
+
 -- Whether value is an object schema in the advertised subset.
 function M.valid_schema(value: unknown): boolean
     local schema = bounds.object(value)
-    return schema ~= nil and schema.type == "object" and valid_schema(schema, 0, false)
+    return schema ~= nil and schema.type == "object" and M.valid_definition(schema)
 end
 
 -- MCP annotations are four booleans from a closed set.

@@ -78,6 +78,7 @@ entries:
   imports:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
+    hive_operations: bee.hive:operations
 - name: delivery
   kind: library.lua
   source: file://delivery.lua

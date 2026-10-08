@@ -194,18 +194,15 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
                 effect = "allow"}}})
     end
-    -- A Hive exposure grant authorizes exactly the approved operations under
-    -- the requested mode. The supervisor joins it through its exposure
-    -- scope; audiences stay in the grant record for review and the
-    -- destination audience table, never in this ceiling.
     if grant.capability == "hive.expose" and grant.operation == "hive.expose" then
         local mode = grant.resource
         local operations = capability_model.strings(scope.operations)
         if not operations then return nil, "resolved Hive operation list is malformed" end
-        return only({id = id, kind = "security.policy", groups = {"bee.security.hive:hive_exposure_scope"},
+        return only({id = id, kind = "security.policy",
             meta = {comment = "Host-generated Hive operation exposure grant"},
-            data = {policy = {actions = {"hive.expose." .. (mode)},
-                resources = operations, effect = "allow"}}})
+            data = {groups = {"bee.security.hive:hive_exposure_scope"},
+                policy = {actions = {"hive.expose." .. (mode)},
+                    resources = operations, effect = "allow"}}})
     end
     if next(scope) == nil then
         local generated = package_policy(grant, id, app)

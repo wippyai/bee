@@ -8,6 +8,7 @@ local canonical = require("canonical")
 local bounds = require("bounds")
 local hash = require("hash")
 local json = require("json")
+local hive_operations = require("hive_operations")
 
 local M = {}
 
@@ -153,6 +154,8 @@ local function entries(value: unknown): ({Entry}?, string?)
         seen[id] = true
         copied[index] = item
     end
+    local hive_error = hive_operations.validate(copied)
+    if hive_error then return nil, hive_error end
     table.sort(copied, function(left: Entry, right: Entry): boolean return tostring(left.id) < tostring(right.id) end)
     return copied, nil
 end

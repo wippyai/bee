@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.hive
 entries:
+- name: operations
+  kind: library.lua
+  source: file://operations.lua
+  imports:
+    bounds: bee.values:bounds
+    schemas: bee.values:agent_tool
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

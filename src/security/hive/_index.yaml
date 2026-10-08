@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.security.hive
+entries:
+- name: exposure_default
+  kind: security.policy.expr
+  groups: [hive_exposure_scope]
+  meta:
+    comment: The exposure scope grants no operation without a destination-installed exposure policy
+  policy:
+    expression: 'false'
+    actions: '*'
+    resources: '*'
+    effect: allow

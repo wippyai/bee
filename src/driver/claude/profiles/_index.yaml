@@ -175,6 +175,9 @@ entries:
     title: Claude Code
     binding_ref: bee.driver.claude.binding:binding
     profile_id: window
+    private_credentials:
+    - claude_api_key
+    - claude_login
     docker_credentials:
     - claude_api_key
     - claude_login

@@ -7,3 +7,17 @@ entries:
   variable: opencode
   default: ''
   readonly: true
+- name: api_key
+  kind: env.variable
+  storage: bee.credentials.env:entered_values
+  variable: OPENCODE_PERSON_KEY
+  default: ''
+  meta:
+    type: bee.credential_source
+    credential_name: opencode_api_key
+    credential:
+      provider: opencode
+      format_ref: bee.driver.opencode.credentials:credential_format
+      workspace_id: '*'
+      audience: '*'
+      projection_kinds: [environment]

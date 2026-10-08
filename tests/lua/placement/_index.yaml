@@ -613,6 +613,7 @@ entries:
   - registry
   - hash
   - sql
+  - json
   security:
     policies:
     - bee.placement.native:apply_test_policy

@@ -141,6 +141,36 @@ local function with_entry(ref: string, mutate: (changed: {[string]: unknown}) ->
     apply(entry)
     if not ok then error(tostring(failure)) end
 end
+local function with_provider_source(provider: string, body: () -> ())
+    local formats = assert(registry.find({["meta.type"] = "bee.credential_format", ["meta.provider"] = provider}))
+    test.eq(#formats, 1)
+    local file = assert(bounds.object(assert(bounds.object(formats[1].data)).file))
+    with_entry("bee.credentials.env:credential_sources", function(data)
+        local rows: {unknown} = {}
+        local found = false
+        for _, row in ipairs(assert(bounds.array(data.sources, 64))) do
+            rows[#rows + 1] = row
+            local source = assert(bounds.object(row))
+            if source.ref == "bee.env:machine_login_source" and source.provider == provider then found = true end
+        end
+        if not found then
+            rows[#rows + 1] = {ref = "bee.env:machine_login_source", workspace_id = "*", audience = "*", provider = provider,
+                projection_kinds = {"file"}, path = file.path}
+        end
+        data.sources = rows
+    end, function()
+        with_entry("bee.credentials.security:credential_file_policy", function(data)
+            local original = assert(bounds.object(data.policy))
+            local changed: {[string]: unknown} = {}
+            for key, value in pairs(original) do changed[key] = value end
+            local resources: {string} = {}
+            for _, ref in ipairs(assert(bounds.ids(original.resources, true))) do resources[#resources + 1] = ref end
+            resources[#resources + 1] = "bee.env:machine_login_source"
+            changed.resources = resources
+            data.policy = changed
+        end, body)
+    end)
+end
 local function refusal_message(reply: admission.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return tostring(reply.error and reply.error.message)
@@ -385,6 +415,66 @@ local function define_tests()
             data.options = {worktree = "dedicated"}
             invalid, err = definitions.decode(DEFINITION, entry)
             test.is_nil(invalid); test.not_nil(err)
+        end)
+        test.it("sets up and admits private-home credentials when a saved window has no machine-home credentials", function()
+            with_entry(DEFINITION, function(data)
+                data.credentials = {}
+                data.private_credentials = {"anthropic"}
+            end, function()
+                local target, saved_id = fresh("private-provider-workspace"), fresh("private-provider-profile")
+                value(call("bee.harness.binding:call", {operation = "put", workspace_id = target, profile_id = saved_id,
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
+                        name = "Custom provider", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding",
+                        provider = {}, bee = {mcp = {}}, placement = {kind = "native", home = "private"}}}))
+                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = target,
+                    saved_profile_id = saved_id, saved_profile_revision = 1}))
+                local prepared = call_setup({workspace_id = target, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest,
+                    saved_profile_id = saved_id, saved_profile_revision = 1})
+                test.is_true(prepared.ok, tostring(prepared.error))
+                test.eq(assert(bounds.array(prepared.credentials, 64))[1], "anthropic")
+                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("private-provider-admit"),
+                    definition_ref = DEFINITION, workspace_id = target, brief = "Fixture", expected_plan_digest = plan.plan_digest,
+                    saved_profile_id = saved_id, saved_profile_revision = 1}))
+                test.eq(#assert(bounds.array(assert(bounds.object(admitted.request)).projections, 64)), 1)
+            end)
+        end)
+        test.it("admits an OpenCode custom-provider profile and stores its entered key outside the profile", function()
+            with_provider_source("opencode", function()
+            with_entry("bee.driver.opencode.security:launch_policy_opencode_window", function(policy)
+                policy.executable_env = {}
+                policy.executables = {opencode = "/usr/bin/true"}
+            end, function()
+            local target, saved_id = workspace_id("custom-opencode"), fresh("custom-profile")
+            local ref = "bee.driver.opencode.profiles:default_window"
+            local decoded = assert(definitions.load(ref))
+            local secret = "fixture-custom-opencode-key"
+            local raw, call_error = funcs.new():with_actor(principals.actor(REQUESTER, target)):with_scope(scope())
+                :call("bee.harness.binding:set_credential", {workspace_id = target, definition_ref = ref,
+                    expected_definition_digest = decoded.digest, name = "opencode_api_key", value = secret})
+            test.is_nil(call_error)
+            local entered_reply = assert(bounds.object(raw))
+            assert(entered_reply.ok == true, assert(json.encode(entered_reply)))
+            local profile = {schema_revision = "bee.agent-profile@3", name = "Local models", definition_ref = ref,
+                driver_binding_ref = "bee.driver.opencode.binding:binding", provider = {model = "local_model/gemma", options = {
+                    enabled_providers = {"local_model"}, providers = {local_model = {npm = "@ai-sdk/openai-compatible", name = "Local",
+                        options = {baseURL = "https://models.example.test/v1", apiKey = "{env:OPENAI_API_KEY}"}, models = {gemma = {name = "gemma"}}}}}},
+                bee = {mcp = {}}, placement = {kind = "native", home = "private"}}
+            value(call("bee.harness.binding:call", {operation = "put", workspace_id = target, profile_id = saved_id,
+                expected_revision = 0, idempotency_key = fresh("save"), profile = profile}))
+            local plan = value(call("bee.harness.binding:resolve", {workspace_id = target, definition_ref = ref,
+                saved_profile_id = saved_id, saved_profile_revision = 1}))
+            local setup_reply = call_setup({workspace_id = target, definition_ref = ref, expected_plan_digest = plan.plan_digest,
+                saved_profile_id = saved_id, saved_profile_revision = 1})
+            assert(setup_reply.ok == true, tostring(setup_reply.error))
+            local admitted = value(call("bee.harness.binding:admit", {workspace_id = target, definition_ref = ref, request_id = fresh("custom-admit"),
+                expected_plan_digest = plan.plan_digest, saved_profile_id = saved_id, saved_profile_revision = 1, brief = "Fixture"}))
+            test.eq(#assert(bounds.array(assert(bounds.object(admitted.request)).projections, 64)), 2)
+            local saved = value(call("bee.harness.binding:call", {operation = "get", workspace_id = target, profile_id = saved_id}))
+            test.is_nil((assert(json.encode(saved)):find(secret, 1, true)))
+            test.is_nil((assert(json.encode(admitted)):find(secret, 1, true)))
+            test.is_nil((assert(json.encode(value(call("bee.credentials.binding:list", {workspace_id = target})))):find(secret, 1, true)))
+            end)
+            end)
         end)
         test.it("fences a saved profile revision before admission and rejects preferences outside host policy", function()
             local workspace_id, saved_id = workspace, fresh("profile")

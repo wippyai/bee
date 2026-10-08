@@ -306,6 +306,76 @@ entries:
               then:
               - --model
               - field: model
+        model_provider:
+          path: provider.options.model_provider
+          value_schema:
+            type: string
+            maxLength: 128
+          label: Model provider
+          description: Model provider
+          section: advanced
+          order: 10
+          contexts: &id001
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.codex.descriptor:cli
+          render:
+          - kind: config
+            contexts: *id001
+            file: .codex/config.toml
+            format: toml
+            path:
+            - model_provider
+            merge: set
+            value:
+              field: provider.options.model_provider
+        model_providers:
+          path: provider.options.model_providers
+          value_schema:
+            type: object
+            maxProperties: 16
+            additionalProperties:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  maxLength: 128
+                base_url:
+                  type: string
+                  maxLength: 512
+                env_key:
+                  type: string
+                  enum:
+                  - OPENAI_API_KEY
+                wire_api:
+                  type: string
+                  enum:
+                  - responses
+              required:
+              - name
+              - base_url
+              - env_key
+              - wire_api
+          label: Custom providers
+          description: Custom providers
+          section: advanced
+          order: 11
+          contexts: *id001
+          support:
+            config_schema_ref: bee.driver.codex.descriptor:cli
+          render:
+          - kind: config
+            contexts: *id001
+            file: .codex/config.toml
+            format: toml
+            path:
+            - model_providers
+            merge: set
+            value:
+              field: provider.options.model_providers
       rules: []
     flags: {}
     argv_templates:

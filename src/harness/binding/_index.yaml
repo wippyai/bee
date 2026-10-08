@@ -146,3 +146,31 @@ entries:
   imports:
     window: bee.placement.native.service:window
     docker_window: bee.placement.docker.service:window
+
+- name: set_credential_backend
+  kind: function.lua
+  source: file://setup_backend.lua
+  method: set_credential
+  modules:
+  - hash
+  - funcs
+  - registry
+  - security
+  imports:
+    bounds: bee.values:bounds
+    definition: bee.harness.launch:definitions
+
+- name: set_credential
+  kind: function.lua
+  source: file://setup_method.lua
+  method: set_credential
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+    admission: bee.harness.launch:admission
+    profiles: bee.harness.profiles:protocol
+  security:
+    policies:
+    - bee.harness.launch:setup_facade_policy

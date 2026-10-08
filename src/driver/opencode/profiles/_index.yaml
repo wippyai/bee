@@ -74,8 +74,12 @@ entries:
     title: OpenCode
     binding_ref: bee.driver.opencode.binding:binding
     profile_id: window
+    private_credentials:
+    - opencode_login
+    - opencode_api_key
     docker_credentials:
     - opencode_login
+    - opencode_api_key
     policy_ref: bee.driver.opencode.security:launch_policy_opencode_window
     default_mode: window
     allowed_overrides:
@@ -117,6 +121,7 @@ entries:
     session_resource: session
     credentials:
     - opencode_login
+    - opencode_api_key
     presentation:
       start_menu: false
       fullscreen: false

@@ -32,6 +32,7 @@ type Definition = {
     thread_policy: ThreadPolicy,
     session_resource: string?,
     credentials: {string},
+    private_credentials: {string}?,
     -- A Docker placement projects these in place of credentials: the
     -- container shares no home with the host CLI login.
     docker_credentials: {string}?,
@@ -84,7 +85,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
     local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "policy_ref", "agent_ref", "default_mode",
-        "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "docker_credentials", "presentation",
+        "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "private_credentials", "docker_credentials", "presentation",
         "allow_wider_tools", "unconfined", "options", "worktree"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
@@ -120,6 +121,12 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     end
     local credentials, credentials_error = bounds.ids(data.credentials == nil and {} or data.credentials, true)
     if not credentials then return nil, ref .. ": credentials: " .. tostring(credentials_error) end
+    local private_credentials: {string}? = nil
+    if data.private_credentials ~= nil then
+        local selected, selected_error = bounds.ids(data.private_credentials, true)
+        if not selected then return nil, ref .. ": private_credentials: " .. tostring(selected_error) end
+        private_credentials = selected
+    end
     local docker_credentials: {string}? = nil
     if data.docker_credentials ~= nil then
         local selected, selected_error = bounds.ids(data.docker_credentials, true)
@@ -150,9 +157,14 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, ref .. ": digest failed" end
     return {ref = ref, digest = digest, launch_id = launch_id, title = title, command_names = commands, binding_ref = binding_ref, profile_id = profile_id,
-        policy_ref = policy_ref, agent_ref = agent_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials, docker_credentials = docker_credentials,
+        policy_ref = policy_ref, agent_ref = agent_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials, private_credentials = private_credentials, docker_credentials = docker_credentials,
         presentation = {start_menu = presentation.start_menu == true, fullscreen = presentation.fullscreen == true, reuse = reuse},
         allow_wider_tools = data.allow_wider_tools == true, unconfined = data.unconfined == true, options = options}, nil
+end
+function M.credential_names(definition: Definition, placement_kind: string, private_home: boolean): {string}
+    if placement_kind == "docker" and definition.docker_credentials then return definition.docker_credentials end
+    if private_home and definition.private_credentials then return definition.private_credentials end
+    return definition.credentials
 end
 function M.load(ref: string): (Definition?, string?)
     local entry, err = registry.get(ref)

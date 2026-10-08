@@ -471,7 +471,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
             local path = bounds.line(declaration.path, 128)
             if not path or (path ~= "provider." .. name and path ~= "provider.options." .. name) then return nil, "OptionSpec path must name its canonical provider field" end
             local schema = bounds.object(declaration.value_schema)
-            if not schema or bounds.fields(schema, {"type", "enum", "format", "items", "maxItems", "maxLength", "properties", "additionalProperties", "required", "minimum", "maximum"}) or not bounds.member(schema.type, {"string", "boolean", "array", "object", "number", "integer"}) then return nil, "OptionSpec value_schema is invalid" end
+            if not schema or bounds.fields(schema, {"type", "enum", "format", "items", "maxItems", "maxLength", "maxProperties", "properties", "additionalProperties", "required", "minimum", "maximum"}) or not bounds.member(schema.type, {"string", "boolean", "array", "object", "number", "integer"}) then return nil, "OptionSpec value_schema is invalid" end
             if not bounds.line(declaration.label, 80) or not bounds.line(declaration.description, 512) or not bounds.member(declaration.section, {"basic", "advanced"}) or not bounds.count(declaration.order) then return nil, "OptionSpec form declaration is invalid" end
             local contexts = bounds.ids(declaration.contexts, true)
             if not contexts or #contexts == 0 then return nil, "OptionSpec contexts are invalid" end

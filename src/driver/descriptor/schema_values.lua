@@ -36,14 +36,17 @@ function M.decode(raw_schema: unknown, raw: unknown, label: string, depth: integ
         end
         return result, nil
     elseif schema.type == "object" then
-        local object, properties = bounds.object(raw), bounds.object(schema.properties)
-        if not object or not properties or schema.additionalProperties ~= false then return nil, label .. ": expected declared object" end
+        local object, properties = bounds.object(raw), bounds.object(schema.properties) or {}
+        local additional = bounds.object(schema.additionalProperties)
+        if not object or (schema.additionalProperties ~= false and not additional) then return nil, label .. ": expected declared object" end
         local result: {[string]: unknown} = {}
         local count = 0
+        local limit = math.floor(math.min(bounds.count(schema.maxProperties) or 64, 64))
         for name, item in pairs(object) do
             count = count + 1
-            if count > 64 or properties[name] == nil then return nil, label .. ": undeclared or excessive object fields" end
-            local value, err = M.decode(properties[name], item, label .. "." .. name, nesting + 1)
+            local value_schema = properties[name] or additional
+            if count > limit or not value_schema or name == "" or #name > 128 or name:find("%c") then return nil, label .. ": undeclared or excessive object fields" end
+            local value, err = M.decode(value_schema, item, label .. "." .. name, nesting + 1)
             if value == nil then return nil, err end
             result[name] = value
         end

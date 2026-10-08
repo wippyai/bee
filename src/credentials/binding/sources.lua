@@ -131,6 +131,28 @@ function M.host_sources(): (SourceSet?, string?)
         if not source then return nil, source_error end
         sources.sources[index] = source
     end
+    local discovered, discovery_error = registry.find({["meta.type"] = "bee.credential_source"})
+    if not discovered or discovery_error then return nil, "credential source metadata unavailable" end
+    if #discovered > M.MAX_SOURCES then return nil, "credential source metadata exceeds the host bounds" end
+    for _, entry in ipairs(discovered) do
+        local meta = bounds.object(entry.meta)
+        local declared = meta and bounds.object(meta.credential)
+        local format_ref = declared and bounds.id(declared.format_ref)
+        local provider = declared and bounds.id(declared.provider)
+        if not declared or not format_ref or not provider then return nil, "credential source metadata is malformed" end
+        local row: {[string]: unknown} = {ref = entry.id}
+        for key, value in pairs(declared) do if key ~= "format_ref" then row[key] = value end end
+        local source, source_error = decode_source(row, #sources.sources + 1)
+        if not source then return nil, source_error end
+        if sources.formats[provider] and sources.formats[provider] ~= format_ref then return nil, "credential source claims another format for " .. provider end
+        if not sources.formats[provider] then
+            format_count = format_count + 1
+            if format_count > M.MAX_FORMATS then return nil, "credential source formats exceed the host bounds" end
+            sources.formats[provider] = format_ref
+        end
+        if #sources.sources >= M.MAX_SOURCES then return nil, "credential sources exceed the host bounds" end
+        sources.sources[#sources.sources + 1] = source
+    end
     if data.admission ~= nil then
         local reader = bounds.id(data.admission)
         if not reader then return nil, "host credential admission reader must be an identifier" end
@@ -320,6 +342,12 @@ function M.variable(ref: string): ({[string]: unknown}?, string?)
     if entry.kind ~= "env.variable" then return nil, "source " .. ref .. " is not an env.variable" end
     local data = type(entry.data) == "table" and entry.data or {}
     return {kind = entry.kind, storage = data.storage, variable = data.variable, readonly = data.readonly}, nil
+end
+function M.accepts_value(ref: string): boolean
+    local variable = M.variable(ref)
+    local storage_ref = variable and bounds.id(variable.storage)
+    local storage = storage_ref and registry.get(storage_ref)
+    return variable ~= nil and variable.readonly ~= true and storage ~= nil and storage.kind == "env.storage.memory"
 end
 -- The fs.directory entry behind a login file source, as configuration only.
 function M.directory(ref: string): ({[string]: unknown}?, string?)

@@ -13,3 +13,17 @@ entries:
   variable: CODEX_HOME
   default: ''
   readonly: true
+- name: api_key
+  kind: env.variable
+  storage: bee.credentials.env:entered_values
+  variable: CODEX_PERSON_KEY
+  default: ''
+  meta:
+    type: bee.credential_source
+    credential_name: codex_api_key
+    credential:
+      provider: codex
+      format_ref: bee.driver.codex.credentials:credential_format
+      workspace_id: '*'
+      audience: '*'
+      projection_kinds: [environment]

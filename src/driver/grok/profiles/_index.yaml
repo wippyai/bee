@@ -120,6 +120,8 @@ entries:
     title: Grok CLI
     binding_ref: bee.driver.grok.binding:binding
     profile_id: window
+    private_credentials:
+    - grok_login
     docker_credentials:
     - grok_login
     policy_ref: bee.driver.grok.security:launch_policy_grok_window

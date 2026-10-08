@@ -17,6 +17,33 @@ local function field(format: string, path: {string}, merge: string): Object
 end
 local function define_tests()
     test.describe("Descriptor option delivery", function()
+        test.it("renders installed custom-provider schemas with environment references only", function()
+            local endpoint = "https://models.example.test/v1"
+            local opencode = assert(descriptor.load("bee.driver.opencode.descriptor:cli"))
+            local fields = assert(bounds.object(opencode.options.fields))
+            local provider = {npm = "@ai-sdk/openai-compatible", name = "Local", options = {baseURL = endpoint, apiKey = "{env:OPENAI_API_KEY}"},
+                models = {gemma = {name = "gemma", tool_call = true}}}
+            local checked = assert(descriptor.decode_option("providers", fields.providers, {local_model = provider}))
+            local files = assert(render.files(fields, {providers = checked, enabled_providers = {"local_model"}}, "window", {}))
+            local content = assert(bounds.object(json.decode(files[1].content)))
+            local providers = assert(bounds.object(content.provider))
+            local options = assert(bounds.object(assert(bounds.object(providers.local_model)).options))
+            test.eq(options.baseURL, endpoint)
+            test.eq(options.apiKey, "{env:OPENAI_API_KEY}")
+            provider.options.apiKey = "fixture-raw-key"
+            test.is_nil(descriptor.decode_option("providers", fields.providers, {local_model = provider}))
+            local codex = assert(descriptor.load("bee.driver.codex.descriptor:cli"))
+            fields = assert(bounds.object(codex.options.fields))
+            local values = {model_provider = "local_model", model_providers = {local_model = {name = "Local", base_url = endpoint,
+                env_key = "OPENAI_API_KEY", wire_api = "responses"}}}
+            test.not_nil(descriptor.decode_option("model_providers", fields.model_providers, values.model_providers))
+            files = assert(render.files(fields, values, "window", {}))
+            content = assert(bounds.object(toml.decode(files[1].content)))
+            test.eq(content.model_provider, "local_model")
+            local selected = assert(bounds.object(assert(bounds.object(content.model_providers)).local_model))
+            test.eq(selected.base_url, endpoint)
+            test.eq(selected.env_key, "OPENAI_API_KEY")
+        end)
         test.it("measures omitted and empty option selections as the same configuration", function()
             local target = "bee.driver.claude.binding:configure"
             test.eq(configuration.digest("bee.driver.claude.binding:binding", {fixture = false, context = "window"}, target),
@@ -30,6 +57,19 @@ local function define_tests()
             test.eq(assert(bounds.object(value)).enabled, false)
             for _, raw in ipairs({{limit = 3}, {enabled = false, extra = true}, {enabled = true, limit = 6}, {enabled = true, tags = {"x", "y", "z"}}}) do
                 test.is_nil(descriptor.decode_option("settings", spec, raw))
+            end
+        end)
+        test.it("validates bounded provider maps using their declared value schemas", function()
+            local spec = {value_schema = {type = "object", maxProperties = 2, additionalProperties = {
+                type = "object", additionalProperties = false, required = {"base_url", "env_key"}, properties = {
+                    base_url = {type = "string", maxLength = 512}, env_key = {type = "string", enum = {"OPENAI_API_KEY"}}}}}}
+            local decoded = assert(descriptor.decode_option("providers", spec,
+                {arbitrary = {base_url = "https://models.example.test/v1", env_key = "OPENAI_API_KEY"}}))
+            test.not_nil(assert(bounds.object(decoded)).arbitrary)
+            for _, raw in ipairs({{arbitrary = {base_url = "https://models.example.test/v1", env_key = "secret-value"}},
+                {arbitrary = {base_url = "https://models.example.test/v1", api_key = "secret-value"}},
+                {a = {base_url = "url", env_key = "OPENAI_API_KEY"}, b = {base_url = "url", env_key = "OPENAI_API_KEY"}, c = {base_url = "url", env_key = "OPENAI_API_KEY"}}}) do
+                test.is_nil(descriptor.decode_option("providers", spec, raw))
             end
         end)
         test.it("renders nested JSON and TOML through the same declaration", function()

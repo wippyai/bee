@@ -128,20 +128,21 @@ entries:
   groups:
   - harness_setup_execution_scope
   policy:
-    expression: (action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource == "bee.credentials.binding:define" || resource == "bee.credentials.binding:list" || resource == "bee.credentials.binding:capabilities"))
-      || ((action == "bee.resources.manage" || action == "bee.credentials.manage") && resource != "" && resource == actor.meta.workspace_id) || action == "registry.get"
+    expression: (action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource == "bee.credentials.binding:define" || resource == "bee.credentials.binding:list" || resource == "bee.credentials.binding:capabilities" || resource == "bee.credentials.binding:set_value"))
+      || ((action == "bee.resources.manage" || action == "bee.credentials.manage") && resource != "" && resource == actor.meta.workspace_id) || action == "registry.get" || action == "registry.find"
     actions:
     - funcs.call
     - bee.resources.manage
     - bee.credentials.manage
     - registry.get
+    - registry.find
     resources: '*'
     effect: allow
 - name: setup_facade_policy
   kind: security.policy.expr
   policy:
     expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope") || (action == "funcs.call"
-      && resource == "bee.harness.binding:setup_backend") || action == "registry.snapshot"
+      && resource in ["bee.harness.binding:setup_backend", "bee.harness.binding:set_credential_backend"]) || action == "registry.snapshot"
     actions:
     - funcs.security
     - security.policy_group.get
@@ -214,12 +215,6 @@ entries:
         source:
           kind: fs_directory
           ref: bee.env:machine_login_source
-        optional: true
-      opencode_api_key:
-        provider: opencode
-        source:
-          kind: env_variable
-          ref: bee.driver.opencode:api_key
         optional: true
       opencode_login:
         provider: opencode

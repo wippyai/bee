@@ -329,6 +329,32 @@ local function decode_issue(value: unknown): (Issue?, string?)
     return {workspace_id = workspace_id, name = name, audience = audience, attempt_id = attempt_id, profile_id = profile_id, profile_digest = profile_digest,
         binding_digest = binding_digest, launch_policy_digest = policy_digest, idempotency_key = key, ttl = ttl}, nil
 end
+function M.set_value(value: unknown): credential_protocol.Reply
+    local request = bounds.object(value)
+    if not request or bounds.fields(request, {"workspace_id", "name", "value"}) then return fail("INVALID", "credential value request is malformed") end
+    local workspace, name = bounds.id(request.workspace_id), bounds.id(request.name)
+    if not workspace or not name then return fail("INVALID", "credential identity is invalid") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(M.MANAGE, workspace) then return fail("DENIED", "caller does not manage workspace " .. workspace) end
+    local secret = bounds.text(request.value, M.MAX_SECRET_BYTES)
+    if not secret or secret:find("[%z\r\n]") then return fail("INVALID", "credential value cannot be carried in an environment") end
+    local db, open_failure = open()
+    if not db then return open_failure or fail("STORAGE", "credential store unavailable") end
+    local definition, read_error = store.definition(db, workspace, name)
+    db:release()
+    if read_error then return fail("STORAGE", "credential definition unavailable") end
+    if not definition then return fail("NOT_FOUND", "credential definition does not exist") end
+    local ref, provider = bounds.id(definition.source_ref), bounds.id(definition.provider)
+    if definition.source_kind ~= "env_variable" or not ref or not provider or not sources.accepts_value(ref) then
+        return fail("DENIED", "credential source does not accept person-entered values")
+    end
+    local admitted, admission_error = sources.host_sources()
+    if not admitted then return fail("UNAVAILABLE", admission_error or "credential admission unavailable") end
+    if not sources.admits(admitted, ref, workspace, provider, "environment") then return fail("DENIED", "credential source is no longer admitted") end
+    local set, set_error = env.set(ref, secret)
+    if not set or set_error then return fail("UNAVAILABLE", "credential value could not be set") end
+    return succeed({workspace_id = workspace, name = name, present = secret ~= ""})
+end
 function M.issue_projection(value: unknown): credential_protocol.Reply
     local request, decode_error = decode_issue(value)
     if not request then return fail("INVALID", decode_error or "invalid request") end

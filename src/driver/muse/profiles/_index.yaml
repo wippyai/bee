@@ -87,6 +87,8 @@ entries:
     title: Muse CLI
     binding_ref: bee.driver.muse.binding:binding
     profile_id: window
+    private_credentials:
+    - muse_login
     docker_credentials:
     - muse_login
     policy_ref: bee.driver.muse.security:launch_policy_muse_window

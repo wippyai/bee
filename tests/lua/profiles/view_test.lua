@@ -4,6 +4,7 @@ local view = require("view")
 local editor = require("editor")
 local appearance = require("appearance")
 local caller = require("caller")
+local canonical = require("canonical")
 type Object = {[string]: unknown}
 local function ok(value: unknown): caller.Reply
     return {ok = true, error = nil, value = value, replayed = false}
@@ -64,6 +65,35 @@ local function define_tests()
             test.eq(s.form.draft.bee.permission_answers, "ask")
             view.input(s, key("enter"), view.draw(120, 45, appearance.defaults(), s))
             test.eq(s.form.draft.bee.permission_answers, "deny")
+        end)
+        test.it("masks entered credentials and sends them only to credential setup", function()
+            local s = state()
+            s.form.credentials = {"custom_api_key"}
+            s.form.credential_keys = {custom_api_key = true}
+            s.form.definition_digest = string.rep("a", 64)
+            local entered = "fixture-person-entered-key"
+            local stored = false
+            s.ask = function(target: string, request: Object): caller.Reply
+                test.eq(target, "bee.harness.binding:set_credential")
+                test.eq(request.name, "custom_api_key")
+                test.eq(request.value, entered)
+                test.eq(request.definition_ref, "host:agent")
+                test.eq(request.expected_definition_digest, string.rep("a", 64))
+                stored = true
+                return ok({present = true})
+            end
+            view.action(s, "advanced")
+            local drawn = view.draw(120, 45, appearance.defaults(), s)
+            for _ = 1, 6 do view.input(s, key("tab"), drawn) end
+            view.input(s, {type = "paste", text = entered}, drawn)
+            local rendered = table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n")
+            test.is_nil((rendered:find(entered, 1, true)))
+            test.is_true(rendered:find("API key: custom_api_key", 1, true) ~= nil)
+            local profile = assert(editor.result(s.form.draft))
+            test.is_nil((assert(canonical.encode(profile)):find(entered, 1, true)))
+            test.eq(view.action(s, "save"), "save")
+            test.is_true(stored)
+            test.eq(s.credential_text.custom_api_key, "")
         end)
         test.it("offers no presentation, budget or stall fields in either view", function()
             local s = state()

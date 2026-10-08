@@ -140,6 +140,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    canonical: bee.values:canonical
     test: wippy.test:test
     view: bee.harness.app:profile_view
     editor: bee.harness.app:profile_editor

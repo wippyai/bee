@@ -145,8 +145,12 @@ entries:
     title: Codex CLI
     binding_ref: bee.driver.codex.binding:binding
     profile_id: window
+    private_credentials:
+    - codex_login
+    - codex_api_key
     docker_credentials:
     - codex_login
+    - codex_api_key
     policy_ref: bee.driver.codex.security:launch_policy_codex_window
     default_mode: window
     allowed_overrides:
@@ -187,6 +191,7 @@ entries:
     session_resource: session
     credentials:
     - codex_login
+    - codex_api_key
     presentation:
       start_menu: false
       fullscreen: false
@@ -215,6 +220,7 @@ entries:
     session_resource: session
     credentials:
     - codex_login
+    - codex_api_key
     presentation:
       start_menu: false
       fullscreen: false

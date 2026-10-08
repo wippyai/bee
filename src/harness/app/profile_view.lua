@@ -23,6 +23,7 @@ type ThreadRow = {thread_id: string?, title: string}
 type Threads = {items: {ThreadRow}, selected: integer, error: string?}
 type Driver = {definition_ref: string, title: string}
 type State = {drivers: {Driver}?, driver_choice: Driver?, settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
+    credential_text: {[string]: string},
     status: string, confirming_remove: boolean, confirming_revoke: boolean?, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
@@ -36,7 +37,7 @@ function M.new(form: forms.Form, ask: Ask, drivers: {Driver}?): State
         end
     end
     return {drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
-        option_text = option_text, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirming_remove = false, confirming_revoke = false, ask = ask,
+        option_text = option_text, credential_text = {}, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirming_remove = false, confirming_revoke = false, ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
 end
 local function folder_label(state: State): string
@@ -117,10 +118,14 @@ local function fields(state: State): {Field}
                 result[#result + 1] = {kind = "scope", name = "mcp." .. tool.name, label = "MCP scope / traits: " .. (value or "{}")}
             end
         end
-        for _, ref in ipairs(state.form.credentials or {}) do
+        for _, ref in ipairs(forms.credential_names(state.form)) do
             local chosen = state.form.draft.bee.credential_refs
             result[#result + 1] = {kind = "credential", name = ref,
                 label = ((chosen == nil or bounds.member(ref, chosen)) and "[x] " or "[ ] ") .. "Credential: " .. ref}
+            if state.form.credential_keys and state.form.credential_keys[ref] then
+                result[#result + 1] = {kind = "credential_value", name = ref, label = "API key: " .. ref .. ": " ..
+                    ((state.credential_text[ref] or "") ~= "" and "********" or "Enter to replace")}
+            end
         end
         for _, ref in ipairs(state.form.leases or {}) do
             result[#result + 1] = {kind = "lease", name = ref,
@@ -150,6 +155,7 @@ function M.action(state: State, action: string): string?
         return nil
     end
     if action == "cancel" then
+        state.credential_text = {}
         if state.confirming_revoke then state.confirming_revoke = false; state.status = ""; return nil end
         if state.confirming_remove then state.confirming_remove = false; return nil end
         return "cancel"
@@ -181,6 +187,16 @@ function M.action(state: State, action: string): string?
         end
         local settings_error = settings.apply(state.form.draft, state.settings)
         if settings_error then state.status = settings_error; return nil end
+        for _, name in ipairs(forms.credential_names(state.form)) do
+            local value = state.credential_text[name]
+            if value and value ~= "" then
+                local reply = state.ask("bee.harness.binding:set_credential", {workspace_id = state.form.workspace_id,
+                    definition_ref = state.form.draft.definition_ref, expected_definition_digest = state.form.definition_digest,
+                    name = name, value = value})
+                state.credential_text[name] = ""
+                if not reply.ok then state.status = "Credential could not be stored"; return nil end
+            end
+        end
         return "save"
     end
     return nil
@@ -357,7 +373,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
                 state.form.draft.bee.approval_leases = refs; ok = true
             elseif field.kind == "credential" then
                 local refs: {string} = {}
-                for _, ref in ipairs(state.form.draft.bee.credential_refs or state.form.credentials or {}) do refs[#refs + 1] = ref end
+                for _, ref in ipairs(state.form.draft.bee.credential_refs or forms.credential_names(state.form)) do refs[#refs + 1] = ref end
                 local found = false
                 for index, ref in ipairs(refs) do if ref == field.name then table.remove(refs, index); found = true; break end end
                 if not found then refs[#refs + 1] = field.name end
@@ -368,14 +384,14 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    local value = (field.kind == "settings" or field.kind == "scope") and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
+    local value = field.kind == "credential_value" and (state.credential_text[field.name] or "") or (field.kind == "settings" or field.kind == "scope") and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
         or (field.kind == "option" and (state.option_text[field.name] or "") or state.guidance)
     if field.kind == "scope" and state.settings[field.name] == nil then
         for _, item in ipairs(state.form.draft.bee.mcp or {}) do
             if "mcp." .. item.tool == field.name then value = canonical.encode(item.scope) or "{}" end
         end
     end
-    local limit = field.kind == "scope" and 8192 or field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
+    local limit = field.kind == "credential_value" and 65536 or field.kind == "scope" and 8192 or field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
         or (field.kind == "option" and (field.max_bytes or editor.MAX_INSTRUCTIONS_BYTES) or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text
     elseif event.type == "key" and event.action == "press" then
@@ -386,7 +402,8 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         elseif not event.ctrl and not event.alt and event.key ~= "" and not event.key:find("%c") then value = value .. event.key end
     end
     if #value > limit then state.status = "Text exceeds " .. tostring(limit) .. " bytes"; return nil end
-    if field.kind == "settings" or field.kind == "scope" then state.settings[field.name] = value
+    if field.kind == "credential_value" then state.credential_text[field.name] = value
+    elseif field.kind == "settings" or field.kind == "scope" then state.settings[field.name] = value
     elseif field.kind == "repair" then state.form.repair_json = value
     elseif field.kind == "title" then state.title = value
     elseif field.kind == "option" then state.option_text[field.name] = value

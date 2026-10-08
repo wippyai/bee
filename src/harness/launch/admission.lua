@@ -370,7 +370,9 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     if not placement then return nil, fail("UNAVAILABLE", placement_error or "placement binding") end
     -- A container shares no home with the host, so its CLI login travels as
     -- the definition's Docker credentials.
-    if placement.placement_kind == "docker" and launch.docker_credentials then launch.credentials = launch.docker_credentials end
+    local private_home = default_private_home
+    if profile_placement and profile_placement.kind == "native" then private_home = profile_placement.home == "private" end
+    launch.credentials = definition.credential_names(launch, placement.placement_kind, private_home)
     if selected and selected.profile.bee.credential_refs then
         local admitted: {string} = {}
         for _, ref in ipairs(selected.profile.bee.credential_refs) do

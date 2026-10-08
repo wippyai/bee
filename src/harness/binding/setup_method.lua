@@ -34,6 +34,8 @@ local function handle(raw: unknown): {[string]: unknown}
     -- where the definition and its launch policy both allow the override: the
     -- request's folder, otherwise the saved profile's.
     local backend_request: {[string]: unknown} = {workspace_id = workspace, definition_ref = definition_ref, expected_definition_digest = plan.definition_digest, placement_kind = plan.placement_kind}
+    local selected_placement = plan.effective_profile and plan.effective_profile.placement
+    backend_request.private_home = selected_placement ~= nil and selected_placement.kind == "native" and selected_placement.home == "private"
     local folder: unknown = request.workdir
     if folder == nil and plan.effective_profile then folder = plan.effective_profile.workdir end
     if folder ~= nil then
@@ -48,4 +50,19 @@ local function handle(raw: unknown): {[string]: unknown}
     if call_error or type(result) ~= "table" then return {ok = false, error = tostring(call_error or "setup reply")} end
     return result
 end
-return {handle = handle}
+local function set_credential(raw: unknown): {[string]: unknown}
+    local request = bounds.object(raw)
+    if not request or bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "name", "value"}) then return {ok = false, error = {code = "INVALID", message = "credential request is malformed"}} end
+    local workspace = bounds.id(request.workspace_id)
+    if not workspace or not security.can("bee.harness.setup", workspace) then return {ok = false, error = {code = "DENIED", message = "setup is not authorized"}} end
+    if not digest(request.expected_definition_digest) then return {ok = false, error = {code = "INVALID", message = "definition digest is invalid"}} end
+    local scope = security.named_scope(SCOPE)
+    if not scope then return {ok = false, error = {code = "UNAVAILABLE", message = "setup scope unavailable"}} end
+    local executor = funcs.new():with_scope(scope)
+    if not executor then return {ok = false, error = {code = "DENIED", message = "setup scope denied"}} end
+    local result, call_error = executor:call("bee.harness.binding:set_credential_backend", request)
+    local reply = bounds.object(result)
+    if call_error or not reply or reply.ok ~= true then return {ok = false, error = {code = "UNAVAILABLE", message = "credential could not be stored"}} end
+    return reply
+end
+return {handle = handle, set_credential = set_credential}

@@ -24,6 +24,12 @@ end
 
 local function define_tests()
     test.describe("Approved driver logins", function()
+        test.it("discovers a custom provider key through admitted registry metadata", function()
+            local admitted = assert(sources.host_sources())
+            test.eq(admitted.formats.local_endpoint, "bee.credentials:custom_format")
+            test.is_true(sources.admits(admitted, "bee.credentials:custom_key", "workspace", "local_endpoint", "environment", "placement"))
+            test.is_false(sources.admits(admitted, "bee.credentials:custom_key", "workspace", "codex", "environment", "placement"))
+        end)
         test.it("ships credential sources that read the logins governance approved", function()
             local data = assert(bounds.object(assert(registry.get(SOURCES)).data))
             test.eq(data.admission, "bee.gov.binding:driver_logins")

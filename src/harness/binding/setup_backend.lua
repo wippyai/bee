@@ -132,10 +132,22 @@ local function admitted_login(name: string): Credential?
     if call_error or not files or type(files[provider]) ~= "string" then return nil end
     return {provider = provider, source = {kind = "fs_directory", ref = MACHINE_LOGIN}, projection_kind = "file", optional = true}
 end
+local function admitted_key(name: string): Credential?
+    local entries, find_error = registry.find({["meta.type"] = "bee.credential_source", ["meta.credential_name"] = name})
+    if find_error or not entries or #entries ~= 1 then return nil end
+    local entry = entries[1]
+    local meta = entry and bounds.object(entry.meta)
+    local declared = meta and bounds.object(meta.credential)
+    local provider = declared and bounds.id(declared.provider)
+    local ref = entry and bounds.id(entry.id)
+    if not provider or not ref or entry.kind ~= "env.variable" then return nil end
+    return {provider = provider, source = {kind = "env_variable", ref = ref}, projection_kind = "environment", optional = true}
+end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return fail("request must be an object") end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "workdir", "placement_kind"}) then return fail("unknown field") end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "workdir", "placement_kind", "private_home"}) then return fail("unknown field") end
+    if request.private_home ~= nil and type(request.private_home) ~= "boolean" then return fail("private_home must be a boolean") end
     if request.placement_kind ~= nil and not bounds.id(request.placement_kind) then return fail("placement_kind is not an identifier") end
     local workspace, ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace or not ref then return fail("workspace_id and definition_ref are required") end
@@ -145,7 +157,7 @@ local function handle(raw: unknown): {[string]: unknown}
     local launch, launch_error = definition.load(ref)
     if not launch then return fail(tostring(launch_error)) end
     if launch.digest ~= expected then return fail("launch definition changed") end
-    if request.placement_kind == "docker" and launch.docker_credentials then launch.credentials = launch.docker_credentials end
+    launch.credentials = definition.credential_names(launch, bounds.id(request.placement_kind) or "native", request.private_home == true)
     local names: {string} = {}
     if launch.workdir_policy.kind == "declared_resource" and launch.workdir_policy.resource_ref then names[#names + 1] = launch.workdir_policy.resource_ref end
     if launch.session_resource then names[#names + 1] = launch.session_resource end
@@ -165,7 +177,7 @@ local function handle(raw: unknown): {[string]: unknown}
     local selected: {[string]: Credential} = {}
     if #launch.credentials > 0 and not security.can("bee.credentials.manage", workspace) then return fail("credential management is not authorized") end
     for _, name in ipairs(launch.credentials) do
-        local chosen = configured and credential(configured[name]) or admitted_login(name)
+        local chosen = configured and credential(configured[name]) or admitted_login(name) or admitted_key(name)
         if not chosen then return fail("host setup has no valid credential for " .. name) end
         selected[name] = chosen
     end
@@ -183,4 +195,22 @@ local function handle(raw: unknown): {[string]: unknown}
     end
     return {ok = true, resources = names, credentials = launch.credentials, workdir = workdir}
 end
-return {handle = handle}
+local function set_credential(raw: unknown): {[string]: unknown}
+    local request = bounds.object(raw)
+    if not request or bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "name", "value"}) then return fail("credential request is malformed") end
+    local workspace, ref, name = bounds.id(request.workspace_id), bounds.id(request.definition_ref), bounds.id(request.name)
+    if not workspace or not ref or not name then return fail("credential identity is invalid") end
+    if not security.can("bee.credentials.manage", workspace) then return fail("credential management is not authorized") end
+    local launch = definition.load(ref)
+    if not launch or launch.digest ~= request.expected_definition_digest then return fail("launch definition changed") end
+    local declared = bounds.member(name, launch.credentials) or bounds.member(name, launch.private_credentials or {}) or bounds.member(name, launch.docker_credentials or {})
+    local chosen = declared and admitted_key(name)
+    if not chosen then return fail("launch definition does not admit an entered credential") end
+    local ensured = ensure_credential(workspace, name, chosen)
+    if not ensured then return fail("credential definition could not be set") end
+    local raw_reply, call_error = funcs.call("bee.credentials.binding:set_value", {workspace_id = workspace, name = name, value = request.value})
+    local reply = bounds.object(raw_reply)
+    if call_error or not reply or reply.ok ~= true then return fail("credential value could not be set") end
+    return {ok = true, value = {name = name, present = true}}
+end
+return {handle = handle, set_credential = set_credential}

@@ -17,9 +17,17 @@ local M = {}
 -- profile, whose own definition applies.
 type Subject = {definition_ref: string?, title: string, saved_profile_id: string?, saved_profile_revision: integer?}
 type Form = {permission_transport: boolean?, driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
+    credential_keys: {[string]: boolean}?, definition_digest: string?, credential_definition: definition.Definition?, default_private_home: boolean?,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?,
     fields: {[string]: {label: string, section: string, order: integer}}?, unsupported: {string}?,
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
+
+function M.credential_names(form: Form): {string}
+    if not form.credential_definition then return form.credentials or {} end
+    local placement = form.draft.placement
+    local private = placement and placement.kind == "native" and placement.home == "private" or placement == nil and form.default_private_home == true
+    return definition.credential_names(form.credential_definition, placement and placement.kind or "native", private)
+end
 
 local function call(request: unknown): ({[string]: unknown}?, string?)
     local raw, err = funcs.call("bee.harness.binding:call", request)
@@ -201,12 +209,30 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
         local meta = place and bounds.object(place.meta)
         placement_names[ref] = meta and bounds.line(meta.title, 80) or ref
     end
-    local credential_choices = decoded.credentials
-    if base.placement and base.placement.kind == "docker" and decoded.docker_credentials then credential_choices = decoded.docker_credentials end
+    local default_private = true
+    local listed = catalog.read(pinned)
+    for _, binding in ipairs(listed and listed.bindings or {}) do
+        if binding.binding_id == decoded.binding_ref then
+            for _, profile in ipairs(binding.profiles) do
+                if profile.id == decoded.profile_id then default_private = profile.private_home end
+            end
+        end
+    end
+    local credential_keys: {[string]: boolean} = {}
+    local sources, source_error = pinned:find({["meta.type"] = "bee.credential_source"})
+    if source_error or not sources then return nil, "Credential source metadata is unavailable" end
+    for _, source in ipairs(sources) do
+        local meta = bounds.object(source.meta)
+        local name = meta and bounds.id(meta.credential_name)
+        if name and source.kind == "env.variable" then credential_keys[name] = true end
+    end
+    local credential_choices = definition.credential_names(decoded, base.placement and base.placement.kind or "native",
+        base.placement and base.placement.kind == "native" and base.placement.home == "private" or base.placement == nil and default_private)
     return {workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
         permission_transport = policy_data.permission_exchange ~= nil,
         driver_name = descriptor.provider, placement_names = placement_names, leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
         save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,
+        credential_keys = credential_keys, credential_definition = decoded, definition_digest = decoded.digest, default_private_home = default_private,
         migration_diagnostic = diagnostic, repair_json = migration_draft and canonical.encode(migration_draft) or nil}, nil
 end
 

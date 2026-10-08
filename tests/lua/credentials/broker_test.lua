@@ -290,6 +290,32 @@ local function define_tests()
                 test.eq(code(call(user, "issue_projection", changed)), "CONFLICT", tostring(next(changes)))
             end
         end)
+        test.it("holds a person-entered custom provider key outside credential and registry records", function()
+            local ws, attempt = fresh("custom-provider"), fresh("custom-provider-attempt")
+            local secret = "custom-provider-fixture-value-832a"
+            local defined = value(call(manager, "define", {workspace_id = ws, name = "custom", provider = "local_endpoint",
+                source = {kind = "env_variable", ref = "bee.credentials:custom_key"}}))
+            test.eq(defined.destination, "LOCAL_ENDPOINT_API_KEY")
+            local stored = call(manager, "set_value", {workspace_id = ws, name = "custom", value = secret})
+            test.is_true(stored.ok)
+            test.is_true(not assert(json.encode(stored)):find(secret, 1, true))
+            test.eq(code(call(outsider, "set_value", {workspace_id = ws, name = "custom", value = secret})), "DENIED")
+            local projected = issue(user, ws, "custom", attempt)
+            local materialized = value(call(runner, "materialize", {projection_id = projected.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt, generation_key = "custom-key"}))
+            test.eq(materialized.destination, "LOCAL_ENDPOINT_API_KEY")
+            test.eq(materialized.value, secret)
+            local listed = call(manager, "list", {workspace_id = ws})
+            local checked = call(runner, "check", {projection_id = projected.projection_id, subject = USER, audience = USER, attempt_id = attempt})
+            for _, object in ipairs({listed, checked, assert(registry.get("bee.credentials:custom_key"))}) do
+                test.is_true(not assert(json.encode(object)):find(secret, 1, true))
+            end
+            local db = assert(store.open())
+            local definitions = assert(db:query("SELECT * FROM bee_credential_definitions WHERE workspace_id = ?", {ws}))
+            local projections = assert(db:query("SELECT * FROM bee_credential_projections WHERE workspace_id = ?", {ws}))
+            db:release()
+            test.is_true(not assert(json.encode({definitions, projections})):find(secret, 1, true))
+        end)
         test.it("reserves unique monotonic materialization generations under concurrent calls", function()
             local attempt = fresh("parallel-materialization")
             local projection = issue(user, workspace, "anthropic", attempt)

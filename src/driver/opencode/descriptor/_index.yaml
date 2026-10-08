@@ -191,6 +191,122 @@ entries:
               then:
               - --variant
               - field: variant
+        providers:
+          path: provider.options.providers
+          value_schema:
+            type: object
+            maxProperties: 16
+            additionalProperties:
+              type: object
+              additionalProperties: false
+              properties:
+                npm:
+                  type: string
+                  enum:
+                  - '@ai-sdk/openai-compatible'
+                name:
+                  type: string
+                  maxLength: 128
+                options:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    baseURL:
+                      type: string
+                      maxLength: 512
+                    apiKey:
+                      type: string
+                      enum:
+                      - '{env:OPENAI_API_KEY}'
+                    includeUsage:
+                      type: boolean
+                  required:
+                  - baseURL
+                  - apiKey
+                models:
+                  type: object
+                  maxProperties: 16
+                  additionalProperties:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      name:
+                        type: string
+                        maxLength: 128
+                      tool_call:
+                        type: boolean
+                      limit:
+                        type: object
+                        additionalProperties: false
+                        properties:
+                          context:
+                            type: integer
+                            minimum: 1
+                          output:
+                            type: integer
+                            minimum: 1
+                      options:
+                        type: object
+                        additionalProperties: false
+                        properties:
+                          temperature:
+                            type: number
+                            minimum: 0
+                            maximum: 2
+                          seed:
+                            type: integer
+                          maxTokens:
+                            type: integer
+                            minimum: 1
+              required:
+              - npm
+              - options
+              - models
+          label: Custom providers
+          description: Custom providers
+          section: advanced
+          order: 10
+          contexts: &id001
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.opencode.descriptor:cli
+          render:
+          - kind: config
+            contexts: *id001
+            file: .config/opencode/opencode.json
+            format: json
+            path:
+            - provider
+            merge: set
+            value:
+              field: provider.options.providers
+        enabled_providers:
+          path: provider.options.enabled_providers
+          value_schema:
+            type: array
+            maxItems: 16
+            items:
+              type: string
+              maxLength: 128
+          label: Enabled providers
+          description: Enabled providers
+          section: advanced
+          order: 11
+          contexts: *id001
+          support:
+            config_schema_ref: bee.driver.opencode.descriptor:cli
+          render:
+          - kind: config
+            contexts: *id001
+            file: .config/opencode/opencode.json
+            format: json
+            path:
+            - enabled_providers
+            merge: set
+            value:
+              field: provider.options.enabled_providers
       rules:
       - kind: forbid_nonempty
         field: gateway_hooks

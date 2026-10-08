@@ -70,6 +70,20 @@ local function define_tests()
             test.eq(model.summary(state), "1 installed · 0 shared")
         end)
 
+        test.it("keeps a governed Hub application in Installed with Hub provenance", function()
+            local state = fresh()
+            load(state, {}, {activation("hub-i1", "hub:bee/progress", "1.0.0", "settled", "applied", "hub-i1")})
+            hub.apply_catalog(state.hub, hub_reply({total = 1, items = {
+                {component = "bee/progress", title = "Progress", latest_version = "1.0.0", description = "Tasks", type = "application"}}}))
+            state.hub_open = true
+            local rows = model.rows(state, "installed")
+            test.eq(#rows, 1)
+            test.eq(rows[1].source, "from Hub")
+            test.is_false(rows[1].made_here)
+            test.eq(#model.rows(state, "shared"), 0)
+            test.eq(model.rows(state, "history")[1].source, "from Hub")
+        end)
+
         test.it("offers the newer shared version of an installed application as an update", function()
             local state = fresh()
             load(state, {version("todo", "1.0.1", "node-laptop"), version("todo", "0.9.0", "node-laptop")},

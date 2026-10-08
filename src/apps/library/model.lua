@@ -97,7 +97,8 @@ end
 
 -- Where a version came from: this bee's own work, naming its agent when it is
 -- known, or another bee of the hive.
-function M.source(state: State, node: string, author: string?): string
+function M.source(state: State, node: string, author: string?, source_workspace: string?): string
+    if source_workspace and source_workspace:sub(1, 4) == "hub:" then return "from Hub" end
     if node == governed.own_node(state.governed) then
         return author and ("made by " .. author) or "made on this bee"
     end
@@ -242,9 +243,9 @@ local function installed_rows(state: State): {Row}
             local row = make({key = "g:app:" .. app.name, origin = "governed",
                 kind = driver_owner(app.owner) and "driver" or "app", name = titled(current or shown, app.name),
                 version = shown.version, status = M.STATUS_INSTALLED,
-                source = M.source(state, origin_node, M.author(state, origin_node, app.name, (current or shown).version)),
+                source = M.source(state, origin_node, M.author(state, origin_node, app.name, (current or shown).version), app.name),
                 intent_id = shown.intent_id, app = app.name, application = current and current.application or nil,
-                made_here = origin_node == state.governed.owner_node})
+                made_here = origin_node == state.governed.owner_node and app.name:sub(1, 4) ~= "hub:"})
             if current and current.baseline_intent_id then
                 for _, earlier in ipairs(state.governed.activations) do
                     if earlier.intent_id == current.baseline_intent_id then row.baseline = earlier.version end
@@ -328,14 +329,16 @@ local function shared_rows(state: State): {Row}
         local attempt = last[item.source_workspace]
         local spec: Spec = {key = "g:ver:" .. governed.available_key(item), origin = "governed", kind = "app",
             name = M.title(item.source_workspace), version = item.version, status = M.STATUS_SHARED,
-            source = M.source(state, item.owner_id, item.author), available_key = governed.available_key(item),
+            source = M.source(state, item.owner_id, item.author, item.source_workspace), available_key = governed.available_key(item),
             app = item.source_workspace,
             note = attempt and attempt.phase == "settled" and attempt.outcome ~= "applied" and ended_note(attempt) or nil}
         rows[#rows + 1] = make(spec)
     end
     local catalog: {hub.Item} = {}
     for _, item in ipairs(hub.visible_catalog(state.hub)) do
-        if hub.component_status(state.hub, item.component) == nil then catalog[#catalog + 1] = item end
+        if not held["hub:" .. item.component] and hub.component_status(state.hub, item.component) == nil then
+            catalog[#catalog + 1] = item
+        end
     end
     if state.hub_open then
         for _, item in ipairs(catalog) do
@@ -373,7 +376,7 @@ local function history_rows(state: State): {Row}
             rows[#rows + 1] = make({key = "g:act:" .. item.intent_id, origin = "governed",
                 kind = driver_owner(item.overlay_owner) and "driver" or "app", name = titled(item, item.source_workspace),
                 version = item.version, status = status, replaced_by = replaced_by,
-                source = M.source(state, item.source_node, M.author(state, item.source_node, item.source_workspace, item.version)),
+                source = M.source(state, item.source_node, M.author(state, item.source_node, item.source_workspace, item.version), item.source_workspace),
                 note = note, intent_id = item.intent_id, app = item.source_workspace})
         end
     end

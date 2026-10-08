@@ -74,5 +74,5 @@ entries:
     type: harness.driver
     driver_id: codex
     descriptor_ref: bee.driver.codex.descriptor:cli
-    accepts_model: false
+    accepts_model: true
     profiles_ref: bee.driver.codex.profiles:profiles

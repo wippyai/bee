@@ -1364,3 +1364,34 @@ entries:
     canonical: bee.values:canonical
     activation_store: bee.gov.persist:activation_store
     activation_uninstall: bee.gov.binding:activation_uninstall
+
+- name: hub_agent_test
+  kind: function.lua
+  source: file://hub_agent_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - json
+  - time
+  - env
+  - system
+  - process
+  - registry
+  - http_client
+  meta:
+    type: test
+    suite: bee
+    timeout: 480s
+  security:
+    policies:
+    - bee.tests.gov:app_database_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    application: bee.node:application
+    guide: bee.gov.traits:guide
+    harness: bee.tests.gov:delivery_harness
+    workspace_applications: bee.gov.types:workspace_applications
+    launch_policy: bee.harness.carrier:policy
+    principals: bee.tests.principals:bound

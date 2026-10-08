@@ -116,6 +116,10 @@ local function main(options: unknown)
         if state.notice ~= "" then return state.notice end
         return hubs.notice
     end
+    local function failure(reason: string)
+        ui.status = reason
+        state.notice, hubs.notice, gov.fault = reason, reason, reason
+    end
     local function wake()
         dirty = true
         if running then updates:send(true) end
@@ -137,12 +141,11 @@ local function main(options: unknown)
         ui.status = "Working…"
         dirty = true
         coroutine.spawn(function()
-            local ok, failure = pcall(operation)
+            local ok, problem = pcall(operation)
             busy = false
             if not running then return end
             if not ok then
-                ui.status = "That did not finish; Technical says why"
-                state.notice, hubs.notice, gov.fault = ui.status, ui.status, tostring(failure)
+                failure(tostring(problem))
             elseif ui.status == "Working…" then ui.status = "" end
             wake()
         end)
@@ -463,6 +466,15 @@ local function main(options: unknown)
             end
         elseif operation == "status" then hub.apply_result(hubs, value)
         elseif operation == "history" then hub.apply_history(hubs, value) end
+        if not value.ok then
+            failure((value.code or "UNAVAILABLE") .. ": " .. (value.message or "Hub read failed"))
+        elseif operation == "state" or operation == "files" or operation == "read_file" then
+            if ui.content.fault ~= "" then failure(ui.content.fault) end
+        elseif operation == "details" and hubs.detail and hubs.detail.readme_error ~= "" then
+            failure("README unavailable: " .. hubs.detail.readme_error)
+        elseif operation ~= "status" and hubs.notice ~= "" and hubs.notice ~= "Installed settings loaded" then
+            failure(hubs.notice)
+        end
     end
     local function start_next()
         if reading then return end
@@ -503,6 +515,7 @@ local function main(options: unknown)
         local future, err = funcs.new():async(hub.HUB, intent)
         if not future or err then
             hub.apply_result(hubs, {ok = false, replayed = false, code = "UNCERTAIN", message = tostring(err or "Hub dispatch unavailable"), value = nil})
+            failure(hubs.result and hubs.result.message or "Hub apply unavailable")
             apply_pending = false
             changed()
             return false
@@ -511,6 +524,7 @@ local function main(options: unknown)
         if not response then
             future:cancel()
             hub.apply_result(hubs, {ok = false, replayed = false, code = "UNCERTAIN", message = "Hub response channel unavailable", value = nil})
+            failure(hubs.result and hubs.result.message or "Hub apply unavailable")
             apply_pending = false
             changed()
             return false
@@ -963,7 +977,7 @@ local function main(options: unknown)
         elseif kind == "policy_block" then hub.set_policy(hubs, "block"); invalidate(); changed()
         elseif kind == "policy_leave" then hub.set_policy(hubs, "leave"); invalidate(); changed()
         elseif kind == "policy_down" then hub.set_policy(hubs, "down"); invalidate(); changed()
-        elseif kind == "review" then local problem = hub.confirm(hubs); if problem then ui.status = problem end; changed()
+        elseif kind == "review" then local problem = hub.confirm(hubs); if problem then failure(problem) end; changed()
         elseif kind == "install_governed" then perform(confirm_hub_now)
         elseif kind == "confirm" then confirm()
         elseif kind == "cancel" then cancel_confirmation()
@@ -1066,6 +1080,7 @@ local function main(options: unknown)
                         apply_pending = false
                         ui.status = ""
                         hub.apply_result(hubs, value)
+                        if not value.ok then failure((value.code or "FAILED") .. ": " .. (value.message or "Hub apply failed")) end
                     end
                     changed()
                 else
@@ -1135,7 +1150,7 @@ local function main(options: unknown)
                                 elseif letter == "x" and phase == "details" then package_hit("uninstall", "")
                                 elseif letter == "p" and phase == "details" then plan()
                                 elseif letter == "t" then model.toggle_technical(state); changed()
-                                elseif letter == "r" then if phase == "result" then check_status() elseif phase == "plan" then plan() else changed() end
+                                elseif letter == "r" then if phase == "result" then check_status() elseif phase == "plan" then plan() elseif phase == "details" then details() else changed() end
                                 elseif key == "esc" or key == "escape" then
                                     if phase == "confirm" then cancel_confirmation() else leave_package() end
                                 end

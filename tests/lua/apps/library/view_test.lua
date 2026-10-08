@@ -98,6 +98,15 @@ end
 
 local function define_tests()
     test.describe("Library frame", function()
+        test.it("shows an empty list's failure in Technical with available actions", function()
+            local state = fresh()
+            state.governed.technical, state.governed.fault = true, "UNAVAILABLE: owner call failed"
+            state.notice = state.governed.fault
+            local shown = view.draw(160, 45, appearance.defaults(), state, ui())
+            test.is_true(table.concat(shown.rows, "\n"):find("Last result: UNAVAILABLE: owner call failed", 1, true) ~= nil)
+            test.is_true(#shown.hits > 3)
+        end)
+
         test.it("reads a version an update replaced as replaced and keeps Removed for removals", function()
             local state = fresh()
             test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {

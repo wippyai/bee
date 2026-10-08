@@ -8,11 +8,11 @@ type Intent = {operation: string, request: Object}
 type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
 type Row = {key: string, label: string, kind: string, value: unknown}
 type State = {open: boolean, component: string, version: string, digest: string?, mode: string,
-    resource: string, path: string, rows: {Row}, selected: integer, lines: {string}, notice: string,
+    resource: string, path: string, rows: {Row}, selected: integer, lines: {string}, notice: string, fault: string,
     next_offset: integer?, offset: integer, pending: boolean}
 function M.new(): State
     return {open = false, component = "", version = "", digest = nil, mode = "entries", resource = "", path = ".",
-        rows = {}, selected = 1, lines = {}, notice = "", next_offset = nil, offset = 0, pending = false}
+        rows = {}, selected = 1, lines = {}, notice = "", fault = "", next_offset = nil, offset = 0, pending = false}
 end
 local function object(raw: unknown): Object?
     return type(raw) == "table" and raw or nil
@@ -124,9 +124,9 @@ function M.next(state: State): Intent?
     return request(state, state.mode == "file" and "read_file" or "files", state.next_offset)
 end
 function M.apply(state: State, operation: string, reply: Reply)
-    state.pending = false
+    state.pending, state.fault = false, ""
     local value = object(reply.value)
-    local function fail(message: string) state.notice = text.bound(message, 512); state.rows, state.lines, state.next_offset = {}, {}, nil end
+    local function fail(message: string) state.notice = text.bound(message, 512); state.fault = state.notice; state.rows, state.lines, state.next_offset = {}, {}, nil end
     if not reply.ok or not value then fail((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "Package contents unavailable")); return end
     local measured = clean(value.digest, 64)
     if value.component ~= state.component or value.version ~= state.version or not measured or #measured ~= 64

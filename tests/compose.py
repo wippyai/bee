@@ -164,7 +164,8 @@ def runner_fixture_type(src):
     anchor = text.index("- name: inspect\n")
     index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_catalog: bee.tests.gov:hub_fixture_catalog\n", 1))
     catalog = src / "hub/binding/catalog.lua"
-    replace_once(catalog, '    local response, response_error', '''    if request.query == nil or request.query == "progress" then
+    replace_once(catalog, '    local response, response_error', '''    if request.query == "fixture-unavailable" then return nil, "fixture catalog unavailable" end
+    if request.query == nil or request.query == "progress" then
         return {items = {{component = "bee/progress", title = "Progress", description = "Task tracking",
             latest_version = "1.0.0", application = true}}, total = 1, page = request.page, page_size = M.PAGE_SIZE}, nil
     end

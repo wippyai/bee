@@ -17,6 +17,40 @@ end
 
 local function define_tests()
     test.describe("Library package screens", function()
+        test.it("keeps recovery actions visible when package details cannot load", function()
+            local state = model.new()
+            state.phase, state.notice = "details", "Hub is unavailable"
+            local shown = draw(160, 45, state, 0, state.notice)
+            local recovery = false
+            for _, hit in ipairs(shown.hits) do
+                if hit.kind == "back" or hit.kind == "refresh_details" then recovery = true end
+            end
+            test.is_true(recovery)
+            test.is_true(table.concat(shown.rows, "\n"):find(state.notice, 1, true) ~= nil)
+        end)
+        test.it("shows the Technical failure on README and Configure screens", function()
+            local state = model.new()
+            model.select(state, "bee/example")
+            model.apply_details(state, {ok = true, replayed = false, value = {component = "bee/example", title = "Example",
+                description = "Package", readme = "Guide", versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1}})
+            for _, configuring in ipairs({false, true}) do
+                state.requirements_open = configuring
+                local shown = view.draw(160, 45, appearance.defaults(), state, 0, "BLOCKED: schema field is missing", true, nil, nil,
+                    {tabs = CHROME.tabs, active = CHROME.active, technical = true, fault = "BLOCKED: schema field is missing"})
+                test.is_true(table.concat(shown.rows, "\n"):find("Last result: BLOCKED: schema field is missing", 1, true) ~= nil)
+                test.is_true(#shown.hits > 3)
+            end
+        end)
+
+        test.it("advertises Technical on every package phase", function()
+            local state = model.new()
+            for _, phase in ipairs({"details", "plan", "confirm", "result"}) do
+                state.phase = phase
+                local shown = draw(160, 45, state, 0, "FAILED: package unavailable")
+                test.is_true(table.concat(shown.rows, "\n"):find("T technical", 1, true) ~= nil)
+            end
+        end)
+
         test.it("keeps configuration dialogs inside the canvas and captures clicks", function()
             for _, width in ipairs({28, 40, 100}) do
                 local frame = draw(width, 18, model.new(), 0, "", false,

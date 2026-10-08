@@ -218,7 +218,8 @@ local function draw_list(width: integer, height: integer, preferences: appearanc
     local detail_lines: {string} = {}
     if chosen and state.tab == "history" and height >= 16 then detail_lines = lines_of(state, chosen) end
     local pane = math.min(#detail_lines, math.floor(math.max(3, (height - 10) // 2)))
-    local last = status_y - (pane > 0 and pane + 2 or 1)
+    local has_fault = state.governed.technical and state.governed.fault ~= ""
+    local last = status_y - (pane > 0 and pane + 2 or (has_fault and 2 or 1))
     local roomy = height >= 12
     if state.tab == "shared" and roomy then
         local x = 2
@@ -364,6 +365,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     elseif screen == "version" then base = draw_version(width, height, preferences, state, ui)
     elseif screen == "platform" then base = draw_platform(width, height, preferences, state, ui)
     else base = draw_list(width, height, preferences, state, ui) end
+    if screen ~= "package" and state.governed.technical and state.governed.fault ~= "" and height >= 8 then
+        local result = frame.new(width, height, preferences)
+        frame.line(result, height - 2, "Last result: " .. state.governed.fault, preferences.theme.text)
+        base.rows[height - 2] = frame.rows(result)[height - 2]
+    end
     local editor = ui.editor
     if editor then return hub_view.overlay(base, width, height, preferences, ui.status, editor) end
     local removal = state.removal

@@ -103,7 +103,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local drawn = frame.put(painter, 2, 3, detail.title, width - 2, theme.accent)
             frame.put(painter, 2 + drawn + 2, 3, detail.component .. status_suffix, width - drawn - 4, theme.muted)
         else
-            frame.line(painter, 3, "Select a package to read its details", theme.muted)
+            frame.line(painter, 3, state.notice ~= "" and state.notice or "Reading package details…", theme.muted)
+            button(2, height - 1, "details", " R Read again ", state.selected ~= nil)
+            button(20, height - 1, "back", " Esc Back ", true)
         end
         if detail then
             frame.line(painter, 4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
@@ -142,7 +144,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 actions = button(actions, height - 2, "content_previous", " Previous ", not content.pending and content.offset > 0)
                 button(actions, height - 2, "content_next", " Next page ", not content.pending and content.next_offset ~= nil)
                 frame.line(painter, height - 1, content.notice, theme.muted)
-                frame.footer(painter, status, "↑↓ browse · Enter open · ⌫ back · N next")
+                frame.footer(painter, status, "↑↓ browse · Enter open · ⌫ back · N next · T technical")
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
             if state.requirements_open then
@@ -274,7 +276,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local parameters = #state.parameters == 0 and "no parameters" or (tostring(#state.parameters) .. " typed parameters")
             if width >= 74 then frame.line(painter, height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
         end
-        frame.footer(painter, status, "↑↓ version · I install · U update · X remove · P review")
+        frame.footer(painter, status, "↑↓ version · I install · U update · X remove · P review · T technical")
         if chrome.technical and chrome.fault and chrome.fault ~= "" then frame.line(painter, height - 3, "Last result: " .. chrome.fault, theme.text) end
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
     end
@@ -300,7 +302,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local actions = 2
         actions = button(actions, height - 1, "confirm", " Confirm recovery ", true)
         button(actions, height - 1, "cancel", " Back ", true)
-        frame.footer(painter, status, "Enter confirms · Esc back to history")
+        frame.footer(painter, status, "Enter confirms · T technical · Esc back to history")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
     end
     local review = chrome.review
@@ -335,7 +337,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         frame.line(painter, 5 + shown, "State: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
         button(2, height - 1, "status", " Check status ", state.plan ~= nil or state.selected_operation ~= nil)
         button(18, height - 1, "back", " Back ", true)
-        frame.footer(painter, status, "R checks again · Esc back")
+        frame.footer(painter, status, "R checks again · T technical · Esc back")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
     if not plan then
@@ -509,6 +511,11 @@ end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?, content: contents.State?, chrome: Chrome): Frame
     local base = draw_base(width, height, preferences, state, offset, editor and "" or status, reading, content, chrome)
+    if chrome.technical and chrome.fault and chrome.fault ~= "" and height >= 8 then
+        local result = frame.new(width, height, preferences)
+        frame.line(result, height - 3, "Last result: " .. chrome.fault, preferences.theme.text)
+        base.rows[height - 3] = frame.rows(result)[height - 3]
+    end
     if not editor then return base end
     return M.overlay(base, width, height, preferences, status, editor)
 end

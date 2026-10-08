@@ -5,7 +5,7 @@ local schemas = require("schemas")
 local M = {}
 type Object = {[string]: unknown}
 type Operation = {ref: string, application_ref: string, service: string, name: string,
-    revision: string, mode: string, input: Object, output: Object}
+    revision: string, mode: string, effect: string, input: Object, output: Object}
 
 local function name(raw: unknown): string?
     local value = bounds.line(raw, 64)
@@ -33,18 +33,19 @@ function M.decode(raw: unknown): (Operation?, string?)
     if data and data.security ~= nil then
         return nil, "Hive application operation declares its own security; it runs only with the application's grants"
     end
-    local extra = bounds.fields(declared, {"name", "revision", "title", "input", "output"})
+    local extra = bounds.fields(declared, {"name", "revision", "title", "input", "output", "effect"})
+    local effect = declared.effect == nil and "mutation" or bounds.member(declared.effect, {"read", "mutation"})
     local operation = name(declared.name)
     local revision = bounds.line(declared.revision, 32)
     local input, output = bounds.object(declared.input), bounds.object(declared.output)
-    if extra or not operation or not revision or not input or not output
+    if extra or not effect or not operation or not revision or not input or not output
         or not schemas.valid_definition(input) or not schemas.valid_definition(output) then
         return nil, "Hive operation requires a name, revision and valid input/output schemas"
     end
     local application = bounds.id(meta.application_ref)
     if not application then return nil, "Hive application_ref must name the owning application" end
     return {ref = ref, application_ref = application, service = service, name = operation,
-        revision = revision, mode = mode, input = input, output = output}, nil
+        revision = revision, mode = mode, effect = effect, input = input, output = output}, nil
 end
 
 function M.validate(entries: {Object}): string?

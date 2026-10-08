@@ -194,6 +194,9 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
                 effect = "allow"}}})
     end
+    if grant.capability == "hive.call" and grant.operation == "hive.call" then
+        return only(plain({"funcs.call"}, {"bee.hive.binding:call"}, "Host-generated Hive call grant", id))
+    end
     if grant.capability == "hive.expose" and grant.operation == "hive.expose" then
         local mode = grant.resource
         local operations = capability_model.strings(scope.operations)

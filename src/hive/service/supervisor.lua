@@ -77,9 +77,14 @@ local function main()
             end
             return
         end
+        local fresh, replay, claim_error = receiver.claim(invocation)
+        if not fresh then
+            process.send(request.caller, request.reply_topic, replay or protocol.fail(tostring(claim_error)))
+            return
+        end
         local future, call_error = receiver.start(invocation)
         if not future then
-            process.send(request.caller, request.reply_topic, protocol.fail(tostring(call_error)))
+            process.send(request.caller, request.reply_topic, receiver.save(invocation, protocol.fail(tostring(call_error))))
             return
         end
         local remaining = math.floor(request.expires - time.now():unix_nano())
@@ -91,9 +96,10 @@ local function main()
             if selected.channel == deadline then
                 completions:send({request = request, reply = protocol.fail("application deadline reached; outcome unknown"), complete = false})
                 response:receive()
+                receiver.save(invocation, receiver.finish(invocation, future))
                 completions:send({request = request, reply = nil, complete = true})
             else
-                completions:send({request = request, reply = receiver.finish(invocation, future), complete = true})
+                completions:send({request = request, reply = receiver.save(invocation, receiver.finish(invocation, future)), complete = true})
             end
         end)
     end

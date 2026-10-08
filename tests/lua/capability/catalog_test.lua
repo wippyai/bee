@@ -48,7 +48,7 @@ local function define_tests()
             local decoded = assert(catalog.decode(shipped()))
             local count = 0
             for _ in pairs(decoded.capabilities) do count = count + 1 end
-            test.eq(count, 17)
+            test.eq(count, 18)
             test.is_true(decoded.never.credentials)
             test.eq(decoded.capabilities["workspace.files.read"].confirm, "standard")
             test.eq(decoded.capabilities["workspace.files.write"].confirm, "explicit")
@@ -133,7 +133,7 @@ local function define_tests()
         end)
         test.it("offers agent tools as the application's own functions, confirmed explicitly", function()
             local decoded = assert(catalog.decode(shipped()))
-            test.eq(decoded.revision, 5)
+            test.eq(decoded.revision, 6)
             local template = decoded.capabilities["agent.tools"]
             test.eq(template.confirm, "explicit")
             test.eq(template.parameters.tools, "own_functions")

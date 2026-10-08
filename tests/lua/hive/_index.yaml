@@ -5,7 +5,7 @@ entries:
   kind: function.lua
   source: file://receiver_test.lua
   method: run
-  modules: [registry, system, process, channel]
+  modules: [registry, system, process, channel, time, uuid, funcs]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -13,6 +13,7 @@ entries:
     model: bee.capability:model
     grants: bee.gov.types:capability_grants
     materializer: bee.gov.binding:materializer
+    application: bee.node:application
     admission: bee.gov.types:governed_application_admission
     protocol: bee.hive:protocol
 - name: exposure_scope_test
@@ -62,4 +63,17 @@ entries:
   modules: [process, channel]
   meta: {type: test_support}
   imports:
+    protocol: bee.hive:protocol
+- name: call_test
+  kind: function.lua
+  source: file://call_test.lua
+  method: run
+  modules: [registry, system]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    model: bee.capability:model
+    grants: bee.gov.types:capability_grants
+    outbound: bee.hive:outbound
     protocol: bee.hive:protocol

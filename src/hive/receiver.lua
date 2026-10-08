@@ -9,6 +9,8 @@ local application = require("application")
 local access = require("access")
 local schemas = require("schemas")
 local protocol = require("protocol")
+local canonical = require("canonical")
+local receipts = require("receipts")
 
 local M = {}
 M.CALL = "application.call"
@@ -16,14 +18,14 @@ M.MAX_ACTIVE = 4
 M.MAX_QUEUED = 64
 M.MAX_TTL = 30000000000
 type Object = {[string]: unknown}
-type Request = {application: string, workspace_id: string, service: string, operation: string, arguments: Object, address: address.Resolved?}
+type Request = {application: string, workspace_id: string, service: string, operation: string, arguments: Object, idempotency_key: string?, address: address.Resolved?}
 type Invocation = {request: Request, operation: operations.Operation, actor: security.Actor, scope: security.Scope,
-    caller: {node: string, pid: string}}
+    caller: {node: string, pid: string}, receipt_key: string?}
 
 local function request(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application call requires an object" end
-    local extra = bounds.fields(value, {"application", "workspace_id", "service", "operation", "arguments"})
+    local extra = bounds.fields(value, {"application", "workspace_id", "service", "operation", "arguments", "idempotency_key"})
     if extra then return nil, extra end
     local workspace = bounds.id(value.workspace_id)
     local service, operation = bounds.line(value.service, 64), bounds.line(value.operation, 64)
@@ -31,10 +33,13 @@ local function request(raw: unknown): (Request?, string?)
     if not workspace or not service or not operation or not arguments then
         return nil, "application call requires application, workspace_id, service, operation and arguments"
     end
+    local key = value.idempotency_key == nil and nil or bounds.line(value.idempotency_key, 128)
+    if value.idempotency_key ~= nil and not key then return nil, "idempotency key is malformed" end
+    if not canonical.encode(value, 262144) then return nil, "application call exceeds its byte bound" end
     local resolved, address_error = address.resolve(value.application, workspace)
     if not resolved then return nil, address_error end
     return {application = resolved.application, workspace_id = workspace, service = service, operation = operation,
-        arguments = arguments, address = resolved}, nil
+        arguments = arguments, idempotency_key = key, address = resolved}, nil
 end
 
 function M.authorize(raw: unknown, caller: string, node: string): (Invocation?, string?)
@@ -97,6 +102,7 @@ function M.authorize(raw: unknown, caller: string, node: string): (Invocation?, 
         return nil, "operation exposure is revoked"
     end
     if selected.mode == "policy" then return nil, "policy operation requires a trusted subject mapping" end
+    if selected.effect == "mutation" and not asked.idempotency_key then return nil, "mutation requires an idempotency key" end
     local input_error = schemas.validate(selected.input, asked.arguments)
     if input_error then return nil, input_error end
     local definition, definition_error = application.definition(asked.application)
@@ -106,7 +112,28 @@ function M.authorize(raw: unknown, caller: string, node: string): (Invocation?, 
     local scope, scope_error = application.scope(definition, asked.workspace_id)
     if not scope then return nil, scope_error end
     return {request = asked, operation = selected, actor = actor, scope = scope,
-        caller = {node = peer, pid = caller}}, nil
+        caller = {node = peer, pid = caller}, receipt_key = nil}, nil
+end
+
+function M.claim(invocation: Invocation): (boolean, protocol.Reply?, string?)
+    local asked = invocation.request
+    if invocation.operation.effect == "read" then return true, nil, nil end
+    local key = assert(canonical.encode({peer = invocation.caller.node, workspace = asked.workspace_id,
+        application = asked.application, service = asked.service, operation = asked.operation, key = asked.idempotency_key}, 4096))
+    local fingerprint, fingerprint_error = canonical.encode({ref = invocation.operation.ref, revision = invocation.operation.revision,
+        input = invocation.operation.input, output = invocation.operation.output, arguments = asked.arguments}, 262144)
+    if not fingerprint then return false, nil, "mutation fingerprint exceeds its bound: " .. tostring(fingerprint_error) end
+    local fresh, reply, err = receipts.claim(key, fingerprint)
+    if fresh then invocation.receipt_key = key end
+    return fresh, reply, err
+end
+
+function M.save(invocation: Invocation, reply: protocol.Reply): protocol.Reply
+    if invocation.receipt_key then
+        local saved, err = receipts.complete(invocation.receipt_key, reply)
+        if not saved then return protocol.fail("receipt completion failed; outcome unknown: " .. tostring(err):sub(1, 2048)) end
+    end
+    return reply
 end
 
 function M.start(invocation: Invocation): (funcs.Future?, string?)
@@ -129,7 +156,9 @@ function M.finish(invocation: Invocation, future: funcs.Future): protocol.Reply
     end
     local output_error = schemas.validate(invocation.operation.output, result)
     if output_error then return protocol.fail("invalid application reply: " .. output_error) end
-    return protocol.ok({result = result, output = invocation.operation.output, revision = invocation.operation.revision})
+    local reply = protocol.ok({result = result, output = invocation.operation.output, revision = invocation.operation.revision})
+    if not canonical.encode(reply, 262144) then return protocol.fail("application reply exceeds its byte bound") end
+    return reply
 end
 
 return M

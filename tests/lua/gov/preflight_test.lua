@@ -62,6 +62,21 @@ local function has(report: preflight.Report, code: string): boolean
 end
 local function define_tests()
     test.describe("Governance preflight", function()
+        test.it("admits measured Hive exposure on owned functions and confines other capabilities to apps", function()
+            local candidate, context = fixture()
+            candidate.requirements[1].value = nil
+            candidate.requirements[1].expected_kind = "security.policy"
+            candidate.requirements[1].capability_request = {capability = "hive.expose",
+                parameters = {operations = {"demo:run"}, mode = "open", audiences = {"node-b"}}, reason = "Expose the SDK",
+                catalog_revision = 6, template_revision = 2, target = "demo:run", path = ".security.policies +="}
+            test.is_true(checked(candidate, context).ready)
+            candidate.requirements[1].capability_request.parameters.operations = {"foreign:run"}
+            test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
+            candidate.requirements[1].capability_request.parameters.operations = {"demo:run"}
+            candidate.requirements[1].capability_request.capability = "hive.call"
+            test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
+        end)
+
         test.it("blocks an application that names no menu, since the person has no way to open it", function()
             local candidate, context = fixture()
             candidate.entries[1].application_unplaced = true

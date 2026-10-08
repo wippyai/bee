@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.hive.binding
+entries:
+- name: call
+  kind: function.lua
+  source: file://call.lua
+  method: call
+  imports:
+    application: bee.node:application
+    bounds: bee.values:bounds
+    access: bee.gov.binding:capability_access
+    outbound: bee.hive:outbound
+    protocol: bee.hive:protocol
+  security:
+    policies: [bee.hive.security:outbound, bee.hive.security:caller, bee.hive.security:messaging, bee.hive.security:admission_store]

@@ -39,11 +39,12 @@ M.identity = identity
 local KINDS: {[string]: boolean} = {relative_subpath = true, name = true, owned_scope = true,
     children_scope = true, definitions = true, methods = true, http_methods = true,
     https_origin = true, url_path_prefix = true, binding = true, contract = true,
-    hive_operations = true, hive_mode = true, hive_audiences = true, command = true, own_functions = true}
+    hive_nodes = true, hive_targets = true, hive_names = true, hive_operations = true, hive_mode = true, hive_audiences = true, command = true, own_functions = true}
 local HIVE_MODES: {[string]: boolean} = {open = true, policy = true}
 local function collection_kind(kind: string): boolean
     return kind == "definitions" or kind == "methods" or kind == "http_methods"
         or kind == "hive_operations" or kind == "hive_audiences" or kind == "own_functions"
+        or kind == "hive_nodes" or kind == "hive_targets" or kind == "hive_names"
 end
 
 M.collection_kind = collection_kind
@@ -226,7 +227,13 @@ local function set_values(raw: unknown, kind: string): {string}?
     local result = string_set(raw)
     if not result then return nil end
     for _, value in ipairs(result) do
-        if kind == "http_methods" then
+        if kind == "hive_nodes" then
+            if not value:match("^[a-z][a-z0-9_.-]*$") then return nil end
+        elseif kind == "hive_targets" then
+            if not value:match("^[A-Za-z0-9][A-Za-z0-9_.:/-]*$") then return nil end
+        elseif kind == "hive_names" then
+            if #value > 64 or not value:match("^[A-Za-z0-9][A-Za-z0-9_.-]*$") then return nil end
+        elseif kind == "http_methods" then
             if not ({GET = true, POST = true, PUT = true, PATCH = true, DELETE = true, HEAD = true})[value] then return nil end
         elseif kind == "definitions" or kind == "methods" or kind == "hive_operations" or kind == "own_functions" then
             if kind == "methods" and not value:match("^[A-Za-z][A-Za-z0-9_]*$") then return nil end
@@ -255,7 +262,8 @@ local function parameter(raw: unknown, kind: string): Parameter?
     end
     if kind == "hive_audiences" then return audience_list(raw) end
     if kind == "definitions" or kind == "methods" or kind == "http_methods"
-        or kind == "hive_operations" or kind == "own_functions" then return set_values(raw, kind) end
+        or kind == "hive_operations" or kind == "own_functions" or kind == "hive_nodes"
+        or kind == "hive_targets" or kind == "hive_names" then return set_values(raw, kind) end
     local value = word(raw, 160)
     if not value then return nil end
     if kind == "https_origin" then
@@ -382,6 +390,7 @@ function M.render(catalog: Vocabulary, grants_raw: unknown): ({string}?, string?
         if id == "workspace.files.read" then reads[#reads + 1] = "Workspace files under " .. printable(params.subpath) end
         if id == "threads.read" then reads[#reads + 1] = "Owned thread content" end
         if id == "app.database" then reads[#reads + 1] = "Application database " .. printable(params.name) end
+        if id == "hive.call" then egress[#egress + 1] = "Hive nodes " .. printable(params.nodes) end
         if id == "http.api" then egress[#egress + 1] = printable(params.origin) end
         if id == "contract.call" then egress[#egress + 1] = "app binding " .. printable(params.binding) end
         if id == "hive.expose" then egress[#egress + 1] = "Hive operations " .. printable(params.operations) .. " in " .. printable(params.mode) .. " mode" end
@@ -400,9 +409,9 @@ type Diff = {added: {Change}, widened: {Change}, narrowed: {Change},
 
 local SCOPE_FIELDS: {[string]: boolean} = {subpath = true, path_prefix = true, methods = true,
     definitions = true, operations = true, traits = true, audiences = true, scope = true,
-    name = true, access = true, workspace_id = true, tools = true}
+    name = true, access = true, workspace_id = true, tools = true, nodes = true, workspaces = true, applications = true, services = true}
 local SET_FIELDS: {[string]: boolean} = {methods = true, definitions = true, operations = true,
-    traits = true, audiences = true, tools = true}
+    traits = true, audiences = true, tools = true, nodes = true, workspaces = true, applications = true, services = true}
 local function valid_path(value: string, absolute: boolean): boolean
     return (value == "" and not absolute) or clean_path(value, absolute) == value
 end

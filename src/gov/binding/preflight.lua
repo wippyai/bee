@@ -617,12 +617,24 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         requirements[item.id] = true
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "requirement is outside measured closure", "repair requirement ownership") end
         local request = item.capability_request
+        local exposure_target = false
+        if request and request.capability == "hive.expose" then
+            local refs = request.parameters.operations
+            local contains_target, owned_operations = false, type(refs) == "table"
+            for _, ref in ipairs(type(refs) == "table" and refs or {}) do
+                local operation = final[ref]
+                if not operation or operation.kind ~= "function.lua" or operation.package ~= item.package then owned_operations = false end
+                if ref == request.target then contains_target = true end
+            end
+            exposure_target = contains_target and owned_operations
+        end
         if request and (item.value ~= nil or item.expected_kind ~= "security.policy"
             or #item.targets ~= 1 or item.targets[1] ~= request.target
             or request.path ~= ".security.policies +=" or not final[request.target]
-            or final[request.target].kind ~= "process.lua") then
-            issue("CAPABILITY_REQUEST_DENIED", item.id, "capability request does not target one app policy list",
-                "declare one policy append target on the owned application")
+            or (request.capability == "hive.expose" and not exposure_target)
+            or (request.capability ~= "hive.expose" and final[request.target].kind ~= "process.lua")) then
+            issue("CAPABILITY_REQUEST_DENIED", item.id, "capability request does not target its owned policy list",
+                "target the owned application, or a declared owned operation for hive.expose")
         end
         local target = item.value and final[item.value] or nil
         if not target and not item.capability_request then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")

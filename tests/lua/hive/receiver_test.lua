@@ -10,9 +10,13 @@ local materializer = require("materializer")
 local process = require("process")
 local channel = require("channel")
 local admission = require("admission")
+local time = require("time")
+local uuid = require("uuid")
+local funcs = require("funcs")
+local application = require("application")
 
 type Object = {[string]: unknown}
-local WORKSPACE = "hive-receiver-workspace"
+local WORKSPACE = "012345678901234567890123456789ab"
 local APP = "receiver.sdk:app"
 local RUN = "unrelated.runner:run"
 local OWNER = "bee.tests.hive:installed_sdk"
@@ -32,21 +36,28 @@ local function remove()
     end
 end
 
-local function install(audience: string, mode: string?, blocked: boolean?): string
+local function install(audience: string, mode: string?, blocked: boolean?, calling: boolean?): string
     remove()
     local vocabulary = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
     local requirement = {id = "receiver.sdk:exposure", value = nil, expected_kind = "security.policy", targets = {RUN},
         capability_request = {capability = "hive.expose", parameters = {operations = {RUN},
             mode = mode or "open", audiences = {audience}}, catalog_revision = model.revisions(vocabulary, "hive.expose"),
             template_revision = 2, target = RUN, path = ".security.policies +="}}
-    local proposal = assert(grants.propose(vocabulary, OWNER, APP, {requirement}))
+    local requirements: {Object} = {requirement}
+    if calling then
+        requirements[#requirements + 1] = {id = "receiver.sdk:call", expected_kind = "security.policy", targets = {APP},
+            capability_request = {capability = "hive.call", parameters = {nodes = {audience, "runner"}, workspaces = {WORKSPACE},
+                applications = {APP}, services = {"test-sdk"}, operations = {"run"}},
+                catalog_revision = vocabulary.revision, template_revision = 1, target = APP, path = ".security.policies +="}}
+    end
+    local proposal = assert(grants.propose(vocabulary, OWNER, APP, requirements))
     local record = assert(grants.record(OWNER, WORKSPACE, APP, proposal, "receiver-approval", 1))
     local entries: {Object} = {
         {id = APP, kind = "process.lua", meta = {type = "bee.app", application = {api_version = 1,
             title = "Receiver SDK", lifetime = "view", revision = "1", instance_policy = "multiple"}},
             data = {source = "return {main = function() end}", method = "main"}},
         {id = RUN, kind = "function.lua", meta = {application_ref = APP, hive = mode or "open", hive_service = "test-sdk",
-            hive_operation = {name = "run", revision = "1", input = {type = "object", additionalProperties = false,
+            hive_operation = {name = "run", revision = "1", effect = "read", input = {type = "object", additionalProperties = false,
                 properties = {configuration = {type = "string"}}, required = {"configuration"}}, output = {type = "object"}}},
             data = {method = "run", modules = {"security", "ctx"}, source = [[
 local security = require("security")
@@ -69,18 +80,22 @@ return {run = function(args)
     return {configuration = args.configuration}
 end}]]
     end
-    for _, binding in ipairs(proposal.bindings) do
-        entries[#entries + 1] = {id = binding.requirement_id, kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = "hive.expose",
-                parameters = {operations = {RUN}, mode = mode or "open", audiences = {audience}},
-                reason = "Expose the receiver fixture"},
-            data = {targets = {{entry = RUN, path = ".security.policies +="}}}}
+    for _, item in ipairs(requirements) do
+        local requested = item.capability_request
+        entries[#entries + 1] = {id = item.id, kind = "ns.requirement",
+            meta = {value_kind = "security.policy", capability = requested.capability,
+                parameters = requested.parameters, reason = "Approve the receiver fixture"},
+            data = {targets = {{entry = requested.target, path = ".security.policies +="}}}}
     end
     assert(materializer.reconcile_composed(OWNER, entries, nil,
         {policies = proposal.policies, bindings = proposal.bindings, record = record}))
     local changes = assert(registry.snapshot()):changes()
     changes:create({id = ADMISSION, kind = "registry.entry", meta = {type = "bee.node.application_admission"},
-        data = {bindings = {{definition_id = APP, policies = {tostring(proposal.policies[1].id)}}}}})
+        data = {bindings = {{definition_id = APP, policies = (function(): {string}
+            local ids: {string} = {}
+            for _, policy in ipairs(proposal.policies) do ids[#ids + 1] = tostring(policy.id) end
+            return ids
+        end)()}}}})
     assert(changes:apply())
     return tostring(proposal.policies[1].id)
 end
@@ -349,6 +364,24 @@ local function define_tests()
             remove()
             refused(reply, "own security")
         end)
+        test.it("preserves installed operation ownership against a foreign overlay replacement", function()
+            install(assert(system.node.id()))
+            local owned = assert(registry.overlay(OWNER))
+            local original = assert(owned:get(RUN))
+            local foreign = assert(registry.overlay("bee.tests.hive:foreign_shadow"))
+            local changes = foreign:changes()
+            changes:create({id = RUN, kind = original.kind, meta = original.meta,
+                data = {method = "run", modules = {"security"}, security = {policies = {"bee.hive.security:admission_store"}},
+                    source = [[local security = require("security")
+return {run = function() return {database = security.can("db.get", "bee:db")} end}]]}})
+            local applied, err = changes:apply()
+            local reply = call()
+            remove()
+            test.is_nil(applied)
+            test.contains(tostring(err), "already owned")
+            test.is_true(reply.ok, tostring(reply.error))
+            test.eq(assert(bounds.object(assert(reply.value).result)).database, false)
+        end)
         test.it("preserves a false result under a boolean output contract", function()
             install(assert(system.node.id()))
             program("return {run = function() return false end}", {type = "boolean"})
@@ -363,6 +396,116 @@ local function define_tests()
             local reply = call()
             remove()
             refused(reply, "invalid application reply")
+        end)
+        test.it("lets a scoped application call its peer copy through the granted host facade", function()
+            local node = assert(system.node.id())
+            install(node, nil, nil, true)
+            local overlay = assert(registry.overlay(OWNER))
+            local changes = overlay:changes()
+            changes:create({id = "receiver.sdk:caller", kind = "function.lua", data = {method = "run", modules = {"funcs"},
+                imports = {hive = "bee.hive:hive"}, source = [[local hive = require("hive")
+return {run = function(request)
+    local result, err = hive.call(request)
+    return {result = result, error = err}
+end}]]}})
+            assert(changes:apply())
+            local definition = assert(application.definition(APP))
+            local actor = assert(application.actor(WORKSPACE, "caller", definition, 1))
+            local scope = assert(application.scope(definition, WORKSPACE))
+            local executor = funcs.new():with_actor(actor):with_scope(scope)
+            local asked = {node = node, workspace_id = WORKSPACE, application = APP, service = "test-sdk", operation = "run",
+                arguments = {configuration = "facade-ci"}, timeout = "5s"}
+            local reply, err = executor:call("receiver.sdk:caller", asked)
+            local called = bounds.object(reply)
+            asked.node = "unapproved"
+            local denied = bounds.object(executor:call("receiver.sdk:caller", asked))
+            changes = assert(registry.snapshot()):changes()
+            changes:delete(ADMISSION)
+            assert(changes:apply())
+            asked.node = "runner"
+            local revoked = bounds.object(executor:call("receiver.sdk:caller", asked))
+            remove()
+            test.is_nil(err)
+            test.not_nil(called)
+            local result = assert(bounds.object(assert(called).result))
+            test.eq(result.configuration, "facade-ci")
+            test.eq(result.registry, false)
+            test.eq(result.database, false)
+            test.contains(tostring(assert(denied).error), "grant")
+            test.contains(tostring(assert(revoked).error), "admission")
+        end)
+        test.it("requires a mutation key and durably replays without another effect", function()
+            install(assert(system.node.id()))
+            program([[local process = require("process")
+return {run = function(args)
+    assert(process.send(args.configuration, "bee.tests.hive.effect", {}))
+    return {configuration = args.configuration}
+end}]], {type = "object"})
+            local overlay = assert(registry.overlay(OWNER))
+            local entry = assert(overlay:get(RUN))
+            entry.data.modules = {"process"}
+            entry.meta.hive_operation.effect = "mutation"
+            local changes = overlay:changes()
+            changes:update(entry)
+            assert(changes:apply())
+            local effects = assert(process.listen("bee.tests.hive.effect", {message = true}))
+            local args = {configuration = tostring(process.pid())}
+            local missing = call({arguments = args})
+            local key = tostring(uuid.v7())
+            local first = call({arguments = args, idempotency_key = key})
+            local second = call({arguments = args, idempotency_key = key})
+            local conflict = call({arguments = {configuration = "changed"}, idempotency_key = key})
+            local first_effect = channel.select({effects:case_receive(), time.after("100ms"):case_receive()})
+            local no_more = channel.select({effects:case_receive(), time.after("100ms"):case_receive()})
+            process.unlisten(effects)
+            remove()
+            refused(missing, "idempotency")
+            test.is_true(first.ok, tostring(first.error))
+            test.is_true(second.ok, tostring(second.error))
+            test.eq(assert(second.value).result.configuration, assert(first.value).result.configuration)
+            refused(conflict, "different")
+            test.eq(first_effect.channel, effects)
+            test.is_false(no_more.channel == effects)
+        end)
+        test.it("keeps a timed out mutation uncertain until its durable receipt completes", function()
+            local started = assert(process.listen("bee.tests.hive.started", {message = true}))
+            install(assert(system.node.id()), nil, true)
+            local overlay = assert(registry.overlay(OWNER))
+            local entry = assert(overlay:get(RUN))
+            entry.meta.hive_operation.effect = "mutation"
+            local changes = overlay:changes()
+            changes:update(entry)
+            assert(changes:apply())
+            local key = tostring(uuid.v7())
+            local args = {application = APP, workspace_id = WORKSPACE, service = "test-sdk", operation = "run",
+                arguments = {configuration = "once", notify = tostring(process.pid())}, idempotency_key = key}
+            local done = channel.new(1)
+            coroutine.spawn(function()
+                local reply, err = protocol.call(assert(system.node.id()), "application.call", args, "100ms", true)
+                done:send({reply = reply, error = err})
+            end)
+            local start = channel.select({started:case_receive(), time.after("1s"):case_receive()})
+            if start.channel ~= started then
+                process.unlisten(started)
+                remove()
+                error("authorized mutation never starts")
+            end
+            local worker = assert(bounds.object(start.value:payload():data())).pid
+            local timed = assert(bounds.object(done:receive()))
+            local pending = call({arguments = args.arguments, idempotency_key = key})
+            assert(process.send(tostring(worker), "bee.tests.hive.release", {}))
+            local completed: protocol.Reply? = nil
+            for _ = 1, 20 do
+                completed = call({arguments = args.arguments, idempotency_key = key})
+                if completed.ok then break end
+                time.after("10ms"):receive()
+            end
+            process.unlisten(started)
+            remove()
+            local timed_reply = bounds.object(timed.reply)
+            test.contains(tostring(timed.error or (timed_reply and timed_reply.error)), "outcome unknown")
+            refused(pending, "outcome unknown")
+            test.is_true(completed ~= nil and completed.ok, tostring(completed and completed.error))
         end)
         test.it("rechecks admission after the execution queue opens", function()
             local started = assert(process.listen("bee.tests.hive.started", {message = true}))

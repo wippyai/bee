@@ -13,7 +13,7 @@ entries:
     comment: Host-owned review vocabulary and templates for the capabilities a governed application or an agent attempt may request; declarations are not grants. modules names the runtime modules a granted
       application may load; tools names the gateway tools through which an agent attempt exercises the grant
   data:
-    revision: 5
+    revision: 6
     never:
     - env
     - credentials
@@ -176,6 +176,27 @@ entries:
         resource: application
         scope:
           tools: $tools
+      resources: []
+    - id: hive.call
+      revision: 1
+      parameters:
+        nodes: hive_nodes
+        workspaces: hive_targets
+        applications: hive_targets
+        services: hive_names
+        operations: hive_names
+      text: Call applications {applications} in workspaces {workspaces} on Hive nodes {nodes}, services {services}, operations {operations}
+      confirm: explicit
+      modules: [funcs]
+      policies:
+      - operation: hive.call
+        resource: applications
+        scope:
+          nodes: $nodes
+          workspaces: $workspaces
+          applications: $applications
+          services: $services
+          operations: $operations
       resources: []
     - id: hive.expose
       revision: 2

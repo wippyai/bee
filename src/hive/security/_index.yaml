@@ -55,3 +55,9 @@ entries:
     actions: [process.send]
     resources: '*'
     effect: allow
+- name: outbound
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get, process.registry.lookup]
+    resources: '*'
+    effect: allow

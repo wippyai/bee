@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.hive.migrations
+entries:
+- name: receipts
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-20T00:00:00Z'
+  source: file://receipts.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

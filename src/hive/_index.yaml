@@ -23,6 +23,8 @@ entries:
     application: bee.node:application
     access: bee.gov.binding:capability_access
     schemas: bee.gateway.catalog:json_schema
+    canonical: bee.values:canonical
+    receipts: bee.hive:receipts
     protocol: bee.hive:protocol
 - name: operations
   kind: library.lua
@@ -34,3 +36,29 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   modules: [process, channel, time, uuid, system]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+- name: outbound
+  kind: library.lua
+  source: file://outbound.lua
+  modules: [time]
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gov.types:capability_gateway
+    canonical: bee.values:canonical
+    schemas: bee.gateway.catalog:json_schema
+    declarations: bee.values:agent_tool
+- name: hive
+  kind: library.lua
+  source: file://hive.lua
+  modules: [funcs]
+- name: receipts
+  kind: library.lua
+  source: file://receipts.lua
+  modules: [json, sql]
+  imports:
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    canonical: bee.values:canonical
+    protocol: bee.hive:protocol

@@ -6,6 +6,8 @@ local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
 local system = require("system")
+local bounds = require("bounds")
+local canonical = require("canonical")
 
 -- ttl is how long the caller keeps waiting, in nanoseconds; the receiving
 -- supervisor turns it into a deadline on its own clock.
@@ -115,31 +117,52 @@ function M.supervisor_pid(): string?
     return known
 end
 
--- call sends op to the supervisor of node and waits up to timeout to resolve
--- it and up to timeout for its reply. The request carries how long the caller
--- waits, so a supervisor never delivers it after the caller gave up.
-function M.call(node: string, op: string, args: {[string]: unknown}, timeout: string): (Reply?, string?)
+function M.decode_reply(raw: unknown, from: string, expected: string?): (Reply?, string?)
+    if expected and from ~= expected then return nil, "untrusted Hive reply sender" end
+    local data = bounds.object(raw)
+    if not data or bounds.fields(data, {"ok", "value", "error"}) or type(data.ok) ~= "boolean"
+        or not canonical.encode(data, 262144) then return nil, "malformed or oversized Hive reply" end
+    if data.ok then
+        local value = bounds.object(data.value)
+        if not value or data.error ~= nil then return nil, "malformed successful Hive reply" end
+        return {ok = true, value = value, error = nil}, nil
+    end
+    local message = bounds.text(data.error, 4096)
+    if not message or data.value ~= nil then return nil, "malformed failed Hive reply" end
+    return {ok = false, value = nil, error = message}, nil
+end
+
+function M.call(node: string, op: string, args: {[string]: unknown}, timeout: string, verified: boolean?): (Reply?, string?)
+    local wait, duration_error = time.parse_duration(timeout)
+    if not wait or wait:nanoseconds() <= 0 then return nil, "invalid Hive deadline: " .. tostring(duration_error) end
+    local expires = time.now():unix_nano() + wait:nanoseconds()
     local pid, resolve_error = supervisor(node, timeout)
     if not pid then return nil, resolve_error end
+    local remaining = math.floor(expires - time.now():unix_nano())
+    if remaining <= 0 then return nil, "Hive deadline reached before dispatch" end
     local reply_topic = "bee.hive.reply." .. tostring(uuid.v7())
     local replies = assert(process.listen(reply_topic, {message = true}))
-    local wait = assert(time.parse_duration(timeout))
-    local request: Request = {op = op, args = args, reply_topic = reply_topic, ttl = math.floor(wait:nanoseconds())}
+    local request: Request = {op = op, args = args, reply_topic = reply_topic, ttl = remaining}
     local sent, send_error = process.send(pid, M.CALL, request)
     if not sent then
         process.unlisten(replies)
         return nil, "send to " .. node .. ": " .. tostring(send_error)
     end
-    local deadline = time.after(timeout)
-    local selected = channel.select({replies:case_receive(), deadline:case_receive()})
-    process.unlisten(replies)
-    if not selected.ok or selected.channel == deadline then return nil, "no reply from " .. node .. " within " .. timeout end
-    local data: unknown = selected.value:payload():data()
-    if type(data) ~= "table" or type(data.ok) ~= "boolean" then return nil, "malformed reply from " .. node end
-    local reply: Reply = {ok = data.ok, value = nil, error = nil}
-    if type(data.value) == "table" then reply.value = data.value end
-    if type(data.error) == "string" then reply.error = data.error end
-    return reply, nil
+    remaining = math.floor(math.max(1, expires - time.now():unix_nano()))
+    local deadline = assert(time.after(tostring(remaining) .. "ns"))
+    while true do
+        local selected = channel.select({replies:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then
+            process.unlisten(replies)
+            return nil, "no reply from " .. node .. " within " .. timeout .. (verified and "; outcome unknown" or "")
+        end
+        local from = tostring(selected.value:from())
+        if not verified or from == pid then
+            local reply, err = M.decode_reply(selected.value:payload():data(), from, verified and pid or nil)
+            process.unlisten(replies)
+            return reply, err
+        end
+    end
 end
 
 return M

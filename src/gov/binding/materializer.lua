@@ -334,6 +334,8 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
                     local next_data: Entry = {}
                     for key, value in pairs(original) do next_data[key] = value end
                     next_data.default = policy_id
+                    local meta = bounds.object(entry.meta)
+                    if meta and meta.capability == "hive.expose" then next_data.targets = {} end
                     local next_entry: Entry = {}
                     for key, value in pairs(entry) do next_entry[key] = value end
                     next_entry.data = next_data

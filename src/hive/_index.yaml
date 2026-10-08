@@ -1,6 +1,17 @@
 version: '1.0'
 namespace: bee.hive
 entries:
+- name: receiver
+  kind: library.lua
+  source: file://receiver.lua
+  modules: [registry, security, funcs]
+  imports:
+    bounds: bee.values:bounds
+    operations: bee.hive:operations
+    application: bee.node:application
+    access: bee.gov.binding:capability_access
+    schemas: bee.gateway.catalog:json_schema
+    protocol: bee.hive:protocol
 - name: operations
   kind: library.lua
   source: file://operations.lua

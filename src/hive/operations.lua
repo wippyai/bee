@@ -29,6 +29,10 @@ function M.decode(raw: unknown): (Operation?, string?)
         or not mode then
         return nil, "Hive declaration requires a function, mode, service and operation"
     end
+    local data = bounds.object(entry.data)
+    if data and data.security ~= nil then
+        return nil, "Hive application operation declares its own security; it runs only with the application's grants"
+    end
     local extra = bounds.fields(declared, {"name", "revision", "title", "input", "output"})
     local operation = name(declared.name)
     local revision = bounds.line(declared.revision, 32)

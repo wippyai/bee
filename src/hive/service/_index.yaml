@@ -8,6 +8,8 @@ entries:
   modules: [process, channel, system, registry, logger, events, time]
   imports:
     protocol: bee.hive:protocol
+    receiver: bee.hive:receiver
+    bounds: bee.values:bounds
 - name: supervisor_service
   meta:
     title: Hive · supervisor
@@ -18,6 +20,6 @@ entries:
     auto_start: true
     security:
       actor: {id: bee.hive.supervisor}
-      policies: [bee.hive.security:supervisor, bee.hive.security:routing, bee.hive.security:routing_changes, bee.hive.security:messaging]
+      policies: [bee.hive.security:supervisor, bee.hive.security:routing, bee.hive.security:routing_changes, bee.hive.security:messaging, bee.hive.security:application_dispatch, bee.hive.security:admission_store]
     restart:
       max_attempts: 10

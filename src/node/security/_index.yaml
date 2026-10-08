@@ -6,7 +6,7 @@ entries:
   meta:
     comment: The node owner reads installed apps and themes, starts and stops app producers, monitors the displays that watch it, and mounts app viewports for them
   policy:
-    actions: [registry.get, registry.version, registry.find, process.context, process.security, security.actor.create, security.policy_group.get, security.policy.get, security.scope.create, process.spawn, process.spawn.monitored, process.spawn.linked, process.cancel, process.monitor, process.unmonitor, tty.mount, tty.observe, tty.input, tty.resize]
+    actions: [registry.get, registry.version, registry.find, registry.overlay.get, process.context, process.security, security.actor.create, security.policy_group.get, security.policy.get, security.scope.create, process.spawn, process.spawn.monitored, process.spawn.linked, process.cancel, process.monitor, process.unmonitor, tty.mount, tty.observe, tty.input, tty.resize]
     resources: '*'
     effect: allow
 - name: owner_store
@@ -180,7 +180,7 @@ entries:
   meta:
     comment: The test runner reads the registry to find an application and runs each test as that application, with the actor and scope the node gives the application's own instances
   policy:
-    actions: [registry.get, registry.version, registry.find, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
+    actions: [registry.get, registry.version, registry.find, registry.overlay.get, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
     resources: '*'
     effect: allow
 - name: app_tools_runner
@@ -188,7 +188,7 @@ entries:
   meta:
     comment: Application tools read the registry for admissions, grant records and tool entries, and run a tool as its application with the actor and scope the node gives the application's own instances
   policy:
-    actions: [registry.get, registry.version, registry.find, registry.snapshot, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
+    actions: [registry.get, registry.version, registry.find, registry.snapshot, registry.overlay.get, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
     resources: '*'
     effect: allow
 - name: tests_store

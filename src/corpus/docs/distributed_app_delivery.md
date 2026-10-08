@@ -245,8 +245,10 @@ declares an authored `meta.hive_service`, a `meta.hive_operation` containing
 `name`, `revision`, `input` and `output` schemas, and `meta.application_ref`
 pointing to its owning application in the same measured artifact. Artifact
 validation checks those declarations and refuses duplicate names within an
-application's service. The supervisor does not discover or dispatch these
-declarations yet; namespace spelling grants no routing or invocation authority.
+application's service. Application operations declare no security of their own;
+they use the installed application's grants. The supervisor resolves these declarations only within
+the installed grant owner's overlay; namespace spelling grants no routing or
+invocation authority.
 Application and operation targets may occupy different namespaces in the same
 measured artifact. The destination
 resolver checks the request against the host-owned `bee.capability:catalog`, preserves the normalized parameters, reason, target, and catalog/template
@@ -305,11 +307,20 @@ combined data flows in Approvals. `threads.read` with `scope: owned`,
 `threads.message`, `agents.launch`, `contract.call` and `http.api` have
 installable host entries. A `hive.expose` grant installs a host-owned policy
 over exactly the approved operations into `bee.security.hive:hive_exposure_scope`.
-The scope defaults to no exposure. The current supervisor forwards service
-routes without checking that scope, live application admission or approved
-audiences. Destination principal mappings and a bounded application dispatcher
-are not implemented. A declaration or generated policy alone does not provide
-receiver-enforced exposure or make an application operation remotely callable.
+The scope defaults to no exposure. The supervisor's `application.call` path
+checks live admission, the installed exposure grant, exact mode/operation
+permission and the authenticated peer node's approved audience. Host admissions
+exclude installed application overlays, and portable artifacts cannot declare
+host admission metadata. The receiver validates input and output schemas and
+runs open-mode calls under the installed app's
+actor and scope. Four execution slots and a 64-call queue bound dispatch;
+queued calls repeat authorization before execution. The supervisor's deadline
+reply reports outcome unknown and keeps the slot occupied until the function finishes.
+Policy-mode application calls require trusted subject mappings and fail closed
+while that path is unavailable. Existing service routes still forward without
+the application exposure gate. The app-facing `hive.call` capability/facade is
+not implemented. Exposure policies stay out of application execution scopes
+and exposure requirements do not attach those policies to app functions.
 A file grant installs a host-created
 `fs.directory` at a verified subroot of the destination workspace's own
 folder: the destination reads the workspace's root and subpath from the node

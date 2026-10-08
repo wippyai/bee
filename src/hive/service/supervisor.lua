@@ -17,6 +17,10 @@ local logger = require("logger")
 local protocol = require("protocol")
 local eventbus = require("events")
 local time = require("time")
+local receiver = require("receiver")
+local bounds = require("bounds")
+
+type Completion = {request: protocol.Forwarded, reply: protocol.Reply?, complete: boolean}
 
 -- routes maps each route prefix to the node-local service name that serves it.
 local function routes(): {[string]: string}
@@ -43,6 +47,9 @@ local function main()
     local readiness = assert(process.listen(protocol.READY, {message = true}))
     local events = assert(process.events())
     local parked: {[string]: {protocol.Forwarded}} = {}
+    local applications: {protocol.Forwarded} = {}
+    local active = 0
+    local completions = channel.new(receiver.MAX_ACTIVE * 2)
     -- services holds the PID serving each routed service name, and names the
     -- service name each monitored PID serves.
     local services: {[string]: string} = {}
@@ -53,6 +60,42 @@ local function main()
 
     local function expired(request: protocol.Forwarded): boolean
         return request.expires <= time.now():unix_nano()
+    end
+
+    local function application_call(request: protocol.Forwarded)
+        if expired(request) then return end
+        local invocation, admission_error = receiver.authorize(request.args, request.caller, node)
+        if not invocation then
+            process.send(request.caller, request.reply_topic, protocol.fail(tostring(admission_error)))
+            return
+        end
+        if active >= receiver.MAX_ACTIVE then
+            if #applications >= receiver.MAX_QUEUED then
+                process.send(request.caller, request.reply_topic, protocol.fail("application queue is full"))
+            else
+                applications[#applications + 1] = request
+            end
+            return
+        end
+        local future, call_error = receiver.start(invocation)
+        if not future then
+            process.send(request.caller, request.reply_topic, protocol.fail(tostring(call_error)))
+            return
+        end
+        local remaining = math.floor(request.expires - time.now():unix_nano())
+        local deadline = assert(time.after(tostring(math.max(1, remaining)) .. "ns"))
+        active = active + 1
+        local response = future:response()
+        coroutine.spawn(function()
+            local selected = channel.select({response:case_receive(), deadline:case_receive()})
+            if selected.channel == deadline then
+                completions:send({request = request, reply = protocol.fail("application deadline reached; outcome unknown"), complete = false})
+                response:receive()
+                completions:send({request = request, reply = nil, complete = true})
+            else
+                completions:send({request = request, reply = receiver.finish(invocation, future), complete = true})
+            end
+        end)
     end
 
     local function serve(name: string, pid: string)
@@ -120,7 +163,7 @@ local function main()
     adopt()
     while true do
         local selected = channel.select({calls:case_receive(), readiness:case_receive(), events:case_receive(),
-            registry_changes:case_receive()})
+            registry_changes:case_receive(), completions:case_receive()})
         if not selected.ok then return end
         if selected.channel == registry_changes then
             routing = routes()
@@ -132,7 +175,7 @@ local function main()
         elseif selected.channel == readiness then
             local message = selected.value
             ready(tostring(message:from()), message:payload():data())
-        else
+        elseif selected.channel == calls then
             local message = selected.value
             local caller = tostring(message:from())
             local data: unknown = message:payload():data()
@@ -140,14 +183,34 @@ local function main()
                 and type(data.ttl) == "number" then
                 local args: {[string]: unknown} = {}
                 if type(data.args) == "table" then args = data.args end
-                local prefix, op = data.op:match("^([^.]+)%.(.+)$")
-                local name = prefix and routing[prefix]
-                if not name or not op then
-                    process.send(caller, data.reply_topic, protocol.fail("unknown operation " .. data.op))
+                if data.op == receiver.CALL then
+                    local extra = bounds.fields(data, {"op", "args", "reply_topic", "ttl"})
+                    if extra or data.ttl ~= data.ttl or data.ttl <= 0 or data.ttl > receiver.MAX_TTL then
+                        process.send(caller, data.reply_topic, protocol.fail(extra or "application deadline exceeds its bound"))
+                    else
+                        application_call({op = data.op, args = args, caller = caller, reply_topic = data.reply_topic,
+                            expires = math.floor(time.now():unix_nano() + data.ttl)})
+                    end
                 else
-                    -- The caller's wait becomes a deadline on this node's clock.
-                    local expires = math.floor(time.now():unix_nano() + data.ttl)
-                    deliver(name, {op = op, args = args, caller = caller, reply_topic = data.reply_topic, expires = expires})
+                    local prefix, op = data.op:match("^([^.]+)%.(.+)$")
+                    local name = prefix and routing[prefix]
+                    if not name or not op then
+                        process.send(caller, data.reply_topic, protocol.fail("unknown operation " .. data.op))
+                    else
+                        local expires = math.floor(time.now():unix_nano() + data.ttl)
+                        deliver(name, {op = op, args = args, caller = caller, reply_topic = data.reply_topic, expires = expires})
+                    end
+                end
+            end
+        else
+            local completed = selected.value :: Completion
+            if completed.reply then
+                process.send(completed.request.caller, completed.request.reply_topic, completed.reply)
+            end
+            if completed.complete then
+                active = active - 1
+                while active < receiver.MAX_ACTIVE and #applications > 0 do
+                    application_call(assert(table.remove(applications, 1)))
                 end
             end
         end

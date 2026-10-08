@@ -1,6 +1,19 @@
 version: '1.0'
 namespace: bee.tests.hive
 entries:
+- name: receiver_test
+  kind: function.lua
+  source: file://receiver_test.lua
+  method: run
+  modules: [registry, system, process, channel]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    model: bee.capability:model
+    grants: bee.gov.types:capability_grants
+    materializer: bee.gov.binding:materializer
+    protocol: bee.hive:protocol
 - name: exposure_scope_test
   kind: function.lua
   source: file://exposure_scope_test.lua

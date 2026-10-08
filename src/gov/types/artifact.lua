@@ -147,6 +147,10 @@ local function entries(value: unknown): ({Entry}?, string?)
         if extra then return nil, "entries[" .. tostring(index) .. "]: " .. extra .. "; registry configuration belongs in data" end
         if not object(item.data) then return nil, "entries[" .. tostring(index) .. "] requires a registry data object" end
         if item.meta ~= nil and not object(item.meta) then return nil, "entries[" .. tostring(index) .. "] metadata must be an object" end
+        local meta = object(item.meta)
+        if meta and meta.type == "bee.node.application_admission" then
+            return nil, "portable artifact cannot declare a host application admission"
+        end
         local id = identifier(item.id)
         local entry_kind = kind(item.kind)
         if not id or not entry_kind then return nil, "entries[" .. tostring(index) .. "] has an invalid id or kind" end

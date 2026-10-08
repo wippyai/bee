@@ -1,6 +1,20 @@
 version: '1.0'
 namespace: bee.hive.security
 entries:
+- name: application_dispatch
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get,
+      security.policy.get, security.policy_group.get, security.actor.create, security.scope.create,
+      funcs.call, funcs.security, funcs.context]
+    resources: '*'
+    effect: allow
+- name: admission_store
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee:db]
+    effect: allow
 - name: supervisor
   kind: security.policy
   meta:

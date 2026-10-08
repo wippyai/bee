@@ -79,6 +79,26 @@ end
 
 local function define_tests()
     test.describe("Governance overlay materializer", function()
+        test.it("installs exposure policy defaults without attaching the host policy to app functions", function()
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
+            local portable = {{id = "app.notes:app", kind = "process.lua",
+                meta = {type = "bee.app"}, data = {source = "return true"}},
+                {id = "app.notes:exposure", kind = "ns.requirement",
+                    meta = {capability = "hive.expose", value_kind = "security.policy"},
+                    data = {targets = {{entry = "app.notes:run", path = ".security.policies +="}}}}}
+            local generated = {policies = {{id = policy_id, kind = "security.policy",
+                data = {groups = {"bee.security.hive:hive_exposure_scope"},
+                    policy = {actions = {"hive.expose.open"}, resources = {"app.notes:run"}, effect = "allow"}}}},
+                bindings = {{requirement_id = "app.notes:exposure", policy_id = policy_id}},
+                record = {id = "bee.gov.grants:record." .. string.rep("b", 64), kind = "registry.entry", data = {}}}
+            assert(materializer.reconcile_composed_with(api(state), is_conflict, "bee.gov:overlay", portable, nil, generated))
+            local projected = assert(bounds.object(state.entries["app.notes:exposure"].data))
+            test.eq(projected.default, policy_id)
+            test.eq(#(projected.targets :: {unknown}), 0)
+            test.eq(#portable[2].data.targets, 1)
+            test.not_nil(state.entries[policy_id])
+        end)
         test.it("replaces the complete owner overlay with one checked generation", function()
             local state: State = {entries = {
                 ["old:gone"] = {id = "old:gone", kind = "registry.entry", data = {value = "old"}},

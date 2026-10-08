@@ -9,6 +9,7 @@ local principal = require("principal")
 local descriptor = require("descriptor")
 local governed_admission = require("governed_admission")
 local application_admissions = require("application_admissions")
+local grants = require("capability_grants")
 local bounds = require("bounds")
 
 local M = {}
@@ -21,6 +22,30 @@ M.MANAGING_SCOPE = "bee.node.security:scope_managing_application"
 M.ADMISSION_TYPE = "bee.node.application_admission"
 
 type Definition = {process: string, title: string, terminal: boolean, revision: string, resume_schema: string, singleton: boolean}
+type Object = {[string]: unknown}
+
+local function host_admissions(pinned: registry.Snapshot): {Object}
+    local owners: {[string]: boolean} = {}
+    for _, schema in ipairs({grants.SCHEMA, governed_admission.SCHEMA}) do
+        for _, entry in ipairs(assert(pinned:find({[".kind"] = "registry.entry", ["meta.type"] = schema}))) do
+            local data = bounds.object(entry.data)
+            local owner = data and bounds.id(data.overlay_owner)
+            if owner then owners[owner] = true end
+        end
+    end
+    local claimed: {[string]: boolean} = {}
+    for owner in pairs(owners) do
+        local overlay = assert(registry.overlay(owner))
+        for _, entry in ipairs(assert(overlay:find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}))) do
+            claimed[entry.id] = true
+        end
+    end
+    local found: {Object} = {}
+    for _, entry in ipairs(assert(pinned:find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}))) do
+        if not claimed[entry.id] then found[#found + 1] = entry end
+    end
+    return found
+end
 
 -- definition is the app process entry id declares, from its meta.application
 -- descriptor.
@@ -35,7 +60,8 @@ function M.definition(id: string): (Definition?, string?)
 end
 
 local function host_binding(definition_id: string): (governed_admission.Binding?, {[string]: unknown}?, string?)
-    for _, entry in ipairs(registry.find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}) or {}) do
+    local pinned = assert(registry.snapshot())
+    for _, entry in ipairs(host_admissions(pinned)) do
         local data = bounds.object(entry.data)
         local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
         if not bindings then return nil, nil, "admission " .. entry.id .. ": " .. tostring(bindings_error) end
@@ -98,13 +124,13 @@ function M.definitions(workspace_id: string): ({string}?, string?)
             result[#result + 1] = definition_id
         end
     end
-    for _, entry in ipairs(registry.find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}) or {}) do
+    local pinned = assert(registry.snapshot())
+    for _, entry in ipairs(host_admissions(pinned)) do
         local data: unknown = entry.data
         local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
-        if not bindings then return nil, "admission " .. entry.id .. ": " .. tostring(bindings_error) end
+        if not bindings then return nil, "admission " .. tostring(entry.id) .. ": " .. tostring(bindings_error) end
         for _, binding in ipairs(bindings) do add(binding.definition_id) end
     end
-    local pinned = assert(registry.snapshot())
     local selection, selection_error = application_admissions.read(pinned, pinned:version():string(), workspace_id,
         assert(system.node.id()))
     if not selection then return nil, selection_error end
@@ -141,9 +167,19 @@ function M.scope(definition: Definition, workspace_id: string): (security.Scope?
         scope = managing
     end
     for _, id in ipairs(binding.policies) do
-        local policy, policy_error = security.policy(id)
-        if not policy then return nil, "admitted policy " .. id .. ": " .. tostring(policy_error) end
-        scope = scope:with(policy)
+        local entry = registry.get(id)
+        local data: unknown = entry and entry.data or nil
+        local exposure = false
+        if type(data) == "table" and type(data.groups) == "table" then
+            for _, group in ipairs(data.groups) do
+                if group == "bee.security.hive:hive_exposure_scope" then exposure = true end
+            end
+        end
+        if not exposure then
+            local policy, policy_error = security.policy(id)
+            if not policy then return nil, "admitted policy " .. id .. ": " .. tostring(policy_error) end
+            scope = scope:with(policy)
+        end
     end
     return scope, nil
 end

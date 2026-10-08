@@ -353,10 +353,17 @@ local function define_tests()
             test.is_true(model.ask_remove(state, model.selected_row(state), "back"))
             for _, size in ipairs({{100, 24}, {60, 16}, {30, 12}}) do
                 local drawn = view.draw(size[1], size[2], appearance.defaults(), state, ui())
+                test.not_nil(drawn.controls)
+                if drawn.controls then
+                    test.eq(#drawn.controls.buttons, 2)
+                    test.eq(drawn.controls.buttons[1].kind, "confirm_remove")
+                    test.eq(drawn.controls.buttons[2].kind, "cancel_remove")
+                end
                 test.eq(#drawn.rows, size[2])
                 for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), size[1]) end
                 for _, hit in ipairs(drawn.hits) do
-                    test.is_true(hit.kind == "confirm_remove" or hit.kind == "cancel_remove")
+                    test.is_true(hit.kind == "confirm_remove" or hit.kind == "cancel_remove" or hit.kind == "frame_help" or hit.kind == "frame_more")
+                    test.eq(hit.y, size[2])
                     test.is_true(hit.x + hit.width - 1 <= size[1] and hit.y + hit.height - 1 <= size[2])
                 end
             end

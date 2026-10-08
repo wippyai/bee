@@ -264,7 +264,11 @@ function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?)
     local more: Button = {kind = "frame_more", key = "F10", label = "More", enabled = true}
     local reserve = button_width(more)
     for _, button in ipairs(buttons) do
-        if button.primary and not button.more and button_width(button) + reserve > room then reserve = 0; break end
+        if button.primary and not button.more and button_width(button) + reserve > room then
+            more = {kind = "frame_more", label = "More", enabled = true}
+            reserve = button_width(more)
+            break
+        end
     end
     local available = room - reserve
     local chosen: {[integer]: boolean} = {}

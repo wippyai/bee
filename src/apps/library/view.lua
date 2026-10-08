@@ -335,7 +335,6 @@ end
 -- takes every click for itself.
 local function draw_removal(base: Frame, width: integer, height: integer, preferences: appearance.Preferences, removal: model.Removal): Frame
     local painter = frame.new(width, height, preferences)
-    local footer_buttons: {frame.Button} = {}
     for y, row in ipairs(base.rows) do painter.canvas:put(1, y, row, width) end
     local lines = model.removal_lines(removal)
     local box = frame.modal(painter, math.min(76, width - 2), #lines + 5, removal.kind == "back" and "Go back" or "Remove")
@@ -343,12 +342,12 @@ local function draw_removal(base: Frame, width: integer, height: integer, prefer
         for index, line in ipairs(lines) do
             frame.put(painter, box.x, box.y + index, text.bound(line, 8192), box.width, index == 1 and painter.theme.accent or painter.theme.text)
         end
-        local x = box.x
-        local y = box.y + #lines + 2
-        x = frame.button(painter, x, y, {kind = "confirm_remove", key = "Enter", label = removal.kind == "back" and "Go back" or "Remove", enabled = true, primary = true})
-        frame.button(painter, x, y, {kind = "cancel_remove", key = "Esc", label = "Keep", enabled = true})
     end
-    return {rows = frame.rows(painter), hits = painter.hits, controls = nil, capacity = base.capacity,
+    frame.footer(painter, "", "", nil, {
+        {kind = "confirm_remove", key = "Enter", label = removal.kind == "back" and "Go back" or "Remove", enabled = true, primary = true},
+        {kind = "cancel_remove", key = "Esc", label = "Keep", enabled = true},
+    })
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = base.capacity,
         offset = base.offset, operation_detail_offset = base.operation_detail_offset}
 end
 

@@ -27,6 +27,24 @@ local function define_tests()
                 else test.is_nil((plain:find("/ search", 1, true))) end
             end
         end)
+        test.it("keeps More visible beside a primary action on a narrow footer", function()
+            local painter = frame.new(28, 16, appearance.defaults())
+            frame.footer(painter, "", "? help", nil, {
+                {kind = "platform", key = "Enter", label = "Packages", enabled = true, primary = true},
+                {kind = "technical", key = "T", label = "Technical", enabled = true},
+                {kind = "refresh", key = "R", label = "Refresh", enabled = true},
+            })
+            local rows = frame.rows(painter)
+            test.is_true(rows[16]:find("Enter Packages", 1, true) ~= nil)
+            test.is_true(rows[16]:find("More", 1, true) ~= nil)
+            test.eq(#painter.controls.overflow, 2)
+            local more = false
+            for _, hit in ipairs(painter.hits) do
+                if hit.kind == "frame_more" then more = true; test.eq(hit.y, 16) end
+            end
+            test.is_true(more)
+        end)
+
         test.it("shares the footer row with the canonical action geometry", function()
             local layout = frame.layout(frame.new(80, 24, appearance.defaults()), true, true)
             test.eq(layout.actions, layout.footer)

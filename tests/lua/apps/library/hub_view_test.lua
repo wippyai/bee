@@ -17,6 +17,63 @@ end
 
 local function define_tests()
     test.describe("Library package screens", function()
+        test.it("uses shared footer controls for configuration at every size", function()
+            for _, width in ipairs({12, 27, 40, 80, 160}) do
+                local shown = draw(width, 18, model.new(), 0, "Invalid value", false,
+                    {field = "configuration", name = "enabled", buffer = "false"})
+                test.not_nil(shown.controls)
+                if shown.controls then
+                    test.eq(#shown.controls.buttons, 2)
+                    test.eq(shown.controls.buttons[1].kind, "save_editor")
+                    test.eq(shown.controls.buttons[2].kind, "cancel_editor")
+                    test.eq(shown.controls.status, "Invalid value")
+                end
+                for _, hit in ipairs(shown.hits) do test.eq(hit.y, 18) end
+                if width >= 40 then
+                    test.is_true(shown.rows[18]:find("Enter Save", 1, true) ~= nil)
+                    test.is_nil((table.concat(shown.rows, "\n", 1, 17):find("Enter Save", 1, true)))
+                end
+            end
+        end)
+
+        test.it("uses shared actions for governed review and missing plans", function()
+            for _, width in ipairs({40, 80, 160}) do
+                local state = model.new()
+                state.phase = "plan"
+                for _, reviewed in ipairs({false, true}) do
+                    local shown = view.draw(width, 24, appearance.defaults(), state, 0, "Unavailable", false, nil, nil,
+                        {tabs = CHROME.tabs, active = CHROME.active, technical = false,
+                            review = reviewed and {{text = "Changes", heading = true}} or nil, ready = true})
+                    test.not_nil(shown.controls)
+                    if shown.controls then
+                        local actions = 0
+                        for _, button in ipairs(shown.controls.buttons) do
+                            if button.kind == "install_governed" or button.kind == "refresh_plan" or button.kind == "back" then actions = actions + 1 end
+                        end
+                        test.eq(actions, 2)
+                    end
+                    for _, hit in ipairs(shown.hits) do
+                        if hit.kind == "install_governed" or hit.kind == "refresh_plan" or hit.kind == "back" then test.eq(hit.y, 24) end
+                    end
+                end
+            end
+        end)
+        test.it("keeps package actions on the footer after a short resize", function()
+            local state = model.new()
+            model.select(state, "bee/example")
+            model.apply_details(state, {ok = true, replayed = false, value = {component = "bee/example", title = "Example",
+                description = "Package", readme = "Guide", versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1}})
+            for _, height in ipairs({6, 7, 12, 24}) do
+                local shown = draw(160, height, state, 0, "")
+                for _, hit in ipairs(shown.hits) do
+                    if hit.kind == "install" or hit.kind == "update" or hit.kind == "uninstall" or hit.kind == "plan"
+                        or hit.kind == "parameter" or hit.kind == "policy_none" or hit.kind == "policy_up" then
+                        test.eq(hit.y, height)
+                    end
+                end
+            end
+        end)
+
         test.it("keeps recovery actions visible when package details cannot load", function()
             local state = model.new()
             state.phase, state.notice = "details", "Hub is unavailable"
@@ -59,7 +116,8 @@ local function define_tests()
                 test.is_true(rendered:find("Configure package", 1, true) ~= nil)
                 test.is_true(rendered:find("false", 1, true) ~= nil)
                 for _, hit in ipairs(frame.hits) do
-                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor")
+                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor" or hit.kind == "frame_help" or hit.kind == "frame_more")
+                    test.eq(hit.y, 18)
                     test.is_true(hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= 18)
                 end
             end
@@ -76,7 +134,8 @@ local function define_tests()
                     test.is_true(rendered:find("false", 1, true) ~= nil)
                 end
                 for _, hit in ipairs(frame.hits) do
-                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor")
+                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor" or hit.kind == "frame_help" or hit.kind == "frame_more")
+                    test.eq(hit.y, size[2])
                     test.is_true(hit.x >= 1 and hit.y >= 1)
                     test.is_true(hit.x + hit.width - 1 <= size[1] and hit.y + hit.height - 1 <= size[2])
                 end

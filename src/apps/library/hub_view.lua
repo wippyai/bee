@@ -82,7 +82,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         return wrapped
     end
     -- A control is active when it names the current phase, view or choice.
-    local function button(x: integer, y: integer, kind: string, label: string, enabled: boolean): integer
+    local function action(kind: string, label: string, enabled: boolean): frame.Button
         local browsing = content ~= nil and content.open
         local active = (kind == "contents" and browsing) or kind == state.phase or (kind == "readme" and reading == true and not state.requirements_open and not browsing)
             or (kind == "versions" and reading ~= true and not state.requirements_open and not browsing)
@@ -91,9 +91,10 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             or kind == "recover"
         local action: frame.Button = {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active,
             primary = kind == "confirm" or kind == "review" or kind == "plan" or kind == "recover"}
-        if y == 5 then return frame.button(painter, x, y, action) end
-        footer_buttons[#footer_buttons + 1] = action
-        return x
+        return action
+    end
+    local function button(kind: string, label: string, enabled: boolean)
+        footer_buttons[#footer_buttons + 1] = action(kind, label, enabled)
     end
     frame.header(painter, "LIBRARY  " .. (TITLES[state.phase] or "PACKAGE"), state.selected or "")
     if height >= 6 then frame.tabs(painter, 2, chrome.tabs, chrome.active) end
@@ -108,16 +109,16 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             frame.put(painter, 2 + drawn + 2, 3, detail.component .. status_suffix, width - drawn - 4, theme.muted)
         else
             frame.line(painter, 3, state.notice ~= "" and state.notice or "Reading package details…", theme.muted)
-            button(2, height - 1, "details", " R Read again ", state.selected ~= nil)
-            button(20, height - 1, "back", " Esc Back ", true)
+            button("details", " R Read again ", state.selected ~= nil)
+            button("back", " Esc Back ", true)
         end
         if detail then
             frame.line(painter, 4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
             local tab_x = 2
-            tab_x = button(tab_x, 5, "readme", " README ", true)
-            tab_x = button(tab_x, 5, "versions", width < 44 and " Vers " or " Versions ", true)
-            tab_x = button(tab_x, 5, "requirements", width < 54 and " Config " or " Requirements ", true)
-            tab_x = button(tab_x, 5, "contents", " Contents ", state.selected_version ~= nil)
+            tab_x = frame.button(painter, tab_x, 5, action("readme", " README ", true))
+            tab_x = frame.button(painter, tab_x, 5, action("versions", width < 44 and " Vers " or " Versions ", true))
+            tab_x = frame.button(painter, tab_x, 5, action("requirements", width < 54 and " Config " or " Requirements ", true))
+            tab_x = frame.button(painter, tab_x, 5, action("contents", " Contents ", state.selected_version ~= nil))
             if content and content.open then
                 local capacity = maximum(0, height - 10)
                 frame.line(painter, 6, content.mode == "entries" and "Read-only package contents" or (content.mode == "entry" and content.path or (content.resource .. " / " .. content.path)), theme.muted)
@@ -144,9 +145,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                         frame.row(painter, y, item.label, active, "content_row", 0, item.key)
                     elseif rows[next_offset + slot] then frame.line(painter, y, rows[next_offset + slot], theme.text) end
                 end
-                local actions = button(2, height - 2, "content_back", " Back ", not content.pending)
-                actions = button(actions, height - 2, "content_previous", " Previous ", not content.pending and content.offset > 0)
-                button(actions, height - 2, "content_next", " Next page ", not content.pending and content.next_offset ~= nil)
+                button("content_back", " Back ", not content.pending)
+                button("content_previous", " Previous ", not content.pending and content.offset > 0)
+                button("content_next", " Next page ", not content.pending and content.next_offset ~= nil)
                 frame.line(painter, height - 1, content.notice, theme.muted)
                 frame.footer(painter, status, "↑↓ browse · Enter open · ⌫ back · N next · T technical", nil, footer_buttons)
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
@@ -172,9 +173,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     frame.line(painter, y + 2, fallback .. (#choices > 0 and " · Choose: " .. table.concat(choices, " / ") or ""), theme.muted)
                     frame.line(painter, y + 3, field and field.description ~= "" and field.description or table.concat(row.targets, " · "), theme.muted)
                 end
-                local action_x = button(2, height - 2, "plan", " Review ", state.requirements_digest ~= nil)
+                button("plan", " Review ", state.requirements_digest ~= nil)
                 local requirement = state.requirements[state.selected_requirement]
-                button(action_x, height - 2, "reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
+                button("reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
                 frame.line(painter, height - 1, "Defaults are used unless you choose a value.", theme.muted)
                 frame.footer(painter, status, "↑↓ field · Enter edit · ←→ choose · J advanced JSON · P review · T technical", nil, footer_buttons)
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = 0, operation_detail_offset = 0}
@@ -246,9 +247,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     if not row then break end
                     frame.line(painter, 6 + slot - 1, row, row:match("^#") and theme.accent or theme.text)
                 end
-                local action_x = button(2, height - 1, "versions", " Choose version ", true)
-                action_x = button(action_x, height - 1, "requirements", " Configure ", true)
-                action_x = button(action_x, height - 1, "plan", " Review installation ", state.selected_version ~= nil)
+                button("versions", " Choose version ", true)
+                button("requirements", " Configure ", true)
+                button("plan", " Review installation ", state.selected_version ~= nil)
                 frame.footer(painter, status, "↑↓ scroll · V versions · C contents · Esc back", nil, footer_buttons)
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
@@ -262,20 +263,20 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 local label = item.version .. (item.yanked and "  yanked" or "")
                 frame.row(painter, y, label, selected, "version", 0, item.version, item.yanked and theme.muted or nil)
             end
-            local actions = 2
-            actions = button(actions, height - 2, "install", " Install ", true)
-            actions = button(actions, height - 2, "update", " Update ", true)
-            actions = button(actions, height - 2, "uninstall", " Remove ", true)
-            actions = button(actions, height - 2, "plan", " Prepare ", state.selected_version ~= nil or state.action == "uninstall")
-            local policy_x = 2
-            policy_x = button(policy_x, height - 1, "parameter", " Configure ", state.action ~= "uninstall")
+
+            button("install", " Install ", true)
+            button("update", " Update ", true)
+            button("uninstall", " Remove ", true)
+            button("plan", " Prepare ", state.selected_version ~= nil or state.action == "uninstall")
+
+            button("parameter", " Configure ", state.action ~= "uninstall")
             if state.action == "uninstall" then
-                policy_x = button(policy_x, height - 1, "policy_block", " Block ", true)
-                policy_x = button(policy_x, height - 1, "policy_leave", " Leave ", true)
-                policy_x = button(policy_x, height - 1, "policy_down", " Roll back ", true)
+                button("policy_block", " Block ", true)
+                button("policy_leave", " Leave ", true)
+                button("policy_down", " Roll back ", true)
             else
-                policy_x = button(policy_x, height - 1, "policy_none", " No migrations ", true)
-                policy_x = button(policy_x, height - 1, "policy_up", " Run migrations ", true)
+                button("policy_none", " No migrations ", true)
+                button("policy_up", " Run migrations ", true)
             end
             local parameters = #state.parameters == 0 and "no parameters" or (tostring(#state.parameters) .. " typed parameters")
             if width >= 74 then frame.line(painter, height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
@@ -303,9 +304,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         frame.line(painter, 5, (chrome.technical and ("Digest " .. recovery.digest) or "Recorded change") .. (#body > body_capacity and (" · detail " .. tostring(body_offset + 1) .. "–" .. tostring(math.min(#body, body_offset + body_capacity)) .. "/" .. tostring(#body)) or ""), theme.muted)
         for slot = 1, math.min(body_capacity, #body - body_offset) do frame.line(painter, 6 + slot - 1, body[body_offset + slot], theme.text) end
         frame.line(painter, height - 2, "Confirming repeats exactly the recorded change.", theme.text)
-        local actions = 2
-        actions = button(actions, height - 1, "confirm", " Confirm recovery ", true)
-        button(actions, height - 1, "cancel", " Back ", true)
+
+        button("confirm", " Confirm recovery ", true)
+        button("cancel", " Back ", true)
         frame.footer(painter, status, "Enter confirms · T technical · Esc back to history", nil, footer_buttons)
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
     end
@@ -320,8 +321,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             else frame.line(painter, 3 + slot - 1, line.text, theme.text) end
         end
         if chrome.technical and chrome.fault and chrome.fault ~= "" then frame.line(painter, height - 2, "Last result: " .. chrome.fault, theme.text) end
-        local x = button(2, height - 1, "install_governed", " Ask for approval ", chrome.ready == true)
-        button(x, height - 1, "back", " Back ", true)
+        button("install_governed", " Ask for approval ", chrome.ready == true)
+        button("back", " Back ", true)
         frame.footer(painter, status, "Enter asks for approval · T technical · ↑↓ scroll · Esc back", nil, footer_buttons)
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
@@ -339,8 +340,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             frame.line(painter, 3 + slot, value, theme.text)
         end
         frame.line(painter, 5 + shown, "State: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
-        button(2, height - 1, "status", " Check status ", state.plan ~= nil or state.selected_operation ~= nil)
-        button(18, height - 1, "back", " Back ", true)
+        button("status", " Check status ", state.plan ~= nil or state.selected_operation ~= nil)
+        button("back", " Back ", true)
         frame.footer(painter, status, "R checks again · T technical · Esc back", nil, footer_buttons)
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
@@ -350,8 +351,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         frame.empty(painter, 3, failed and "Changes could not be read" or "Reading changes…",
             failed and (state.notice ~= "" and state.notice or status) or "The Hub plan is pending")
         if chrome.technical and fault and fault ~= "" then frame.line(painter, 6, "Last result: " .. fault, theme.text) end
-        button(2, height - 1, "refresh_plan", " Read again ", true)
-        button(18, height - 1, "back", " Back ", true)
+        button("refresh_plan", " Read again ", true)
+        button("back", " Back ", true)
         frame.footer(painter, status, "R reads again · T technical · Esc back", nil, footer_buttons)
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
@@ -422,16 +423,16 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             if row.missing and state.phase == "plan" then frame.add_hit(painter, "missing", 0, row.missing, 1, y, width, 1) end
         end
     end
-    local actions = 2
+
     if state.phase == "confirm" then
         frame.line(painter, height - 2, "Applies once, to exactly these changes; any edit clears the confirmation.", theme.text)
-        actions = button(actions, height - 1, "confirm", " Confirm ", plan.ready)
-        actions = button(actions, height - 1, "cancel", " Back ", true)
+        button("confirm", " Confirm ", plan.ready)
+        button("cancel", " Back ", true)
         frame.footer(painter, status, "Enter confirms · Esc returns to the plan", nil, footer_buttons)
     else
-        actions = button(actions, height - 1, "review", " Confirm… ", plan.ready)
-        actions = button(actions, height - 1, "refresh_plan", " Replan ", true)
-        button(actions, height - 1, "missing", " Configure required ", #plan.missing > 0)
+        button("review", " Confirm… ", plan.ready)
+        button("refresh_plan", " Replan ", true)
+        button("missing", " Configure required ", #plan.missing > 0)
         frame.footer(painter, status, "Enter reviews these changes · R refreshes them · edits clear them", nil, footer_buttons)
     end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
@@ -459,15 +460,11 @@ function M.overlay(base: Frame, width: integer, height: integer, preferences: ap
         end
         compact_line(1, "EDIT · " .. title, theme.accent)
         compact_line(2, (editor.buffer ~= "" and editor.buffer or "(empty)") .. "▏")
-        if height > 2 then compact_line(height, status ~= "" and status or "Enter save · Esc cancel", theme.muted) end
-        local compact_hits: {frame.Hit} = {}
-        if width >= 24 and height > 2 then
-            compact_hits = {
-                {kind = "save_editor", index = 0, key = "", x = 1, y = height, width = 10, height = 1},
-                {kind = "cancel_editor", index = 0, key = "", x = 14, y = height, width = 10, height = 1},
-            }
-        end
-        return {rows = frame.rows(compact_painter), hits = compact_hits, capacity = 0,
+        frame.footer(compact_painter, status, "", nil, {
+            {kind = "save_editor", key = "Enter", label = "Save", enabled = true, primary = true},
+            {kind = "cancel_editor", key = "Esc", label = "Cancel", enabled = true},
+        })
+        return {rows = frame.rows(compact_painter), hits = compact_painter.hits, controls = frame.controls(compact_painter), capacity = 0,
             offset = base.offset, operation_detail_offset = base.operation_detail_offset}
     end
     local editor_painter = frame.new(width, height, preferences)
@@ -504,13 +501,13 @@ function M.overlay(base: Frame, width: integer, height: integer, preferences: ap
         or "Type to edit; Escape keeps the previous value"
     if status:find("not JSON", 1, true) or status:find("required", 1, true) or status:find("cannot", 1, true) then hint = status end
     row(top + h - 3, hint, theme.muted)
-    row(top + h - 2, " Enter Save     Esc Cancel", theme.accent)
     canvas:put(left, top + h - 1, appearance.style(theme.accent, theme.surface) .. "╰" .. string.rep("─", w - 2) .. "╯" .. RESET, w)
-    local hits: {frame.Hit} = {
-        {kind = "save_editor", index = 0, key = "", x = left + 2, y = top + h - 2, width = 12, height = 1},
-        {kind = "cancel_editor", index = 0, key = "", x = left + 15, y = top + h - 2, width = math.floor(math.min(12, w - 17)), height = 1},
-    }
-    return {rows = frame.rows(editor_painter), hits = hits, capacity = base.capacity, offset = base.offset, operation_detail_offset = base.operation_detail_offset}
+    frame.footer(editor_painter, status, "", nil, {
+        {kind = "save_editor", key = "Enter", label = "Save", enabled = true, primary = true},
+        {kind = "cancel_editor", key = "Esc", label = "Cancel", enabled = true},
+    })
+    return {rows = frame.rows(editor_painter), hits = editor_painter.hits, controls = frame.controls(editor_painter), capacity = base.capacity,
+        offset = base.offset, operation_detail_offset = base.operation_detail_offset}
 end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?, content: contents.State?, chrome: Chrome): Frame

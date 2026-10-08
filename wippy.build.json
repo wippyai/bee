@@ -26,7 +26,7 @@
         "module": "bee/bee",
         "version": "0.2.0-dev",
         "path": "dist/bee.wapp",
-        "sha256": "b004422303231880de3fcf7fe92feb7f82bb550504a22aa50a28563ddab62044"
+        "sha256": "df8caebd3e0aa624f28aeb6b926674eb2702cdc912388baefb2f35ddb0c4edf7"
       },
       {
         "module": "wippy/bootloader",

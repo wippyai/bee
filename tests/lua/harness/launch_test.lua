@@ -121,23 +121,26 @@ local function code(reply: admission.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return reply.error and reply.error.code or ""
 end
-local function apply(entry: {[string]: unknown})
+local function apply(entry: {id: string, kind: string, meta?: {[string]: unknown}, data?: unknown})
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local applied, err = changes:apply()
     if not applied then error("apply: " .. tostring(err)) end
 end
--- Temporarily replaces one entry's data, restoring it whatever the body does.
-local function with_entry(ref: string, mutate: (changed: {[string]: unknown}) -> (), body: () -> ())
+type EntryField = "data" | "meta"
+-- Restores the selected entry field after the body.
+local function with_entry(ref: string, mutate: (changed: {[string]: unknown}) -> (), body: () -> (), field: EntryField?)
     local entry = assert(registry.get(ref))
-    local original = entry.data
+    local original: {[string]: unknown}
+    if field == "meta" then original = assert(bounds.object(entry.meta))
+    else original = assert(bounds.object(entry.data)) end
     local changed: {[string]: unknown} = {}
-    for key, item in pairs(assert(bounds.object(original))) do changed[key] = item end
+    for key, item in pairs(original) do changed[key] = item end
     mutate(changed)
-    entry.data = changed
+    if field == "meta" then entry.meta = changed else entry.data = changed end
     apply(entry)
     local ok, failure = pcall(body)
-    entry.data = original
+    if field == "meta" then entry.meta = original else entry.data = original end
     apply(entry)
     if not ok then error(tostring(failure)) end
 end
@@ -956,7 +959,7 @@ local function define_tests()
                     end
                 end
                 if selected.binding == "bee.driver.agy.binding:binding" then
-                    test.eq(#policy.gateway_hooks, 0)
+                    test.eq(table.concat(policy.gateway_hooks, ","), "PermissionRequest")
                     test.eq(policy.prepare_options.sandbox, true)
                     local has_thread_message = false
                     for _, tool in ipairs(policy.gateway_tools) do if tool == "thread_message" then has_thread_message = true end end
@@ -2281,14 +2284,16 @@ local function define_tests()
                 test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
                 test.is_true(refusal_message(refused):find("unmapped-model", 1, true) ~= nil)
             end)
-            with_entry(AGENT_DEFINITION, function(data)
-                data.binding_ref = "bee.driver.codex.binding:binding"
-                data.profile_id = "batch"
-            end, function()
-                local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
-                test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
-                test.is_true(refusal_message(refused):find("codex", 1, true) ~= nil)
-            end)
+            with_entry("bee.driver.codex.binding:binding", function(meta) meta.accepts_model = false end, function()
+                with_entry(AGENT_DEFINITION, function(data)
+                    data.binding_ref = "bee.driver.codex.binding:binding"
+                    data.profile_id = "batch"
+                end, function()
+                    local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
+                    test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
+                    test.is_true(refusal_message(refused):find("codex", 1, true) ~= nil)
+                end)
+            end, "meta")
         end)
         test.it("declines only owner-permitted tuning hints", function()
             with_entry(AGENT_REVIEWER, function(data) data.tuning = {temperature = 0.2, top_k = 1} end, function()

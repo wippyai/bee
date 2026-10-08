@@ -5,6 +5,7 @@
 -- projecting onto a thread, and the outbox over its own store surviving a
 -- crash between the thread commit and its acknowledgement.
 local test = require("test")
+local support = require("support")
 local events = require("events")
 local principals = require("principals")
 local bounds = require("bounds")
@@ -16,7 +17,6 @@ local time = require("time")
 local process = require("process")
 local channel = require("channel")
 local sql = require("sql")
-local uuid = require("uuid")
 local service = require("service")
 local worker = require("worker")
 local resources = require("resources")
@@ -27,25 +27,7 @@ local TEST_STORE = "bee.approvals:test_db"
 local REQUESTER, OTHER_REQUESTER, ALICE, BOB, OUTSIDER, MANAGER = "bee.test.launcher", "bee.test.other_launcher", "bee.test.alice", "bee.test.bob", "bee.test.outsider", "bee.test.manager"
 local OUTBOX = "bee.test.outbox"
 local POLICY = "test-owner"
-local function key(): string
-    local id, err = uuid.v4()
-    if err or not id then error("uuid: " .. tostring(err)) end
-    return id
-end
-local function scope(names: {string}): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
-end
-local function caller(id: string, grants: {string}, metadata: {[string]: string | integer}?): funcs.Executor
-    local names: {string} = {"bee.approvals:client_test_policy"}
-    for _, grant in ipairs(grants) do names[#names + 1] = grant end
-    return funcs.new():with_actor(security.new_actor(id, metadata)):with_scope(scope(names))
-end
+local key, scope, caller = support.key, support.scope, support.caller
 local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:store"})
 local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)
 local stranger = thread_harness.principal("bee.test.stranger", thread_harness.ALL)

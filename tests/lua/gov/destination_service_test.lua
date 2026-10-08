@@ -289,4 +289,12 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+return function(options)
+    local original = assert(registry.get("bee.security.approvals:approver_policies"))
+    local ok, result = pcall(test.run_cases(define_tests), options)
+    local restore = registry.snapshot():changes()
+    assert(restore:update(original))
+    assert(restore:apply())
+    if not ok then error(tostring(result)) end
+    return result
+end

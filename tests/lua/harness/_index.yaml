@@ -2486,6 +2486,8 @@ entries:
   meta: {type: test, suite: bee}
   modules:
   - sql
+  - fs
+  - env
   - uuid
   imports:
     test: wippy.test:test

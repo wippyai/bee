@@ -257,8 +257,8 @@ local function define_tests()
             for _, fragment in ipairs({
                 "local appearance = require(\"appearance\")", "appearance.defaults()",
                 "local frame = require(\"frame\")", "frame.new(width, height, preferences)",
-                "frame.header(painter, \"COUNTER APP\"", "frame.actions(painter, height - 1", "primary = true",
-                "frame.footer(painter, \"Status: \" .. status, HINTS)", "frame.hints(", "frame.hit(hits",
+                "frame.header(painter, \"COUNTER APP\"", "{kind = \"increment\", key = \"Enter\"", "primary = true",
+                "frame.footer(painter, \"Status: \" .. status, HINTS, nil, {", "frame.hints(", "frame.hit(hits",
                 "frame.rows(painter)", "tty.mouse(true)", "WORK",
                 "message:from() == launch.broker_pid", "data.version == 1",
                 "data.request_id == pending_request_id", "local submitted = pending_count",

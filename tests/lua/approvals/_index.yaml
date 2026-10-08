@@ -1,6 +1,11 @@
 version: '1.0'
 namespace: bee.approvals
 entries:
+- name: test_principals
+  kind: library.lua
+  source: file://test_principals.lua
+  meta: {type: test_support}
+  modules: [uuid, security, funcs]
 - name: apply_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -54,10 +59,11 @@ entries:
   source: file://hive_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [funcs, security, registry, uuid, system, process, channel, time]
+  modules: [funcs, security, registry, system, process, channel, time]
   security:
     policies: [bee.approvals:apply_test_policy, bee.approvals:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy]
   imports:
+    support: bee.approvals:test_principals
     principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -67,10 +73,11 @@ entries:
   source: file://service_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [funcs, security, registry, time, sql, process, channel, uuid, json, events]
+  modules: [funcs, security, registry, time, sql, process, channel, json, events]
   security:
     policies: [bee.approvals:attention_test_policy, bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   imports:
+    support: bee.approvals:test_principals
     principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test

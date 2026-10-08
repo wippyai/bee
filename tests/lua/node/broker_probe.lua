@@ -16,6 +16,8 @@ local function main(options: unknown)
     local answers = assert(process.listen("bee.app.query.result", {message = true}))
     local checkpoints = assert(process.listen("bee.app.checkpoint_result", {message = true}))
     local navigations = assert(process.listen("bee.app.navigate", {message = true}))
+    local close_seen = launch.arguments[5] == "observe-close" and assert(process.listen("bee.tests.close_seen", {message = true})) or nil
+    local pending_close: string? = nil
     local lifecycle = assert(process.events())
     assert(tty.start())
     local surface = assert(tty.surface({}))
@@ -32,8 +34,10 @@ local function main(options: unknown)
     if launch.arguments[3] and launch.arguments[3] ~= "" then assert(client.checkpoint(launch, launch.arguments[3])) end
     if launch.arguments[4] == "navigate" then assert(client.navigate(launch, launch.definition_id, {"to", "here"})) end
     while true do
-        local selected = channel.select({closes:case_receive(), close_results:case_receive(), answers:case_receive(),
-            checkpoints:case_receive(), navigations:case_receive(), lifecycle:case_receive()})
+        local cases = {closes:case_receive(), close_results:case_receive(), answers:case_receive(),
+            checkpoints:case_receive(), navigations:case_receive(), lifecycle:case_receive()}
+        if close_seen then cases[#cases + 1] = close_seen:case_receive() end
+        local selected = channel.select(cases)
         if not selected.ok then break end
         if selected.channel == lifecycle then
             if selected.value.kind == process.event.CANCEL then break end
@@ -45,9 +49,13 @@ local function main(options: unknown)
                     lines[5] = "close asked"
                     local action: "accept" | "cancel" | "confirm" = "accept"
                     if close_action == "cancel" then action = "cancel" elseif close_action == "confirm" then action = "confirm" end
-                    client.close_reply(launch, request.request_id, {action = action,
-                        title = "Close probe?", message = "It has work", accept = "Close"})
+                    if close_seen and action == "accept" then pending_close = request.request_id
+                    else client.close_reply(launch, request.request_id, {action = action,
+                        title = "Close probe?", message = "It has work", accept = "Close"}) end
                 end
+            elseif selected.channel == close_seen and pending_close then
+                assert(client.close_reply(launch, pending_close, {action = "accept"}))
+                pending_close = nil
             elseif selected.channel == close_results then
                 if client.close_result(launch, from, data) then lines[5] = "close cancelled" end
             elseif selected.channel == answers then

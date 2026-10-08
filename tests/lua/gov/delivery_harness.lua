@@ -7,6 +7,7 @@ local security = require("security")
 local bounds = require("bounds")
 local json = require("json")
 local time = require("time")
+local uuid = require("uuid")
 local env = require("env")
 local system = require("system")
 local client = require("client")
@@ -15,10 +16,9 @@ local principal = require("principal")
 local M = {}
 type Object = {[string]: unknown}
 
--- A workspace on the machine home folder no display watches, so the
--- approvals a suite raises present the Inbox on no desktop.
+-- Each suite uses a separate folder beneath the fixture home.
 function M.isolated(label: string): string
-    local path = assert(env.get("bee.env:machine_home"))
+    local path = assert(env.get("bee.env:machine_home")) .. "/" .. label .. "-" .. assert(uuid.v7())
     local added, err = client.call(assert(system.node.id()), "workspace_add", {path = path, label = label})
     if not added then error("workspace_add: " .. tostring(err)) end
     return tostring(added.workspace)
@@ -100,10 +100,15 @@ function M.request(writer: funcs.Executor, overlay: string, workspace: string, v
         source_overlay_id = overlay, version = version, snapshot_digest = digest}))
 end
 
+-- person uses the Inbox principal for the fixture workspace.
+function M.person(workspace: string): funcs.Executor
+    local identity = assert(principal.value(workspace, "delivery-inbox", "bee.approvals.inbox.app:app", "1", 1))
+    return funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+end
+
 -- answer reads what Needs you shows for the installation and decides it as the person.
 function M.answer(workspace: string, approval_id: unknown, decision: string): Object
-    local identity = assert(principal.value(workspace, "delivery-inbox", "bee.approvals.inbox.app:app", "1", 1))
-    local person = funcs.new():with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+    local person = M.person(workspace)
     local read = M.value(M.reply(person:call("bee.approvals.binding:read", {approval_id = approval_id})))
     M.value(M.reply(person:call("bee.approvals.binding:decide", {approval_id = approval_id,
         expected_revision = read.revision, decision = decision, proposal_digest = read.proposal_digest})))

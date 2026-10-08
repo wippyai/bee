@@ -583,11 +583,10 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 		refused := call("delivery", object{"operation": "request", "workspace_id": destination,
 			"source_overlay_id": source, "version": version, "snapshot_digest": frozen["digest"]}, 37)
 		report["refusal_ok"] = refused["ok"]
-		report["refusal_code"] = refused["code"]
-		report["refusal_message"] = refused["message"]
-		if value := mustObject(refused["value"]); value != nil {
-			report["refusal_remedy"] = value["remedy"]
-		}
+		fault := mustObject(refused["error"])
+		report["refusal_code"] = fault["code"]
+		report["refusal_message"] = fault["message"]
+		report["refusal_remedy"] = fault["remedy"]
 		// Round 2: the agent repairs exactly what the refusal named.
 		repairPut := call("overlay", object{"operation": "put", "overlay_id": workspace, "expected_revision": 3,
 			"idempotency_key": "put-entries-" + source, "path": example["path"], "content": entriesJSON}, 38)
@@ -650,21 +649,22 @@ func reportSpecAuthoring(client *httpClient, url, authorization string, report o
 	delivered := call("delivery", object{"operation": "request", "source_overlay_id": source,
 		"version": version, "snapshot_digest": snapshot}, 55)
 	report["delivery_ok"] = delivered["ok"]
-	report["delivery_code"] = delivered["code"]
-	report["delivery_message"] = delivered["message"]
+	fault := mustObject(delivered["error"])
+	report["delivery_code"] = fault["code"]
+	report["delivery_message"] = fault["message"]
+	report["delivery_remedy"] = fault["remedy"]
 	if value := mustObject(delivered["value"]); value != nil {
 		report["delivery_ready"] = value["ready"]
 		report["delivery_diagnostics"] = value["diagnostics"]
 		report["delivery_plan_digest"] = value["plan_digest"]
 		report["delivery_component"] = value["component"]
-		report["delivery_remedy"] = value["remedy"]
 		if steps, ok := value["human_steps"].([]any); ok {
 			report["delivery_human_steps"] = len(steps)
 		}
 	}
 	status := call("delivery", object{"operation": "status", "source_overlay_id": source, "version": version}, 56)
 	report["status_ok"] = status["ok"]
-	report["status_message"] = status["message"]
+	report["status_message"] = mustObject(status["error"])["message"]
 	if value := mustObject(status["value"]); value != nil {
 		report["status_plan_digest"] = value["plan_digest"]
 		report["status_selected"] = value["selected"]

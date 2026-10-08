@@ -515,6 +515,12 @@ entries:
     approval: bee.gov.binding:approval
     drivers: bee.gov.types:drivers
     canonical: bee.values:canonical
+- name: replica_fixture
+  kind: library.lua
+  source: file://replica_fixture.lua
+  meta: {type: test_support}
+  imports:
+    replicas: bee.sync.persist:replicas
 - name: destination_test
   kind: function.lua
   source: file://destination_test.lua
@@ -532,6 +538,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     destination: bee.gov.binding:destination
+    replica_fixture: bee.tests.gov:replica_fixture
     plan_store: bee.gov.persist:plan_store
     replicas: bee.sync.persist:replicas
     delivery: bee.gov.types:delivery
@@ -562,6 +569,7 @@ entries:
     publisher: bee.gov.binding:publisher
     destination: bee.gov.binding:destination
     activation_owner: bee.gov.binding:activation_owner
+    replica_fixture: bee.tests.gov:replica_fixture
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
     replicas: bee.sync.persist:replicas
@@ -616,7 +624,6 @@ entries:
   method: run
   modules:
   - funcs
-  - security
   - registry
   - system
   - uuid
@@ -639,6 +646,7 @@ entries:
     publisher: bee.gov.binding:publisher
     governed: bee.apps.library:governed
     library: bee.apps.library:model
+    harness: bee.tests.gov:delivery_harness
 - name: delivery_test
   kind: function.lua
   source: file://delivery_test.lua
@@ -1179,6 +1187,7 @@ entries:
   - security
   - json
   - time
+  - uuid
   - env
   - system
   imports:

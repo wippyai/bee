@@ -18,10 +18,15 @@ local function screen(view: tty.Viewport): string
     local shown = view:snapshot()
     return shown and (table.concat(shown.rows, "\n"):gsub("\27%[[0-9;]*m", "")) or ""
 end
-local function await(view: tty.Viewport, needle: string)
+local function await(view: tty.Viewport, needle: string, selected: boolean?)
     local updates = assert(view:updates())
     local deadline = time.after("60s")
-    while not screen(view):find(needle, 1, true) do
+    local function ready(): boolean
+        local shown = screen(view)
+        local content = selected and (shown:match("\n(›[^\n]+)") or "") or shown
+        return content:find(needle, 1, true) ~= nil and shown:find("Working…", 1, true) == nil
+    end
+    while not ready() do
         local selected = channel.select({updates:case_receive(), deadline:case_receive()})
         if selected.channel == deadline then error("missing " .. needle .. " in:\n" .. screen(view)) end
     end
@@ -62,6 +67,15 @@ local function details(window: Window)
     key(window.view, "progress")
     key(window.view, "", "enter")
     await(window.view, "Progress")
+    local cursor, target = 0, 0
+    for row, raw in ipairs(assert(window.view:snapshot()).rows) do
+        local text = raw:gsub("\27%[[0-9;]*m", "")
+        if text:sub(1, #"›") == "›" then cursor = row end
+        if text:find("Progress", 1, true) then target = row end
+    end
+    assert(cursor > 0 and target > 0, "Progress row is unavailable")
+    for _ = 1, math.abs(target - cursor) do key(window.view, "", target > cursor and "down" or "up") end
+    await(window.view, "Progress", true)
     key(window.view, "", "enter")
     await(window.view, "fixture README unavailable")
     key(window.view, "i")
@@ -117,7 +131,7 @@ local function define_tests()
                 await(window.view, "BLOCKED:")
                 await(window.view, "Changes could not be read")
                 local shown = assert(window.view:snapshot())
-                test.is_true(shown.rows[#shown.rows]:find("BLOCKED:", 1, true) ~= nil)
+                test.is_true(shown.rows[#shown.rows - 1]:find("BLOCKED:", 1, true) ~= nil)
                 key(window.view, "t")
                 await(window.view, "Last result: BLOCKED:")
                 test.eq(#inbox(window.workspace), 0)

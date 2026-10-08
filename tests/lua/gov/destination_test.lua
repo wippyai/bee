@@ -13,6 +13,7 @@ local delivery = require("delivery")
 local artifact = require("artifact")
 local preflight = require("preflight")
 local version = require("version")
+local replica_fixture = require("replica_fixture")
 
 local function ok(result: {[string]: unknown}): {[string]: unknown}
     if result.ok ~= true then error(tostring(result.code) .. ": " .. tostring(result.message)) end
@@ -131,4 +132,6 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+return function(options)
+    return replica_fixture.run(test.run_cases(define_tests), {"source-made", "source-node", "another-node"}, options)
+end

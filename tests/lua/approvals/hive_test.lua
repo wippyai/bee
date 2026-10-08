@@ -1,10 +1,10 @@
 -- MIT
 local test = require("test")
+local support = require("support")
 local system = require("system")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
-local uuid = require("uuid")
 local principals = require("principals")
 local bounds = require("bounds")
 local protocol = require("protocol")
@@ -17,28 +17,7 @@ type Object = {[string]: unknown}
 local POLICY = "test-hive"
 local PEER_PREFIX = "bee.approvals.peer."
 
-local function key(): string
-    local id, err = uuid.v4()
-    if err or not id then error("uuid: " .. tostring(err)) end
-    return id
-end
-
-local function scope(names: {string}): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
-end
-
-local function caller(id: string, grants: {string}): funcs.Executor
-    local names: {string} = {"bee.approvals:client_test_policy"}
-    for _, grant in ipairs(grants) do names[#names + 1] = grant end
-    return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
-end
-
+local key, caller = support.key, support.caller
 local requester = caller("bee.test.hive_requester", {"bee.security.approvals:approval_request_policy"})
 
 local function direct(method: string, value: unknown): Object

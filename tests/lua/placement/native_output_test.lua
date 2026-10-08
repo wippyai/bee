@@ -367,10 +367,10 @@ local function output_tests()
             native_fixture.resource_call("associate", {workspace_id = workspace, name = "project", root_ref = native_fixture.ROOT, subpath = "", allowed_access = "write"})
             native_fixture.resource_mode("granted")
             local attempt_id = native_fixture.fresh("attempt")
-            local granted = native_fixture.resource_call("grant", {workspace_id = workspace, name = "project", access = "write", purpose = "project",
-                audience = native_fixture.OWNER, attempt_id = attempt_id, ttl_ms = 2000})
             local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "direct_process")
             request.attempt_id = attempt_id
+            local granted = native_fixture.resource_call("grant", {workspace_id = workspace, name = "project", access = "write", purpose = "project",
+                audience = native_fixture.OWNER, attempt_id = attempt_id, ttl_ms = 2000})
             local grant = (principals.objects(request.resources))[1]
             grant.grant_ref = granted.grant_id
             native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))

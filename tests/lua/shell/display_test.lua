@@ -12,6 +12,8 @@ local tty = require("tty")
 local registry = require("registry")
 local client = require("client")
 local events = require("events")
+local env = require("env")
+local uuid = require("uuid")
 
 local DISPLAY = "bee.shell:client"
 
@@ -235,9 +237,22 @@ local function define_tests()
         test.it("alerts on arrival, preserves a busy keyboard and opens the request by key or click", function()
             local lifecycle = assert(process.events())
             local view, pid = start()
+            expect(view, "the display shows its desktop", " BEE ", true)
+            local desktop_title = assert(bar(view):match("Desktop %d+"))
+            local node = assert(system.node.id())
+            local added = assert(client.call(node, "workspace_add", {
+                path = assert(env.get("bee.env:machine_home")) .. "/display-attention-" .. uuid.v7(), label = "attention"}))
+            local desktops = assert(client.state(assert(client.call(node, "list", {})))).desktops
+            local desktop, original_workspace = "", ""
+            for _, item in ipairs(desktops) do
+                if item.title == desktop_title then desktop, original_workspace = item.id, item.workspace end
+            end
+            assert(desktop ~= "")
+            assert(client.call(node, "desktop_workspace", {id = desktop, workspace = added.workspace}))
+            expect(view, "the display works in its isolated workspace", "attention ▾", true)
             open_probe(view)
             local listed = assert(client.state(assert(client.call(assert(system.node.id()), "list", {}))))
-            local workspace = listed.home
+            local workspace = tostring(added.workspace)
             assert(events.send("bee.attention", "approval.requested", workspace,
                 {approval_id = "busy-request", count = 2, title = "Allow a workspace edit?"}))
             expect(view, "arrival shows the counted badge", "! 2 Needs you", true)
@@ -247,6 +262,7 @@ local function define_tests()
             test.eq(running(), #listed.running)
             key(view, "f4")
             expect(view, "F4 dismisses the card", "Allow a workspace edit?", false)
+            expect(view, "F4 opens Needs you", "No decisions needed", true)
             key(view, "w", {ctrl = true})
             expect(view, "F4 focuses and closes Needs you", "No decisions needed", false)
             expect(view, "closing Needs you retains the pending badge", "! 2 Needs you", true)
@@ -275,6 +291,8 @@ local function define_tests()
             expect(view, "clicking keeps the pending badge", "! 1 Needs you", true)
             assert(events.send("bee.attention", "approval.changed", workspace, {count = 0}))
             expect(view, "resolved requests clear the badge", "! 1 Needs you", false)
+            assert(client.call(node, "desktop_workspace", {id = desktop, workspace = original_workspace}))
+            expect(view, "the display restores its desktop's workspace", "attention ▾", false)
             exits(lifecycle, {pid})
             view:close()
         end)

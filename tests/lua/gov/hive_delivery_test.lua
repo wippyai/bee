@@ -14,6 +14,8 @@ local owner = require("activation_owner")
 local plan_store = require("plan_store")
 local activation_store = require("activation_store")
 local replicas = require("replicas")
+local replica_fixture = require("replica_fixture")
+local sources: {string} = {}
 local sync = require("sync")
 local preflight = require("preflight")
 local governed = require("governed")
@@ -73,6 +75,7 @@ local function define_tests()
         test.it("publishes on one bee, appears as shared on another, and installs through that bee's approval", function()
             local suffix = assert(uuid.v7())
             local source_node = "node-a-" .. suffix
+            sources[#sources + 1] = source_node
             local node = "node-b-" .. suffix
             local workspace = "workspace-b-" .. suffix
             local entry = {id = "app.notes:main", kind = "function.lua", data = {source = "return 'notes'"}}
@@ -182,4 +185,6 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+return function(options)
+    return replica_fixture.run(test.run_cases(define_tests), sources, options)
+end

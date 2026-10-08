@@ -71,10 +71,16 @@ local function define_tests()
 
         test.it("asks a negotiating app before closing it and closes it when the app accepts", function()
             local events = assert(process.listen(client.EVENTS, {message = true}))
-            local id, view = open(events, {"accept"})
+            local id, view = open(events, {"accept", "", "", "", "observe-close"})
             raw_event(events, "title")
+            local pid = ""
+            for _, instance in ipairs(assert(client.state(call("list", {}))).running) do
+                if instance.id == id then pid = instance.pid end
+            end
+            assert(pid ~= "")
             test.is_true(call("close", {id = id}).closing == true)
             test.is_true(shows(view, 5, "close asked"))
+            assert(process.send(pid, "bee.tests.close_seen", {}))
             closed(events, id)
             view:close()
             process.unlisten(events)

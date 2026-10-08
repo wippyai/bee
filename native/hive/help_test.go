@@ -27,7 +27,7 @@ func TestHelpPrintsUsageWithoutBootingANodeOrADisplay(t *testing.T) {
 	}
 	var out bytes.Buffer
 	Help(&out)
-	for _, line := range []string{"bee hive invite", "bee hive join TOKEN", "bee node", "bee client", "bee NAME"} {
+	for _, line := range []string{"bee hive invite", "bee hive join TOKEN", "bee node", "bee client", "bee NAME", "bee mcp connect [--name NAME]"} {
 		require.Contains(t, out.String(), line)
 	}
 }

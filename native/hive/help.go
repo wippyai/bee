@@ -15,6 +15,7 @@ Usage:
   bee hive invite       print a token that joins another machine to this hive
   bee hive join TOKEN   join this machine to the hive the token names
   bee gov revert OWNER  restore an installed application's previous version
+  bee mcp connect [--name NAME]  pair an external MCP client through Needs you
   bee help              show this help
 `
 

@@ -75,3 +75,51 @@ entries:
       - bee.security.approvals:approval_request_policy
       - bee.security.approvals:approval_consume_policy
       - bee.gateway.security:worker_host_policy
+- name: external_cli
+  kind: process.lua
+  source: file://external_cli.lua
+  method: main
+  modules: [io]
+  imports:
+    protocol: bee.hive:protocol
+    node_client: bee.node:client
+    bounds: bee.values:bounds
+    configuration: bee.gateway.api:external_configuration
+  meta:
+    command:
+      name: mcp
+      host: bee:terminal
+      short: Pair an external MCP client through Needs you
+      security:
+        actor: {id: bee.gateway.cli}
+        policies: [bee.hive.security:caller, bee.hive.security:messaging]
+- name: external
+  kind: process.lua
+  source: file://external.lua
+  method: main
+  modules: [process, channel, time, cdc, env, system]
+  imports:
+    protocol: bee.hive:protocol
+    bounds: bee.values:bounds
+    external: bee.gateway.binding:external
+    node_client: bee.node:client
+- name: external_service
+  kind: process.service
+  process: bee.gateway.service:external
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service]
+    security:
+      actor: {id: bee.gateway.external}
+      policies:
+      - bee.gateway.security:external_host_policy
+      - bee.gateway.security:execute_policy
+      - bee.gateway.security:store_policy
+      - bee.gateway.security:address_call_policy
+      - bee.gateway.security:address_policy
+      - bee.gateway.security:supervisor_policy
+      - bee.gateway.security:access_call_policy
+      - bee.gateway.security:access_reference_policy
+      - bee.gateway.security:access_policy_read_policy
+      - bee.hive.security:messaging

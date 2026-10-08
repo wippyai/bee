@@ -209,3 +209,10 @@ entries:
   method: POST
   path: /mcp/:action
   func: bee.gateway.api:mcp_http
+- name: external_configuration
+  kind: library.lua
+  source: file://external_configuration.lua
+  modules: [json]
+  imports:
+    bounds: bee.values:bounds
+    address: bee.gateway.api:address_value

@@ -30,3 +30,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     capability_model: bee.capability:model
+- name: external_store
+  kind: library.lua
+  source: file://external_store.lua
+  modules: [sql]

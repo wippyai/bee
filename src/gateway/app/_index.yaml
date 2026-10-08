@@ -1,0 +1,31 @@
+version: '1.0'
+namespace: bee.gateway.app
+entries:
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, funcs, time]
+  imports:
+    view: bee.gateway.app:view
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    client: bee.app:client
+    bounds: bee.values:bounds
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: MCP clients
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu]
+  security:
+    policies: [bee.gateway.security:external_view_policy]

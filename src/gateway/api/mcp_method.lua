@@ -334,6 +334,8 @@ local function handle(): nil
     local name = call.params.name
     if type(name) ~= "string" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "tool name required")); return nil end
     if name == "session" then
+        local recorded = gateway.record_external_call(binding, "session")
+        if not recorded.ok then answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(recorded, nil))); return nil end
         local request = bounds.object(call.params.arguments)
         if not request then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "session arguments required")); return nil end
         local allowed: {string} = {"operation"}
@@ -389,6 +391,8 @@ local function handle(): nil
                 nil, false, "call tools/list or app_tools for the current tools")))
             return nil
         end
+        local recorded = gateway.record_external_call(binding, offered.alias)
+        if not recorded.ok then answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(recorded, nil))); return nil end
         local app_arguments, app_argument_error = mcp.app_tool_arguments(offered, parameters)
         if not app_arguments then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, app_argument_error or "invalid arguments")); return nil end
         local revalidated = profile_scope.revalidate(bound.configuration.resource_grants, binding.attempt_id, function(target: string, value: unknown): (unknown, unknown) local raw, err = funcs.call(target, value); return raw, err end)
@@ -397,6 +401,8 @@ local function handle(): nil
         return nil
     end
     if not tool then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "tool is not admitted for this binding")); return nil end
+    local recorded = gateway.record_external_call(binding, tool.name)
+    if not recorded.ok then answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(recorded, nil))); return nil end
     local arguments: Object? = nil
     local argument_error: string? = nil
     if tool.name == "thread_read" then arguments, argument_error = mcp.read_arguments(parameters)

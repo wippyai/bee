@@ -455,3 +455,51 @@ entries:
     effect: allow
   meta:
     comment: The gateway installation and publication workers run on the workers host, message and monitor their processes, hold their names and read Hub receipt metadata
+- name: external_principal_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, bee.threads.create, bee.threads.lifecycle]
+    resources: '*'
+    expression: >-
+      (action == "funcs.call" && (resource == "bee.threads.binding:create" || resource == "bee.threads.binding:admit_action" || resource == "bee.threads.binding:prepare_attempt")) ||
+      ((action == "bee.threads.create" || action == "bee.threads.lifecycle") && resource matches "^mcp[.]")
+    effect: allow
+- name: external_host_policy
+  kind: security.policy.expr
+  policy:
+    actions: [bee.gateway.admit, bee.gateway.manage, bee.gateway.materialize, bee.gateway.external.manage, registry.find, registry.get, security.policy.get, funcs.call, cdc.subscribe, process.registry.register, process.registry.lookup, system.read, env.get]
+    resources: '*'
+    expression: >-
+      (action == "bee.gateway.admit" && resource matches "^mcp[.]") ||
+      (action == "bee.gateway.materialize" && resource matches "^mcp[.]") ||
+      (action == "bee.gateway.manage" && resource == "bindings") ||
+      (action == "bee.gateway.external.manage" && resource != "") ||
+      (action == "registry.find" && resource == "*") ||
+      (action == "registry.get" && resource == "bee.gateway:external_profile") ||
+      (action == "security.policy.get" && resource == "bee.gateway.security:external_principal_policy") ||
+      (action == "funcs.call" && (resource == "bee.threads.binding:create" || resource == "bee.threads.binding:admit_action" || resource == "bee.threads.binding:prepare_attempt")) ||
+      (action == "cdc.subscribe" && resource == "bee:changes") ||
+      (action == "process.registry.register" && resource == "bee.gateway.external") ||
+      (action == "process.registry.lookup" && resource == "bee.hive.supervisor") ||
+      (action == "system.read" && resource == "node") ||
+      (action == "env.get" && resource == "bee:role")
+    effect: allow
+- name: external_reader_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.binding:read_after]
+    effect: allow
+- name: external_reader_host_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, security.policy.get]
+    resources: [bee.threads.binding:read_after, bee.gateway.security:external_reader_policy]
+    effect: allow
+- name: external_view_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, bee.gateway.external.view]
+    resources: '*'
+    expression: (action == "funcs.call" && resource == "bee.gateway.binding:external_call") || (action == "bee.gateway.external.view" && resource != "")
+    effect: allow

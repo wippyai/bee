@@ -190,3 +190,65 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy: {actions: [funcs.call, security.policy.get], resources: '*', effect: allow}
+- name: external_configuration_test
+  kind: function.lua
+  source: file://external_configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    configuration: bee.gateway.api:external_configuration
+- name: external_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, funcs.security, funcs.context, security.actor.create, security.scope.create, security.policy.get, bee.gateway.admit, bee.gateway.manage, bee.gateway.materialize, bee.gateway.external.manage, registry.find, registry.get, system.read, db.get, bee.approvals.manage, bee.approvals.decide, bee.threads.create, http_client.request, http_client.private_ip, events.subscribe]
+    resources: '*'
+    effect: allow
+- name: external_test
+  kind: function.lua
+  source: file://external_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, json, http_client, events, logger, channel, time]
+  security:
+    policies:
+    - bee.gateway:external_test_policy
+    - bee.gateway.security:access_call_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+  imports:
+    test: wippy.test:test
+    external: bee.gateway.binding:external
+    gateway: bee.gateway.binding:gateway
+    bounds: bee.values:bounds
+    catalog: bee.gateway.catalog:catalog
+- name: external_view_test
+  kind: function.lua
+  source: file://external_view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    view: bee.gateway.app:view
+    appearance: bee.ui:appearance
+- name: external_hive_test
+  kind: function.lua
+  source: file://external_hive_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [system, funcs, security, channel]
+  security:
+    policies:
+    - bee.gateway:external_test_policy
+    - bee.gateway.security:external_view_policy
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+  imports:
+    test: wippy.test:test
+    protocol: bee.hive:protocol
+    node_client: bee.node:client
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway

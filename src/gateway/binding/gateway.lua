@@ -28,6 +28,8 @@ local surface = require("surface")
 local surface_store = require("surface_store")
 local binding_store = require("binding_store")
 local credential_store = require("credential_store")
+local external_store = require("external_store")
+local subject_call = require("subject_call")
 local hook_store = require("hook_store")
 local listener_store = require("listener_store")
 local access = require("access")
@@ -1788,4 +1790,27 @@ function M.hook_reject(value: unknown): Reply
 end
 
 
+function M.managed_binding(binding_id: string): (Binding?, Reply?)
+    if not actor() or not security.can(M.MANAGE, "bindings") then return nil, fail("DENIED", "caller does not manage bindings") end
+    local db, failure = open()
+    if not db then return nil, failure end
+    local binding, missing = binding_by_id(db, binding_id)
+    db:release()
+    return binding, missing
+end
+function M.record_external_call(binding: Binding, name: string): Reply
+    local db, failure = open()
+    if not db then return failure or fail("STORAGE", "open external clients") end
+    local rows, err = external_store.by_binding(db, binding.binding_id)
+    db:release()
+    if not rows or err then return fail("STORAGE", "read external client") end
+    if #rows == 0 then return succeed({}) end
+    local reference_id = mcp.TOOL_POLICY_REFS.message
+    local policy, policy_error = subject_call.linked(reference_id, "thread record policy")
+    if not policy then return policy_error or fail("UNAVAILABLE", "thread record policy is unavailable") end
+    local id, id_error = uuid.v7()
+    if not id then return fail("STORAGE", tostring(id_error)) end
+    return subject_call.call(binding, {policy}, "bee.threads.binding:record", {thread_id = binding.thread_id,
+        idempotency_key = id, kind = "message", body = {message_id = id, message_kind = "progress", recipient_ids = {}, content = {text = "MCP tool: " .. name}}})
+end
 return M

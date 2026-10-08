@@ -58,3 +58,12 @@ entries:
     capability_model: bee.capability:model
     context: bee.gateway.catalog:context
     mcp: bee.gateway.api:mcp
+- name: external
+  kind: library.lua
+  source: file://external.lua
+  modules: [registry, hash]
+  imports:
+    bounds: bee.values:bounds
+    surface: bee.gateway.catalog:surface
+    mcp: bee.gateway.api:mcp
+    canonical: bee.values:canonical

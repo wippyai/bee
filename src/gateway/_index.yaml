@@ -7,3 +7,118 @@ entries:
   imports:
     bounds: bee.values:bounds
     service_reply: bee.values:reply
+- name: external_profile
+  kind: registry.entry
+  meta:
+    type: bee.gateway.external_profile
+  data:
+    gateway_tools:
+    - thread_read
+    - docs
+    - capabilities
+    - thread_message
+    - app_tools
+    - publish
+    - application_open
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - overlay
+    - delivery
+    - components
+    - tests
+    - install_request
+    - uninstall_request
+    - install_status
+    - publish_request
+    - publish_status
+    - request_capability
+    - capability_status
+    - process_run
+    - http_request
+    pairing_traits:
+    - bee.mcp:read
+    gateway_surface:
+      tools: []
+      traits:
+      - id: bee.mcp:read
+        title: Read Bee documentation and this client's thread
+        prompt: Read Bee documentation, capabilities and this client's own thread
+        tools:
+        - thread_read
+        - docs
+        - capabilities
+      - id: bee.mcp:notes
+        title: Post notes to this client's thread
+        prompt: Record notes on this client's thread
+        tools:
+        - thread_message
+      - id: bee.mcp:sessions
+        title: Manage agent sessions
+        prompt: Open agents, send work, read results and close sessions
+        tools:
+        - session_catalog
+        - session_open
+        - session_run
+        - session_send
+        - session_await
+        - session_join
+        - session_get
+        - session_list
+        - session_cancel
+        - session_close
+      - id: bee.mcp:authoring
+        title: Build workspace applications
+        prompt: Author overlays, preflight and request reviewed delivery
+        tools:
+        - overlay
+        - delivery
+        - components
+        - tests
+      - id: bee.mcp:packages
+        title: Request package changes
+        prompt: Ask the person to install, remove or publish packages
+        tools:
+        - install_request
+        - uninstall_request
+        - install_status
+        - publish_request
+        - publish_status
+      - id: bee.mcp:capabilities
+        title: Request command and network access
+        prompt: Ask for exact command or HTTP capabilities with approval expiry
+        tools:
+        - request_capability
+        - capability_status
+        - process_run
+        - http_request
+      base_tools: []
+      active_traits: []
+      fixed_context: {}
+      dynamic_keys: []
+      access:
+        policy: agent-access
+        traits:
+        - bee.mcp:read
+        - bee.mcp:notes
+        - bee.app:tools
+        - bee.app:share
+        - bee.app:runtime
+        - bee.mcp:sessions
+        - bee.mcp:authoring
+        - bee.mcp:packages
+        - bee.mcp:capabilities
+- name: external_route
+  kind: registry.entry
+  meta:
+    type: bee.hive.route
+  data:
+    prefix: mcp
+    name: bee.gateway.external

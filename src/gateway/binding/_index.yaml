@@ -30,6 +30,8 @@ entries:
     surface_store: bee.gateway.persist:surface_store
     binding_store: bee.gateway.persist:binding_store
     credential_store: bee.gateway.persist:credential_store
+    external_store: bee.gateway.persist:external_store
+    subject_call: bee.gateway.security:subject_call
     hook_store: bee.gateway.persist:hook_store
     listener_store: bee.gateway.persist:listener_store
     access: bee.gateway.security:access
@@ -406,5 +408,33 @@ entries:
     configuration: bee.gateway.env:configuration
   security:
     policies:
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: external
+  kind: library.lua
+  source: file://external.lua
+  modules: [uuid, security]
+  imports:
+    bounds: bee.values:bounds
+    database: bee.persist:database
+    store: bee.gateway.persist:external_store
+    gateway: bee.gateway.binding:gateway
+    profile: bee.gateway.catalog:external
+    subject_call: bee.gateway.security:subject_call
+- name: external_call
+  kind: function.lua
+  source: file://external_call_method.lua
+  method: handle
+  modules: [security]
+  imports:
+    bounds: bee.values:bounds
+    external: bee.gateway.binding:external
+  security:
+    policies:
+    - bee.gateway.security:external_host_policy
+    - bee.gateway.security:external_reader_host_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:address_call_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy

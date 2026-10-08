@@ -469,6 +469,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif data.key_type == "enter" then open = true
                         elseif key == "n" then kind = "new_session"
                         elseif key == "x" then kind = "close_listed"
+                        elseif key == "m" then kind = "mcp_clients"
                         elseif key == "c" then kind = "closed"
                         elseif key == "w" then kind = "workspace"
                         elseif key == "r" then refresh = true
@@ -487,6 +488,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         confirming = "close_listed"
                         status = "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it"
                         dirty = true
+                    elseif kind == "mcp_clients" then client.navigate(launch, "bee.gateway.app:app", {})
                     elseif kind == "closed" then show_closed = not show_closed; refresh = true
                     elseif kind == "workspace" then filtered = not filtered; refresh = true end
                 elseif data.type == "key" and data.action == "press" then

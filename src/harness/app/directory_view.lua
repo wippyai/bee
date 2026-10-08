@@ -53,6 +53,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if #rows > 0 then buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = chosen ~= nil, primary = true} end
         buttons[#buttons + 1] = {kind = "new_session", key = "N", label = "New", enabled = true, primary = #rows == 0}
         if #rows > 0 then buttons[#buttons + 1] = {kind = "close_listed", key = "X", label = "Close", enabled = chosen ~= nil and chosen.lifecycle ~= "closed" and chosen.lifecycle ~= "closing"} end
+        buttons[#buttons + 1] = {kind = "mcp_clients", key = "M", label = "MCP clients", enabled = true}
         frame.actions(painter, height - 1, buttons)
     end
     frame.footer(painter, "", HINTS, MORE .. (show_closed and " · closed shown" or ""))

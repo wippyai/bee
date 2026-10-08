@@ -208,6 +208,22 @@ func (h *Host) Plan(_ context.Context, launch app.Launch) (app.Plan, error) {
 			return app.Plan{}, err
 		}
 	}
+	if launch.Op == app.OpRun && len(launch.Args) > 0 && launch.Args[0] == "mcp" {
+		name, err := mcpName(launch.Args)
+		if err != nil {
+			return app.Plan{}, err
+		}
+		if !owned {
+			return app.Plan{}, errors.New("bee mcp connect: this folder needs a running node")
+		}
+		plan, err := h.clientPlan(dir, launch.State, hive, owned, nil)
+		if err != nil {
+			return app.Plan{}, err
+		}
+		plan.Command = "mcp"
+		plan.Args = append(plan.Args, name)
+		return plan, nil
+	}
 	if headless {
 		if owned {
 			return app.Plan{}, errors.New("bee node: a bee is already running in this folder")

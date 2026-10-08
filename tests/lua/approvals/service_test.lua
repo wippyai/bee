@@ -46,7 +46,7 @@ local function caller(id: string, grants: {string}, metadata: {[string]: string 
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id, metadata)):with_scope(scope(names))
 end
-local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:store", "bee.threads.security:store"})
+local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:store"})
 local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)
 local stranger = thread_harness.principal("bee.test.stranger", thread_harness.ALL)
 local other_requester = caller(OTHER_REQUESTER, {"bee.security.approvals:approval_request_policy"})
@@ -60,7 +60,7 @@ local inbox_app = caller(INBOX_ACTOR, {"bee.security.approvals:approval_decide_p
     {definition_id = "bee.approvals.inbox.app:app", workspace_id = "0123456789abcdef0123456789abcdef"})
 local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other-instance",
     {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.settings.app:app"})
-local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.threads.security:approval", "bee.threads.security:approval_client", "bee.threads.security:store", "bee.threads.security:store"})
+local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.threads.security:approval", "bee.threads.security:approval_client", "bee.threads.security:store"})
 local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
     local reply, err = client:call("bee.approvals.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end

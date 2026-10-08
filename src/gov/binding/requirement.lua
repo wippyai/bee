@@ -9,6 +9,59 @@ local canonical = require("canonical")
 local hash = require("hash")
 local M = {}
 type Entry = {[string]: unknown}
+-- Bounded dependency references for Hub and private overlay entries.
+function M.references(entry: Entry): ({string}?, string?)
+    local found: {[string]: boolean} = {}
+    -- Registry dependency fields contain qualified entry IDs.
+    local scalar: {[string]: boolean} = {parent = true, config = true, fs = true, func = true,
+        env = true, set = true, store = true, storage = true, bucket = true, host = true,
+        process = true, driver = true, queue = true, client = true, server = true,
+        router = true, network = true, token_store = true, contract = true}
+    local collection: {[string]: boolean} = {depends_on = true, requires = true, groups = true,
+        imports = true, middleware = true, post_middleware = true, policies = true, methods = true}
+    local function add(raw: unknown)
+        if type(raw) ~= "string" then return end
+        local reference = bounds.id(raw)
+        if reference and reference:match("^[A-Za-z0-9][A-Za-z0-9_.-]*:[A-Za-z0-9][A-Za-z0-9_.-]*$") then
+            found[reference] = true
+        end
+    end
+    local function add_all(value: unknown): string?
+        if type(value) ~= "table" then add(value); return nil end
+        for key, child in pairs(value) do
+            if type(key) ~= "string" and type(key) ~= "number" then return "entry reference structure is not encodable" end
+            local problem = add_all(child)
+            if problem then return problem end
+        end
+        return nil
+    end
+    local function scan(value: unknown, key: string?): string?
+        if type(value) ~= "table" then
+            if key and (scalar[key] or key:match("_ref$") or key:match("_env$")) then add(value) end
+            return nil
+        end
+        for child_key, child in pairs(value) do
+            if type(child_key) == "string" then
+                local problem: string? = nil
+                if collection[child_key] then problem = add_all(child)
+                else problem = scan(child, child_key) end
+                if problem then return problem end
+            elseif type(child_key) == "number" then
+                local problem = scan(child, key)
+                if problem then return problem end
+            else return "entry reference structure is not encodable" end
+        end
+        return nil
+    end
+    local problem = scan(entry, nil)
+    if problem then return nil, problem end
+    local result: {string} = {}
+    for reference in pairs(found) do result[#result + 1] = reference end
+    table.sort(result)
+    if #result > 64 then return nil, "entry references exceed their bound" end
+    return result, nil
+end
+
 local function object(value: unknown): Entry?
     return bounds.object(value)
 end

@@ -66,6 +66,23 @@ local function define_tests()
             view.input(s, key("enter"), view.draw(120, 45, appearance.defaults(), s))
             test.eq(s.form.draft.bee.permission_answers, "deny")
         end)
+        test.it("gives adjacent credential fields distinct visible names", function()
+            local s: view.State = state()
+            s.form.credentials = {"custom_login", "custom_api_key"}
+            view.action(s, "advanced")
+            local function focus(): string
+                local shown = view.draw(120, 45, appearance.defaults(), s)
+                for _, row in ipairs(shown.rows) do
+                    local selected = row:gsub("\27%[[0-9;]*m", ""):match("›(.*)")
+                    if selected then return selected:gsub("^%[[x ]%]%s*", ""):match("^[^:]+") or "" end
+                end
+                return ""
+            end
+            s.selected = 6
+            local first = focus()
+            view.input(s, key("tab"), view.draw(120, 45, appearance.defaults(), s))
+            test.neq(focus(), first)
+        end)
         test.it("masks entered credentials and sends them only to credential setup", function()
             local s = state()
             s.form.credentials = {"custom_api_key"}
@@ -88,7 +105,7 @@ local function define_tests()
             view.input(s, {type = "paste", text = entered}, drawn)
             local rendered = table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n")
             test.is_nil((rendered:find(entered, 1, true)))
-            test.is_true(rendered:find("API key: custom_api_key", 1, true) ~= nil)
+            test.is_true(rendered:find("API key custom_api_key", 1, true) ~= nil)
             local profile = assert(editor.result(s.form.draft))
             test.is_nil((assert(canonical.encode(profile)):find(entered, 1, true)))
             test.eq(view.action(s, "save"), "save")

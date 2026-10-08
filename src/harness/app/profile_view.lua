@@ -121,9 +121,9 @@ local function fields(state: State): {Field}
         for _, ref in ipairs(forms.credential_names(state.form)) do
             local chosen = state.form.draft.bee.credential_refs
             result[#result + 1] = {kind = "credential", name = ref,
-                label = ((chosen == nil or bounds.member(ref, chosen)) and "[x] " or "[ ] ") .. "Credential: " .. ref}
+                label = ((chosen == nil or bounds.member(ref, chosen)) and "[x] " or "[ ] ") .. "Credential " .. ref}
             if state.form.credential_keys and state.form.credential_keys[ref] then
-                result[#result + 1] = {kind = "credential_value", name = ref, label = "API key: " .. ref .. ": " ..
+                result[#result + 1] = {kind = "credential_value", name = ref, label = "API key " .. ref .. ": " ..
                     ((state.credential_text[ref] or "") ~= "" and "********" or "Enter to replace")}
             end
         end

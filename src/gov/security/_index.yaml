@@ -200,6 +200,7 @@ entries:
     - process.send
     - db.get
     - registry.get
+    - registry.snapshot
     - registry.preview
     - hub.versions.open
     - hub.versions.list

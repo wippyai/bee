@@ -18,6 +18,18 @@ end
 
 local function define_tests()
     test.describe("destination activation host configuration", function()
+        test.it("captures a Hub resolution snapshot in the private destination scope", function()
+            local actor = principals.actor("hub-destination", "workspace-a")
+            local scope = assert(security.named_scope("bee.gov.security:destination_execution_scope"))
+            test.eq(scope:evaluate(actor, "registry.snapshot", "registry"), "allow")
+            local person = assert(security.new_scope({assert(security.policy("bee.apps.library:destination_client")),
+                assert(security.policy("bee.apps.library:delivery_operations"))}))
+            test.neq(person:evaluate(actor, "registry.snapshot", "registry"), "allow")
+            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.tests.gov:hub_snapshot_probe", {})
+            test.is_nil(err, tostring(err))
+            local captured = assert(bounds.object(raw))
+            test.is_true(captured.ok == true, tostring(captured.error))
+        end)
         test.it("materializes a durable shadow through destination and recovery owner scopes", function()
             local original = assert(registry.get("bee.apps.settings:choice"))
             local data = assert(bounds.object(original.data))

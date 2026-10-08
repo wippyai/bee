@@ -121,6 +121,11 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     caller: bee.app:caller
+- name: hub_snapshot_probe
+  kind: function.lua
+  source: file://hub_snapshot_probe.lua
+  method: capture
+  modules: [registry]
 - name: destination_service_test
   kind: function.lua
   source: file://destination_service_test.lua

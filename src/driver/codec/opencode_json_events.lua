@@ -1,12 +1,4 @@
--- MIT. OpenCode `run --format json` (protocol revision opencode-run-json-1)
--- into thread observations. The stream has no turn envelope: newline
--- delimited events carry step_start, text, tool_use and step_finish frames,
--- and the process exit ends the turn, so only the end of the stream reports
--- terminally. An error frame or an empty stream settles the turn from here;
--- the exit code never decides.
---
--- Shapes verified against opencode 1.18.32 live traces. Unknown envelope
--- types stay extension evidence; they never end the turn.
+-- SPDX-License-Identifier: MIT
 local json = require("json")
 local events = require("events")
 local types = require("types")
@@ -21,6 +13,7 @@ type Fault = {code: string, message: string, retryable: boolean}
 type State = {
     session_id: string?,
     started: boolean,
+    completed: boolean,
     resumed: boolean,
     answer: string?,
     answer_truncated: boolean,
@@ -30,7 +23,7 @@ type State = {
 }
 type Step = {observations: {Observation}, terminal: types.Terminal?}
 function M.new(resumed: boolean): State
-    return {resumed = resumed, started = false, answer_truncated = false}
+    return {resumed = resumed, started = false, completed = false, answer_truncated = false}
 end
 local function key(index: integer, suffix: string): string
     return "opencode:" .. tostring(index) .. ":" .. suffix
@@ -127,11 +120,12 @@ end
 function M.decode_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state must be an object" end
-    local unknown_field = bounds.fields(object, {"session_id", "started", "resumed", "answer", "answer_truncated", "usage", "error", "terminal"})
+    local unknown_field = bounds.fields(object, {"session_id", "started", "completed", "resumed", "answer", "answer_truncated", "usage", "error", "terminal"})
     if unknown_field then return nil, "state: " .. unknown_field end
     if type(object.started) ~= "boolean" or type(object.resumed) ~= "boolean" or type(object.answer_truncated) ~= "boolean" then
         return nil, "state has invalid flags"
     end
+    if object.completed ~= nil and type(object.completed) ~= "boolean" then return nil, "state.completed must be a boolean" end
     local session_id: string? = nil
     if object.session_id ~= nil then
         session_id = bounds.id(object.session_id)
@@ -196,7 +190,7 @@ function M.decode_state(value: unknown): (State?, string?)
         end
         terminal = {outcome = terminal_outcome, answer = terminal_answer, resume_ref = resume_ref, usage = terminal_usage, error = terminal_fault}
     end
-    return {session_id = session_id, started = object.started, resumed = object.resumed,
+    return {session_id = session_id, started = object.started, completed = object.completed == true, resumed = object.resumed,
         answer = answer, answer_truncated = object.answer_truncated, usage = usage, error = fault,
         terminal = terminal}, nil
 end
@@ -209,8 +203,10 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     end
     observe_session(state, index, envelope, paths, out)
     if kind == "step_start" then
+        state.completed = false
         ensure_started(state, index, out)
     elseif kind == "text" then
+        state.completed = false
         ensure_started(state, index, out)
         local selected_text = path_reader.read(envelope, paths, "result_text")
         local text = type(selected_text) == "string" and selected_text or ""
@@ -228,11 +224,12 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             for _, piece in ipairs(events.text(key(index, "text"), "answer", "append", text, "answer")) do out[#out + 1] = piece end
         end
     elseif kind == "tool_use" then
+        state.completed = false
         ensure_started(state, index, out)
         tool_observations(state, index, envelope, out)
     elseif kind == "step_finish" then
-        -- A finished step is progress, not the turn: usage accumulates and
-        -- the stream end reports terminally.
+        local part = bounds.object(envelope.part)
+        state.completed = part ~= nil and part.reason == "stop"
         ensure_started(state, index, out)
         accumulate_usage(state, path_reader.read(envelope, paths, "usage"))
     elseif kind == "error" then
@@ -258,7 +255,7 @@ function M.finish(state: State, index: integer): Step
     if state.error then
         out[#out + 1] = events.turn(key(index, "eof"), "ended", "failed", state.usage)
         terminal = {outcome = "failed", resume_ref = state.session_id, usage = state.usage, error = state.error}
-    elseif not state.started then
+    elseif not state.completed then
         out[#out + 1] = events.turn(key(index, "eof"), "ended", "uncertain", nil)
         terminal = {outcome = "uncertain", resume_ref = state.session_id,
             error = events.fault("stream_ended", "the stream ended without a completed step", false)}

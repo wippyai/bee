@@ -106,6 +106,38 @@ local function define_tests()
             test.is_nil(terminal.answer)
             test.not_nil(terminal.error)
         end)
+        test.it("leaves started streams uncertain without a final stop step", function()
+            for _, envelope in ipairs({
+                {type = "step_start"},
+                {type = "text", part = {type = "text", text = "Partial reply"}},
+                {type = "session_updated"},
+                {type = "step_finish", part = {reason = "tool-calls"}},
+                {type = "step_finish", part = {reason = "length"}},
+                {type = "step_finish", part = {}},
+            }) do
+                local state = protocol.new(false)
+                protocol.normalize(state, 0, envelope)
+                local reply = normalize.handle({state = state, index = 1, eof = true})
+                test.is_true(reply.ok)
+                local terminal = assert(bounds.object(reply.terminal))
+                test.eq(terminal.outcome, "uncertain")
+                test.is_nil(terminal.answer)
+                test.eq(assert(bounds.object(terminal.error)).code, "stream_ended")
+            end
+        end)
+        test.it("requires completion again when a new step follows a final step", function()
+            local state = protocol.new(false)
+            protocol.normalize(state, 0, {type = "step_finish", part = {reason = "stop"}})
+            protocol.normalize(state, 1, {type = "step_start"})
+            test.eq(assert(protocol.finish(state, 2).terminal).outcome, "uncertain")
+        end)
+        test.it("retains final completion across persisted normalizer state", function()
+            local state = protocol.new(false)
+            protocol.normalize(state, 0, {type = "step_finish", part = {reason = "stop"}})
+            local reply = normalize.handle({state = state, index = 1, eof = true})
+            test.is_true(reply.ok)
+            test.eq(assert(bounds.object(reply.terminal)).outcome, "succeeded")
+        end)
         test.it("leaves an empty stream uncertain and guards envelopes after the terminal", function()
             local state = protocol.new(false)
             local reply = normalize.handle({state = state, index = 0, eof = true})

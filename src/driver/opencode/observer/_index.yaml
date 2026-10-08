@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.driver.opencode.observer
+entries:
+- name: http_policy
+  kind: security.policy.expr
+  policy:
+    effect: allow
+    actions:
+    - http_client.request
+    - http_client.private_ip
+    - process.send
+    resources:
+    - '*'
+    expression: action == "process.send" || (action == "http_client.private_ip" &&
+      resource == "127.0.0.1") || (action == "http_client.request" && resource matches
+      "^http://127[.]0[.]0[.]1:[0-9]+/")
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  imports:
+    bounds: bee.values:bounds

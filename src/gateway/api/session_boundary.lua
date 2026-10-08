@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 local bounds = require("bounds")
 local json = require("json")
+local hooks = require("hooks")
 local subject_call = require("subject_call")
 local M = {}
 type Object = {[string]: unknown}
@@ -9,6 +10,11 @@ function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Obje
     if event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" then return {}, nil end
     if not event_id then return nil, "hook occurrence omitted its identity" end
     if binding.subject:sub(1, 3) ~= "bs:" then return {}, nil end
+    if payload then
+        local decoded, decode_error = hooks.payload(payload)
+        if not decoded then return nil, decode_error end
+        payload = decoded
+    end
     local request: Object = {session = binding.subject, event = event, attempt_id = binding.attempt_id, operation_key = event_id}
     if event == "UserPromptSubmit" and payload and payload.prompt ~= nil then
         local prompt = bounds.text(payload.prompt, 65536)

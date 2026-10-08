@@ -7,6 +7,7 @@ entries:
   modules:
   - json
   imports:
+    hooks: bee.gateway.hooks:hooks
     bounds: bee.values:bounds
     subject_call: bee.gateway.security:subject_call
 - name: admission

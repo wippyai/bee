@@ -54,15 +54,17 @@ function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_prot
     if not hook_token then return nil, "agy hooks require a separate hook credential environment" end
     local selected: {[string]: unknown} = {}
     for _, event in ipairs(gateway.hooks) do
-        if event ~= "PreToolUse" and event ~= "PostToolUse" and event ~= "Stop" then
+        if event ~= "SessionStart" and event ~= "UserPromptSubmit" and event ~= "PreToolUse" and event ~= "PostToolUse" and event ~= "Stop" then
             return nil, "agy does not support gateway hook event " .. event
         end
-        local command = quote.line({executable, "hook-post", gateway.endpoint, gateway.action_id, hook_token, event})
+        local native_event = event == "UserPromptSubmit" and "PreInvocation" or event
+        local command_event = (event == "UserPromptSubmit" or event == "Stop") and ("agy:" .. event) or event
+        local command = quote.line({executable, "hook-post", gateway.endpoint, gateway.action_id, hook_token, command_event})
         local handler = {type = "command", command = command, timeout = 3}
-        if event == "Stop" then
-            selected[event] = {handler}
+        if event == "Stop" or event == "UserPromptSubmit" or event == "SessionStart" then
+            selected[native_event] = {handler}
         else
-            selected[event] = {{matcher = "", hooks = {handler}}}
+            selected[native_event] = {{matcher = "", hooks = {handler}}}
         end
     end
     local content, content_error = canonical.encode({bee = selected})

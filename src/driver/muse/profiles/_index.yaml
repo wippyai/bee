@@ -60,6 +60,16 @@ entries:
           required_placement_features: []
       - id: window
         mode: window
+        hooks:
+          transports:
+          - command
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - Stop
+          adapter_ref: bee.driver.muse.descriptor:cli
         protocol: pty
         protocol_revision: native-window-1
         answer_path:
@@ -70,7 +80,7 @@ entries:
         isolation_env:
           variables:
           - HOME
-          private_home: false
+          private_home: true
         exit_codes_trustworthy: false
         input_ready:
           strategy: none

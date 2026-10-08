@@ -16,6 +16,18 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("delivers acceptance and settlement hooks on Agy Grok and Muse windows", function()
+            local pinned = assert(registry.snapshot())
+            for _, provider in ipairs({"agy", "grok", "muse"}) do
+                local binding = "bee.driver." .. provider .. ".binding:binding"
+                local selected = assert(resolver.profile(pinned, binding, "window"))
+                local policy = assert(pinned:get("bee.driver." .. provider .. ".security:launch_policy_" .. provider .. "_window"))
+                local requested = assert(bounds.ids(assert(bounds.object(policy.data)).gateway_hooks, true))
+                local delivered = resolver.select_hooks(selected, requested)
+                test.not_nil(bounds.member("UserPromptSubmit", delivered))
+                test.not_nil(bounds.member("Stop", delivered))
+            end
+        end)
         test.it("allows agent model mapping when Codex declares a model option", function()
             local binding = assert(registry.get("bee.driver.codex.binding:binding"))
             local meta = assert(bounds.object(binding.meta))

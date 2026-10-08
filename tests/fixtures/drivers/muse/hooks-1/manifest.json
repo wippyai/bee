@@ -1,0 +1,10 @@
+{
+  "executable": "muse",
+  "version": "1.4.3-R5018.1",
+  "source": "Isolated fixture API key and loopback Responses endpoint; global command hooks",
+  "prompt_consumption": {
+    "path": ".codex/AGENTS.md",
+    "request_field": "input[0].content",
+    "marker_observed": true
+  }
+}

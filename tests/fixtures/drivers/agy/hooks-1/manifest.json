@@ -1,0 +1,11 @@
+{
+  "executable": "agy",
+  "version": "1.3.1",
+  "source": "Isolated GEMINI_API_KEY fixture value and loopback Gemini SSE endpoint; no provider login",
+  "events": [
+    "SessionStart",
+    "PreInvocation",
+    "Stop"
+  ],
+  "transcript": "transcript.jsonl"
+}

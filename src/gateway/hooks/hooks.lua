@@ -153,6 +153,9 @@ local function wire_fields(payload: Object): (Object?, string?)
     -- retaining the existing ambiguous-delivery semantics.
     return result, nil
 end
+function M.payload(payload: Object): (Object?, string?)
+    return wire_fields(payload)
+end
 -- normalize: what a record keeps of a payload, and nothing else.
 function M.normalize(event: string, payload: Object): (Submission?, string?)
     if not M.known(event) then return nil, "event " .. event .. " is not in the hook catalog" end

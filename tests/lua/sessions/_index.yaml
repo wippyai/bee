@@ -342,3 +342,15 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     harness: bee.tests.threads:harness
+- name: driver_window_contract_test
+  kind: function.lua
+  source: file://driver_window_contract_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    hooks: bee.gateway.hooks:hooks
+    resolver: bee.driver.binding:resolver

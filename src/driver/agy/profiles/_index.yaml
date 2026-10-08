@@ -91,6 +91,8 @@ entries:
           transports:
           - command
           events:
+          - SessionStart
+          - UserPromptSubmit
           - PreToolUse
           - PostToolUse
           - Stop

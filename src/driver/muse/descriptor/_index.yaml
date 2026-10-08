@@ -237,7 +237,7 @@ entries:
             - --
             - field: brief
         readiness: terminal:attached
-        provider_home_private: false
+        provider_home_private: true
         login: true
       first_turn:
         argv:

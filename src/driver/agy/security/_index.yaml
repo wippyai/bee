@@ -95,6 +95,8 @@ entries:
       - bee.app:tools
       - bee.hub:library
     gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
     - PreToolUse
     - PostToolUse
     - Stop

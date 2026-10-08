@@ -1,0 +1,9 @@
+{
+  "artifactDirectoryPath": "/fixture/brain/ef06ab43-51b5-4911-8a6f-f4700e9a3193",
+  "conversationId": "ef06ab43-51b5-4911-8a6f-f4700e9a3193",
+  "modelName": "gemini-3.8-flash-low",
+  "transcriptPath": "/fixture/brain/ef06ab43-51b5-4911-8a6f-f4700e9a3193/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "/fixture/work"
+  ]
+}

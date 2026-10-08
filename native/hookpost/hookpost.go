@@ -63,6 +63,10 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 	if !safeSegment(actionID, MaxActionBytes) {
 		return errors.New("hook-post: invalid action id")
 	}
+	agyTranscript := strings.HasPrefix(event, "agy:")
+	if agyTranscript {
+		event = strings.TrimPrefix(event, "agy:")
+	}
 	if _, ok := knownEvents[event]; !ok {
 		return errors.New("hook-post: invalid event")
 	}
@@ -79,6 +83,15 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 	raw, err := readBounded(requestCtx, stdin)
 	if err != nil {
 		return err
+	}
+	if agyTranscript {
+		raw, err = agyPayload(raw, event)
+		if err != nil {
+			return err
+		}
+		if raw == nil {
+			return nil
+		}
 	}
 	body, err := payload(raw, event)
 	if err != nil {

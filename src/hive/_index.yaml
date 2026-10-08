@@ -4,9 +4,14 @@ entries:
 - name: address
   kind: library.lua
   source: file://address.lua
+  modules: [registry, system]
   imports:
     bounds: bee.values:bounds
     application: bee.node:application
+    profiles: bee.gov.types:activation_profile_decoder
+    grants: bee.gov.types:capability_grants
+    access: bee.gov.binding:capability_access
+    model: bee.capability:model
 - name: receiver
   kind: library.lua
   source: file://receiver.lua

@@ -13,6 +13,7 @@ entries:
     model: bee.capability:model
     grants: bee.gov.types:capability_grants
     materializer: bee.gov.binding:materializer
+    admission: bee.gov.types:governed_application_admission
     protocol: bee.hive:protocol
 - name: exposure_scope_test
   kind: function.lua

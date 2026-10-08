@@ -1,6 +1,12 @@
 -- MIT
 local bounds = require("bounds")
 local application = require("application")
+local registry = require("registry")
+local system = require("system")
+local profiles = require("profiles")
+local grants = require("grants")
+local access = require("access")
+local model = require("model")
 
 local M = {}
 M.TYPE = "bee.hive.application_address"
@@ -54,6 +60,32 @@ function M.resolve(raw: unknown, workspace_id: string): (Resolved?, string?)
             if matches then
                 if selected then return nil, "application address is ambiguous" end
                 selected = {application = ref, overlay_owner = owner, identity = source}
+            end
+        end
+    end
+    if not selected and asked then
+        local configured = registry.get("bee.gov:activation_profiles")
+        local configuration = configured and profiles.decode(configured.data) or nil
+        local vocabulary = model.decode(registry.get("bee.capability:catalog"))
+        local definitions, definitions_error = application.definitions(workspace_id)
+        if not configuration or not vocabulary or not definitions then
+            return nil, definitions_error or "application address admission is unavailable"
+        end
+        for _, ref in ipairs(definitions) do
+            local binding, admission = application.admission(ref, workspace_id)
+            if binding and admission and admission.source_node == asked.source_node
+                and admission.source_workspace == asked.source_workspace then
+                local installed = access.record(workspace_id, ref)
+                if installed and installed.overlay_owner == admission.overlay_owner then
+                    local stored = registry.get(assert(grants.record_id(installed.overlay_owner)))
+                        or registry.get(assert(grants.prior_record_id(installed.overlay_owner)))
+                    local profile = profiles.select_decoded(configuration, workspace_id, admission.source_node,
+                        admission.source_workspace, assert(system.node.id()), stored, vocabulary, installed.overlay_owner)
+                    if profile and profile.overlay_owner == installed.overlay_owner and profile.component == asked.component then
+                        if selected then return nil, "application address is ambiguous" end
+                        selected = {application = ref, overlay_owner = installed.overlay_owner, identity = asked}
+                    end
+                end
             end
         end
     end

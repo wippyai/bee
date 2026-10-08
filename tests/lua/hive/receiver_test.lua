@@ -9,6 +9,7 @@ local grants = require("grants")
 local materializer = require("materializer")
 local process = require("process")
 local channel = require("channel")
+local admission = require("admission")
 
 type Object = {[string]: unknown}
 local WORKSPACE = "hive-receiver-workspace"
@@ -229,6 +230,39 @@ local function define_tests()
             end
             remove()
             for _, reply in ipairs(replies) do refused(reply, "malformed") end
+        end)
+        test.it("resolves an approved source identity directly from its live governed admission", function()
+            local policy = install(assert(system.node.id()))
+            local original = assert(registry.get("bee.gov:activation_profiles"))
+            local configured = assert(registry.get("bee.gov:activation_profiles"))
+            local overlay = assert(registry.overlay(OWNER))
+            local app = assert(overlay:get(APP))
+            local generated = assert(overlay:get(policy))
+            local bindings = {{definition_id = APP, policies = {policy}}}
+            configured.data.profiles = {{workspace_id = WORKSPACE, source_node = "sdk-author", source_workspace = "project",
+                component = "vendor/test-sdk", overlay_owner = OWNER, approval_policy = "fixture-delivery", resolver = "overlay",
+                parameters = {}, allow = {packages = {}, namespaces = {"receiver.sdk", "unrelated.runner"},
+                    kinds = {"process.lua", "function.lua", "ns.requirement"}, modules = {"security", "ctx"},
+                    databases = {}, grants = {policy}, auto_start = false}, applications = bindings}}
+            local measured = assert(admission.project({identity_generation = "current", workspace_id = WORKSPACE,
+                overlay_owner = OWNER, source_node = "sdk-author", source_workspace = "project", artifact_digest = string.rep("a", 64),
+                bindings = bindings, artifact_entries = {app}, registry_entries = {generated}, overlay_ids = {},
+                generated_policies = {generated}}))
+            local changes = assert(registry.snapshot()):changes()
+            changes:delete(ADMISSION)
+            changes:update(configured)
+            assert(changes:apply())
+            changes = overlay:changes()
+            changes:create(assert(admission.entry(measured.bytes, measured.digest)))
+            assert(changes:apply())
+            local accepted = call({application = {source_node = "sdk-author", source_workspace = "project", component = "vendor/test-sdk"}})
+            local wrong_component = call({application = {source_node = "sdk-author", source_workspace = "project", component = "vendor/other"}})
+            changes = assert(registry.snapshot()):changes()
+            changes:update(original)
+            assert(changes:apply())
+            remove()
+            test.is_true(accepted.ok, tostring(accepted.error))
+            refused(wrong_component, "address")
         end)
         test.it("refuses an audience other than the authenticated sender node", function()
             install("another-node")

@@ -347,7 +347,9 @@ not implemented. Exposure policies stay out of application execution scopes
 and exposure requirements do not attach those policies to app functions.
 For `application.call`, `application` accepts the existing exact definition ID,
 an immutable `{source_node, source_workspace, component}` object, or an
-`{alias}` object. The destination supplies identity and alias mappings as
+`{alias}` object. A source identity also resolves through the live governed admission and its
+destination-selected component profile. The destination supplies additional
+identity and alias mappings as
 `registry.entry` records with `meta.type: bee.hive.application_address`:
 
 ```json

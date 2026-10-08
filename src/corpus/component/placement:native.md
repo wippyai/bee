@@ -421,3 +421,12 @@ drain bound cannot discard pipe events already available to the runner.
 Native preparation decodes host prepare options through the same driver preferences
 decoder as the carrier planner before comparing the configuration digest. Empty
 registry maps and absent options therefore select the same default options.
+
+A declared window observer shares the window supervisor's lifecycle. The
+supervisor starts the CLI server, reads its loopback endpoint, starts the
+metadata-selected observer with only the admitted hook token and hook endpoint,
+and waits for subscription readiness before attaching the terminal and
+releasing the initial prompt. Closing or finishing the window stops both the
+observer and server before revoking hook authority. Observer setup, mapping,
+delivery, and shutdown failures become placement evidence; they do not terminate
+the terminal CLI. Startup failure retains the original terminal argv.

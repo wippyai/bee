@@ -1,6 +1,4 @@
--- MIT. OpenCode configuration: one composed opencode.json with the scoped
--- bee remote MCP entry, strict refusal of providers, instructions and hook
--- events, and deterministic SHA-256 measurement.
+-- SPDX-License-Identifier: MIT
 local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")
@@ -11,6 +9,7 @@ local driver_configuration = require("driver_configuration")
 local configure = require("configure")
 local placement_configuration = require("placement_configuration")
 local placement_types = require("placement_types")
+local policy = require("policy")
 local function gateway(tools: {string}, hooks: {string}): configuration.Gateway
     return {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = tools, hooks = hooks,
         token_environment = "BEE_GATEWAY_TOKEN"}
@@ -26,14 +25,28 @@ local function define_tests()
             test.eq(files[1].path, configuration.PATH)
             test.eq(files[1].composition.base_path, configuration.BASE_PATH)
         end)
-        test.it("declares no hook transport on either shipped route", function()
+        test.it("preserves the selected model in supervised window configuration", function()
+            local reply = configure.handle({fixture = false, private_home = true, context = "window", option_values = {model = "fixture/selected"}})
+            test.is_true(reply.ok)
+            local file = assert(assert(driver_configuration.decode_delivery(reply.delivery)).files[1])
+            local base = [[{"model":"fixture/default","share":"disabled"}]]
+            local rendered, err = placement_configuration.render(file, {}, nil, base)
+            if not rendered then error(tostring(err)) end
+            local config = assert(json.decode(rendered))
+            test.eq(config.model, "fixture/selected")
+            test.eq(config.share, "disabled")
+        end)
+        test.it("declares lifecycle hooks only on the window route", function()
             for _, ref in ipairs({"bee.driver.opencode.security:launch_policy_opencode_window", "bee.driver.opencode.security:launch_policy_opencode_batch"}) do
-                local entry, entry_error = registry.get(ref)
-                if not entry then error(tostring(entry_error or (ref .. " is missing"))) end
-                local data = assert(bounds.object(entry.data))
-                test.eq(#(principals.items(data.gateway_hooks)), 0)
-                test.is_nil(data.hook_command_ref)
+                local entry = assert(registry.get(ref))
+                local decoded, err = policy.decode(ref, entry, function(_: string): (string?, string?) return "/usr/bin/opencode", nil end)
+                if not decoded then error(tostring(err)) end
             end
+            local entry = assert(registry.get("bee.driver.opencode.security:launch_policy_opencode_window"))
+            local data = assert(bounds.object(entry.data))
+            test.eq(table.concat(principals.items(data.gateway_hooks), ","), "SessionStart,UserPromptSubmit,PreToolUse,PostToolUse,PostToolUseFailure,PermissionRequest,Stop,StopFailure,SessionEnd")
+            local batch = assert(bounds.object(assert(registry.get("bee.driver.opencode.security:launch_policy_opencode_batch")).data))
+            test.eq(#principals.items(batch.gateway_hooks), 0)
         end)
         test.it("renders one composed config file with the scoped bee remote entry", function()
             local file, err = configuration.settings_file(gateway({"thread_read"}, {}))
@@ -81,15 +94,24 @@ local function define_tests()
             if not again then error(tostring(again_error)) end
             test.eq(again, rendered)
         end)
-        test.it("refuses hook events, providers and instructions", function()
-            local _, event_error = configuration.settings_file(gateway({"thread_read"}, {"Stop"}))
-            test.eq(event_error, "opencode does not support gateway hook event Stop")
+        test.it("delivers hooks through the observer without a plugin file", function()
             local hook_reply = configure.handle({fixture = false,
-                gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {"thread_read"},
-                    hooks = {"Stop"}, token_environment = "BEE_GATEWAY_TOKEN",
-                    hook_token_environment = "BEE_HOOK_TOKEN"}})
-            test.is_false(hook_reply.ok)
-            test.eq(hook_reply.error, "opencode does not support gateway hook event Stop")
+                gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {},
+                    hooks = {"Stop"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN"}})
+            test.is_true(hook_reply.ok)
+            test.eq(#hook_reply.delivery.files, 0)
+            local unsupported = configure.handle({fixture = false, gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {},
+                hooks = {"Unsupported"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN"}})
+            test.is_false(unsupported.ok)
+            test.eq(unsupported.error, "opencode does not support gateway hook event Unsupported")
+            local missing_token = configure.handle({fixture = false, gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {},
+                hooks = {"Stop"}, token_environment = "BEE_GATEWAY_TOKEN"}})
+            test.is_false(missing_token.ok)
+            local both = configure.handle({fixture = false, gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {"thread_read"},
+                hooks = {"Stop"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN"}})
+            test.eq(#both.delivery.files, 1)
+            test.eq(both.delivery.files[1].path, configuration.PATH)
+            test.is_nil(both.delivery.files[1].content:find("plugin", 1, true))
             local provider_reply = configure.handle({fixture = false, provider_ref = "custom:provider",
                 provider = {schema_revision = "bee.opencode-provider@1"}})
             test.is_false(provider_reply.ok)

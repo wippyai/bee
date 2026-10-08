@@ -171,3 +171,11 @@ factories, the exact host activation append and delivery approval. The driver's
 the Sessions agent picker (N); false keeps it programmatic. A window definition
 also sets `session_resource: session`, selecting the host's existing retained
 session resource.
+
+Window profiles may declare an `observer` selector. The catalog discovers one
+`registry.entry` with `meta.type=bee.driver.window_observer`, matching
+`driver_ref`, `profile_id`, and `observer`. Its data names the observer process,
+`server_arguments`, and an `endpoint_pattern` for the CLI server's stdout. The
+profile digest measures both that declaration and the process entry; native
+placement rechecks the digest before launch. Profiles without a selector retain
+their existing window launch.

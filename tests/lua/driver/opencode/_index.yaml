@@ -34,11 +34,8 @@ entries:
   kind: function.lua
   source: file://configuration_test.lua
   method: run
-  meta:
-    type: test
-    suite: bee
-  modules:
-  - json
+  meta: {type: test, suite: bee}
+  modules: [json]
   imports:
     principals: bee.tests.principals:bound
     bounds: bee.values:bounds
@@ -49,18 +46,53 @@ entries:
     configure: bee.driver.opencode.binding:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
+    policy: bee.harness.carrier:policy
+- name: hooks_test
+  kind: function.lua
+  source: file://hooks_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    fixture: bee.tests.driver.support:opencode_hooks
+    principals: bee.tests.principals:bound
+    gateway_hooks: bee.gateway.hooks:hooks
+    hook_records: bee.harness.carrier:hook_records
+- name: carrier_test
+  kind: function.lua
+  source: file://carrier_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    opencode_hooks: bee.tests.driver.support:opencode_hooks
+- name: observer_test
+  kind: function.lua
+  source: file://observer_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs, env, json]
+  security:
+    policies: [bee.placement.native.security:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    mapper: bee.driver.opencode.observer:events
 - name: supervisor_test
   kind: function.lua
   source: file://supervisor_test.lua
   method: run
-  meta:
-    type: test
-    suite: bee
-  modules:
-  - security
+  meta: {type: test, suite: bee}
+  modules: [security]
   security:
-    policies:
-    - bee.tests.driver.opencode:policy_inspection
+    policies: [bee.tests.driver.opencode:policy_inspection]
   imports:
     test: wippy.test:test
     observer: bee.placement.native.service:observer
@@ -69,9 +101,7 @@ entries:
   kind: function.lua
   source: file://delivery_test.lua
   method: run
-  meta:
-    type: test
-    suite: bee
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     delivery: bee.driver.opencode.observer:delivery
@@ -79,7 +109,29 @@ entries:
   kind: security.policy
   policy:
     effect: allow
-    actions:
-    - security.policy.get
-    resources:
-    - bee.driver.opencode.observer:http_policy
+    actions: [security.policy.get]
+    resources: ['bee.driver.opencode.observer:http_policy']
+- name: subscriber_test
+  kind: function.lua
+  source: file://subscriber_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [exec, env, process, channel, time, http_client, json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    quote: bee.driver.binding:quote
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:window_observer_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.tests.driver.opencode:http_probe_policy
+- name: http_probe_policy
+  kind: security.policy.expr
+  policy:
+    effect: allow
+    actions: [http_client.request, http_client.private_ip]
+    resources: ['*']
+    expression: (action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127[.]0[.]0[.]1:[0-9]+/(state|captured)$")

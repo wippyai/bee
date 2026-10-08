@@ -19,6 +19,8 @@ entries:
   method: handle
   imports:
     configuration: bee.driver.opencode.binding:configuration
+    observer_events: bee.driver.opencode.observer:events
+    bounds: bee.values:bounds
     configure_protocol: bee.driver.binding:configuration
     universal: bee.driver.binding:universal
   security:

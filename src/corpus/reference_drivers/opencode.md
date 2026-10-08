@@ -100,17 +100,15 @@ entries:
     capabilities:
       permission_answers:
         window:
-          transport: provider
-          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission API. The window retains provider prompts; no Bee
-            hook transport is selected.
+          transport: hook_http
+          adapter_ref: bee.driver.permission:permission_request_hook
+          reason: The supervised observer relays Bee hook decisions to the OpenCode permission reply endpoint.
         first_turn:
           transport: provider
-          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission API. The window retains provider prompts; no Bee
-            hook transport is selected.
+          reason: Bee runs opencode run --format json with stdin closed; batch turns retain provider permission handling.
         resume:
           transport: provider
-          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission API. The window retains provider prompts; no Bee
-            hook transport is selected.
+          reason: Bee runs opencode run --format json with stdin closed; batch turns retain provider permission handling.
     options:
       profiles:
       - window
@@ -199,6 +197,14 @@ entries:
               then:
               - --model
               - field: model
+          - kind: config
+            contexts: [window]
+            file: .config/opencode/opencode.json
+            format: json
+            path: [model]
+            merge: set
+            value:
+              field: provider.model
         variant:
           path: provider.options.variant
           value_schema:
@@ -345,9 +351,14 @@ entries:
             value:
               field: provider.options.enabled_providers
       rules:
-      - kind: forbid_nonempty
+      - kind: values
         field: gateway_hooks
-        message: opencode declares no hook transport for gateway hooks
+        values: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, StopFailure, SessionEnd]
+        message: unsupported gateway hook
+      - kind: profile_fields
+        profile: batch
+        fields: [gateway_hooks]
+        message: gateway hooks require the window profile
     flags: {}
     argv_templates:
       window:
@@ -484,9 +495,20 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
+        observer: local_http
         hooks:
-          transports: []
-          events: []
+          transports: [http]
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PostToolUseFailure
+          - PermissionRequest
+          - Stop
+          - StopFailure
+          - SessionEnd
+          adapter_ref: bee.driver.opencode.descriptor:cli
         answer_path:
           strategy: none
         resume:
@@ -500,7 +522,9 @@ entries:
         input_ready:
           strategy: none
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
 - name: default_window
   kind: registry.entry
   meta:
@@ -692,7 +716,16 @@ entries:
       - bee.app:share
       - bee.app:tools
       - bee.hub:library
-    gateway_hooks: []
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - PostToolUseFailure
+    - PermissionRequest
+    - Stop
+    - StopFailure
+    - SessionEnd
     prepare_options: {}
     placement_profiles:
     - bee.placement.profiles:native
@@ -731,6 +764,8 @@ entries:
   method: handle
   imports:
     configuration: bee.driver.opencode.binding:configuration
+    observer_events: bee.driver.opencode.observer:events
+    bounds: bee.values:bounds
     configure_protocol: bee.driver.binding:configuration
     universal: bee.driver.binding:universal
   security:
@@ -791,15 +826,7 @@ entries:
 ## binding/configuration.lua
 
 ```lua
--- MIT. The OpenCode configuration file: the one file the inherited home
--- needs for the admitted gateway. OpenCode reads MCP servers only from its
--- JSON configuration, so configure renders opencode.json with the single
--- scoped bee remote entry and composes it into the user's own configuration
--- without replacing unrelated keys. Token bytes never enter the content;
--- placement injects them through secret_fields before OpenCode reads the
--- file. Models, providers and permissions stay
--- user-configured; this component renders no provider entry. OpenCode has no
--- hook transport, so any requested hook event is refused.
+-- SPDX-License-Identifier: MIT
 local hash = require("hash")
 local canonical = require("canonical")
 local configure_protocol = require("configure_protocol")
@@ -812,9 +839,6 @@ M.MAX_CONFIGURATION_BYTES = 8192
 type Gateway = configure_protocol.GatewayInput
 type Configuration = configure_protocol.Configuration
 function M.settings_file(gateway: Gateway): (Configuration?, string?)
-    for _, event in ipairs(gateway.hooks) do
-        return nil, "opencode does not support gateway hook event " .. event
-    end
     if #gateway.tools == 0 then return nil, "opencode configuration needs a gateway" end
     local document: {[string]: unknown} = {
         ["$schema"] = M.SCHEMA,
@@ -862,30 +886,29 @@ return M
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
 local universal = require("universal")
+local observer_events = require("observer_events")
+local bounds = require("bounds")
 local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref or request.provider then
         return {ok = false, error = "opencode configures no model provider; the user selects models in their own OpenCode home"}
     end
-    local prompt_files: {configure_protocol.Configuration} = {}
-    if (not request.gateway or #request.gateway.tools == 0) then
-        if request.gateway then
-            for _, event in ipairs(request.gateway.hooks) do
-                return {ok = false, error = "opencode does not support gateway hook event " .. event}
-            end
+    local files: {configure_protocol.Configuration} = {}
+    local gateway = request.gateway
+    if gateway then
+        for _, event in ipairs(gateway.hooks) do
+            if not bounds.member(event, observer_events.HOOKS) then return {ok = false, error = "opencode does not support gateway hook event " .. event} end
         end
-        if request.private_home ~= true then return {ok = true, delivery = {arguments = {}, files = {}}} end
-        local file, file_error = configuration.login_configuration()
-        if not file then return {ok = false, error = tostring(file_error)} end
-        return {ok = true, delivery = {arguments = {}, files = {file}}}
     end
-    local no_tools: {string} = {}
-    local no_hooks: {string} = {}
-    local empty_gateway: configure_protocol.GatewayInput = {endpoint = "", action_id = "", tools = no_tools, hooks = no_hooks, token_environment = "BEE_UNUSED"}
-    local gateway = request.gateway or empty_gateway
-    local file, file_error = configuration.settings_file(gateway)
-    if not file then return {ok = false, error = tostring(file_error)} end
-    prompt_files[#prompt_files + 1] = file
-    return {ok = true, delivery = {arguments = {}, files = prompt_files}}
+    if gateway and #gateway.tools > 0 then
+        local file, err = configuration.settings_file(gateway)
+        if not file then return {ok = false, error = tostring(err)} end
+        files[#files + 1] = file
+    elseif request.private_home == true then
+        local file, err = configuration.login_configuration()
+        if not file then return {ok = false, error = tostring(err)} end
+        files[#files + 1] = file
+    end
+    return {ok = true, delivery = {arguments = {}, files = files}}
 end
 return {handle = universal.configure("opencode", {opencode = handle}, "bee.driver.opencode.descriptor:cli")}
 ```
@@ -919,4 +942,419 @@ return {handle = universal.normalize("bee.driver.opencode.descriptor:cli")}
 -- MIT. The universal driver implements this contract method.
 local universal = require("universal")
 return {handle = universal.prepare("bee.driver.opencode.descriptor:cli")}
+```
+
+## observer/_index.yaml
+
+```yaml
+version: '1.0'
+namespace: bee.driver.opencode.observer
+entries:
+- name: events
+  kind: library.lua
+  source: file://events.lua
+  imports:
+    bounds: bee.values:bounds
+- name: declaration
+  kind: registry.entry
+  meta:
+    type: bee.driver.window_observer
+    driver_ref: bee.driver.opencode.binding:binding
+    profile_id: window
+    observer: local_http
+  data:
+    process: bee.driver.opencode.observer:subscriber
+    server_arguments: [serve, --port, '0', --hostname, 127.0.0.1]
+    endpoint_pattern: 'http://127%.0%.0%.1:%d+'
+- name: subscriber
+  kind: process.lua
+  source: file://subscriber.lua
+  method: main
+  modules: [process, channel, http_client, json]
+  imports:
+    bounds: bee.values:bounds
+    framing: bee.driver.transport:framing
+    events: bee.driver.opencode.observer:events
+    observer_types: bee.driver:window_observer
+    delivery: bee.driver.opencode.observer:delivery
+  security:
+    policies: [bee.driver.opencode.observer:http_policy]
+- name: http_policy
+  kind: security.policy.expr
+  policy:
+    effect: allow
+    actions: [http_client.request, http_client.private_ip, process.send]
+    resources: ['*']
+    expression: action == "process.send" || (action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127[.]0[.]0[.]1:[0-9]+/")
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  imports:
+    bounds: bee.values:bounds
+```
+
+## observer/delivery.lua
+
+```lua
+-- SPDX-License-Identifier: MIT
+local bounds = require("bounds")
+local M = {}
+type Object = {[string]: unknown}
+type IO = {submit: (Object) -> Object?, permission: (string, Object) -> (), record: (string) -> ()}
+function M.send(io: IO, row: Object): boolean
+    local ok = pcall(function()
+        local response = io.submit(row)
+        if row.hook_event_name ~= "PermissionRequest" or not response then return end
+        local output = bounds.object(response.hookSpecificOutput) or {}
+        local decision = bounds.object(output.decision) or {}
+        if decision.behavior == "allow" or decision.behavior == "deny" then
+            io.permission(tostring(row.permission_id), {reply = decision.behavior == "allow" and "once" or "reject", message = decision.message})
+        end
+    end)
+    if not ok then io.record(tostring(row.hook_event_name) .. ": hook delivery failed") end
+    return ok
+end
+return M
+```
+
+## observer/events.lua
+
+```lua
+-- SPDX-License-Identifier: MIT
+local bounds = require("bounds")
+local M = {}
+M.HOOKS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "Stop", "StopFailure", "SessionEnd"}
+type Object = {[string]: unknown}
+type Message = {info: Object, parts: {[string]: Object}}
+type Session = {messages: {[string]: Message}, order: {string}, prompts: {[string]: boolean}, permissions: {[string]: boolean}, tools: {[string]: boolean}, active: string?, stopped: {[string]: boolean}, ended: boolean, failed: boolean}
+type State = {sessions: {[string]: Session}, failure: string?}
+function M.new(): State return {sessions = {}} end
+local function text(message: Message): string
+    local parts: {string} = {}
+    local ids: {string} = {}
+    for id in pairs(message.parts) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for _, id in ipairs(ids) do
+        local part = message.parts[id]
+        if part.type == "text" and part.synthetic ~= true and part.ignored ~= true and type(part.text) == "string" then parts[#parts + 1] = part.text end
+    end
+    return table.concat(parts, "\n")
+end
+local function record(event: string, session: string, fields: Object?): Object
+    local row: Object = {hook_event_name = event, session_id = session}
+    for key, value in pairs(fields or {}) do row[key] = value end
+    return row
+end
+local function session_start(state: State, info: Object): {Object}
+    local id = bounds.id(info.id)
+    if not id or info.parentID ~= nil or state.sessions[id] then return {} end
+    state.sessions[id] = {messages = {}, order = {}, prompts = {}, permissions = {}, tools = {}, stopped = {}, ended = false, failed = false}
+    return {record("SessionStart", id, {source = "startup"})}
+end
+local function message_update(session: Session, info: Object)
+    local id = bounds.id(info.id)
+    if not id then return end
+    if not session.messages[id] then
+        local created: Message = {info = info, parts = {}}
+        session.messages[id] = created
+        session.order[#session.order + 1] = id
+    end
+    session.messages[id].info = info
+end
+local function prompt(session: Session, id: string, session_id: string): {Object}
+    local message = session.messages[id]
+    if not message or message.info.role ~= "user" or session.prompts[id] then return {} end
+    local content = text(message)
+    if content == "" then return {} end
+    session.prompts[id] = true
+    session.active = id
+    session.failed = false
+    return {record("UserPromptSubmit", session_id, {prompt_id = id, prompt = content})}
+end
+local function part_update(session: Session, part: Object, session_id: string): {Object}
+    local message_id = bounds.id(part.messageID)
+    local part_id = bounds.id(part.id)
+    if not message_id or not part_id then return {} end
+    local message = session.messages[message_id]
+    if part.type ~= "tool" then
+        if message then message.parts[part_id] = part end
+        return prompt(session, message_id, session_id)
+    end
+    local tool = bounds.id(part.tool)
+    local call = bounds.id(part.callID)
+    local status = bounds.object(part.state)
+    if not tool or not call or not status then return {} end
+    local key_base = message_id .. ":" .. call .. ":"
+    if session.tools[key_base .. "PostToolUse"] or session.tools[key_base .. "PostToolUseFailure"] then return {} end
+    if message then message.parts[part_id] = part end
+    local name: string? = nil
+    if status.status == "running" then name = "PreToolUse"
+    elseif status.status == "completed" then name = "PostToolUse"
+    elseif status.status == "error" then name = "PostToolUseFailure" end
+    if not name then return {} end
+    local key = key_base .. name
+    if session.tools[key] then return {} end
+    session.tools[key] = true
+    return {record(name, session_id, {tool_name = tool, tool_use_id = call, tool_input = status.input or {}, tool_response = status.output, error = status.error})}
+end
+local function stop(state: State, session: Session, id: string): {Object}
+    local active = session.active
+    if not active or session.stopped[active] then return {} end
+    for i = #session.order, 1, -1 do
+        local message = session.messages[session.order[i]]
+        local info = message.info
+        if info.role == "assistant" and info.parentID == active then
+            if info.error ~= nil then session.failed = true end
+            local time = bounds.object(info.time)
+            if not session.failed and info.finish == "stop" and time and type(time.completed) == "number" then
+                session.stopped[active] = true
+                return {record("Stop", id, {prompt_id = active, last_assistant_message = text(message), stop_hook_active = false})}
+            end
+        end
+    end
+    if session.failed then
+        session.stopped[active] = true
+        return {record("StopFailure", id, {prompt_id = active, error = "OpenCode turn failed"})}
+    end
+    state.failure = "OpenCode idle omitted a completed reply"
+    return {}
+end
+function M.snapshot(state: State, id: string, messages: {unknown}): {Object}
+    local session: Session? = state.sessions[id]
+    if not session then return {} end
+    local rows: {Object} = {}
+    for _, raw in ipairs(messages) do
+        local message = bounds.object(raw)
+        local info = message and bounds.object(message.info)
+        if info and message then
+            message_update(session, info)
+            local parts = bounds.array(message.parts, 4096) or {}
+            for _, raw_part in ipairs(parts) do
+                local part = bounds.object(raw_part)
+                if part then
+                    for _, row in ipairs(part_update(session, part, id)) do rows[#rows + 1] = row end
+                end
+            end
+        end
+    end
+    return rows
+end
+function M.event(state: State, event: Object): {Object}
+    local properties = bounds.object(event.properties) or {}
+    local info = bounds.object(properties.info)
+    if event.type == "session.created" or event.type == "session.updated" then return info and session_start(state, info) or {} end
+    local id = bounds.id(properties.sessionID) or (info and bounds.id(info.sessionID))
+    local part = bounds.object(properties.part)
+    id = id or (part and bounds.id(part.sessionID))
+    if event.type == "session.deleted" then id = info and bounds.id(info.id) end
+    if not id or not state.sessions[id] then return {} end
+    local session: Session = state.sessions[id]
+    if event.type == "message.updated" and info then message_update(session, info); return prompt(session, tostring(info.id), id) end
+    if event.type == "message.part.updated" and part then return part_update(session, part, id) end
+    if event.type == "permission.asked" then
+        local permission_id = bounds.id(properties.id)
+        if not permission_id or session.permissions[permission_id] then return {} end
+        session.permissions[permission_id] = true
+        local tool = bounds.object(properties.tool) or {}
+        local input = properties.metadata or {}
+        local name = properties.permission
+        for _, message in pairs(session.messages) do
+            for _, known in pairs(message.parts) do
+                if known.type == "tool" and known.callID == tool.callID then
+                    local status = bounds.object(known.state)
+                    if status then input = status.input or input; name = known.tool end
+                end
+            end
+        end
+        return {record("PermissionRequest", id, {tool_name = name, tool_use_id = tool.callID or properties.id, tool_input = input, permission_id = permission_id})}
+    end
+    if event.type == "session.error" then session.failed = true end
+    if event.type == "session.idle" then return stop(state, session, id) end
+    if event.type == "session.status" and (bounds.object(properties.status) or {}).type == "idle" then return stop(state, session, id) end
+    if event.type == "session.deleted" and not session.ended then session.ended = true; return {record("SessionEnd", id, {reason = "clear"})} end
+    return {}
+end
+function M.statuses(state: State, statuses: Object): {Object}
+    local rows: {Object} = {}
+    for id in pairs(state.sessions) do
+        for _, row in ipairs(M.event(state, {type = "session.status", properties = {sessionID = id, status = statuses[id] or {type = "idle"}}})) do rows[#rows + 1] = row end
+    end
+    return rows
+end
+function M.finish(state: State): {Object}
+    local rows: {Object} = {}
+    for id, session in pairs(state.sessions) do
+        if not session.ended then session.ended = true; rows[#rows + 1] = record("SessionEnd", id, {reason = "prompt_input_exit"}) end
+    end
+    return rows
+end
+return M
+```
+
+## observer/subscriber.lua
+
+```lua
+-- SPDX-License-Identifier: MIT
+local process = require("process")
+local channel = require("channel")
+local http = require("http_client")
+local json = require("json")
+local bounds = require("bounds")
+local framing = require("framing")
+local events = require("events")
+local observer_types = require("observer_types")
+local delivery = require("delivery")
+local function main(input: observer_types.Input)
+    local state = events.new()
+    local session_id: string? = nil
+    local stopping = false
+    local released = false
+    local operation = "startup"
+    local stream: http.StreamReader? = nil
+    local controls = assert(process.listen(input.topic .. ".control", {message = true}))
+    local signals = assert(process.events())
+    local function report(kind: string, detail: string)
+        process.send(input.owner, input.topic, {kind = kind, detail = detail})
+    end
+    local function get(path: string): unknown
+        operation = "GET " .. path
+        local reply = http.get(input.endpoint .. path, {timeout = "10s", headers = {["x-opencode-directory"] = input.working_directory}})
+        if reply then operation = operation .. " (HTTP " .. tostring(reply.status_code) .. ")" end
+        if not reply or reply.status_code ~= 200 then error("OpenCode read failed: " .. path) end
+        return json.decode(assert(reply.body))
+    end
+    local function post(path: string, body: unknown): unknown
+        operation = "POST " .. path
+        local reply = http.post(input.endpoint .. path, {timeout = "10s", headers = {["Content-Type"] = "application/json", ["x-opencode-directory"] = input.working_directory}, body = json.encode(body)})
+        if reply then operation = operation .. " (HTTP " .. tostring(reply.status_code) .. ")" end
+        if not reply or reply.status_code < 200 or reply.status_code >= 300 then error("OpenCode write failed: " .. path) end
+        return reply.body and reply.body ~= "" and json.decode(reply.body) or nil
+    end
+    local admitted: {[string]: boolean} = {}
+    for _, name in ipairs(input.hooks) do admitted[name] = true end
+    local function deliver(row: {[string]: unknown})
+        if not admitted[tostring(row.hook_event_name)] then return end
+        delivery.send({
+            submit = function(payload: {[string]: unknown}): {[string]: unknown}?
+                local reply = http.post(input.hook_endpoint, {timeout = payload.hook_event_name == "PermissionRequest" and "240s" or "10s",
+                    headers = {Authorization = "Bearer " .. input.hook_token, ["Content-Type"] = "application/json"}, body = json.encode(payload)})
+                if not reply or reply.status_code < 200 or reply.status_code >= 300 then error("hook endpoint refused delivery") end
+                return reply.body and reply.body ~= "" and bounds.object(json.decode(reply.body)) or nil
+            end,
+            permission = function(id: string, decision: {[string]: unknown}) post("/permission/" .. id .. "/reply", decision) end,
+            record = function(detail: string) report("delivery_failed", detail) end,
+        }, row)
+    end
+    local function deliver_all(rows: {{[string]: unknown}})
+        for _, row in ipairs(rows) do
+            if row.hook_event_name == "PermissionRequest" then coroutine.spawn(function() deliver(row) end) else deliver(row) end
+        end
+        if state.failure then report("mapping_failed", state.failure); state.failure = nil end
+    end
+    local function snapshot(id: string)
+        deliver_all(events.snapshot(state, id, assert(bounds.array(get("/session/" .. id .. "/message"), 4096))))
+    end
+    local function reconcile()
+        for _, raw in ipairs(assert(bounds.array(get("/session"), 4096))) do
+            local info = bounds.object(raw)
+            if info and (info.id == session_id or state.sessions[tostring(info.id)]) then
+                deliver_all(events.event(state, {type = "session.updated", properties = {info = info}}))
+            end
+        end
+        for id in pairs(state.sessions) do snapshot(id) end
+        local statuses = bounds.object(get("/session/status")) or {}
+        deliver_all(events.statuses(state, statuses))
+        for _, raw in ipairs(assert(bounds.array(get("/permission"), 4096))) do
+            local permission = bounds.object(raw)
+            if permission then deliver_all(events.event(state, {type = "permission.asked", properties = permission})) end
+        end
+    end
+    local prompt: string? = nil
+    local model: string? = nil
+    for i, arg in ipairs(input.argv) do
+        if arg == "--session" or arg == "-s" then session_id = input.argv[i + 1]
+        elseif arg == "--prompt" then prompt = input.argv[i + 1]
+        elseif arg == "--model" or arg == "-m" then model = input.argv[i + 1] end
+    end
+    coroutine.spawn(function()
+        while not stopping do
+            local selected = channel.select({controls:case_receive(), signals:case_receive()})
+            if not selected.ok then return end
+            if selected.channel == signals or tostring(selected.value:from()) == input.owner then
+                local data = selected.channel == controls and bounds.object(selected.value:payload():data()) or nil
+                if data and data.command == "release" then
+                    released = true
+                    if prompt and session_id then
+                        local body: {[string]: unknown} = {parts = {{type = "text", text = prompt}}}
+                        if model then local provider, name = model:match("^([^/]+)/(.+)$"); if provider then body.model = {providerID = provider, modelID = name} end end
+                        local ok = pcall(post, "/session/" .. session_id .. "/prompt_async", body)
+                        if not ok then report("prompt_failed", "OpenCode initial prompt submission failed") end
+                    end
+                else
+                    stopping = true
+                    if stream then stream:close() end
+                    return
+                end
+            end
+        end
+    end)
+    local first = true
+    local ok = pcall(function()
+        while not stopping do
+            operation = "GET /event"
+            local response = http.get(input.endpoint .. "/event", {stream = true, timeout = "0s", headers = {["x-opencode-directory"] = input.working_directory}})
+            if response then operation = operation .. " (HTTP " .. tostring(response.status_code) .. ")" end
+            if not response or response.status_code ~= 200 or not response.stream then error("OpenCode event subscription failed") end
+            stream = response.stream
+            if first then
+                if not session_id then
+                    local session = assert(bounds.object(post("/session", json.decode("{}"))))
+                    session_id = assert(bounds.id(session.id))
+                end
+                reconcile()
+                process.send(input.owner, input.topic, {kind = "ready", arguments = {"attach", input.endpoint, "--dir", input.working_directory, "--session", session_id}})
+                first = false
+            else
+                report("reconnected", "OpenCode stream reconnected; rereading session messages")
+                reconcile()
+            end
+            local framer = framing.new()
+            while not stopping do
+                local chunk = stream:read(8192)
+                if not chunk or chunk == "" then break end
+                for _, line in ipairs(assert(framing.feed(framer, chunk))) do
+                    if line:sub(1, 5) == "data:" then
+                        local event = bounds.object(json.decode(line:sub(6)))
+                        if event then
+                            operation = "event " .. tostring(event.type)
+                            local properties = bounds.object(event.properties) or {}
+                            local id = bounds.id(properties.sessionID)
+                            local info = bounds.object(properties.info)
+                            id = id or (info and bounds.id(info.sessionID))
+                            if id and state.sessions[id] then
+                                local status = bounds.object(properties.status) or {}
+                                if event.type == "session.idle" or (event.type == "session.status" and status.type == "idle") then
+                                    snapshot(id)
+                                elseif event.type == "message.updated" and info and info.role == "user" then
+                                    local message_id = assert(bounds.id(info.id))
+                                    deliver_all(events.snapshot(state, id, {get("/session/" .. id .. "/message/" .. message_id)}))
+                                end
+                            end
+                            deliver_all(events.event(state, event))
+                        end
+                    end
+                end
+            end
+            stream:close()
+            stream = nil
+            if not stopping and not released then error("OpenCode stream ended before window startup") end
+        end
+    end)
+    if stream then stream:close() end
+    deliver_all(events.finish(state))
+    if not ok and not stopping then report("failed", "OpenCode observer stopped during " .. operation) end
+    process.send(input.owner, input.topic, {kind = "stopped"})
+    process.unlisten(controls)
+end
+return {main = main}
 ```

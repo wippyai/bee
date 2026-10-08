@@ -1,19 +1,42 @@
 version: '1.0'
 namespace: bee.driver.opencode.observer
 entries:
+- name: events
+  kind: library.lua
+  source: file://events.lua
+  imports:
+    bounds: bee.values:bounds
+- name: declaration
+  kind: registry.entry
+  meta:
+    type: bee.driver.window_observer
+    driver_ref: bee.driver.opencode.binding:binding
+    profile_id: window
+    observer: local_http
+  data:
+    process: bee.driver.opencode.observer:subscriber
+    server_arguments: [serve, --port, '0', --hostname, 127.0.0.1]
+    endpoint_pattern: 'http://127%.0%.0%.1:%d+'
+- name: subscriber
+  kind: process.lua
+  source: file://subscriber.lua
+  method: main
+  modules: [process, channel, http_client, json]
+  imports:
+    bounds: bee.values:bounds
+    framing: bee.driver.transport:framing
+    events: bee.driver.opencode.observer:events
+    observer_types: bee.driver:window_observer
+    delivery: bee.driver.opencode.observer:delivery
+  security:
+    policies: [bee.driver.opencode.observer:http_policy]
 - name: http_policy
   kind: security.policy.expr
   policy:
     effect: allow
-    actions:
-    - http_client.request
-    - http_client.private_ip
-    - process.send
-    resources:
-    - '*'
-    expression: action == "process.send" || (action == "http_client.private_ip" &&
-      resource == "127.0.0.1") || (action == "http_client.request" && resource matches
-      "^http://127[.]0[.]0[.]1:[0-9]+/")
+    actions: [http_client.request, http_client.private_ip, process.send]
+    resources: ['*']
+    expression: action == "process.send" || (action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127[.]0[.]0[.]1:[0-9]+/")
 - name: delivery
   kind: library.lua
   source: file://delivery.lua

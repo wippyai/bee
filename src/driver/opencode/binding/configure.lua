@@ -5,29 +5,28 @@
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
 local universal = require("universal")
+local observer_events = require("observer_events")
+local bounds = require("bounds")
 local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref or request.provider then
         return {ok = false, error = "opencode configures no model provider; the user selects models in their own OpenCode home"}
     end
-    local prompt_files: {configure_protocol.Configuration} = {}
-    if (not request.gateway or #request.gateway.tools == 0) then
-        if request.gateway then
-            for _, event in ipairs(request.gateway.hooks) do
-                return {ok = false, error = "opencode does not support gateway hook event " .. event}
-            end
+    local files: {configure_protocol.Configuration} = {}
+    local gateway = request.gateway
+    if gateway then
+        for _, event in ipairs(gateway.hooks) do
+            if not bounds.member(event, observer_events.HOOKS) then return {ok = false, error = "opencode does not support gateway hook event " .. event} end
         end
-        if request.private_home ~= true then return {ok = true, delivery = {arguments = {}, files = {}}} end
-        local file, file_error = configuration.login_configuration()
-        if not file then return {ok = false, error = tostring(file_error)} end
-        return {ok = true, delivery = {arguments = {}, files = {file}}}
     end
-    local no_tools: {string} = {}
-    local no_hooks: {string} = {}
-    local empty_gateway: configure_protocol.GatewayInput = {endpoint = "", action_id = "", tools = no_tools, hooks = no_hooks, token_environment = "BEE_UNUSED"}
-    local gateway = request.gateway or empty_gateway
-    local file, file_error = configuration.settings_file(gateway)
-    if not file then return {ok = false, error = tostring(file_error)} end
-    prompt_files[#prompt_files + 1] = file
-    return {ok = true, delivery = {arguments = {}, files = prompt_files}}
+    if gateway and #gateway.tools > 0 then
+        local file, err = configuration.settings_file(gateway)
+        if not file then return {ok = false, error = tostring(err)} end
+        files[#files + 1] = file
+    elseif request.private_home == true then
+        local file, err = configuration.login_configuration()
+        if not file then return {ok = false, error = tostring(err)} end
+        files[#files + 1] = file
+    end
+    return {ok = true, delivery = {arguments = {}, files = files}}
 end
 return {handle = universal.configure("opencode", {opencode = handle}, "bee.driver.opencode.descriptor:cli")}

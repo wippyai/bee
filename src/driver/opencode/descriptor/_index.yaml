@@ -63,17 +63,15 @@ entries:
     capabilities:
       permission_answers:
         window:
-          transport: provider
-          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission API. The window retains provider prompts; no Bee
-            hook transport is selected.
+          transport: hook_http
+          adapter_ref: bee.driver.permission:permission_request_hook
+          reason: The supervised observer relays Bee hook decisions to the OpenCode permission reply endpoint.
         first_turn:
           transport: provider
-          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission API. The window retains provider prompts; no Bee
-            hook transport is selected.
+          reason: Bee runs opencode run --format json with stdin closed; batch turns retain provider permission handling.
         resume:
           transport: provider
-          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission API. The window retains provider prompts; no Bee
-            hook transport is selected.
+          reason: Bee runs opencode run --format json with stdin closed; batch turns retain provider permission handling.
     options:
       profiles:
       - window
@@ -162,6 +160,14 @@ entries:
               then:
               - --model
               - field: model
+          - kind: config
+            contexts: [window]
+            file: .config/opencode/opencode.json
+            format: json
+            path: [model]
+            merge: set
+            value:
+              field: provider.model
         variant:
           path: provider.options.variant
           value_schema:
@@ -308,9 +314,14 @@ entries:
             value:
               field: provider.options.enabled_providers
       rules:
-      - kind: forbid_nonempty
+      - kind: values
         field: gateway_hooks
-        message: opencode declares no hook transport for gateway hooks
+        values: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, StopFailure, SessionEnd]
+        message: unsupported gateway hook
+      - kind: profile_fields
+        profile: batch
+        fields: [gateway_hooks]
+        message: gateway hooks require the window profile
     flags: {}
     argv_templates:
       window:

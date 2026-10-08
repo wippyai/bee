@@ -1,12 +1,4 @@
--- MIT. The OpenCode configuration file: the one file the inherited home
--- needs for the admitted gateway. OpenCode reads MCP servers only from its
--- JSON configuration, so configure renders opencode.json with the single
--- scoped bee remote entry and composes it into the user's own configuration
--- without replacing unrelated keys. Token bytes never enter the content;
--- placement injects them through secret_fields before OpenCode reads the
--- file. Models, providers and permissions stay
--- user-configured; this component renders no provider entry. OpenCode has no
--- hook transport, so any requested hook event is refused.
+-- SPDX-License-Identifier: MIT
 local hash = require("hash")
 local canonical = require("canonical")
 local configure_protocol = require("configure_protocol")
@@ -19,9 +11,6 @@ M.MAX_CONFIGURATION_BYTES = 8192
 type Gateway = configure_protocol.GatewayInput
 type Configuration = configure_protocol.Configuration
 function M.settings_file(gateway: Gateway): (Configuration?, string?)
-    for _, event in ipairs(gateway.hooks) do
-        return nil, "opencode does not support gateway hook event " .. event
-    end
     if #gateway.tools == 0 then return nil, "opencode configuration needs a gateway" end
     local document: {[string]: unknown} = {
         ["$schema"] = M.SCHEMA,

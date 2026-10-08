@@ -100,7 +100,16 @@ entries:
       - bee.app:share
       - bee.app:tools
       - bee.hub:library
-    gateway_hooks: []
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - PostToolUseFailure
+    - PermissionRequest
+    - Stop
+    - StopFailure
+    - SessionEnd
     prepare_options: {}
     placement_profiles:
     - bee.placement.profiles:native

@@ -51,10 +51,25 @@ file the broker projects without interpreting its bytes.
 
 ## Hooks
 
-OpenCode offers no hook transport: its plugin events are provider-owned
-JavaScript, not Bee's admitted hook handlers. Both profiles declare no hook
-transport, and any requested gateway hook event is refused at decode time
-rather than silently dropped.
+The window profile declares a supervised local HTTP observer. Placement discovers
+its declaration by registry metadata, starts OpenCode `serve --port 0 --hostname
+127.0.0.1`, subscribes to `/event`, and attaches the TUI to that same server.
+A selected window model is also rendered into the server configuration because
+`attach` has no model flag.
+The supervisor releases the initial prompt only after subscription readiness and
+stops the observer and server with the window. Setup failures record evidence
+and allow the ordinary CLI to start. Bee projects no hook plugin or SDK.
+
+The observer sends the existing Bee HTTP hook records. User messages accept peer
+work. Idle rereads session messages and submits `Stop` only for a completed
+assistant message with `finish=stop`; intermediate tool-call messages do not
+settle work. Root sessions remain separate from child sessions. Running tools
+include their full input; completed and failed states produce result records.
+Permission requests use the existing host-selected hook permission adapter and
+relay allow/deny responses to `/permission/:id/reply`. Hook delivery failures
+record placement evidence and do not stop OpenCode. Reconnection rereads session
+messages because the stream has no replay. Batch turns retain their stream
+answer path: EOF without a final `step_finish` with reason `stop` is uncertain.
 
 Headless first and resumed turns declare an empty stdin with end-of-file after
 delivering the argv brief: OpenCode waits for pipe EOF before starting `run`.

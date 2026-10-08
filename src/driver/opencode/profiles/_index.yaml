@@ -46,9 +46,20 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
+        observer: local_http
         hooks:
-          transports: []
-          events: []
+          transports: [http]
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PostToolUseFailure
+          - PermissionRequest
+          - Stop
+          - StopFailure
+          - SessionEnd
+          adapter_ref: bee.driver.opencode.descriptor:cli
         answer_path:
           strategy: none
         resume:
@@ -62,7 +73,9 @@ entries:
         input_ready:
           strategy: none
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
 - name: default_window
   kind: registry.entry
   meta:

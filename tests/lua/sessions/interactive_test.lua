@@ -103,6 +103,10 @@ local function define_tests()
             local found = false
             for _, row in ipairs(page.items) do if row.session == opened.session then found = true end end
             test.is_true(found)
+            local schema = {type = "object", properties = {items = {type = "array", items = {type = "object", properties = {
+                effective_limits = {type = "object"}}}}}}
+            local valid, validation_error = json.validate_string(assert(json.encode(schema)), assert(json.encode(page)))
+            if not valid then error(tostring(validation_error)) end
             local joined = call("join", {works = {work.work}, policy = "all_settled", operation_key = harness.key()})
             test.eq(joined.tag, "ready")
             test.eq(call("close", {session = opened.session, expected_incarnation = 1, operation_key = harness.key()}).effect, "close")

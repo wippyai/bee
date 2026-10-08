@@ -131,13 +131,17 @@ local function reply_result(reply: unknown, call_error: unknown): Object
     if call_error then return refused("UNAVAILABLE", tostring(call_error), nil, true, "retry the same call") end
     local decoded, decode_error = decode_owner_reply(reply)
     if not decoded then return refused("UNAVAILABLE", decode_error or "owner returned an invalid reply") end
-    local encoded, encode_error = json.encode(reply)
+    local projected: Object
+    if decoded.ok then projected = {ok = true, value = decoded.value}
+    else
+        local value = bounds.object(decoded.value)
+        local remedy = value and bounds.text(value.remedy, 4096) or nil
+        projected = mcp.tool_error(decoded.error.code, decoded.error.message,
+            decoded.error.field, decoded.error.retryable == true, remedy or decoded.error.remedy)
+    end
+    local encoded, encode_error = json.encode(projected)
     if encode_error or not encoded then return refused("UNAVAILABLE", "owner reply could not be encoded") end
-    if decoded.ok then return mcp.tool_result(encoded, false, reply) end
-    local value = bounds.object(decoded.value)
-    local remedy = value and bounds.text(value.remedy, 4096) or nil
-    return mcp.tool_result(encoded, true, mcp.tool_error(decoded.error.code,
-        decoded.error.message, decoded.error.field, decoded.error.retryable == true, remedy or decoded.error.remedy))
+    return mcp.tool_result(encoded, not decoded.ok, projected)
 end
 local function capabilities(binding: gateway.Binding): Object
     local bound, surface_error = gateway.surface(binding)

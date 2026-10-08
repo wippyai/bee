@@ -87,6 +87,20 @@ local function define_tests()
             local offered = names((rpc(endpoint, action, token, "tools/list", {})))
             test.is_true(offered.docs == true)
             test.is_false(offered.thread_message == true)
+            local definitions = assert(bounds.array(assert(bounds.object((rpc(endpoint, action, token, "tools/list", {})).result)).tools, 64))
+            local docs_schema: Object? = nil
+            for _, raw_tool in ipairs(definitions) do
+                local tool = assert(bounds.object(raw_tool))
+                if tool.name == "docs" then docs_schema = assert(bounds.object(tool.outputSchema)) end
+            end
+            local docs = assert(bounds.object((rpc(endpoint, action, token, "tools/call", {name = "docs", arguments = {operation = "web_toc"}})).result))
+            test.is_false(docs.isError == true)
+            local structured = assert(bounds.object(docs.structuredContent))
+            local valid, validation_error = json.validate(assert(docs_schema), structured)
+            if not valid then error(tostring(validation_error)) end
+            test.is_nil(structured.replayed)
+            local content = assert(bounds.array(docs.content, 8))
+            test.eq(assert(bounds.object(content[1])).text, assert(json.encode(structured)))
             local called, status = rpc(endpoint, action, token, "tools/call", {name = "capabilities", arguments = {}})
             test.eq(status, 200)
             test.is_nil(called.error)

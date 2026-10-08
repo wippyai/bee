@@ -105,12 +105,14 @@ local function snapshot(value: unknown): (Object?, string?)
         if not id or not revision or revision < 1 then return nil, "Session saved profile is malformed" end
         saved_profile = {id = id, revision = revision}
     end
+    local limits: Object = table.create(0, 1)
+    for name, limit in pairs(object(route.budgets) or {}) do limits[name] = limit end
     return {terminal = route.delivery == "hook", session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
         driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
         revision = row.revision, incarnation = 1, title = row.title,
         lifecycle = lifecycle, activity = activity, activity_evidence = activity_evidence,
         execution = {state = row.execution_running == true and "running" or "quiescent", evidence_at = at, stale = false},
-        queue_count = queued, effective_limits = route.budgets or {},
+        queue_count = queued, effective_limits = limits,
         saved_profile = saved_profile, effective_profile = profile_values.upgrade(route.effective_profile), profile_digest = route.profile_digest, budget_consumption = row.budget_consumption, continuity = {mode = "provider_resume"}, actions = {}}, nil
 end
 

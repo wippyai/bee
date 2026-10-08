@@ -170,6 +170,7 @@ end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, themes: {appearance.Theme},
     pane: Pane, offset: integer, message: string?, live: live_updates.Status?, live_pending: boolean?, build: Build?): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local grid = M.grid(width, height)
     local backgrounds = appearance.backgrounds()
@@ -185,7 +186,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             {value = "Each activation still needs an explicit person approval."},
             {value = "Enable accepts exact non-kernel namespaces for up to 24h.", role = "muted"},
         }, width - 2, LABEL_WIDTH), 0, LABEL_WIDTH)
-        if height >= 3 then frame.footer(painter, notice ~= "" and notice or "Choose E or D to continue", EDIT_HINTS) end
+        if height >= 3 then frame.footer(painter, notice ~= "" and notice or "Choose E or D to continue", EDIT_HINTS, nil, footer_buttons) end
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
     end
     if pane == "about" then
@@ -195,9 +196,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local first = M.about_offset(offset, width, height, live, live_pending, build)
         frame.document(painter, 4, 4 + capacity - 1, details, first, LABEL_WIDTH)
         if actions then
-            frame.actions(painter, height - 1, {
+            footer_buttons = {
                 {kind = "check", key = "R", label = live_pending and "Checking…" or "Check for updates", enabled = not live_pending, primary = true},
-            })
+            }
         end
         local page = ""
         local bee_update = live and live.bee_update
@@ -208,7 +209,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         elseif #details > capacity then
             page = "Details " .. tostring(first + 1) .. "–" .. tostring(math.min(#details, first + capacity)) .. "/" .. tostring(#details)
         end
-        if height >= 3 then frame.footer(painter, notice ~= "" and notice or page, ABOUT_HINTS, ABOUT_MORE) end
+        if height >= 3 then frame.footer(painter, notice ~= "" and notice or page, ABOUT_HINTS, ABOUT_MORE, footer_buttons) end
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
     end
     if grid.capacity == 0 or width < 12 then
@@ -277,7 +278,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.put(painter, width - 3, height - 1, " › ", 3, theme.accent)
         frame.add_hit(painter, "page", 1, "", width - 3, height - 1, 3, 1)
     end
-    frame.footer(painter, status, HINTS)
+    frame.footer(painter, status, HINTS, nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

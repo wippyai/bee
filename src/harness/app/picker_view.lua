@@ -21,6 +21,7 @@ end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?, query: string?, sort: string?, searching: boolean?): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local count = #listing.items
     frame.header(painter, "NEW SESSION", count > 0 and (tostring(count) .. " agents") or nil)
@@ -51,13 +52,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if height >= 6 and message ~= "" then frame.line(painter, height - 2, text.bound(message, 512), theme.muted) end
     if height >= 3 then
         local chosen = item ~= nil and window.capacity > 0
-        frame.actions(painter, height - 1, {
+        footer_buttons = {
             {kind = item and not item.ready and "setup" or "open", key = "Enter", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
             {kind = "edit", key = "E", label = item and item.kind == "profile" and "Edit" or "Customize", enabled = not busy and chosen},
             {kind = "close", key = "Esc", label = "Back", enabled = true},
-        })
+        }
     end
-    if height >= 2 then frame.footer(painter, "", HINTS, MORE) end
+    if height >= 2 then frame.footer(painter, "", HINTS, MORE, footer_buttons) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

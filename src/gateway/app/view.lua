@@ -6,6 +6,7 @@ type Client = {client_id: string, name: string, status: string, thread_id: strin
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, clients: {Client}, selected: integer, status: string, records: string?): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local layout = frame.layout(painter, false, true)
     frame.header(painter, "MCP CLIENTS", tostring(#clients) .. " clients")
     local chosen = clients[selected]
@@ -27,13 +28,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if #clients == 0 then frame.empty(painter, layout.work.y, "No external clients", "Run bee mcp connect in this folder to pair one") end
     end
     if height >= 4 then
-        frame.actions(painter, height - 1, {
+        footer_buttons = {
             {kind = "read", key = "Enter", label = "Tool calls", enabled = chosen ~= nil, primary = true},
             {kind = "revoke", key = "X", label = "Revoke", enabled = chosen ~= nil and chosen.status ~= "revoked" and chosen.status ~= "expired"},
             {kind = "refresh", key = "R", label = "Refresh", enabled = true},
-        })
+        }
     end
-    frame.footer(painter, status, frame.hints({{key = "↑↓", verb = "select"}, {key = "Esc", verb = records and "back" or "close"}}))
+    frame.footer(painter, status, frame.hints({{key = "↑↓", verb = "select"}, {key = "Esc", verb = records and "back" or "close"}}), nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

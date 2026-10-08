@@ -76,6 +76,7 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
     preferences: appearance.Preferences, selected: string, offset: integer, paused: boolean,
     status: string, confirming: boolean, services: boolean, rows: {Row}, by_steps: boolean): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local noun = services and (#rows == 1 and " service" or " services") or (#rows == 1 and " process" or " processes")
     frame.header(painter, "PROCESS MANAGER", (paused and "Paused" or "Live · 1s") .. " · " .. tostring(#rows) .. noun)
@@ -128,15 +129,15 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
         frame.put(painter, 11, detail_y, text.bound(selected, 512), width - 11, theme.text)
     end
     if height >= 3 then
-        frame.actions(painter, height - 1, {
+        footer_buttons = {
             {kind = "pause", key = "P", label = paused and "Resume" or "Pause", enabled = true, active = paused},
             {kind = "sort", key = "S", label = by_steps and (services and "Sort: restarts" or "Sort: steps") or "Sort: name", enabled = true},
             {kind = "stop", key = "Del", label = "Stop app", enabled = not services and selected ~= "", primary = confirming},
-        })
+        }
     end
     local footer = text.bound(status ~= "" and status or (snapshot.error or ""), 512)
     if confirming then footer = "Stop selected app?" end
-    frame.footer(painter, footer, confirming and "Enter confirms · Esc cancels" or HINTS, MORE)
+    frame.footer(painter, footer, confirming and "Enter confirms · Esc cancels" or HINTS, MORE, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 
@@ -156,6 +157,7 @@ end
 function M.draw_hive(width: integer, height: integer, nodes: {hive.Node}, preferences: appearance.Preferences,
     selected: string, offset: integer, paused: boolean, status: string): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local online = 0
     for _, item in ipairs(nodes) do if item.online then online = online + 1 end end
@@ -210,11 +212,11 @@ function M.draw_hive(width: integer, height: integer, nodes: {hive.Node}, prefer
         frame.put(painter, 11, detail_y, text.bound(item.node .. note, 512), width - 11, theme.text)
     end
     if height >= 3 then
-        frame.actions(painter, height - 1, {
+        footer_buttons = {
             {kind = "pause", key = "P", label = paused and "Resume" or "Pause", enabled = true, active = paused},
-        })
+        }
     end
-    frame.footer(painter, text.bound(status, 512), HIVE_HINTS, HIVE_MORE)
+    frame.footer(painter, text.bound(status, 512), HIVE_HINTS, HIVE_MORE, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

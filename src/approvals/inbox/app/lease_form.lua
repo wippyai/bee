@@ -89,18 +89,19 @@ end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: State): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     frame.header(painter, "LEASE REQUEST", model.text(state.view.proposal.ref, 60))
     local sizes: {integer} = {}
     for index, field in ipairs(state.form.fields) do sizes[index] = forms.rows(field) end
     local rects = frame.stack({x = 2, y = 3, width = math.floor(math.max(1, width - 2)), height = math.floor(math.max(1, height - 5))}, sizes, 0)
     for index, rect in ipairs(rects) do forms.draw(painter, rect, state.form, index) end
     if height >= 4 then
-        frame.actions(painter, height - 1, {
+        footer_buttons = {
             {kind = "submit", label = "Request lease", enabled = forms.can_submit(state.form), primary = true},
             {kind = "cancel", label = "Cancel", enabled = true},
-        })
+        }
     end
-    frame.footer(painter, state.status, frame.hints({{key = "Tab", verb = "next"}, {key = "Ctrl+S", verb = "request"}, {key = "Esc", verb = "cancel"}}))
+    frame.footer(painter, state.status, frame.hints({{key = "Tab", verb = "next"}, {key = "Ctrl+S", verb = "request"}, {key = "Esc", verb = "cancel"}}), nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 

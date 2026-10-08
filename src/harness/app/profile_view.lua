@@ -372,7 +372,7 @@ local function draw_folders(painter: frame.Painter, state: State, picker: folder
     local body: frame.Rect = {x = work.x, y = work.y + 2, width = work.width, height = math.floor(math.max(0, work.height - 2))}
     local window = folder_picker.draw(painter, body, picker, state.list_offset, "U use this folder")
     state.list_offset = window.offset
-    frame.footer(painter, text.bound(state.status, 4096), FOLDER_HINTS)
+    frame.footer(painter, text.bound(state.status, 4096), FOLDER_HINTS, nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 local function draw_threads(painter: frame.Painter, state: State, threads: Threads): Frame
@@ -386,11 +386,12 @@ local function draw_threads(painter: frame.Painter, state: State, threads: Threa
             kind = "thread", selected = threads.selected, offset = state.list_offset, focused = true, area = work})
         state.list_offset = window.offset
     end
-    frame.footer(painter, text.bound(threads.error or state.status, 4096), THREAD_HINTS)
+    frame.footer(painter, text.bound(threads.error or state.status, 4096), THREAD_HINTS, nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: State): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local picker = state.browsing
     if picker then return draw_folders(painter, state, picker) end
     local threads = state.threads
@@ -433,10 +434,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             buttons[#buttons + 1] = {kind = "copy", key = "", label = "Save copy", enabled = true}
             buttons[#buttons + 1] = {kind = "reload", key = "", label = "Reload", enabled = true}
         end
-        frame.actions(painter, height - 1, buttons)
+        footer_buttons = buttons
     end
     if state.status ~= "" and height >= 7 then frame.line(painter, height - 2, text.bound(state.status, 4096), painter.theme.text) end
-    frame.footer(painter, "", HINTS)
+    frame.footer(painter, "", HINTS, nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

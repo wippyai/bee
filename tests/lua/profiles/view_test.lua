@@ -97,7 +97,7 @@ local function define_tests()
             current.advanced = true
             for _, size in ipairs({{120, 36}, {80, 24}}) do
                 local shown = view.draw(size[1], size[2], appearance.defaults(), current)
-                test.is_true(shown.rows[size[2] - 1]:find("Revoke Docker access", 1, true) ~= nil)
+                test.contains(shown.rows[size[2]], "Revoke Docker access")
             end
             view.action(current, "revoke_docker")
             test.is_true(current.confirming_revoke == true)
@@ -264,7 +264,7 @@ local function define_tests()
                 local plain = table.concat(shown.rows, "\n"):gsub("\27%[[0-9;]*m", "")
                 test.is_nil((plain:find("thread_read", 1, true)))
                 test.is_true(plain:find("Advanced", 1, true) ~= nil)
-                test.is_true(shown.rows[size[2]]:find("Ctrl+S save", 1, true) ~= nil)
+                test.contains(shown.rows[size[2]], "Ctrl+S Save")
                 test.is_true(shown.rows[size[2]]:find("? help", 1, true) ~= nil)
                 view.action(s, "advanced")
                 plain = table.concat(view.draw(size[1], size[2], appearance.defaults(), s).rows, "\n")

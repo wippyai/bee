@@ -1,10 +1,9 @@
--- MIT. The shared application frame: one header, tabs, an action bar, one
--- status and key-hint footer, a scrolling list, a table and an empty or error
+-- MIT. The shared application frame: one header, tabs, one action and
+-- key-hint footer, a scrolling list, a table and an empty or error
 -- state, all drawn from semantic appearance roles. Pure: it paints one canvas
 -- and records hit rectangles; it performs no calls and grants nothing.
 --
--- Anatomy, top to bottom: row 1 header, optional tabs, work, the action bar on
--- the penultimate row and the footer (status, then key hints) on the final row.
+-- Anatomy: header, optional tabs, work and one footer with actions and hints.
 local tty = require("tty")
 local appearance = require("appearance")
 local M = {}
@@ -263,7 +262,11 @@ function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?)
         return column
     end
     local more: Button = {kind = "frame_more", key = "F10", label = "More", enabled = true}
-    local available = room - button_width(more)
+    local reserve = button_width(more)
+    for _, button in ipairs(buttons) do
+        if button.primary and not button.more and button_width(button) + reserve > room then reserve = 0; break end
+    end
+    local available = room - reserve
     local chosen: {[integer]: boolean} = {}
     for _, primary in ipairs({true, false}) do
         for index, button in ipairs(buttons) do
@@ -277,7 +280,8 @@ function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?)
         if chosen[index] then column = draw_button(painter, column, y, button)
         else painter.controls.overflow[#painter.controls.overflow + 1] = button end
     end
-    return draw_button(painter, column, y, more)
+    if reserve > 0 then return draw_button(painter, column, y, more) end
+    return column
 end
 
 -- Canonical key-hint text: "↑↓ select · Enter open · Esc close".
@@ -287,33 +291,48 @@ function M.hints(hints: {Hint}): string
     return table.concat(parts, " · ")
 end
 
--- The footer reserves a bounded region for hints and an always visible Help.
--- more lists further keys that only Help shows, keeping the footer short.
-function M.footer(painter: Painter, status: string, hints: string, more: string?)
+function M.footer(painter: Painter, status: string, hints: string, more: string?, buttons: {Button}?)
     local y = painter.height
     painter.controls.status = status
     if y < 1 then return end
+    local actions = buttons or {}
     local listed = hints
     if more and more ~= "" then listed = hints .. " · " .. more end
     for part in listed:gmatch("[^·]+") do
         local key, verb = part:match("^%s*(%S+)%s+(.+)%s*$")
         if key and verb then painter.controls.hints[#painter.controls.hints + 1] = {key = key, verb = verb:gsub("%s+$", "")} end
     end
-    local theme = painter.theme
     M.fill(painter, y)
-    local room = maximum(0, painter.width - 2)
-    local help = M.fit("? help", room)
-    local help_size = tty.text.width(help)
-    local hint_room = maximum(0, room - help_size - 3)
-    if status ~= "" then hint_room = maximum(0, hint_room - minimum(tty.text.width(status), room // 3) - 3) end
-    local shown = M.fit(hints, hint_room)
-    local size = tty.text.width(shown)
-    local hint_x = painter.width - help_size - 3 - size
-    if status ~= "" then M.put(painter, 2, y, status, maximum(0, hint_x - 4), theme.text) end
-    if size > 0 then M.put(painter, hint_x, y, shown, size, theme.muted) end
-    local help_x = painter.width - help_size
-    M.put(painter, help_x, y, help, help_size, theme.accent)
-    M.add_hit(painter, "frame_help", 0, "", help_x, y, help_size, 1)
+    local column = M.actions(painter, y, actions)
+    local room = maximum(0, painter.width - column - 1)
+    local shown: {string} = {}
+    local used = 0
+    for part in hints:gmatch("[^·]+") do
+        local item = part:match("^%s*(.-)%s*$") or ""
+        local key = item:match("^(%S+)")
+        local duplicate = key == "?"
+        for _, button in ipairs(actions) do
+            if button.key and key and button.key:lower() == key:lower() then
+                for _, hit in ipairs(painter.hits) do
+                    if hit.kind == button.kind and hit.y == y then duplicate = true end
+                end
+            end
+        end
+        local size = tty.text.width(item)
+        if not duplicate and size + used + (used > 0 and 3 or 0) + 9 <= room then
+            shown[#shown + 1] = item
+            used = used + size + (used > 0 and 3 or 0)
+        end
+    end
+    if room >= 6 then shown[#shown + 1] = "? help" end
+    local value = table.concat(shown, " · ")
+    local size = tty.text.width(value)
+    local x = painter.width - size
+    if size > 0 then
+        M.put(painter, x, y, value, size, painter.theme.muted)
+        M.add_hit(painter, "frame_help", 0, "", painter.width - 6, y, 6, 1)
+    end
+    if status ~= "" then M.line(painter, y - 1, status, painter.theme.muted) end
 end
 
 -- The visible window of a scrolling list of count rows in capacity slots,
@@ -453,16 +472,16 @@ end
 -- The canonical anatomy for this canvas: header on row 1, tabs on row 2 when
 -- requested and the canvas has at least 6 rows, one blank row, the work area
 -- from column 2 to the column before the last, the action bar on the
--- penultimate row when requested and the canvas has at least 6 rows, and the
+-- final row when requested and the canvas has at least 6 rows, and the
 -- footer on the final row when the canvas has at least 2 rows.
 function M.layout(painter: Painter, tabs: boolean, actions: boolean): Layout
     local height = painter.height
     local roomy = height >= 6
     local tab_row = (tabs and roomy) and 2 or 0
-    local action_row = (actions and roomy) and height - 1 or 0
+    local action_row = (actions and roomy) and height or 0
     local footer_row = height >= 2 and height or 0
     local first = roomy and (tab_row > 0 and 4 or 3) or 2
-    local last = action_row > 0 and action_row - 1 or (footer_row > 0 and footer_row - 1 or height)
+    local last = footer_row > 0 and footer_row - 1 or height
     return {size = M.size(painter.width, height), tabs = tab_row, actions = action_row, footer = footer_row,
         work = {x = 2, y = first, width = maximum(0, painter.width - 2), height = maximum(0, last - first + 1)}}
 end

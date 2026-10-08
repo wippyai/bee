@@ -133,6 +133,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         return {rows = rows, hits = hits, controls = body.controls}
     end
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     frame.header(painter, "SESSION", text.bound(conv.title, 128))
     local badge = conv.activity .. (conv.queued > 0 and (" · " .. tostring(conv.queued) .. " queued") or "")
@@ -162,20 +163,20 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     if height >= 5 then
         frame.line(painter, input_row, conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. text.bound(draft, 512) .. "▏", theme.text)
-        frame.actions(painter, height - 1, {
+        footer_buttons = {
             {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start new session from this" or "Send", enabled = conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active", primary = true},
             {kind = "back", key = "Esc", label = "Sessions", enabled = true},
             {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true, more = true},
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = agents.pending(conv)},
             {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = conv.lifecycle == "active"},
-        })
+        }
     end
     local message = status ~= "" and status or conv.notice
     if message == "" and conv.activity == "stalled" and conv.activity_evidence then
         message = "No progress for " .. tostring(conv.activity_evidence.quiet_for_ms) .. " ms · " .. conv.activity_evidence.turn
     end
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start new"}, {key = "Esc", verb = "sessions"}}) or MORE) end
+    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start new"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

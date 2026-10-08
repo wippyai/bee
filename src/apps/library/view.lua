@@ -201,6 +201,7 @@ end
 
 local function draw_list(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, ui: Ui): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     frame.header(painter, "LIBRARY", model.summary(state))
     if height >= 6 then frame.tabs(painter, 2, TABS, "tab_" .. state.tab) end
@@ -244,9 +245,8 @@ local function draw_list(width: integer, height: integer, preferences: appearanc
             if line then frame.line(painter, status_y - pane - 1 + slot, "  " .. text.bound(line, 8192), theme.text) end
         end
     end
-    if height >= 4 then frame.actions(painter, status_y, M.actions(state, chosen, not roomy)) end
-    frame.footer(painter, text.bound(ui.status ~= "" and ui.status or state.notice, 8192), HINTS,
-        state.governed.technical and TECHNICAL_HINTS or nil)
+    if height >= 4 then footer_buttons = M.actions(state, chosen, not roomy) end
+    frame.footer(painter, text.bound(ui.status ~= "" and ui.status or state.notice, 8192), HINTS, state.governed.technical and TECHNICAL_HINTS or nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter),
         capacity = window.capacity, offset = window.offset, operation_detail_offset = detail_offset}
 end
@@ -254,6 +254,7 @@ end
 -- draw_platform lists the packages the one Bee row stands for.
 local function draw_platform(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, ui: Ui): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local rows = model.platform(state)
     local chosen = model.selected_row(state)
     frame.header(painter, "LIBRARY  BEE", tostring(#rows) .. " packages · built in")
@@ -272,16 +273,17 @@ local function draw_platform(width: integer, height: integer, preferences: appea
             {title = "Part of", width = 12}}, cells = table_cells, keys = keys, kind = "row", selected = selected_index, offset = ui.offset})
     end
     if height >= 4 then
-        frame.actions(painter, height - 1, {{kind = "open", key = "Enter", label = "Details", enabled = chosen ~= nil, primary = true},
-            {kind = "back", key = "Esc", label = "Back", enabled = true}})
+        footer_buttons = {{kind = "open", key = "Enter", label = "Details", enabled = chosen ~= nil, primary = true},
+            {kind = "back", key = "Esc", label = "Back", enabled = true}}
     end
-    frame.footer(painter, text.bound(ui.status ~= "" and ui.status or state.notice, 8192), HINTS)
+    frame.footer(painter, text.bound(ui.status ~= "" and ui.status or state.notice, 8192), HINTS, nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter),
         capacity = window.capacity, offset = window.offset, operation_detail_offset = 0}
 end
 
 local function draw_version(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, ui: Ui): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local row = model.selected_row(state)
     frame.header(painter, "LIBRARY  " .. string.upper(row and row.name or "VERSION"), row and row.version or "")
@@ -323,9 +325,8 @@ local function draw_version(width: integer, height: integer, preferences: appear
         if line.heading then frame.section(painter, y, text.bound(line.text, 8192), line.summary and text.bound(line.summary, 8192) or nil)
         elseif line.text ~= "" then frame.line(painter, y, "  " .. text.bound(line.text, 8192), theme.text) end
     end
-    if height >= 4 then frame.actions(painter, status_y, M.actions(state, row)) end
-    frame.footer(painter, text.bound(ui.status ~= "" and ui.status or state.notice, 8192), HINTS,
-        state.governed.technical and TECHNICAL_HINTS or nil)
+    if height >= 4 then footer_buttons = M.actions(state, row) end
+    frame.footer(painter, text.bound(ui.status ~= "" and ui.status or state.notice, 8192), HINTS, state.governed.technical and TECHNICAL_HINTS or nil, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter),
         capacity = room, offset = offset, operation_detail_offset = 0}
 end
@@ -334,6 +335,7 @@ end
 -- takes every click for itself.
 local function draw_removal(base: Frame, width: integer, height: integer, preferences: appearance.Preferences, removal: model.Removal): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     for y, row in ipairs(base.rows) do painter.canvas:put(1, y, row, width) end
     local lines = model.removal_lines(removal)
     local box = frame.modal(painter, math.min(76, width - 2), #lines + 5, removal.kind == "back" and "Go back" or "Remove")

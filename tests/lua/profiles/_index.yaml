@@ -129,6 +129,7 @@ entries:
     test: wippy.test:test
     directory_view: bee.harness.app:directory_view
     protocol: bee.threads.sessions.types:protocol
+    frames: bee.ui:frame
     picker_view: bee.harness.app:picker_view
     session_view: bee.harness.app:session_view
     agents: bee.harness.app:agents

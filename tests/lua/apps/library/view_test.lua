@@ -171,7 +171,10 @@ local function define_tests()
             test.is_true(rows[2]:find("Installed", 1, true) ~= nil and rows[2]:find("Shared", 1, true) ~= nil and rows[2]:find("History", 1, true) ~= nil)
             test.is_true(rows[4]:find("Nothing installed yet", 1, true) ~= nil)
             test.is_true(rows[5]:find("Install something from Shared", 1, true) ~= nil)
-            test.is_true(rows[24]:find("Tab view · ↑↓ select · Esc close", 1, true) ~= nil)
+            test.contains(view.draw(160, 24, appearance.defaults(), state, ui()).rows[24], "Tab view · ↑↓ select · Esc close")
+            local hinted: {[string]: boolean} = {}
+            for _, hint in ipairs(assert(drawn.controls).hints) do hinted[hint.key] = true end
+            test.is_true(hinted.Tab and hinted["↑↓"] and hinted.Esc)
             test.is_true(rows[24]:find("? help", 1, true) ~= nil)
             local tabs = 0
             for _, hit in ipairs(drawn.hits) do if view.tab_of(hit.kind) then tabs = tabs + 1 end end
@@ -469,7 +472,9 @@ local function define_tests()
                 if row:sub(1, #"›") == "›" then marked = marked + 1; test.is_true(row:find("very-long", 1, true) ~= nil) end
             end
             test.eq(marked, 1)
-            test.is_true(rows[18]:find("↑↓ select", 1, true) ~= nil)
+            local wide = view.draw(160, 18, appearance.defaults(), state, ui())
+            test.contains(wide.rows[18], "↑↓ select")
+            test.contains(rows[18], "Enter Details")
         end)
 
         test.it("offers no publication from installed Hub packages", function()

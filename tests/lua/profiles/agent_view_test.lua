@@ -8,6 +8,7 @@ local directory_view = require("directory_view")
 local protocol = require("protocol")
 local fixtures = require("fixtures")
 local tty = require("tty")
+local frames = require("frames")
 type Object = {[string]: unknown}
 local function screen(rows: {string}): string return table.concat(rows, "\n") end
 local function conversation(activity: string, turns: {agents.Turn}, ref: string?, evidence: protocol.ActivityEvidence?): agents.Conversation
@@ -81,8 +82,8 @@ local function define_tests()
             test.is_true(rows[1]:find("NEW SESSION", 1, true) ~= nil and rows[1]:find("2 agents", 1, true) ~= nil)
             test.eq(rows[2]:sub(1, 7), " Alpha ")
             test.eq(rows[3]:sub(1, #"›"), "›")
-            -- The footer lists only keys the buttons above it do not show.
-            test.is_true(rows[23]:find("Enter Open", 1, true) ~= nil)
+
+            test.contains(rows[24], "Enter Open")
             test.is_true(rows[24]:find("/ search", 1, true) ~= nil)
             test.is_nil((rows[24]:find("Enter open", 1, true)))
             test.is_true(drawn.controls ~= nil)
@@ -132,7 +133,7 @@ local function define_tests()
                 test.is_true(plain:find("Fix API", 1, true) ~= nil)
                 test.is_true(plain:find("closed", 1, true) ~= nil)
                 test.is_nil((plain:find("bs:n:w:s", 1, true)))
-                test.is_true(shown.rows[size[2] - 1]:find("Enter Open", 1, true) ~= nil)
+                test.contains(shown.rows[size[2]], "Enter Open")
                 test.is_nil((shown.rows[size[2]]:find("Enter open", 1, true)))
                 test.is_true(shown.rows[size[2]]:find("Esc back", 1, true) ~= nil)
             end
@@ -186,7 +187,11 @@ local function define_tests()
                 test.is_true(screen(shown.rows):find("Stop current work", 1, true) ~= nil)
                 -- Stop is a button; the footer names only keys no button shows.
                 test.is_nil((shown.rows[size[2]]:find("Ctrl+K stop work", 1, true)))
-                test.is_true(shown.rows[size[2]]:find("Ctrl+D details", 1, true) ~= nil)
+                local hinted = false
+                for _, hint in ipairs(assert(shown.controls).hints) do
+                    if hint.key == "Ctrl+D" and hint.verb == "details" then hinted = true end
+                end
+                test.is_true(hinted)
             end
         end)
         test.it("updates the sidebar marker from the session snapshot", function()
@@ -229,7 +234,13 @@ local function define_tests()
                 for _, button in ipairs(controls.buttons) do test.not_nil(button.key) end
                 local footer = shown.rows[#shown.rows]:gsub("\27%[[0-9;]*m", "")
                 local _, helps = footer:gsub("%? help", "")
-                test.eq(helps, 1)
+                if helps == 0 then
+                    local menu = frames.menu()
+                    frames.render(shown, menu, appearance.defaults())
+                    local _, handled = frames.route(menu, {type = "key", action = "press", key = "?", key_type = "rune"})
+                    test.is_true(handled)
+                    test.eq(menu.mode, "help")
+                else test.eq(helps, 1) end
             end
             local hinted: {[string]: boolean} = {}
             for _, hint in ipairs(assert(screens[1].controls).hints) do hinted[hint.key] = true end

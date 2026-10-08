@@ -27,6 +27,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     rows: {protocol.SessionSnapshot}, selected: integer, status: string, filtered: boolean, workspaces: {[string]: agents.Workspace}?,
     show_closed: boolean?): Frame
     local painter = frame.new(width, height, preferences)
+    local footer_buttons: {frame.Button} = {}
     local layout = frame.layout(painter, false, true)
     local scope = filtered and "this workspace" or nil
     frame.header(painter, "SESSIONS", tostring(#rows) .. (#rows == 1 and " session" or " sessions") .. (scope and (" · " .. scope) or ""))
@@ -54,9 +55,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         buttons[#buttons + 1] = {kind = "new_session", key = "N", label = "New", enabled = true, primary = #rows == 0}
         if #rows > 0 then buttons[#buttons + 1] = {kind = "close_listed", key = "X", label = "Close", enabled = chosen ~= nil and chosen.lifecycle ~= "closed" and chosen.lifecycle ~= "closing"} end
         buttons[#buttons + 1] = {kind = "mcp_clients", key = "M", label = "MCP clients", enabled = true}
-        frame.actions(painter, height - 1, buttons)
+        footer_buttons = buttons
     end
-    frame.footer(painter, "", HINTS, MORE .. (show_closed and " · closed shown" or ""))
+    frame.footer(painter, "", HINTS, MORE .. (show_closed and " · closed shown" or ""), footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

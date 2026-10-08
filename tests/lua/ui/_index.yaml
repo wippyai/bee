@@ -23,11 +23,13 @@ entries:
 - name: frame_test
   kind: function.lua
   source: file://frame_test.lua
+  modules: [tty]
   method: run
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
+    appearance: bee.ui:appearance
 - name: glyphs_test
   kind: function.lua
   source: file://glyphs_test.lua
@@ -50,3 +52,23 @@ entries:
     model: bee.shell:model
     render: bee.shell:render
     settings_view: bee.apps.settings:view
+- name: footer_apps_test
+  kind: function.lua
+  source: file://footer_apps_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    picker: bee.harness.app:picker_view
+    directory: bee.harness.app:directory_view
+    settings: bee.apps.settings:view
+    help: bee.apps.help:view
+    library: bee.apps.library:view
+    library_model: bee.apps.library:model
+    contents: bee.apps.library:contents
+    inbox: bee.approvals.inbox.app:view
+    inbox_model: bee.approvals.inbox.app:model
+    leases: bee.approvals.inbox.app:leases
+    gateway: bee.gateway.app:view

@@ -100,18 +100,21 @@ local function define_tests()
             test.is_true(text:find("bee.apps.settings:app · 0x00017 ", 1, true) ~= nil)
             test.is_true(text:find("bee.apps.settings:app · 0x00018 ", 1, true) ~= nil)
             test.is_nil(text:find("0x00017}", 1, true) and text:find("· 0x00017}", 1, true))
-            -- Sort, pause and stop are buttons; the footer names the rest.
+
             test.is_true(plain[24]:find("Tab switch · Esc close", 1, true) ~= nil)
             test.is_nil((plain[24]:find("P pause", 1, true)))
-            test.is_true(plain[23]:find("Pause", 1, true) ~= nil and plain[23]:find("Stop app", 1, true) ~= nil)
+            test.is_true(plain[24]:find("Pause", 1, true) ~= nil and plain[24]:find("Stop app", 1, true) ~= nil)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(drawn.hits) do kinds[hit.kind] = true end
+            for _, hit in ipairs(drawn.hits) do
+                if hit.kind == "pause" or hit.kind == "sort" or hit.kind == "stop" or hit.kind == "frame_help" then test.eq(hit.y, 24) end
+            end
             test.is_true(kinds["processes"] and kinds["services"] and kinds["pause"] and kinds["sort"] and kinds["stop"] and kinds["row"])
             local marked = 0
             for _, row in ipairs(plain) do if row:sub(1, #"›") == "›" then marked = marked + 1; test.is_true(row:find("0x00018", 1, true) ~= nil) end end
             test.eq(marked, 1)
-            local confirming = view.draw(80, 24, sample, history, appearance.defaults(), rows[2].pid, 0, false, "", true, false, rows, false)
-            test.is_true(confirming.rows[24]:find("Stop selected app?", 1, true) ~= nil)
+            local confirming = view.draw(120, 24, sample, history, appearance.defaults(), rows[2].pid, 0, false, "", true, false, rows, false)
+            test.is_true(confirming.rows[23]:find("Stop selected app?", 1, true) ~= nil)
             test.is_true(confirming.rows[24]:find("Enter confirms · Esc cancels", 1, true) ~= nil)
             test.is_true(confirming.rows[24]:find("? help", 1, true) ~= nil)
         end)

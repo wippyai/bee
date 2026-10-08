@@ -35,6 +35,7 @@ that you and they both use, and bees on all your machines join one hive.
 
 - **Every coding agent in one workspace:** Claude Code, Codex, Antigravity, Grok, Muse and OpenCode run as sessions with live terminal windows; close a window and the agent keeps working.
 - **Agents drive agents:** a scoped MCP server lets any agent open other agents' sessions, send them work, wait for results and talk on durable threads.
+- **Bring your own MCP client:** `bee mcp connect --name "Terminal Claude"` pairs a client through **Needs you** and prints Claude Code and Codex configuration once; **Sessions → MCP clients → Revoke** cuts access.
 - **Apps built on demand:** ask in plain words and an agent builds a real Wippy application: a terminal UI for you, tools for agents, its own SQLite database with migrations, and Lua tests it runs inside Bee.
 - **One approval, exact permissions:** an app asks for only what it needs, such as a database, agent tools, one HTTP origin or one command in a folder; **Needs you** shows what it can do and what data it changes, and nothing is decided twice.
 - **Library:** apps and drivers your agents made, versions other bees share and Hub packages in one place, with updates, history, going back and removing while keeping data.

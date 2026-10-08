@@ -10,6 +10,8 @@ other dependencies when changing or copying runtime code. Registry metadata
 describes capabilities; it never grants them. Native Terminal runs with the
 operating system user's authority.
 
+External MCP clients pair with `bee mcp connect [--name NAME]`; use the existing trait approval and gateway token paths described in [External MCP clients](docs/external_mcp).
+
 ## Layout
 
 Each component is one folder `src/<component>/` that holds its own

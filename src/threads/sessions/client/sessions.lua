@@ -26,19 +26,19 @@ type SessionArg = string | Addressed
 type JoinPolicy = "all_success" | "all_settled" | "first_success" | "quorum"
 type CatalogKind = "definition" | "profile"
 
-type AwaitOptions = {timeout_ms: integer?}
-type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
-type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string}
-type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
-type OpenOptions = {definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, operation_key: string}
-type CallOptions = {definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, input: Input, output: string?,
+type AwaitOptions = {node: string?, timeout_ms: integer?}
+type CancelOptions = {node: string?, work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
+type CloseOptions = {node: string?, session: SessionArg?, incarnation: integer?, operation_key: string}
+type SendOptions = {node: string?, session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
+type OpenOptions = {node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, operation_key: string}
+type CallOptions = {node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, input: Input, output: string?,
     timeout_ms: integer?, operation_key: string}
-type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
-type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
+type ClientAwaitOptions = {node: string?, subject: string | Observable, timeout_ms: integer?}
+type JoinOptions = {node: string?, works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
     operation_key: string}
-type ListOptions = {filter: {lifecycle: string?, activity: string?, workspace: string?, definition: string?}?, cursor: string?}
-type HistoryOptions = {session: string, cursor: integer?, limit: integer?}
-type CatalogOptions = {definition_ref: string?, query: string?, sort: "name" | "driver"?, kind: CatalogKind?, include_unavailable: boolean?, cursor: string?}
+type ListOptions = {node: string?, filter: {lifecycle: string?, activity: string?, workspace: string?, definition: string?}?, cursor: string?}
+type HistoryOptions = {node: string?, session: string, cursor: integer?, limit: integer?}
+type CatalogOptions = {node: string?, definition_ref: string?, query: string?, sort: "name" | "driver"?, kind: CatalogKind?, include_unavailable: boolean?, cursor: string?}
 
 type Operation = {receipt: protocol.ControlReceipt, ref: (Operation) -> string,
     await: (Operation, AwaitOptions?) -> (OperationAwait?, Fault?)}
@@ -92,7 +92,7 @@ end
 
 -- The owner's ok value, its own Fault, or a transport/shape Fault. A lost or
 -- malformed reply to a mutation is an unknown outcome to recover by key.
-local function invoke(id: string, method: string, request: {[string]: unknown}, key: string?): (unknown, Fault?)
+local function invoke_owner(id: string, method: string, request: {[string]: unknown}, key: string?): (unknown, Fault?)
     local raw, transport = call_owner(id, method, request)
     if transport ~= nil then
         if key then return nil, fault("UNKNOWN_OUTCOME", transport, "same_key", key) end
@@ -202,21 +202,25 @@ local function incarnation_of(explicit: unknown, handle: unknown): (integer?, Fa
     return number, nil
 end
 
-local function new_client(): Client
+local function new_client(node: string?): Client
+    local function invoke(id: string, method: string, request: {[string]: unknown}, key: string?): (unknown, Fault?)
+        request.node = request.node or node
+        return invoke_owner(id, method, request, key)
+    end
     local client: Client
 
-    local function observe(ref: string, timeout: unknown): (unknown, Fault?)
+    local function observe(ref: string, timeout: unknown, selected_node: string?): (unknown, Fault?)
         local milliseconds, timeout_fault = timeout_of(timeout)
         if timeout_fault then return nil, timeout_fault end
-        return invoke(M.SESSIONS, "await", {subject = ref, timeout_ms = milliseconds}, nil)
+        return invoke(M.SESSIONS, "await", {subject = ref, timeout_ms = milliseconds, node = selected_node}, nil)
     end
 
-    local function operation_handle(receipt: protocol.ControlReceipt): Operation
+    local function operation_handle(receipt: protocol.ControlReceipt, selected_node: string?): Operation
         local ref = receipt.operation
         local handle_receipt = receipt
         local handle_ref = function(_: Operation): string return ref end
         local handle_await = function(_: Operation, options: AwaitOptions?): (OperationAwait?, Fault?)
-            local value, failure = observe(ref, options and options.timeout_ms)
+            local value, failure = observe(ref, options and options.timeout_ms, selected_node)
             if failure then return nil, failure end
             local observed, decode_error = protocol.decode_operation_await(value)
             if not observed then return nil, unreadable(decode_error, nil) end
@@ -226,13 +230,13 @@ local function new_client(): Client
         return {receipt = handle_receipt, ref = handle_ref, await = handle_await}
     end
 
-    local function work_handle(ref: string, session: string, incarnation: integer, receipt: protocol.WorkReceipt?): Work
+    local function work_handle(ref: string, session: string, incarnation: integer, receipt: protocol.WorkReceipt?, selected_node: string?): Work
         local handle_receipt = receipt
         local handle_session = session
         local handle_incarnation = incarnation
         local handle_ref = function(_: Work): string return ref end
         local handle_await = function(_: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
-            local value, failure = observe(ref, options and options.timeout_ms)
+            local value, failure = observe(ref, options and options.timeout_ms, selected_node)
             if failure then return nil, failure end
             local observed, decode_error = protocol.decode_work_await(value)
             if not observed then return nil, unreadable(decode_error, nil) end
@@ -240,12 +244,12 @@ local function new_client(): Client
             return observed, nil
         end
         local handle_cancel = function(_: Work, options: CancelOptions): (Operation?, Fault?)
-            local request: CancelOptions = {work = ref, incarnation = incarnation, reason = options and options.reason,
+            local request: CancelOptions = {work = ref, incarnation = incarnation, reason = options and options.reason, node = selected_node,
                 operation_key = options.operation_key}
             return client:cancel(request)
         end
         local handle_state = function(_: Work): (protocol.WorkState?, Fault?)
-            local value, failure = invoke(M.SESSIONS, "get", {work = ref}, nil)
+            local value, failure = invoke(M.SESSIONS, "get", {work = ref, node = selected_node}, nil)
             if failure then return nil, failure end
             local decoded, decode_error = protocol.decode_get(value)
             if not decoded or decoded.kind ~= "work" or decoded.value.work ~= ref then
@@ -256,14 +260,15 @@ local function new_client(): Client
         return {receipt = handle_receipt, session = handle_session, incarnation = handle_incarnation, ref = handle_ref, await = handle_await, cancel = handle_cancel, state = handle_state}
     end
 
-    local function session_handle(snapshot: protocol.SessionSnapshot, receipt: protocol.OpenReceipt?): Session
+    local function session_handle(snapshot: protocol.SessionSnapshot, receipt: protocol.OpenReceipt?, selected_node: string?): Session
+        selected_node = selected_node or node
         local handle_receipt = receipt
         local handle_snapshot = snapshot
         local handle_incarnation = snapshot.incarnation
         local handle_ref = function(_: Session): string return snapshot.session end
         local handle_send = function(_: Session, options: SendOptions): (Work?, Fault?)
             local request: SendOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
-                input = options.input, output = options.output, operation_key = options.operation_key}
+                input = options.input, output = options.output, operation_key = options.operation_key, node = selected_node}
             return client:send(request)
         end
         local handle_await = function(_: Session, work: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
@@ -274,14 +279,18 @@ local function new_client(): Client
         end
         local handle_close = function(_: Session, options: CloseOptions): (Operation?, Fault?)
             local request: CloseOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
-                operation_key = options.operation_key}
+                operation_key = options.operation_key, node = selected_node}
             return client:close(request)
         end
         local handle_get = function(_: Session): (Session?, Fault?)
-            return client:get(snapshot.session)
+            local value, failure = invoke(M.SESSIONS, "get", {session = snapshot.session, node = selected_node}, nil)
+            if failure then return nil, failure end
+            local decoded, err = protocol.decode_get(value)
+            if not decoded or decoded.kind ~= "session" then return nil, unreadable(err, nil) end
+            return session_handle(decoded.value, nil, selected_node), nil
         end
         local handle_history = function(_: Session, options: {cursor: integer?, limit: integer?}?): (protocol.HistoryPage?, Fault?)
-            return client:history({session = snapshot.session, cursor = options and options.cursor, limit = options and options.limit})
+            return client:history({session = snapshot.session, cursor = options and options.cursor, limit = options and options.limit, node = selected_node})
         end
         return {receipt = handle_receipt, snapshot = handle_snapshot, incarnation = handle_incarnation, ref = handle_ref, send = handle_send, await = handle_await, close = handle_close, get = handle_get, history = handle_history}
     end
@@ -298,11 +307,12 @@ local function new_client(): Client
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
+        request.node = options and options.node
         local value, failure = invoke(M.SESSIONS, "run", request, key)
         if failure then return nil, failure end
         local receipt, decode_error = protocol.decode_work_receipt(value)
         if not receipt then return nil, unreadable(decode_error, key) end
-        return work_handle(receipt.work, receipt.session, 1, receipt), nil
+        return work_handle(receipt.work, receipt.session, 1, receipt, options.node or node), nil
     end
 
     local client_open = function(_: Client, options: OpenOptions): (Session?, Fault?)
@@ -312,11 +322,12 @@ local function new_client(): Client
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
+        request.node = options and options.node
         local value, failure = invoke(M.SESSIONS, "open", request, key)
         if failure then return nil, failure end
         local receipt, decode_error = protocol.decode_open_receipt(value)
         if not receipt then return nil, unreadable(decode_error, key) end
-        return session_handle(receipt.snapshot, receipt), nil
+        return session_handle(receipt.snapshot, receipt, options.node or node), nil
     end
 
     local client_call = function(_: Client, options: CallOptions): (Call?, Fault?)
@@ -343,12 +354,13 @@ local function new_client(): Client
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
+        request.node = options and options.node
         local value, failure = invoke(M.SESSIONS, "send", request, key)
         if failure then return nil, failure end
         local receipt, decode_error = protocol.decode_work_receipt(value)
         if not receipt then return nil, unreadable(decode_error, key) end
         if receipt.session ~= session then return nil, unreadable("send receipt names another session", key) end
-        return work_handle(receipt.work, receipt.session, incarnation or 1, receipt), nil
+        return work_handle(receipt.work, receipt.session, incarnation or 1, receipt, options.node or node), nil
     end
 
     local client_cancel = function(_: Client, options: CancelOptions): (Operation?, Fault?)
@@ -365,12 +377,13 @@ local function new_client(): Client
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
+        request.node = options and options.node
         local value, failure = invoke(M.SESSIONS, "cancel", request, key)
         if failure then return nil, failure end
         local receipt, decode_error = protocol.decode_control_receipt(value)
         if not receipt then return nil, unreadable(decode_error, key) end
         if receipt.effect ~= "cancel" or receipt.subject ~= work then return nil, unreadable("cancel receipt names another effect or subject", key) end
-        return operation_handle(receipt), nil
+        return operation_handle(receipt, options.node or node), nil
     end
 
     local client_close = function(_: Client, options: CloseOptions): (Operation?, Fault?)
@@ -383,12 +396,13 @@ local function new_client(): Client
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
+        request.node = options and options.node
         local value, failure = invoke(M.SESSIONS, "close", request, key)
         if failure then return nil, failure end
         local receipt, decode_error = protocol.decode_control_receipt(value)
         if not receipt then return nil, unreadable(decode_error, key) end
         if receipt.effect ~= "close" or receipt.subject ~= session then return nil, unreadable("close receipt names another effect or subject", key) end
-        return operation_handle(receipt), nil
+        return operation_handle(receipt, options.node or node), nil
     end
 
     local client_await = function(_: Client, options: ClientAwaitOptions): (AnyAwait?, Fault?)
@@ -402,7 +416,7 @@ local function new_client(): Client
         end
         local kind = ref and protocol.subject_kind(ref)
         if not ref or not kind then return nil, invalid("subject must be a work or operation ref or handle") end
-        local value, failure = observe(ref, options.timeout_ms)
+        local value, failure = observe(ref, options.timeout_ms, options.node)
         if failure then return nil, failure end
         local observed, decode_error = protocol.decode_any_await(value)
         if not observed then return nil, unreadable(decode_error, nil) end
@@ -440,6 +454,7 @@ local function new_client(): Client
         if not key then return nil, key_fault end
         request.operation_key = key
         request.timeout_ms = timeout
+        request.node = options and options.node
         local value, failure = invoke(M.SESSIONS, "join", request, key)
         if failure then return nil, failure end
         local joined, decode_error = protocol.decode_join_await(value)
@@ -482,7 +497,7 @@ local function new_client(): Client
         local cursor = options.cursor == nil and nil or bounds.count(options.cursor)
         local limit = options.limit == nil and 64 or protocol.position(options.limit)
         if not session or (options.cursor ~= nil and cursor == nil) or not limit or limit > 64 then return nil, invalid("history requires a session and bounded cursor/limit") end
-        local value, failure = invoke(M.SESSIONS, "history", {session = session, cursor = cursor, limit = limit}, nil)
+        local value, failure = invoke(M.SESSIONS, "history", {session = session, cursor = cursor, limit = limit, node = options.node}, nil)
         if failure then return nil, failure end
         local page, decode_error = protocol.decode_history(value)
         if not page then return nil, unreadable(decode_error, nil) end
@@ -508,6 +523,7 @@ local function new_client(): Client
             if not cursor then return nil, invalid("cursor must be a cursor") end
             request.cursor = cursor
         end
+        request.node = options and options.node
         local value, failure = invoke(M.SESSIONS, "list", request, nil)
         if failure then return nil, failure end
         local page, decode_error = protocol.decode_list_page(value)
@@ -547,6 +563,7 @@ local function new_client(): Client
                 request.sort = options.sort
             end
         end
+        request.node = options and options.node
         local value, failure = invoke(M.CATALOG, "list", request, nil)
         if failure then return nil, failure end
         local page, decode_error = protocol.decode_catalog_page(value)
@@ -558,7 +575,7 @@ local function new_client(): Client
     return client
 end
 
-function M.client(): Client return new_client() end
+function M.client(options: {node: string?}?): Client return new_client(options and options.node) end
 local ambient_client = new_client()
 
 function M.open(options: OpenOptions): (Session?, Fault?) return ambient_client:open(options) end

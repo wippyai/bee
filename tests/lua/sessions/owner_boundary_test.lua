@@ -15,6 +15,16 @@ local function define_tests()
                 test.eq(assert(bounds.object(reply.error)).code, "INVALID", method)
             end
         end)
+        test.it("accepts node additively while rejecting invalid targets", function()
+            for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close", "catalog"}) do
+                local raw, err = funcs.call("bee.threads.sessions.binding:" .. method, {node = "", operation_key = "k"})
+                test.is_nil(err)
+                local reply = assert(bounds.object(raw))
+                local fault = assert(bounds.object(reply.error))
+                test.eq(fault.code, "INVALID")
+                test.contains(tostring(fault.message), "node")
+            end
+        end)
     end)
 end
 

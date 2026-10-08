@@ -18,7 +18,11 @@ local function incarnation(session: unknown): integer return math.floor(tonumber
 local function object(value: unknown): {[string]: unknown} return assert(bounds.object(value)) end
 
 local function closed(request: unknown, allowed: {string}): string?
-    local seen: {[string]: boolean} = {}
+    local raw = object(request)
+    if raw.node ~= nil and raw.node ~= "peer-test" then return "unexpected node" end
+    local destination = tostring(raw.session or raw.work or raw.subject or "")
+    if destination:find(":peer-test:", 1, true) and raw.node ~= "peer-test" then return "peer node was lost" end
+    local seen: {[string]: boolean} = {node = true}
     for _, name in ipairs(allowed) do seen[name] = true end
     for name in pairs(object(request)) do if not seen[name] then return "unknown field " .. tostring(name) end end
     return nil
@@ -65,7 +69,7 @@ function M.open(request: unknown): Reply
         local folder = object(object(object(request).spec).workdir)
         if folder.root_ref ~= "bee.node:machine" or folder.path ~= "home/project" then return refuse("INVALID", "workdir was lost", key) end
     end
-    local session = definition == "two" and "bs:n:w:s2" or "bs:n:w:s1"
+    local session = definition == "remote" and "bs:peer-test:w:s1" or definition == "two" and "bs:n:w:s2" or "bs:n:w:s1"
     if definition == "malformed" then return ok({session = session}) end
     return ok({session = session, operation = "bo:n:w:" .. segment(key), snapshot = (function()
         local value = snapshot(session)
@@ -93,7 +97,7 @@ function M.send(request: unknown): Reply
         return refuse("STALE", "incarnation changed", input.operation_key)
     end
     local word = type(input.input) == "string" and (input.input):match("^%a+$") or "ready"
-    return ok({work = "bw:n:w:" .. word, session = input.session, operation = "bo:n:w:" .. segment(input.operation_key),
+    return ok({work = (input.node == "peer-test" and "bw:peer-test:w:" or "bw:n:w:") .. word, session = input.session, operation = "bo:n:w:" .. segment(input.operation_key),
         committed_at = STAMP, sequence = 2, kind = "request", state = "queued", output_schema = input.output or "bee:Text@1",
         sender = {kind = "session", id = "bs:n:w:lead"}})
 end
@@ -132,6 +136,8 @@ end
 
 function M.get(request: unknown): Reply
     local input = object(request)
+    local problem = closed(request, {"session", "work", "operation"})
+    if problem then return refuse("INVALID", problem, nil) end
     if input.session then return ok({kind = "session", value = snapshot(tostring(input.session))}) end
     if input.work then
         local name = tail(input.work)
@@ -171,7 +177,11 @@ function M.catalog(request: unknown): Reply
         reasons = {}, features = {}, actions = {}}}, complete = true, unavailable_count = 0, diagnostics = {}})
 end
 
-function M.history(_: unknown): unknown return {ok = true, value = {items = {}}} end
+function M.history(request: unknown): unknown
+    local problem = closed(request, {"session", "cursor", "limit"})
+    if problem then return refuse("INVALID", problem, nil) end
+    return {ok = true, value = {items = {}}}
+end
 type ClientScript = {
     catalog: ((sessions.CatalogOptions) -> (unknown, sessions.Fault?))?,
     list: ((sessions.ListOptions) -> (unknown, sessions.Fault?))?,

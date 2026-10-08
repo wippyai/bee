@@ -4,7 +4,8 @@ entries:
 - name: launch_spawn_policy
   kind: security.policy
   meta:
-    comment: Launch start spawns the carrier on the workers host as the requester; the requester's own scope supplies everything else
+    comment: Launch start spawns the carrier on the workers host as the requester; the requester's own scope supplies everything
+      else
   policy:
     actions:
     - process.spawn
@@ -20,7 +21,8 @@ entries:
 - name: carrier_policy
   kind: security.policy
   meta:
-    comment: A carrier process calls the thread, placement and driver facades and reads the catalog and its launch policy; it holds no executor
+    comment: A carrier process calls the thread, placement and driver facades and reads the catalog and its launch policy;
+      it holds no executor
   policy:
     actions:
     - funcs.call
@@ -40,7 +42,8 @@ entries:
 - name: carrier_process_registry_policy
   kind: security.policy.expr
   meta:
-    comment: A carrier registers only its own attempt name so managed-run recovery can distinguish a live carrier from an orphan
+    comment: A carrier registers only its own attempt name so managed-run recovery can distinguish a live carrier from an
+      orphan
   policy:
     expression: ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$")
     actions:
@@ -51,13 +54,17 @@ entries:
 - name: harness_setup_policy
   kind: security.policy.expr
   meta:
-    comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application also resolves the public sessions contracts and opens any definition the person picks, and their owner authorizes each operation
+    comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application also
+      resolves the public sessions contracts and opens any definition the person picks, and their owner authorizes each operation
   policy:
-    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource in ["bee.harness.binding:setup", "bee.harness.binding:set_credential", "bee.gov.binding:driver_bindings"])
-      || (action == "contract.get" && (resource == "bee.threads.sessions:contract" || resource == "bee.threads.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await",
-      "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.threads.sessions.binding:owner_binding" || resource == "bee.threads.sessions.binding:catalog_binding"))
-      || (action == "funcs.call" && resource == "bee.node.binding:read") || (action == "bee.node.workspace.read" && resource == actor.meta.workspace_id)
-      || action == "bee.harness.launch"
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call"
+      && resource in ["bee.harness.binding:setup", "bee.harness.binding:set_credential", "bee.gov.binding:driver_bindings"])
+      || (action == "contract.get" && (resource == "bee.threads.sessions:contract" || resource == "bee.threads.sessions:catalog"))
+      || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel",
+      "close"]) || (action == "contract.open" && (resource == "bee.threads.sessions.binding:owner_binding" || resource ==
+      "bee.threads.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.node.binding:read")
+      || (action == "bee.node.workspace.read" && resource == actor.meta.workspace_id) || action == "bee.harness.launch" ||
+      action == "bee.sessions.remote" || (action == "funcs.call" && resource == "bee.hive.binding:call")
     actions:
     - bee.harness.launch
     - bee.node.workspace.read
@@ -66,13 +73,14 @@ entries:
     - contract.get
     - contract.open
     - contract.call
+    - bee.sessions.remote
     resources: '*'
     effect: allow
 - name: carrier_environment_policy
   kind: security.policy
   meta:
-    comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables while resolving host launch policy, so admission resolves the executable_env and environment_refs
-      of the definitions it admits
+    comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables while
+      resolving host launch policy, so admission resolves the executable_env and environment_refs of the definitions it admits
   policy:
     actions:
     - env.get
@@ -89,13 +97,16 @@ entries:
 - name: launch_locate_probe_policy
   kind: security.policy.expr
   meta:
-    comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and alternative login metadata without reading credential contents
+    comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings,
+      and alternative login metadata without reading credential contents
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action == "env.get" && (resource matches "^bee[.]driver[.][a-z][a-z0-9]*[.]env:executable$" || resource == "bee.harness.launch:host_environment_names"
-      || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || (action == "exec.get" && resource == "bee.placement.native.env:placement_executor") || (action == "exec.run" && meta.executor == "bee.placement.native.env:placement_executor")
-      || (action == "fs.get" && resource == "bee.env:machine_login_source")
-      || (action == "fs.get" && resource == "bee.placement.native.env:placement_host_files") || action == "fs.stat"
-      || (action == "env.get" && resource == "bee.placement.native.env:placement_path") || (action == "db.get" && resource == "bee:db")
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action == "env.get" && (resource
+      matches "^bee[.]driver[.][a-z][a-z0-9]*[.]env:executable$" || resource == "bee.harness.launch:host_environment_names"
+      || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource
+      != "") || (action == "exec.get" && resource == "bee.placement.native.env:placement_executor") || (action == "exec.run"
+      && meta.executor == "bee.placement.native.env:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")
+      || (action == "fs.get" && resource == "bee.placement.native.env:placement_host_files") || action == "fs.stat" || (action
+      == "env.get" && resource == "bee.placement.native.env:placement_path") || (action == "db.get" && resource == "bee:db")
     actions:
     - funcs.call
     - registry.get
@@ -119,7 +130,8 @@ entries:
 - name: profile_store_policy
   kind: security.policy.expr
   meta:
-    comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or write authority
+    comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or
+      write authority
   policy:
     expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || action != "funcs.call"
     actions:
@@ -178,11 +190,15 @@ entries:
     - process.context
     - bee.apps.session_present
     resources: '*'
-    expression: (action == "process.security" && resource == "security") || (action == "security.actor.create" && resource matches "^bee[.]application:[0-9a-f]{32}:([0-9a-f]{64}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
-      || (action == "process.context" && resource == "bee.workspace_id") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner")
-      || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$")
-      || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:get",
-      "bee.apps:open_call", "bee.harness.binding:setup", "bee.harness.service:open", "bee.threads.sessions.binding:restore", "bee.threads.sessions.binding:launch_prompt", "bee.threads.sessions.binding:idle_check"])
+    expression: (action == "process.security" && resource == "security") || (action == "security.actor.create" && resource
+      matches "^bee[.]application:[0-9a-f]{32}:([0-9a-f]{64}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+      || (action == "process.context" && resource == "bee.workspace_id") || (action == "bee.apps.session_present" && resource
+      == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner") ||
+      (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup"
+      && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register"
+      || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action ==
+      "funcs.call" && resource in ["bee.threads.sessions.binding:get", "bee.apps:open_call", "bee.harness.binding:setup",
+      "bee.harness.service:open", "bee.threads.sessions.binding:restore", "bee.threads.sessions.binding:launch_prompt", "bee.threads.sessions.binding:idle_check"])
     effect: allow
 - name: presentation_owner_policy
   kind: security.policy.expr
@@ -205,9 +221,11 @@ entries:
     - env.get
     - funcs.call
     resources: '*'
-    expression: (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" && resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
-      ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"] || ((action == "process.registry.register" || action == "process.registry.unregister") &&
-      resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")
+    expression: (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" &&
+      resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored"] &&
+      resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers")
+      || action in ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"]
+      || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")
     effect: allow
 - name: presentation_facade_policy
   kind: security.policy.expr
@@ -217,7 +235,9 @@ entries:
     - funcs.call
     - security.policy_group.get
     resources: '*'
-    expression: (action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource in ["bee.harness.service:open", "bee.harness.service:restore", "bee.harness.service:type", "bee.harness.service:activity"]) || (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope")
+    expression: (action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource in ["bee.harness.service:open",
+      "bee.harness.service:restore", "bee.harness.service:type", "bee.harness.service:activity"]) || (action == "security.policy_group.get"
+      && resource == "bee.harness.security:presentation_execution_scope")
     effect: allow
 - name: presentation_viewer_policy
   kind: security.policy.expr
@@ -228,17 +248,21 @@ entries:
     - process.registry.unregister
     - funcs.call
     resources: '*'
-    expression: (action == "process.registry.lookup" && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister")
-      && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource == "bee.harness.binding:present_restore")
+    expression: (action == "process.registry.lookup" && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$") || ((action
+      == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$")
+      || (action == "funcs.call" && resource == "bee.harness.binding:present_restore")
     effect: allow
 - name: permission_hook_policy
   kind: security.policy.expr
   policy:
-    actions: [funcs.call, bee.gateway.manage, process.registry.lookup, process.send, process.monitor]
+    actions:
+    - funcs.call
+    - bee.gateway.manage
+    - process.registry.lookup
+    - process.send
+    - process.monitor
     resources: '*'
-    expression: >-
-      (action == "funcs.call" && resource == "bee.gateway.binding:check") ||
-      (action == "bee.gateway.manage" && resource == "bindings") ||
-      (action == "process.registry.lookup" && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$") ||
-      action in ["process.send", "process.monitor"]
+    expression: (action == "funcs.call" && resource == "bee.gateway.binding:check") || (action == "bee.gateway.manage" &&
+      resource == "bindings") || (action == "process.registry.lookup" && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$")
+      || action in ["process.send", "process.monitor"]
     effect: allow

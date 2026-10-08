@@ -39,6 +39,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -50,6 +51,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: &id001
     - bee.threads.security:sessions_owner
@@ -123,12 +125,80 @@ entries:
             minLength: 1
             maxLength: 128
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_open
 - name: run
   kind: function.lua
   source: file://owner.lua
@@ -140,6 +210,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -151,6 +222,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   meta:
@@ -236,12 +308,80 @@ entries:
             minLength: 1
             maxLength: 128
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_run
 - name: send
   kind: function.lua
   source: file://owner.lua
@@ -253,6 +393,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -264,6 +405,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   meta:
@@ -311,13 +453,84 @@ entries:
             type: string
             minLength: 1
             maxLength: 128
+          expected_incarnation:
+            type: integer
+            minimum: 1
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_send
 - name: await
   kind: function.lua
   source: file://owner.lua
@@ -329,6 +542,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -340,6 +554,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: &id002
     - bee.threads.security:sessions_owner
@@ -381,12 +596,80 @@ entries:
             maximum: 60000
             default: 30000
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_await
 - name: join
   kind: function.lua
   source: file://owner.lua
@@ -398,6 +681,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -409,6 +693,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   meta:
@@ -471,12 +756,80 @@ entries:
             required:
             - quorum
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_join
 - name: get
   kind: function.lua
   source: file://owner.lua
@@ -488,6 +841,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -499,6 +853,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
   meta:
@@ -539,12 +894,80 @@ entries:
         - required:
           - operation
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_get
 - name: list
   kind: function.lua
   source: file://owner.lua
@@ -556,6 +979,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -567,6 +991,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   meta:
@@ -611,12 +1036,80 @@ entries:
             minLength: 1
             maxLength: 2048
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_list
 - name: history
   kind: function.lua
   source: file://owner.lua
@@ -628,6 +1121,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -639,6 +1133,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   meta:
@@ -665,12 +1160,80 @@ entries:
             minimum: 1
             maximum: 64
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_history
 - name: cancel
   kind: function.lua
   source: file://owner.lua
@@ -682,6 +1245,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -693,6 +1257,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
   meta:
@@ -728,12 +1293,80 @@ entries:
             minLength: 1
             maxLength: 128
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_cancel
 - name: close
   kind: function.lua
   source: file://owner.lua
@@ -745,6 +1378,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -756,6 +1390,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
   meta:
@@ -788,12 +1423,80 @@ entries:
             minLength: 1
             maxLength: 128
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_close
 - name: catalog
   kind: function.lua
   source: file://owner.lua
@@ -805,6 +1508,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -816,6 +1520,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   meta:
@@ -854,12 +1559,80 @@ entries:
             minLength: 1
             maxLength: 2048
       output:
-        type: object
-        required:
-        - ok
-        properties:
-          ok:
-            type: boolean
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_catalog
 - name: attach
   kind: function.lua
   source: file://owner.lua
@@ -875,6 +1648,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
@@ -884,6 +1658,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
 - name: restore
   kind: function.lua
   source: file://owner.lua
@@ -899,6 +1674,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
@@ -908,6 +1684,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
 - name: launch_prompt
   kind: function.lua
   source: file://owner.lua
@@ -923,6 +1700,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
@@ -932,6 +1710,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
 - name: idle_check
   kind: function.lua
   source: file://owner.lua
@@ -947,6 +1726,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
   modules:
@@ -956,6 +1736,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
 - name: hook_boundary
   kind: function.lua
   source: file://owner.lua
@@ -971,6 +1752,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
@@ -980,6 +1762,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
 - name: detach
   kind: function.lua
   source: file://owner.lua
@@ -991,6 +1774,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -1002,6 +1786,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
 - name: attention_count
@@ -1015,6 +1800,7 @@ entries:
   - hash
   - funcs
   - time
+  - system
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -1026,6 +1812,7 @@ entries:
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
 - name: threads_journal
@@ -1082,6 +1869,7 @@ entries:
     authorizer: bee.threads.sessions.binding:peer_authorize
     owner_receipts: true
     permission_action: bee.sessions.workspace
+    outbound_action: bee.sessions.remote
 - name: allowances
   kind: library.lua
   source: file://allowances.lua
@@ -1093,6 +1881,7 @@ entries:
   - funcs
   - ctx
   - system
+  - json
   imports:
     bounds: bee.values:bounds
     workspaces: bee.node:workspaces
@@ -1119,3 +1908,25 @@ entries:
   security:
     policies:
     - bee.threads.sessions.security:allowance_store_policy
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  imports:
+    hive: bee.hive:hive
+    bounds: bee.values:bounds
+- name: peers
+  kind: function.lua
+  source: file://peers.lua
+  method: list
+  modules:
+  - security
+  - system
+  imports:
+    protocol: bee.hive:protocol
+    nodes: bee.node:client
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.hive.security:outbound

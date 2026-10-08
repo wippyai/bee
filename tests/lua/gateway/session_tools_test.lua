@@ -175,6 +175,17 @@ local function define_tests()
                 test.eq(failure, "arguments.operation_key is required")
             end
         end)
+        test.it("accepts an optional bounded node on every session tool", function()
+            for _, name in ipairs(session_tools.NAMES) do
+                local arguments = valid(name)
+                arguments.node = "bee-peer"
+                local request, err = session_tools.decode(name, {arguments = arguments})
+                test.not_nil(request, tostring(err))
+                test.eq(request and request.node, "bee-peer")
+                arguments.node = ""
+                test.is_nil(session_tools.decode(name, {arguments = arguments}))
+            end
+        end)
         test.it("refuses caller identity and unknown fields in every payload", function()
             for _, name in ipairs(session_tools.NAMES) do
                 for _, field in ipairs({"subject_id", "workspace_id", "thread_id", "caller", "sender_action_id", "incarnation_epoch"}) do

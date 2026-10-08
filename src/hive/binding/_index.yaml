@@ -11,5 +11,16 @@ entries:
     access: bee.gov.binding:capability_access
     outbound: bee.hive:outbound
     protocol: bee.hive:protocol
+    schemas: bee.gateway.catalog:json_schema
+    operations: bee.hive:operations
+    canonical: bee.values:canonical
   security:
-    policies: [bee.hive.security:outbound, bee.hive.security:caller, bee.hive.security:messaging, bee.hive.security:admission_store]
+    policies:
+    - bee.hive.security:outbound
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.hive.security:admission_store
+  modules:
+  - security
+  - registry
+  - time

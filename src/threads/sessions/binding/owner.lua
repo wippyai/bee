@@ -15,6 +15,8 @@ local time = require("time")
 local logger = require("logger")
 local session_protocol = require("session_protocol")
 local record_values = require("record_values")
+local remote = require("remote")
+local system = require("system")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -1275,4 +1277,18 @@ function M.history(raw_request: unknown): Reply
     return succeed(page)
 end
 
+for _, name in ipairs({"open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close", "catalog"}) do
+    local local_method = M[name]
+    M[name] = function(raw: unknown): Reply
+        local input = object(raw)
+        if not input or input.node == nil then return local_method(raw) end
+        local node = bounds.id(input.node)
+        if not node or node:find("[^A-Za-z0-9_.-]") then return fail("INVALID", "node is malformed", key(input.operation_key)) end
+        local request: Object = {}
+        for field, value in pairs(input) do if field ~= "node" then request[field] = value end end
+        if node == system.node.id() then return local_method(request) end
+        local reply = remote.call(node, name, request)
+        return {ok = reply.ok == true, value = reply.value, error = object(reply.error)}
+    end
+end
 return M

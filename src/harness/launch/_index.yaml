@@ -180,6 +180,24 @@ entries:
       project: bee.env:workspace_root
       session: bee.placement.native.env:root
     credentials:
+      agy_api_key:
+        provider: agy
+        source:
+          kind: env_variable
+          ref: bee.driver.agy.env:api_key
+        optional: true
+      grok_api_key:
+        provider: grok
+        source:
+          kind: env_variable
+          ref: bee.driver.grok.env:api_key
+        optional: true
+      muse_api_key:
+        provider: muse
+        source:
+          kind: env_variable
+          ref: bee.driver.muse.env:api_key
+        optional: true
       claude_api_key:
         provider: claude
         source:

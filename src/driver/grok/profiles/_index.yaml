@@ -122,8 +122,10 @@ entries:
     profile_id: window
     private_credentials:
     - grok_login
+    - grok_api_key
     docker_credentials:
     - grok_login
+    - grok_api_key
     policy_ref: bee.driver.grok.security:launch_policy_grok_window
     default_mode: window
     allowed_overrides:
@@ -137,6 +139,7 @@ entries:
     session_resource: session
     credentials:
     - grok_login
+    - grok_api_key
     presentation:
       start_menu: true
       fullscreen: true
@@ -166,6 +169,7 @@ entries:
     session_resource: session
     credentials:
     - grok_login
+    - grok_api_key
     presentation:
       start_menu: false
       fullscreen: false

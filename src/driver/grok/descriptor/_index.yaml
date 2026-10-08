@@ -25,7 +25,6 @@ entries:
       - kind: env_present
         names:
         - XAI_API_KEY
-        - GROK_CODE_XAI_API_KEY
     platform:
       os:
       - linux

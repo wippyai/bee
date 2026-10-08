@@ -123,8 +123,10 @@ entries:
     profile_id: window
     private_credentials:
     - agy_login
+    - agy_api_key
     docker_credentials:
     - agy_login
+    - agy_api_key
     policy_ref: bee.driver.agy.security:launch_policy_agy_window
     default_mode: window
     allowed_overrides:
@@ -136,7 +138,8 @@ entries:
     thread_policy:
       kind: new
     session_resource: session
-    credentials: []
+    credentials:
+    - agy_api_key
     presentation:
       start_menu: true
       fullscreen: true
@@ -165,6 +168,7 @@ entries:
     session_resource: session
     credentials:
     - agy_login
+    - agy_api_key
     presentation:
       start_menu: false
       fullscreen: false

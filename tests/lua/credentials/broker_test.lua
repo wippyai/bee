@@ -167,6 +167,7 @@ local function issue(client: Principal, workspace: string, name: string, attempt
     for key, item in pairs(extra or {}) do request[key] = item end
     return value(call(client, "issue_projection", request))
 end
+local shipped_sources = assert(registry.get("bee.credentials.env:credential_sources"))
 local function define_tests()
     test.describe("Credential broker", function()
         local workspace = fresh("ws")
@@ -289,6 +290,37 @@ local function define_tests()
                 for key, item in pairs(changes) do changed[key] = item end
                 test.eq(code(call(user, "issue_projection", changed)), "CONFLICT", tostring(next(changes)))
             end
+        end)
+        test.it("projects entered Agy Grok and Muse keys without recording their values", function()
+            local before = assert(registry.get("bee.credentials.env:credential_sources"))
+            local selected = assert(registry.snapshot()):changes()
+            selected:update(shipped_sources)
+            assert(selected:apply())
+            local ok, failure = pcall(function()
+            for _, row in ipairs({{provider = "agy", destination = "GEMINI_API_KEY"},
+                {provider = "grok", destination = "XAI_API_KEY"}, {provider = "muse", destination = "META_API_KEY"}}) do
+                local ws, attempt = fresh(row.provider), fresh("entered-key-attempt")
+                local ref = "bee.driver." .. row.provider .. ".env:api_key"
+                local secret = "fixture-entered-" .. row.provider .. "-832a"
+                local defined = value(call(manager, "define", {workspace_id = ws, name = "api_key", provider = row.provider,
+                    source = {kind = "env_variable", ref = ref}}))
+                test.eq(defined.destination, row.destination)
+                local stored = call(manager, "set_value", {workspace_id = ws, name = "api_key", value = secret})
+                test.is_true(stored.ok)
+                local projected = issue(user, ws, "api_key", attempt)
+                local materialized = value(call(runner, "materialize", {projection_id = projected.projection_id, subject = USER,
+                    audience = USER, attempt_id = attempt, generation_key = "entered-key"}))
+                test.eq(materialized.destination, row.destination)
+                test.eq(materialized.value, secret)
+                for _, safe in ipairs({stored, call(manager, "list", {workspace_id = ws}), assert(registry.get(ref))}) do
+                    test.is_nil(assert(json.encode(safe)):find(secret, 1, true))
+                end
+            end
+            end)
+            local restore = assert(registry.snapshot()):changes()
+            restore:update(before)
+            assert(restore:apply())
+            if not ok then error(tostring(failure)) end
         end)
         test.it("holds a person-entered custom provider key outside credential and registry records", function()
             local ws, attempt = fresh("custom-provider"), fresh("custom-provider-attempt")

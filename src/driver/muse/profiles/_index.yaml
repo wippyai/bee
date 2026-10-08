@@ -99,8 +99,10 @@ entries:
     profile_id: window
     private_credentials:
     - muse_login
+    - muse_api_key
     docker_credentials:
     - muse_login
+    - muse_api_key
     policy_ref: bee.driver.muse.security:launch_policy_muse_window
     default_mode: window
     allowed_overrides:
@@ -112,7 +114,8 @@ entries:
     thread_policy:
       kind: new
     session_resource: session
-    credentials: []
+    credentials:
+    - muse_api_key
     presentation:
       start_menu: true
       fullscreen: true
@@ -141,6 +144,7 @@ entries:
     session_resource: session
     credentials:
     - muse_login
+    - muse_api_key
     presentation:
       start_menu: false
       fullscreen: false

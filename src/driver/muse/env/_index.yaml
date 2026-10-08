@@ -7,3 +7,8 @@ entries:
   variable: muse
   default: ''
   readonly: true
+- name: api_key
+  kind: env.variable
+  storage: bee.credentials.env:entered_values
+  variable: muse_api_key
+  default: ''

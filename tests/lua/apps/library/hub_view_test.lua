@@ -76,6 +76,19 @@ local function define_tests()
             test.is_true(table.concat(frame.rows, "\n"):find("Usage instructions", 1, true) ~= nil)
             test.is_true(table.concat(frame.rows, "\n"):find("    enabled = false", 1, true) ~= nil)
         end)
+        test.it("says why a package README is unavailable and still offers its versions", function()
+            local state = model.new()
+            model.select(state, "bee/example")
+            model.apply_details(state, {ok = true, code = nil, message = nil, replayed = false, value = {
+                component = "bee/example", title = "Example", description = "Package", readme = "",
+                readme_error = "internal: failed to get readme",
+                versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1,
+            }})
+            test.eq(state.phase, "details")
+            test.eq(state.selected_version, "1.0.0")
+            local frame = draw(100, 24, state, 0, "", true)
+            test.is_true(table.concat(frame.rows, "\n"):find("README unavailable: internal: failed to get readme", 1, true) ~= nil)
+        end)
         test.it("shows why Update Bee retains a selected component", function()
             local state = model.new()
             model.select(state, "bee/bee")

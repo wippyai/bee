@@ -21,7 +21,7 @@ type Intent = {operation: string, request: Object?, expected_digest: string?}
 type Phase = "catalog" | "installed" | "details" | "operations" | "plan" | "confirm" | "result"
 type Item = {component: string, title: string, description: string, latest_version: string, application: boolean?}
 type Version = {version: string, yanked: boolean}
-type Detail = {component: string, title: string, description: string, readme: string, versions: {Version}, page: integer, total_versions: integer}
+type Detail = {component: string, title: string, description: string, readme: string, readme_error: string, versions: {Version}, page: integer, total_versions: integer}
 type Module = {component: string, version: string, source: string, direct: boolean, used_by: {string}}
 type PackUpdate = {component: string, installed_version: string, available_version: string, update_available: boolean}
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
@@ -836,7 +836,8 @@ function M.apply_details(state: State, reply: Reply)
         if selected then versions[#versions + 1] = {version = selected, yanked = item.yanked} end
     end
     state.detail = {component = name, title = M.text(value.title, 160), description = M.text(value.description, 512),
-        readme = readme(value.readme), versions = versions, page = page, total_versions = total_versions}
+        readme = readme(value.readme), readme_error = M.text(value.readme_error, 512), versions = versions, page = page,
+        total_versions = total_versions}
     if not state.selected_version then for _, item in ipairs(versions) do if not item.yanked then state.selected_version = item.version; break end end end
     state.phase, state.notice = "details", ""
 end

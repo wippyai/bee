@@ -224,7 +224,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     end
                 end
                 flush()
-                if detail.readme == "" then lines = {"No README provided by this package."} end
+                if detail.readme_error ~= "" then lines = {"README unavailable: " .. detail.readme_error}
+                elseif detail.readme == "" then lines = {"No README provided by this package."} end
                 local capacity = maximum(0, height - 8)
                 local next_offset = math.floor(math.max(0, math.min(maximum(0, #lines - capacity), offset)))
                 for slot = 1, capacity do

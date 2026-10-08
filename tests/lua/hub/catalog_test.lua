@@ -111,6 +111,18 @@ local function define_tests()
             test.is_true(result.versions[2].yanked)
         end)
 
+        test.it("keeps the package and its versions when Hub cannot serve its README", function()
+            local result, problem = catalog.decode_detail_result(module("wippy/terminal"), nil,
+                versions({{version = "v1.2.3", yanked = false}}), "wippy/terminal", "internal: failed to get readme")
+            test.is_nil(problem)
+            test.not_nil(result)
+            if not result then return end
+            test.eq(result.readme, "")
+            test.eq(result.readme_error, "internal: failed to get readme")
+            test.eq(#result.versions, 1)
+            test.eq(result.versions[1].version, "v1.2.3")
+        end)
+
         test.it("rejects mismatched identity and malformed detail data", function()
             test.is_nil(catalog.decode_detail_result(module("other/terminal"), {content = "README"}, versions({}),
                 "wippy/terminal"))

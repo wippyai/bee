@@ -22,7 +22,7 @@ type Item = {component: string, title: string, description: string, latest_versi
 type Browse = {items: {Item}, total: integer, page: integer, page_size: integer}
 type Version = {version: string, yanked: boolean}
 type VersionPage = {items: {Version}, total: integer, page: integer, page_size: integer}
-type Detail = {component: string, latest_version: string, title: string, description: string, readme: string, versions: {Version}, total_versions: integer, page: integer, page_size: integer}
+type Detail = {component: string, latest_version: string, title: string, description: string, readme: string, readme_error: string, versions: {Version}, total_versions: integer, page: integer, page_size: integer}
 
 local function component(value: unknown): string?
     local name = bounds.line(value, M.MAX_COMPONENT_BYTES)
@@ -149,21 +149,29 @@ function M.decode_versions(raw: unknown): (VersionPage?, string?)
     return {items = versions, total = total, page = page, page_size = M.MAX_VERSIONS}, nil
 end
 
-function M.decode_detail_result(module: unknown, readme: unknown, version_response: unknown, requested_component: string): (Detail?, string?)
+-- decode_detail_result reads a package's details. The README is optional
+-- content: when Hub could not serve it, readme_error says why and the package
+-- and its versions still decode.
+function M.decode_detail_result(module: unknown, readme: unknown, version_response: unknown, requested_component: string,
+    readme_error: string?): (Detail?, string?)
     local item, item_error = decode_item(module)
     if not item then return nil, item_error end
     if item.component ~= requested_component then return nil, "Hub returned another component" end
-    local readme_value = bounds.object(readme)
-    if not readme_value then return nil, "Hub README must be an object" end
-    local content = bounds.text(readme_value.content, M.MAX_README_BYTES)
-    if not content then return nil, "Hub README has invalid content" end
+    local content = ""
+    if readme_error == nil then
+        local readme_value = bounds.object(readme)
+        if not readme_value then return nil, "Hub README must be an object" end
+        local text = bounds.text(readme_value.content, M.MAX_README_BYTES)
+        if not text then return nil, "Hub README has invalid content" end
+        content = text
+    end
     local versions, versions_error = M.decode_versions(version_response)
     if not versions then return nil, versions_error end
     return {
         component = item.component, latest_version = item.latest_version,
         title = item.title,
         description = item.description,
-        readme = content,
+        readme = content, readme_error = readme_error or "",
         versions = versions.items,
         total_versions = versions.total, page = versions.page, page_size = versions.page_size,
     }, nil
@@ -219,11 +227,11 @@ function M.detail(raw: unknown): (Detail?, string?)
     local module, module_error = hub.modules.get(request.component, {timeout = M.TIMEOUT_SECONDS})
     if not module then return nil, tostring(module_error) end
     local readme, readme_error = hub.modules.readme(request.component, {timeout = M.TIMEOUT_SECONDS})
-    if not readme then return nil, tostring(readme_error) end
     local versions, versions_error = hub.versions.list(request.component,
         {page = request.page, page_size = M.MAX_VERSIONS, include_yanked = true, timeout = M.TIMEOUT_SECONDS})
     if not versions then return nil, tostring(versions_error) end
-    return M.decode_detail_result(module, readme, versions, request.component)
+    return M.decode_detail_result(module, readme, versions, request.component,
+        not readme and tostring(readme_error or "Hub README is unavailable") or nil)
 end
 
 -- latest is the newest release Hub lists for component.

@@ -21,7 +21,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.placement_profile
-    title: Native
+    title: Local
   data:
     schema_revision: bee.placement-profile@1
     placement_binding: bee.placement.native.binding:binding

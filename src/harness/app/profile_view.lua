@@ -21,12 +21,13 @@ type Field = {kind: string, name: string, label: string, option_kind: string?, m
 -- A thread row; thread_id nil is the new thread the launch opens.
 type ThreadRow = {thread_id: string?, title: string}
 type Threads = {items: {ThreadRow}, selected: integer, error: string?}
-type State = {settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
+type Driver = {definition_ref: string, title: string}
+type State = {drivers: {Driver}?, driver_choice: Driver?, settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     status: string, confirming_remove: boolean, confirming_revoke: boolean?, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 
-function M.new(form: forms.Form, ask: Ask): State
+function M.new(form: forms.Form, ask: Ask, drivers: {Driver}?): State
     local option_text: {[string]: string} = {}
     local options = editor.options(form.draft) or {}
     for _, option in ipairs(options) do
@@ -34,7 +35,7 @@ function M.new(form: forms.Form, ask: Ask): State
             option_text[option.name] = type(option.value) == "string" and option.value or ""
         end
     end
-    return {settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
+    return {drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
         option_text = option_text, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirming_remove = false, confirming_revoke = false, ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
 end
@@ -65,9 +66,12 @@ local function human(name: string): string
     return words:sub(1, 1):upper() .. words:sub(2)
 end
 local function fields(state: State): {Field}
-    local result: {Field} = {{kind = "title", name = "", label = "Name"}}
+    local result: {Field} = {{kind = "title", name = "", label = "Name"},
+        {kind = "driver", name = "", label = "Driver: " .. (state.form.driver_name or state.form.draft.driver_binding_ref)}}
+    result[#result + 1] = {kind = "answers", name = "", label = "Permission answers: " .. (state.form.draft.bee.permission_answers or "provider")}
+    if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "System prompt"} end
     if state.form.draft._allowed.workdir then result[#result + 1] = {kind = "workdir", name = "", label = folder_label(state)} end
-    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Placement: " .. (editor.placement_ref(state.form.draft) or "bee.placement.profiles:native")} end
+    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Run in: " .. ((state.form.placement_names or {})[editor.placement_ref(state.form.draft) or "bee.placement.profiles:native"] or editor.placement_ref(state.form.draft) or "Definition default")} end
     local options = editor.options(state.form.draft)
     local metadata = state.form.fields or {}
     table.sort(options or {}, function(a: {name: string}, b: {name: string}): boolean
@@ -77,7 +81,7 @@ local function fields(state: State): {Field}
         return a.name < b.name
     end)
     for _, option in ipairs(options or {}) do
-        if (metadata[option.name] and metadata[option.name].section == "basic") or (not metadata[option.name] and (option.name == "model" or option.name == "effort")) then
+        if metadata[option.name] and metadata[option.name].section == "basic" then
             result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
                 max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
         end
@@ -91,11 +95,9 @@ local function fields(state: State): {Field}
             for _, reason in ipairs(reasons) do result[#result + 1] = {kind = "info", name = "", label = reason} end
             result[#result + 1] = {kind = "info", name = "", label = "Original: " .. (canonical.encode(state.form.migration_diagnostic.source) or "Unavailable")}
         end
-        result[#result + 1] = {kind = "answers", name = "", label = "Permission answers: " .. (state.form.draft.bee.permission_answers or "provider")}
-        if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "Instructions"} end
         if state.form.draft._allowed.thread then result[#result + 1] = {kind = "thread", name = "", label = thread_label(state)} end
         for _, option in ipairs(options or {}) do
-            if (metadata[option.name] and metadata[option.name].section == "advanced") or (not metadata[option.name] and option.name ~= "model" and option.name ~= "effort") then
+            if not metadata[option.name] or metadata[option.name].section == "advanced" then
                 result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
                     max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
             end
@@ -104,6 +106,15 @@ local function fields(state: State): {Field}
         for _, tool in ipairs(editor.tools(state.form.draft) or {}) do
             result[#result + 1] = {kind = "tool", name = tool.name,
                 label = (tool.selected and "[x] " or "[ ] ") .. (TOOL_NAMES[tool.name] or human(tool.name))}
+            if tool.selected then
+                local value = state.settings["mcp." .. tool.name]
+                if value == nil then
+                    for _, item in ipairs(state.form.draft.bee.mcp or {}) do
+                        if item.tool == tool.name then value = canonical.encode(item.scope) end
+                    end
+                end
+                result[#result + 1] = {kind = "scope", name = "mcp." .. tool.name, label = "MCP scope / traits: " .. (value or "{}")}
+            end
         end
         for _, ref in ipairs(state.form.credentials or {}) do
             local chosen = state.form.draft.bee.credential_refs
@@ -159,6 +170,13 @@ function M.action(state: State, action: string): string?
         for name, value in pairs(state.option_text) do
             local changed, option_error = editor.set_text_option(state.form.draft, name, value)
             if not changed then state.status = option_error or "Invalid option"; return nil end
+        end
+        for name, value in pairs(state.settings) do
+            local tool = name:match("^mcp%.(.+)$")
+            if tool then
+                local changed, scope_error = editor.set_tool_scope(state.form.draft, tool, value)
+                if not changed then state.status = scope_error or "Invalid MCP scope"; return nil end
+            end
         end
         local settings_error = settings.apply(state.form.draft, state.settings)
         if settings_error then state.status = settings_error; return nil end
@@ -292,6 +310,18 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     if state.form.pending or state.confirming_remove then return nil end
     local field = listed[state.selected]
     if not field or field.kind == "unsupported" or field.kind == "info" then return nil end
+    if field.kind == "driver" then
+        if event.type == "key" and event.action == "press" and (event.key_type == "enter" or event.key_type == "left" or event.key_type == "right") then
+            local drivers = state.drivers or {}
+            if #drivers == 0 then state.status = "Choose an installed driver from New session"; return nil end
+            local current = 0
+            for index, item in ipairs(drivers) do if item.definition_ref == state.form.draft.definition_ref then current = index end end
+            local delta = event.key_type == "left" and -1 or 1
+            state.driver_choice = drivers[((current - 1 + delta) % #drivers) + 1]
+            return "driver"
+        end
+        return nil
+    end
     if field.kind == "workdir" or field.kind == "thread" then
         if event.type == "key" and event.action == "press" and (event.key_type == "enter" or event.key_type == "space" or event.key == " ") then
             if field.kind == "workdir" then browse(state) else choose_thread(state) end
@@ -334,9 +364,14 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    local value = field.kind == "settings" and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
+    local value = (field.kind == "settings" or field.kind == "scope") and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
         or (field.kind == "option" and (state.option_text[field.name] or "") or state.guidance)
-    local limit = field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
+    if field.kind == "scope" and state.settings[field.name] == nil then
+        for _, item in ipairs(state.form.draft.bee.mcp or {}) do
+            if "mcp." .. item.tool == field.name then value = canonical.encode(item.scope) or "{}" end
+        end
+    end
+    local limit = field.kind == "scope" and 8192 or field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
         or (field.kind == "option" and (field.max_bytes or editor.MAX_INSTRUCTIONS_BYTES) or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text
     elseif event.type == "key" and event.action == "press" then
@@ -347,7 +382,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         elseif not event.ctrl and not event.alt and event.key ~= "" and not event.key:find("%c") then value = value .. event.key end
     end
     if #value > limit then state.status = "Text exceeds " .. tostring(limit) .. " bytes"; return nil end
-    if field.kind == "settings" then state.settings[field.name] = value
+    if field.kind == "settings" or field.kind == "scope" then state.settings[field.name] = value
     elseif field.kind == "repair" then state.form.repair_json = value
     elseif field.kind == "title" then state.title = value
     elseif field.kind == "option" then state.option_text[field.name] = value
@@ -396,7 +431,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if picker then return draw_folders(painter, state, picker) end
     local threads = state.threads
     if threads then return draw_threads(painter, state, threads) end
-    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced" or "Name · agent settings")
+    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "NEW AGENT PROFILE", state.advanced and "Advanced" or "Name · agent settings")
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))
     local window = frame.window(#listed, capacity, state.selected, 0)

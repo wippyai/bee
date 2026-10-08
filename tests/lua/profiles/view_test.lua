@@ -153,8 +153,9 @@ local function define_tests()
             local drawn = view.draw(60, 16, appearance.defaults(), s)
             test.is_true(table.concat(drawn.rows, "\n"):find("Folder: Definition folder", 1, true) ~= nil)
             test.is_true(table.concat(drawn.rows, "\n"):find("Thread: New thread", 1, true) ~= nil)
-            -- Name, then the folder.
-            view.input(s, key("tab"), drawn)
+            for _, hit in ipairs(drawn.hits) do
+                if hit.kind == "field" and drawn.rows[hit.y]:find("Folder:", 1, true) then s.selected = hit.index end
+            end
             view.input(s, key("enter"), drawn)
             test.not_nil(s.browsing)
             drawn = view.draw(60, 16, appearance.defaults(), s)
@@ -166,10 +167,10 @@ local function define_tests()
             test.is_nil(s.browsing)
             test.eq(s.form.draft.workdir and s.form.draft.workdir.path, "legacy")
             test.eq(s.form.draft.workdir and s.form.draft.workdir.root_ref, "bee.env:workspace_root")
-            -- Native home and permission answers precede the thread.
-            view.input(s, key("tab"), drawn)
-            view.input(s, key("tab"), drawn)
-            view.input(s, key("tab"), drawn)
+            drawn = view.draw(60, 16, appearance.defaults(), s)
+            for _, hit in ipairs(drawn.hits) do
+                if hit.kind == "field" and drawn.rows[hit.y]:find("Thread:", 1, true) then s.selected = hit.index end
+            end
             view.input(s, key("enter"), drawn)
             local threads = s.threads
             if not threads then error("thread chooser did not open") end
@@ -183,10 +184,9 @@ local function define_tests()
             local result = editor.result(s.form.draft)
             test.eq(result and result.workdir and result.workdir.path, "legacy")
             test.eq(result and result.thread and result.thread.thread_id, "thread-1")
-            -- The definition folder and a new thread clear the choices.
-            view.input(s, key("up"), drawn)
-            view.input(s, key("up"), drawn)
-            view.input(s, key("up"), drawn)
+            for _, hit in ipairs(drawn.hits) do
+                if hit.kind == "field" and drawn.rows[hit.y]:find("Folder:", 1, true) then s.selected = hit.index end
+            end
             view.input(s, key("enter"), drawn)
             view.input(s, key("rune", "d"), drawn)
             test.is_nil(s.form.draft.workdir)

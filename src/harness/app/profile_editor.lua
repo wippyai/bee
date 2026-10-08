@@ -319,6 +319,31 @@ function M.cycle_option(draft: Draft, raw_name: unknown, raw_direction: number?)
     return true, nil
 end
 
+function M.set_tool_scope(draft: Draft, tool: string, value: string): (boolean, string?)
+    if not bounds.member(tool, draft._allowed.mcp_tools) then return false, "MCP tool is not allowed by the host" end
+    local base, base_error = current(draft)
+    if not base then return false, base_error end
+    local scope, decode_error = json.decode(value)
+    if decode_error then return false, "MCP scope requires JSON" end
+    local mcp: {{tool: string, scope: unknown}} = {}
+    local selected = false
+    for _, item in ipairs(base.bee.mcp or {}) do
+        local chosen: unknown = item.scope
+        if item.tool == tool then chosen = scope; selected = true end
+        mcp[#mcp + 1] = {tool = item.tool, scope = chosen}
+    end
+    if not selected then return false, "Select the MCP tool before editing its scope" end
+    local raw = raw_profile(base)
+    local bee: {[string]: unknown} = {}
+    for key, item in pairs(base.bee) do bee[key] = item end
+    bee.mcp = mcp
+    raw.bee = bee
+    local checked, err = protocol.profile(raw)
+    if not checked then return false, err end
+    draft.bee = checked.bee
+    return true, nil
+end
+
 function M.toggle_tool(draft: Draft, tool: string): (boolean, string?)
     if not bounds.member(tool, draft._allowed.mcp_tools) then return false, "MCP tool is not allowed by the host" end
     local mcp = draft.bee.mcp or {}

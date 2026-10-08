@@ -31,7 +31,7 @@ local function ask(target: string, request: {[string]: unknown}): caller.Reply
     if err then return caller.unknown() end
     return caller.decode(raw) or caller.unknown()
 end
-type Loaded = {serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
+type Loaded = {drivers: {profile_view.Driver}?, serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
 type Opened = {serial: integer, conversation: agents.Conversation?, error: string?}
 type Progress = {conversation: agents.Conversation, error: string?}
 local function fault(reply: admission.Reply?): string
@@ -99,6 +99,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local filtered = false
     local remembered: {[string]: agents.Conversation} = {}
     local listed = no_agents()
+    local driver_choices: {profile_view.Driver} = {}
     local selected: integer = 0
     local status = "Loading sessions…"
     local loading = false
@@ -153,9 +154,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         local closed_requested = show_closed
         coroutine.spawn(function()
             if catalog_requested then
-                local found, load_error = agents.list(sessions.client(), include, catalog_query, catalog_sort)
+                local found, load_error = agents.list(sessions.client(), true, nil, catalog_sort)
                 if running and serial == load_serial then
-                    local sent: Loaded = {serial = serial, listing = found, error = load_error}
+                    local sent: Loaded = {serial = serial, listing = found and agents.visible_profiles(found, include, catalog_query),
+                        drivers = found and agents.profile_drivers(found), error = load_error}
                     send_loads(sent)
                 end
             else
@@ -338,7 +340,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if result.serial == load_serial then
                 loading = false
                 listed = no_agents()
-                if result.listing then listed = result.listing end
+                if result.listing then
+                    driver_choices = result.drivers or {}
+                    listed = result.listing
+                end
                 directory = result.directory or directory
                 workspace_names = result.workspaces or workspace_names
                 local count = catalog_open and #listed.items or #directory
@@ -415,13 +420,18 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 elseif editing then
                     local action = profile_view.input(editing, data, edit_frame)
                     if action == "cancel" then editing = nil
+                    elseif action == "driver" and editing.driver_choice then
+                        editing.form.draft.name = editing.title
+                        local form, err = forms.change_driver(editing.form, editing.driver_choice)
+                        if form then editing = profile_view.new(form, ask, driver_choices)
+                        else editing.status = err or "Driver could not be selected" end
                     elseif action == "copy" then
                         local ok, err = forms.copy(editing.form)
                         if ok then ok, err = forms.save(editing.form) end
                         if ok then editing = nil; refresh = true else editing.status = err or "Copy failed" end
                     elseif action == "reload" then
                         local form, err = forms.reload(editing.form)
-                        if form then editing = profile_view.new(form, ask) else editing.status = err or "Reload failed" end
+                        if form then editing = profile_view.new(form, ask, driver_choices) else editing.status = err or "Reload failed" end
                     elseif action == "save" or action == "remove" then
                         local ok: boolean = false
                         local err: string? = nil
@@ -468,6 +478,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif data.key_type == "down" then selected = math.floor(math.min(#directory, selected + 1)); dirty = true
                         elseif data.key_type == "enter" then open = true
                         elseif key == "n" then kind = "new_session"
+                        elseif key == "p" then kind = "profiles"
                         elseif key == "x" then kind = "close_listed"
                         elseif key == "m" then kind = "mcp_clients"
                         elseif key == "c" then kind = "closed"
@@ -483,7 +494,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "open" then open = true
                         elseif kind == "refresh" then refresh = true end
                     end
-                    if kind == "new_session" then catalog_open = true; selected = 0; refresh = true
+                    if kind == "new_session" or kind == "profiles" then catalog_open = true; selected = 0; refresh = true
                     elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle ~= "closed" and directory[selected].lifecycle ~= "closing" then
                         confirming = "close_listed"
                         status = "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it"
@@ -541,15 +552,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         if open and not catalog_open and not conversation and idle() and not loading then open_existing(selected) end
         if edit and catalog_open and not conversation then
             local entry = listed.items[selected]
-            if entry then
+            if entry and (not duplicate or entry.ready or entry.status == "unconfigured") then
                 local subject: forms.Subject = {title = entry.title}
                 if entry.kind == "definition" then subject.definition_ref = entry.ref
                 else subject.saved_profile_id, subject.saved_profile_revision = entry.ref, entry.revision end
                 local opened, open_error = forms.load(launch.workspace_id, subject, duplicate)
-                if opened then editing = profile_view.new(opened, ask)
+                if opened then editing = profile_view.new(opened, ask, driver_choices)
                 else status = open_error or "Profile could not be opened" end
                 dirty = true
-            end
+            elseif duplicate then status = "Choose an installed driver for a new profile"; dirty = true end
         end
         if open and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
             local entry = listed.items[selected]

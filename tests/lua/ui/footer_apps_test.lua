@@ -26,7 +26,7 @@ local function define_tests()
             local prefs = appearance.defaults()
             for _, width in ipairs({80, 160}) do
                 check(picker.draw(width, 24, prefs, {items = {}, unavailable = 0, notes = {}}, 0, ""), 24, "Enter Open")
-                check(directory.draw(width, 24, prefs, {}, 0, "", false), 24, "N New")
+                check(directory.draw(width, 24, prefs, {}, 0, "", false), 24, "N Start agent")
                 check(settings.draw(width, 24, prefs, {}, "about", 0), 24, "Check for updates")
                 check(help.draw(width, 24, prefs, "desktop", 0), 24, "? help")
                 check(library.draw(width, 24, prefs, library_model.new("workspace"),

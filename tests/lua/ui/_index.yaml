@@ -72,3 +72,17 @@ entries:
     inbox_model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
     gateway: bee.gateway.app:view
+- name: profile_discovery_test
+  kind: function.lua
+  source: file://profile_discovery_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    picker: bee.harness.app:picker_view
+    directory: bee.harness.app:directory_view
+    view: bee.harness.app:profile_view
+    editor: bee.harness.app:profile_editor
+    caller: bee.app:caller
+    agents: bee.harness.app:agents

@@ -16,7 +16,7 @@ local M = {}
 -- What a profile form opens: a definition for a new profile, or a saved
 -- profile, whose own definition applies.
 type Subject = {definition_ref: string?, title: string, saved_profile_id: string?, saved_profile_revision: integer?}
-type Form = {leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
+type Form = {driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?,
     fields: {[string]: {label: string, section: string, order: integer}}?, unsupported: {string}?,
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
@@ -195,12 +195,29 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
         if ref and row and row.revoked_at == nil then leases[#leases + 1] = ref end
     end
     for _, ref in ipairs(base.bee.approval_leases or {}) do if not bounds.member(ref, leases) then leases[#leases + 1] = ref end end
+    local placement_names: {[string]: string} = {}
+    for _, ref in ipairs(bounds.ids(policy_data.placement_profiles or {"bee.placement.profiles:native"}, true) or {}) do
+        local place = catalog.entry(pinned, ref)
+        local meta = place and bounds.object(place.meta)
+        placement_names[ref] = meta and bounds.line(meta.title, 80) or ref
+    end
     local credential_choices = decoded.credentials
     if base.placement and base.placement.kind == "docker" and decoded.docker_credentials then credential_choices = decoded.docker_credentials end
     return {workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
-        leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
+        driver_name = descriptor.provider, placement_names = placement_names, leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
         save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,
         migration_diagnostic = diagnostic, repair_json = migration_draft and canonical.encode(migration_draft) or nil}, nil
+end
+
+function M.change_driver(form: Form, choice: Subject): (Form?, string?)
+    if form.pending then return nil, "Finish the pending profile operation first" end
+    local selected, err = M.load(form.workspace_id, choice, true)
+    if not selected then return nil, err end
+    selected.profile_id, selected.revision = form.profile_id, form.revision
+    selected.save_key, selected.remove_key = form.save_key, form.remove_key
+    local named, name_error = editor.set_title(selected.draft, form.draft.name)
+    if not named then return nil, name_error end
+    return selected, nil
 end
 
 function M.save(form: Form): (boolean, string?)

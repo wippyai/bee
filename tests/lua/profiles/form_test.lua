@@ -16,6 +16,20 @@ local function read(workspace: string, id: string): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Agent profile form persistence", function()
+        test.it("changes a saved driver through the new driver's declared schema and keeps the profile identity", function()
+            local workspace = "profile-driver-change"
+            local original = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Named worker"}, true))
+            test.is_true(form.save(original))
+            local editing = assert(form.reload(original))
+            local changed = assert(form.change_driver(editing, {definition_ref = "bee.driver.codex.profiles:default_window", title = "Codex"}))
+            test.eq(changed.profile_id, original.profile_id)
+            test.eq(changed.revision, 1)
+            test.eq(changed.draft.name, "Named worker")
+            test.eq(changed.draft.driver_binding_ref, "bee.driver.codex.binding:binding")
+            test.is_true(changed.fields ~= nil)
+            test.is_true(form.save(changed))
+            test.eq(read(workspace, changed.profile_id).revision, 2)
+        end)
         test.it("preserves a conflicting draft for reload or a fresh copy", function()
             local workspace = "profile-form-conflict"
             local created = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude"}, true))

@@ -78,6 +78,26 @@ function M.list(client: sessions.Client, include_unavailable: boolean, query: st
     return listing, nil
 end
 
+function M.visible_profiles(listing: Listing, include_unavailable: boolean, query: string): Listing
+    local shown: Listing = {items = {}, unavailable = listing.unavailable, notes = listing.notes}
+    local search = query:lower()
+    for _, entry in ipairs(listing.items) do
+        if (entry.ready or include_unavailable) and (search == "" or entry.title:lower():find(search, 1, true) or
+            (entry.driver or ""):lower():find(search, 1, true)) then shown.items[#shown.items + 1] = entry end
+    end
+    return shown
+end
+
+function M.profile_drivers(listing: Listing): {{definition_ref: string, title: string}}
+    local choices: {{definition_ref: string, title: string}} = {}
+    for _, entry in ipairs(listing.items) do
+        if entry.kind == "definition" and (entry.status == "ready" or entry.status == "unconfigured") then
+            choices[#choices + 1] = {definition_ref = entry.ref, title = entry.title}
+        end
+    end
+    return choices
+end
+
 local function conversation(session: sessions.Session): Conversation
     local snapshot = session.snapshot
     local turns: {Turn} = {}

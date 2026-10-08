@@ -69,7 +69,7 @@ entries:
     application:
       menus: [bee.shell:apps_menu]
       api_version: 1
-      title: Sessions
+      title: Agents
       icon: A
       lifetime: view
       revision: '1'

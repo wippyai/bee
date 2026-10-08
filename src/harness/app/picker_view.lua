@@ -55,6 +55,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         footer_buttons = {
             {kind = item and not item.ready and "setup" or "open", key = "Enter", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
             {kind = "edit", key = "E", label = item and item.kind == "profile" and "Edit" or "Customize", enabled = not busy and chosen},
+            {kind = "new", key = "N", label = "New profile", enabled = not busy and chosen and item ~= nil and (item.ready or item.status == "unconfigured")},
             {kind = "close", key = "Esc", label = "Back", enabled = true},
         }
     end

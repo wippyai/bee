@@ -20,14 +20,14 @@ M.MAX_TTL = 30000000000
 type Object = {[string]: unknown}
 type Request = {application: string, workspace_id: string, service: string, operation: string, arguments: Object, idempotency_key: string?, address: address.Resolved?}
 type Invocation = {request: Request, operation: operations.Operation, actor: security.Actor, scope: security.Scope,
-    caller: {node: string, pid: string}, receipt_key: string?}
+    caller: {node: string, pid: string}, receipt_key: string?, owner_receipts: boolean?}
 
 local function request(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application call requires an object" end
     local extra = bounds.fields(value, {"application", "workspace_id", "service", "operation", "arguments", "idempotency_key"})
     if extra then return nil, extra end
-    local workspace = bounds.id(value.workspace_id)
+    local workspace = value.workspace_id == nil and "" or bounds.id(value.workspace_id)
     local service, operation = bounds.line(value.service, 64), bounds.line(value.operation, 64)
     local arguments = bounds.object(value.arguments)
     if not workspace or not service or not operation or not arguments then
@@ -42,9 +42,65 @@ local function request(raw: unknown): (Request?, string?)
         arguments = arguments, idempotency_key = key, address = resolved}, nil
 end
 
+local function host_exposure(asked: Request, caller: string, node: string, inspection: boolean?): (boolean, Invocation?, string?)
+    local selected: Object? = nil
+    for _, entry in ipairs(application.host_entries("bee.hive.host_exposure")) do
+        local data = bounds.object(entry.data)
+        if data and data.application_ref == asked.application then
+            if selected then return true, nil, "duplicate host exposure" end
+            selected = data
+        end
+    end
+    if not selected then return false, nil, nil end
+    local authorizer = bounds.id(selected.authorizer)
+    local refs = bounds.ids(selected.operations, true)
+    if not authorizer or not refs then return true, nil, "invalid host exposure" end
+    local operation: operations.Operation? = nil
+    for _, ref in ipairs(refs) do
+        local raw = registry.get(ref)
+        local decoded, err = operations.decode(raw, true)
+        if err then return true, nil, err end
+        if decoded and decoded.application_ref == asked.application and decoded.service == asked.service and decoded.name == asked.operation then
+            if operation then return true, nil, "duplicate exposed operation" end
+            operation = decoded
+        end
+    end
+    if not operation then return true, nil, "unknown exposed operation" end
+    local input_error = schemas.validate(operation.input, asked.arguments)
+    if not inspection and input_error then return true, nil, input_error end
+    local peer = protocol.node_of(caller, node)
+    local executor = funcs.new():with_context({["bee.hive.caller"] = {node = peer, pid = caller}})
+    local raw, err = executor:call(authorizer, {workspace_id = asked.workspace_id, operation = asked.operation, arguments = asked.arguments})
+    local reply = bounds.object(raw)
+    local mapped = reply and reply.ok == true and bounds.object(reply.value) or nil
+    if err or not mapped then return true, nil, reply and tostring(reply.error) or tostring(err) end
+    local workspace, subject = bounds.id(mapped.workspace_id), bounds.id(mapped.subject)
+    local policies = bounds.ids(mapped.policies, true)
+    if not workspace or not subject or not policies then return true, nil, "host subject mapping is malformed" end
+    asked.workspace_id = workspace
+    local binding, _, admission_error = application.admission(asked.application, workspace)
+    if not binding then return true, nil, admission_error or "application admission is absent or revoked" end
+    local actor = assert(security.new_actor(subject, {node = peer, workspace_id = workspace}))
+    local exposure = assert(security.named_scope("bee.security.hive:hive_exposure_scope"))
+    if exposure:evaluate(actor, "hive.expose." .. operation.mode, operation.ref) ~= "allow" then
+        return true, nil, "operation exposure is revoked: " .. peer .. " / " .. workspace .. " / " .. operation.ref
+    end
+    local loaded: {security.Policy} = {}
+    for _, name in ipairs(policies) do loaded[#loaded + 1] = assert(security.policy(name)) end
+    local scope = assert(security.new_scope(loaded))
+    if scope:evaluate(actor, tostring(selected.permission_action) .. "." .. asked.operation, workspace) ~= "allow" then
+        return true, nil, "receiving workspace session permission is denied"
+    end
+    return true, {request = asked, operation = operation, actor = actor, scope = scope,
+        caller = {node = peer, pid = caller}, owner_receipts = selected.owner_receipts == true}, nil
+end
+
 function M.authorize(raw: unknown, caller: string, node: string, inspection: boolean?): (Invocation?, string?)
     local asked, decode_error = request(raw)
     if not asked then return nil, decode_error end
+    local host, invocation, host_error = host_exposure(asked, caller, node, inspection)
+    if host then return invocation, host_error end
+    if asked.workspace_id == "" then return nil, "application call requires workspace_id" end
     local binding, admission, admission_error = application.admission(asked.application, asked.workspace_id)
     if not binding then return nil, admission_error or "application admission is absent or revoked" end
     local record, refusal = access.record(asked.workspace_id, asked.application)
@@ -117,7 +173,7 @@ end
 
 function M.claim(invocation: Invocation): (boolean, protocol.Reply?, string?)
     local asked = invocation.request
-    if invocation.operation.effect == "read" then return true, nil, nil end
+    if invocation.owner_receipts or invocation.operation.effect == "read" then return true, nil, nil end
     local key = assert(canonical.encode({peer = invocation.caller.node, workspace = asked.workspace_id,
         application = asked.application, service = asked.service, operation = asked.operation, key = asked.idempotency_key}, 4096))
     local fingerprint, fingerprint_error = canonical.encode({ref = invocation.operation.ref, revision = invocation.operation.revision,

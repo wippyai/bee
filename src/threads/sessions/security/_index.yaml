@@ -79,7 +79,8 @@ entries:
     - security.actor.create
     - funcs.security
     - funcs.context
-    expression: action in ["funcs.security", "funcs.context"] || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"
+    expression: action in ["funcs.security", "funcs.context"] || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$"
+      || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"
     resources: '*'
     effect: allow
 - name: owner_workspace_identity_policy
@@ -94,7 +95,8 @@ entries:
 - name: owner_registry_read_policy
   kind: security.policy
   meta:
-    comment: The Sessions owner reads admitted driver, definition and launch policy metadata from one pinned catalog; this grants no registry mutation or launch permission
+    comment: The Sessions owner reads admitted driver, definition and launch policy metadata from one pinned catalog; this
+      grants no registry mutation or launch permission
   policy:
     actions:
     - registry.get
@@ -102,3 +104,30 @@ entries:
     resources:
     - '*'
     effect: allow
+- name: allowance_store_policy
+  kind: security.policy
+  policy:
+    actions:
+    - registry.get
+    - registry.find
+    - registry.snapshot
+    - registry.version
+    - registry.apply
+    - db.get
+    - system.read
+    - funcs.call
+    - funcs.context
+    resources:
+    - '*'
+    effect: allow
+- name: peer_session_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - funcs.call
+    - bee.harness.launch
+    - bee.sessions.send
+    - bee.sessions.discover
+    resources: '*'
+    effect: allow
+    expression: action in ["funcs.call", "bee.harness.launch", "bee.sessions.send", "bee.sessions.discover"]

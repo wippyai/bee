@@ -60,6 +60,75 @@ entries:
     - bee.threads.sessions.security:owner_workspace_identity_policy
     - bee.harness.security:profile_workspace_policy
     - bee.threads.sessions.security:owner_delivery_policy
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: open
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - spec
+        - operation_key
+        properties:
+          spec:
+            type: object
+            additionalProperties: false
+            required:
+            - definition
+            properties:
+              definition:
+                type: string
+                minLength: 1
+                maxLength: 256
+              profile:
+                type: object
+                additionalProperties: false
+                required:
+                - id
+                - revision
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  revision:
+                    type: integer
+                    minimum: 1
+              workdir:
+                type: object
+                additionalProperties: false
+                description: 'The working folder: a folder under an admitted node root. The stock root bee.node:machine is
+                  the machine root /, so path is the folder''s absolute path without its leading slash.'
+                properties:
+                  root_ref:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  path:
+                    type: string
+                    maxLength: 4096
+                required:
+                - root_ref
+                - path
+              workspace:
+                type: string
+                pattern: ^[0-9a-f]{32}$
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: run
   kind: function.lua
   source: file://owner.lua
@@ -84,6 +153,95 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: run
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - spec
+        - input
+        - operation_key
+        properties:
+          spec:
+            type: object
+            additionalProperties: false
+            required:
+            - definition
+            properties:
+              definition:
+                type: string
+                minLength: 1
+                maxLength: 256
+              profile:
+                type: object
+                additionalProperties: false
+                required:
+                - id
+                - revision
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  revision:
+                    type: integer
+                    minimum: 1
+              workdir:
+                type: object
+                additionalProperties: false
+                description: 'The working folder: a folder under an admitted node root. The stock root bee.node:machine is
+                  the machine root /, so path is the folder''s absolute path without its leading slash.'
+                properties:
+                  root_ref:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  path:
+                    type: string
+                    maxLength: 4096
+                required:
+                - root_ref
+                - path
+              workspace:
+                type: string
+                pattern: ^[0-9a-f]{32}$
+          input:
+            oneOf:
+            - type: string
+              maxLength: 16384
+            - type: object
+              additionalProperties: false
+              required:
+              - schema
+              - value
+              properties:
+                schema:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                value: {}
+          output:
+            type: string
+            minLength: 1
+            maxLength: 256
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: send
   kind: function.lua
   source: file://owner.lua
@@ -108,6 +266,58 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: send
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - session
+        - input
+        - operation_key
+        properties:
+          session:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bs:[^:]+:[^:]+:[^:]+$
+          input:
+            oneOf:
+            - type: string
+              maxLength: 16384
+            - type: object
+              additionalProperties: false
+              required:
+              - schema
+              - value
+              properties:
+                schema:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                value: {}
+          output:
+            type: string
+            minLength: 1
+            maxLength: 256
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: await
   kind: function.lua
   source: file://owner.lua
@@ -139,6 +349,44 @@ entries:
     - bee.threads.sessions.security:owner_setup_policy
     - bee.threads.sessions.security:owner_workspace_identity_policy
     - bee.threads.sessions.security:owner_principal_policy
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: await
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - subject
+        properties:
+          subject:
+            oneOf:
+            - allOf:
+              - type: string
+                minLength: 1
+                maxLength: 256
+              - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+            - allOf:
+              - type: string
+                minLength: 1
+                maxLength: 256
+              - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+          timeout_ms:
+            type: integer
+            minimum: 0
+            maximum: 60000
+            default: 30000
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: join
   kind: function.lua
   source: file://owner.lua
@@ -163,6 +411,72 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: join
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - works
+        - operation_key
+        properties:
+          works:
+            type: array
+            minItems: 1
+            maxItems: 64
+            uniqueItems: true
+            items:
+              allOf:
+              - type: string
+                minLength: 1
+                maxLength: 256
+              - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+          policy:
+            enum:
+            - all_success
+            - all_settled
+            - first_success
+            - quorum
+            default: all_success
+          quorum:
+            type: integer
+            minimum: 1
+            maximum: 64
+          timeout_ms:
+            type: integer
+            minimum: 0
+            maximum: 60000
+            default: 30000
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+        if:
+          required:
+          - policy
+          properties:
+            policy:
+              const: quorum
+        then:
+          required:
+          - quorum
+        else:
+          not:
+            required:
+            - quorum
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: get
   kind: function.lua
   source: file://owner.lua
@@ -187,6 +501,50 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id002
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: get
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          session:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bs:[^:]+:[^:]+:[^:]+$
+          work:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+          operation:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+        oneOf:
+        - required:
+          - session
+        - required:
+          - work
+        - required:
+          - operation
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: list
   kind: function.lua
   source: file://owner.lua
@@ -211,6 +569,54 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: list
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          filter:
+            type: object
+            additionalProperties: false
+            properties:
+              workspace:
+                type: string
+                minLength: 1
+                maxLength: 32
+              definition:
+                type: string
+                minLength: 1
+                maxLength: 256
+              activity:
+                enum:
+                - idle
+                - working
+                - blocked
+                - stalled
+              lifecycle:
+                enum:
+                - opening
+                - active
+                - suspended
+                - closing
+                - closed
+          cursor:
+            type: string
+            minLength: 1
+            maxLength: 2048
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: history
   kind: function.lua
   source: file://owner.lua
@@ -235,6 +641,36 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: history
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - session
+        properties:
+          session:
+            type: string
+          cursor:
+            type: integer
+            minimum: 0
+          limit:
+            type: integer
+            minimum: 1
+            maximum: 64
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: cancel
   kind: function.lua
   source: file://owner.lua
@@ -259,6 +695,45 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id002
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: cancel
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - work
+        - operation_key
+        properties:
+          work:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+          reason:
+            type: string
+            maxLength: 16384
+          expected_incarnation:
+            type: integer
+            minimum: 1
+            default: 1
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: close
   kind: function.lua
   source: file://owner.lua
@@ -283,6 +758,42 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id002
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: close
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - session
+        - operation_key
+        properties:
+          session:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bs:[^:]+:[^:]+:[^:]+$
+          expected_incarnation:
+            type: integer
+            minimum: 1
+            default: 1
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: catalog
   kind: function.lua
   source: file://owner.lua
@@ -307,6 +818,48 @@ entries:
     record_values: bee.threads.records:values
   security:
     policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: catalog
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          definition_ref:
+            type: string
+            minLength: 1
+            maxLength: 256
+          query:
+            type: string
+            maxLength: 80
+          sort:
+            enum:
+            - name
+            - driver
+          kind:
+            enum:
+            - definition
+            - profile
+            default: definition
+          include_unavailable:
+            type: boolean
+            default: false
+          cursor:
+            type: string
+            minLength: 1
+            maxLength: 2048
+      output:
+        type: object
+        required:
+        - ok
+        properties:
+          ok:
+            type: boolean
 - name: attach
   kind: function.lua
   source: file://owner.lua
@@ -508,3 +1061,61 @@ entries:
   - security
   imports:
     bounds: bee.values:bounds
+- name: host_exposure
+  kind: registry.entry
+  meta:
+    type: bee.hive.host_exposure
+  data:
+    application_ref: bee.harness.app:app
+    operations:
+    - bee.threads.sessions.binding:open
+    - bee.threads.sessions.binding:run
+    - bee.threads.sessions.binding:send
+    - bee.threads.sessions.binding:await
+    - bee.threads.sessions.binding:join
+    - bee.threads.sessions.binding:get
+    - bee.threads.sessions.binding:list
+    - bee.threads.sessions.binding:history
+    - bee.threads.sessions.binding:cancel
+    - bee.threads.sessions.binding:close
+    - bee.threads.sessions.binding:catalog
+    authorizer: bee.threads.sessions.binding:peer_authorize
+    owner_receipts: true
+    permission_action: bee.sessions.workspace
+- name: allowances
+  kind: library.lua
+  source: file://allowances.lua
+  modules:
+  - registry
+  - security
+  - hash
+  - time
+  - funcs
+  - ctx
+  - system
+  imports:
+    bounds: bee.values:bounds
+    workspaces: bee.node:workspaces
+    application: bee.node:application
+- name: allowance
+  kind: function.lua
+  source: 'local allowances = require("allowances")
+
+    return {handle = allowances.manage}'
+  method: handle
+  imports:
+    allowances: bee.threads.sessions.binding:allowances
+  security:
+    policies:
+    - bee.threads.sessions.security:allowance_store_policy
+- name: peer_authorize
+  kind: function.lua
+  source: 'local allowances = require("allowances")
+
+    return {handle = allowances.authorize}'
+  method: handle
+  imports:
+    allowances: bee.threads.sessions.binding:allowances
+  security:
+    policies:
+    - bee.threads.sessions.security:allowance_store_policy

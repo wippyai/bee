@@ -5,19 +5,34 @@ entries:
   kind: function.lua
   source: file://owner_boundary_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
   security:
-    policies: [bee.tests.sessions:probe_policy]
+    policies:
+    - bee.tests.sessions:probe_policy
 - name: interactive_test
   kind: function.lua
   source: file://interactive_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security, sql, uuid, registry, process, channel, time, json]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
+  - sql
+  - uuid
+  - registry
+  - process
+  - channel
+  - time
+  - json
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
@@ -28,26 +43,42 @@ entries:
   kind: function.lua
   source: file://locate_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
     locate: bee.threads.sessions.binding:locate
 - name: catalog_service_test_policy
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [funcs.call, registry.get, registry.snapshot, registry.apply]
+    actions:
+    - funcs.call
+    - registry.get
+    - registry.snapshot
+    - registry.apply
     resources: '*'
     effect: allow
 - name: catalog_service_test
   kind: function.lua
   source: file://catalog_service_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: '120s'}
-  modules: [funcs, registry]
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  modules:
+  - funcs
+  - registry
   security:
-    policies: [bee.tests.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
+    policies:
+    - bee.tests.sessions:catalog_service_test_policy
+    - bee.harness.security:launch_locate_probe_policy
+    - bee.harness.profiles:test_read
+    - bee.harness.profiles:test_write
   imports:
     principals: bee.tests.principals:bound
     bounds: bee.values:bounds
@@ -58,7 +89,8 @@ entries:
     materialization: bee.placement.native.service:materialization
 - name: fake_owner
   kind: contract.binding
-  meta: {type: test_support}
+  meta:
+    type: test_support
   contracts:
   - contract: bee.threads.sessions:contract
     default: true
@@ -75,7 +107,8 @@ entries:
       history: bee.tests.sessions:fake_history
 - name: fake_catalog_owner
   kind: contract.binding
-  meta: {type: test_support}
+  meta:
+    type: test_support
   contracts:
   - contract: bee.threads.sessions:catalog
     default: true
@@ -85,103 +118,159 @@ entries:
   kind: function.lua
   source: file://fake_owner.lua
   method: open
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_run
   kind: function.lua
   source: file://fake_owner.lua
   method: run
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_send
   kind: function.lua
   source: file://fake_owner.lua
   method: send
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_await
   kind: function.lua
   source: file://fake_owner.lua
   method: await
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_join
   kind: function.lua
   source: file://fake_owner.lua
   method: join
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_get
   kind: function.lua
   source: file://fake_owner.lua
   method: get
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_cancel
   kind: function.lua
   source: file://fake_owner.lua
   method: cancel
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_close
   kind: function.lua
   source: file://fake_owner.lua
   method: close
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_list
   kind: function.lua
   source: file://fake_owner.lua
   method: list
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: fake_catalog
   kind: function.lua
   source: file://fake_owner.lua
   method: catalog
-  meta: {type: test_support}
-  modules: [security]
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: probe
   kind: function.lua
   source: file://probe.lua
   method: run
-  meta: {type: test_support}
+  meta:
+    type: test_support
   imports:
     bounds: bee.values:bounds
     sessions: bee.threads.sessions.client:sessions
 - name: probe_policy
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: ['*']
-    resources: ['*']
+    actions:
+    - '*'
+    resources:
+    - '*'
     effect: allow
 - name: protocol_test
   modules: [json]
   kind: function.lua
   source: file://protocol_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     protocol: bee.threads.sessions.types:protocol
@@ -189,8 +278,12 @@ entries:
   kind: function.lua
   source: file://client_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -200,125 +293,174 @@ entries:
   kind: function.lua
   source: file://wiring_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [registry, security, funcs]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - registry
+  - security
+  - funcs
   imports:
     test: wippy.test:test
     journal: bee.threads.sessions.binding:threads_journal
   security:
-    policies: [bee.tests.sessions:probe_policy]
+    policies:
+    - bee.tests.sessions:probe_policy
 - name: fake_history
   kind: function.lua
   source: file://fake_owner.lua
   method: history
-  meta: {type: test_support}
-  modules: [security]
-
-  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.principals:bound, bounds: bee.values:bounds}
-
+  meta:
+    type: test_support
+  modules:
+  - security
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    sessions: bee.threads.sessions.client:sessions
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
 - name: interactive_exited
   kind: function.lua
   source: file://interactive_placement.lua
-  modules: [security]
+  modules:
+  - security
   method: exited
-  meta: {type: test_support}
+  meta:
+    type: test_support
 - name: interactive_running
   kind: function.lua
   source: file://interactive_placement.lua
-  modules: [security]
+  modules:
+  - security
   method: running
-  meta: {type: test_support}
+  meta:
+    type: test_support
 - name: interactive_quiet
   kind: function.lua
   source: file://interactive_placement.lua
-  modules: [security]
+  modules:
+  - security
   method: quiet
-  meta: {type: test_support}
+  meta:
+    type: test_support
 - name: interactive_background
   kind: function.lua
   source: file://interactive_placement.lua
-  modules: [security]
+  modules:
+  - security
   method: background
-  meta: {type: test_support}
+  meta:
+    type: test_support
 - name: resume_probe_policy
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [process.registry.lookup, process.send]
-    resources: ['*']
+    actions:
+    - process.registry.lookup
+    - process.send
+    resources:
+    - '*'
     effect: allow
 - name: resume_probe
   kind: function.lua
   source: file://resume_probe.lua
   method: handle
-  meta: {type: test_support}
-  modules: [process]
+  meta:
+    type: test_support
+  modules:
+  - process
   security:
-    policies: [bee.tests.sessions:resume_probe_policy]
+    policies:
+    - bee.tests.sessions:resume_probe_policy
 - name: type_probe
   kind: function.lua
   source: file://resume_probe.lua
   method: type_text
-  meta: {type: test_support}
-  modules: [process]
+  meta:
+    type: test_support
+  modules:
+  - process
   security:
-    policies: [bee.tests.sessions:resume_probe_policy]
+    policies:
+    - bee.tests.sessions:resume_probe_policy
 - name: activity_probe
   kind: function.lua
   source: file://resume_probe.lua
   method: activity
-  meta: {type: test_support}
-  modules: [process]
+  meta:
+    type: test_support
+  modules:
+  - process
   security:
-    policies: [bee.tests.sessions:resume_probe_policy]
+    policies:
+    - bee.tests.sessions:resume_probe_policy
 - name: interactive_lifecycle_policy
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [funcs.call, bee.sessions.attach, bee.harness.launch]
-    resources: ['*']
+    actions:
+    - funcs.call
+    - bee.sessions.attach
+    - bee.harness.launch
+    resources:
+    - '*'
     effect: allow
-
 - name: cancellation_owner_running
   kind: function.lua
   source: file://interactive_placement.lua
   method: owner_running
-  modules: [security]
-  meta: {type: test_support}
+  modules:
+  - security
+  meta:
+    type: test_support
 - name: cancellation_owner_stop
   kind: function.lua
   source: file://interactive_placement.lua
   method: owner_stop
-  modules: [security]
-  meta: {type: test_support}
+  modules:
+  - security
+  meta:
+    type: test_support
 - name: hook_boundary_probe
   kind: function.lua
   source: file://hook_boundary_probe.lua
   method: handle
-  meta: {type: test_support}
+  meta:
+    type: test_support
   imports:
     boundary: bee.gateway.api:session_boundary
     bounds: bee.values:bounds
     subject_call: bee.gateway.security:subject_call
   security:
-    policies: [bee.gateway.security:execute_policy, bee.gateway.security:session_boundary_resolver_policy, bee.gateway.security:session_boundary_policy]
-
+    policies:
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:session_boundary_resolver_policy
+    - bee.gateway.security:session_boundary_policy
 - name: attention_test
   kind: function.lua
   source: file://attention_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
-
 - name: fixtures
   kind: library.lua
   source: file://fake_owner.lua
-  meta: {type: test_support}
-  imports: {bounds: bee.values:bounds, principals: bee.tests.principals:bound, sessions: bee.threads.sessions.client:sessions, protocol: bee.threads.sessions.types:protocol}
-
+  meta:
+    type: test_support
+  imports:
+    bounds: bee.values:bounds
+    principals: bee.tests.principals:bound
+    sessions: bee.threads.sessions.client:sessions
+    protocol: bee.threads.sessions.types:protocol
 - name: await_test_caller
   kind: security.policy
   meta:
@@ -336,7 +478,10 @@ entries:
   kind: function.lua
   source: file://await_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: 120s}
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
   modules:
   - funcs
   - security
@@ -350,10 +495,17 @@ entries:
   kind: function.lua
   source: file://driver_window_contract_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security, registry]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
+  - registry
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.placement.native.security:placement_exec_policy]
+    policies:
+    - bee.harness.catalog:apply_test_policy
+    - bee.placement.native.security:placement_exec_policy
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
@@ -365,7 +517,14 @@ entries:
 - name: muse_permission_fixture
   kind: library.lua
   source: file://muse_permission_fixture.lua
-  modules: [registry, funcs, security, env, time, exec, json]
+  modules:
+  - registry
+  - funcs
+  - security
+  - env
+  - time
+  - exec
+  - json
   imports:
     bounds: bee.values:bounds
     admission: bee.harness.launch:admission
@@ -373,3 +532,26 @@ entries:
     harness: bee.tests.threads:harness
     adapter: bee.harness.permission:adapter
     configuration: bee.gateway.env:configuration
+- name: hive_authorization_test
+  kind: function.lua
+  source: file://hive_authorization_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - registry
+  - security
+  imports:
+    test: wippy.test:test
+    receiver: bee.hive:receiver
+    bounds: bee.values:bounds
+- name: hive_authorize_probe
+  kind: function.lua
+  source: "local receiver = require(\"receiver\")\nreturn {handle = function(args: {request: unknown, caller: string, node:\
+    \ string})\n local invocation, err = receiver.authorize(args.request, args.caller, args.node)\n return {ok = invocation\
+    \ ~= nil, error = err}\nend}"
+  method: handle
+  imports:
+    receiver: bee.hive:receiver

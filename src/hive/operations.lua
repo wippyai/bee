@@ -13,7 +13,7 @@ local function name(raw: unknown): string?
     return value
 end
 
-function M.decode(raw: unknown): (Operation?, string?)
+function M.decode(raw: unknown, host: boolean?): (Operation?, string?)
     local entry = bounds.object(raw)
     local meta = entry and bounds.object(entry.meta) or nil
     if not entry or not meta then return nil, nil end
@@ -30,7 +30,7 @@ function M.decode(raw: unknown): (Operation?, string?)
         return nil, "Hive declaration requires a function, mode, service and operation"
     end
     local data = bounds.object(entry.data)
-    if data and data.security ~= nil then
+    if data and data.security ~= nil and not host then
         return nil, "Hive application operation declares its own security; it runs only with the application's grants"
     end
     local extra = bounds.fields(declared, {"name", "revision", "title", "input", "output", "effect"})

@@ -14,7 +14,7 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capa
 -- missing names the requirement an item configures.
 type ReviewLine = {text: string, heading: boolean, summary: string?, missing: string?}
 -- The Library tabs drawn above a package screen and the one it belongs to.
-type Chrome = {tabs: {frame.Tab}, active: string, technical: boolean}
+type Chrome = {tabs: {frame.Tab}, active: string, technical: boolean, review: {ReviewLine}?, ready: boolean?, fault: string?}
 local TITLES: {[string]: string} = {details = "PACKAGE", plan = "CHANGES", confirm = "CONFIRM", result = "RESULT"}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
@@ -268,6 +268,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             if width >= 74 then frame.line(painter, height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
         end
         frame.footer(painter, status, "↑↓ version · I install · U update · X remove · P review")
+        if chrome.technical and chrome.fault and chrome.fault ~= "" then frame.line(painter, height - 3, "Last result: " .. chrome.fault, theme.text) end
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
     end
     if state.phase == "confirm" and state.recovery then
@@ -295,6 +296,22 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         frame.footer(painter, status, "Enter confirms · Esc back to history")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
     end
+    local review = chrome.review
+    if state.phase == "plan" and review then
+        local capacity = maximum(0, height - 5)
+        local next_offset = math.floor(math.max(0, math.min(maximum(0, #review - capacity), offset)))
+        for slot = 1, capacity do
+            local line = review[next_offset + slot]
+            if not line then break end
+            if line.heading then frame.section(painter, 3 + slot - 1, line.text, line.summary)
+            else frame.line(painter, 3 + slot - 1, line.text, theme.text) end
+        end
+        if chrome.technical and chrome.fault and chrome.fault ~= "" then frame.line(painter, height - 2, "Last result: " .. chrome.fault, theme.text) end
+        local x = button(2, height - 1, "install_governed", " Ask for approval ", chrome.ready == true)
+        button(x, height - 1, "back", " Back ", true)
+        frame.footer(painter, status, "Enter asks for approval · T technical · ↑↓ scroll · Esc back")
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+    end
     local plan = state.plan
     if state.phase == "result" and state.result then
         local result = state.result
@@ -315,8 +332,14 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
     if not plan then
-        frame.empty(painter, 3, "No changes to review", "Choose a package and press P to review its changes")
-        frame.footer(painter, status, "P reviews the changes of the selected package")
+        local fault = chrome.fault
+        local failed = state.notice ~= "" or (fault ~= nil and fault ~= "")
+        frame.empty(painter, 3, failed and "Changes could not be read" or "Reading changes…",
+            failed and (state.notice ~= "" and state.notice or status) or "The Hub plan is pending")
+        if chrome.technical and fault and fault ~= "" then frame.line(painter, 6, "Last result: " .. fault, theme.text) end
+        button(2, height - 1, "refresh_plan", " Read again ", true)
+        button(18, height - 1, "back", " Back ", true)
+        frame.footer(painter, status, "R reads again · T technical · Esc back")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
     frame.line(painter, 3, chrome.technical and ("Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision)) or "Changes this package makes", theme.muted)

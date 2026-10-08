@@ -19,6 +19,7 @@ local hub = require("hub")
 local view = require("view")
 local contents = require("contents")
 
+type Object = {[string]: unknown}
 type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
 type Pending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, apply: boolean}
 type ReadPending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, retired: boolean}
@@ -138,7 +139,9 @@ local function main(options: unknown)
             local ok, failure = pcall(operation)
             busy = false
             if not running then return end
-            if not ok then ui.status = "That did not finish; try Refresh"; gov.fault = tostring(failure)
+            if not ok then
+                ui.status = "That did not finish; Technical says why"
+                state.notice, hubs.notice, gov.fault = ui.status, ui.status, tostring(failure)
             elseif ui.status == "Working…" then ui.status = "" end
             wake()
         end)
@@ -157,7 +160,7 @@ local function main(options: unknown)
     end
     local function invoke(request: unknown): governed.Reply?
         local raw, err = funcs.new():call(governed.CALL, request)
-        if err then return nil end
+        if err then return governed.reply({ok = false, value = nil, error = {code = "UNAVAILABLE", message = tostring(err)}}) end
         return governed.reply(raw)
     end
 
@@ -306,21 +309,23 @@ local function main(options: unknown)
         state.notice = gov.notice
         return applied
     end
-    local function install_selected_now(follow_source: boolean?)
-        if not read_selected_now() then return end
+    local function install_selected_now(follow_source: boolean?): boolean
+        if not read_selected_now() then return false end
         local selected = governed.selected(gov)
-        if governed.accepts_review(selected) and not review_transition(true) then return end
+        if governed.accepts_review(selected) and not review_transition(true) then return false end
         selected = governed.selected(gov)
-        if selected and governed.can_select(selected) and not selected.selected and not select_transition() then return end
+        if selected and governed.can_select(selected) and not selected.selected and not select_transition() then return false end
         selected = governed.selected(gov)
         if selected and governed.can_prepare(gov, selected) then
             if prepare_transition(follow_source) then
                 refresh_activations()
-                state.notice = ""
+                state.notice = gov.notice
+                return gov.notice == ""
             end
         else
             state.notice = state.notice ~= "" and state.notice or "This version can't be installed here right now"
         end
+        return false
     end
     -- Install runs the whole local path: receive the version, read its checks,
     -- review it, choose it and ask for approval, which waits in Needs you.
@@ -338,16 +343,24 @@ local function main(options: unknown)
         install_selected_now(follow_source)
     end
 
-    local function install_hub_now(request: Object)
-        if not governed.apply_plan(gov, invoke(request)) then state.notice = gov.notice; return end
-        local staged = gov.detail
-        if not staged then return end
-        local selected_key = governed.key(staged)
-        refresh_governed()
+    local function review_hub_now(request: Object)
+        if not governed.apply_plan(gov, invoke(request)) then hubs.notice = gov.notice; return end
+        local selected_key = governed.key(assert(gov.detail))
+        if not governed.apply_list(gov, invoke(governed.list_request(gov))) then hubs.notice = gov.notice; return end
         governed.select(gov, selected_key)
-        install_selected_now()
-        hub.show(hubs, "catalog")
-        model.show_tab(state, "installed")
+        if not read_selected_now() then hubs.notice = state.notice; return end
+        if gov.changes_error then hubs.notice, gov.fault = "Entry changes could not be read; Technical says why", gov.changes_error; return end
+        hubs.notice = "Review these changes; Enter asks for approval in Needs you"
+    end
+    local function confirm_hub_now()
+        if install_selected_now() then
+            local intent = assert(gov.intent)
+            hub.show(hubs, "catalog")
+            model.show_tab(state, "installed")
+            model.select(state, "g:act:" .. intent.intent_id)
+            hubs.notice = ""
+            state.notice = "Approval waits in Needs you"
+        else hubs.notice = state.notice end
     end
     local function step_now()
         local intent_id = gov.intent and gov.intent.intent_id or gov.restored_intent_id
@@ -439,10 +452,14 @@ local function main(options: unknown)
         elseif operation == "details" then hub.apply_details(hubs, value)
         elseif operation == "inspect" then hub.apply_inspect(hubs, value)
         elseif operation == "plan" then
-            local request, problem = hub.governed_request(hubs, value, workspace_id, new_key())
-            if request then perform(function() install_hub_now(request) end)
-            elseif problem then state.notice = problem
-            else hub.apply_plan(hubs, value) end
+            ui.status = ""
+            local request, problem = hub.governed_request(hubs, value, state.workspace_id, new_key())
+            if request then perform(function() review_hub_now(request) end)
+            elseif problem then hubs.notice, gov.fault = problem, problem
+            else
+                hub.apply_plan(hubs, value)
+                gov.fault = hubs.notice
+            end
         elseif operation == "status" then hub.apply_result(hubs, value)
         elseif operation == "history" then hub.apply_history(hubs, value) end
     end
@@ -551,9 +568,16 @@ local function main(options: unknown)
         changed()
     end
     local function plan()
+        if busy then ui.status = "Request in progress; review when it finishes"; changed(); return end
         local intent, problem = hub.plan_intent(hubs)
-        if not intent then ui.status = problem or "Cannot review these changes"; changed(); return end
+        if not intent then
+            ui.status = problem or "Cannot review these changes"
+            hubs.notice, gov.fault = ui.status, ui.status
+            changed(); return
+        end
         hub.begin_plan(hubs)
+        governed.select(gov, nil)
+        ui.status = "Reading changes…"
         ui.offset = 0
         begin({intent})
         changed()
@@ -905,6 +929,7 @@ local function main(options: unknown)
         elseif kind == "policy_leave" then hub.set_policy(hubs, "leave"); invalidate(); changed()
         elseif kind == "policy_down" then hub.set_policy(hubs, "down"); invalidate(); changed()
         elseif kind == "review" then local problem = hub.confirm(hubs); if problem then ui.status = problem end; changed()
+        elseif kind == "install_governed" then perform(confirm_hub_now)
         elseif kind == "confirm" then confirm()
         elseif kind == "cancel" then cancel_confirmation()
         elseif kind == "status" then check_status()
@@ -1052,7 +1077,10 @@ local function main(options: unknown)
                                 elseif key == "right" and phase == "details" and hubs.detail then hub.set_detail_page(hubs, hubs.detail.page + 1); invalidate(); details()
                                 elseif key == "enter" then
                                     if phase == "details" and hubs.requirements_open then edit_requirement()
-                                    elseif phase == "plan" then package_hit("review", "")
+                                    elseif phase == "plan" then
+                                        local selected = governed.selected(gov)
+                                        if selected and selected.source_workspace == "hub:" .. tostring(hubs.selected) then package_hit("install_governed", "")
+                                        else package_hit("review", "") end
                                     elseif phase == "confirm" then confirm() end
                                 elseif key == "delete" and phase == "details" and hubs.requirements_open then package_hit("reset_requirement", "")
                                 elseif letter == "e" and phase == "plan" then package_hit("missing", "")

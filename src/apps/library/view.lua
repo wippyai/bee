@@ -354,8 +354,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local screen = M.screen(state)
     local base: Frame
     if screen == "package" then
+        local selected = governed.selected(state.governed)
+        local review = state.hub.phase == "plan" and selected
+            and selected.source_workspace == "hub:" .. tostring(state.hub.selected)
+            and governed.review_rows(state.governed) or nil
         base = hub_view.draw(width, height, preferences, state.hub, ui.offset, ui.editor and "" or ui.status, ui.reading, nil, ui.content,
-            {tabs = TABS, active = "tab_" .. state.tab, technical = state.governed.technical})
+            {tabs = TABS, active = "tab_" .. state.tab, technical = state.governed.technical,
+                review = review, ready = selected ~= nil and governed.verdict(state.governed, selected) == "ready", fault = state.governed.fault})
     elseif screen == "version" then base = draw_version(width, height, preferences, state, ui)
     elseif screen == "platform" then base = draw_platform(width, height, preferences, state, ui)
     else base = draw_list(width, height, preferences, state, ui) end

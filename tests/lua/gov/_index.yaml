@@ -1323,3 +1323,15 @@ entries:
     guide: bee.gov.traits:guide
     bounds: bee.values:bounds
     harness: bee.tests.gov:delivery_harness
+- name: hub_ui_test
+  kind: function.lua
+  source: file://hub_ui_test.lua
+  method: run
+  modules: [process, channel, time, tty, funcs, security, system, uuid, env]
+  meta: {type: test, suite: bee, timeout: 180s}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    harness: bee.tests.gov:delivery_harness
+    application: bee.node:application
+    client: bee.node:client

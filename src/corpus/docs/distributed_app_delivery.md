@@ -27,10 +27,11 @@ Each destination independently:
 5. obtains a local approval; and
 6. applies the approved intent through its owner-local overlay generation.
 
-Receipt of a later version never changes the selected or active version. A
-destination can stage the same source version independently from other
-destinations. Its plan, selection, approval, activation receipt and overlay do
-not leave that destination.
+Receipt alone leaves the selected and active versions unchanged. The current
+Library requires destination-local activation for each update; destination
+consent to follow a source automatically is not implemented. A destination can
+stage the same source version independently from other destinations. Its plan,
+selection, approval, activation receipt and overlay stay on that destination.
 
 ## Review and activation
 
@@ -224,12 +225,15 @@ for capability requests. A request declares `meta.value_kind: security.policy`,
 `meta.capability`, bounded `meta.parameters`, and a printable `meta.reason`. Its
 single target must be its own `bee.app` process entry at
 `.security.policies +=`, except a `hive.expose` request, whose target is one of
-the artifact's own Hive operations at the requested mode. Those functions
-also declare a string `meta.hive_service` with their existing owner service wire
-ID and the `meta.hive_operation` input/output contract. The supervisor measures
-and verifies that declared service; namespace spelling grants no routing or
-invocation authority. Application and operation targets may occupy different
-child namespaces of the same measured artifact. The destination
+the artifact's own Hive operations at the requested mode. A named operation
+declares an authored `meta.hive_service`, a `meta.hive_operation` containing
+`name`, `revision`, `input` and `output` schemas, and `meta.application_ref`
+pointing to its owning application in the same measured artifact. Artifact
+validation checks those declarations and refuses duplicate names within an
+application's service. The supervisor does not discover or dispatch these
+declarations yet; namespace spelling grants no routing or invocation authority.
+Application and operation targets may occupy different namespaces in the same
+measured artifact. The destination
 resolver checks the request against the host-owned `bee.capability:catalog`, preserves the normalized parameters, reason, target, and catalog/template
 revisions in the measured candidate, and includes the catalog definition in
 the candidate's external-base digest. The request grants no policy. Preflight
@@ -285,9 +289,12 @@ combined data flows in Approvals. `threads.read` with `scope: owned`,
 `workspace.files.read`, `workspace.files.write`, `app.database`,
 `threads.message`, `agents.launch`, `contract.call` and `http.api` have
 installable host entries. A `hive.expose` grant installs a host-owned policy
-over exactly the approved operations into the supervisor's exposure scope;
-the destination audience table admits the operation's peers, and policy-mode
-operations still check the caller through the destination principal mappings.
+over exactly the approved operations into `bee.security.hive:hive_exposure_scope`.
+The scope defaults to no exposure. The current supervisor forwards service
+routes without checking that scope, live application admission or approved
+audiences. Destination principal mappings and a bounded application dispatcher
+are not implemented. A declaration or generated policy alone does not provide
+receiver-enforced exposure or make an application operation remotely callable.
 A file grant installs a host-created
 `fs.directory` at a verified subroot of the destination workspace's own
 folder: the destination reads the workspace's root and subpath from the node

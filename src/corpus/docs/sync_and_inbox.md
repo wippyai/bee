@@ -94,8 +94,18 @@ resubmits a decision.
 
 ## Hive admission
 
-Feed operations carry `meta.hive: policy`. The destination maps the verified
-caller to an actor; that actor needs both invocation permission and the owner's
-domain permission (`approval_decide_policy` for the inbox), and approver
-policies must list it separately. Exposing an operation does not substitute for
-caller authorization.
+Feed operations carry `meta.hive: policy`. The `approvals` route accepts only
+messages forwarded by this node's Hive supervisor and uses the authenticated
+sender PID's node as `bee.approvals.peer.<node>`. Its explicit operation map
+covers snapshots, catch-up, reads, decisions, batches, withdrawals and grant
+windows. The peer scope reaches only those bindings and the approval decision
+gate; destination approver policies must separately name the peer actor for
+request reads and decisions. The owner checks revision and proposal digest on
+decisions and retains requester-only withdrawal and issuer-only window
+revocation.
+
+The supervisor does not yet enforce application exposure grants or their
+audiences, and it does not map an authenticated remote person to a local actor
+and workspace. Node-level approver authorization is the current route's
+authority boundary. Exposing an operation does not substitute for domain
+authorization.

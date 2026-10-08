@@ -8,9 +8,23 @@ local artifact = require("artifact")
 local preflight = require("preflight")
 local naming = require("workspace_applications")
 local json = require("json")
+local registry = require("registry")
 
 local function define_tests()
     test.describe("Governance application guide", function()
+        test.it("uses an installed contract binding in its contract.call example", function()
+            local text = guide.workspace_delivery()
+            test.is_nil((string.find(text, "bee.hive.telemetry.binding:status", 1, true)))
+            local id = "bee.threads.sessions.binding:catalog_binding"
+            test.not_nil((string.find(text, id, 1, true)))
+            local entry = assert(registry.get(id))
+            test.eq(entry.kind, "contract.binding")
+            local data = assert(bounds.object(entry.data))
+            local implementation = principals.objects(data.contracts)[1]
+            local methods = assert(bounds.object(implementation.methods))
+            local target = assert(bounds.id(methods.list))
+            test.eq(assert(registry.get(target)).kind, "function.lua")
+        end)
         test.it("explains how an approved driver becomes selectable in Sessions", function()
             local text = guide.driver_delivery()
             for _, needle in ipairs({"presentation.start_menu = true", "session_resource = session", "Sessions", "N", "E", "default_mode window", "docker_credentials"}) do

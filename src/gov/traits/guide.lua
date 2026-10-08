@@ -12,7 +12,7 @@ local drivers = require("drivers")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@16"
+M.REVISION = "bee.governance-component-guide@17"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -603,8 +603,8 @@ function M.workspace_delivery(): string
         .. " Request a host catalog capability with an ns.requirement entry whose meta names value_kind"
         .. " security.policy, the capability, its parameters and a reason, targeting your application entry at"
         .. " .security.policies +=; the person approves it at installation. For contract.call,"
-        .. ' meta.parameters is {binding = "bee.hive.telemetry.binding:status", methods = {"snapshot", "detail"}}'
-        .. " when requesting the counts-only Hive status binding. The binding and method names are exact;"
+        .. ' meta.parameters is {binding = "bee.threads.sessions.binding:catalog_binding", methods = {"list"}}'
+        .. " when requesting the Sessions catalog binding. The binding and method names are exact;"
         .. " check the destination's bee.capability:catalog with the components tool for its admitted parameters."
         .. " To run a host program, request process.exec with"
         .. ' meta.parameters {command = "/usr/bin/make test", directory = "."}: command is the executable, an'

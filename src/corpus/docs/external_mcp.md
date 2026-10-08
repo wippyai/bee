@@ -39,4 +39,5 @@ Start panel. It shows each named client, its status and **Tool calls**. Every
 admitted tool invocation appends its name to the client's thread as that
 subject. The audit record contains no request arguments, results or bearer
 credential. **Revoke** closes the existing gateway binding immediately;
-subsequent presentations of its token fail. The transcript stays available.
+subsequent presentations of its token fail. Revoking a pending client also
+withdraws its pairing request from Needs you. The transcript stays available.

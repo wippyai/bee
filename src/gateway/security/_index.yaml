@@ -476,8 +476,8 @@ entries:
       (action == "bee.gateway.external.manage" && resource != "") ||
       (action == "registry.find" && resource == "*") ||
       (action == "registry.get" && resource == "bee.gateway:external_profile") ||
-      (action == "security.policy.get" && resource == "bee.gateway.security:external_principal_policy") ||
-      (action == "funcs.call" && (resource == "bee.threads.binding:create" || resource == "bee.threads.binding:admit_action" || resource == "bee.threads.binding:prepare_attempt")) ||
+      (action == "security.policy.get" && (resource == "bee.gateway.security:external_principal_policy" || resource == "bee.gateway.security:external_withdraw_policy")) ||
+      (action == "funcs.call" && (resource == "bee.threads.binding:create" || resource == "bee.threads.binding:admit_action" || resource == "bee.threads.binding:prepare_attempt" || resource == "bee.approvals.binding:withdraw")) ||
       (action == "cdc.subscribe" && resource == "bee:changes") ||
       (action == "process.registry.register" && resource == "bee.gateway.external") ||
       (action == "process.registry.lookup" && resource == "bee.hive.supervisor") ||
@@ -502,4 +502,10 @@ entries:
     actions: [funcs.call, bee.gateway.external.view]
     resources: '*'
     expression: (action == "funcs.call" && resource == "bee.gateway.binding:external_call") || (action == "bee.gateway.external.view" && resource != "")
+    effect: allow
+- name: external_withdraw_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:withdraw]
     effect: allow

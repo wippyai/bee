@@ -151,9 +151,19 @@ function M.revoke(client: string, workspace: string): Reply
     local row, failure = read(client)
     if not row then return failure or fail("NOT_FOUND", "external client is unavailable") end
     if row.workspace_id ~= workspace then return fail("DENIED", "external client belongs to another workspace") end
-    local binding = bounds.id(row.binding_id)
-    if not binding then return fail("STORAGE", "external binding is invalid") end
-    return gateway.revoke({binding_id = binding})
+    local binding_id = bounds.id(row.binding_id)
+    if not binding_id then return fail("STORAGE", "external binding is invalid") end
+    local binding, missing = gateway.managed_binding(binding_id)
+    if not binding then return missing or fail("STORAGE", "read external binding") end
+    local revoked = gateway.revoke({binding_id = binding_id})
+    if not revoked.ok then return revoked end
+    local approval = bounds.id(row.approval_id)
+    if approval then
+        local withdrawn = subject_call.call(binding, {"bee.gateway.security:external_withdraw_policy"},
+            "bee.approvals.binding:withdraw", {approval_id = approval})
+        if not withdrawn.ok then return withdrawn end
+    end
+    return revoked
 end
 function M.records(client: string, workspace: string): Reply
     if not manage(workspace) then return fail("DENIED", "caller cannot read external clients") end

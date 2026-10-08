@@ -285,7 +285,7 @@ local function main(options: unknown)
         if not applied then state.notice = gov.notice end
         return applied
     end
-    local function prepare_transition(): boolean
+    local function prepare_transition(follow_source: boolean?): boolean
         local item = governed.selected(gov)
         if refuse(item) then return false end
         if not governed.can_prepare(gov, item) or not item then
@@ -300,13 +300,13 @@ local function main(options: unknown)
             governed.set_pending_prepare(gov, item, pending_prepare.intent_id, pending_prepare.receipt_key)
         end
         wake()
-        local answer = invoke(governed.prepare_request(gov, item, pending_prepare.intent_id, pending_prepare.receipt_key))
+        local answer = invoke(governed.prepare_request(gov, item, pending_prepare.intent_id, pending_prepare.receipt_key, follow_source))
         local applied = governed.apply_activation(gov, answer)
         if answer and (applied or not answer.ok) then gov.pending_prepare = nil end
         state.notice = gov.notice
         return applied
     end
-    local function install_selected_now()
+    local function install_selected_now(follow_source: boolean?)
         if not read_selected_now() then return end
         local selected = governed.selected(gov)
         if governed.accepts_review(selected) and not review_transition(true) then return end
@@ -314,7 +314,7 @@ local function main(options: unknown)
         if selected and governed.can_select(selected) and not selected.selected and not select_transition() then return end
         selected = governed.selected(gov)
         if selected and governed.can_prepare(gov, selected) then
-            if prepare_transition() then
+            if prepare_transition(follow_source) then
                 refresh_activations()
                 state.notice = ""
             end
@@ -324,7 +324,7 @@ local function main(options: unknown)
     end
     -- Install runs the whole local path: receive the version, read its checks,
     -- review it, choose it and ask for approval, which waits in Needs you.
-    local function install_now(row: model.Row)
+    local function install_now(row: model.Row, follow_source: boolean?)
         local item: governed.Available? = nil
         for _, candidate in ipairs(gov.available) do
             if governed.available_key(candidate) == row.available_key then item = candidate end
@@ -335,7 +335,7 @@ local function main(options: unknown)
         refresh_governed()
         local plan = governed.staged_plan(gov, item)
         if plan then governed.select(gov, governed.key(plan)) end
-        install_selected_now()
+        install_selected_now(follow_source)
     end
 
     local function install_hub_now(request: Object)
@@ -801,10 +801,22 @@ local function main(options: unknown)
             if tab then show_tab(tab) end
         end
     end
+    local function follow_now(row: model.Row, mode: string)
+        if not model.can_follow(row) or not row.source_node or not row.app or not row.component then return end
+        local answer = invoke(governed.follow_request(gov, row.source_node, row.app, row.component, mode))
+        if answer and answer.ok then
+            refresh_activations()
+            state.notice = mode == "following" and "Following source" or (mode == "paused" and "Updates paused" or "Version pinned")
+        else state.notice = answer and answer.error and answer.error.message or "Following choice did not finish" end
+    end
     local function version_hit(kind: string)
         ui.status = ""
         local row = model.selected_row(state)
         if kind == "install" and row then perform(function() install_now(row) end)
+        elseif kind == "install_follow" and row then perform(function() install_now(row, true) end)
+        elseif kind == "follow" and row then perform(function() follow_now(row, "following") end)
+        elseif kind == "pause_follow" and row then perform(function() follow_now(row, "paused") end)
+        elseif kind == "pin_follow" and row then perform(function() follow_now(row, "pinned") end)
         elseif kind == "update" and row then update_row(row)
         elseif kind == "refresh" then perform(function() refresh_governed(); if row then open_version_now(row) end end)
         elseif kind == "technical" then model.toggle_technical(state); ui.offset = 0; changed()
@@ -1071,6 +1083,9 @@ local function main(options: unknown)
                                 elseif key == "tab" or letter == "\t" then
                                     local order = {installed = "shared", shared = "history", history = "installed"}
                                     show_tab(order[state.tab] :: model.Tab)
+                                elseif letter == "f" and model.can_follow(row) and row then
+                                    version_hit(row.status == model.STATUS_SHARED and "install_follow" or (row.follow_state == "following" and "pause_follow" or "follow"))
+                                elseif letter == "v" and model.can_follow(row) then version_hit("pin_follow")
                                 elseif letter == "t" then version_hit("technical")
                                 elseif letter == "r" then version_hit("refresh")
                                 elseif letter == "a" then version_hit("accept")

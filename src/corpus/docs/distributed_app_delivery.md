@@ -27,11 +27,35 @@ Each destination independently:
 5. obtains a local approval; and
 6. applies the approved intent through its owner-local overlay generation.
 
-Receipt alone leaves the selected and active versions unchanged. The current
-Library requires destination-local activation for each update; destination
-consent to follow a source automatically is not implemented. A destination can
-stage the same source version independently from other destinations. Its plan,
-selection, approval, activation receipt and overlay stay on that destination.
+Receipt alone leaves the selected and active versions unchanged. The exception
+is an application whose destination person explicitly enables **Following source**.
+Following is off by default. The Library offers **Install & follow** for a hive
+application and **Follow source**, **Pause updates** and **Pin version** in its
+installed-version details. Consent belongs only to that destination and the
+immutable identity `{source_node, source_workspace, component}`; a namespace
+never establishes ownership.
+
+The Governance activation worker consumes verified publications in source order,
+stages and preflights their bytes, records review and selection, and prepares and
+applies through the existing activation owner. A newer version reuses the live
+installed approval only when authority is equal or narrower and no migrations
+are pending. Expanded permissions, exposure, audiences or caller mappings, and
+pending migrations raise one local request in **Needs you**. A general approval
+lease does not authorize expansion by the follower.
+
+The destination persists consent, publication cursor, version and bytes digests,
+the pending activation identity, and the last follow outcome. Rollback,
+equivocation and versions without a semantic ordering are refused. One pending
+source update serializes later publications; restart resumes its durable owner
+receipts. A failed update retains the working overlay. Pause and pin stop
+following; going back pins the application, and removal turns following off.
+The Library shows following state and the last update outcome. Following grants
+no source-side automatic-publication permission: each node authorizes its own
+publication and activation independently.
+
+A destination stages the same source version independently from other
+destinations. Its plan, selection, approval, activation receipt and overlay stay
+on that destination.
 
 ## Applications from Hub
 

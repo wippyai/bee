@@ -521,6 +521,22 @@ function M.agent_tools(): string
         .. " answers TOOLS_CHANGED, and two applications offering one alias offer neither."
 end
 
+function M.sharing(): string
+    return "A person shares an installed application made on their bee through the Library."
+        .. " Hive Sync delivers immutable versions as inert replicas; ownership is the exact"
+        .. " {source_node, source_workspace, component} identity, never a namespace."
+        .. " On the destination, following is off by default. The person chooses Install & follow"
+        .. " during installation or Follow source later in the Library's version details."
+        .. " The serialized Governance worker stages and preflights a newer verified publication"
+        .. " and reuses its installed approval only for equal or narrower authority without pending migrations."
+        .. " Expanded permissions, exposure, audiences or caller mappings, and migrations ask once in Needs you;"
+        .. " a general grant lease does not bypass this decision. Pause updates and Pin version stop following;"
+        .. " going back pins, and removal turns following off. The Library shows the state and last outcome."
+        .. " Durable cursors and activation receipts resume after restart; rollback and equivocation are refused,"
+        .. " and failed updates retain the working version. Following grants no source-side automatic-publication"
+        .. " permission: every bee authorizes its own publication and activation independently."
+end
+
 type Section = {id: string, title: string, body: fun(): string}
 local SECTIONS: {Section} = {
     {id = "pack", title = "Component pack shape", body = function(): string return M.pack_shape() end},
@@ -531,6 +547,7 @@ local SECTIONS: {Section} = {
     {id = "config", title = "Configuration shapes", body = function(): string return CONFIG_SHAPE_RULE end},
     {id = "transport", title = "Overlay transport, freeze", body = function(): string return M.transport() end},
     {id = "delivery", title = "Delivery after freeze", body = function(): string return M.after_freeze() end},
+    {id = "sharing", title = "Sharing applications", body = function(): string return M.sharing() end},
     {id = "tests", title = "Testing your application", body = function(): string return M.tests() end},
     {id = "database", title = "Your application's database", body = function(): string return M.database() end},
     {id = "agent_tools", title = "Tools agents call", body = function(): string return M.agent_tools() end},

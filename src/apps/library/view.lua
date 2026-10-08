@@ -73,6 +73,15 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         else
             buttons[#buttons + 1] = {kind = "refresh", key = "Enter", label = "Check", enabled = true, primary = true}
         end
+        if model.can_follow(row) and row then
+            if status == model.STATUS_SHARED then
+                buttons[#buttons + 1] = {kind = "install_follow", key = "F", label = "Install & follow", enabled = true}
+            else
+                local follows = row.follow_state == "following"
+                buttons[#buttons + 1] = {kind = follows and "pause_follow" or "follow", key = "F", label = follows and "Pause updates" or "Follow source", enabled = true}
+                buttons[#buttons + 1] = {kind = "pin_follow", key = "V", label = "Pin version", enabled = row.follow_state ~= "pinned"}
+            end
+        end
         buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide technical" or "Technical", enabled = true}
         buttons[#buttons + 1] = {kind = "back", key = "Esc", label = "Back", enabled = true}
         if row and row.application and state.can_open then

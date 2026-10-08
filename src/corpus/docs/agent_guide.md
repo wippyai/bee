@@ -139,3 +139,22 @@ owner. `app.database` provisions the application's migration database;
 `agent.tools` offers its granted functions, `tests` runs its associated tests
 by definition ID, and declared menus place it in the shell. Library packages
 and `bee/bee` self-update retain Hub dependency-root publication.
+
+## Sharing applications
+
+A person shares an application made and installed on their bee through the
+Library. Hive Sync carries its immutable published versions to other bees as
+inert replicas. Application identity is `{source_node, source_workspace,
+component}`; ownership does not come from entry namespaces.
+
+The destination person installs from Shared and approves its own permissions in
+Needs you. Following is off by default. **Install & follow** opts in during
+installation; **Follow source** opts in later in version details. The destination
+worker applies a newer verified version under the installed approval only for
+equal or narrower authority with no pending migrations. Expansion or migrations
+raise one local approval. **Pause updates** and **Pin version** stop following;
+going back pins, and removal turns it off. The Library shows the state and last
+outcome. Durable cursors and activation receipts resume after restart, rollback
+and equivocation are refused, and failed updates retain the working version.
+Following at a destination grants no source-side permission to publish new
+versions automatically. Each bee authorizes its own changes.

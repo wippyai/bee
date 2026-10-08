@@ -76,6 +76,7 @@ entries:
     - bee.gov.delivery.read
     - bee.gov.delivery.manage
     - bee.gov.delivery.activate
+    - bee.gov.delivery.follow
     resources: '*'
     effect: allow
 - name: delivery_share

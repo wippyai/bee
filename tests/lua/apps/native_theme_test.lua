@@ -25,7 +25,7 @@ local function shows(view: tty.Viewport, needle: string, width: integer?, height
     end
 end
 
-local function changed(inbox: channel.Channel, id: string)
+local function changed(inbox: Channel<process.Message>, id: string)
     local deadline = time.after("10s")
     while true do
         local selected = channel.select({inbox:case_receive(), deadline:case_receive()})

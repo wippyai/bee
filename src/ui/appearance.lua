@@ -1,7 +1,7 @@
 -- MIT. Semantic desktop colors and presentation preferences.
 --
 -- A theme is a palette over fixed roles. Themes are registry entries of type
--- TYPE (data: title and one #rrggbb color per role), so any module can add
+-- TYPE (data: title and one terminal color per role), so any module can add
 -- one; the node resolves the chosen entry and hands the palette to displays
 -- and apps, which never read themes from the registry themselves.
 --
@@ -89,8 +89,8 @@ function M.role(theme: Theme, name: string?): string
     return theme.text
 end
 
--- The color k of the way from a to b (0 is a, 1 is b), for intensity ramps
--- between the surface and a role.
+-- RGB intensity ramps blend from a to b (0 is a, 1 is b). Terminal colors
+-- retain their palette identity instead of acquiring fixed RGB values.
 function M.mix(a: string, b: string, k: number): string
     local weight = math.max(0, math.min(1, k))
     if a:sub(1, 1) ~= "#" or b:sub(1, 1) ~= "#" then return weight == 0 and a or b end
@@ -104,6 +104,7 @@ function M.mix(a: string, b: string, k: number): string
 end
 
 -- The page colors of an app viewport; terminal apps may use their own pair.
+-- A default pair removes the viewport page override.
 function M.page(theme: Theme, terminal: boolean): Page?
     local foreground = terminal and (theme.terminal_text or theme.text) or theme.text
     local background = terminal and (theme.terminal_surface or theme.surface) or theme.surface
@@ -132,8 +133,9 @@ local function color(value: unknown): string?
     return nil
 end
 
--- decode_theme validates a palette: an id, a title, a #rrggbb color for every
--- role and, when present, for the optional roles.
+-- Terminal colors are #rrggbb, ansi:0 through ansi:15, default, default:dim
+-- or default:reverse. Optional selection colors pair readable highlights.
+-- decode_theme validates every required and supplied optional role.
 function M.decode_theme(value: unknown): Theme?
     if type(value) ~= "table" or type(value.id) ~= "string" or type(value.title) ~= "string" then return nil end
     local ground, surface, text, muted = color(value.ground), color(value.surface), color(value.text), color(value.muted)

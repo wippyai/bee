@@ -1,4 +1,4 @@
--- MIT. A palette carries an id, a title and a #rrggbb color for every role;
+-- MIT. A palette carries an id, a title and a terminal color for every role;
 -- preferences carry a palette, a known background and a taskbar style.
 -- Anything else is refused, and a missing value falls back to the defaults.
 local test = require("test")

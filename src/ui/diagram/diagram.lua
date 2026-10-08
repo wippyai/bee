@@ -250,7 +250,7 @@ function M.flame(painter: frame.Painter, rect: Rect, root: Frame): integer
         width = minimum(width, rect.x + rect.width - x)
         local y = rect.y + depth
         local fg = color(painter, node.role, STACK_ROLES[depth % #STACK_ROLES + 1])
-        frame.put(painter, x, y, frame.pad(node.label, width), width, appearance.selection_text(theme), fg)
+        frame.put(painter, x, y, frame.pad(node.label, width), width, appearance.selection_text(theme), appearance.selection_background(theme, fg))
         drawn = drawn + 1
         frame.add_hit(painter, "frame", drawn, node.label, x, y, width, 1)
         local children = node.children or {}

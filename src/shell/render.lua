@@ -39,7 +39,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     local cursor: Cursor = {x = 1, y = 1, visible = false}
     local selected_snapshot: selection.Snapshot? = active_selection and selection.snapshot(active_selection) or nil
     local selected_span = active_selection and selection.range(active_selection) or nil
-    local selected_style = appearance.style(appearance.selection_text(theme), theme.accent)
+    local selected_style = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
     chrome.background(canvas, width, height, prefs)
     if #model.visible(scene) == 0 then
         chrome.welcome(canvas, width, height, prefs, false)

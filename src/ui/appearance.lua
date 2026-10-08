@@ -55,6 +55,10 @@ end
 -- Selection text is independent of wallpaper color (notably on classic navy).
 function M.selection_text(theme: Theme): string return theme.on_accent or theme.ground end
 
+function M.selection_background(theme: Theme, accent: string?): string
+    return theme.on_accent_background or accent or theme.accent
+end
+
 -- Named instance accents affect chrome only. Each palette has a paired readable
 -- selection foreground; application page colors stay owned by the theme.
 local accent_dark: {[string]: string} = {amber = "#ffc963", cyan = "#67dce5", green = "#a6df8a", rose = "#ffa5c5", violet = "#d3b0ff"}
@@ -186,7 +190,8 @@ local function sgr(value: string, background: boolean): string
 end
 
 function M.style(foreground: string, background: string): string
-    return sgr(foreground, false) .. sgr(background, true)
+    local attributes = foreground:sub(1, 1) ~= "#" or background:sub(1, 1) ~= "#"
+    return (attributes and "\27[22;27m" or "") .. sgr(foreground, false) .. sgr(background, true)
 end
 
 return M

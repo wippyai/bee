@@ -393,7 +393,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
     local muted = appearance.style(theme.muted, theme.surface)
     local accent = appearance.style(theme.accent, theme.surface)
     local border = appearance.style(theme.border, theme.surface)
-    local chosen = appearance.style(appearance.selection_text(theme), theme.accent)
+    local chosen = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
     local reset = "\27[0m"
     local panel = M.panel(width, height, menu)
     local inside = panel.width - 2

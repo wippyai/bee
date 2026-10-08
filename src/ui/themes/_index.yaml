@@ -261,3 +261,21 @@ entries:
     on_accent: '#ffffff'
     terminal_text: '#cccccc'
     terminal_surface: '#0c0c0c'
+- name: native
+  kind: registry.entry
+  meta:
+    type: bee.ui.theme
+  data:
+    title: Native
+    ground: default
+    surface: default
+    text: default
+    muted: default:dim
+    border: default
+    accent: ansi:6
+    pattern: default:dim
+    ok: ansi:2
+    warn: ansi:3
+    error: ansi:1
+    on_accent: default
+    on_accent_background: default:reverse

@@ -98,7 +98,7 @@ function M.draw(canvas: tty.Canvas, state: State, width: integer, height: intege
     if room > 0 and p.height >= 5 then
         local selected = state.selected and state.focus == "text"
         local fg = selected and appearance.selection_text(theme) or theme.text
-        local bg = selected and theme.accent or theme.surface
+        local bg = selected and appearance.selection_background(theme) or theme.surface
         canvas:put(p.x + 2, p.y + 3, appearance.style(fg, bg) .. text .. "\27[0m", room)
     end
     if state.error ~= "" then put(p.y + 4, state.error, theme.accent)
@@ -108,7 +108,7 @@ function M.draw(canvas: tty.Canvas, state: State, width: integer, height: intege
             local x = p.x + 2 + (index - 1) * 10
             local room = math.floor(math.max(0, math.min(#item.text, p.x + p.width - 1 - x)))
             local fg = state.focus == item.id and appearance.selection_text(theme) or theme.text
-            local bg = state.focus == item.id and theme.accent or theme.surface
+            local bg = state.focus == item.id and appearance.selection_background(theme) or theme.surface
             if room > 0 then canvas:put(x, p.y + 5, appearance.style(fg, bg) .. tty.text.truncate(item.text, room, "") .. "\27[0m", room) end
         end
     end

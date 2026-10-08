@@ -64,7 +64,7 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     local theme = preferences.theme
     local normal = appearance.style(theme.text, theme.surface)
     local muted = appearance.style(theme.muted, theme.surface)
-    local active = appearance.style(appearance.selection_text(theme), theme.accent)
+    local active = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
     local width = scene.width
     local restore_id = ""
     for _, win in ipairs(model.visible(scene)) do
@@ -89,7 +89,7 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
         for _, win in ipairs(scene.windows) do
             if win.id == hit.id then
                 local accent, foreground = appearance.instance_accent(theme, win.accent)
-                if hit.id == scene.focus then style = appearance.style(foreground, accent)
+                if hit.id == scene.focus then style = appearance.style(foreground, appearance.selection_background(theme, accent))
                 elseif win.mode ~= "minimized" and win.accent and win.accent ~= "" then style = appearance.style(accent, theme.surface) end
             end
         end

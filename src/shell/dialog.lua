@@ -268,7 +268,7 @@ function M.draw(canvas: tty.Canvas, state: State, width: integer, height: intege
     local normal = appearance.style(theme.text, theme.surface)
     local border = appearance.style(theme.border, theme.surface)
     local muted = appearance.style(theme.muted, theme.surface)
-    local active = appearance.style(appearance.selection_text(theme), theme.accent)
+    local active = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
     local reset = "\27[0m"
     if p.width <= 0 or p.height <= 0 then return {x = 1, y = 1, visible = false} end
 
@@ -291,7 +291,7 @@ function M.draw(canvas: tty.Canvas, state: State, width: integer, height: intege
     if inner > 0 and p.height >= 3 then
         for _, button in ipairs(buttons) do
             local foreground, background = theme.text, theme.surface
-            if state.focus == button.action then foreground, background = appearance.selection_text(theme), theme.accent end
+            if state.focus == button.action then foreground, background = appearance.selection_text(theme), appearance.selection_background(theme) end
             put(canvas, button.x, buttons_row, button_text(state, button.action, button.width), button.width, foreground, background)
         end
     elseif inner > 0 and #buttons > 0 then
@@ -328,7 +328,7 @@ function M.draw(canvas: tty.Canvas, state: State, width: integer, height: intege
         local visible = tty.text.cut(text, offset, offset + room)
         local cursor_text = tty.text.cut(text, offset, cursor_width)
         local foreground = state.focus == "text" and appearance.selection_text(theme) or theme.text
-        local background = state.focus == "text" and theme.accent or theme.surface
+        local background = state.focus == "text" and appearance.selection_background(theme) or theme.surface
         put(canvas, left, field_y, visible, room, foreground, background)
         local cursor_x = left + tty.text.width(cursor_text)
         if state.focus == "text" and not state.selected then

@@ -187,7 +187,7 @@ function M.text_draw(painter: frame.Painter, x: integer, y: integer, width: inte
     local offset = maximum(0, left_width - room)
     local shown = tty.text.cut(left .. right, offset, offset + width)
     if field.selected and focused then
-        frame.put(painter, x, y, shown, width, appearance.selection_text(theme), theme.accent)
+        frame.put(painter, x, y, shown, width, appearance.selection_text(theme), appearance.selection_background(theme))
         return
     end
     frame.put(painter, x, y, shown, width, theme.text)
@@ -343,7 +343,7 @@ function M.number_draw(painter: frame.Painter, x: integer, y: integer, width: in
     local offset = maximum(0, left_width - room)
     local shown = tty.text.cut(left .. right, offset, offset + width)
     if field.selected and focused then
-        frame.put(painter, x, y, shown, width, appearance.selection_text(theme), theme.accent)
+        frame.put(painter, x, y, shown, width, appearance.selection_text(theme), appearance.selection_background(theme))
         return
     end
     frame.put(painter, x, y, shown, width, color)
@@ -575,7 +575,7 @@ function M.select_draw(painter: frame.Painter, rect: frame.Rect, field: Select, 
     local option = field.options[field.selected]
     local shown_width = maximum(0, rect.width - 2)
     local text = frame.pad(option and option.label or "Select…", shown_width)
-    if focused then frame.put(painter, rect.x, rect.y, text, shown_width, appearance.selection_text(theme), theme.accent)
+    if focused then frame.put(painter, rect.x, rect.y, text, shown_width, appearance.selection_text(theme), appearance.selection_background(theme))
     else frame.put(painter, rect.x, rect.y, text, shown_width, theme.text) end
     frame.put(painter, rect.x + shown_width, rect.y, field.open and "▲" or "▼", minimum(2, rect.width), theme.muted)
     if not field.open or rect.height <= 1 then return 1 end
@@ -589,7 +589,7 @@ function M.select_draw(painter: frame.Painter, rect: frame.Rect, field: Select, 
         local y = rect.y + slot
         local active = index == field.highlighted
         local fg = active and appearance.selection_text(theme) or theme.text
-        local bg = active and theme.accent or theme.surface
+        local bg = active and appearance.selection_background(theme) or theme.surface
         frame.put(painter, rect.x, y, frame.pad(item.label, rect.width), rect.width, fg, bg)
         if hit_index then frame.add_hit(painter, "option", hit_index, item.value, rect.x, y, rect.width, 1) end
     end
@@ -608,7 +608,7 @@ function M.checkbox_draw(painter: frame.Painter, x: integer, y: integer, width: 
     local theme = painter.theme
     local text = (field.checked and "[x] " or "[ ] ") .. label
     local fg = focused and appearance.selection_text(theme) or theme.text
-    local bg = focused and theme.accent or theme.surface
+    local bg = focused and appearance.selection_background(theme) or theme.surface
     frame.put(painter, x, y, text, width, fg, bg)
     if hit_index then frame.add_hit(painter, "field", hit_index, "", x, y, width, 1) end
 end
@@ -645,7 +645,7 @@ function M.radio_draw(painter: frame.Painter, rect: frame.Rect, field: Radio, fo
         local active = index == field.selected
         local text = (active and "(•) " or "(  ) ") .. option.label
         local fg = (active and focused) and appearance.selection_text(theme) or theme.text
-        local bg = (active and focused) and theme.accent or theme.surface
+        local bg = (active and focused) and appearance.selection_background(theme) or theme.surface
         frame.put(painter, rect.x, y, text, rect.width, fg, bg)
         if hit_index then frame.add_hit(painter, "option", hit_index, option.value, rect.x, y, rect.width, 1) end
     end
@@ -663,7 +663,7 @@ function M.toggle_draw(painter: frame.Painter, x: integer, y: integer, width: in
     local theme = painter.theme
     local text = (field.on and "[ ON] " or "[OFF] ") .. label
     local fg = focused and appearance.selection_text(theme) or (field.on and theme.ok or theme.text)
-    local bg = focused and theme.accent or theme.surface
+    local bg = focused and appearance.selection_background(theme) or theme.surface
     frame.put(painter, x, y, text, width, fg, bg)
     if hit_index then frame.add_hit(painter, "field", hit_index, "", x, y, width, 1) end
 end

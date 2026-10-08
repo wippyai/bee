@@ -206,7 +206,7 @@ function M.tabs(painter: Painter, y: integer, tabs: {Tab}, selected: string): in
         local room = painter.width - x + 1 - (active and 0 or reserved)
         if size <= room then
             M.put(painter, x, y, label, size, active and appearance.selection_text(theme) or theme.muted,
-                active and theme.accent or theme.surface)
+                active and appearance.selection_background(theme) or theme.surface)
             M.add_hit(painter, tab.kind, index, "", x, y, size, 1)
             x = x + size + 1
             if active then reserved = 0 end
@@ -222,7 +222,7 @@ local function draw_button(painter: Painter, x: integer, y: integer, button: But
     local theme = painter.theme
     local fg, bg = theme.muted, theme.surface
     if button.enabled then
-        if button.primary or button.active then fg, bg = appearance.selection_text(theme), theme.accent
+        if button.primary or button.active then fg, bg = appearance.selection_text(theme), appearance.selection_background(theme)
         else fg = theme.accent end
     end
     M.put(painter, x, y, label, size, fg, bg)
@@ -354,7 +354,7 @@ local function draw_row(painter: Painter, area: Rect?, y: integer, value: string
     local has_focus = focused == nil or focused
     local text_fg = fg or theme.text
     local bg = theme.surface
-    if selected and has_focus then text_fg, bg = appearance.selection_text(theme), theme.accent
+    if selected and has_focus then text_fg, bg = appearance.selection_text(theme), appearance.selection_background(theme)
     elseif selected then text_fg = theme.accent end
     if area then
         local x = maximum(1, area.x - 1)
@@ -698,14 +698,14 @@ function M.steps(painter: Painter, y: integer, labels: {string}, current: intege
     if full > painter.width - 2 then
         local label = labels[current] or ""
         M.put(painter, 2, y, " Step " .. tostring(current) .. "/" .. tostring(#labels) .. " " .. label .. " ",
-            painter.width - 2, appearance.selection_text(theme), theme.accent)
+            painter.width - 2, appearance.selection_text(theme), appearance.selection_background(theme))
         return
     end
     local x = 2
     for index, part in ipairs(parts) do
         if index > 1 then x = x + M.put(painter, x, y, " › ", 3, theme.muted) end
         local label = " " .. part .. " "
-        if index == current then x = x + M.put(painter, x, y, label, painter.width - x, appearance.selection_text(theme), theme.accent)
+        if index == current then x = x + M.put(painter, x, y, label, painter.width - x, appearance.selection_text(theme), appearance.selection_background(theme))
         else x = x + M.put(painter, x, y, label, painter.width - x, index < current and theme.text or theme.muted) end
     end
 end
@@ -801,7 +801,7 @@ local function highlighted(painter: Painter, x: integer, y: integer, text: strin
             budget = budget - used
         end
         if budget <= 0 then break end
-        local used = M.put(painter, column, y, fitted:sub(found, found + #query - 1), budget, appearance.selection_text(theme), theme.accent)
+        local used = M.put(painter, column, y, fitted:sub(found, found + #query - 1), budget, appearance.selection_text(theme), appearance.selection_background(theme))
         column = column + used
         budget = budget - used
         at = found + maximum(1, #query)
@@ -828,7 +828,7 @@ function M.log(painter: Painter, first: integer, last: integer, value: LogView):
         local has_focus = value.focused == nil or value.focused
         local fg = line.role and appearance.role(theme, line.role) or theme.text
         local bg = theme.surface
-        if selected and has_focus then fg, bg = appearance.selection_text(theme), theme.accent
+        if selected and has_focus then fg, bg = appearance.selection_text(theme), appearance.selection_background(theme)
         elseif selected then fg = theme.accent end
         local area = value.area
         if area then
@@ -853,7 +853,7 @@ end
 function M.badge(painter: Painter, x: integer, y: integer, text: string, role: string?): integer
     local label = " " .. text .. " "
     local size = tty.text.width(label)
-    local bg = appearance.role(painter.theme, role or "accent")
+    local bg = appearance.selection_background(painter.theme, appearance.role(painter.theme, role or "accent"))
     return M.put(painter, x, y, label, size, appearance.selection_text(painter.theme), bg)
 end
 
@@ -863,7 +863,7 @@ end
 -- how long; this only draws the row.
 function M.toast(painter: Painter, y: integer, toast: Toast)
     if y < 1 or y > painter.height then return end
-    local bg = appearance.role(painter.theme, toast.role or "accent")
+    local bg = appearance.selection_background(painter.theme, appearance.role(painter.theme, toast.role or "accent"))
     M.fill(painter, y, bg)
     local text = M.fit(toast.text, maximum(0, painter.width - 4))
     local size = tty.text.width(text)

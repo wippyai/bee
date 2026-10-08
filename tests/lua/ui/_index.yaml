@@ -37,3 +37,16 @@ entries:
   imports:
     test: wippy.test:test
     glyphs: bee.ui:glyphs
+- name: native_theme_test
+  kind: function.lua
+  source: file://native_theme_test.lua
+  method: run
+  modules: [tty, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    model: bee.shell:model
+    render: bee.shell:render
+    settings_view: bee.apps.settings:view

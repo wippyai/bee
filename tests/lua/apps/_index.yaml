@@ -59,3 +59,14 @@ entries:
     appearance: bee.ui:appearance
     interaction: bee.app:interaction
     view: bee.apps.settings:view
+- name: native_theme_test
+  kind: function.lua
+  source: file://native_theme_test.lua
+  method: run
+  modules: [process, system, channel, time, tty, sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+    appearance: bee.ui:appearance
+    settings: bee.node:settings

@@ -256,7 +256,7 @@ function M.draw(canvas: tty.Canvas, panel: Panel, state: State, items: {Item}, p
             local style = item.enabled and normal or muted
             local hint_style = muted
             if index == state.selected and item.enabled then
-                style = appearance.style(appearance.selection_text(theme), theme.accent)
+                style = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
                 hint_style = style
             end
             local available = math.floor(math.max(0, inside - 2))

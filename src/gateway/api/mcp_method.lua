@@ -136,8 +136,9 @@ local function reply_result(reply: unknown, call_error: unknown): Object
     else
         local value = bounds.object(decoded.value)
         local remedy = value and bounds.text(value.remedy, 4096) or nil
-        projected = mcp.tool_error(decoded.error.code, decoded.error.message,
-            decoded.error.field, decoded.error.retryable == true, remedy or decoded.error.remedy)
+        local fault = assert(decoded.error)
+        projected = mcp.tool_error(assert(fault.code), assert(fault.message),
+            fault.field, fault.retryable == true, remedy or fault.remedy)
     end
     local encoded, encode_error = json.encode(projected)
     if encode_error or not encoded then return refused("UNAVAILABLE", "owner reply could not be encoded") end

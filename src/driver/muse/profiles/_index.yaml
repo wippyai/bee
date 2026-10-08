@@ -24,9 +24,7 @@ entries:
           - UserPromptSubmit
           - PreToolUse
           - PostToolUse
-          - PermissionRequest
           - Stop
-          - SessionEnd
           adapter_ref: bee.driver.muse.descriptor:cli
         inbound:
         - next_turn

@@ -18,7 +18,7 @@ M.HOOK_TIMEOUT = 3
 M.HOOK_TOKEN_DIRECTORY = ".config/muse/.bee-hooks"
 -- Every event here is accepted by muse 1.3.0 at startup; anything else is
 -- refused rather than rendered into a skipped handler group.
-M.HOOK_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop", "SessionEnd"}
+M.HOOK_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop"}
 type Gateway = configure_protocol.GatewayInput
 type Configuration = configure_protocol.Configuration
 function M.hook_token_file(home_directory: string, attempt_id: string, hook_environment: string): (Configuration?, string?, string?)

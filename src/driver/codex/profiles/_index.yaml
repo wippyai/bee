@@ -25,9 +25,7 @@ entries:
           - UserPromptSubmit
           - PreToolUse
           - PostToolUse
-          - PermissionRequest
           - Stop
-          - SessionEnd
           adapter_ref: bee.driver.codex.descriptor:cli
         inbound:
         - next_turn
@@ -64,6 +62,17 @@ entries:
           git_writable_roots_adapter: codex_workspace_write
       - id: named_batch
         mode: batch
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - Stop
+          adapter_ref: bee.driver.codex.descriptor:cli
         protocol: stream-json
         protocol_revision: exec-json-1
         answer_path:
@@ -108,7 +117,6 @@ entries:
           - PostToolUse
           - PermissionRequest
           - Stop
-          - SessionEnd
           adapter_ref: bee.driver.codex.descriptor:cli
         protocol: pty
         protocol_revision: native-window-1

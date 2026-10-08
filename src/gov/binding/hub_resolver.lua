@@ -177,18 +177,16 @@ local function references(entry: Entry): ({string}?, string?)
             found[reference] = true
         end
     end
-    local function add_all(value: unknown, depth: integer): string?
-        if depth > 12 then return "entry reference structure nests too deeply" end
+    local function add_all(value: unknown): string?
         if type(value) ~= "table" then add(value); return nil end
         for key, child in pairs(value) do
             if type(key) ~= "string" and type(key) ~= "number" then return "entry reference structure is not encodable" end
-            local problem = add_all(child, depth + 1)
+            local problem = add_all(child)
             if problem then return problem end
         end
         return nil
     end
-    local function scan(value: unknown, depth: integer, key: string?): string?
-        if depth > 12 then return "entry reference structure nests too deeply" end
+    local function scan(value: unknown, key: string?): string?
         if type(value) ~= "table" then
             if key and (scalar[key] or key:match("_ref$") or key:match("_env$")) then add(value) end
             return nil
@@ -196,17 +194,17 @@ local function references(entry: Entry): ({string}?, string?)
         for child_key, child in pairs(value) do
             if type(child_key) == "string" then
                 local problem: string? = nil
-                if collection[child_key] then problem = add_all(child, depth + 1)
-                else problem = scan(child, depth + 1, child_key) end
+                if collection[child_key] then problem = add_all(child)
+                else problem = scan(child, child_key) end
                 if problem then return problem end
             elseif type(child_key) == "number" then
-                local problem = scan(child, depth + 1, key)
+                local problem = scan(child, key)
                 if problem then return problem end
             else return "entry reference structure is not encodable" end
         end
         return nil
     end
-    local problem = scan(entry, 0, nil)
+    local problem = scan(entry, nil)
     if problem then return nil, problem end
     local result: {string} = {}
     for reference in pairs(found) do result[#result + 1] = reference end
@@ -225,7 +223,7 @@ local function measured_entry(entry: Entry, package: string): (preflight.Entry?,
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error or "measure resolved entry") end
     local refs, references_error = references(clean)
-    if not refs then return nil, references_error end
+    if not refs then return nil, id .. ": " .. tostring(references_error) end
     local modules, modules_error = lists.strings(clean.modules, "entry modules", 32)
     if not modules then return nil, modules_error end
     local config_objects, config_lists, config_empty, shapes_error = artifact.config_shapes(clean)

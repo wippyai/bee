@@ -114,6 +114,16 @@ end
 
 local function define_tests()
     test.describe("Hub registry resolver", function()
+        test.it("measures references in a canonically valid retained driver descriptor", function()
+            local deps, spec, observed = deps_fixture(nil)
+            local descriptor: Object = {config = "host:db"}
+            for _ = 1, 15 do descriptor = {nested = descriptor} end
+            local captured = assert(observed.captured)
+            captured.entries[#captured.entries + 1] = {id = "host:descriptor", kind = "registry.entry",
+                registry = {owner = "host/base"}, data = descriptor}
+            local resolved = facts(deps, spec)
+            test.eq(resolved.context.entries["host:descriptor"].references[1], "host:db")
+        end)
         test.it("resolves an application database capability from the host catalog", function()
             local deps, spec, observed = deps_fixture(nil)
             local captured = assert(observed.captured)

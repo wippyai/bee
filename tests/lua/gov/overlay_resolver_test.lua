@@ -127,6 +127,15 @@ end
 
 local function define_tests()
     test.describe("Workspace driver admission", function()
+        test.it("measures references in a canonically valid retained driver descriptor", function()
+            local deps, spec, observed = fixture()
+            local descriptor: Object = {config = "bee.host:db"}
+            for _ = 1, 15 do descriptor = {nested = descriptor} end
+            observed.captured.entries[#observed.captured.entries + 1] = {id = "bee.host:descriptor", kind = "registry.entry",
+                registry = {owner = "bee/host"}, data = descriptor}
+            local resolved = resolve(deps, spec)
+            test.eq(resolved.context.entries["bee.host:descriptor"].references[1], "bee.host:db")
+        end)
         test.it("measures an owned activation append through existing preflight", function()
             local deps, spec = driver_fixture()
             local facts = resolve(deps, spec)

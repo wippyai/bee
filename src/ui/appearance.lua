@@ -9,7 +9,7 @@
 -- past a declared threshold, always beside text that carries the same meaning.
 type Theme = {id: string, title: string, ground: string, surface: string, text: string,
     muted: string, border: string, accent: string, pattern: string, ok: string, warn: string, error: string,
-    on_accent: string?, terminal_text: string?, terminal_surface: string?}
+    on_accent: string?, on_accent_background: string?, terminal_text: string?, terminal_surface: string?}
 type Page = {foreground: string, background: string}
 -- Preferences are what a display paints with: the node's palette, the
 -- background pattern and the taskbar style.
@@ -20,7 +20,7 @@ M.TYPE = "bee.ui.theme"
 -- TOPIC carries appearance changes to running apps as {appearance = value}.
 M.TOPIC = "bee.ui.appearance"
 M.ROLES = {"ground", "surface", "text", "muted", "border", "accent", "pattern", "ok", "warn", "error"}
-M.OPTIONAL_ROLES = {"on_accent", "terminal_text", "terminal_surface"}
+M.OPTIONAL_ROLES = {"on_accent", "on_accent_background", "terminal_text", "terminal_surface"}
 
 local fallback: Theme = {id = "", title = "Default", ground = "#0c1119", surface = "#17202c", text = "#d8e2ef",
     muted = "#8999ad", border = "#6f89a5", accent = "#ffc963", pattern = "#1c2937", ok = "#7ee787",
@@ -58,11 +58,13 @@ function M.selection_text(theme: Theme): string return theme.on_accent or theme.
 -- Named instance accents affect chrome only. Each palette has a paired readable
 -- selection foreground; application page colors stay owned by the theme.
 local accent_dark: {[string]: string} = {amber = "#ffc963", cyan = "#67dce5", green = "#a6df8a", rose = "#ffa5c5", violet = "#d3b0ff"}
+local accent_terminal: {[string]: string} = {amber = "ansi:3", cyan = "ansi:6", green = "ansi:2", rose = "ansi:1", violet = "ansi:5"}
 local accent_light: {[string]: string} = {amber = "#9c6200", cyan = "#006d80", green = "#28703a", rose = "#9f3158", violet = "#744394"}
 function M.instance_accent(theme: Theme, name: string?): (string, string)
     if not name or name == "" then return theme.accent, M.selection_text(theme) end
     local dark, light = accent_dark[name], accent_light[name]
     if not dark or not light then return theme.accent, M.selection_text(theme) end
+    if theme.surface == "default" then return assert(accent_terminal[name]), M.selection_text(theme) end
     local r = tonumber(theme.surface:sub(2, 3), 16) or 0
     local g = tonumber(theme.surface:sub(4, 5), 16) or 0
     local b = tonumber(theme.surface:sub(6, 7), 16) or 0
@@ -87,6 +89,7 @@ end
 -- between the surface and a role.
 function M.mix(a: string, b: string, k: number): string
     local weight = math.max(0, math.min(1, k))
+    if a:sub(1, 1) ~= "#" or b:sub(1, 1) ~= "#" then return weight == 0 and a or b end
     local parts: {string} = {}
     for _, first in ipairs({2, 4, 6}) do
         local x = tonumber(a:sub(first, first + 1), 16) or 0
@@ -97,11 +100,11 @@ function M.mix(a: string, b: string, k: number): string
 end
 
 -- The page colors of an app viewport; terminal apps may use their own pair.
-function M.page(theme: Theme, terminal: boolean): Page
-    if terminal then
-        return {foreground = theme.terminal_text or theme.text, background = theme.terminal_surface or theme.surface}
-    end
-    return {foreground = theme.text, background = theme.surface}
+function M.page(theme: Theme, terminal: boolean): Page?
+    local foreground = terminal and (theme.terminal_text or theme.text) or theme.text
+    local background = terminal and (theme.terminal_surface or theme.surface) or theme.surface
+    if foreground == "default" and background == "default" then return nil end
+    return {foreground = foreground, background = background}
 end
 
 function M.backgrounds(): {string} return backgrounds end
@@ -118,7 +121,10 @@ function M.default_theme(): Theme return fallback end
 function M.defaults(): Preferences return {theme = fallback, background = "dots", taskbar = "labels"} end
 
 local function color(value: unknown): string?
-    if type(value) == "string" and value:match("^#%x%x%x%x%x%x$") then return value end
+    if type(value) ~= "string" then return nil end
+    if value:match("^#%x%x%x%x%x%x$") or value == "default" or value == "default:dim" or value == "default:reverse" then return value end
+    local index = value:match("^ansi:(%d+)$")
+    if index and tonumber(index) < 16 then return value end
     return nil
 end
 
@@ -138,7 +144,7 @@ function M.decode_theme(value: unknown): Theme?
     end
     return {id = value.id, title = value.title, ground = ground, surface = surface, text = text, muted = muted,
         border = border, accent = accent, pattern = pattern_color, ok = ok, warn = warn, error = err,
-        on_accent = color(value.on_accent), terminal_text = color(value.terminal_text),
+        on_accent = color(value.on_accent), on_accent_background = color(value.on_accent_background), terminal_text = color(value.terminal_text),
         terminal_surface = color(value.terminal_surface)}
 end
 
@@ -166,8 +172,21 @@ local function rgb(hex: string): string
     return tostring(tonumber(hex:sub(2, 3), 16)) .. ";" .. tostring(tonumber(hex:sub(4, 5), 16)) .. ";" .. tostring(tonumber(hex:sub(6, 7), 16))
 end
 
+local function sgr(value: string, background: boolean): string
+    local base = background and 40 or 30
+    if value == "default" then return "\27[" .. tostring(base + 9) .. "m" end
+    if value == "default:dim" then return "\27[" .. tostring(base + 9) .. ";2m" end
+    if value == "default:reverse" then return "\27[" .. tostring(base + 9) .. ";7m" end
+    local index = value:match("^ansi:(%d+)$")
+    if index then
+        local number = assert(tonumber(index))
+        return "\27[" .. tostring(number < 8 and base + number or base + 60 + number - 8) .. "m"
+    end
+    return "\27[" .. tostring(base + 8) .. ";2;" .. rgb(value) .. "m"
+end
+
 function M.style(foreground: string, background: string): string
-    return "\27[38;2;" .. rgb(foreground) .. "m\27[48;2;" .. rgb(background) .. "m"
+    return sgr(foreground, false) .. sgr(background, true)
 end
 
 return M

@@ -34,6 +34,36 @@ local function define_tests()
         end)
     end)
 
+    test.describe("terminal colors", function()
+        test.it("resolves terminal defaults and all sixteen ANSI colors", function()
+            local value = palette()
+            value.ground, value.surface, value.text = "default", "default", "default"
+            value.muted = "default:dim"
+            value.on_accent_background = "default:reverse"
+            for index = 0, 15 do
+                value.accent = "ansi:" .. tostring(index)
+                local theme = assert(appearance.decode_theme(value))
+                test.eq(theme.text, "default")
+                test.eq(appearance.style(theme.text, theme.surface), "\27[39m\27[49m")
+                test.contains(appearance.style(theme.accent, theme.surface), "\27[" .. tostring(index < 8 and 30 + index or 90 + index - 8) .. "m")
+                test.is_nil(appearance.page(theme, false))
+                test.is_nil(appearance.page(theme, true))
+            end
+            value.accent = "ansi:16"
+            test.is_nil(appearance.decode_theme(value))
+        end)
+
+        test.it("preserves terminal colors through intensity ramps and named accents", function()
+            local value = palette()
+            value.surface = "default"
+            local theme = assert(appearance.decode_theme(value))
+            local accent = appearance.instance_accent(theme, "cyan")
+            test.eq(accent, "ansi:6")
+            test.eq(appearance.mix("default", "ansi:2", 0.35), "ansi:2")
+            test.eq(appearance.mix("default", "ansi:2", 0), "default")
+        end)
+    end)
+
     test.describe("preferences", function()
         test.it("decodes a palette, a known background and a taskbar style", function()
             local decoded = appearance.decode({theme = palette(), background = "grid", taskbar = "icons"})

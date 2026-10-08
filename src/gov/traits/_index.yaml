@@ -10,6 +10,7 @@ entries:
     preflight: bee.gov.binding:preflight
     workspace_applications: bee.gov.types:workspace_applications
     drivers: bee.gov.types:drivers
+    hive_sdk_example: bee.gov.traits:hive_sdk_example
 - name: authoring_trait
   kind: registry.entry
   meta:

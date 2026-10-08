@@ -266,7 +266,8 @@ single target must be its own `bee.app` process entry at
 `.security.policies +=`, except a `hive.expose` request, whose target is one of
 the artifact's own Hive operations at the requested mode. A named operation
 declares an authored `meta.hive_service`, a `meta.hive_operation` containing
-`name`, `revision`, `input` and `output` schemas, and `meta.application_ref`
+`name`, `revision`, `input` and `output` schemas, and `effect` (`read` or
+`mutation`, defaulting to `mutation`). Its `meta.application_ref`
 pointing to its owning application in the same measured artifact. Artifact
 validation checks those declarations and refuses duplicate names within an
 application's service. Application operations declare no security of their own;
@@ -311,10 +312,11 @@ the person still reviews and approves the exact binding and methods locally.
 
 The catalog currently describes `workspace.files.read`, `workspace.files.write`,
 `app.database`, `threads.read`, `threads.message`, `agents.launch`,
-`contract.call`, `http.api`, `hive.expose`, `hive.view`,
+`contract.call`, `http.api`, `process.exec`, `agent.tools`, `hive.call`,
+`hive.expose`, `hive.view`,
 `desktop.application_stop`, `hub.manage`, `hub.self_update`,
 `gov.delivery.manage` and `gov.delivery.activate`. Its decoder bounds relative subpaths, lists, identities and
-HTTPS origins; it also carries a never-list for execution, environment and
+HTTPS origins; it also carries a never-list for raw execution, environment and
 credential access, registry and scope management, approval decisions, core
 databases, and auto start. `bee.capability:model` expands templates into
 proposed operation/resource/scope values, compares grant scopes semantically,
@@ -341,9 +343,16 @@ actor and scope. Four execution slots and a 64-call queue bound dispatch;
 queued calls repeat authorization before execution. The supervisor's deadline
 reply reports outcome unknown and keeps the slot occupied until the function finishes.
 Policy-mode application calls require trusted subject mappings and fail closed
-while that path is unavailable. Existing service routes still forward without
-the application exposure gate. The app-facing `hive.call` capability/facade is
-not implemented. Exposure policies stay out of application execution scopes
+while that path is unavailable. Existing service routes retain their destination
+owner authorization and remain outside the application facade. App code imports
+`bee.hive:hive` and calls the granted `hive.call` host function. Its bounded
+capability names exact nodes, workspaces, applications, services and operations;
+the destination still authorizes exposure. Replies validate the authenticated
+supervisor, correlation, size and operation schema against one deadline.
+Mutations require an idempotency key and use durable destination receipts; a
+timeout means outcome unknown. See `docs/hive_test_sdk` for the complete app,
+trait and tools manifest, peer calls and optional-node MCP tools.
+Exposure policies stay out of application execution scopes
 and exposure requirements do not attach those policies to app functions.
 For `application.call`, `application` accepts the existing exact definition ID,
 an immutable `{source_node, source_workspace, component}` object, or an

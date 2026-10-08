@@ -104,8 +104,9 @@ request reads and decisions. The owner checks revision and proposal digest on
 decisions and retains requester-only withdrawal and issuer-only window
 revocation.
 
-The supervisor does not yet enforce application exposure grants or their
-audiences, and it does not map an authenticated remote person to a local actor
-and workspace. Node-level approver authorization is the current route's
-authority boundary. Exposing an operation does not substitute for domain
-authorization.
+The supervisor enforces live admission, operation exposure, approved peer-node
+audiences and application scope for `application.call`. Policy-mode application
+operations remain fail-closed until trusted remote-subject mappings exist.
+The approvals route keeps its explicit operation map and destination approver
+authorization; an application exposure grant does not grant approval decision
+authority. See `docs/hive_test_sdk` for application peer calls and agent discovery.

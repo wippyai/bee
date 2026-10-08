@@ -1305,3 +1305,21 @@ entries:
     follow_source: bee.gov.binding:follow_source
     follow_store: bee.gov.persist:follow_store
     delivery: bee.gov.types:delivery
+- name: hive_sdk_guide_test
+  kind: function.lua
+  source: file://hive_sdk_guide_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  modules:
+  - json
+  security:
+    policies:
+    - bee.tests.gov:app_database_test_policy
+  imports:
+    test: wippy.test:test
+    guide: bee.gov.traits:guide
+    bounds: bee.values:bounds
+    harness: bee.tests.gov:delivery_harness

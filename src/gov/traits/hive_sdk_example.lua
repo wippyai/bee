@@ -28,9 +28,13 @@ local function run(args: Object): Object
 end
 return {run = run}]=]
 M.TEST_SOURCE = [=[local funcs = require("funcs")
+type Object = {[string]: unknown}
 local function run(): boolean
-    local reply = assert(funcs.call("app.test_sdk:run", {configuration = "ci", inputs = {1, 2, 3}}))
-    return reply.ok == true and reply.value.total == 18
+    local result, err = funcs.call("app.test_sdk:run", {configuration = "ci", inputs = {1, 2, 3}})
+    if err or type(result) ~= "table" then return false end
+    local reply = result :: Object
+    local value = type(reply.value) == "table" and reply.value :: Object or nil
+    return reply.ok == true and value ~= nil and value.total == 18
 end
 return {run = run}]=]
 function M.entries(node: string, workspace: string, audience: string): {Object}
@@ -51,7 +55,7 @@ function M.entries(node: string, workspace: string, audience: string): {Object}
     return {
         {id = M.APP, kind = "process.lua", meta = {type = "bee.app", application = {api_version = 1,
             title = "Project test SDK", menus = {"bee.shell:apps_menu"}, lifetime = "view", revision = "1", instance_policy = "multiple"}},
-            data = {source = 'local client = require("client")\nlocal process = require("process")\nlocal function main(value: unknown)\n    local launch = assert(client.launch(value))\n    client.ready(launch)\n    process.events():receive()\nend\nreturn {main = main}',
+            data = {source = 'local client = require("client")\nlocal process = require("process")\nlocal function main(value: unknown)\n    local launch = assert(client.launch(value))\n    client.ready(launch)\n    assert(process.events()):receive()\nend\nreturn {main = main}',
                 method = "main", modules = {"process"}, imports = {client = "bee.app:client"}}},
         {id = M.RUN, kind = "function.lua", meta = {type = "tool", application_ref = M.APP, hive = "open",
             hive_service = "test-sdk", hive_operation = {name = "run", revision = "1", effect = "read",
@@ -67,7 +71,7 @@ function M.entries(node: string, workspace: string, audience: string): {Object}
             suite = "project-sdk", hive = "open", hive_service = "test-sdk",
             hive_operation = {name = "configuration_test", revision = "1", effect = "read", input = {type = "object"}, output = {type = "boolean"}}},
             data = {source = M.TEST_SOURCE, method = "run", modules = {"funcs"}}},
-        {id = "app.test_sdk:trait", kind = "registry.entry", meta = {type = "agent.trait", title = "Project test SDK"},
+        {id = "app.test_sdk:trait", kind = "registry.entry", meta = {type = "agent.trait", application_ref = M.APP, title = "Project test SDK"},
             data = {prompt = "Use test_sdk_run for the local configuration. Use test_sdk_peer with the approved node for a peer call. app_tools with node lists exposed peer tools; tests with node lists/runs the associated suite and reads its run_id on that node. Retry remote mutations with the same request and idempotency_key. A timeout means outcome unknown.",
                 tools = {M.RUN, M.PEER}}},
         requirement("agent_tools", "agent.tools", {tools = {M.RUN, M.PEER}}, M.APP),

@@ -10,9 +10,10 @@ local preflight = require("preflight")
 local workspace_applications = require("workspace_applications")
 local drivers = require("drivers")
 local json = require("json")
+local hive_sdk_example = require("hive_sdk_example")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@17"
+M.REVISION = "bee.governance-component-guide@18"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -538,6 +539,50 @@ function M.sharing(): string
 end
 
 type Section = {id: string, title: string, body: fun(): string}
+function M.hive_sdk_example(node: string, workspace: string, audience: string): {{[string]: unknown}}
+    return hive_sdk_example.entries(node, workspace, audience)
+end
+
+function M.hive_sdk(): string
+    return "Build a project test SDK as an admitted app, an agent.trait, local tools and explicit Hive operations."
+        .. " The complete entries.json below uses overlay test_sdk and namespace app.test_sdk. Replace runner-node,"
+        .. " destination-workspace and author-node with the actual authenticated nodes and destination workspace"
+        .. " the person approves. agent.tools offers only the named functions. hive.expose requests destination-local"
+        .. " approval for each operation and authenticated peer audience; open still requires live admission and"
+        .. " that approval. hive.call bounds nodes, workspaces, application addresses, services and operations."
+        .. " App code imports bee.hive:hive and calls hive.call without added registry, system or supervisor-lookup grants."
+        .. " An open audience approves a peer node, not a source app; the existing app base permits process messages."
+        .. " The facade bounds its own calls. The peer tool runs as the source application; run executes as the"
+        .. " destination copy with its own grants."
+        .. "\n\nUse a source identity"
+        .. ' {source_node = "author-node", source_workspace = "test_sdk", component = "app.test_sdk"}'
+        .. " or an approved alias when copies use different definition IDs. Grant that exact address in hive.call"
+        .. " too. A version is not part of the application address. Discovery uses live metadata and ownership."
+        .. "\n\napp_tools with node lists only peer agent tools exposed to this node. Call a listed peer tool with"
+        .. " operation call, node, tool and arguments. Direct aliases and omitted node remain local. For associated"
+        .. " exposed tests, use tests with operation list, application and node; then run with a stable"
+        .. " idempotency_key; then status with the run_id and the same node. Remote test runs reuse the existing"
+        .. " runner and recheck live exposure."
+        .. "\n\nDeclare effect read for pure computation; omission defaults to mutation. A mutation requires a"
+        .. " bounded idempotency_key. Retry identical arguments and the same key: durable destination receipts"
+        .. " replay completion and refuse changed arguments. A timeout means outcome unknown; the deadline bounds"
+        .. " waiting and does not roll back effects. Pending or interrupted receipts never redispatch."
+        .. "\n\nPublish an immutable version, stage it independently at each destination, read preflight diagnostics"
+        .. " and ask for that destination's approval before application. New versions repeat that workflow."
+        .. " Governance can reuse installed approval when authority does not widen and no pending migrations remain;"
+        .. " that reuse does not follow publications automatically. Automatic follow_source consent and reconciliation"
+        .. " are unavailable. Policy mode stays fail-closed until trusted subject"
+        .. " mappings exist; this example uses open with exact audiences. Package operations without an installed"
+        .. " overlay stay fail-closed. Legacy service routes retain their destination owner authorization and are"
+        .. " outside the app facade. To test a real checkout, add separately approved workspace.files.read and"
+        .. " process.exec requirements and use their granted host functions."
+        .. "\n\nThis project's executable pure Lua configuration multiplies {1,2,3} by three for ci and returns 18"
+        .. " from the destination worker, including its PID. The two-node e2e proof verifies that worker runs on"
+        .. " beta while the calling application's peer tool runs on alpha."
+        .. "\n\nentries.json (freeze this complete JSON list):\n"
+        .. assert(json.encode(M.hive_sdk_example("runner-node", "destination-workspace", "author-node")))
+end
+
 local SECTIONS: {Section} = {
     {id = "pack", title = "Component pack shape", body = function(): string return M.pack_shape() end},
     {id = "contents", title = "Pack contents and authority", body = function(): string return M.pack_contents() end},
@@ -551,6 +596,7 @@ local SECTIONS: {Section} = {
     {id = "tests", title = "Testing your application", body = function(): string return M.tests() end},
     {id = "database", title = "Your application's database", body = function(): string return M.database() end},
     {id = "agent_tools", title = "Tools agents call", body = function(): string return M.agent_tools() end},
+    {id = "hive_sdk", title = "A project test SDK across Hive nodes", body = function(): string return M.hive_sdk() end},
     {id = "workspace", title = "Delivering to your own workspace", body = function(): string return M.workspace_delivery() end},
     {id = "drivers", title = "Custom CLI drivers and source inspection", body = function(): string return M.driver_delivery() end},
     {id = "docs", title = "Platform documentation", body = function(): string return M.platform_documentation() end},
@@ -697,8 +743,9 @@ function M.platform_documentation(): string
         .. " or call (process, channel, tty, registry, sql, fs, http, events, time and the rest), Bee's own"
         .. " contracts (application, threads, hive, placement and subscriptions, gateway, carrier, storage,"
         .. " UI) and the terminal toolkit. For an application that works across every node, search the "
-        .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
-        .. " matches. The authored UI rules are corpus document docs/ui_brand_book, and the toolkit reference gives compact"
+        .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement. Read the matches."
+        .. " Corpus document docs/hive_test_sdk teaches the complete app, trait and tools workflow."
+        .. " The authored UI rules are corpus document docs/ui_brand_book, and the toolkit reference gives compact"
         .. " examples built on bee.ui:frame. For"
         .. " a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
         .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every"

@@ -70,7 +70,7 @@ function M.discover(raw: unknown, caller: string, node: string): protocol.Reply
     table.sort(kept, function(a: Object, b: Object): boolean return tostring(a.alias) < tostring(b.alias) end)
     if #kept > app_tools.MAX_TOOLS then return protocol.fail("remote discovery exceeds its tool bound") end
     local reply = protocol.ok({tools = kept, diagnostics = {}})
-    if not canonical.encode(reply, 262144) then return protocol.fail("remote discovery exceeds its byte bound") end
+    if not canonical.encode(reply, protocol.MAX_BYTES) then return protocol.fail("remote discovery exceeds its byte bound") end
     return reply
 end
 
@@ -160,7 +160,7 @@ function M.tests(raw: unknown, caller: string, node: string): protocol.Reply
     local result = handle_tests(raw, caller, node)
     local reply = result.ok and tests.succeed(result.value) or tests.fail("DENIED", result.error or "remote tests failed")
     local envelope = protocol.ok({reply = reply})
-    if not canonical.encode(envelope, 262144) then return protocol.fail("remote tests reply exceeds its byte bound") end
+    if not canonical.encode(envelope, protocol.MAX_BYTES) then return protocol.fail("remote tests reply exceeds its byte bound") end
     return envelope
 end
 return M

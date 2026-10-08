@@ -35,7 +35,7 @@ local function request(raw: unknown): (Request?, string?)
     end
     local key = value.idempotency_key == nil and nil or bounds.line(value.idempotency_key, 128)
     if value.idempotency_key ~= nil and not key then return nil, "idempotency key is malformed" end
-    if not canonical.encode(value, 262144) then return nil, "application call exceeds its byte bound" end
+    if not canonical.encode(value, protocol.MAX_BYTES) then return nil, "application call exceeds its byte bound" end
     local resolved, address_error = address.resolve(value.application, workspace)
     if not resolved then return nil, address_error end
     return {application = resolved.application, workspace_id = workspace, service = service, operation = operation,
@@ -121,7 +121,7 @@ function M.claim(invocation: Invocation): (boolean, protocol.Reply?, string?)
     local key = assert(canonical.encode({peer = invocation.caller.node, workspace = asked.workspace_id,
         application = asked.application, service = asked.service, operation = asked.operation, key = asked.idempotency_key}, 4096))
     local fingerprint, fingerprint_error = canonical.encode({ref = invocation.operation.ref, revision = invocation.operation.revision,
-        input = invocation.operation.input, output = invocation.operation.output, arguments = asked.arguments}, 262144)
+        input = invocation.operation.input, output = invocation.operation.output, arguments = asked.arguments}, protocol.MAX_BYTES)
     if not fingerprint then return false, nil, "mutation fingerprint exceeds its bound: " .. tostring(fingerprint_error) end
     local fresh, reply, err = receipts.claim(key, fingerprint)
     if fresh then invocation.receipt_key = key end
@@ -157,7 +157,7 @@ function M.finish(invocation: Invocation, future: funcs.Future): protocol.Reply
     local output_error = schemas.validate(invocation.operation.output, result)
     if output_error then return protocol.fail("invalid application reply: " .. output_error) end
     local reply = protocol.ok({result = result, output = invocation.operation.output, revision = invocation.operation.revision})
-    if not canonical.encode(reply, 262144) then return protocol.fail("application reply exceeds its byte bound") end
+    if not canonical.encode(reply, protocol.MAX_BYTES) then return protocol.fail("application reply exceeds its byte bound") end
     return reply
 end
 

@@ -44,6 +44,7 @@ entries:
   source: file://outbound.lua
   modules: [time]
   imports:
+    protocol: bee.hive:protocol
     bounds: bee.values:bounds
     gateway: bee.gov.types:capability_gateway
     canonical: bee.values:canonical

@@ -1,12 +1,13 @@
 -- MIT
 local time = require("time")
+local protocol = require("protocol")
 local bounds = require("bounds")
 local gateway = require("gateway")
 local canonical = require("canonical")
 local schemas = require("schemas")
 local declarations = require("declarations")
 local M = {}
-M.MAX_BYTES = 262144
+M.MAX_BYTES = protocol.MAX_BYTES
 type Object = {[string]: unknown}
 type Request = {node: string, timeout: string, args: Object}
 local function contains(raw: unknown, value: string): boolean

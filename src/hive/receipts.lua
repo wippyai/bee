@@ -32,13 +32,12 @@ function M.claim(key: string, fingerprint: string): (boolean, protocol.Reply?, s
     result = transaction.release(db, "Hive receipts", result)
     if not result.ok then return false, nil, result.message end
     if result.replayed then
-        local reply, invalid = protocol.decode_reply(result.value, "stored", "stored")
-        return false, reply, invalid
+        return false, result.value :: protocol.Reply, nil
     end
     return true, nil, nil
 end
 function M.complete(key: string, reply: protocol.Reply): (boolean, string?)
-    local encoded, err = canonical.encode(reply, 262144)
+    local encoded, err = canonical.encode(reply, protocol.MAX_BYTES)
     if not encoded then return false, err end
     local db, open_error = database.open()
     if not db then return false, open_error end

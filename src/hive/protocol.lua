@@ -15,6 +15,7 @@ type Request = {op: string, args: {[string]: unknown}, reply_topic: string, ttl:
 type Reply = {ok: boolean, value: {[string]: unknown}?, error: string?}
 
 local M = {}
+M.MAX_BYTES = 262144
 M.CALL = "bee.hive.call"
 M.SUPERVISOR = "bee.hive.supervisor"
 -- FORWARD is the topic the supervisor uses to hand a routed operation to a
@@ -121,7 +122,7 @@ function M.decode_reply(raw: unknown, from: string, expected: string?): (Reply?,
     if expected and from ~= expected then return nil, "untrusted Hive reply sender" end
     local data = bounds.object(raw)
     if not data or bounds.fields(data, {"ok", "value", "error"}) or type(data.ok) ~= "boolean"
-        or not canonical.encode(data, 262144) then return nil, "malformed or oversized Hive reply" end
+        or not canonical.encode(data, M.MAX_BYTES) then return nil, "malformed or oversized Hive reply" end
     if data.ok then
         local value = bounds.object(data.value)
         if not value or data.error ~= nil then return nil, "malformed successful Hive reply" end

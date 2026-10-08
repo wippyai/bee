@@ -58,6 +58,26 @@ local function define_tests()
             test.eq(after.checkpoint.placement_binding, "bee.placement.native.binding:binding")
             test.eq(harness.code(runner:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"})), "DENIED")
         end)
+        test.it("retains launch phase timestamps in the fenced thread checkpoint", function()
+            local thread_id = prepared_attempt()
+            harness.value(carrier:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"}))
+            local startup = {source = "bee", body = {type = "extension", event_key = "startup:t1:1",
+                data = {type = "extension", event_name = "bee.carrier.startup", event_revision = "1",
+                    payload_json = '{"phase":"Preparing process","started_ms":100,"ended_ms":125}'}}}
+            harness.value(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1",
+                carrier_epoch = 1, expected_revision = 0, checkpoint = checkpoint(1), records = {startup}}))
+            local page = harness.value(carrier:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"observation"}}}))
+            local found = false
+            for _, entry in ipairs(page.records) do
+                if entry.body.type == "extension" and entry.body.data.event_name == "bee.carrier.startup" then
+                    test.eq(entry.source, "bee")
+                    test.eq(entry.attempt_id, "t1")
+                    test.eq(entry.body.data.payload_json, startup.body.data.payload_json)
+                    found = true
+                end
+            end
+            test.is_true(found)
+        end)
         test.it("fences earlier carriers by epoch and advances revisions only from the expected one", function()
             local thread_id = prepared_attempt()
             local key = harness.key()

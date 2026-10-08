@@ -480,6 +480,7 @@ entries:
     admission: bee.harness.launch:admission
     profile_protocol: bee.harness.profiles:protocol
     locate: bee.threads.sessions.binding:locate
+    locate_driver: bee.driver.locate:locate
     readiness: bee.harness.launch:readiness
 - name: cancellation
   kind: library.lua

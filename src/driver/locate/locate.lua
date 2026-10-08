@@ -128,6 +128,10 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
     return result, nil
 end
 
+function M.installed(result: Result): boolean
+    return result.executable.present == true and result.executable.version ~= nil and result.platform.compatible == true
+end
+
 function M.status(value: unknown): LocateStatus?
     if value == "ready" or value == "missing" or value == "unconfigured" or value == "incompatible" or value == "unknown" then return value end
     return nil

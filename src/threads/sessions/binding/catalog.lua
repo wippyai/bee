@@ -8,6 +8,7 @@ local admission = require("admission")
 local profile_protocol = require("profile_protocol")
 local locate = require("locate")
 local readiness = require("readiness")
+local locate_driver = require("locate_driver")
 local M = {}
 
 M.PAGE_SIZE = 64
@@ -180,7 +181,8 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
             features[#features + 1] = (capability.supported and "supported:" or "unsupported:") .. path
         end
         table.sort(features)
-        return {status = probe.result.status, reasons = reasons, features = features, actions = {}}, nil
+        local interactive = locate_driver.installed(probe.result)
+        return {status = interactive and "ready" or probe.result.status, reasons = reasons, features = features, actions = {}}, nil
     end)
     if not value then return nil, locate_error end
     local status: Status = base_status

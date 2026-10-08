@@ -154,9 +154,10 @@ local function release_unstarted(admitted: admission.Admitted): (boolean, string
     return true, nil
 end
 
-local function persist_checkpoint(state: hooks.State): (boolean, string?)
+local function persist_checkpoint(state: hooks.State, records: {{[string]: unknown}}?): (boolean, string?)
     local intent = hooks.next_intent(state, "launch:" .. state.attempt_id .. ":window:checkpoint", now_ms())
     if not intent then return false, "window checkpoint intent is missing" end
+    if records then intent.request.records = records end
     if not hooks.begin(state, "checkpoint", intent) then return false, "window checkpoint is already in flight" end
     local raw, call_error = funcs.call(intent.target, intent.request)
     if call_error then
@@ -223,6 +224,24 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     local saved: recovery.Saved? = nil
     local admitted: admission.Admitted? = nil
     local ready_announced = false
+    local phase_name = ""
+    local phase_started = now_ms()
+    local launch_records: {{[string]: unknown}} = {}
+    local function phase(name: string)
+        local at = now_ms()
+        if phase_name ~= "" then
+            launch_records[#launch_records + 1] = {source = "bee", body = {type = "extension",
+                event_key = "startup:" .. launch.instance_id .. ":" .. tostring(#launch_records + 1),
+                data = {type = "extension", event_name = "bee.carrier.startup", event_revision = "1",
+                    payload_json = assert(json.encode({phase = phase_name, started_ms = phase_started, ended_ms = at}))}}}
+        end
+        phase_name, phase_started = name, at
+        local output = assert(tty.surface())
+        local width, height = tty.screen_size()
+        local frame = restore_view.draw(width, height, launch.appearance, name .. "…", "Starting Agent", "")
+        assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+        assert(output:close())
+    end
     local function show_failure(status: string, settle: (() -> string)?)
         logger:warn("Agent terminal did not start", {reason = status})
         local output = assert(tty.surface())
@@ -607,7 +626,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         end
     elseif direct then
         local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], launch.thread_id,
-            {view_id = launch.view_id, instance_id = launch.instance_id})
+            {view_id = launch.view_id, instance_id = launch.instance_id}, phase)
         if not choice then
             show_failure("Managed window admission: " .. tostring(direct_error))
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
@@ -621,6 +640,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             return
         end
+        phase("Creating session and thread")
         local choice, admission_error = admission.admit_request(body, session_operation_key)
         if not choice then
             show_failure("Managed window admission: " .. failure(admission_error))
@@ -636,6 +656,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         saved_profile_id = admitted.plan.saved_profile_id, saved_profile_revision = admitted.plan.saved_profile_revision,
         plan_digest = admitted.plan.plan_digest, origin_request_id = origin_request_id,
         previous_attempt_id = admitted.attempt_id, thread_id = admitted.thread_id}
+    phase("Planning process")
     local transport = io()
     local prompt: string? = nil
     if admitted.session_ref then
@@ -672,6 +693,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    phase("Preparing process")
     local progress_events = assert(process.listen("bee.placement.image_progress", {message = true}))
     local completed = channel.new(1)
     type Preparation = {prepared: machine.PreparedAttempt?, error: string?, failed: machine.FailedPreparation?}
@@ -718,6 +740,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    if prepared.notice then phase("Waiting for login-screen confirmation") end
     if prepared.notice and not show_login(prepared.notice) then
         settle_failure(admitted, prepared.epoch, "the login notice was closed before the provider started",
             prepared.gateway_binding, true, true)
@@ -742,7 +765,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         decoder = records.batch,
     })
     local driver = delivery.new(state, start_intent, transport.key)
-    local checkpointed, checkpoint_error = persist_checkpoint(state)
+    phase("Saving launch checkpoint")
+    local checkpointed, checkpoint_error = persist_checkpoint(state, launch_records)
     if not checkpointed then
         local reason = "native window checkpoint did not persist: " .. tostring(checkpoint_error)
         show_failure(reason, function(): string
@@ -751,6 +775,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    phase("Attaching process output")
     local attach_target = machine.placement_target(plan, "attach")
     local attached = false
     local attachment_error: string? = "selected placement binds no attach"
@@ -768,6 +793,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         return
     end
     local width, height = tty.screen_size()
+    phase("Starting process")
     local terminal, terminal_error = open(admitted.attempt_id, {width = width, height = height,
         term = "xterm-256color", expected_binding = prepared.gateway_binding, expected_placement_binding = plan.placement_binding.binding_id,
         generation = prepared.epoch})
@@ -779,6 +805,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    phase("Recording supervised process start")
     local started, started_error = call(THREADS .. ":start_attempt", {thread_id = admitted.thread_id,
         idempotency_key = "launch:" .. admitted.attempt_id .. ":window:started", action_id = admitted.action_id,
         attempt_id = admitted.attempt_id, started = {execution_kind = "process", execution_ref = admitted.attempt_id,
@@ -796,6 +823,24 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    phase("Running")
+    local recorded, record_error = funcs.call(hooks.COMMIT, {thread_id = state.thread_id,
+        idempotency_key = "launch:" .. state.attempt_id .. ":window:startup", attempt_id = state.attempt_id,
+        carrier_epoch = state.epoch, expected_revision = state.revision, checkpoint = state.checkpoint, records = launch_records})
+    local launch_receipt = not record_error and bounds.object(recorded)
+    local revision = launch_receipt and launch_receipt.ok == true and bounds.object(launch_receipt.value)
+    if not revision or revision.checkpoint_revision ~= state.revision + 1 then
+        local reason = "Launch phase records did not persist: " .. tostring(record_error or "unexpected checkpoint revision")
+        terminal:close()
+        terminal:done():receive()
+        terminal:finish()
+        show_failure(reason, function(): string
+            return settle_failure(admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
+        end)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+        return
+    end
+    state.revision = state.revision + 1
     local encoded, encode_error = recovery.encode(application_saved)
     local checkpoint_id: string? = nil
     local checkpoint_error: string? = encode_error

@@ -44,9 +44,11 @@ end
 -- explicit picker choice. The command resolver supplies only a definition
 -- reference; this actor obtains and fences the current measured plan.
 function M.direct(workspace_id: string, definition_ref: string, thread_id: string?,
-    origin_view: {view_id: string, instance_id: string}?): (admission.Admitted?, string?)
+    origin_view: {view_id: string, instance_id: string}?, phase: ((string) -> ())?): (admission.Admitted?, string?)
+    if phase then phase("Checking installed driver") end
     local plan, refused = admission.resolve(definition_ref, "window", workspace_id)
     if not plan then return nil, fault(refused) end
+    if phase then phase("Preparing agent resources") end
     local setup, setup_error = funcs.call("bee.harness.binding:setup", {
         workspace_id = workspace_id, definition_ref = definition_ref,
         expected_plan_digest = plan.plan_digest})
@@ -57,6 +59,7 @@ function M.direct(workspace_id: string, definition_ref: string, thread_id: strin
     end
     local request_id, request_error = uuid.v7()
     if not request_id then return nil, "Agent request identity: " .. tostring(request_error) end
+    if phase then phase("Creating session and thread") end
     local admitted, admission_error = admission.admit_request({request_id = request_id,
         definition_ref = definition_ref, expected_plan_digest = plan.plan_digest,
         workspace_id = workspace_id, thread_id = thread_id, brief = "", mode = "window", workdir = prepared.workdir, origin_view = origin_view})

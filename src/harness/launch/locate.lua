@@ -277,6 +277,8 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     if not docker and (not executable_error or executable_error:kind() == errors.NOT_FOUND) then
         version, executable_present = executable_version(executable_path, bounds.object(selected.version_probe) or {})
     end
+    local selected_profile = driver_resolver.profile(pinned, binding_ref, profile_id)
+    local interactive = selected_profile and selected_profile.mode == "window" and selected_profile.protocol == "pty"
     local names = environment_names()
     local checks = login_evidence.probe(selected.login_evidence, {
         file = login_exists,
@@ -285,7 +287,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             return names[name] == true
         end,
         status = function(args: {string}, timeout: integer): integer?
-            if docker or executable_present ~= true then return nil end
+            if interactive or docker or executable_present ~= true then return nil end
             local argv: {string} = {executable_path}
             for _, arg in ipairs(args) do argv[#argv + 1] = arg end
             local _, code = capture(argv, timeout, true)
@@ -311,8 +313,8 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         if field and path then
             local support = bounds.object(field.support)
             local help = support and bounds.object(support.help_probe)
-            local supported = result.status == "ready"
-            local reason: string? = supported and nil or "Installed version and login are not established"
+            local supported = locate.installed(result)
+            local reason: string? = supported and nil or "Installed version and platform compatibility are not established"
             if supported and help then
                 local args = bounds.array(help.argv, 8)
                 local flag = bounds.line(help.flag, 128)

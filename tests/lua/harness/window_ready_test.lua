@@ -92,6 +92,9 @@ local function define_tests()
                     reached = true
                 end
             end
+            local starting = assert(view:snapshot())
+            test.is_true(table.concat(starting.rows, "\n"):find("Starting process", 1, true) ~= nil,
+                "the launch surface does not identify the blocked native-open phase")
             -- Both messages come from the window process, so their order is
             -- the order in which the window sent them.
             test.is_true(announced, "the window held readiness behind launch work that was still running")

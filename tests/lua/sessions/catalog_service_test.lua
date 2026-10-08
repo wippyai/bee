@@ -53,6 +53,65 @@ local function define_tests()
                 end
             end
         end)
+        test.it("offers installed interactive drivers and options before login", function()
+            local ref = "bee.driver.claude.descriptor:cli"
+            local original = assert(registry.get(ref))
+            local edited = assert(registry.get(ref))
+            local data = assert(bounds.object(edited.data))
+            data.login_evidence = {command = "fixture login", any_of = {{kind = "file_exists", paths = {".fixture-no-login"}}}}
+            local options = assert(bounds.object(data.options))
+            local fields = assert(bounds.object(options.fields))
+            local model = assert(bounds.object(fields.model))
+            model.support = {config_schema_ref = "fixture:model"}
+            local changes = assert(registry.snapshot()):changes()
+            changes:update(edited)
+            assert(changes:apply())
+            local ok, failure = pcall(function()
+                local probe = assert(bounds.object(assert(funcs.call("bee.harness.binding:locate_probe",
+                    {binding_ref = "bee.driver.claude.binding:binding", profile_id = "window"}))))
+                local result = assert(bounds.object(probe.result))
+                test.eq(result.status, "unconfigured")
+                local capabilities = assert(bounds.object(result.capabilities))
+                local model_capability = assert(bounds.object(capabilities["provider.model"]))
+                test.eq(model_capability.supported, true)
+                local found = false
+                for _, candidate in ipairs(listed(false).items) do
+                    if candidate.ref == "bee.driver.claude.profiles:default_window" then
+                        test.eq(candidate.status, "ready")
+                        found = true
+                    end
+                end
+                test.is_true(found, "installed signed-out interactive driver is hidden")
+            end)
+            local restore = assert(registry.snapshot()):changes()
+            restore:update(original)
+            assert(restore:apply())
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("leaves PTY authentication to the CLI and probes headless login", function()
+            local ref = "bee.driver.claude.descriptor:cli"
+            local original = assert(registry.get(ref))
+            local edited = assert(registry.get(ref))
+            local data = assert(bounds.object(edited.data))
+            data.login_evidence = {command = "fixture login", any_of = {{kind = "auth_status",
+                argv = {"--version"}, success_exit_code = 0, timeout_ms = 3000}}}
+            local changes = assert(registry.snapshot()):changes()
+            changes:update(edited)
+            assert(changes:apply())
+            local ok, failure = pcall(function()
+                local function login(profile: string): Object
+                    local probe = assert(bounds.object(assert(funcs.call("bee.harness.binding:locate_probe",
+                        {binding_ref = "bee.driver.claude.binding:binding", profile_id = profile}))))
+                    return assert(bounds.object(assert(bounds.object(probe.result)).login))
+                end
+                test.is_nil(login("window").exists)
+                test.eq(login("session").exists, true)
+            end)
+            local restore = assert(registry.snapshot()):changes()
+            restore:update(original)
+            assert(restore:apply())
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("keeps an existing machine login ready in the default launch home", function()
             local found: Candidate? = nil
             for _, candidate in ipairs(listed(true).items) do

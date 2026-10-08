@@ -313,7 +313,7 @@ local function define_tests()
                 test.eq(materialized.destination, row.destination)
                 test.eq(materialized.value, secret)
                 for _, safe in ipairs({stored, call(manager, "list", {workspace_id = ws}), assert(registry.get(ref))}) do
-                    test.is_nil(assert(json.encode(safe)):find(secret, 1, true))
+                    test.is_nil((assert(json.encode(safe)):find(secret, 1, true)))
                 end
             end
             end)

@@ -50,7 +50,7 @@ func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenSour
 	return RunTo(ctx, stdin, io.Discard, endpoint, actionID, tokenSource, event)
 }
 
-// RunTo forwards a bounded context-only response to the hook caller.
+// RunTo forwards a bounded response to the hook caller.
 func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint, actionID, tokenSource, event string) error {
 	if ctx == nil {
 		return errors.New("hook-post: context is required")

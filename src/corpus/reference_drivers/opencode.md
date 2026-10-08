@@ -16,6 +16,20 @@ entries:
   variable: opencode
   default: ''
   readonly: true
+- name: api_key
+  kind: env.variable
+  storage: bee.credentials.env:entered_values
+  variable: OPENCODE_PERSON_KEY
+  default: ''
+  meta:
+    type: bee.credential_source
+    credential_name: opencode_api_key
+    credential:
+      provider: opencode
+      format_ref: bee.driver.opencode.credentials:credential_format
+      workspace_id: '*'
+      audience: '*'
+      projection_kinds: [environment]
 ```
 
 ## descriptor/_index.yaml
@@ -214,6 +228,122 @@ entries:
               then:
               - --variant
               - field: variant
+        providers:
+          path: provider.options.providers
+          value_schema:
+            type: object
+            maxProperties: 16
+            additionalProperties:
+              type: object
+              additionalProperties: false
+              properties:
+                npm:
+                  type: string
+                  enum:
+                  - '@ai-sdk/openai-compatible'
+                name:
+                  type: string
+                  maxLength: 128
+                options:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    baseURL:
+                      type: string
+                      maxLength: 512
+                    apiKey:
+                      type: string
+                      enum:
+                      - '{env:OPENAI_API_KEY}'
+                    includeUsage:
+                      type: boolean
+                  required:
+                  - baseURL
+                  - apiKey
+                models:
+                  type: object
+                  maxProperties: 16
+                  additionalProperties:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      name:
+                        type: string
+                        maxLength: 128
+                      tool_call:
+                        type: boolean
+                      limit:
+                        type: object
+                        additionalProperties: false
+                        properties:
+                          context:
+                            type: integer
+                            minimum: 1
+                          output:
+                            type: integer
+                            minimum: 1
+                      options:
+                        type: object
+                        additionalProperties: false
+                        properties:
+                          temperature:
+                            type: number
+                            minimum: 0
+                            maximum: 2
+                          seed:
+                            type: integer
+                          maxTokens:
+                            type: integer
+                            minimum: 1
+              required:
+              - npm
+              - options
+              - models
+          label: Custom providers
+          description: Custom providers
+          section: advanced
+          order: 10
+          contexts: &id001
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.opencode.descriptor:cli
+          render:
+          - kind: config
+            contexts: *id001
+            file: .config/opencode/opencode.json
+            format: json
+            path:
+            - provider
+            merge: set
+            value:
+              field: provider.options.providers
+        enabled_providers:
+          path: provider.options.enabled_providers
+          value_schema:
+            type: array
+            maxItems: 16
+            items:
+              type: string
+              maxLength: 128
+          label: Enabled providers
+          description: Enabled providers
+          section: advanced
+          order: 11
+          contexts: *id001
+          support:
+            config_schema_ref: bee.driver.opencode.descriptor:cli
+          render:
+          - kind: config
+            contexts: *id001
+            file: .config/opencode/opencode.json
+            format: json
+            path:
+            - enabled_providers
+            merge: set
+            value:
+              field: provider.options.enabled_providers
       rules:
       - kind: forbid_nonempty
         field: gateway_hooks
@@ -382,8 +512,12 @@ entries:
     title: OpenCode
     binding_ref: bee.driver.opencode.binding:binding
     profile_id: window
+    private_credentials:
+    - opencode_login
+    - opencode_api_key
     docker_credentials:
     - opencode_login
+    - opencode_api_key
     policy_ref: bee.driver.opencode.security:launch_policy_opencode_window
     default_mode: window
     allowed_overrides:
@@ -425,6 +559,7 @@ entries:
     session_resource: session
     credentials:
     - opencode_login
+    - opencode_api_key
     presentation:
       start_menu: false
       fullscreen: false
@@ -445,6 +580,7 @@ entries:
     provider: opencode
   data:
     schema_revision: bee.credential-format@1
+    environment_destination: OPENAI_API_KEY
     file:
       path: .local/share/opencode/auth.json
       content_format: json
@@ -496,7 +632,13 @@ entries:
     placement_profiles:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
-    profile_restrictions: {}
+    profile_restrictions:
+      provider.model:
+        kind: declared
+      provider.options.providers:
+        kind: declared
+      provider.options.enabled_providers:
+        kind: declared
     profile_instructions: true
 - name: launch_policy_opencode_window
   kind: registry.entry
@@ -557,6 +699,10 @@ entries:
     - bee.placement.docker.profiles:coding
     profile_restrictions:
       provider.model:
+        kind: declared
+      provider.options.providers:
+        kind: declared
+      provider.options.enabled_providers:
         kind: declared
     profile_instructions: true
 ```

@@ -68,6 +68,8 @@ local function define_tests()
             test.is_true(snapshot.complete)
             local usable, usable_error = catalog.usable(snapshot)
             if not usable then error(tostring(usable_error)) end
+            local opencode = find(snapshot, "bee.driver.opencode.binding:binding")
+            assert(opencode.state == "compatible", table.concat(opencode.diagnostics, "; "))
             test.eq(#usable, 7)
             test.eq(usable[1].binding_id, "bee.driver.agy.binding:binding")
             test.eq(usable[2].binding_id, "bee.driver.claude.binding:binding")

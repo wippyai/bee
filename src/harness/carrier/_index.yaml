@@ -56,6 +56,7 @@ entries:
     mcp: bee.gateway.api:mcp
     gateway_protocol: bee.gateway:protocol
     surface: bee.gateway.catalog:surface
+    gateway_hooks_catalog: bee.gateway.hooks:hooks
     preferences: bee.driver.profiles:preferences
 - name: continuation
   kind: library.lua

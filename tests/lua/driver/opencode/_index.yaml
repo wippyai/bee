@@ -49,6 +49,22 @@ entries:
     configure: bee.driver.opencode.binding:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
+- name: supervisor_test
+  kind: function.lua
+  source: file://supervisor_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - security
+  security:
+    policies:
+    - bee.tests.driver.opencode:policy_inspection
+  imports:
+    test: wippy.test:test
+    observer: bee.placement.native.service:observer
+    observer_protocol: bee.driver:window_observer
 - name: delivery_test
   kind: function.lua
   source: file://delivery_test.lua
@@ -59,3 +75,11 @@ entries:
   imports:
     test: wippy.test:test
     delivery: bee.driver.opencode.observer:delivery
+- name: policy_inspection
+  kind: security.policy
+  policy:
+    effect: allow
+    actions:
+    - security.policy.get
+    resources:
+    - bee.driver.opencode.observer:http_policy

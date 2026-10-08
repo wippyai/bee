@@ -13,6 +13,7 @@ local preferences = require("preferences")
 local mcp = require("mcp")
 local gateway_protocol = require("gateway_protocol")
 local surface = require("surface")
+local gateway_hooks_catalog = require("gateway_hooks_catalog")
 local M = {}
 M.MAX_AGENT_DELEGATES = 16
 M.MAX_AGENT_MODELS = 16
@@ -340,10 +341,8 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if data.gateway_hooks ~= nil then
         local declared, hooks_error = bounds.ids(data.gateway_hooks, true)
         if not declared then return nil, ref .. ": gateway_hooks: " .. tostring(hooks_error) end
-        -- Events a harness emits only while shutting down are not reliably
-        -- captured, so no generated configuration admits them.
         for _, event in ipairs(declared) do
-            if event == "SessionEnd" or event == "StopFailure" then return nil, ref .. ": gateway_hooks names " .. event .. ", a shutdown event that generated configuration does not admit in this version" end
+            if not bounds.member(event, gateway_hooks_catalog.EVENTS) then return nil, ref .. ": gateway_hooks names an unsupported event " .. event end
         end
         table.sort(declared)
         gateway_hooks = declared

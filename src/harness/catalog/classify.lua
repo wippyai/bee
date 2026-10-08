@@ -7,6 +7,7 @@ local canonical = require("canonical")
 local profile = require("profile")
 local driver_types = require("driver_types")
 local permission = require("permission")
+local observers = require("observers")
 local M = {}
 M.CONTRACT = "bee.driver:driver"
 M.METHODS = {"prepare", "dispatch", "normalize", "configure"}
@@ -33,7 +34,7 @@ type Binding = {
     activated: boolean,
     diagnostics: {string},
 }
-type Input = {binding: Entry, declaration: Entry?, methods: {[string]: Entry?}, adapters: {[string]: Entry?}?, activated: boolean}
+type Input = {binding: Entry, declaration: Entry?, methods: {[string]: Entry?}, adapters: {[string]: Entry?}?, activated: boolean, observers: observers.Measurements?}
 local function digest(value: unknown): (string?, string?)
     local encoded, encode_error = canonical.encode(value)
     if not encoded then return nil, encode_error end
@@ -119,7 +120,7 @@ function M.binding(input: Input): Binding
         local declaration_data = bounds.object(declaration.data) or {}
         local parsed, parse_error = profile.decode(declaration_data.driver)
         if not parsed then fail("profiles: " .. tostring(parse_error)) else decoded = parsed end
-        local sum, sum_error = digest(declaration_data)
+        local sum, sum_error = observers.digest(declaration_data, input.observers or {})
         if not sum then fail("profiles are not measurable: " .. tostring(sum_error)) else profile_digest = sum end
     end
     local profiles: {Profile} = {}
@@ -132,6 +133,7 @@ function M.binding(input: Input): Binding
         default_profile = decoded.default_profile
         local any_supported = false
         for index, item in ipairs(decoded.profiles) do
+            if item.observer and not (input.observers or {})[item.id] then fail("profile " .. item.id .. " observer is not measurable") end
             local ok = supported(item.mode, item.protocol)
             if ok then any_supported = true end
             profiles[index] = {id = item.id, mode = item.mode, protocol = item.protocol, protocol_revision = item.protocol_revision, supported = ok, private_home = item.isolation_env.private_home,

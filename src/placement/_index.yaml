@@ -18,6 +18,7 @@ entries:
     types: bee.placement:types
     driver_types: bee.driver:types
     login_evidence: bee.driver.locate:login_evidence
+    hook_catalog: bee.gateway.hooks:hooks
     preferences: bee.driver.profiles:preferences
 - name: transitions
   kind: library.lua

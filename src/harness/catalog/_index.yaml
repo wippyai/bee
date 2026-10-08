@@ -8,6 +8,7 @@ entries:
   - hash
   imports:
     bounds: bee.values:bounds
+    observers: bee.driver:window_observer
     canonical: bee.values:canonical
     profile: bee.driver.profiles:profile
     driver_types: bee.driver:types
@@ -19,5 +20,6 @@ entries:
   - registry
   imports:
     bounds: bee.values:bounds
+    observers: bee.driver:window_observer
     classify: bee.harness.catalog:classify
     resolver: bee.driver.binding:resolver

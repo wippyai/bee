@@ -192,6 +192,7 @@ entries:
     bounds: bee.values:bounds
     identity: bee.placement.native.service:identity
     process_backend: bee.placement.native.binding:process_backend
+    observer: bee.placement.native.service:observer
 - name: sweeper
   kind: process.lua
   source: file://sweeper.lua
@@ -275,3 +276,14 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
+- name: observer
+  kind: library.lua
+  source: file://observer.lua
+  modules: [registry, process, channel, time, uuid, exec]
+  imports:
+    bounds: bee.values:bounds
+    resolver: bee.driver.binding:resolver
+    observer_protocol: bee.driver:window_observer
+    resources: bee.placement.native.env:resources
+    quote: bee.driver.binding:quote
+    types: bee.placement:types

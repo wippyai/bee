@@ -21,6 +21,7 @@ local service = require("service")
 local protocol = require("protocol")
 local identity = require("identity")
 local process_backend = require("process_backend")
+local observer = require("observer")
 
 type Options = {width: integer, height: integer, term: string, expected_binding: string?, expected_placement_binding: string?, generation: integer?}
 type Window = {
@@ -201,6 +202,22 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     end
     if not executor then return fail(db, backend, "placement executor unavailable", gateway_binding, attempt_id) end
 
+    local observed: observer.Handle? = nil
+    if not backend then
+        local observer_ok, handle = pcall(function()
+            return observer.start(request, executor, prepared.arguments, prepared.working_directory, prepared.environment, function(kind: string, detail: string)
+                store.transition(db, attempt_id, {evidence = {kind = kind, detail = detail}})
+            end)
+        end)
+        if observer_ok then observed = handle else store.transition(db, attempt_id, {evidence = {kind = "observer.failed", detail = "observer setup failed; ordinary CLI launch continues"}}) end
+        if observed then
+            argv = {request.launch.executable}
+            for _, argument in ipairs(observed.arguments) do argv[#argv + 1] = argument end
+        end
+    end
+    local function stop_observer()
+        if observed then observed.stop() end
+    end
     local closed = false
     local stop_requested = false
     local finished = false
@@ -211,6 +228,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     local controls = process.listen(protocol.TOPIC_CONTROL, {message = true})
     if not controls then
         materialization.fail_start(db, attempt_id, "window control listener unavailable before child creation", backend ~= nil)
+        stop_observer()
         executor:release()
         return fail(db, backend, "window control listener unavailable", gateway_binding, attempt_id)
     end
@@ -249,7 +267,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
                     if current and current.owner_id == owner and current.runner_pid == process.pid()
                         and current.execution_state == "stopping" then
                         stop_requested = true
-                        if current_terminal and current_terminal:close() then closed = true end
+                        if current_terminal and current_terminal:close() then closed = true; stop_observer() end
                     end
                 end
             end
@@ -263,6 +281,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "native terminal start"}})
     if not creating.ok then
         process.unlisten(controls)
+        stop_observer()
         executor:release()
         local current = store.row(db, attempt_id)
         local reason = current and current.execution_state == "stopping" and "window stopped during startup"
@@ -274,6 +293,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     if not started then
         finished = true
         process.unlisten(controls)
+        stop_observer()
         store.transition(db, attempt_id, {evidence = {kind = "child.refused", detail = "executor refused the PTY command: " .. tostring(start_error)}})
         executor:release()
         return fail(db, backend, "start terminal: " .. tostring(start_error), gateway_binding, attempt_id)
@@ -332,6 +352,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     if not settled.ok then
         finished = true
         process.unlisten(controls)
+        stop_observer()
         started:close()
         local current = store.row(db, attempt_id)
         if not current or current.execution_state ~= "stopping" then
@@ -351,9 +372,12 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     if startup_exit then
         finished = true
         process.unlisten(controls)
+        stop_observer()
         executor:release()
         return fail(db, backend, "terminal completed during startup", gateway_binding, attempt_id, true)
     end
+
+    if observed then observed.release() end
 
     local function retire_gateway(why: string)
         if not gateway_binding then return end
@@ -380,6 +404,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
             return false, ended.message or "record terminal exit"
         end
         process.unlisten(controls)
+        stop_observer()
         retire_gateway("terminal process completed")
         executor:release()
         local attempt = store.attempt(db, attempt_id)
@@ -417,7 +442,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
                 if not stopped then return false, stop_error end
             end
             local ok, close_error = started:close()
-            if ok then closed = true end
+            if ok then closed = true; stop_observer() end
             return ok, error_text(close_error)
         end,
         finish = finish,

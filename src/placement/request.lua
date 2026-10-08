@@ -9,6 +9,7 @@ local types = require("types")
 local driver_types = require("driver_types")
 local preferences = require("preferences")
 local login_evidence = require("login_evidence")
+local hook_catalog = require("hook_catalog")
 local M = {}
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
@@ -458,7 +459,10 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
         if not destination or not destination:match("^[A-Z][A-Z0-9_]*$") then return nil, "gateway.destination must be an environment name" end
         local hook_events, hook_events_error = bounds.ids(declared.hooks == nil and {} or declared.hooks, true)
         if not hook_events then return nil, "gateway.hooks: " .. tostring(hook_events_error) end
-        if #hook_events > M.MAX_PROJECTIONS then return nil, "gateway.hooks exceeds " .. tostring(M.MAX_PROJECTIONS) .. " items" end
+        if #hook_events > #hook_catalog.EVENTS then return nil, "gateway.hooks exceeds " .. tostring(#hook_catalog.EVENTS) .. " items" end
+        for _, event in ipairs(hook_events) do
+            if not bounds.member(event, hook_catalog.EVENTS) then return nil, "gateway.hooks names unsupported event " .. event end
+        end
         if #tools == 0 and #hook_events == 0 then return nil, "gateway needs tools or hooks" end
         local hook_destination: string? = nil
         if declared.hook_destination ~= nil then

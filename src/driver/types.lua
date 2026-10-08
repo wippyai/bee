@@ -31,6 +31,7 @@ type Profile = {
     protocol: Protocol,
     protocol_revision: string,
     hooks: Hooks,
+    observer: string?,
     answer_path: AnswerPath,
     resume: Resume,
     inbound: {Inbound},

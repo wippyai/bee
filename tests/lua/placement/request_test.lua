@@ -207,7 +207,16 @@ local function define_tests()
             if not digest_decoded then error("configuration digest should decode") end
             test.eq(digest_decoded.configuration_digest, CONFIG_DIGEST)
         end)
-        test.it("admits the nine-tool default gateway without widening credential or hook lists", function()
+        test.it("admits all nine existing lifecycle events without widening credential projections", function()
+            local value = launch()
+            value.gateway = {endpoint = "127.0.0.1:4312", tools = {},
+                hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "Stop", "StopFailure", "SessionEnd"},
+                destination = "BEE_GATEWAY_TOKEN", hook_destination = "BEE_GATEWAY_HOOK_TOKEN"}
+            local decoded, err = request.decode(value)
+            if not decoded or not decoded.gateway then error(tostring(err)) end
+            test.eq(#decoded.gateway.hooks, 9)
+        end)
+        test.it("admits the nine-tool default gateway with bounded credentials and supported hooks", function()
             local value = launch()
             value.gateway = {endpoint = "127.0.0.1:4312", tools = {"components", "delivery", "docs", "overlay", "thread_message",
                 "thread_notify", "thread_read", "thread_sessions", "thread_wait"}, hooks = {}, destination = "BEE_GATEWAY_TOKEN"}
@@ -221,7 +230,12 @@ local function define_tests()
                 item.gateway = {endpoint = "127.0.0.1:4312", tools = {"thread_read"},
                     hooks = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
                     destination = "BEE_GATEWAY_TOKEN", hook_destination = "BEE_GATEWAY_HOOK_TOKEN"}
-            end, "gateway.hooks exceeds 8 items")
+            end, "gateway.hooks names unsupported event one")
+            rejects(function(item)
+                item.gateway = {endpoint = "127.0.0.1:4312", tools = {},
+                    hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "Stop", "StopFailure", "SessionEnd", "Extra"},
+                    destination = "BEE_GATEWAY_TOKEN", hook_destination = "BEE_GATEWAY_HOOK_TOKEN"}
+            end, "gateway.hooks exceeds 9 items")
         end)
         test.it("rejects traversal, unknown fields, missing environment and bad references", function()
             rejects(function(value) (principals.objects(value.resources))[1].subpath = "../etc" end, "resources[1]: subpath has an invalid segment")

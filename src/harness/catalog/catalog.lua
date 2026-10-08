@@ -7,6 +7,7 @@ local registry = require("registry")
 local bounds = require("bounds")
 local classify = require("classify")
 local resolver = require("resolver")
+local observers = require("observers")
 local M = {}
 M.ACTIVATION_ENTRY = "bee.harness.launch:harness_activation"
 M.BINDING_TYPE = "harness.driver"
@@ -102,8 +103,9 @@ function M.read(pinned: Pinned, limit: integer?): (Snapshot?, string?)
                 local declaration: Entry? = nil
                 local profiles_ref = bounds.id(meta.profiles_ref)
                 if profiles_ref then declaration = entry(pinned, profiles_ref) end
+                local measurements = declaration and observers.collect(pinned, binding_id, bounds.object(declaration.data) or {}) or nil
                 snapshot.bindings[#snapshot.bindings + 1] = classify.binding({binding = candidate, declaration = declaration,
-                    methods = method_targets(pinned, candidate), adapters = adapter_entries(pinned, declaration), activated = active[binding_id] == true})
+                    methods = method_targets(pinned, candidate), adapters = adapter_entries(pinned, declaration), observers = measurements, activated = active[binding_id] == true})
             end
         end
     end

@@ -26,3 +26,10 @@ entries:
   methods:
   - name: locate
     description: Locate an admitted external driver profile from host-probed executable, login evidence, and platform evidence
+- name: window_observer
+  kind: library.lua
+  source: file://window_observer.lua
+  modules: [registry, hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical

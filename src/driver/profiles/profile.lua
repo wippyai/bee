@@ -129,7 +129,7 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
     local profile, profile_error = object(value, "profile")
     if not profile then return nil, profile_error end
     local unknown_field = bounds.fields(profile, {"id", "mode", "protocol", "protocol_revision", "hooks", "answer_path", "resume", "inbound",
-        "isolation_env", "trust_preanswer", "exit_codes_trustworthy", "input_ready", "interrupt", "mcp", "sandbox", "permission_exchange"})
+        "isolation_env", "trust_preanswer", "exit_codes_trustworthy", "input_ready", "interrupt", "mcp", "sandbox", "permission_exchange", "observer"})
     if unknown_field then return nil, "profile: " .. unknown_field end
     local id = bounds.id(profile.id)
     if not id then return nil, "profile id is not an identifier" end
@@ -140,6 +140,8 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
     if not protocol then return nil, what .. ": protocol is not supported" end
     local revision = bounds.id(profile.protocol_revision)
     if not revision then return nil, what .. ": protocol_revision is not an identifier" end
+    local observer = bounds.id(profile.observer)
+    if profile.observer ~= nil and (not observer or mode ~= "window") then return nil, what .. ".observer requires a window and an identifier" end
     local hooks: types.Hooks = {transports = {}, events = {}}
     if profile.hooks ~= nil then
         local declared, declared_error = object(profile.hooks, what .. ".hooks")
@@ -301,7 +303,7 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if exchange_mode == "none" and (adapter or adapter_digest) then return nil, what .. ".permission_exchange names an adapter while disabled" end
         exchange = {mode = exchange_mode, adapter_ref = adapter, adapter_digest = adapter_digest}
     end
-    return {id = id, mode = mode, protocol = protocol, protocol_revision = revision, hooks = hooks,
+    return {id = id, mode = mode, protocol = protocol, protocol_revision = revision, hooks = hooks, observer = observer,
         answer_path = answer_path, resume = resume, inbound = inbound,
         isolation_env = isolation, trust_preanswer = trust, exit_codes_trustworthy = exit_codes, input_ready = ready, interrupt = interrupt, mcp = mcp, sandbox = sandbox,
         permission_exchange = exchange}, nil

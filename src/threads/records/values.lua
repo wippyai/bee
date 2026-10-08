@@ -46,7 +46,7 @@ function M.usage(value: unknown): (types.Usage?, string?)
     if not object then return nil, "usage must be an object" end
     local unknown_field = bounds.fields(object, {"input_tokens", "output_tokens", "cached_tokens", "cost_decimal", "currency"})
     if unknown_field then return nil, unknown_field end
-    local usage: types.Usage = {}
+    local usage: types.Usage = table.create(0, 1)
     for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
         local raw: unknown = object[name]
         if raw ~= nil then

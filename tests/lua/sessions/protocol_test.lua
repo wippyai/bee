@@ -1,5 +1,6 @@
 local test = require("test")
 local protocol = require("protocol")
+local json = require("json")
 
 local function succeeded(): {[string]: unknown}
     return {outcome = "succeeded", schema = "bee:Text@1", value = {text = "done"}, artifacts = {}, usage = {}}
@@ -34,6 +35,10 @@ local function define_tests()
             test.is_nil(protocol.decode_history(page))
         end)
 
+        test.it("encodes empty provider usage as an object", function()
+            local decoded = assert(protocol.decode_result(succeeded()))
+            test.eq(assert(json.encode(decoded.usage)), "{}")
+        end)
         test.it("decodes provider usage counts and rejects malformed usage", function()
             local result = succeeded()
             result.usage = {input_tokens = 2, output_tokens = 4, cached_tokens = 10}

@@ -10,6 +10,7 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local json = require("json")
+local session_tools = require("session_tools")
 local WORKSPACE = string.rep("a", 32)
 -- owner_text is the text Sessions types into the agent for a queued message.
 local function owner_text(input: string, sender: string): string
@@ -139,6 +140,16 @@ local function define_tests()
             local settled = harness.value(journal:call("work_describe", {work = work.work}))
             test.eq(settled.phase, "settled")
             test.eq((assert(bounds.object((assert(bounds.object(settled.result))).value))).text, "The boundary reply.")
+            for _, observation in ipairs({
+                {name = "session_await", method = "await", input = {subject = work.work, timeout_ms = 0}},
+                {name = "session_get", method = "get", input = {work = work.work}},
+                {name = "session_join", method = "join", input = {works = {work.work}, policy = "all_settled", operation_key = harness.key(), timeout_ms = 0}}
+            }) do
+                local reply = owner_call(observation.method, observation.input)
+                test.is_true(assert(json.encode(reply)):find('"usage":{}', 1, true) ~= nil, observation.name .. " usage must encode as an object")
+                local valid, failure = json.validate_string(assert(json.encode(session_tools.OUTPUT_SCHEMAS[observation.name])), assert(json.encode({ok = true, value = reply})))
+                test.is_true(valid, tostring(failure))
+            end
         end)
         test.it("resumes the terminal of a session whose typed message waits after a restart", function()
             local journal = harness.session_owner(WORKSPACE)

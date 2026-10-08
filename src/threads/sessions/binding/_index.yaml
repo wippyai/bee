@@ -49,6 +49,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: &id001
     - bee.threads.security:sessions_owner
@@ -80,6 +81,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: send
@@ -103,6 +105,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: await
@@ -126,6 +129,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: &id002
     - bee.threads.security:sessions_owner
@@ -156,6 +160,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: get
@@ -179,6 +184,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id002
 - name: list
@@ -202,6 +208,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: history
@@ -225,6 +232,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: cancel
@@ -248,6 +256,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id002
 - name: close
@@ -271,6 +280,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id002
 - name: catalog
@@ -294,6 +304,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: attach
@@ -310,6 +321,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
   modules:
@@ -333,6 +345,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
   modules:
@@ -356,6 +369,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
   modules:
@@ -379,6 +393,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id002
   modules:
@@ -402,6 +417,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
   modules:
@@ -432,6 +448,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: attention_count
@@ -455,6 +472,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
   security:
     policies: *id001
 - name: threads_journal

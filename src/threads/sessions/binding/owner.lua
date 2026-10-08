@@ -14,6 +14,7 @@ local cancellation = require("cancellation")
 local time = require("time")
 local logger = require("logger")
 local session_protocol = require("session_protocol")
+local record_values = require("record_values")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -658,9 +659,11 @@ local function work_value(value: unknown): (Object?, string?)
         if not result then return nil, "Threads returned a malformed work result" end
         local outcome = result.state
         if outcome == "succeeded" then
+            local usage, usage_error = record_values.usage(result.usage or {})
+            if not usage then return nil, usage_error or "Threads returned malformed usage" end
             state.phase = "settled"
             state.result = {outcome = outcome, schema = result.schema or row.output_schema,
-                value = result.value, artifacts = result.artifacts or {}, usage = result.usage or {}}
+                value = result.value, artifacts = result.artifacts or {}, usage = usage}
         elseif outcome == "budget_exceeded" then
             local failure = object(result.error) or {}
             local evidence = object(result.evidence)

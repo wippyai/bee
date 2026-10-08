@@ -23,6 +23,7 @@ entries:
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
     admission: bee.harness.launch:admission
+    session_tools: bee.gateway.catalog:session_tools
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua
@@ -176,6 +177,7 @@ entries:
     resources: ['*']
     effect: allow
 - name: protocol_test
+  modules: [json]
   kind: function.lua
   source: file://protocol_test.lua
   method: run
@@ -338,10 +340,12 @@ entries:
   modules:
   - funcs
   - security
+  - json
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
     harness: bee.tests.threads:harness
+    session_tools: bee.gateway.catalog:session_tools
 - name: driver_window_contract_test
   kind: function.lua
   source: file://driver_window_contract_test.lua

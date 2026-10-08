@@ -140,6 +140,13 @@ def managed_gateway(src):
 
 def runner_fixture_type(src):
     """The runner finds the fixture applications' tests by their own type, so the suites' unrestricted runner leaves them alone."""
+    source = src / "hub/binding/artifact_source.lua"
+    replace_once(source, 'local M = {}', 'local fixture_catalog = require("fixture_catalog")\nlocal M = {}')
+    replace_once(source, '    return {versions = catalog.available,', '    if target == "bee/progress" then return fixture_catalog.source() end\n    return {versions = catalog.available,')
+    index = src / "hub/binding/_index.yaml"
+    text = index.read_text()
+    anchor = text.index("- name: artifact_source\n")
+    index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_catalog: bee.tests.gov:hub_fixture_catalog\n", 1))
     replace_once(src / "node/application_tests.lua", 'meta.type == "test"', 'meta.type == "app_test"')
 
 

@@ -7,7 +7,7 @@ type Request = {component: string, version: string, parameters: {requirements.Pa
 type Entry = {id: string, kind: string, meta: {[string]: unknown}, data: unknown}
 type Summary = {id: string, kind: string}
 type Inspection = {component: string, version: string, digest: string, requirements: requirements.Result,
-    entries: {Entry}, next_offset: integer?, eof: boolean}
+    entries: {Entry}, next_offset: integer?, eof: boolean, metadata: {[string]: unknown}?}
 M.MAX_ENTRIES_PER_PAGE = 32
 
 function M.decode(raw: unknown): (Request?, string?)

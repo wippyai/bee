@@ -20,6 +20,7 @@ local leases = require("lease_store")
 local lease_grants = require("lease_grants")
 local owner = require("activation_owner")
 local resolver = require("hub_resolver")
+local hub_package = require("hub_package")
 local overlay_resolver = require("overlay_resolver")
 local delivery = require("delivery")
 local destination = require("destination")
@@ -182,7 +183,8 @@ local function selected(config: Configuration, workspace_id: string, source_node
     local vocabulary: unknown = nil
     local owner_hint: string? = nil
     local slot_source: string? = nil
-    local workspace_identity = workspace_applications.identity(workspace_id, source_workspace)
+    local workspace_identity = activation_profiles.hub_identity(workspace_id, source_workspace)
+        or workspace_applications.identity(workspace_id, source_workspace)
     local prior_owner = workspace_applications.prior_owner(workspace_id, source_workspace)
     if prior_owner then
         local prior_id = capability_grants.prior_record_id(prior_owner)
@@ -287,7 +289,8 @@ local function destination_resolver(config: Configuration, profile_value: Profil
         if not admitted then return nil, admission_error end
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id then return nil, "activation policy belongs to another node" end
-        local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
+        local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
+        or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
         local base_policy_digest: string? = nil
         if identity and identity.component == profile_value.component
             and (identity.overlay_owner == profile_value.overlay_owner
@@ -366,11 +369,13 @@ local function destination_resolver(config: Configuration, profile_value: Profil
             folder = function(): (unknown?, string?) return resources.workspace_folder(workspace_id) end})
     end
     return resolver.new({overlay_owner = profile_value.overlay_owner,
-        root = selected_root, policy = selected_policy})
+        root = selected_root, policy = selected_policy,
+        folder = function(): (unknown?, string?) return resources.workspace_folder(workspace_id) end})
 end
 
 local function generated_install(profile_value: Profile, intent_raw: unknown): (Object?, string?)
-    local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
+    local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
+        or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
     local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
     local uses_prior = prior_owner ~= nil and prior_owner == profile_value.overlay_owner
     if not identity or (identity.overlay_owner ~= profile_value.overlay_owner and not uses_prior)
@@ -758,11 +763,11 @@ local function request_identity(request: Object): (string?, string?, string?)
     return bounds.id(request.source_node), bounds.id(request.source_workspace), bounds.id(request.version)
 end
 
-local OPERATIONS: Set = {available = true, stage = true, list = true, activations = true, get = true, changes = true, revert = true, uninstall = true,
+local OPERATIONS: Set = {available = true, stage = true, stage_hub = true, list = true, activations = true, get = true, changes = true, revert = true, uninstall = true,
     review = true, select = true, prepare = true, step = true, status = true, recover = true,
     lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
 local READS: Set = {available = true, list = true, activations = true, get = true, changes = true, status = true}
-local MANAGES: Set = {stage = true, review = true, select = true}
+local MANAGES: Set = {stage = true, stage_hub = true, review = true, select = true}
 local LEASES: Set = {lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
 
 -- One delivery action per operation, so the public facade authenticates the
@@ -821,7 +826,8 @@ local RECOVERY_ATTEMPTS = 4
 -- The overlay owner an application of this workspace runs under: the one
 -- holding a desired version, else the application's own owner.
 local function application_owner(activation_store: activations.Store, workspace_id: string, source_workspace: string): string?
-    local identity = workspace_applications.identity(workspace_id, source_workspace)
+    local identity = activation_profiles.hub_identity(workspace_id, source_workspace)
+        or workspace_applications.identity(workspace_id, source_workspace)
     if not identity then return nil end
     for _, candidate in ipairs({workspace_applications.prior_owner(workspace_id, source_workspace), identity.overlay_owner}) do
         if activations.desired(activation_store, candidate).ok then return candidate end
@@ -857,7 +863,8 @@ local function revert_application(request: Object, workspace_id: string, actor_i
     plan_store: plans.Store, activation_store: activations.Store, lease_handle: leases.Store): Result
     if exact(request, {"source_workspace", "receipt_key"}) then return failure("INVALID", "revert has unknown fields") end
     local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
-    local identity = source_workspace and workspace_applications.identity(workspace_id, source_workspace) or nil
+    local identity = source_workspace and (activation_profiles.hub_identity(workspace_id, source_workspace)
+        or workspace_applications.identity(workspace_id, source_workspace)) or nil
     if not source_workspace or not key or not identity then return failure("INVALID", "revert names no application") end
     local overlay_owner = application_owner(activation_store, workspace_id, source_workspace)
     if not overlay_owner or not activations.desired(activation_store, overlay_owner).ok then
@@ -901,7 +908,8 @@ end
 -- The host-selected vocabulary and the installed grant record of the profile's
 -- application: a lease can only be proposed over something already installed.
 local function installed_envelope(profile_value: Profile): (capability_model.Vocabulary?, {capability_model.Grant}?, string?)
-    local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
+    local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
+        or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
     local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
     local uses_prior = prior_owner ~= nil and prior_owner == profile_value.overlay_owner
     if not identity or (identity.overlay_owner ~= profile_value.overlay_owner and not uses_prior)
@@ -1021,6 +1029,29 @@ function M.call(raw: unknown): Result
                 end
                 if result == nil then result = transaction.success({workspace_id = workspace_id, versions = items}, false) end
                 replicas.close(replica_store)
+            end
+        end
+    elseif operation == "stage_hub" then
+        local component, version = bounds.id(request.component), bounds.id(request.version)
+        local key, measured = bounds.id(request.idempotency_key), bounds.text(request.artifact_digest, 64)
+        if exact(request, {"component", "version", "artifact_digest", "idempotency_key"})
+            or not component or not version or not key or not measured then
+            result = failure("INVALID", "Hub stage requires an exact measured package")
+        else
+            local expanded, expand_error = hub_package.read({component = component, version = version, parameters = {}})
+            local config, config_error = load()
+            local source_workspace = "hub:" .. component
+            local chosen, profile_error = config and selected(config, workspace_id, node_id,
+                source_workspace, activation_store) or nil
+            if not expanded then result = failure("BLOCKED", expand_error or "Hub package is unavailable")
+            elseif not expanded.governed then result = failure("INVALID", "library packages use Hub publication")
+            elseif expanded.artifact.digest ~= measured then result = failure("BLOCKED", "Hub artifact differs from the measured package")
+            elseif not chosen then result = failure("BLOCKED", profile_error or config_error or "Hub application is not admitted")
+            else
+                local resolved = destination_resolver(assert(config), chosen, node_id, workspace_id, activation_store)
+                result = destination.stage_artifact(plan_store, actor_id, {source_node = node_id,
+                    source_workspace = source_workspace, version = version, artifact = expanded.artifact,
+                    idempotency_key = key}, resolved)
             end
         end
     elseif operation == "stage" then

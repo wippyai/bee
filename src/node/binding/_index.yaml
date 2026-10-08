@@ -73,6 +73,7 @@ entries:
     test_runs: bee.node:test_runs
     discovery: wippy.test:discovery
     application_tests: bee.node:application_tests
+    activation_profiles: bee.gov.types:activation_profile_decoder
     bounds: bee.values:bounds
 - name: app_tools
   kind: function.lua

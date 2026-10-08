@@ -84,10 +84,19 @@ function M.stage_replica(target: Store, replica_store: ReplicaStore, actor: unkn
     if component ~= application.value.component then return failure("DENIED", "application version does not match the destination application slot") end
     if type(resolver) ~= "table" then return failure("UNAVAILABLE", "destination resolver is unavailable") end
     if type(resolver.resolve) ~= "function" then return failure("UNAVAILABLE", "destination resolver is unavailable") end
-    local candidate, context, resolve_error = resolver:resolve({owner_node = target.node,
-        workspace_id = target.workspace, source_node = application.value.source_node,
+    return M.stage_artifact(target, admitted_actor, {source_node = application.value.source_node,
         source_workspace = application.value.source_workspace, version = application.value.version,
-        artifact_bytes = application.value.artifact.bytes, artifact_digest = application.value.artifact.digest})
+        artifact = application.value.artifact, author = application.value.author,
+        idempotency_key = input.idempotency_key}, resolver)
+end
+
+type Input = {source_node: string, source_workspace: string, version: string,
+    artifact: {bytes: string, digest: string}, author: string?, idempotency_key: string}
+function M.stage_artifact(target: Store, admitted_actor: string, input: Input, resolver: Resolver): transaction.Result
+    local candidate, context, resolve_error = resolver:resolve({owner_node = target.node,
+        workspace_id = target.workspace, source_node = input.source_node,
+        source_workspace = input.source_workspace, version = input.version,
+        artifact_bytes = input.artifact.bytes, artifact_digest = input.artifact.digest})
     if not candidate then return failure("BLOCKED", tostring(resolve_error or "resolve destination plan")) end
     if not context then return failure("BLOCKED", tostring(resolve_error or "resolve destination plan")) end
     local candidate_bytes, candidate_error = canonical.encode(candidate, 1048576)
@@ -100,10 +109,10 @@ function M.stage_replica(target: Store, replica_store: ReplicaStore, actor: unkn
     if not report_bytes then return failure("INTERNAL", tostring(report_encode_error or "encode destination preflight")) end
     if not report_digest then return failure("INTERNAL", tostring(report_encode_error or "encode destination preflight")) end
     return store.call(target, admitted_actor, {operation = "stage", expected_revision = 0,
-        idempotency_key = input.idempotency_key, source_node = application.value.source_node,
-        source_workspace = application.value.source_workspace, version = application.value.version,
+        idempotency_key = input.idempotency_key, source_node = input.source_node,
+        source_workspace = input.source_workspace, version = input.version,
         candidate = {bytes = candidate_bytes, digest = candidate_digest},
-        artifact = application.value.artifact, author = application.value.author,
+        artifact = {bytes = input.artifact.bytes, digest = input.artifact.digest}, author = input.author,
         preflight = {bytes = report_bytes, digest = report_digest}})
 end
 

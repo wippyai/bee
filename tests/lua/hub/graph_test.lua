@@ -41,6 +41,19 @@ local function forwarding_artifact(name: string, version: string, dependencies: 
 end
 local function define_tests()
     test.describe("Hub dependency graph", function()
+        test.it("preserves host capability requests through default forwarding", function()
+            local entries: {inspect.Entry} = {{id = "app.progress:database", kind = "ns.requirement",
+                meta = {capability = "app.database"}, data = {targets = {{entry = "app.progress:app", path = ".security.policies +="}}}}}
+            local source: graph.Source = {versions = function(_name: string, _page: integer): ({string}?, boolean?, string?)
+                return {"1.0.0"}, false, nil
+            end, artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                return {component = name, version = version, digest = string.rep("a", 64), entries = entries,
+                    requirements = assert(requirements.read(entries, {})), next_offset = nil, eof = true}, nil
+            end}
+            local resolved = assert(graph.resolve({edge("bee/progress", "1.0.0")}, source))
+            test.eq(#resolved.missing, 0)
+            test.eq(resolved.packages[1].requirements.requirements[1].capability, "app.database")
+        end)
         test.it("forwards bound requirement defaults through a dependency chain", function()
             local result, problem = graph.resolve({
                 {component = "acme/root", version = "1.0.0", parameters = {{name = "target_db", value = false}}},

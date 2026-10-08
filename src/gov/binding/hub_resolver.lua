@@ -14,12 +14,14 @@ local resolution = require("resolution")
 local requirement = require("requirement")
 local capability_model = require("capability_model")
 local application_capabilities = require("application_capabilities")
+local hub_package = require("hub_package")
+local graph = require("graph")
 
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
 type RegistryChange = {entry: Entry, op: string}
-type RegistryPlan = {digest: string, changes: {RegistryChange}, resolution: Object?}
+type RegistryPlan = {digest: string, changes: {RegistryChange}, resolution: Object?, retained: {[string]: boolean}?}
 type ResolvedModule = {name: string, version: string, digest: string}
 type Captured = {revision: integer, entries: {Entry}, resolution: Object?,
     overlay_ids: {[string]: boolean}?, preview: (Entry) -> (RegistryPlan?, string?)}
@@ -336,6 +338,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     if not edges then return nil, nil, edges_error end
     local selected, closure_error = closure(component, edges, modules)
     if not selected then return nil, nil, closure_error end
+    for package in pairs(preview.retained or {}) do selected[package] = nil end
 
     local catalog: capability_model.Vocabulary? = nil
     for _, entry in ipairs(captured.entries) do
@@ -436,6 +439,10 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     if not policy then return nil, nil, policy_error or "read destination Hub policy" end
     if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
 
+    if policy.workspace_application and spec.source_workspace == "hub:" .. component then
+        policy.namespaces = owned_namespaces
+        policy.packages = selected
+    end
     local current_raw: {[string]: Entry} = {}
     for _, entry in ipairs(captured.entries) do current_raw[entry.id] = entry end
     local prepared, capability_error = application_capabilities.prepare(policy, spec, flattened,
@@ -530,37 +537,12 @@ function M.new(config: Config): Resolver
         end
         local captured: Captured = {revision = math.floor(revision), entries = state.entries,
             resolution = state.resolution, overlay_ids = overlay_ids, preview = function(root_entry: Entry): (RegistryPlan?, string?)
-                local changes = snapshot:changes()
-                local id, kind = bounds.id(root_entry.id), bounds.id(root_entry.kind)
-                if not id or not kind then return nil, "registry state contains an invalid entry" end
-                local input = {id = id, kind = kind, data = root_entry.data, meta = object(root_entry.meta), dependency_root = root_entry.dependency_root == true}
-                local existing = snapshot:get(id)
-                local created, create_error
-                if existing then created, create_error = changes:update(input)
-                else created, create_error = changes:create(input) end
-                if not created then return nil, tostring(create_error or "stage Hub dependency root") end
-                local plan, plan_error = changes:plan()
-                if not plan then return nil, tostring(plan_error or "plan Hub dependency root") end
-                local value = object(plan)
-                local digest = value and sha(value.digest) or nil
-                local rows, rows_error = bounds.dense_list(value and value.changes, 4096, "registry plan changes")
-                local resolution = value and object(value.resolution) or nil
-                if not value or not digest or not rows or not resolution then
-                    return nil, rows_error or "registry dependency plan is malformed"
-                end
-                local normalized: {RegistryChange} = {}
-                for _, raw_change in ipairs(rows) do
-                    local change = object(raw_change)
-                    local operation = change and bounds.id(change.op) or nil
-                    local entry: Entry? = nil
-                    local entry_error: string? = nil
-                    if change then entry, entry_error = copy_entry(change.entry) end
-                    if not operation or not entry then
-                        return nil, entry_error or "registry dependency plan change is malformed"
-                    end
-                    normalized[#normalized + 1] = {op = operation, entry = entry}
-                end
-                return {digest = digest, changes = normalized, resolution = resolution}, nil
+                local root, root_error = graph.edge(root_entry.data)
+                if not root then return nil, root_error end
+                local expanded, expand_error = hub_package.expand(state, math.floor(revision), root)
+                if not expanded then return nil, expand_error end
+                return {digest = expanded.digest, changes = expanded.changes,
+                    resolution = expanded.resolution, retained = expanded.retained}, nil
             end}
         return captured, nil
     end

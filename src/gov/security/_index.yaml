@@ -106,6 +106,8 @@ entries:
     - registry.get
     - registry.snapshot
     - registry.preview
+    - hub.versions.open
+    - hub.versions.list
     - registry.apply
     - system.read
     - funcs.call
@@ -197,6 +199,8 @@ entries:
     - db.get
     - registry.get
     - registry.preview
+    - hub.versions.open
+    - hub.versions.list
     - system.read
     - funcs.call
     - funcs.security

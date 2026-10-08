@@ -8,6 +8,7 @@ local test_runs = require("test_runs")
 local discovery = require("discovery")
 local bounds = require("bounds")
 local application_tests = require("application_tests")
+local activation_profiles = require("activation_profiles")
 
 type Object = {[string]: unknown}
 type Plan = {definition: application.Definition, tests: {test_runs.Planned}}
@@ -34,7 +35,9 @@ local function plan(workspace_id: string, selector: string, owned: {[string]: bo
                     local rows = overlay and overlay:entries() or nil
                     if not rows then return nil, tests.fail("UNAVAILABLE", tostring(overlay_error or "application entries are unavailable")) end
                     for _, raw in ipairs(rows) do associated[raw.id] = true end
-                    if associated[entry.id] and not owned[record.source_workspace] then
+                    local hub = activation_profiles.hub_identity(workspace_id, record.source_workspace)
+                    local admitted_hub = hub and hub.overlay_owner == record.overlay_owner
+                    if associated[entry.id] and not admitted_hub and not owned[record.source_workspace] then
                         return nil, tests.fail("DENIED", "application is not delivered from an overlay you own")
                     end
                 end

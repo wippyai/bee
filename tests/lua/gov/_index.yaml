@@ -1221,3 +1221,29 @@ entries:
     governed: bee.apps.library:governed
     library: bee.apps.library:model
     principals: bee.tests.principals:bound
+
+- name: hub_fixture_catalog
+  kind: library.lua
+  source: file://hub_fixture_catalog.lua
+  imports:
+    artifact: bee.gov.types:artifact
+    requirements: bee.hub.package:requirements
+    graph: bee.hub.package:graph
+    inspection: bee.hub.package:inspection
+- name: hub_application_test
+  kind: function.lua
+  source: file://hub_application_test.lua
+  method: run
+  modules: [funcs, security, time, registry, system, json]
+  meta: {type: test, suite: bee, timeout: 480s}
+  security:
+    policies: [bee.tests.gov:app_database_test_policy]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    harness: bee.tests.gov:delivery_harness
+    application: bee.node:application
+    hub: bee.apps.library:hub
+    governed: bee.apps.library:governed
+    preflight: bee.gov.binding:preflight
+    client: bee.node:client

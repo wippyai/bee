@@ -13,6 +13,15 @@ end
 
 local function define_tests()
     test.describe("package activation ceiling", function()
+        test.it("derives a local Hub application owner under the package ceiling", function()
+            local configured = assert(profiles.configuration(assert(registry.get("bee.gov:activation_profiles")).data, "local"))
+            local selected = assert(profiles.select(configured, string.rep("e", 32), "local", "hub:bee/progress"))
+            test.eq(selected.component, "bee/progress")
+            test.eq(selected.resolver, "hub")
+            test.eq(selected.overlay_owner, assert(profiles.hub_identity(string.rep("e", 32), "hub:bee/progress")).overlay_owner)
+            test.eq(#assert(selected.applications), 1)
+            test.is_nil(profiles.select(configured, string.rep("e", 32), "remote", "hub:bee/progress"))
+        end)
         test.it("admits a local custom driver through the host-selected ceiling without an application grant", function()
             local configured = assert(profiles.configuration({profiles = {}, workspace_drivers = {
                 approval_policy = "workspace-application-delivery", kinds = {"function.lua", "library.lua", "registry.entry", "contract.binding", "ns.requirement"},

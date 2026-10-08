@@ -394,6 +394,16 @@ function M.plan_intent(state: State): (Intent?, string?)
     return {operation = "plan", request = request}, nil
 end
 
+function M.governed_request(state: State, reply: Reply, workspace_id: string, key: string): (Object?, string?)
+    local value = reply.ok and object(reply.value) or nil
+    if not value or value.route ~= "governed" then return nil, nil end
+    local measured = digest(value.artifact_digest)
+    if value.component ~= state.selected or value.version ~= state.selected_version or not measured
+        or state.action == "uninstall" then return nil, "Application plan does not match the selected version" end
+    return {operation = "stage_hub", workspace_id = workspace_id, component = value.component,
+        version = value.version, artifact_digest = measured, idempotency_key = key}, nil
+end
+
 function M.confirm_intent(state: State): (Intent?, string?)
     if state.phase ~= "confirm" then return nil, "review confirmation before applying" end
     if state.recovery then

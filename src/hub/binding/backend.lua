@@ -9,6 +9,8 @@ local inventory_reader = require("inventory_reader")
 local inspect = require("inspect")
 local preview = require("preview")
 local publication = require("publication")
+local hub_package = require("hub_package")
+local plan = require("plan")
 local hub_result = require("hub_result")
 type Result = hub_result.Result
 
@@ -71,10 +73,30 @@ local function handle(raw: unknown): Result
         if not result then return hub_result.failure("UNAVAILABLE", problem or "Bee update status unavailable") end
         return hub_result.success(result, false)
     elseif value.operation == "plan" then
+        local request, invalid = plan.decode(value.request)
+        if not request then return hub_result.failure("INVALID", invalid or "invalid package request") end
+        if request.action ~= "uninstall" and request.component ~= "bee/bee" then
+            local expanded, problem = hub_package.read({component = request.component, version = request.version,
+                parameters = request.parameters})
+            if not expanded then return hub_result.failure("BLOCKED", problem or "package unavailable") end
+            if expanded.governed then
+                if #request.parameters > 0 then return hub_result.failure("INVALID", "governed application grants are selected by the host") end
+                return hub_result.success({route = "governed", component = request.component, version = request.version,
+                    artifact_digest = expanded.artifact.digest}, false)
+            end
+        end
         local result, problem = publication.prepare(value.request)
         if not result then return hub_result.failure("INVALID", problem or "package plan unavailable") end
         return hub_result.success(result.plan, false)
     elseif value.operation == "apply" then
+        local request, invalid = plan.decode(value.request)
+        if not request then return hub_result.failure("INVALID", invalid or "invalid package request") end
+        if request.action ~= "uninstall" and request.component ~= "bee/bee" then
+            local expanded, problem = hub_package.read({component = request.component, version = request.version,
+                parameters = request.parameters})
+            if not expanded then return hub_result.failure("BLOCKED", problem or "package unavailable") end
+            if expanded.governed then return hub_result.failure("GOVERNED_DELIVERY", "install this application through governed delivery") end
+        end
         local expected = bounds.line(value.expected_digest, 64)
         if not expected then return hub_result.failure("INVALID", "confirmation digest is required") end
         return publish(value.request, expected)

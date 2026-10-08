@@ -4,6 +4,18 @@ local model = require("model")
 local function ok(value: unknown): model.Reply return {ok = true, code = nil, message = nil, value = value, replayed = false} end
 local function define_tests()
     test.describe("Library Hub model", function()
+        test.it("routes a measured Hub application to governed staging", function()
+            local state = model.new()
+            model.select(state, "bee/progress")
+            model.select_version(state, "1.0.0")
+            local request = assert(model.governed_request(state, {ok = true, replayed = false,
+                value = {route = "governed", component = "bee/progress", version = "1.0.0",
+                    artifact_digest = string.rep("a", 64)}}, "workspace", "stage-key"))
+            test.eq(request.operation, "stage_hub")
+            test.eq(request.component, "bee/progress")
+            test.eq(request.workspace_id, "workspace")
+            test.eq(request.artifact_digest, string.rep("a", 64))
+        end)
         test.it("discovers typed defaults without submitting them and rejects stale requirements", function()
             local state = model.new()
             model.select(state, "acme/app")

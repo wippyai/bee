@@ -306,19 +306,7 @@ local function main(options: unknown)
         state.notice = gov.notice
         return applied
     end
-    -- Install runs the whole local path: receive the version, read its checks,
-    -- review it, choose it and ask for approval, which waits in Needs you.
-    local function install_now(row: model.Row)
-        local item: governed.Available? = nil
-        for _, candidate in ipairs(gov.available) do
-            if governed.available_key(candidate) == row.available_key then item = candidate end
-        end
-        if not item then state.notice = "That version is no longer shared; try Refresh"; return end
-        governed.select_available(gov, governed.available_key(item))
-        if not stage_now(item) then return end
-        refresh_governed()
-        local plan = governed.staged_plan(gov, item)
-        if plan then governed.select(gov, governed.key(plan)) end
+    local function install_selected_now()
         if not read_selected_now() then return end
         local selected = governed.selected(gov)
         if governed.accepts_review(selected) and not review_transition(true) then return end
@@ -333,6 +321,33 @@ local function main(options: unknown)
         else
             state.notice = state.notice ~= "" and state.notice or "This version can't be installed here right now"
         end
+    end
+    -- Install runs the whole local path: receive the version, read its checks,
+    -- review it, choose it and ask for approval, which waits in Needs you.
+    local function install_now(row: model.Row)
+        local item: governed.Available? = nil
+        for _, candidate in ipairs(gov.available) do
+            if governed.available_key(candidate) == row.available_key then item = candidate end
+        end
+        if not item then state.notice = "That version is no longer shared; try Refresh"; return end
+        governed.select_available(gov, governed.available_key(item))
+        if not stage_now(item) then return end
+        refresh_governed()
+        local plan = governed.staged_plan(gov, item)
+        if plan then governed.select(gov, governed.key(plan)) end
+        install_selected_now()
+    end
+
+    local function install_hub_now(request: Object)
+        if not governed.apply_plan(gov, invoke(request)) then state.notice = gov.notice; return end
+        local staged = gov.detail
+        if not staged then return end
+        local selected_key = governed.key(staged)
+        refresh_governed()
+        governed.select(gov, selected_key)
+        install_selected_now()
+        hub.show(hubs, "catalog")
+        model.show_tab(state, "installed")
     end
     local function step_now()
         local intent_id = gov.intent and gov.intent.intent_id or gov.restored_intent_id
@@ -423,7 +438,11 @@ local function main(options: unknown)
         elseif operation == "updates" then hub.apply_updates(hubs, value)
         elseif operation == "details" then hub.apply_details(hubs, value)
         elseif operation == "inspect" then hub.apply_inspect(hubs, value)
-        elseif operation == "plan" then hub.apply_plan(hubs, value)
+        elseif operation == "plan" then
+            local request, problem = hub.governed_request(hubs, value, workspace_id, new_key())
+            if request then perform(function() install_hub_now(request) end)
+            elseif problem then state.notice = problem
+            else hub.apply_plan(hubs, value) end
         elseif operation == "status" then hub.apply_result(hubs, value)
         elseif operation == "history" then hub.apply_history(hubs, value) end
     end

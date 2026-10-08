@@ -13,7 +13,9 @@ function M.read(raw: unknown): (inspection.Inspection?, string?)
     if not package then return nil, tostring(open_error) end
     local version, digest = package.version, package.digest
     local entries, entries_error = package:entries({include_data = true})
+    local metadata, metadata_error = package:metadata()
     local closed, close_error = package:close()
+    if not metadata then return nil, tostring(metadata_error) end
     if entries_error or not entries then return nil, tostring(entries_error) end
     if not closed then return nil, tostring(close_error) end
     if version:gsub("^v", "") ~= request.version:gsub("^v", "") then
@@ -43,6 +45,6 @@ function M.read(raw: unknown): (inspection.Inspection?, string?)
     end
     local page = inspection.page(decoded, request.entry_offset, request.entry_limit, request.include_data)
     return {component = request.component, version = version, digest = digest, requirements = result,
-        entries = page.entries, next_offset = page.next_offset, eof = page.eof}, nil
+        entries = page.entries, next_offset = page.next_offset, eof = page.eof, metadata = bounds.object(metadata)}, nil
 end
 return M

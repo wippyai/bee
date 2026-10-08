@@ -45,6 +45,7 @@ entries:
   imports:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
+    artifact_source: bee.hub.binding:artifact_source
     plan: bee.hub.package:plan
     binary_identity: bee.hub.package:binary_identity
     catalog: bee.hub.binding:catalog
@@ -74,6 +75,8 @@ entries:
   modules: [security, process]
   meta: {type: internal}
   imports:
+    hub_package: bee.gov.binding:hub_package
+    plan: bee.hub.package:plan
     bounds: bee.values:bounds
     catalog: bee.hub.binding:catalog
     updates: bee.hub.binding:updates
@@ -102,3 +105,14 @@ entries:
     llm_alias: BeeComponents
     llm_description: Inspect effective installed component state and exact Hub packages without applying them
     input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","updates","plan"]},"request":{"type":"object"}}}'
+
+- name: artifact_source
+  kind: library.lua
+  source: file://artifact_source.lua
+  imports:
+    bounds: bee.values:bounds
+    catalog: bee.hub.binding:catalog
+    inspect: bee.hub.binding:inspect
+    inspection: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
+    inventory: bee.hub.package:inventory

@@ -63,7 +63,8 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
     local result: {Measurement} = {}
     for _, item in ipairs(records) do
         local record = item.record
-        local identity = workspace_applications.identity(workspace_id, record.source_workspace)
+        local identity = activation_profiles.hub_identity(workspace_id, record.source_workspace)
+            or workspace_applications.identity(workspace_id, record.source_workspace)
         local grant_id = identity and identity.overlay_owner == record.overlay_owner
             and capability_grants.record_id(record.overlay_owner) or nil
         local installed = grant_id and lookup(grant_id) or nil

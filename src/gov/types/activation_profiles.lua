@@ -347,10 +347,25 @@ end
 
 -- One eligible overlay's profile, built as host configuration and
 -- decoded by the same rules as an explicit row.
+M.HUB_SOURCE_PREFIX = "hub:"
+M.HUB_OWNER_PREFIX = "bee.gov.hub:"
+function M.hub_identity(workspace_raw: unknown, source_raw: unknown): workspace_applications.Identity?
+    local workspace, source = bounds.id(workspace_raw), bounds.id(source_raw)
+    if not workspace or not source or source:sub(1, #M.HUB_SOURCE_PREFIX) ~= M.HUB_SOURCE_PREFIX then return nil end
+    local component = source:sub(#M.HUB_SOURCE_PREFIX + 1)
+    if not component:match("^[%w_.-]+/[%w_.-]+$") then return nil end
+    local measured = hash.sha256(component)
+    if not measured then return nil end
+    return {name = source, namespace = "", component = component,
+        overlay_owner = M.HUB_OWNER_PREFIX .. workspace .. "." .. measured}
+end
+
 local function instantiate(rule: Template, workspace_id: string, source_node: string,
     source_workspace: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
     owner_hint: string?): (DecodedProfile?, Object?, string?)
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
+    local hub_identity = M.hub_identity(workspace_id, source_workspace)
+    identity = hub_identity or identity
     if not identity then
         return nil, nil, tostring(identity_error) .. "; " .. missing(workspace_id, source_node, source_workspace)
     end
@@ -379,8 +394,8 @@ local function instantiate(rule: Template, workspace_id: string, source_node: st
     end
     local selected, policy, profile_error = profile({workspace_id = workspace_id, source_node = source_node, source_workspace = identity.name,
         component = identity.component, overlay_owner = identity.overlay_owner,
-        approval_policy = rule.approval_policy, resolver = "overlay", parameters = empty_list(),
-        allow = {packages = {identity.component}, namespaces = {identity.namespace}, kinds = rule.kinds,
+        approval_policy = rule.approval_policy, resolver = hub_identity and "hub" or "overlay", parameters = empty_list(),
+        allow = {packages = {identity.component}, namespaces = hub_identity and empty_list() or {identity.namespace}, kinds = rule.kinds,
             databases = empty_list(), grants = allowed, modules = rule.modules, auto_start = false},
         applications = nil})
     if not selected or not policy then return nil, nil, profile_error end
@@ -577,6 +592,12 @@ function M.select_decoded(configuration: DecodedConfiguration, workspace_id: str
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
+    if M.hub_identity(workspace_id, source_workspace) then
+        if source_node ~= node_id or not configuration.packages then return nil, "host does not admit this Hub application" end
+        local item, _, problem = instantiate(configuration.packages, workspace_id, source_node,
+            source_workspace, installed_raw, vocabulary, nil)
+        return item, problem
+    end
     if drivers.name(source_workspace) then
         local item, _, driver_error = driver_profile(configuration.workspace_drivers, workspace_id,
             source_node, source_workspace, node_id)
@@ -605,6 +626,13 @@ function M.select(configuration: Configuration, workspace_id: string, source_nod
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
+    if M.hub_identity(workspace_id, source_workspace) then
+        if source_node ~= configuration.node_id or not configuration.packages then return nil, "host does not admit this Hub application" end
+        local item, policy, problem = instantiate(configuration.packages, workspace_id, source_node,
+            source_workspace, installed_raw, vocabulary, nil)
+        if not item or not policy then return nil, problem end
+        return measure(item, policy, configuration.node_id)
+    end
     if drivers.name(source_workspace) then
         local item, policy, driver_error = driver_profile(configuration.workspace_drivers, workspace_id,
             source_node, source_workspace, configuration.node_id)

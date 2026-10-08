@@ -23,8 +23,8 @@ version is shared or on the Hub), Shared (what could be installed, from a bee
 or from the Hub) and History (past installs and removals, with the recovery
 action of an interrupted Hub change). Installed lists what the person uses (applications and drivers by the title
 they declare, Hub packages the person installed) and Bee's platform as one row
-("Bee 0.2.0-dev, built in, 6 packages", Enter lists them); packages other
-installed things need are never offered for removal. Shared lists what the
+(the installed Bee version and package count; Enter lists its packages).
+Packages other installed things need are never offered for removal. Shared lists what the
 hive made first and keeps the Hub catalog behind one collapsed row, because Hub
 metadata does not say which uninstalled packages Bee can run as applications.
 Rows carry the glyphs of `bee.ui:glyphs`. A row carries one status: Shared, Waiting
@@ -63,12 +63,19 @@ attempt; Install asks the person anew. The header counts only installed
 versions, not installs waiting or on their way. Install and update of a Hub
 library package open the package screens: details, changes, confirmation and
 result. Hub application plans enter the governed install flow and wait in Needs
-you for one approval.
+you for one approval. Following a source records destination consent: Follow
+automatically stages and reviews newer shared versions, Paused suspends those
+updates, and Pin keeps the installed version. Each followed version asks for
+its own approval.
 
-The app calls two facades and nothing else. `bee.gov.binding:destination_call`
-runs under `bee.gov.delivery.read`, `manage` and `activate`; the operations it
-uses are `available`, `list`, `activations`, `stage`, `stage_hub`, `get`, `changes`,
-`review`, `select`, `prepare`, `step`, `status`, `recover`, `revert` and `uninstall`. The public Hub
+Package and activation operations use the public Hub and governance facades.
+`bee.gov.binding:destination_call` runs under `bee.gov.delivery.read`, `manage`,
+`activate` and `follow`; the operations it uses are `available`, `list`,
+`activations`, `stage`, `stage_hub`, `get`, `changes`, `review`, `select`,
+`prepare`, `step`, `status`, `recover`, `revert`, `uninstall` and `follow`.
+The Library reads node names through `bee.node.binding:names`, shares installed
+versions through `bee.gov.binding:delivery_call`, and opens applications through
+its `bee.app:client` broker. The public Hub
 facade `bee.hub.binding:call` runs under `bee.hub.read`, `bee.hub.manage` and,
 for the Bee deployment root, `bee.hub.self_update`. The approval decision
 belongs to the approvals owner (`component/approvals`); the activation owner
@@ -77,5 +84,5 @@ and execution authority stay inside `component/hub`.
 
 Singleton, listed in `bee.shell:system_menu`. The libraries are `model` (the
 list model), `governed` (versions delivered to this node), `hub` (Hub
-packages), `view`, `hub_view` (the package screens) and `contents` (the
-read-only package browser).
+packages), `form` (typed configuration fields), `view`, `hub_view` (the package
+screens) and `contents` (the read-only package browser).

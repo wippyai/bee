@@ -33,7 +33,7 @@ and nowhere else.
 | 2 | Tabs, when the application has sections | `frame.tabs` |
 | 3 | Blank | — |
 | 4 … H−1 | Work area, columns 2 … W−1 (from row 3 without tabs); status uses its last row when supplied | `layout.work` |
-| H | Shared footer: actions left, complete hints and ? help right | `frame.footer`, `frame.hints` |
+| H | Shared footer: actions left, supplementary hints and ? help right | `frame.footer`, `frame.hints` |
 
 Below 6 rows the tabs are omitted and the work area runs from row 2 to H−1;
 below 2 rows only the header remains. The footer drops hints before actions
@@ -66,7 +66,8 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
   (`frame.footer(painter, status, hints, more, buttons)`). Order: the primary action first, then secondary actions,
   then toggles, then destructive actions last.
 - Exactly one enabled button per screen is `primary`: the action Enter
-  performs. It is filled: `selection_text` on `accent`. Secondary buttons are
+  performs. It is filled: `selection_text(theme)` on
+  `selection_background(theme)`. Secondary buttons are
   `accent` text on `surface`. A selected toggle is `active` and filled like the
   primary.
 - A button with a key shows it first: `" R Refresh "` (`Button.key`). The key
@@ -85,7 +86,8 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
   sentence naming the latest effect or the current state: `Saved count 2`,
   `Waiting for approval`, `Paused`. Actions appear at the left; hints at the right use
   `frame.hints`: key, space, lowercase verb, joined with ` · `.
-- Hints and a clickable `? help` occupy the space after the actions. A narrow
+- Hints and a clickable `? help` occupy the space after the actions. Hints whose
+  keys already appear in visible footer buttons are omitted. A narrow
   window drops whole hints before actions; it never wraps or splits an item. Help
   lists the screen's complete declared buttons, tabs and hints, plus the full
   status message.
@@ -138,7 +140,7 @@ application. `appearance.role(theme, name)` resolves a role by name.
 | `muted` | Labels, panel titles, axes, units, metadata, key hints, disabled controls, the empty part of a meter |
 | `border` | The one navigation rule and graph edges |
 | `accent` | Focus, the selected row or tab, the primary action, and the primary data series of a chart |
-| `selection_text` | Text drawn on `accent` only |
+| `selection_text` | Text drawn on `selection_background(theme)` |
 | `ok` | A state word that reports success (`Ready`, `Passed`), and data marks inside a declared healthy range |
 | `warn` | A state word that asks for attention (`Degraded`, `Waiting`), and data marks past a declared warning threshold |
 | `error` | A state word that reports failure (`Failed`), an inline field error, and data marks past a declared failure threshold |
@@ -155,7 +157,8 @@ Rules:
 
 ## 7. Selection and focus
 
-- A selected row keeps its text, takes `selection_text` on `accent`, and
+- A selected row keeps its text, takes `selection_text(theme)` on
+  `selection_background(theme)`, and
   carries `›` in column 1 (`frame.row`, `frame.table`). Focus is visible
   without color.
 - When another pane owns focus the selection keeps `›` and `accent` text on

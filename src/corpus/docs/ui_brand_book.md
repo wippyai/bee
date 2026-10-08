@@ -27,7 +27,8 @@ Use `bee.ui:appearance`; never embed the Honey hex values in an app.
 | `border` | `#6f89a5` | Rules, outlines and passive separation |
 | `accent` | `#ffc963` | Focus, selection and the primary action |
 | `pattern` | `#1c2937` | Quiet desktop texture |
-| `selection_text(theme)` | derived | Text drawn on `accent` |
+| `selection_text(theme)` | derived | Text drawn on the selection background |
+| `selection_background(theme)` | derived | Selection fill, including terminal reverse in Native |
 | `ok` | `#7ee787` | A success word; data inside a healthy range |
 | `warn` | `#ffa657` | An attention word; data past a warning threshold |
 | `error` | `#ff7b72` | A failure word; an inline field error; data past a failure threshold |
@@ -53,8 +54,9 @@ The terminal supplies the monospace typeface. Design in cells.
 - Prefer 1, 2, 4 and 6-cell gaps. A control label includes its own surrounding
   spaces, such as `" Run "`.
 - Use one footer on the final row (`frame.footer`): actions at the left,
-  complete key hints and clickable `? help` at the right. Hints give way to
-  actions on narrow windows; items never wrap. Status appears above the footer.
+  supplementary key hints and clickable `? help` at the right. Keys already
+  shown in footer buttons are omitted from hints. Hints give way to actions on
+  narrow windows; items never wrap. Status appears above the footer.
   Overflow actions appear in `F10 More`.
 - Write key hints as key then lowercase verb, joined with ` · `
   (`frame.hints`): `↑↓ select · Enter open · Esc close`.
@@ -68,11 +70,12 @@ Every application frame follows the same reading order:
 
 1. **Identity:** title at the upper left; a concise live summary may align right
    in `muted`.
-2. **Navigation:** `frame.tabs`. Selected tabs use accent background plus
+2. **Navigation:** `frame.tabs`. Selected tabs use
+   `appearance.selection_background(theme)` plus
    `appearance.selection_text(theme)`; inactive tabs use `muted` on `surface`.
 3. **Work:** lists (`frame.row`), tables (`frame.table`), forms, metrics or a
-   focused detail. Selection uses the same accent pair as tabs and a `›` marker
-   in column 1.
+   focused detail. Selection uses the same foreground/background pair as tabs
+   and a `›` marker in column 1.
 4. **Actions and hints:** one footer on the final row. Visible keys use the
    same verbs as mouse controls; hints occupy the right and give way to actions.
 5. **Feedback:** explicit status above the footer. Empty, loading and error

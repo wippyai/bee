@@ -168,7 +168,8 @@ make build
 
 Releases build from the runtime commit pinned in `wippy.build.json`;
 `make runtime-pin RUNTIME_VERSION=<commit>` moves the pin and
-`make native-pin` pins Bee's native module to the pushed commit that holds it.
+`make native-pin NATIVE_VERSION=<commit>` pins Bee's native module to the
+pushed commit that holds it.
 
 ## License
 

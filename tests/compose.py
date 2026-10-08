@@ -147,6 +147,22 @@ def runner_fixture_type(src):
     text = index.read_text()
     anchor = text.index("- name: artifact_source\n")
     index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_catalog: bee.tests.gov:hub_fixture_catalog\n", 1))
+    inspect = src / "hub/binding/inspect.lua"
+    replace_once(inspect, 'local M = {}', 'local fixture_catalog = require("fixture_catalog")\nlocal M = {}')
+    replace_once(inspect, '    if not request then return nil, request_error end', '''    if not request then return nil, request_error end
+    if request.component == "bee/progress" then
+        local selected, problem = fixture_catalog.source().artifact(request.component, request.version)
+        if not selected then return nil, problem end
+        local configured, invalid = requirements.read(selected.entries, request.parameters)
+        if not configured then return nil, invalid end
+        local page = inspection.page(selected.entries, request.entry_offset, request.entry_limit, request.include_data)
+        return {component = selected.component, version = selected.version, digest = selected.digest,
+            entries = page.entries, requirements = configured, metadata = selected.metadata,
+            next_offset = page.next_offset, eof = page.eof}, nil
+    end''')
+    text = index.read_text()
+    anchor = text.index("- name: inspect\n")
+    index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_catalog: bee.tests.gov:hub_fixture_catalog\n", 1))
     catalog = src / "hub/binding/catalog.lua"
     replace_once(catalog, '    local response, response_error', '''    if request.query == nil or request.query == "progress" then
         return {items = {{component = "bee/progress", title = "Progress", description = "Task tracking",

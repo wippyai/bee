@@ -2,6 +2,8 @@
 -- mutating them. The caller supplies already-decoded configuration values.
 local bounds = require("bounds")
 local canonical = require("canonical")
+local json = require("json")
+local json_schema = require("json_schema")
 local M = {}
 M.MAX_PACKAGE_ENTRIES = 512
 M.MAX_REQUIREMENTS = 128
@@ -19,8 +21,38 @@ type Requirement = {
     targets: {Target},
     selected: unknown?,
     has_selected: boolean,
+    schema: {[string]: unknown}?,
+    description: string?,
+    schema_default: boolean?,
 }
 type Result = {requirements: {Requirement}, missing: {string}}
+
+function M.defaults(schema: {[string]: unknown}, value: unknown): unknown
+    if value == nil then value = schema.default end
+    local properties = bounds.object(schema.properties)
+    if properties and (value == nil or bounds.object(value)) then
+        local result: {[string]: unknown} = {}
+        for name, item in pairs(bounds.object(value) or {}) do result[name] = item end
+        for name, raw in pairs(properties) do
+            local child = bounds.object(raw)
+            if child then result[name] = M.defaults(child, result[name]) end
+        end
+        if next(result) ~= nil or value ~= nil then return result end
+    end
+    local items = bounds.object(schema.items)
+    if items and type(value) == "table" then
+        local result: {unknown} = {}
+        for index, item in ipairs(value) do result[index] = M.defaults(items, item) end
+        return result
+    end
+    return value
+end
+
+function M.validate(requirement: Requirement, value: unknown): string?
+    if requirement.capability then return requirement.id .. ": capability grants are selected by the host" end
+    local problem = json_schema.validate(requirement.schema or {}, value)
+    return problem and requirement.id .. ": " .. problem or nil
+end
 
 local function qualified_name(value: unknown, label: string): (string?, string?)
     local name = bounds.id(value)
@@ -116,16 +148,33 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
             local targets, targets_error = decode_targets(data.targets, "package entries[" .. tostring(index) .. "].data.targets")
             if not targets then return nil, targets_error end
             if #requirements >= M.MAX_REQUIREMENTS then return nil, "package requirements exceeds " .. tostring(M.MAX_REQUIREMENTS) .. " items" end
-            local has_default = data.default ~= nil
+            local meta = bounds.object(entry.meta) or {}
+            local raw_schema = meta.schema or meta.json_schema
+            if type(raw_schema) == "string" then
+                local decoded, problem = json.decode(raw_schema)
+                if problem then return nil, id .. ": invalid declared schema" end
+                raw_schema = decoded
+            end
+            local schema = raw_schema == nil and {} or bounds.object(raw_schema)
+            if not schema then return nil, id .. ": invalid declared schema" end
+            local fallback = M.defaults(schema, data.default)
+            local schema_default = canonical.encode(fallback) ~= canonical.encode(data.default)
+            local has_default = fallback ~= nil
             if has_default then
-                local encoded, encode_error = canonical.encode(data.default)
+                local encoded, encode_error = canonical.encode(fallback)
                 if not encoded or #encoded > M.MAX_PARAMETER_BYTES then
                     return nil, encode_error or "requirement default exceeds its bound"
                 end
             end
-            local meta = bounds.object(entry.meta)
-            local capability = meta and bounds.text(meta.capability, 80) or nil
-            requirements[#requirements + 1] = {capability = capability, id = id, default = data.default, has_default = has_default, targets = targets, has_selected = false}
+            local capability = bounds.text(meta.capability, 80)
+            local description = bounds.text(schema.description or meta.description or meta.comment, 4096)
+            local requirement: Requirement = {capability = capability, id = id, default = fallback, has_default = has_default,
+                targets = targets, has_selected = false, schema = schema, description = description, schema_default = schema_default}
+            if has_default and not capability then
+                local problem = M.validate(requirement, fallback)
+                if problem then return nil, problem end
+            end
+            requirements[#requirements + 1] = requirement
             by_id[id] = #requirements
             local bare = id:match(":([^:]+)$")
             if bare then
@@ -142,7 +191,9 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
         if not addressed then return nil, "parameter names no requirement " .. parameter.name end
         for _, requirement_index in ipairs(addressed) do
             local requirement = requirements[requirement_index]
-            requirement.selected = parameter.value
+            local problem = M.validate(requirement, M.defaults(requirement.schema or {}, parameter.value))
+            if problem then return nil, problem end
+            requirement.selected = M.defaults(requirement.schema or {}, parameter.value)
             requirement.has_selected = true
         end
     end
@@ -203,7 +254,19 @@ function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?
         end
     end
     local result: {Entry} = {}
+    local bindings: {[string]: Requirement} = {}
+    for _, requirement in ipairs(selected.requirements) do bindings[requirement.id] = requirement end
     for _, entry in ipairs(entries) do
+        local binding = bindings[entry.id]
+        if binding and not binding.capability and (binding.has_selected or binding.schema_default) then
+            local original = bounds.object(entry.data)
+            if not original then return nil, "invalid requirement configuration: " .. entry.id end
+            local data: {[string]: unknown} = {}
+            for key, value in pairs(original) do data[key] = value end
+            data.default = binding.default
+            if binding.has_selected then data.default = binding.selected end
+            entry = {id = entry.id, kind = entry.kind, meta = entry.meta, data = data}
+        end
         local database = targets[entry.id]
         if database then
             local meta: {[string]: unknown} = {}
@@ -223,5 +286,78 @@ function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?
         end
     end
     return result, nil
+end
+
+function M.configuration_path(path: unknown): ({string}?, string?)
+    if type(path) ~= "string" or not path:match("^%.[A-Za-z_][A-Za-z0-9_%.]*$") then
+        return nil, "configuration target path is invalid"
+    end
+    if path == ".data" or path == ".meta" then return nil, "configuration cannot replace an entry envelope" end
+    local names: {string} = {}
+    for name in path:gmatch("[A-Za-z_][A-Za-z0-9_]*") do
+        if name == "id" or name == "kind" or name == "security" or name == "policies" or name == "imports"
+            or name == "modules" or name == "registry" or name == "lifecycle" then
+            return nil, "configuration cannot select execution authority: " .. path
+        end
+        names[#names + 1] = name
+    end
+    if names[1] ~= "meta" and names[1] ~= "data" then table.insert(names, 1, "data") end
+    return names, nil
+end
+
+function M.configuration_targets(entries: {Entry}, selected: Result): ({Entry}?, string?)
+    local copied: {Entry} = {}
+    local owned: {[string]: {[string]: unknown}} = {}
+    for _, entry in ipairs(entries) do
+        local encoded, problem = json.encode(entry)
+        if not encoded then return nil, tostring(problem) end
+        local decoded, invalid = json.decode(encoded)
+        local value = bounds.object(decoded)
+        if not value then return nil, tostring(invalid) end
+        owned[entry.id] = value
+        copied[#copied + 1] = value :: Entry
+    end
+    local assigned: {[string]: string} = {}
+    for _, requirement in ipairs(selected.requirements) do
+        if not requirement.capability and requirement.schema and next(requirement.schema) ~= nil then
+            local value = requirement.default
+            if requirement.has_selected then value = requirement.selected end
+            if value == nil then return nil, requirement.id .. " is required" end
+            for _, target in ipairs(requirement.targets) do
+                local destination = owned[target.entry]
+                if not destination then return nil, "configuration must target an owned entry: " .. target.entry end
+                local names, invalid = M.configuration_path(target.path)
+                if not names then return nil, invalid end
+                local address = target.entry .. target.path
+                local measured = assert(canonical.encode(value))
+                if assigned[address] and assigned[address] ~= measured then return nil, "conflicting configuration: " .. address end
+                assigned[address] = measured
+                local parent = destination
+                for index = 1, #names - 1 do
+                    local child = bounds.object(parent[names[index]])
+                    if not child then
+                        if parent[names[index]] ~= nil then return nil, "configuration target is not an object: " .. address end
+                        child = {}; parent[names[index]] = child
+                    end
+                    parent = child
+                end
+                parent[names[#names]] = value
+            end
+        end
+    end
+    return copied, nil
+end
+
+function M.frozen_parameters(raw: unknown): ({Parameter}?, string?)
+    local declarations, problem = M.read(raw, {})
+    if not declarations then return nil, problem end
+    local parameters: {Parameter} = {}
+    for _, requirement in ipairs(declarations.requirements) do
+        if not requirement.capability and requirement.has_default then
+            parameters[#parameters + 1] = {name = requirement.id, value = requirement.default}
+        end
+    end
+    table.sort(parameters, function(a: Parameter, b: Parameter): boolean return a.name < b.name end)
+    return parameters, nil
 end
 return M

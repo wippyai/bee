@@ -3,6 +3,7 @@
 -- become application events and nothing here opens Hub or confirms an install.
 local tty = require("tty")
 local json = require("json")
+local form = require("form")
 local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
@@ -145,7 +146,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
             if state.requirements_open then
-                local capacity = maximum(0, math.floor((height - 9) / 3))
+                local capacity = maximum(0, math.floor((height - 10) / 4))
                 local selected = state.selected_requirement
                 local first = math.max(1, selected - capacity + 1)
                 if not state.requirements_digest then frame.line(painter, 7, state.notice ~= "" and state.notice or "Loading requirements…", theme.muted)
@@ -153,17 +154,23 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 for slot = 1, capacity do
                     local row = state.requirements[first + slot - 1]
                     if not row then break end
-                    local y = 6 + (slot - 1) * 3
+                    local y = 6 + (slot - 1) * 4
                     local active = first + slot - 1 == selected
-                    frame.row(painter, y, row.id .. " · " .. row.origin, active, "requirement", 0, row.id, nil, nil, 3)
-                    frame.line(painter, y + 1, row.json == "" and "Choose a JSON value" or row.json, theme.text)
-                    frame.line(painter, y + 2, table.concat(row.targets, " · "), theme.muted)
+                    local field = row.field
+                    local declared = field and (" [" .. field.kind .. "]" .. (field.required and " required" or "")) or ""
+                    frame.row(painter, y, row.id .. declared .. " · " .. row.origin, active, "requirement", 0, row.id, nil, nil, 4)
+                    frame.line(painter, y + 1, field and form.label(field.value) or row.json, theme.text)
+                    local choices: {string} = {}
+                    if field then for _, value in ipairs(field.choices) do choices[#choices + 1] = form.label(value) end end
+                    local fallback = field and field.default ~= nil and ("Default: " .. form.label(field.default)) or "No default"
+                    frame.line(painter, y + 2, fallback .. (#choices > 0 and " · Choose: " .. table.concat(choices, " / ") or ""), theme.muted)
+                    frame.line(painter, y + 3, field and field.description ~= "" and field.description or table.concat(row.targets, " · "), theme.muted)
                 end
-                local action_x = button(2, height - 2, "plan", " Prepare ", state.requirements_digest ~= nil)
+                local action_x = button(2, height - 2, "plan", " Review ", state.requirements_digest ~= nil)
                 local requirement = state.requirements[state.selected_requirement]
                 button(action_x, height - 2, "reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
                 frame.line(painter, height - 1, "Defaults are used unless you choose a value.", theme.muted)
-                frame.footer(painter, status, "↑↓ select · Enter edit JSON · V versions · P prepare")
+                frame.footer(painter, status, "↑↓ field · Enter edit · ←→ choose · J advanced JSON · P review · T technical")
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = 0, operation_detail_offset = 0}
             end
             if reading then
@@ -255,7 +262,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             actions = button(actions, height - 2, "uninstall", " Remove ", true)
             actions = button(actions, height - 2, "plan", " Prepare ", state.selected_version ~= nil or state.action == "uninstall")
             local policy_x = 2
-            policy_x = button(policy_x, height - 1, "parameter", " JSON value ", state.action ~= "uninstall")
+            policy_x = button(policy_x, height - 1, "parameter", " Configure ", state.action ~= "uninstall")
             if state.action == "uninstall" then
                 policy_x = button(policy_x, height - 1, "policy_block", " Block ", true)
                 policy_x = button(policy_x, height - 1, "policy_leave", " Leave ", true)
@@ -431,7 +438,7 @@ type Editor = {field: string, buffer: string, name: string?}
 function M.overlay(base: Frame, width: integer, height: integer, preferences: appearance.Preferences, status: string, editor: Editor): Frame
     local theme = preferences.theme
     local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword"
-        or "Configure package")
+        or (editor.field == "configuration" and "Edit " .. (editor.name or "field") or "Configure package"))
     -- The editor remains the active mode after a resize. A compact frame must
     -- therefore keep that mode visible and must never expose the underlying
     -- page's hit targets while keystrokes still edit the buffer.

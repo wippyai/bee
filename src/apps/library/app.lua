@@ -5,6 +5,7 @@
 -- approval owner, and package credentials and registry writes stay behind the
 -- two facades.
 local tty = require("tty")
+local json = require("json")
 local process = require("process")
 local channel = require("channel")
 local uuid = require("uuid")
@@ -695,6 +696,12 @@ local function main(options: unknown)
             ui.editor = nil
             load_tab()
             return
+        elseif active.field == "configuration" then
+            local problem = hub.set_field(hubs, active.name or "", active.buffer)
+            if problem then ui.status, gov.fault = problem, problem; changed(); return end
+            ui.status = "Field saved"
+            invalidate()
+            changed()
         elseif active.field == "parameter_name" then
             if active.buffer == "" then ui.status = "Parameter name is required"; changed(); return end
             ui.editor = {field = "parameter_value", buffer = "", name = active.buffer}
@@ -712,14 +719,42 @@ local function main(options: unknown)
     local function begin_editor(field: string)
         if field == "query" then ui.editor = {field = field, buffer = hubs.query}; ui.status = "Search: " .. hubs.query
         elseif field == "keyword" then ui.editor = {field = field, buffer = hubs.keyword}; ui.status = "Keyword (empty is all): " .. hubs.keyword
-        else ui.editor = {field = "parameter_name", buffer = ""}; ui.status = "Parameter name (namespace:name): " end
+        else
+            local row = hubs.requirements[hubs.selected_requirement]
+            if hubs.requirements_open and row and row.field then
+                local root = row.field.root
+                local buffer = ""
+                for _, parameter in ipairs(hubs.parameters) do if parameter.name == root then buffer = parameter.json end end
+                if buffer == "" then
+                    for _, declaration in ipairs(hubs.configuration or {}) do
+                        if declaration.id == root then buffer = json.encode(declaration.default) or "" end
+                    end
+                end
+                ui.editor = {field = "parameter_value", buffer = buffer, name = root}
+                ui.status = "Advanced JSON: " .. root
+            else ui.editor = {field = "parameter_name", buffer = ""}; ui.status = "Parameter name (namespace:name): " end
+        end
         changed()
     end
     local function edit_requirement()
         local row = hubs.requirements[hubs.selected_requirement]
         if not row then ui.status = "Select a requirement first"; changed(); return end
-        ui.editor = {field = "parameter_value", buffer = row.json, name = row.id}
-        ui.status = row.id .. " JSON: " .. row.json
+        local field = row.field
+        if field and field.readonly then ui.status = field.root .. ": supplied by the host"; changed(); return end
+        if field and (#field.choices > 0 or field.kind == "boolean") then
+            local problem = hub.cycle_field(hubs, row.id, 1)
+            ui.status = problem or "Field saved"
+            if problem then gov.fault = problem end
+        elseif field and field.kind == "object" and #field.choices == 0 then
+            hub.select_requirement(hubs, hubs.selected_requirement + 1)
+            ui.status = "Choose a field below; J opens Advanced JSON"
+        elseif field and field.kind == "array" and type(field.schema.items) == "table"
+            and (field.schema.items.type == "object" or field.schema.items.type == "array") then
+            ui.status = hub.add_field_item(hubs, row.id) or "Item added; configure its fields below"
+        else
+            ui.editor = {field = "configuration", buffer = hub.field_buffer(row), name = row.id}
+            ui.status = "Edit " .. row.id
+        end
         changed()
     end
 
@@ -900,7 +935,7 @@ local function main(options: unknown)
         elseif kind == "reset_requirement" then
             local row = hubs.requirements[hubs.selected_requirement]
             if row and row.origin == "Selected" then
-                hub.remove_parameter(hubs, row.id)
+                hub.remove_parameter(hubs, row.field and row.field.root or row.id)
                 invalidate()
                 requirements()
                 ui.status = "Override cleared"
@@ -922,7 +957,7 @@ local function main(options: unknown)
             if kind == "update" then hub.begin_update_hydration(hubs); begin({hub.installed_intent(hubs)}) end
             changed()
         elseif kind == "refresh_plan" then plan()
-        elseif kind == "parameter" then begin_editor("parameter_name")
+        elseif kind == "parameter" then requirements()
         elseif kind == "policy_none" then hub.set_policy(hubs, "none"); invalidate(); changed()
         elseif kind == "policy_up" then hub.set_policy(hubs, "up"); invalidate(); changed()
         elseif kind == "policy_block" then hub.set_policy(hubs, "block"); invalidate(); changed()
@@ -1073,6 +1108,12 @@ local function main(options: unknown)
                                     if (phase == "details" and ui.reading) or phase == "plan" or phase == "confirm" then ui.offset = ui.offset + 1; changed()
                                     elseif phase == "details" and hubs.requirements_open then hub.select_requirement(hubs, hubs.selected_requirement + 1); changed()
                                     elseif phase == "details" then version_relative(1) end
+                                elseif (key == "left" or key == "right") and phase == "details" and hubs.requirements_open then
+                                    local row = hubs.requirements[hubs.selected_requirement]
+                                    if row then
+                                        ui.status = hub.cycle_field(hubs, row.id, key == "left" and -1 or 1) or "Field saved"
+                                        changed()
+                                    end
                                 elseif key == "left" and phase == "details" and hubs.detail then hub.set_detail_page(hubs, hubs.detail.page - 1); invalidate(); details()
                                 elseif key == "right" and phase == "details" and hubs.detail then hub.set_detail_page(hubs, hubs.detail.page + 1); invalidate(); details()
                                 elseif key == "enter" then

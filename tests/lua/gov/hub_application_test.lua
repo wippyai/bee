@@ -38,6 +38,7 @@ local function define_tests()
             local state = hub.new()
             hub.select(state, "bee/progress")
             hub.select_version(state, "1.0.0")
+            test.is_nil(hub.set_parameter(state, "app.progress:title", '"Team progress"'))
             local plan_request = assert(hub.plan_intent(state))
             local planned = call(person, hub.HUB, plan_request)
             local stage = assert(hub.governed_request(state, planned :: hub.Reply, workspace, "hub-stage"),
@@ -121,6 +122,9 @@ local function define_tests()
                 end
             end
             test.is_true(placed, "Progress is absent from the Start menu")
+            local installed_app = assert(registry.get(APP))
+            local installed_meta = assert(bounds.object(installed_app.meta))
+            test.eq(assert(bounds.object(installed_meta.application)).title, "Team progress")
             local revert = call(person, governed.CALL, governed.revert_request(gov, "hub:bee/progress", "hub-back"))
             test.is_false(revert.ok)
             local refusal = assert(bounds.object(revert.error))

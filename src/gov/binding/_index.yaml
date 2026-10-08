@@ -327,6 +327,7 @@ entries:
     activation_owner: bee.gov.binding:activation_owner
     hub_resolver: bee.gov.binding:hub_resolver
     hub_package: bee.gov.binding:hub_package
+    package_requirements: bee.hub.package:requirements
     overlay_resolver: bee.gov.binding:overlay_resolver
     delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
@@ -412,6 +413,7 @@ entries:
     activation_owner: bee.gov.binding:activation_owner
     hub_resolver: bee.gov.binding:hub_resolver
     hub_package: bee.gov.binding:hub_package
+    package_requirements: bee.hub.package:requirements
     overlay_resolver: bee.gov.binding:overlay_resolver
     delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
@@ -461,6 +463,7 @@ entries:
     activation_owner: bee.gov.binding:activation_owner
     hub_resolver: bee.gov.binding:hub_resolver
     hub_package: bee.gov.binding:hub_package
+    package_requirements: bee.hub.package:requirements
     overlay_resolver: bee.gov.binding:overlay_resolver
     delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
@@ -549,7 +552,10 @@ entries:
 - name: requirement
   kind: library.lua
   source: file://requirement.lua
+  modules: [hash]
   imports:
+    requirements: bee.hub.package:requirements
+    canonical: bee.values:canonical
     bounds: bee.values:bounds
     capability_model: bee.capability:model
     agent_tool: bee.values:agent_tool

@@ -111,3 +111,12 @@ entries:
     actions: [bee.gov.delivery.read]
     resources: '*'
     effect: allow
+
+- name: form_test
+  kind: function.lua
+  source: file://form_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    form: bee.apps.library:form

@@ -6,6 +6,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local text = require("text")
 local bounds = require("bounds")
+local form = require("form")
 local M = {}
 
 M.MAX_TEXT = 512
@@ -27,7 +28,7 @@ type PackUpdate = {component: string, installed_version: string, available_versi
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
 type Parameter = {name: string, value: unknown, json: string}
 type Root = {id: string, component: string, version: string, parameters: {Parameter}, managed: boolean}
-type Requirement = {id: string, json: string, origin: string, targets: {string}}
+type Requirement = {id: string, json: string, origin: string, targets: {string}, field: form.Field?}
 type RootSelection = {id: string, component: string}
 type Plan = {conversion: {roots: {RootSelection}}?, digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, starts: {string}, capabilities: {string}}
 type Result = {ok: boolean, code: string, message: string, replayed: boolean, state: string}
@@ -38,6 +39,7 @@ type State = {
     developer_packages: boolean, pack_updates: {PackUpdate}, bee_update: BeeUpdate?, update_status: string,
     installed: {Module}, installed_roots: {Root}, installed_read: "unknown" | "pending" | "ready" | "error", selected: string?, detail: Detail?, selected_version: string?,
     requirements_open: boolean, requirements: {Requirement}, requirements_digest: string?, selected_requirement: integer,
+    configuration: {form.Declaration}?, configuration_targets: {[string]: {string}}?,
     action: string, policy: string, parameters: {Parameter}, parameter_touched: {[string]: boolean}, plan: Plan?, result: Result?, notice: string,
     operation_page: integer, operation_total: integer, operation_page_size: integer, operation_detail_offset: integer, operations: {Operation}, selected_operation: Operation?, recovery: Recovery?,
 }
@@ -380,6 +382,14 @@ end
 function M.plan_intent(state: State): (Intent?, string?)
     if not state.selected then return nil, "select a package first" end
     if state.action ~= "uninstall" and not state.selected_version then return nil, "select an exact package version" end
+    if state.action ~= "uninstall" then
+        for _, declaration in ipairs(state.configuration or {}) do
+            local value = declaration.default
+            for _, parameter in ipairs(state.parameters) do if parameter.name == declaration.id then value = parameter.value end end
+            local problem = form.validate(declaration, value)
+            if problem then return nil, problem end
+        end
+    end
     if state.action == "update" then
         if state.installed_read ~= "ready" then return nil, state.installed_read == "error"
             and "installed settings could not be read; retry the inventory read before updating"
@@ -400,8 +410,11 @@ function M.governed_request(state: State, reply: Reply, workspace_id: string, ke
     local measured = digest(value.artifact_digest)
     if value.component ~= state.selected or value.version ~= state.selected_version or not measured
         or state.action == "uninstall" then return nil, "Application plan does not match the selected version" end
+    local parameters: {Object} = {}
+    for _, parameter in ipairs(state.parameters) do parameters[#parameters + 1] = {name = parameter.name, value = parameter.value} end
     return {operation = "stage_hub", workspace_id = workspace_id, component = value.component,
-        version = value.version, artifact_digest = measured, idempotency_key = key}, nil
+        version = value.version, parameters = parameters,
+        artifact_digest = measured, idempotency_key = key}, nil
 end
 
 function M.confirm_intent(state: State): (Intent?, string?)
@@ -461,6 +474,7 @@ function M.select(state: State, name: string?)
         state.selected, state.detail, state.selected_version, state.parameters = name, nil, nil, {}
         state.parameter_touched = {}
         state.requirements, state.requirements_digest, state.selected_requirement = {}, nil, 1
+        state.configuration, state.configuration_targets = nil, nil
         state.action, state.policy = "install", "none"
         reset_plan(state)
     end
@@ -471,6 +485,7 @@ function M.select_version(state: State, selected: string?)
     if selected ~= state.selected_version then
         state.selected_version = selected
         state.requirements, state.requirements_digest, state.selected_requirement = {}, nil, 1
+        state.configuration, state.configuration_targets = nil, nil
         reset_plan(state)
     end
 end
@@ -526,6 +541,39 @@ function M.set_policy(state: State, policy: string)
     if valid and policy ~= state.policy then state.policy = policy; reset_plan(state) end
 end
 
+local function refresh_fields(state: State)
+    if not state.configuration then return end
+    local values: {[string]: unknown} = {}
+    for _, parameter in ipairs(state.parameters) do values[parameter.name] = parameter.value end
+    local rows: {Requirement} = {}
+    local fields, problem = form.fields(state.configuration, values)
+    if problem then state.notice = problem; state.requirements_digest = nil end
+    for _, field in ipairs(fields) do
+        rows[#rows + 1] = {id = field.id, json = field.value ~= nil and (json.encode(field.value) or "") or "",
+            origin = field.origin, targets = state.configuration_targets and state.configuration_targets[field.root] or {}, field = field}
+    end
+    state.requirements = rows
+end
+
+local function write_parameter(state: State, id: string, value: unknown, normalized: string): string?
+    for _, parameter in ipairs(state.parameters) do
+        if parameter.name == id then
+            parameter.value, parameter.json = value, normalized
+            state.parameter_touched[id] = true
+            reset_plan(state)
+            refresh_fields(state)
+            return nil
+        end
+    end
+    if #state.parameters >= M.MAX_PARAMETERS then return "too many parameters" end
+    state.parameters[#state.parameters + 1] = {name = id, value = value, json = normalized}
+    table.sort(state.parameters, function(a: Parameter, b: Parameter): boolean return a.name < b.name end)
+    state.parameter_touched[id] = true
+    reset_plan(state)
+    refresh_fields(state)
+    return nil
+end
+
 function M.set_parameter(state: State, name: unknown, encoded: unknown): string?
     local id = type(name) == "string" and name or nil
     if not id or #id == 0 or #id > 256 or not id:match("^[^:%s]+:[^:%s]+$") then return "parameter name must be a qualified identifier" end
@@ -535,25 +583,88 @@ function M.set_parameter(state: State, name: unknown, encoded: unknown): string?
     if problem or value == nil then return "parameter value is not JSON" end
     local normalized, normalization_error = json.encode(value)
     if not normalized or normalization_error then return "parameter value cannot be represented" end
-    for _, parameter in ipairs(state.parameters) do
-        if parameter.name == id then
-            parameter.value, parameter.json = value, normalized
-            state.parameter_touched[id] = true
-            reset_plan(state)
-            return nil
+    if state.configuration then
+        local found = false
+        for _, declaration in ipairs(state.configuration) do
+            if declaration.id == id then
+                if declaration.capability then return id .. ": capability grants are selected by the host" end
+                local problem = form.validate(declaration, value)
+                if problem then return problem end
+                found = true
+            end
+        end
+        if not found then return "parameter names no requirement " .. id end
+    end
+    return write_parameter(state, id, value, normalized)
+end
+
+local function write_field(state: State, field: form.Field, value: unknown): string?
+    if field.readonly then return field.root .. ": supplied by the host" end
+    local root: unknown = nil
+    for _, declaration in ipairs(state.configuration or {}) do if declaration.id == field.root then root = declaration.default end end
+    for _, parameter in ipairs(state.parameters) do if parameter.name == field.root then root = parameter.value end end
+    local assigned = form.assign(root, field.path, value)
+    local encoded = json.encode(assigned)
+    if not encoded then return field.id .. ": value cannot be represented" end
+    return write_parameter(state, field.root, assigned, encoded)
+end
+
+function M.set_field(state: State, name: string, input: string): string?
+    for _, row in ipairs(state.requirements) do
+        local field = row.field
+        if row.id == name and field then
+            local value, problem = form.parse(field, input)
+            if problem then return problem end
+            return write_field(state, field, value)
         end
     end
-    if #state.parameters >= M.MAX_PARAMETERS then return "too many parameters" end
-    state.parameters[#state.parameters + 1] = {name = id, value = value, json = normalized}
-    table.sort(state.parameters, function(a: Parameter, b: Parameter): boolean return a.name < b.name end)
-    state.parameter_touched[id] = true
-    reset_plan(state)
-    return nil
+    return "Choose a configuration field"
+end
+
+function M.field_buffer(row: Requirement): string
+    return row.field and form.buffer(row.field) or row.json
+end
+
+function M.cycle_field(state: State, name: string, step: integer): string?
+    for _, row in ipairs(state.requirements) do
+        local field = row.field
+        if row.id == name and field then
+            if field.readonly then return field.root .. ": supplied by the host" end
+            if #field.choices > 0 then
+                local index = step > 0 and 0 or 1
+                for position, value in ipairs(field.choices) do
+                    if canonical.encode(value) == canonical.encode(field.value) then index = position end
+                end
+                local value = field.choices[(index - 1 + step) % #field.choices + 1]
+                local problem = form.validate({id = field.id, schema = field.schema, default = nil, has_default = false}, value)
+                if problem then return problem end
+                return write_field(state, field, value)
+            elseif field.kind == "boolean" then return M.set_field(state, name, field.value == true and "false" or "true") end
+            return "Enter edits this field"
+        end
+    end
+    return "Choose a configuration field"
+end
+
+function M.add_field_item(state: State, name: string): string?
+    for _, row in ipairs(state.requirements) do
+        local field = row.field
+        if row.id == name and field and field.kind == "array" then
+            local items = bounds.object(field.schema.items)
+            if not items then return "This list has no declared item schema" end
+            local value = clone(field.value or {})
+            if type(value) ~= "table" then return "This field is not a list" end
+            if #value >= 128 then return "This list reaches its item limit" end
+            value[#value + 1] = items.default or {}
+            return write_field(state, field, value)
+        end
+    end
+    return "Choose a list field"
 end
 
 function M.remove_parameter(state: State, name: string)
     for index, parameter in ipairs(state.parameters) do
-        if parameter.name == name then table.remove(state.parameters, index); state.parameter_touched[name] = true; reset_plan(state); return end
+        if parameter.name == name then table.remove(state.parameters, index); state.parameter_touched[name] = true; reset_plan(state); refresh_fields(state); return end
     end
 end
 
@@ -565,6 +676,7 @@ end
 
 function M.apply_inspect(state: State, reply: Reply)
     state.requirements, state.requirements_digest = {}, nil
+    state.configuration, state.configuration_targets = nil, nil
     if not reply.ok then state.notice = M.text(reply.message or "Requirements unavailable"); return end
     local value = object(reply.value)
     if not value then state.notice = "Invalid package requirements"; return end
@@ -576,6 +688,7 @@ function M.apply_inspect(state: State, reply: Reply)
     local rows = requirements and requirement_list(requirements.requirements, M.MAX_PARAMETERS) or nil
     if not rows then state.notice = "Invalid package requirements"; return end
     local decoded: {Requirement}, seen: {[string]: boolean} = {}, {}
+    local declarations: {form.Declaration}, configuration_targets: {[string]: {string}} = {}, {}
     for _, raw in ipairs(rows) do
         local row = object(raw)
         if not row then state.notice = "Invalid package requirement"; return end
@@ -604,9 +717,17 @@ function M.apply_inspect(state: State, reply: Reply)
             paths[#paths + 1] = M.text(target.entry, 256) .. " " .. M.text(target.path, 512)
         end
         decoded[#decoded + 1] = {id = id, json = encoded, origin = origin, targets = paths}
+        local schema = row.schema == nil and {} or bounds.object(row.schema)
+        if not schema then state.notice = id .. ": Invalid declared schema"; return end
+        local capability = row.capability == nil and nil or bounds.text(row.capability, 80)
+        declarations[#declarations + 1] = {id = id, schema = schema, default = row.default, has_default = row.has_default,
+            capability = capability, description = bounds.text(row.description, 4096)}
+        configuration_targets[id] = paths
         seen[id] = true
     end
     state.requirements, state.requirements_digest, state.notice = decoded, measured, ""
+    state.configuration, state.configuration_targets = declarations, configuration_targets
+    refresh_fields(state)
     state.selected_requirement = math.floor(math.max(1, math.min(#decoded, state.selected_requirement)))
 end
 

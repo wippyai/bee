@@ -16,7 +16,7 @@ type Artifact = {component: string, version: string, digest: string, dependencie
 type CapabilityRequest = {capability: string, parameters: {[string]: string | {string}}, reason: string,
     target: string, path: string, catalog_revision: integer, template_revision: integer}
 type Requirement = {id: string, package: string, value: string?, expected_kind: string?, targets: {string},
-    capability_request: CapabilityRequest?}
+    capability_request: CapabilityRequest?, configuration_digest: string?}
 type DriverRequirement = {binding: string, digest: string}
 type Migration = {id: string, target_db: string, checksum: string, ordinal: integer}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
@@ -291,7 +291,7 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
     local count, count_error = dense_count(raw, "candidate requirements", 128)
     if not count then return nil, count_error end
     local allowed: {[string]: boolean} = {id = true, package = true, value = true,
-        expected_kind = true, targets = true, capability_request = true}
+        expected_kind = true, targets = true, capability_request = true, configuration_digest = true}
     local result: {Requirement} = {}
     for index = 1, count do
         local row = (raw)[index]
@@ -331,9 +331,13 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
                 path = ".security.policies +=", catalog_revision = math.floor(value.catalog_revision),
                 template_revision = math.floor(value.template_revision)}
         end
+        if item.configuration_digest ~= nil and (type(item.configuration_digest) ~= "string"
+            or not digest(item.configuration_digest) or item.value ~= nil or item.expected_kind ~= nil or request ~= nil) then
+            return nil, "configuration evidence is malformed"
+        end
         local requirement: Requirement = {id = item.id, package = item.package,
             value = item.value, expected_kind = item.expected_kind, targets = targets,
-            capability_request = request}
+            capability_request = request, configuration_digest = item.configuration_digest}
         result[index] = requirement
     end
     return result, nil
@@ -636,8 +640,15 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             issue("CAPABILITY_REQUEST_DENIED", item.id, "capability request does not target its owned policy list",
                 "target the owned application, or a declared owned operation for hive.expose")
         end
+        if item.configuration_digest then
+            local measured = final[item.id]
+            if not digest(item.configuration_digest) or item.value or item.expected_kind or request
+                or not measured or measured.kind ~= "ns.requirement" or measured.package ~= item.package then
+                issue("CONFIGURATION_DENIED", item.id, "configuration evidence does not match the owned requirement", "resolve the declared configuration again")
+            end
+        end
         local target = item.value and final[item.value] or nil
-        if not target and not item.capability_request then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
+        if not target and not item.capability_request and not item.configuration_digest then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
         elseif target and item.expected_kind and target.kind ~= item.expected_kind then issue("BINDING_KIND", item.id, "resource does not match declared kind", "select a resource of the declared kind") end
         for _, reference in ipairs(item.targets) do
             local append = context.driver_requirements and context.driver_requirements[item.id] or nil
@@ -648,6 +659,9 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
                 and reference == driver_admission.TARGET
             if guarded(reference) and not admitted_append then
                 issue("PROTECTED_KERNEL", item.id, "requirement selects into protected kernel definition " .. reference, PROTECTED_REMEDY)
+            end
+            if item.configuration_digest and final[reference] and final[reference].package ~= item.package then
+                issue("CONFIGURATION_DENIED", item.id, "configuration target is outside its package", "target an owned entry")
             end
             if not final[reference] then issue("DANGLING_REQUIREMENT_TARGET", item.id, "missing target entry " .. reference, "repair the package requirement target") end
         end

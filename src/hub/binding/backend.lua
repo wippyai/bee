@@ -80,7 +80,6 @@ local function handle(raw: unknown): Result
                 parameters = request.parameters})
             if not expanded then return hub_result.failure("BLOCKED", problem or "package unavailable") end
             if expanded.governed then
-                if #request.parameters > 0 then return hub_result.failure("INVALID", "governed application grants are selected by the host") end
                 return hub_result.success({route = "governed", component = request.component, version = request.version,
                     artifact_digest = expanded.artifact.digest}, false)
             end

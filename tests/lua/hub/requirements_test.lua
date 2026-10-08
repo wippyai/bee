@@ -21,6 +21,20 @@ end
 
 local function define_tests()
     test.describe("Hub requirements", function()
+        test.it("validates declared field types, enum values and nested required properties", function()
+            local entries: {unknown} = {{id = "demo:options", kind = "ns.requirement",
+                meta = {schema = {type = "object", additionalProperties = false,
+                    properties = {workers = {type = "integer", minimum = 1},
+                        mode = {type = "string", enum = {"quiet", "verbose"}}}, required = {"workers", "mode"}}},
+                data = {default = {workers = 2, mode = "quiet"}, targets = {{entry = "demo:config", path = ".options"}}}}}
+            test.not_nil(requirements.read(entries, parameters({{name = "demo:options", value = {workers = 3, mode = "verbose"}}})))
+            for _, value in ipairs({{workers = "3", mode = "quiet"}, {workers = 0, mode = "quiet"},
+                {workers = 3, mode = "other"}, {workers = 3}}) do
+                local result, problem = requirements.read(entries, parameters({{name = "demo:options", value = value}}))
+                test.is_nil(result)
+                test.is_true(tostring(problem):find("demo:options", 1, true) ~= nil)
+            end
+        end)
         test.it("leaves application capabilities to host admission rather than dependency parameters", function()
             local result = assert(requirements.read({
                 {id = "app.progress:database", kind = "ns.requirement",

@@ -4,9 +4,11 @@ entries:
 - name: requirements
   kind: library.lua
   source: file://requirements.lua
+  modules: [json]
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
+    json_schema: bee.gateway.catalog:json_schema
 - name: inspection
   kind: library.lua
   source: file://inspection.lua

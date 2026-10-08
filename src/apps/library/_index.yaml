@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.apps.library
 entries:
+- name: form
+  kind: library.lua
+  source: file://form.lua
+  modules: [json]
+  imports:
+    bounds: bee.values:bounds
+    json_schema: bee.gateway.catalog:json_schema
+    requirements: bee.hub.package:requirements
 - name: hub
   kind: library.lua
   source: file://hub.lua
@@ -11,6 +19,7 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     text: bee.ui:text
+    form: bee.apps.library:form
 - name: governed
   kind: library.lua
   source: file://governed.lua
@@ -44,6 +53,7 @@ entries:
     appearance: bee.ui:appearance
     model: bee.apps.library:hub
     contents: bee.apps.library:contents
+    form: bee.apps.library:form
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -152,6 +162,7 @@ entries:
   source: file://app.lua
   method: main
   modules:
+  - json
   - tty
   - process
   - channel

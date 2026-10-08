@@ -67,6 +67,8 @@ function M.entries(): {inspection.Entry}
             restart_policy = "never", menus = {"bee.shell:apps_menu"}}},
             data = {source = 'local process = require("process")\nlocal function main() process.events():receive() end\nreturn {main = main}',
                 method = "main", modules = {"process"}}},
+        {id = NS .. ":title", kind = "ns.requirement", meta = {schema = {type = "string", minLength = 1, description = "Name in Apps"}},
+            data = {default = "Progress", targets = {{entry = NS .. ":app", path = ".meta.application.title"}}}},
         {id = NS .. ":access", kind = "library.lua", meta = {}, data = {source = ACCESS, modules = {"funcs", "sql"}}},
         {id = NS .. ":database", kind = "ns.requirement", meta = {value_kind = "security.policy", capability = "app.database",
             parameters = {name = "progress"}, reason = "Keep tasks"},

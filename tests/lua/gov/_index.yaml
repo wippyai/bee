@@ -1335,3 +1335,12 @@ entries:
     harness: bee.tests.gov:delivery_harness
     application: bee.node:application
     client: bee.node:client
+- name: config_requirement_test
+  kind: function.lua
+  source: file://config_requirement_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    requirement: bee.gov.binding:requirement
+    preflight: bee.gov.binding:preflight

@@ -4,6 +4,9 @@ local capability_model = require("capability_model")
 local agent_tool = require("agent_tool")
 local drivers = require("drivers")
 local driver_admission = require("driver_admission")
+local requirements = require("requirements")
+local canonical = require("canonical")
+local hash = require("hash")
 local M = {}
 type Entry = {[string]: unknown}
 local function object(value: unknown): Entry?
@@ -32,6 +35,17 @@ function M.resolve(entry: Entry, package: string, final: {[string]: Entry}, owne
     local selected: string? = nil
     local meta = object(entry.meta)
     local capability = meta and meta.capability or nil
+    local configuration_digest: string? = nil
+    if not capability and meta and (meta.schema ~= nil or meta.json_schema ~= nil) then
+        local declarations, problem = requirements.read({{id = entry.id, kind = entry.kind, meta = entry.meta, data = entry.data}}, {})
+        if not declarations then return nil, problem end
+        if #declarations.missing > 0 then return nil, declarations.missing[1] .. " is required" end
+        local bytes, invalid = canonical.encode({value = declarations.requirements[1].default,
+            schema = declarations.requirements[1].schema, targets = targets})
+        if not bytes then return nil, invalid end
+        configuration_digest = hash.sha256(bytes)
+        if not configuration_digest then return nil, "cannot measure requirement configuration" end
+    end
     local capability_request: preflight.CapabilityRequest? = nil
     if capability ~= nil then
         if not meta or meta.value_kind ~= "security.policy" or type(capability) ~= "string"
@@ -139,6 +153,10 @@ function M.resolve(entry: Entry, package: string, final: {[string]: Entry}, owne
             end
             capability_request.target = target_id
             capability_request.path = target.path
+        elseif configuration_digest then
+            if not owned[target_id] then return nil, "configuration must target an owned entry: " .. target_id end
+            local names, invalid = requirements.configuration_path(target.path)
+            if not names then return nil, invalid end
         else
             local binding, binding_error = path_value(destination, target.path)
             local value = bounds.id(binding)
@@ -152,7 +170,7 @@ function M.resolve(entry: Entry, package: string, final: {[string]: Entry}, owne
     local id = bounds.id(entry.id)
     if not id then return nil, "requirement identity is invalid" end
     return {id = id, package = package, value = selected, expected_kind = expected,
-        targets = result_targets, capability_request = capability_request}, nil
+        targets = result_targets, capability_request = capability_request, configuration_digest = configuration_digest}, nil
 end
 
 return M

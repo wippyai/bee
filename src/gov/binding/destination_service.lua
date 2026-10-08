@@ -21,6 +21,7 @@ local lease_grants = require("lease_grants")
 local owner = require("activation_owner")
 local resolver = require("hub_resolver")
 local hub_package = require("hub_package")
+local package_requirements = require("package_requirements")
 local overlay_resolver = require("overlay_resolver")
 local delivery = require("delivery")
 local destination = require("destination")
@@ -286,6 +287,15 @@ local function destination_resolver(config: Configuration, profile_value: Profil
             or not bounds.id(spec.version) then return nil, "selected plan does not match its activation profile" end
         local version = bounds.id(spec.version)
         if not version then return nil, "selected plan version is invalid" end
+        if spec.source_workspace == "hub:" .. profile_value.component then
+            local frozen, problem = artifact.decode(spec.artifact_bytes, spec.artifact_digest)
+            if not frozen then return nil, problem end
+            local parameters, invalid = package_requirements.frozen_parameters(frozen)
+            if not parameters then return nil, invalid end
+            local rows: {unknown} = {}
+            for _, parameter in ipairs(parameters) do rows[#rows + 1] = parameter end
+            return {component = profile_value.component, version = version, parameters = rows}, nil
+        end
         return {component = profile_value.component, version = version, parameters = profile_value.parameters}, nil
     end
     local function selected_policy(spec_raw: unknown, _captured: unknown, _preview: unknown): (ResolverPolicy?, string?)
@@ -1078,16 +1088,18 @@ function M.call(raw: unknown): Result
     elseif operation == "stage_hub" then
         local component, version = bounds.id(request.component), bounds.id(request.version)
         local key, measured = bounds.id(request.idempotency_key), bounds.text(request.artifact_digest, 64)
-        if exact(request, {"component", "version", "artifact_digest", "idempotency_key"})
+        if exact(request, {"component", "version", "parameters", "artifact_digest", "idempotency_key"})
             or not component or not version or not key or not measured then
             result = failure("INVALID", "Hub stage requires an exact measured package")
         else
-            local expanded, expand_error = hub_package.read({component = component, version = version, parameters = {}})
+            local parameters, parameter_error = package_requirements.parameters(request.parameters or {})
+            local expanded, expand_error
+            if parameters then expanded, expand_error = hub_package.read({component = component, version = version, parameters = parameters}) end
             local config, config_error = load()
             local source_workspace = "hub:" .. component
             local chosen, profile_error = config and selected(config, workspace_id, node_id,
                 source_workspace, activation_store) or nil
-            if not expanded then result = failure("BLOCKED", expand_error or "Hub package is unavailable")
+            if not expanded then result = failure("BLOCKED", parameter_error or expand_error or "Hub package is unavailable")
             elseif not expanded.governed then result = failure("INVALID", "library packages use Hub publication")
             elseif expanded.artifact.digest ~= measured then result = failure("BLOCKED", "Hub artifact differs from the measured package")
             elseif not chosen then result = failure("BLOCKED", profile_error or config_error or "Hub application is not admitted")

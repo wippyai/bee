@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.threads.sessions.app
+entries:
+- name: allowance_form
+  kind: library.lua
+  source: file://allowance_form.lua
+  modules: [tty, funcs, json]
+  imports:
+    forms: bee.ui.forms:forms
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    bounds: bee.values:bounds

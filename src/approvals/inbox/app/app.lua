@@ -21,6 +21,7 @@ local inbox = require("inbox")
 local feeds = require("feeds")
 local leases = require("leases")
 local lease_form = require("lease_form")
+local allowance_form = require("allowance_form")
 local source_config = require("source_config")
 local protocol = require("protocol")
 local system = require("system")
@@ -78,6 +79,7 @@ local function main(value: unknown)
     local state: model.State = model.new(configured.workspaces)
     local slice: leases.Slice = leases.new()
     local request_form: lease_form.State? = nil
+    local allowance_request: allowance_form.State? = nil
     local form_frame: {rows: {string}, hits: {frame.Hit}} = {rows = {}, hits = {}}
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     local rows: {model.Row} = {}
@@ -310,6 +312,11 @@ local function main(value: unknown)
         if kind == "approve" and leases.is_review(state.detail) and not slice.review_complete then
             status = "Scroll to the end of the lease terms before approving"; dirty = true; return
         end
+        if kind == "approve" and state.detail and state.detail.proposal.ref == "bee.threads.sessions:allowance" then
+            allowance_request = allowance_form.new(state.detail.source_workspace_id or state.detail.workspace_id, state.detail)
+            dirty = true
+            return
+        end
         if kind == "approve" or kind == "deny" then perform(function() act(kind); state.longer = false end); return end
         local title = "Withdraw this request?"
         local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
@@ -327,7 +334,11 @@ local function main(value: unknown)
     while running do
         if dirty then
             local open_form = request_form
-            if open_form then
+            if allowance_request then
+                form_frame = allowance_form.draw(width, height, preferences, allowance_request)
+                frame.render(form_frame, menu, preferences)
+                assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            elseif open_form then
                 form_frame = lease_form.draw(width, height, preferences, open_form)
                 frame.render(form_frame, menu, preferences)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -398,6 +409,21 @@ local function main(value: unknown)
             if data then
                 if data.type == "close" then running = false
                 elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+                elseif allowance_request and (data.type == "key" or data.type == "mouse") then
+                    local opened_form = allowance_request
+                    local outcome = allowance_form.input(opened_form, data, form_frame)
+                    if outcome == "cancel" then allowance_request = nil
+                    elseif outcome == "submit" then
+                        local intent, err = allowance_form.intent(opened_form)
+                        if intent then
+                            perform(function()
+                                local reply = owner:invoke(intent.target, intent.request)
+                                if reply and reply.kind == "success" then allowance_request = nil; refresh()
+                                else opened_form.status = reply and reply.message or "Decision outcome unknown; refresh" end
+                            end)
+                        else opened_form.status = err or "Invalid allowance" end
+                    end
+                    dirty = true
                 elseif request_form and (data.type == "key" or data.type == "mouse") then
                     local open_form = request_form
                     local outcome = lease_form.input(open_form, data, form_frame)

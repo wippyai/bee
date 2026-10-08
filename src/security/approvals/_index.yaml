@@ -97,10 +97,17 @@ entries:
     confirm: explicit
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
+  - name: hive-session-agents
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
 - name: approval_installation_effects_policy
   kind: security.policy
   meta:
-    comment: Host-authorized installation worker lists approved Hub effects; the effect owner verifies each binding and approval before applying
+    comment: Host-authorized installation worker lists approved Hub effects; the effect owner verifies each binding and approval
+      before applying
   policy:
     actions:
     - bee.approvals.own
@@ -110,7 +117,8 @@ entries:
 - name: approval_activation_effects_policy
   kind: security.policy
   meta:
-    comment: Host-authorized activation worker lists approved governance activations and those whose request ended without approval; the activation owner consumes each approval and applies its exact intent, or settles the intent refused
+    comment: Host-authorized activation worker lists approved governance activations and those whose request ended without
+      approval; the activation owner consumes each approval and applies its exact intent, or settles the intent refused
   policy:
     actions:
     - bee.approvals.own
@@ -121,7 +129,8 @@ entries:
 - name: approval_publication_effects_policy
   kind: security.policy
   meta:
-    comment: Host-authorized publication worker lists approved Hub effects; the effect owner verifies each binding and approval before uploading
+    comment: Host-authorized publication worker lists approved Hub effects; the effect owner verifies each binding and approval
+      before uploading
   policy:
     actions:
     - bee.approvals.own
@@ -140,7 +149,8 @@ entries:
 - name: approval_hive_names
   kind: security.policy
   meta:
-    comment: The approvals hive service holds its node-local name, checks requests come from the Hive supervisor and reads this node's identity and role
+    comment: The approvals hive service holds its node-local name, checks requests come from the Hive supervisor and reads
+      this node's identity and role
   policy:
     actions:
     - process.registry.register
@@ -170,7 +180,8 @@ entries:
 - name: approval_hive_peer
   kind: security.policy
   meta:
-    comment: A peer node reaches only the mapped owner operations; the destination approver policy decides what its actor may read or settle
+    comment: A peer node reaches only the mapped owner operations; the destination approver policy decides what its actor
+      may read or settle
   policy:
     actions:
     - funcs.call

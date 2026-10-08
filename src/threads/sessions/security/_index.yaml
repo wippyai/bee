@@ -49,6 +49,7 @@ entries:
     - bee.harness.launch:admission
     - bee.harness.binding:setup
     - bee.harness.binding:locate_probe
+    - bee.hive.binding:call
     effect: allow
 - name: owner_setup_policy
   kind: security.policy.expr
@@ -101,6 +102,7 @@ entries:
     actions:
     - registry.get
     - registry.snapshot
+    - system.read
     resources:
     - '*'
     effect: allow
@@ -117,6 +119,10 @@ entries:
     - system.read
     - funcs.call
     - funcs.context
+    - security.actor.create
+    - funcs.security
+    - bee.approvals.request
+    - bee.approvals.consume
     resources:
     - '*'
     effect: allow
@@ -131,3 +137,14 @@ entries:
     resources: '*'
     effect: allow
     expression: action in ["funcs.call", "bee.harness.launch", "bee.sessions.send", "bee.sessions.discover"]
+- name: person_allowance_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - bee.sessions.allowance.manage
+    - funcs.call
+    resources: '*'
+    effect: allow
+    expression: actor.id matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" && actor.meta.definition_id in ["bee.harness.app:app",
+      "bee.approvals.inbox.app:app"] && ((action == "bee.sessions.allowance.manage" && resource == actor.meta.workspace_id)
+      || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:allowance", "bee.threads.sessions.binding:peers"]))

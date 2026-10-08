@@ -33,6 +33,24 @@ local function define_tests()
             test.is_nil(invocation)
             test.contains(tostring(err), "allowance")
         end)
+        test.it("records one Needs you request and gives agents no consent management authority", function()
+            local asked = request("list")
+            authorized(asked, "{peer-request@workers|1}", "receiver")
+            authorized(asked, "{peer-request@workers|2}", "receiver")
+            local rows = assert(registry.find({["meta.type"] = "bee.sessions.allowance"}))
+            local found = 0
+            for _, entry in ipairs(rows) do
+                if entry.data.peer == "peer-request" then
+                    found = found + 1
+                    test.not_nil(entry.data.approval_id)
+                    test.eq(entry.data.scope, nil)
+                end
+            end
+            test.eq(found, 1)
+            local policy = assert(security.policy("bee.threads.sessions.security:person_allowance_policy"))
+            local actor = assert(security.new_actor("bee.hive.member.peer-request", {workspace_id = WORKSPACE, node = "peer-request"}))
+            test.is_true(policy:evaluate(actor, "bee.sessions.allowance.manage", WORKSPACE) ~= "allow")
+        end)
         test.it("limits list-only allowance and rejects forged peer fields", function()
             test.eq(consent("list").ok, true)
             local exposure = assert(registry.find({[".kind"] = "security.policy.expr"}))

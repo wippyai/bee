@@ -5,6 +5,7 @@ local hash = require("hash")
 local time = require("time")
 local funcs = require("funcs")
 local ctx = require("ctx")
+local json = require("json")
 local system = require("system")
 local workspaces = require("workspaces")
 local bounds = require("bounds")
@@ -59,6 +60,69 @@ local function replace(peer: string, workspace: string, value: Object): (boolean
     return ok ~= nil, err and tostring(err) or nil
 end
 local function failure(message: string): Object return {ok = false, error = message} end
+local function approval(method: string, request: Object, workspace: string): (Object?, string?, Object?)
+    local actor = assert(security.new_actor("bee.sessions.allowance.owner", {workspace_id = workspace}))
+    local raw, err = funcs.new():with_actor(actor):call("bee.approvals.binding:" .. method, request)
+    local reply = bounds.object(raw)
+    if err or not reply or reply.ok ~= true then
+        local fault = reply and bounds.object(reply.error)
+        return nil, tostring(err or (fault and fault.message) or "approval owner refused"), reply
+    end
+    return bounds.object(reply.value), nil
+end
+local function ask(peer: string, workspace: string, previous: Object?): (Object?, string?)
+    if previous and (previous.approval_id ~= nil or previous.revoked == true) then return previous, nil end
+    local revision = previous and bounds.integer(previous.revision) or 0
+    local view, err = approval("request", {workspace_id = workspace, idempotency_key = id(peer, workspace) .. "." .. tostring(revision or 0),
+        request_kind = "question", policy = "hive-session-agents",
+        proposal = {kind = "operation", ref = "bee.threads.sessions:allowance", revision = "1", payload = {peer = peer, workspace_id = workspace}},
+        prompt = {text = "Allow agents from bee " .. peer .. " to see / message agents here. Choose list only, message and await, or open new sessions; choose a duration or permanent. You can revoke in Sessions."},
+        response_schema = {type = "object", required = {"text"}, properties = {text = {type = "string"}}}}, workspace)
+    if not view then return nil, err end
+    local value: Object = {}
+    for k, v in pairs(previous or {}) do value[k] = v end
+    value.peer, value.workspace_id, value.revision, value.approval_id = peer, workspace, revision or 0, view.approval_id
+    local saved, save_error = replace(peer, workspace, value)
+    if not saved then return nil, save_error end
+    return value, nil
+end
+local function resolved(value: Object): (Object?, string?)
+    local peer, workspace, approval_id = bounds.id(value.peer), bounds.id(value.workspace_id), bounds.id(value.approval_id)
+    if not peer or not workspace or not approval_id or value.applied == true then return value, nil end
+    local view, err = approval("read", {approval_id = approval_id}, workspace)
+    if not view then return nil, err end
+    if view.state ~= "decided" or view.decision ~= "approved" then return value, nil end
+    local response = bounds.object(view.response)
+    local answer = response and type(response.text) == "string" and bounds.object((json.decode(response.text))) or nil
+    local scope = answer and bounds.member(answer.scope, {"list", "message", "open"}) or nil
+    local duration = answer and answer.duration_ms ~= nil and bounds.integer(answer.duration_ms) or nil
+    if not answer or not scope or bounds.fields(answer, {"scope", "duration_ms"})
+        or (answer.duration_ms ~= nil and (not duration or duration < 1 or duration > 2592000000)) then return nil, "invalid allowance answer" end
+    local decided = bounds.text(view.decided_at)
+    local stamp = decided and time.parse("2006-01-02T15:04:05.000Z07:00", decided) or nil
+    if not stamp then return nil, "approval decision has no timestamp" end
+    local at = math.floor(stamp:unix_nano() / 1000000)
+    local effect: Object = {approval_id = approval_id, proposal_digest = view.proposal_digest,
+        effect_key = id(peer, workspace), owner_incarnation = view.owner_incarnation}
+    local consumed, consume_error, refusal = approval("consume", effect, workspace)
+    local fault = refusal and bounds.object(refusal.error)
+    if not consumed and fault and fault.code == "REVALIDATE" then
+        local evidence = bounds.object(refusal.value)
+        local current = evidence and bounds.integer(evidence.current_incarnation)
+        if not current then return nil, "approval authority incarnation is unavailable" end
+        local checked, check_error = approval("revalidate", {approval_id = approval_id, proposal_digest = view.proposal_digest,
+            owner_incarnation = current}, workspace)
+        if not checked then return nil, check_error end
+        effect.owner_incarnation = current
+        consumed, consume_error = approval("consume", effect, workspace)
+    end
+    if not consumed then return nil, consume_error end
+    local next_value: Object = {peer = peer, workspace_id = workspace, revision = (bounds.integer(value.revision) or 0) + 1,
+        scope = scope, expires_ms = duration and at + duration or nil, approval_id = approval_id, applied = true}
+    local saved, save_error = replace(peer, workspace, next_value)
+    if not saved then return nil, save_error end
+    return next_value, nil
+end
 function M.manage(raw: unknown): Object
     local asked = bounds.object(raw)
     local actor = security.actor()
@@ -71,6 +135,9 @@ function M.manage(raw: unknown): Object
         for _, entry in ipairs(application.host_entries(M.TYPE)) do
             local data = bounds.object(entry.data)
             if data and data.workspace_id == workspace then
+                local updated, err = resolved(data)
+                if not updated then return failure(tostring(err)) end
+                data = updated
                 local value: Object = {}
                 for k, v in pairs(data) do value[k] = v end
                 value.allowed = live(data)
@@ -92,6 +159,10 @@ function M.manage(raw: unknown): Object
         value.scope = scope
         value.expires_ms = duration and now() + duration or nil
     elseif asked.operation ~= "revoke" then return failure("unknown allowance operation") end
+    if previous and previous.approval_id ~= nil and previous.applied ~= true then
+        local withdrawn, withdraw_error = approval("withdraw", {approval_id = previous.approval_id}, workspace)
+        if not withdrawn then return failure(tostring(withdraw_error)) end
+    end
     local saved, err = replace(peer, workspace, value)
     if not saved then return failure(tostring(err)) end
     return {ok = true, value = value}
@@ -132,7 +203,16 @@ function M.authorize(raw: unknown): Object
         return failure("receiving workspace session permission is denied")
     end
     local allowance = row(peer, workspace)
-    if not live(allowance) then return failure("peer has no live allowance on this bee") end
+    if allowance then
+        local updated, resolve_error = resolved(allowance)
+        if not updated then return failure(tostring(resolve_error)) end
+        allowance = updated
+    end
+    if not live(allowance) then
+        local request_error: string? = nil
+        if asked.inspection ~= true then _, request_error = ask(peer, workspace, allowance) end
+        return failure("peer has no live allowance on this bee" .. (request_error and (": " .. request_error) or "; Needs you holds the request"))
+    end
     if not permitted(tostring(allowance.scope), operation) then return failure("allowance does not include this operation") end
     return {ok = true, value = {subject = "bee.hive.member." .. peer, workspace_id = workspace,
         policies = {"bee.threads.sessions.security:peer_session_policy", "bee.security.hive:session_" .. id(peer, workspace):match(":(.+)$")}}}

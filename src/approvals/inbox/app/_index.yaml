@@ -28,10 +28,12 @@ entries:
     lease_form: bee.approvals.inbox.app:lease_form
     source_config: bee.approvals.inbox.app:source_config
     protocol: bee.hive:protocol
+    allowance_form: bee.threads.sessions.app:allowance_form
   meta:
     type: bee.app
     application:
-      menus: [bee.shell:apps_menu]
+      menus:
+      - bee.shell:apps_menu
       api_version: 1
       title: Needs you
       icon: '!'
@@ -50,6 +52,7 @@ entries:
     - bee.node.security:workspace_catalog_read_policy
     - bee.hive.security:caller
     - bee.hive.security:messaging
+    - bee.threads.sessions.security:person_allowance_policy
 - name: model
   kind: library.lua
   source: file://model.lua
@@ -122,6 +125,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.approvals.inbox.workspaces
-    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
+    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still
+      decides eligibility per request
   data:
     workspaces: []

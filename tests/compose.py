@@ -184,6 +184,7 @@ def host_environment():
     document = yaml.safe_load((TESTS / "fixtures/harness/host.yaml").read_text())
     environment = next(entry for entry in document["entries"] if entry["name"] == "environment")
     environment["data"]["values"]["claude"] = str(TESTS / "fixtures/harness/bin/claude")
+    environment["data"]["values"]["opencode"] = str(TESTS / "fixtures/harness/bin/opencode")
     target = TESTS / "lua/harness/host/_index.yaml"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(yaml.safe_dump(document, sort_keys=False))

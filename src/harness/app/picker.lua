@@ -17,6 +17,7 @@ local agents = require("agents")
 local view = require("view")
 local session_view = require("session_view")
 local directory_view = require("directory_view")
+local allowance_form = require("allowance_form")
 local sessions_protocol = require("sessions_protocol")
 local frame = require("frame")
 local forms = require("forms")
@@ -94,6 +95,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local preferences = launch.appearance
     local function no_agents(): agents.Listing return {items = {}, unavailable = 0, notes = {}} end
     local directory: {sessions_protocol.SessionSnapshot} = {}
+    local allowances: allowance_form.State? = nil
+    local allowance_frame: allowance_form.Frame = {rows = {}, hits = {}}
     local workspace_names: {[string]: agents.Workspace} = {}
     local query = ""
     local sort: "name" | "driver" = "name"
@@ -134,12 +137,32 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     -- directory_loaded reads the sessions and the workspaces they live in.
     local function directory_loaded(serial: integer, workspace_filter: string?, closed_requested: boolean): Loaded
         local rows, load_error = agents.directory(sessions.client(), workspace_filter, closed_requested)
+        local peer_raw, peer_error = funcs.call("bee.threads.sessions.binding:peers", {})
+        local peer_reply = bounds.object(peer_raw)
+        local peer_value = peer_reply and bounds.object(peer_reply.value)
+        local peers = peer_value and bounds.dense_list(peer_value.items, 16, "peer bees")
+        if peer_error then load_error = tostring(peer_error) end
+        rows = rows or {}
+        for _, raw in ipairs(peers or {}) do
+            local peer = bounds.object(raw)
+            local node, scope = peer and bounds.id(peer.node), peer and bounds.id(peer.scope)
+            if node and scope then
+                local remote, err = agents.directory(sessions.client({node = node}), nil, closed_requested)
+                if remote then
+                    for _, row in ipairs(remote) do row.node, row.peer_scope = node, scope; rows[#rows + 1] = row end
+                else load_error = err end
+            end
+        end
+        table.sort(rows, function(a: sessions_protocol.SessionSnapshot, b: sessions_protocol.SessionSnapshot): boolean
+            if a.node ~= b.node then return (a.node or "") < (b.node or "") end
+            return a.execution.evidence_at > b.execution.evidence_at
+        end)
         local names: {[string]: agents.Workspace} = {}
         local own = agents.workspace(launch.workspace_id, ask)
         if own then names[launch.workspace_id] = own end
         for _, row in ipairs(rows or {}) do
             local id = agents.home(row.session)
-            if id and not names[id] then names[id] = agents.workspace(id, ask) end
+            if id and not row.node and not names[id] then names[id] = agents.workspace(id, ask) end
         end
         return {serial = serial, directory = rows, workspaces = names, error = load_error}
     end
@@ -173,6 +196,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local function close_listed(index: integer)
         local entry = directory[index]
         if not entry or loading then return end
+        if entry.node and entry.peer_scope ~= "open" then status = "Session control is not allowed by this bee"; dirty = true; return end
         load_serial = load_serial + 1
         local serial = load_serial
         loading = true
@@ -181,7 +205,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         local workspace_filter = filtered and launch.workspace_id or nil
         local closed_requested = show_closed
         coroutine.spawn(function()
-            local _, fault = sessions.client():close({session = entry.session, operation_key = assert(uuid.v7())})
+            local _, fault = sessions.client({node = entry.node}):close({session = entry.session, operation_key = assert(uuid.v7())})
             local sent = directory_loaded(serial, workspace_filter, closed_requested)
             if fault then sent.error = fault.message end
             if running and serial == load_serial then send_loads(sent) end
@@ -257,7 +281,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         local serial = open_serial
         opening = true; status = "Opening session…"; dirty = true
         coroutine.spawn(function()
-            local conv, err = agents.resume(sessions.client(), entry.session)
+            local conv, err = agents.resume(sessions.client({node = entry.node}), entry.session, entry.node, entry.peer_scope)
             local saved = remembered[entry.session]
             if conv and saved then conv = agents.remember(conv, saved) end
             if running and serial == open_serial then
@@ -281,7 +305,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     while true do
         if dirty then
             local rows: {string}
-            if editing then
+            if allowances then
+                allowance_frame = allowance_form.draw(width, height, preferences, allowances)
+                frame.render(allowance_frame, menu, preferences)
+                rows = allowance_frame.rows
+            elseif editing then
                 edit_frame = profile_view.draw(width, height, preferences, editing)
                 frame.render(edit_frame, menu, preferences)
                 rows = edit_frame.rows
@@ -360,7 +388,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if result.serial == open_serial then
                 opening = false
                 if result.conversation then
-                    if result.conversation.session.snapshot.terminal == true then
+                    if result.conversation.session.snapshot.terminal == true and not result.conversation.node then
                         output:close()
                         client.title(launch, text.bound(result.conversation.title, 76))
                         local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes)
@@ -420,6 +448,20 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if data.type == "close" then return finish(nil, nil)
                 elseif data.type == "start" or data.type == "resize" then
                     width, height = assert(data.width), assert(data.height); dirty = true
+                elseif allowances then
+                    local opened_form = allowances
+                    local action = allowance_form.input(opened_form, data, allowance_frame)
+                    if action == "cancel" then allowances = nil; load()
+                    elseif action == "submit" then
+                        local intent, err = allowance_form.intent(opened_form)
+                        if intent then
+                            local raw, call_error = funcs.call(intent.target, intent.request)
+                            local reply = bounds.object(raw)
+                            if call_error or not reply or reply.ok ~= true then opened_form.status = tostring(call_error or (reply and reply.error) or "Allowance did not apply")
+                            else allowances = nil; load() end
+                        else opened_form.status = err or "Invalid allowance" end
+                    end
+                    dirty = true
                 elseif editing then
                     local action = profile_view.input(editing, data, edit_frame)
                     if action == "cancel" then editing = nil
@@ -467,7 +509,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "close_session" then confirming = "close"; status = "Close session? Enter confirms · Esc keeps it"; dirty = true
                         elseif kind == "stop_work" then confirming = "stop"; status = "Stop current work? Enter confirms · Esc keeps it"; dirty = true end
                     else
-                        local next_draft = session_view.edit(draft, data)
+                        local next_draft = not conversation.read_only and session_view.edit(draft, data) or draft
                         if next_draft ~= draft then draft = next_draft; dirty = true end
                     end
                 elseif not catalog_open then
@@ -484,6 +526,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif key == "p" then kind = "profiles"
                         elseif key == "x" then kind = "close_listed"
                         elseif key == "m" then kind = "mcp_clients"
+                        elseif key == "a" then kind = "allowances"
                         elseif key == "c" then kind = "closed"
                         elseif key == "w" then kind = "workspace"
                         elseif key == "r" then refresh = true
@@ -502,6 +545,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         confirming = "close_listed"
                         status = "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it"
                         dirty = true
+                    elseif kind == "allowances" then allowances = allowance_form.new(launch.workspace_id); dirty = true
                     elseif kind == "mcp_clients" then client.navigate(launch, "bee.gateway.app:app", {})
                     elseif kind == "closed" then show_closed = not show_closed; refresh = true
                     elseif kind == "workspace" then filtered = not filtered; refresh = true end

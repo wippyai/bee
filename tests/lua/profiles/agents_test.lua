@@ -145,6 +145,15 @@ local function define_tests()
             test.eq(listing.items[1].reason, "Permission answers: ask requires a host-accepted permission transport")
         end)
     end)
+    test.describe("Peer agents", function()
+        test.it("keeps a list-only conversation read-only", function()
+            local sent: {Object} = {}
+            local conv = must_open(fixtures.fixture_client({open = function() return session("idle", 0, sent, {}) end}), "d", nil, "k")
+            conv.node, conv.read_only = "bee-peer", true
+            test.is_false(agents.submit(conv, "hi", key_source()))
+            test.eq(#sent, 0)
+        end)
+    end)
     test.describe("Sessions directory and work control", function()
         test.it("pages every visible session, filters by its public workspace address and lists closed sessions on request", function()
             local asked: {Object} = {}

@@ -67,7 +67,8 @@ entries:
   meta:
     type: bee.app
     application:
-      menus: [bee.shell:apps_menu]
+      menus:
+      - bee.shell:apps_menu
       api_version: 1
       title: Agents
       icon: A
@@ -107,6 +108,7 @@ entries:
     - bee.placement.docker.security:image_client_policy
     - bee.node.security:workspace_catalog_read_policy
     - bee.placement.docker.security:environment_revoke_policy
+    - bee.threads.sessions.security:person_allowance_policy
 - name: agents
   kind: library.lua
   source: file://agents.lua
@@ -167,6 +169,7 @@ entries:
     forms: bee.harness.app:profile_form
     profile_view: bee.harness.app:profile_view
     terminal_view: bee.harness.app:terminal_view
+    allowance_form: bee.threads.sessions.app:allowance_form
 - name: profile_editor
   kind: library.lua
   source: file://profile_editor.lua

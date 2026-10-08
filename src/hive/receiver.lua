@@ -70,7 +70,7 @@ local function host_exposure(asked: Request, caller: string, node: string, inspe
     if not inspection and input_error then return true, nil, input_error end
     local peer = protocol.node_of(caller, node)
     local executor = funcs.new():with_context({["bee.hive.caller"] = {node = peer, pid = caller}})
-    local raw, err = executor:call(authorizer, {workspace_id = asked.workspace_id, operation = asked.operation, arguments = asked.arguments})
+    local raw, err = executor:call(authorizer, {workspace_id = asked.workspace_id, operation = asked.operation, arguments = asked.arguments, inspection = inspection == true})
     local reply = bounds.object(raw)
     local mapped = reply and reply.ok == true and bounds.object(reply.value) or nil
     if err or not mapped then return true, nil, reply and tostring(reply.error) or tostring(err) end

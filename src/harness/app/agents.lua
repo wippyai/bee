@@ -26,7 +26,7 @@ type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "starting" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
 type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, progress: string?, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
 type Unsent = {text: string, key: string}
-type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
+type Conversation = {node: string?, read_only: boolean?, peer_scope: string?, session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
     activity_evidence: sessions_protocol.ActivityEvidence?, turns: {Turn}, details: boolean?, unsent: Unsent?, notice: string, thread_cursor: integer?}
 
 local function describe(fault: Fault?): string
@@ -125,6 +125,7 @@ end
 -- Sends text as one unit of work. A failed send keeps its key, so submitting
 -- the same text again resolves the earlier attempt instead of duplicating it.
 function M.submit(conv: Conversation, text: string, new_key: () -> string): boolean
+    if conv.read_only then conv.notice = "Read-only · messaging is not allowed by this bee"; return false end
     local unsent = conv.unsent
     if not unsent or unsent.text ~= text then unsent = {text = text, key = new_key()} end
     conv.unsent = unsent
@@ -142,6 +143,7 @@ end
 -- Seals intake and lets accepted work finish. The key makes a retry resolve
 -- the same close.
 function M.close(conv: Conversation, key: string): boolean
+    if conv.node and conv.peer_scope ~= "open" then conv.notice = "Session control is not allowed by this bee"; return false end
     local operation, fault = conv.session:close({operation_key = key})
     if not operation then
         conv.notice = describe(fault)
@@ -205,6 +207,7 @@ function M.preparation_progress(raw: unknown): ({state: "starting", detail: stri
     return {state = "starting", detail = detail}, nil
 end
 local function observe_thread(conv: Conversation)
+    if conv.node then return end
     local thread = conv.session.snapshot.thread_ref
     if not thread then return end
     local reply = caller.new(funcs.call):invoke("bee.threads.binding:read_after", {thread_id = thread,
@@ -289,7 +292,13 @@ function M.refresh(conv: Conversation): boolean
     conv.notice = ""
     for _, turn in ipairs(conv.turns) do
         if turn.state == "queued" or turn.state == "starting" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then
-            local observed, await_fault = turn.work:await({timeout_ms = 0})
+            local observed: sessions_protocol.WorkAwait? = nil
+            local await_fault: sessions.Fault? = nil
+            if conv.read_only then
+                local state, fault = turn.work:state()
+                await_fault = fault
+                if state and state.phase == "settled" then observed = {tag = "ready", subject_kind = "work", subject = turn.work:ref(), cursor = tostring(state.revision), result = state.result} end
+            else observed, await_fault = turn.work:await({timeout_ms = 0}) end
             if not observed then
                 conv.notice = describe(await_fault)
             elseif observed.tag == "pending" then
@@ -307,13 +316,14 @@ end
 function M.remember(current: Conversation, saved: Conversation): Conversation
     return {session = current.session, title = current.title, lifecycle = current.lifecycle, activity = current.activity,
         queued = current.queued, activity_evidence = current.activity_evidence, turns = saved.turns,
-        unsent = saved.unsent, notice = current.notice, thread_cursor = saved.thread_cursor}
+        unsent = saved.unsent, notice = current.notice, thread_cursor = saved.thread_cursor, node = current.node, read_only = current.read_only, peer_scope = current.peer_scope}
 end
 
-function M.resume(client: sessions.Client, ref: string): (Conversation?, string?)
+function M.resume(client: sessions.Client, ref: string, node: string?, scope: string?): (Conversation?, string?)
     local session, fault = client:get(ref)
     if not session then return nil, describe(fault) end
     local conv = conversation(session)
+    conv.node, conv.read_only, conv.peer_scope = node, node ~= nil and scope == "list", scope
     local turns = conv.turns
     local cursor: integer? = nil
     for _ = 1, M.MAX_PAGES do
@@ -373,6 +383,7 @@ function M.directory(client: sessions.Client, workspace: string?, include_closed
 end
 
 function M.stop(conv: Conversation, new_key: () -> string): boolean
+    if conv.node and conv.peer_scope ~= "open" then conv.notice = "Session control is not allowed by this bee"; return false end
     local chosen: Turn? = nil
     for _, turn in ipairs(conv.turns) do
         if turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then chosen = turn; break end

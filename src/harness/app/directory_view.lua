@@ -11,7 +11,7 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capa
 -- them all.
 local HINTS = frame.hints({{key = "Esc", verb = "back"}})
 local MORE = frame.hints({{key = "Enter", verb = "open"}, {key = "N", verb = "new"}, {key = "X", verb = "close"}, {key = "↑↓", verb = "select"},
-    {key = "W", verb = "this workspace or all"}, {key = "C", verb = "closed sessions"}, {key = "R", verb = "refresh"}})
+    {key = "W", verb = "this workspace or all"}, {key = "C", verb = "closed sessions"}, {key = "R", verb = "refresh"}, {key = "A", verb = "agent allowances"}})
 
 -- state names what the session is doing in a word a person reads at a glance.
 local function state(item: protocol.SessionSnapshot): string
@@ -32,19 +32,27 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local scope = filtered and "this workspace" or nil
     frame.header(painter, "SESSIONS", tostring(#rows) .. (#rows == 1 and " session" or " sessions") .. (scope and (" · " .. scope) or ""))
     local names: {[string]: agents.Workspace} = workspaces or {}
-    local capacity = math.floor(math.max(0, (layout.work.height - 1) / 2))
+    local capacity = math.floor(math.max(0, (layout.work.height - 1) / 3))
     local window = frame.window(#rows, capacity, selected, 0)
+    local y = layout.work.y
+    local previous_bee: string? = nil
     for slot = 1, window.capacity do
         local index = window.offset + slot
         local item = rows[index]
         if not item then break end
-        local y = layout.work.y + (slot - 1) * 2
+        local bee = item.node or "This bee"
+        if bee ~= previous_bee then
+            frame.line(painter, y, "Bee · " .. bee, painter.theme.muted)
+            y = y + 1
+            previous_bee = bee
+        end
         frame.row(painter, y, frame.tagged(width, text.bound(item.title, 512), state(item)), index == selected, "session", index, "", nil, true, 2)
         local last = item.last_result
         local home = agents.home(item.session)
         local workspace = home and names[home]
         local detail = last and last.summary or (workspace and workspace.label or "No reply yet")
         frame.line(painter, y + 1, text.bound(detail, 512), painter.theme.muted)
+        y = y + 2
     end
     if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N Start agent · P Profiles") end
     if height >= 6 and status ~= "" then frame.line(painter, height - 2, text.bound(status, 512), painter.theme.text) end
@@ -53,8 +61,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local buttons: {frame.Button} = {}
         if #rows > 0 then buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = chosen ~= nil, primary = true} end
         buttons[#buttons + 1] = {kind = "new_session", key = "N", label = "Start agent", enabled = true, primary = #rows == 0}
-        if #rows > 0 then buttons[#buttons + 1] = {kind = "close_listed", key = "X", label = "Close", enabled = chosen ~= nil and chosen.lifecycle ~= "closed" and chosen.lifecycle ~= "closing"} end
+        if #rows > 0 then buttons[#buttons + 1] = {kind = "close_listed", key = "X", label = "Close", enabled = chosen ~= nil and (not chosen.node or chosen.peer_scope == "open") and chosen.lifecycle ~= "closed" and chosen.lifecycle ~= "closing"} end
         buttons[#buttons + 1] = {kind = "profiles", key = "P", label = "Profiles", enabled = true}
+        buttons[#buttons + 1] = {kind = "allowances", key = "A", label = "Allowances", enabled = true}
         buttons[#buttons + 1] = {kind = "mcp_clients", key = "M", label = "MCP clients", enabled = true}
         footer_buttons = buttons
     end

@@ -135,7 +135,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
-    frame.header(painter, "SESSION", text.bound(conv.title, 128))
+    frame.header(painter, "SESSION", (conv.node and ("Bee " .. conv.node .. " · ") or "") .. text.bound(conv.title, 128))
     local badge = conv.activity .. (conv.queued > 0 and (" · " .. tostring(conv.queued) .. " queued") or "")
     if height >= 3 then
         frame.badge(painter, 2, 2, badge, ACTIVITY_ROLE[conv.activity])
@@ -162,13 +162,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.log(painter, 4, last - 1, {lines = lines, selected = 0, offset = math.floor(math.max(0, #lines - (last - 4))), focused = false})
     end
     if height >= 5 then
-        frame.line(painter, input_row, conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. text.bound(draft, 512) .. "▏", theme.text)
+        frame.line(painter, input_row, conv.read_only and "Read-only · messaging is not allowed by this bee" or conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. text.bound(draft, 512) .. "▏", theme.text)
         footer_buttons = {
-            {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start new session from this" or "Send", enabled = conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active", primary = true},
+            {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start new session from this" or "Send", enabled = not conv.read_only and (conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active"), primary = true},
             {kind = "back", key = "Esc", label = "Sessions", enabled = true},
             {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true, more = true},
-            {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = agents.pending(conv)},
-            {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = conv.lifecycle == "active"},
+            {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = (not conv.node or conv.peer_scope == "open") and agents.pending(conv)},
+            {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = (not conv.node or conv.peer_scope == "open") and conv.lifecycle == "active"},
         }
     end
     local message = status ~= "" and status or conv.notice

@@ -19,6 +19,16 @@ local function conversation(activity: string, turns: {agents.Turn}, ref: string?
         activity = activity, queued = 1, activity_evidence = evidence, turns = turns, notice = ""}
 end
 local function define_tests()
+    test.describe("Peer session screen", function()
+        test.it("shows its bee and disables messaging for list-only access", function()
+            local conv = conversation("idle", {})
+            conv.node, conv.read_only = "bee-peer", true
+            local drawn = session_view.draw(100, 25, appearance.defaults(), conv, "hello", "")
+            test.contains(screen(drawn.rows), "bee-peer")
+            test.contains(screen(drawn.rows), "Read-only")
+            for _, hit in ipairs(drawn.hits) do test.is_true(hit.kind ~= "send") end
+        end)
+    end)
     test.describe("Agent picker screen", function()
         local listing: agents.Listing = {items = {
             {ref = "a:claude", kind = "definition", title = "Claude", status = "ready", ready = true, reason = ""},

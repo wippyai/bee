@@ -65,6 +65,27 @@ function M.discover(raw: unknown, caller: string, node: string): protocol.Reply
             end
         end
     end
+    for _, entry in ipairs(application.host_entries("bee.hive.host_exposure")) do
+        local data = bounds.object(entry.data)
+        local app = data and bounds.id(data.application_ref)
+        local refs = data and bounds.ids(data.operations, true)
+        for _, ref in ipairs(refs or {}) do
+            local raw_entry = registry.get(ref)
+            local meta = raw_entry and bounds.object(raw_entry.meta)
+            local alias = meta and bounds.line(meta.hive_alias, 64)
+            local op = operations.decode(raw_entry, true)
+            if app and op and alias then
+                local invocation = receiver.authorize({application = app, service = op.service, operation = op.name, arguments = {}}, caller, node, true)
+                if invocation then
+                    if seen[alias] then collisions[alias] = true end
+                    seen[alias] = true
+                    tools[#tools + 1] = {alias = alias, ref = ref, definition_id = app, description = "Destination-approved " .. op.service .. "." .. op.name,
+                        input_schema = op.input, output_schema = op.output, annotations = {readOnlyHint = op.effect == "read"},
+                        workspace_id = invocation.request.workspace_id, service = op.service, operation = op.name, revision = op.revision, effect = op.effect}
+                end
+            end
+        end
+    end
     local kept: {Object} = {}
     for _, tool in ipairs(tools) do if not collisions[tostring(tool.alias)] then kept[#kept + 1] = tool end end
     table.sort(kept, function(a: Object, b: Object): boolean return tostring(a.alias) < tostring(b.alias) end)

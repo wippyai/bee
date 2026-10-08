@@ -77,7 +77,7 @@ type LastResult = {work: string, outcome: LastOutcome, summary: string, at: stri
 type HistoryItem = {work: string, sequence: integer, input: unknown, created_at: string}
 type HistoryPage = {items: {HistoryItem}, next: integer?}
 type ProfileRef = {id: string, revision: integer}
-type SessionSnapshot = {saved_profile: ProfileRef?, effective_profile: profile_values.Profile?, profile_digest: string?,
+type SessionSnapshot = {node: string?, peer_scope: string?, saved_profile: ProfileRef?, effective_profile: profile_values.Profile?, profile_digest: string?,
     budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, terminal: boolean?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, activity_evidence: ActivityEvidence?, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}

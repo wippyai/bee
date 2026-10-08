@@ -310,6 +310,9 @@ entries:
   - events
   - logger
   imports:
+    follow_store: bee.gov.persist:follow_store
+    follow_source: bee.gov.binding:follow_source
+    follow_wake: bee.gov.service:follow_wake
     driver_admission: bee.gov.types:driver_admission
     artifact: bee.gov.types:artifact
     bounds: bee.values:bounds
@@ -657,3 +660,17 @@ entries:
     artifact_source: bee.hub.binding:artifact_source
     artifact: bee.gov.types:artifact
     canonical: bee.values:canonical
+
+- name: follow_source
+  kind: library.lua
+  source: file://follow_source.lua
+  imports:
+    bounds: bee.values:bounds
+    follow_store: bee.gov.persist:follow_store
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    activation_owner: bee.gov.binding:activation_owner
+    destination: bee.gov.binding:destination
+    delivery: bee.gov.types:delivery
+    preflight: bee.gov.binding:preflight
+    transaction: bee.persist:transaction

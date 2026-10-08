@@ -4,6 +4,8 @@
 local logger = require("logger")
 local worker = require("worker")
 local pass = require("pass")
+local service = require("service")
+local bounds = require("bounds")
 local approval_service = require("approval_service")
 
 -- drain runs one pass and reports each activation; false means a queue could
@@ -23,7 +25,13 @@ local function drain(): boolean
                 {approval_id = item.approval_id, code = item.code, reason = item.message})
         end
     end
-    return true
+    local followed = service.follow_all()
+    if not followed.ok then
+        logger:error("Source following ledger is unreadable", {cause = followed.message})
+        return false
+    end
+    local value = bounds.object(followed.value)
+    return value ~= nil and value.retry ~= true
 end
 
 local function main()

@@ -38,6 +38,10 @@ local capability_model = require("capability_model")
 local capability_files = require("capability_files")
 local workspace_applications = require("workspace_applications")
 
+local follows = require("follow_store")
+local follower = require("follow_source")
+local follow_wake = require("follow_wake")
+
 local M = {}
 M.BACKEND = "bee.gov.binding:destination_backend_call"
 M.EXECUTE = "bee.gov.delivery.execute"
@@ -765,7 +769,7 @@ end
 
 local OPERATIONS: Set = {available = true, stage = true, stage_hub = true, list = true, activations = true, get = true, changes = true, revert = true, uninstall = true,
     review = true, select = true, prepare = true, step = true, status = true, recover = true,
-    lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
+    follow = true, lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
 local READS: Set = {available = true, list = true, activations = true, get = true, changes = true, status = true}
 local MANAGES: Set = {stage = true, stage_hub = true, review = true, select = true}
 local LEASES: Set = {lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
@@ -775,6 +779,7 @@ local LEASES: Set = {lease_propose = true, lease_grant = true, lease_list = true
 function M.required_action(raw: unknown): string?
     local operation = bounds.id(raw)
     if not operation or not OPERATIONS[operation] then return nil end
+    if operation == "follow" then return "bee.gov.delivery.follow" end
     if LEASES[operation] then return "bee.gov.delivery.lease" end
     if READS[operation] then return "bee.gov.delivery.read" end
     if MANAGES[operation] then return "bee.gov.delivery.manage" end
@@ -810,12 +815,23 @@ local function annotate(store: activations.Store, listing: Result): Result
     local value = listing.ok and bounds.object(listing.value) or nil
     local rows = value and value.activations
     if type(rows) ~= "table" then return listing end
+    local config = load()
     for _, raw in ipairs(rows) do
         local row = bounds.object(raw)
         if row and row.intent_id ~= nil and row.intent_id == row.observed_intent_id then
             local read = activations.get(store, row.intent_id)
             local intent = read.ok and bounds.object(read.value) or nil
             if intent then row.application, row.title = M.application_of(intent.artifact_bytes, intent.artifact_digest) end
+        end
+        local source_node = row and bounds.id(row.source_node) or nil
+        local source_workspace = row and bounds.id(row.source_workspace) or nil
+        local chosen = config and source_node and source_workspace and selected(config, store.workspace, source_node, source_workspace, store) or nil
+        if row and chosen and source_node and source_workspace then
+            row.component = chosen.component
+            local following = follows.get(store, {source_node = source_node, source_workspace = source_workspace, component = chosen.component})
+            if not following.ok then return following end
+            local state = bounds.object(following.value)
+            if state then row.follow_state, row.follow_outcome, row.follow_message = state.mode, state.last_outcome, state.last_message end
         end
     end
     return listing
@@ -845,6 +861,8 @@ local function uninstall_application(request: Object, workspace_id: string, acto
     local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
     local overlay_owner = source_workspace and application_owner(activation_store, workspace_id, source_workspace) or nil
     if not source_workspace or not key or not overlay_owner then return failure("INVALID", "uninstall names no application") end
+    local paused = follows.disable(activation_store, source_workspace, "off")
+    if not paused.ok then return paused end
     return uninstall.uninstall({activations = activation_store, overlay_owner = overlay_owner, actor_id = actor_id,
         clear = function(): ({[string]: unknown}?, string?) return materializer.retain_data(overlay_owner) end,
         cleared = function(): (boolean?, string?) return materializer.retains_data(overlay_owner) end}, key)
@@ -881,6 +899,8 @@ local function revert_application(request: Object, workspace_id: string, actor_i
     local current_source = bounds.id(current.source_node)
     local chosen = current_source and selected(config, workspace_id, current_source, source_workspace, activation_store) or nil
     if not chosen then return failure("BLOCKED", "activation profile is unavailable") end
+    local pinned = follows.disable(activation_store, source_workspace, "pinned")
+    if not pinned.ok then return pinned end
     current.component, baseline.component = chosen.component, chosen.component
     local adapter: RevertMethods = {
         applied = function(store: activations.Store, component: string): Result return activations.applied(store, component) end,
@@ -954,6 +974,30 @@ local function lease_request(operation: string, request: Object, node_id: string
         return lease_grants.propose(executor, vocabulary, installed, chosen, workspace_id, request, key)
     end
     return lease_grants.grant(executor, lease_handle, vocabulary, chosen, workspace_id, actor_id, request, key)
+end
+
+local function follow_consent(request: Object, config: Configuration, workspace_id: string,
+    activation_store: activations.Store, intent: Object?): Result
+    local source_node = intent and bounds.id(intent.source_node) or bounds.id(request.source_node)
+    local source_workspace = intent and bounds.id(intent.source_workspace) or bounds.id(request.source_workspace)
+    local requested_mode = request.mode or (request.follow_source == true and "following" or "off")
+    if not source_node or not source_workspace or source_node == config.node_id then return failure("INVALID", "Choose an application received from another hive bee") end
+    local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
+    if not chosen or (request.component ~= nil and request.component ~= chosen.component) then
+        return failure("BLOCKED", profile_error or "Source application is not admitted")
+    end
+    if not intent then
+        local desired = activations.desired(activation_store, chosen.overlay_owner)
+        if not desired.ok then return desired end
+        intent = bounds.object(desired.value)
+        if not intent or intent.source_node ~= source_node or intent.source_workspace ~= source_workspace then return failure("CONFLICT", "Installed source identity changed") end
+    end
+    local version, artifact_digest = bounds.id(intent.version), bounds.text(intent.artifact_digest, 64)
+    if not version or not artifact_digest then return failure("INTERNAL", "Installed application identity is missing") end
+    local result = follows.consent(activation_store, {source_node = source_node, source_workspace = source_workspace,
+        component = chosen.component}, requested_mode, version, artifact_digest)
+    if result.ok then follow_wake.signal() end
+    return result
 end
 
 function M.call(raw: unknown): Result
@@ -1112,6 +1156,11 @@ function M.call(raw: unknown): Result
     elseif operation == "activations" then
         if exact(request, {}) then result = failure("INVALID", "activations has unknown fields")
         else result = annotate(activation_store, activations.listing(activation_store)) end
+    elseif operation == "follow" then
+        local config, config_error = load()
+        if exact(request, {"source_node", "source_workspace", "component", "mode"}) then result = failure("INVALID", "Following request is invalid")
+        elseif not config then result = failure("UNAVAILABLE", config_error or "Following configuration is unavailable")
+        else result = follow_consent(request, config, workspace_id, activation_store, nil) end
     elseif operation == "uninstall" then
         result = uninstall_application(request, workspace_id, actor_id, activation_store)
     elseif operation == "revert" then
@@ -1165,7 +1214,7 @@ function M.call(raw: unknown): Result
         else result = activations.get(activation_store, request.intent_id) end
     else
         local operation_fields: {[string]: {string}} = {
-            prepare = {"source_node", "source_workspace", "version", "intent_id", "receipt_key"},
+            prepare = {"source_node", "source_workspace", "version", "intent_id", "receipt_key", "follow_source"},
             step = {"intent_id", "receipt_key"},
             recover = {"source_node", "source_workspace", "receipt_key"}}
         if exact(request, operation_fields[operation]) then
@@ -1197,9 +1246,19 @@ function M.call(raw: unknown): Result
             if not config or not chosen or not composed then
                 result = failure("BLOCKED", config_error or profile_error or compose_error or "activation configuration is unavailable")
             elseif operation == "prepare" then
+                if request.follow_source ~= nil and type(request.follow_source) ~= "boolean" then
+                    close(plan_store, activation_store, lease_handle); return failure("INVALID", "follow_source is a destination-local consent flag")
+                end
+                if request.follow_source == true and source_node == node_id then
+                    close(plan_store, activation_store, lease_handle); return failure("INVALID", "Following requires another hive bee")
+                end
                 result = owner.prepare(composed, {source_node = request.source_node,
                     source_workspace = request.source_workspace, version = request.version,
                     intent_id = request.intent_id, receipt_key = request.receipt_key})
+                if result.ok and request.follow_source ~= nil then
+                    local consent = follow_consent(request, config, workspace_id, activation_store, bounds.object(result.value))
+                    if not consent.ok then result = consent end
+                end
             elseif operation == "step" then
                 result = owner.step(composed, request.intent_id, request.receipt_key)
             elseif operation == "recover" then
@@ -1311,6 +1370,12 @@ function M.apply_approved(raw: unknown): Result
             local configured = owner_config(config, chosen, plan_store, activation_store, lease_handle)
             if not configured.ok then result = failure("BLOCKED", configured.error or "activation configuration is unavailable")
             else
+                local following = follows.get(activation_store, {source_node = source_node, source_workspace = source_workspace, component = chosen.component})
+                local state = following.ok and bounds.object(following.value) or nil
+                if not following.ok then close(plan_store, activation_store, lease_handle); return following end
+                if state and state.pending ~= nil and state.intent_id == intent_id and state.mode ~= "following" then
+                    close(plan_store, activation_store, lease_handle); return failure("PAUSED", "Following is paused or pinned")
+                end
                 result = owner.advance(configured.config, intent_id, "approved-" .. approval_id)
                 local settled = result.ok and bounds.object(result.value) or nil
                 if settled and settled.outcome == "applied" then
@@ -1428,6 +1493,91 @@ function M.recover_all(): (boolean, string?, {string}?)
         close(plan_store, activation_store, lease_handle)
     end
     return true, nil, refused
+end
+
+function M.follow_all(): Result
+    local config, config_error = load()
+    local resource, resource_error = resources.database()
+    if not config or not resource then return failure("UNAVAILABLE", config_error or resource_error or "Following configuration is unavailable") end
+    local listing = follows.list(resource, config.node_id)
+    if not listing.ok then return listing end
+    local listed = bounds.object(listing.value)
+    local items = listed and bounds.array(listed.items, 1024) or nil
+    if not items then return failure("INTERNAL", "Following ledger is malformed") end
+    local replica_store, open_error = replicas.open()
+    if not replica_store then return failure("UNAVAILABLE", open_error or "Open source replicas") end
+    local outcomes: {Object} = {}
+    local retry = false
+    for _, raw in ipairs(items) do
+        local item = bounds.object(raw)
+        local state = item and bounds.object(item.state) or nil
+        local workspace_id = item and bounds.id(item.workspace_id) or nil
+        local source_node = state and bounds.id(state.source_node) or nil
+        local source_workspace = state and bounds.id(state.source_workspace) or nil
+        local component = state and bounds.id(state.component) or nil
+        local cursor = state and bounds.count(state.cursor) or nil
+        if state and workspace_id and source_node and source_workspace and component and cursor and state.mode == "following" then
+            local plan_store, activation_store, lease_handle, store_error = stores(config.node_id, workspace_id)
+            if not plan_store or not activation_store or not lease_handle then replicas.close(replica_store); return failure("UNAVAILABLE", store_error or "Open following stores") end
+            local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
+            local configured = chosen and owner_config(config, chosen, plan_store, activation_store, lease_handle) or nil
+            if not chosen or chosen.component ~= component or not configured or not configured.ok then
+                outcomes[#outcomes + 1] = {workspace_id = workspace_id, source_node = source_node, component = component,
+                    ok = false, message = profile_error or "Source application is no longer admitted"}
+            else
+                local publications: {Object} = {}
+                local desired = owner.desired(configured.config)
+                local working = desired.ok and bounds.object(desired.value) or nil
+                local installed = working and working.observed_outcome == "applied"
+                local available_slot = state.pending ~= nil or (working and working.phase == "settled" and working.outcome == "applied")
+                local pending = bounds.object(state.pending)
+                if pending then publications[1] = {descriptor = pending, cursor = cursor}
+                elseif installed and available_slot then
+                    local available = replicas.publications(replica_store, source_node, delivery.FEED, cursor, component, source_workspace)
+                    local value = available.ok and bounds.object(available.value) or nil
+                    local rows = value and bounds.array(value.items, 128) or nil
+                    if not rows then close(plan_store, activation_store, lease_handle); replicas.close(replica_store); return available.ok and failure("INTERNAL", "Source publications are malformed") or available end
+                    if #rows == 128 then follow_wake.signal() end
+                    for _, raw_publication in ipairs(rows) do
+                        local publication = bounds.object(raw_publication)
+                        local descriptor = publication and bounds.object(publication.descriptor) or nil
+                        local manifest = descriptor and bounds.object(descriptor.manifest) or nil
+                        if publication and descriptor and manifest and descriptor.object_id == component and manifest.source_workspace == source_workspace then
+                            publications[#publications + 1] = publication
+                        end
+                    end
+                end
+                local composed = configured.config
+                for _, publication in ipairs(publications) do
+                    local descriptor = bounds.object(publication.descriptor)
+                    local key = descriptor and bounds.id(descriptor.key) or nil
+                    local measured = descriptor and bounds.text(descriptor.digest, 64) or nil
+                    local sequence = bounds.count(publication.cursor)
+                    if not descriptor or not key or not measured or not sequence then break end
+                    local replicated = replicas.read(replica_store, {source_owner = source_node, feed = delivery.FEED,
+                        version_key = key, descriptor_digest = measured})
+                    local value = replicated.ok and bounds.object(replicated.value) or nil
+                    local content = value and value.content
+                    local result: Result
+                    if type(content) ~= "string" then result = replicated.ok and failure("INTERNAL", "Source bytes are missing") or replicated
+                    else
+                        result = follower.reconcile(composed, {source_node = source_node, source_workspace = source_workspace,
+                            component = component}, descriptor, content, sequence)
+                    end
+                    if not result.ok and (result.code == "BUSY" or result.code == "UNAVAILABLE" or result.code == "UNCERTAIN" or result.code == "APPROVAL") then retry = true end
+                    local intent = result.ok and bounds.object(result.value) or nil
+                    outcomes[#outcomes + 1] = {workspace_id = workspace_id, source_node = source_node, component = component,
+                        ok = result.ok, code = result.code, message = result.message, phase = intent and intent.phase, outcome = intent and intent.outcome}
+                    if (not result.ok and (result.code == "BUSY" or result.code == "UNAVAILABLE" or result.code == "UNCERTAIN"
+                        or result.code == "APPROVAL" or result.code == "PAUSED"))
+                        or (intent and intent.phase ~= nil and intent.phase ~= "settled") then break end
+                end
+            end
+            close(plan_store, activation_store, lease_handle)
+        end
+    end
+    replicas.close(replica_store)
+    return transaction.success({outcomes = outcomes, retry = retry}, false)
 end
 
 return M

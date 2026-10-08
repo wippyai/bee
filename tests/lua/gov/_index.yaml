@@ -353,6 +353,9 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
     migration_work: bee.gov.types:migration_work
+    follow_source: bee.gov.binding:follow_source
+    follow_store: bee.gov.persist:follow_store
+    delivery: bee.gov.types:delivery
 - name: activation_owner_admission_test
   kind: function.lua
   source: file://activation_owner_test.lua
@@ -380,6 +383,9 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
     migration_work: bee.gov.types:migration_work
+    follow_source: bee.gov.binding:follow_source
+    follow_store: bee.gov.persist:follow_store
+    delivery: bee.gov.types:delivery
 - name: activation_owner_recovery_test
   kind: function.lua
   source: file://activation_owner_test.lua
@@ -407,6 +413,9 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
     migration_work: bee.gov.types:migration_work
+    follow_source: bee.gov.binding:follow_source
+    follow_store: bee.gov.persist:follow_store
+    delivery: bee.gov.types:delivery
 - name: activation_owner_migration_test
   kind: function.lua
   source: file://activation_owner_test.lua
@@ -434,6 +443,9 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
     migration_work: bee.gov.types:migration_work
+    follow_source: bee.gov.binding:follow_source
+    follow_store: bee.gov.persist:follow_store
+    delivery: bee.gov.types:delivery
 - name: artifact_test
   kind: function.lua
   source: file://artifact_test.lua
@@ -1262,3 +1274,34 @@ entries:
     follow_store: bee.gov.persist:follow_store
     delivery: bee.gov.types:delivery
     artifact: bee.gov.types:artifact
+
+- name: follow_source_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: follow
+  modules:
+  - hash
+  meta:
+    type: test
+    suite: bee
+  security:
+    policies:
+    - bee.tests.gov:plan_test_policy
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
+    follow_source: bee.gov.binding:follow_source
+    follow_store: bee.gov.persist:follow_store
+    delivery: bee.gov.types:delivery

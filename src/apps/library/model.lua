@@ -26,11 +26,13 @@ type RowKind = "app" | "driver" | "package" | "platform" | "section"
 type Row = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, update: string?,
     replaced_by: string?,
     source: string, note: string, component: string?, available_key: string?, intent_id: string?,
-    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean, made_here: boolean?}
+    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean, made_here: boolean?, source_node: string?,
+    follow_state: string?, follow_outcome: string?, follow_message: string?}
 -- What a row needs to say; the rest is empty.
 type Spec = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, source: string,
     update: string?, replaced_by: string?, note: string?, component: string?, available_key: string?, intent_id: string?,
-    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean?, made_here: boolean?}
+    operation: string?, app: string?, application: string?, baseline: string?, removable: boolean?, made_here: boolean?, source_node: string?,
+    follow_state: string?, follow_outcome: string?, follow_message: string?}
 type Selection = {installed: string?, shared: string?, history: string?, platform: string?}
 type Screen = "list" | "version" | "platform"
 -- A removal waits for the person's confirmation. Remove takes the application
@@ -178,7 +180,8 @@ local function make(spec: Spec): Row
         status = spec.status, update = spec.update, replaced_by = spec.replaced_by, source = spec.source, note = spec.note or "",
         component = spec.component, available_key = spec.available_key, intent_id = spec.intent_id,
         operation = spec.operation, app = spec.app, application = spec.application, baseline = spec.baseline,
-        removable = spec.removable == true, made_here = spec.made_here}
+        removable = spec.removable == true, made_here = spec.made_here, source_node = spec.source_node,
+        follow_state = spec.follow_state, follow_outcome = spec.follow_outcome, follow_message = spec.follow_message}
 end
 
 -- Whether a Bee application is a driver, by the overlay that owns it.
@@ -245,7 +248,10 @@ local function installed_rows(state: State): {Row}
                 version = shown.version, status = M.STATUS_INSTALLED,
                 source = M.source(state, origin_node, M.author(state, origin_node, app.name, (current or shown).version), app.name),
                 intent_id = shown.intent_id, app = app.name, application = current and current.application or nil,
-                made_here = origin_node == state.governed.owner_node and app.name:sub(1, 4) ~= "hub:"})
+                made_here = origin_node == state.governed.owner_node and app.name:sub(1, 4) ~= "hub:",
+                source_node = origin_node, component = (current or shown).component,
+                follow_state = (current or shown).follow_state or "off", follow_outcome = (current or shown).follow_outcome,
+                follow_message = (current or shown).follow_message})
             if current and current.baseline_intent_id then
                 for _, earlier in ipairs(state.governed.activations) do
                     if earlier.intent_id == current.baseline_intent_id then row.baseline = earlier.version end
@@ -330,7 +336,8 @@ local function shared_rows(state: State): {Row}
         local spec: Spec = {key = "g:ver:" .. governed.available_key(item), origin = "governed", kind = "app",
             name = M.title(item.source_workspace), version = item.version, status = M.STATUS_SHARED,
             source = M.source(state, item.owner_id, item.author, item.source_workspace), available_key = governed.available_key(item),
-            app = item.source_workspace,
+            app = item.source_workspace, source_node = item.owner_id, component = item.component,
+            follow_state = "off", made_here = item.owner_id == state.governed.owner_node,
             note = attempt and attempt.phase == "settled" and attempt.outcome ~= "applied" and ended_note(attempt) or nil}
         rows[#rows + 1] = make(spec)
     end
@@ -497,6 +504,11 @@ end
 
 -- Whether an installed application made on this bee can be shared with the
 -- hive: the installed version is the one shared.
+function M.can_follow(row: Row?): boolean
+    return row ~= nil and row.origin == "governed" and row.made_here == false and row.source_node ~= nil
+        and row.app ~= nil and row.component ~= nil
+end
+
 function M.can_share(row: Row?): boolean
     return M.can_remove(row) and row ~= nil and row.made_here == true
 end
@@ -546,6 +558,11 @@ type Line = {label: string, value: string}
 -- from and how far its install has come. Technical words stay in details.
 function M.version_lines(state: State, row: Row): {Line}
     local lines: {Line} = {{label = "Status", value = M.status_glyph(row.status) .. " " .. row.status}, {label = "Source", value = row.source}}
+    if row.origin == "governed" and row.made_here == false then
+        local labels: {[string]: string} = {off = "Off", following = "Following source", paused = "Paused", pinned = "Pinned to this version"}
+        lines[#lines + 1] = {label = "Updates", value = labels[row.follow_state or "off"] or "Off"}
+        if row.follow_message then lines[#lines + 1] = {label = "Last update", value = row.follow_message} end
+    end
     if row.update then lines[#lines + 1] = {label = "Newer", value = row.update .. " is shared with this bee"} end
     for _, item in ipairs(state.governed.available) do
         if governed.available_key(item) == row.available_key and item.author and not row.source:find("made by", 1, true) then

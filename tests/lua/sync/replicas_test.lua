@@ -66,6 +66,30 @@ local function execute(store: replicas.Store, statement: string, parameters: {un
 end
 local function define_tests()
     test.describe("Source-qualified version replicas", function()
+        test.it("pages publications in source order within an exact application identity", function()
+            local handle = opened()
+            local source = "source-publications-" .. required_uuid()
+            for _, item in ipairs({{cursor = 3, component = "shared/app", workspace = "app-a"},
+                {cursor = 1, component = "shared/app", workspace = "app-a"},
+                {cursor = 2, component = "shared/app", workspace = "app-b"},
+                {cursor = 4, component = "other/app", workspace = "app-a"}}) do
+                local content = "publication-" .. tostring(item.cursor)
+                local descriptor = assert(version.create(source, "apps", required_uuid(), item.component, "1.0.0",
+                    required_digest(content), "application", #content, {source_workspace = item.workspace}))
+                test.is_true(transfer(handle, descriptor, content, item.cursor).ok)
+            end
+            local first = replicas.publications(handle, source, "apps", 0, "shared/app", "app-a")
+            test.is_true(first.ok)
+            local items = (assert(bounds.object(first.value))).items
+            assert(type(items) == "table")
+            test.eq(#items, 2); test.eq(items[1].cursor, 1); test.eq(items[2].cursor, 3)
+            local second = replicas.publications(handle, source, "apps", 1, "shared/app", "app-a")
+            test.is_true(second.ok)
+            items = (assert(bounds.object(second.value))).items
+            assert(type(items) == "table")
+            test.eq(#items, 1); test.eq(items[1].cursor, 3)
+            test.is_true(replicas.close(handle))
+        end)
         test.it("retains exact content and replays the complete transfer", function()
             local store, key, content = opened(), required_uuid(), string.rep("payload", 6000)
             local item = descriptor(key, content)

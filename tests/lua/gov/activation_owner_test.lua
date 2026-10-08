@@ -1240,5 +1240,93 @@ local function migration_tests()
     end)
 end
 
+local function follow_tests()
+    local follower = require("follow_source")
+    local follow_store = require("follow_store")
+    local delivery = require("delivery")
+    test.describe("Following source activation", function()
+        for _, scenario in ipairs({"equal", "widened", "migration", "restart", "paused", "failed"}) do
+            test.it("reconciles a " .. scenario .. " source update", function()
+                local workspace = "workspace-follow-" .. scenario
+                local plans = assert(plan_store.open("bee:db", "node-owner", workspace))
+                local activations = assert(activation_store.open("bee:db", "node-owner", workspace))
+                local entry: {[string]: unknown} = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+                if scenario == "migration" then
+                    entry = {id = "demo:001", kind = "function.lua", meta = {type = "migration", target_db = "host:db", ordinal = 1},
+                        data = {source = "return true", modules = {}}}
+                end
+                local exact = assert(artifact.create({entry}))
+                local identity = {source_node = "source-a", source_workspace = "app-a", component = "demo/app"}
+                local published = assert(delivery.create({schema_revision = delivery.SCHEMA, source_node = identity.source_node,
+                    source_workspace = identity.source_workspace, component = identity.component, version = "1.0.1",
+                    artifact = {bytes = exact.bytes, digest = exact.digest}}))
+                local descriptor = assert(delivery.descriptor(published))
+                local review: capability_grants.Review? = nil
+                if scenario == "widened" then
+                    review = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {}, requires_approval = true,
+                        revocation = {grants = {}, fenced_attempts = {}}, lines = {"widened authority"}, resolved = {"widened authority"}, delta = {"widened authority"}}
+                end
+                local world: ResolverWorld = {revision = 4, digest = SHA, capability = installed_capability(review),
+                    application_admission = admission(exact.digest, SHA, nil, workspace), blocked = scenario == "failed"}
+                local requests, effects = 0, 0
+                local working = "1.0.0"
+                local executor = {}
+                function executor.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
+                    if method == "bee.approvals.binding:request" then requests = requests + 1 end
+                    return approvals():call(method, request)
+                end
+                local function configuration(): owner.Config
+                    return {plans = plans, activations = activations, resolver = scenario == "migration" and migration_resolver(entry, {}) or shifting_resolver(entry, world),
+                        approvals = executor, actor_id = "host-a", consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
+                        approval_policy = "local-install", migrations = migration_effect(),
+                        matches = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): (boolean?, string?)
+                            return working == (assert(bounds.object(intent))).version, nil
+                        end,
+                        apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): ({[string]: unknown}?, string?)
+                            local release = (assert(bounds.object(intent))).version
+                            assert(type(release) == "string")
+                            working, effects = release, effects + 1
+                            return {changed = true}, nil
+                        end}
+                end
+                expect_code(follower.reconcile(configuration(), identity, descriptor, published.bytes, 1), "PAUSED")
+                ok(follow_store.consent(activations, identity, "following", "1.0.0", exact.digest))
+                if scenario == "restart" or scenario == "paused" then
+                    ok(follow_store.reserve(activations, identity, descriptor, 1))
+                end
+                if scenario == "restart" then
+                    assert(activation_store.close(activations)); assert(plan_store.close(plans))
+                    plans = assert(plan_store.open("bee:db", "node-owner", workspace))
+                    activations = assert(activation_store.open("bee:db", "node-owner", workspace))
+                elseif scenario == "paused" then
+                    ok(follow_store.consent(activations, identity, "paused", "1.0.0", exact.digest))
+                end
+                local result = follower.reconcile(configuration(), identity, descriptor, published.bytes, 1)
+                if scenario == "paused" then
+                    expect_code(result, "PAUSED")
+                    test.eq(effects, 0); test.eq(working, "1.0.0")
+                elseif scenario == "failed" then
+                    expect_code(result, "BLOCKED")
+                    test.eq(effects, 0); test.eq(working, "1.0.0")
+                    test.eq(ok(follow_store.get(activations, identity)).last_outcome, "failed")
+                elseif scenario == "widened" or scenario == "migration" then
+                    test.eq(ok(result).phase, "approval_bound")
+                    test.eq(ok(follow_store.get(activations, identity)).last_outcome, "needs_you")
+                    test.eq(working, "1.0.0"); test.eq(effects, 0); test.eq(requests, 1)
+                    test.eq(ok(follower.reconcile(configuration(), identity, descriptor, published.bytes, 1)).phase, "approval_bound")
+                    test.eq(requests, 1)
+                else
+                    test.eq(ok(result).outcome, "applied")
+                    test.eq(working, "1.0.1"); test.eq(effects, 1); test.eq(requests, 0)
+                    test.eq(ok(follow_store.get(activations, identity)).last_outcome, "applied")
+                    ok(follower.reconcile(configuration(), identity, descriptor, published.bytes, 1))
+                    test.eq(effects, 1); test.eq(requests, 0)
+                end
+                assert(activation_store.close(activations)); assert(plan_store.close(plans))
+            end)
+        end
+    end)
+end
+
 return {run = test.run_cases(authority_tests), admission = test.run_cases(admission_tests),
-    recovery = test.run_cases(recovery_tests), migration = test.run_cases(migration_tests)}
+    recovery = test.run_cases(recovery_tests), migration = test.run_cases(migration_tests), follow = test.run_cases(follow_tests)}

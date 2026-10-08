@@ -61,6 +61,8 @@ entries:
   - logger
   imports:
     worker: bee.process:worker
+    service: bee.gov.binding:destination_service
+    bounds: bee.values:bounds
     pass: bee.gov.service:activation_pass
     approval_service: bee.approvals.binding:service
 - name: activation_service
@@ -82,3 +84,8 @@ entries:
       - bee.security.approvals:approval_activation_effects_policy
       - bee.gov.security:activation_announce_policy
       - bee.gov.security:activation_worker_policy
+
+- name: follow_wake
+  kind: library.lua
+  source: file://follow_wake.lua
+  modules: [process]

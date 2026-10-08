@@ -416,6 +416,26 @@ ORDER BY version_key]], {selected.source_owner, selected.feed, object_id, versio
     end)
 end
 
+function M.publications(store: Store, source_owner: string, feed: string, after: integer, component: string, source_workspace: string): Result
+    local selected, source_error = source(source_owner, feed)
+    if store.closed or not selected or bounds.count(after) == nil or not bounds.id(component) or not bounds.id(source_workspace) then return fail("INVALID", source_error or "publication cursor is invalid") end
+    return transaction.read(store.db, "sync publications", function(tx: sql.Transaction): Result
+        local rows, err = tx:query([[SELECT v.descriptor_json, t.source_cursor FROM bee_sync_replica_versions v JOIN bee_sync_replica_transfers t ON t.source_owner = v.source_owner AND t.feed = v.feed AND t.version_key = v.version_key WHERE v.source_owner = ? AND v.feed = ? AND t.state = 'available' AND t.source_cursor > ? AND json_extract(v.descriptor_json, '$.object_id') = ? AND json_extract(v.descriptor_json, '$.manifest.source_workspace') = ? ORDER BY t.source_cursor, v.version_key LIMIT 128]], {source_owner, feed, after, component, source_workspace})
+        if not rows or err then return transaction.sql_failure(err, "read source publications") end
+        local items: {{descriptor: version.Descriptor, cursor: integer}} = {}
+        for _, row in ipairs(rows) do
+            local encoded, cursor = row.descriptor_json, bounds.count(row.source_cursor)
+            local raw = type(encoded) == "string" and json.decode(encoded) or nil
+            local descriptor = version.decode(raw)
+            if not descriptor or not cursor or descriptor.owner_id ~= source_owner or descriptor.feed ~= feed then
+                return fail("INTERNAL", "source publication is corrupt")
+            end
+            items[#items + 1] = {descriptor = descriptor, cursor = cursor}
+        end
+        return transaction.success({items = items}, false)
+    end)
+end
+
 function M.close(store: Store): boolean
     if store.closed then return true end
     store.closed = true

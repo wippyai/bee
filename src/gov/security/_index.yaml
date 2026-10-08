@@ -196,6 +196,8 @@ entries:
     comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action
   policy:
     actions:
+    - process.registry.lookup
+    - process.send
     - db.get
     - registry.get
     - registry.preview

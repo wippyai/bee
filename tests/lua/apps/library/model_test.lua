@@ -48,6 +48,28 @@ end
 
 local function define_tests()
     test.describe("Library model", function()
+        test.it("shows following state and the last source update outcome", function()
+            local state = fresh()
+            local item = activation("follow-current", "notes", "1.0.1", "settled", "applied", "follow-current", "source-bee")
+            item.component = "shared/notes"
+            item.follow_state, item.follow_outcome, item.follow_message = "following", "applied", "Applied 1.0.1"
+            load(state, {}, {item})
+            local row = model.rows(state, "installed")[1]
+            test.eq(row.follow_state, "following")
+            test.eq(row.follow_outcome, "applied")
+            test.eq(row.component, "shared/notes")
+            local lines = model.version_lines(state, row)
+            local following, outcome = false, false
+            for _, line in ipairs(lines) do
+                if line.label == "Updates" and line.value == "Following source" then following = true end
+                if line.label == "Last update" and line.value == "Applied 1.0.1" then outcome = true end
+            end
+            test.is_true(following); test.is_true(outcome)
+            item.follow_state = "pinned"
+            load(state, {}, {item})
+            test.eq(model.rows(state, "installed")[1].follow_state, "pinned")
+        end)
+
         test.it("speaks only the person-facing status words", function()
             test.eq(model.STATUS_SHARED, "Shared")
             test.eq(model.STATUS_WAITING, "Waiting for your approval")

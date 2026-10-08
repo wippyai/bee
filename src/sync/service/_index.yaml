@@ -30,6 +30,7 @@ entries:
   imports:
     protocol: bee.hive:protocol
     distributor: bee.sync.service:distributor
+    follow_wake: bee.gov.service:follow_wake
     replica_protocol: bee.sync:replica_protocol
 - name: service
   meta:

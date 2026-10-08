@@ -167,4 +167,24 @@ function M.list(resource: string, node: string): Result
     end)
     return transaction.release(db, "following", result)
 end
+function M.disable(store: Store, source_workspace: string, raw_mode: unknown): Result
+    local selected_mode = mode(raw_mode)
+    if not selected_mode or not bounds.id(source_workspace) then return transaction.failure("INVALID", "Following pause is invalid") end
+    return transaction.write(store.db, "following", function(tx: sql.Transaction): Result
+        local rows, err = tx:query([[SELECT state_json FROM bee_governance_follow WHERE owner_node = ? AND workspace_id = ? AND source_workspace = ?]],
+            {store.node, store.workspace, source_workspace})
+        if not rows or err then return transaction.sql_failure(err, "read following consent") end
+        for _, raw in ipairs(rows) do
+            local encoded = raw.state_json
+            local parsed = type(encoded) == "string" and json.decode(encoded) or nil
+            local row = decode(parsed)
+            if not row then return transaction.failure("INTERNAL", "Following consent is corrupt") end
+            row.mode = selected_mode
+            local result = write(tx, store, row)
+            if not result.ok then return result end
+        end
+        return transaction.success({mode = selected_mode}, false)
+    end)
+end
+
 return M

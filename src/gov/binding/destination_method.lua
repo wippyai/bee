@@ -39,6 +39,12 @@ local function handle(raw: unknown): {[string]: unknown}
     if not actor or not security.can(action, workspace_id) then
         return reply(transaction.failure("DENIED", "destination operation is not authorized"))
     end
+    if request.follow_source ~= nil and (request.operation ~= "prepare" or type(request.follow_source) ~= "boolean") then
+        return reply(transaction.failure("INVALID", "follow_source is an installation consent flag"))
+    end
+    if request.follow_source ~= nil and not security.can("bee.gov.delivery.follow", workspace_id) then
+        return reply(transaction.failure("DENIED", "Only destination-local following consent permits this choice"))
+    end
     local scope, scope_error = security.named_scope(service.SCOPE)
     if not scope then return reply(transaction.failure("UNAVAILABLE", tostring(scope_error or "destination execution scope unavailable"))) end
     local executor, executor_error = funcs.new():with_scope(scope)

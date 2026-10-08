@@ -27,6 +27,7 @@ local cdc = require("cdc")
 local protocol = require("protocol")
 local distributor = require("distributor")
 local replica_protocol = require("replica_protocol")
+local follow_wake = require("follow_wake")
 
 type Worker = {destination: distributor.Destination, name: string, wake: channel.Channel, stopped: boolean}
 
@@ -68,6 +69,9 @@ local function receive(request: protocol.Forwarded, node: string): protocol.Repl
     if call_error or type(reply) ~= "table" then
         return protocol.fail("replica owner outcome is unknown; read durable status before retrying")
     end
+    local arguments = request.args
+    if reply.ok == true and type(arguments) == "table" and arguments.action == "finish"
+        and arguments.feed == "governance.application_versions" then follow_wake.signal() end
     return protocol.ok(reply)
 end
 

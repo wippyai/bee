@@ -33,7 +33,8 @@ type Intent = {owner_node: string, workspace_id: string, intent_id: string, over
     phase: string, outcome: string?, diagnostics: string?, approval_id: string?,
     approval_proposal_digest: string?, consumed_proposal_digest: string?,
     observed_intent_id: string?, observed_artifact_digest: string?, observed_outcome: string?,
-    baseline_intent_id: string?, application: string?, title: string?}
+    baseline_intent_id: string?, application: string?, title: string?, component: string?,
+    follow_state: string?, follow_outcome: string?, follow_message: string?}
 type EntryChange = {id: string, kind: string, digest: string}
 type Changes = {plan_digest: string, candidate_digest: string, artifact_digest: string,
     base_digest: string, composed_base_digest: string, base_revision: integer,
@@ -69,7 +70,7 @@ local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "o
     "outcome", "diagnostics", "migrations_completed", "migration_receipt_bytes", "migration_receipt_digest",
     "slot_revision", "desired_intent_id", "desired_execution_revision",
     "observed_intent_id", "observed_execution_revision", "observed_artifact_digest", "observed_outcome",
-    "baseline_intent_id", "application", "title"}
+    "baseline_intent_id", "application", "title", "component", "follow_state", "follow_outcome", "follow_message"}
 local DESCRIPTOR_FIELDS = {"schema", "owner_id", "feed", "key", "object_id", "version_id", "content_digest",
     "manifest_digest", "content_kind", "total_bytes", "manifest", "digest"}
 local MANIFEST_FIELDS = {"schema_revision", "source_workspace", "component", "artifact_digest", "author"}
@@ -253,6 +254,14 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         or (value.migrations_completed ~= nil and type(value.migrations_completed) ~= "boolean") then
         return nil, "activation evidence is malformed"
     end
+    local follow_state = optional_id(value.follow_state)
+    if value.follow_state ~= nil and (follow_state ~= "off" and follow_state ~= "following" and follow_state ~= "paused" and follow_state ~= "pinned") then
+        return nil, "following state is malformed"
+    end
+    local follow_outcome, follow_message = optional_id(value.follow_outcome), optional_text(value.follow_message, 8192)
+    local component = optional_id(value.component)
+    if (value.follow_outcome ~= nil and not follow_outcome) or (value.follow_message ~= nil and not follow_message)
+        or (value.component ~= nil and not component) then return nil, "following outcome is malformed" end
     return {owner_node = owner_node, workspace_id = workspace, intent_id = intent_id, overlay_owner = overlay_owner,
         source_node = source_node, source_workspace = source_workspace, version = version,
         revision = revision, phase = phase, outcome = outcome, diagnostics = diagnostics, approval_id = approval_id,
@@ -261,7 +270,8 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         observed_intent_id = optional_id(value.observed_intent_id),
         observed_artifact_digest = digest(value.observed_artifact_digest),
         observed_outcome = observed, baseline_intent_id = optional_id(value.baseline_intent_id),
-        application = optional_text(value.application, 256), title = optional_text(value.title, 80)}, nil
+        application = optional_text(value.application, 256), title = optional_text(value.title, 80), component = component,
+        follow_state = follow_state, follow_outcome = follow_outcome, follow_message = follow_message}, nil
 end
 local function entry_change(raw: unknown): (EntryChange?, string?)
     local value = object(raw)
@@ -625,9 +635,15 @@ function M.select_request(state: State, item: Plan, key: string): Object
         source_workspace = item.source_workspace, version = item.version, expected_revision = item.revision,
         idempotency_key = key}
 end
-function M.prepare_request(state: State, item: Plan, intent_id: string, key: string): Object
-    return {operation = "prepare", workspace_id = state.workspace_id, source_node = item.source_node,
+function M.prepare_request(state: State, item: Plan, intent_id: string, key: string, follow_source: boolean?): Object
+    local request: Object = {operation = "prepare", workspace_id = state.workspace_id, source_node = item.source_node,
         source_workspace = item.source_workspace, version = item.version, intent_id = intent_id, receipt_key = key}
+    if follow_source ~= nil then request.follow_source = follow_source end
+    return request
+end
+function M.follow_request(state: State, source_node: string, source_workspace: string, component: string, mode: string): Object
+    return {operation = "follow", workspace_id = state.workspace_id, source_node = source_node,
+        source_workspace = source_workspace, component = component, mode = mode}
 end
 function M.can_advance(state: State): boolean
     local phase = state.intent and state.intent.phase

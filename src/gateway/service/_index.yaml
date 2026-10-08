@@ -42,6 +42,7 @@ entries:
       - bee.gateway.security:installation_worker_policy
       - bee.gateway.security:installation_read_policy
       - bee.gateway.security:installation_apply_policy
+      - bee.gateway.security:installation_library_policy
       - bee.gateway.security:access_reference_policy
       - bee.gateway.security:access_policy_read_policy
       - bee.security.approvals:approval_installation_effects_policy

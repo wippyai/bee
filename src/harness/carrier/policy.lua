@@ -159,9 +159,11 @@ local function access_surface(raw: unknown, tools: {string}, selected: boolean):
     end
     local base: {string} = {}
     local requestable: {string} = {}
+    local requested: {[string]: boolean} = {}
     for _, name in ipairs(tools) do
         local trait = gateway_protocol.CONSENT_TOOLS[name]
-        if trait and offered[trait] and not selected then requestable[#requestable + 1] = trait
+        if trait and offered[trait] and not selected then
+            if not requested[trait] then requestable[#requestable + 1] = trait; requested[trait] = true end
         else base[#base + 1] = name end
     end
     table.sort(requestable)

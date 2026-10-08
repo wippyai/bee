@@ -214,6 +214,7 @@ entries:
     - bee.gateway.security:store_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
+    - bee.gateway.security:installation_library_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
 - name: uninstall_request
@@ -227,6 +228,7 @@ entries:
     - bee.gateway.security:store_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
+    - bee.gateway.security:installation_library_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
 - name: install_status
@@ -240,6 +242,7 @@ entries:
     - bee.gateway.security:store_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
+    - bee.gateway.security:installation_library_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
 - name: publication

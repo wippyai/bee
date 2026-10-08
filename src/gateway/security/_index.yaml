@@ -166,6 +166,7 @@ entries:
     - bee.gateway.security:installation_policy
     - bee.gateway.security:installation_read_policy
     - bee.gateway.security:installation_apply_policy
+    - bee.gateway.security:installation_library_policy
     - bee.gateway.security:publication_policy
     - bee.gateway.security:publication_read_policy
     - bee.gateway.security:publication_apply_policy
@@ -340,6 +341,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     installation: bee.hub.activation:installation
+    library: bee.gateway.security:library_installation
     subject_call: bee.gateway.security:subject_call
 - name: session_boundary_policy
   kind: security.policy.expr
@@ -509,3 +511,20 @@ entries:
     actions: [funcs.call]
     resources: [bee.approvals.binding:withdraw]
     effect: allow
+
+- name: installation_library_policy
+  kind: security.policy.expr
+  policy:
+    effect: allow
+    actions: [funcs.call, bee.gov.delivery.read, bee.gov.delivery.manage, bee.gov.delivery.activate]
+    resources: [bee.gov.binding:destination_call, '*']
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:destination_call") || (action != "funcs.call" && resource == actor.meta.workspace_id)
+- name: library_installation
+  kind: library.lua
+  source: file://library_installation.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    governed: bee.apps.library:governed
+    installation: bee.hub.activation:installation
+    canonical: bee.values:canonical

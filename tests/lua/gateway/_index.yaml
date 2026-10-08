@@ -262,4 +262,17 @@ entries:
   imports:
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
+
+- name: hub_installation_test
+  kind: function.lua
+  source: file://hub_installation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    surface: bee.gateway.catalog:surface
+    catalog: bee.gateway.catalog:catalog
+    mcp: bee.gateway.api:mcp
+    installer: bee.gateway.security:installation
+    installation: bee.hub.activation:installation
     bounds: bee.values:bounds

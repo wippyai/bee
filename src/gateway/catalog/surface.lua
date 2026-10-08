@@ -58,7 +58,9 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     local declared_traits = value.traits
     if type(declared_traits) ~= "table" then return nil, nil, "expected list" end
     local consent_of: {[string]: catalog.Trait} = {}
-    for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent_of[trait.tools[1]] = trait end
+    for _, trait in ipairs(mcp.CONSENT_TRAITS) do
+        for _, name in ipairs(trait.tools) do consent_of[name] = trait end
+    end
     for _, raw_trait in ipairs(declared_traits) do
         local trait = bounds.object(raw_trait)
         local trait_tools = trait and bounds.ids(trait.tools, true)
@@ -72,9 +74,17 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     end
     local has_open = false
     local consents: {catalog.Trait} = {}
+    local admitted_tools: {[string]: boolean} = {}
     for _, name in ipairs(ceiling) do
+        admitted_tools[name] = true
         if name == "application_open" then has_open = true end
-        if consent_of[name] then consents[#consents + 1] = consent_of[name] end
+    end
+    for _, trait in ipairs(mcp.CONSENT_TRAITS) do
+        local tools: {string} = {}
+        for _, name in ipairs(trait.tools) do
+            if admitted_tools[name] then tools[#tools + 1] = name end
+        end
+        if #tools > 0 then consents[#consents + 1] = {id = trait.id, title = trait.title, prompt = trait.prompt, tools = tools} end
     end
     local traits: {unknown} = {}
     for _, trait in ipairs(declared_traits) do traits[#traits + 1] = trait end
@@ -105,11 +115,12 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     -- person saved lists it as a base tool, or the person approves its
     -- requestable trait during the session.
     for _, trait in ipairs(consents) do
-        local name = trait.tools[1]
-        local enabled = false
-        for _, base_name in ipairs(base) do if base_name == name then enabled = true end end
-        if not enabled and not requestable[trait.id] then
-            return nil, nil, name .. " needs a person: enable it in the profile or offer " .. trait.id .. " as requestable access"
+        for _, name in ipairs(trait.tools) do
+            local enabled = false
+            for _, base_name in ipairs(base) do if base_name == name then enabled = true end end
+            if not enabled and not requestable[trait.id] then
+                return nil, nil, name .. " needs a person: enable it in the profile or offer " .. trait.id .. " as requestable access"
+            end
         end
     end
     local gated_tools: {[string]: boolean} = {}

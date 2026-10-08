@@ -7,14 +7,16 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local hash = require("hash")
 local semver = require("semver")
+local requirements = require("requirements")
 local M = {}
 M.REF = "bee.hub:apply"
 M.SOURCE = "hub"
 type Object = {[string]: unknown}
 type Kind = "install" | "uninstall"
-type Decoded = {kind: Kind, component: string, version: string?}
+type Parameter = requirements.Parameter
+type Decoded = {kind: Kind, component: string, version: string?, parameters: {Parameter}}
 type Context = {binding_id: string, thread_id: string, action_id: string, attempt_id: string}
-type Request = {action: string, component: string, version: string, migration_policy: string}
+type Request = {action: string, component: string, version: string, migration_policy: string, parameters: {Parameter}}
 type Verified = {request: Request, digest: string}
 type Status = {status: string, code: string?, message: string?, state: string?, replayed: boolean?}
 
@@ -35,15 +37,17 @@ function M.decode(kind: Kind, raw: unknown): (Decoded?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "installation request must be an object" end
     local allowed: {string} = {"component"}
-    if kind == "install" then allowed = {"component", "version"} end
+    if kind == "install" then allowed = {"component", "version", "parameters"} end
     local extra = bounds.fields(value, allowed)
     if extra then return nil, extra end
     local component = component_name(value.component)
     if not component then return nil, "component must name a Hub package as owner/name" end
-    if value.version == nil then return {kind = kind, component = component, version = nil}, nil end
+    local parameters, parameter_error = requirements.parameters(value.parameters or {})
+    if not parameters then return nil, parameter_error end
+    if value.version == nil then return {kind = kind, component = component, version = nil, parameters = parameters}, nil end
     local version = bounds.line(value.version, 128)
     if not version or not semver.parse(version) then return nil, "version must be an exact package version" end
-    return {kind = kind, component = component, version = version}, nil
+    return {kind = kind, component = component, version = version, parameters = parameters}, nil
 end
 
 -- The plan action for an install: update when this installer already holds
@@ -87,9 +91,11 @@ end
 
 -- The Hub plan request. Install and update run the package's migrations
 -- under the host's migration grants; uninstall blocks on applied migrations.
-function M.request(action: string, component: string, version: string?): Object
+function M.request(action: string, component: string, version: string?, parameters: {Parameter}?): Object
     if action == "uninstall" then return {action = action, component = component, migration_policy = "block"} end
-    return {action = action, component = component, version = version, migration_policy = "up"}
+    local result: Object = {action = action, component = component, version = version, migration_policy = "up"}
+    if parameters and #parameters > 0 then result.parameters = parameters end
+    return result
 end
 
 local function lines(): {string}
@@ -167,6 +173,8 @@ function M.proposal(plan_raw: unknown, context: Context): (Object?, string?, str
     end
     local version = action == "uninstall" and "" or bounds.line(request.version, 128)
     if not version then return nil, nil, "Hub plan version is malformed" end
+    local parameters, parameter_error = requirements.parameters(request.parameters or {})
+    if not parameters then return nil, nil, parameter_error end
     local dependencies, policies, migrations, starts = lines(), lines(), lines(), lines()
     if plan.conversion ~= nil then
         local conversion = bounds.object(plan.conversion)
@@ -206,7 +214,7 @@ function M.proposal(plan_raw: unknown, context: Context): (Object?, string?, str
     end
     local proposal: Object = {kind = "operation", ref = M.REF, revision = digest, input_digest = digest,
         payload = {action = action, component = component, version = version, source = M.SOURCE,
-            plan_digest = digest, base_revision = revision, migration_policy = migration_policy,
+            plan_digest = digest, base_revision = revision, migration_policy = migration_policy, parameters = parameters,
             dependency_changes = dependencies, permission_changes = policies, migrations = migrations,
             auto_start = starts, binding_id = context.binding_id, thread_id = context.thread_id, action_id = context.action_id,
             attempt_id = context.attempt_id}}
@@ -247,8 +255,10 @@ function M.verify(view_raw: unknown, subject: string, workspace_id: string, poli
         if not recorded then return nil, "recorded proposal version is malformed" end
         version = recorded
     end
+    local parameters, parameter_error = requirements.parameters(payload.parameters or {})
+    if not parameters then return nil, parameter_error end
     return {request = {action = action, component = component, version = version,
-        migration_policy = migration_policy}, digest = digest}, nil
+        migration_policy = migration_policy, parameters = parameters}, digest = digest}, nil
 end
 
 -- The Hub apply request the approved proposal names.
@@ -257,8 +267,10 @@ function M.apply_request(verified: Verified): Object
     if request.action == "uninstall" then
         return {action = "uninstall", component = request.component, migration_policy = request.migration_policy}
     end
-    return {action = request.action, component = request.component, version = request.version,
+    local result: Object = {action = request.action, component = request.component, version = request.version,
         migration_policy = request.migration_policy}
+    if #request.parameters > 0 then result.parameters = request.parameters end
+    return result
 end
 
 -- The decision the approval owner records, before any effect.

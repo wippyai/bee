@@ -15,6 +15,7 @@ local node_tests = require("node_tests")
 local app_requests = require("app_requests")
 local json_schema = require("json_schema")
 local canonical = require("canonical")
+local requirements = require("requirements")
 local M = {}
 function M.is_retired_tool(name: string): boolean
     return name == "thread_launch" or name == "run_status" or name == "run_wait" or name == "run_cancel"
@@ -125,20 +126,23 @@ local TOOLS: {Tool} = {
             {operation = "read_file", request = {component = "acme/tool", version = "1.2.3",
                 resource = "package", path = "init.lua", offset = 0, limit = 16384}},
         }}},
-    {name = "install_request", description = "Ask the person to install or update one Hub package in this agent's workspace. The host resolves the exact plan (the newest release when version is omitted, an update when the package is already installed through the Hub) and files one approval showing the package, version, source, dependency changes, the security policies it adds, replaces or removes, migrations and auto-start entries. Filing changes nothing; poll install_status with the returned request_id. A retry for the same plan replays the same request. A package that needs requirement values is refused; the person installs it in the Library.",
+    {name = "install_request", description = "Ask the person to install or update one Hub package in this agent's workspace. The host resolves the exact plan (the newest release when version is omitted, an update when the package is already installed through the Hub) and files one approval showing the package, version, source, dependency changes, the security policies it adds, replaces or removes, migrations and auto-start entries. Filing changes nothing; poll install_status with the returned request_id. A retry for the same plan replays the same request. Optional parameters fill declared requirements with typed values and the same validation as Library Configure. Application packages use the Library governed delivery and one installation approval.",
         operation = "bee.gateway.binding:install_request",
         policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"component"}, properties = {
             component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name"},
             version = {type = "string", minLength = 1, maxLength = 128, description = "Exact version; omit for the newest release"},
+            parameters = {type = "array", maxItems = 128, description = "Declared configuration values; package schema validates each typed value",
+                items = {type = "object", additionalProperties = false, required = {"name", "value"}, properties = {
+                    name = {type = "string", minLength = 1, maxLength = 256}, value = {}}}},
         }}},
-    {name = "uninstall_request", description = "Ask the person to remove one Hub package this installer holds, with the dependencies only it uses. The approval shows the removed packages and policies; applied migrations block the removal. Filing changes nothing; poll install_status with the returned request_id.",
+    {name = "uninstall_request", description = "Ask the person to remove one Hub package this installer holds, with the dependencies only it uses. The approval shows the removed packages and policies. Governed applications retain saved data; applied library migrations block removal. Filing changes nothing; poll install_status with the returned request_id.",
         operation = "bee.gateway.binding:uninstall_request",
         policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"component"}, properties = {
             component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name"},
         }}},
-    {name = "install_status", description = "Poll one installation request by request_id: pending, refused (the person denied it or it expired), approved (applying), applied, or failed with the Hub code and message. On the first poll after approval the host consumes the decision once and applies exactly the approved plan; a replayed poll replays the recorded result.",
+    {name = "install_status", description = "Poll one installation request by request_id: pending, refused (the person denied it or it expired), approved (applying), applied, or failed with the Hub code and message. Status reads the recorded decision and outcome; the owner worker applies exactly the approved plan.",
         operation = "bee.gateway.binding:install_status",
         policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
@@ -364,7 +368,10 @@ M.APPLICATION_SHARE_TRAIT = {id = gateway_protocol.APPLICATION_SHARE_TRAIT_ID, t
     tools = {"publish"}}
 -- The built-in traits behind which a tool reaches an agent only through a
 -- person, each with the one tool it offers.
-M.CONSENT_TRAITS = {M.APPLICATION_TOOLS_TRAIT, M.APPLICATION_SHARE_TRAIT}
+M.HUB_LIBRARY_TRAIT = {id = gateway_protocol.HUB_LIBRARY_TRAIT_ID, title = "Hub and Library",
+    prompt = "Browse Hub packages and request installation or removal in this workspace. Each change waits for your separate approval in Needs you; application packages use the Library governed review.",
+    tools = {"components", "install_request", "uninstall_request", "install_status"}}
+M.CONSENT_TRAITS = {M.APPLICATION_TOOLS_TRAIT, M.APPLICATION_SHARE_TRAIT, M.HUB_LIBRARY_TRAIT}
 -- Each advertised tool carries its own annotations.
 M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
 function M.tool(name: string): Tool?
@@ -669,7 +676,7 @@ end
 function M.install_arguments(params: Object, uninstall: boolean): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local allowed: {string} = {"component", "version"}
+    local allowed: {string} = {"component", "version", "parameters"}
     if uninstall then allowed = {"component"} end
     local unknown_field = bounds.fields(arguments, allowed)
     if unknown_field then return nil, unknown_field end
@@ -680,6 +687,11 @@ function M.install_arguments(params: Object, uninstall: boolean): (Object?, stri
         local version = bounds.line(arguments.version, 128)
         if not version then return nil, "version must be an exact package version" end
         request.version = version
+    end
+    if arguments.parameters ~= nil then
+        local parameters, problem = requirements.parameters(arguments.parameters)
+        if not parameters then return nil, problem end
+        request.parameters = parameters
     end
     return request, nil
 end

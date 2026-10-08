@@ -1359,7 +1359,7 @@ local function installation_call(value: unknown, fields: {string}): (Binding?, s
     return binding, policy_name, request, nil
 end
 function M.install_request(value: unknown): Reply
-    local binding, policy_name, request, refusal = installation_call(value, {"component", "version"})
+    local binding, policy_name, request, refusal = installation_call(value, {"component", "version", "parameters"})
     if not binding or not policy_name then return assert(refusal) end
     return installation.request(installation.port(binding), binding, policy_name, "install", request)
 end

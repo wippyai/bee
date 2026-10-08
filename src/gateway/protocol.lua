@@ -208,12 +208,15 @@ end
 
 -- The trait a person approves before an agent may use application tools.
 M.APPLICATION_TOOLS_TRAIT_ID = "bee.app:tools"
+M.HUB_LIBRARY_TRAIT_ID = "bee.hub:library"
 -- The trait a person approves before an agent may share an installed
 -- application with the hive.
 M.APPLICATION_SHARE_TRAIT_ID = "bee.app:share"
 -- Tools a launch offers only with the person's consent, by the trait the
 -- person approves as requestable access.
-M.CONSENT_TOOLS = {app_tools = M.APPLICATION_TOOLS_TRAIT_ID, publish = M.APPLICATION_SHARE_TRAIT_ID}
+M.CONSENT_TOOLS = {app_tools = M.APPLICATION_TOOLS_TRAIT_ID, publish = M.APPLICATION_SHARE_TRAIT_ID,
+    components = M.HUB_LIBRARY_TRAIT_ID, install_request = M.HUB_LIBRARY_TRAIT_ID,
+    uninstall_request = M.HUB_LIBRARY_TRAIT_ID, install_status = M.HUB_LIBRARY_TRAIT_ID}
 -- access_traits names the traits a launch policy's data offers as requestable
 -- access: its own gateway_access, or the access of the surface it declares.
 function M.access_traits(policy_data: unknown): {string}

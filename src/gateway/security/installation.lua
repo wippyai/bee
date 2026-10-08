@@ -1,20 +1,16 @@
 -- SPDX-License-Identifier: MIT
--- Agent-requested Hub installation through the approval owner. The agent
--- names a package; the host resolves the exact plan and files one approval
--- bound to the asking thread and attempt. The agent never writes the
--- registry: once the person approves, an owner worker consumes the decision
--- and applies the approved plan digest through the Hub facade under the
--- installation apply policy. The agent's status polling returns the decision
--- and, once applied, the recorded Hub receipt without performing the apply.
+-- Bound Hub changes use person-approved plans; applications use Library governance.
 local registry = require("registry")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local installation = require("installation")
+local library = require("library")
 local subject_call = require("subject_call")
 local M = {}
 M.CALL_POLICY = "bee.gateway.security:installation_policy"
 M.READ_POLICY = "bee.gateway.security:installation_read_policy"
 M.APPLY_POLICY = "bee.gateway.security:installation_apply_policy"
+M.LIBRARY_POLICY = "bee.gateway.security:installation_library_policy"
 M.CONFIGURATION_REF = "bee.gateway.env:install_configuration_ref"
 M.HUB = "bee.hub.binding:call"
 type Object = {[string]: unknown}
@@ -22,7 +18,7 @@ type Binding = {binding_id: string, subject: string, action_id: string, attempt_
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
 -- The effects one request reaches: the approval owner, and the Hub facade
 -- for reads (manage false) or for the approved apply (manage true).
-type Port = {approvals: (string, Object) -> Reply, hub: (Object, boolean) -> Object}
+type Port = {approvals: (string, Object) -> Reply, hub: (Object, boolean) -> Object, governed: ((Object) -> Reply)?}
 local fail = subject_call.fail
 
 -- The host-selected approval policy installation requests are filed under;
@@ -42,6 +38,9 @@ end
 function M.port(binding: Binding): Port
     return {
         approvals = subject_call.approvals(binding, M.CALL_POLICY),
+        governed = function(value: Object): Reply
+            return subject_call.call(binding, {M.LIBRARY_POLICY}, "bee.gov.binding:destination_call", value)
+        end,
         hub = function(value: Object, manage: boolean): Object
             local policies: {string} = {M.CALL_POLICY, M.READ_POLICY}
             if manage then policies[#policies + 1] = M.APPLY_POLICY end
@@ -75,6 +74,17 @@ function M.request(port: Port, binding: Binding, policy: string, kind: "install"
     if not workspace_id then return fail("DENIED", "this binding names no workspace to install into") end
     local decoded, decode_error = installation.decode(kind, raw)
     if not decoded then return fail("INVALID", decode_error or "invalid installation request") end
+    local removal: Object? = nil
+    local removal_prompt: string? = nil
+    if kind == "uninstall" and port.governed then
+        local current, problem = library.installed(port.governed, binding, decoded.component)
+        if problem then return problem end
+        if current then
+            local invalid: string? = nil
+            removal, removal_prompt, invalid = library.removal(binding, decoded.component, current)
+            if not removal then return fail("INCOMPLETE", invalid or "application removal is malformed") end
+        end
+    end
     local action = "uninstall"
     local version = decoded.version
     if kind == "install" then
@@ -91,10 +101,19 @@ function M.request(port: Port, binding: Binding, policy: string, kind: "install"
             version = latest
         end
     end
-    local planned, plan_error = hub_value(port, {operation = "plan",
-        request = installation.request(action, decoded.component, version)})
-    if plan_error then return plan_error end
-    local proposal, prompt, proposal_error = installation.proposal(planned, context(binding))
+    local proposal, prompt = removal, removal_prompt
+    local proposal_error: string? = nil
+    if not proposal then
+        local planned, plan_error = hub_value(port, {operation = "plan",
+            request = installation.request(action, decoded.component, version, decoded.parameters)})
+        if plan_error then return plan_error end
+        local application = bounds.object(planned)
+        if application and application.route == "governed" then
+            if not port.governed then return fail("UNAVAILABLE", "Library destination is unavailable") end
+            return library.request(port.governed, binding, application, decoded.parameters)
+        end
+        proposal, prompt, proposal_error = installation.proposal(planned, context(binding))
+    end
     if not proposal or not prompt then return fail("INCOMPLETE", proposal_error or "plan cannot be approved") end
     local payload = proposal.payload
     local digest = tostring(payload.plan_digest)
@@ -148,8 +167,16 @@ function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unk
     elseif view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
         return fail("DENIED", "approval was consumed by another effect owner")
     end
-    local effect = port.hub({operation = "apply", request = installation.apply_request(verified),
-        expected_digest = verified.digest}, true)
+    local proposal = assert(bounds.object(view.proposal))
+    local payload = assert(bounds.object(proposal.payload))
+    local effect: Object
+    if payload.route == "governed" then
+        if not port.governed then return fail("UNAVAILABLE", "Library destination is unavailable") end
+        effect = library.remove(port.governed, binding, proposal, effect_key)
+    else
+        effect = port.hub({operation = "apply", request = installation.apply_request(verified),
+            expected_digest = verified.digest}, true)
+    end
     local outcome = installation.status(effect)
     if outcome.status ~= "approved" then
         local digest = bounds.id(view.proposal_digest)
@@ -168,6 +195,10 @@ function M.status(port: Port, binding: Binding, policy: string, raw: unknown): R
     if not request_id then return fail("INVALID", "request_id is required") end
     local workspace_id = binding.workspace_id
     if not workspace_id then return fail("DENIED", "this binding names no workspace to install into") end
+    if request_id:sub(1, 4) == "gov:" then
+        if not port.governed then return fail("UNAVAILABLE", "Library destination is unavailable") end
+        return library.status(port.governed, binding, request_id)
+    end
     local read = port.approvals("read", {approval_id = request_id})
     if not read.ok then return read end
     local view = bounds.object(read.value)
@@ -187,6 +218,8 @@ function M.status(port: Port, binding: Binding, policy: string, raw: unknown): R
             return fail("DENIED", "approval was consumed by another effect owner")
         end
         if view.effect_result ~= nil then return reply(installation.status(view.effect_result)) end
+        local payload = bounds.object(assert(bounds.object(view.proposal)).payload)
+        if payload and payload.route == "governed" then return reply(decision) end
         return reply(installation.status(port.hub({operation = "status", expected_digest = verified.digest}, false)))
     end
     return reply(decision)

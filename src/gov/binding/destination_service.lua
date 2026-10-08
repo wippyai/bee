@@ -867,7 +867,7 @@ end
 -- data and its migration ledger are there for the next install.
 local function uninstall_application(request: Object, workspace_id: string, actor_id: string,
     activation_store: activations.Store): Result
-    if exact(request, {"source_workspace", "receipt_key"}) then return failure("INVALID", "uninstall has unknown fields") end
+    if exact(request, {"source_workspace", "receipt_key", "expected_intent_id"}) then return failure("INVALID", "uninstall has unknown fields") end
     local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
     local overlay_owner = source_workspace and application_owner(activation_store, workspace_id, source_workspace) or nil
     if not source_workspace or not key or not overlay_owner then return failure("INVALID", "uninstall names no application") end
@@ -875,7 +875,7 @@ local function uninstall_application(request: Object, workspace_id: string, acto
     if not paused.ok then return paused end
     return uninstall.uninstall({activations = activation_store, overlay_owner = overlay_owner, actor_id = actor_id,
         clear = function(): ({[string]: unknown}?, string?) return materializer.retain_data(overlay_owner) end,
-        cleared = function(): (boolean?, string?) return materializer.retains_data(overlay_owner) end}, key)
+        cleared = function(): (boolean?, string?) return materializer.retains_data(overlay_owner) end}, key, request.expected_intent_id)
 end
 
 type RevertMethods = {

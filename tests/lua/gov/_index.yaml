@@ -1344,3 +1344,23 @@ entries:
     test: wippy.test:test
     requirement: bee.gov.binding:requirement
     preflight: bee.gov.binding:preflight
+
+- name: uninstall_pin_test
+  kind: function.lua
+  source: file://uninstall_pin_test.lua
+  method: run
+  modules:
+  - hash
+  - uuid
+  meta:
+    type: test
+    suite: bee
+  security:
+    policies:
+    - bee.tests.gov:plan_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    activation_store: bee.gov.persist:activation_store
+    activation_uninstall: bee.gov.binding:activation_uninstall

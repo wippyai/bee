@@ -24,3 +24,4 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     semver: bee.hub.package:semver
+    requirements: bee.hub.package:requirements

@@ -537,6 +537,9 @@ entries:
     - overlay
     - docs
     - components
+    - install_request
+    - uninstall_request
+    - install_status
     - delivery
     - tests
     - app_tools
@@ -546,6 +549,7 @@ entries:
       traits:
       - bee.app:share
       - bee.app:tools
+      - bee.hub:library
     gateway_hooks: []
     prepare_options: {}
     placement_profiles:

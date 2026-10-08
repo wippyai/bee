@@ -1,0 +1,36 @@
+version: '1.0'
+namespace: bee.e2e.sdk
+entries:
+- name: fixture
+  kind: process.lua
+  source: file://sdk_fixture.lua
+  method: main
+  modules: [process, env, registry, system, funcs, fs, json, time]
+  imports:
+    protocol: bee.hive:protocol
+    example: bee.gov.traits:hive_sdk_example
+    model: bee.capability:model
+    grants: bee.gov.types:capability_grants
+    materializer: bee.gov.binding:materializer
+    application: bee.node:application
+    bounds: bee.values:bounds
+- name: fixture_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find, registry.version, registry.snapshot, registry.overlay.get,
+      registry.apply, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*,
+      security.actor.create, security.scope.create, security.policy.get, security.policy_group.get,
+      funcs.security, funcs.call, system.read, process.registry.register.eventual, process.registry.lookup,
+      fs.get, process.send]
+    resources: '*'
+    effect: allow
+- name: fixture_service
+  kind: process.service
+  process: bee.e2e.sdk:fixture
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires: [bee.node.service:owner_service, bee.hive.service:supervisor_service]
+    security:
+      actor: {id: bee.e2e.sdk}
+      policies: [bee.e2e.sdk:fixture_policy, bee.node.security:owner_role]

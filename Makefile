@@ -127,8 +127,9 @@ test: binary-identity compose $(TEST_FIXTURES)/harness/bin/gateway-client
 		-o bee.threads.service:pump_service:lifecycle.auto_start=false \
 		$(if $(TESTS),test $(TESTS))
 
-e2e: build
-	tests/e2e/hive.sh dist/bee
+e2e: lint
+	python3 tests/e2e/hive_pack.py
+	tests/e2e/hive.sh .wippy/e2e-build/bee
 
 footprint: build
 	tests/footprint.sh dist/bee

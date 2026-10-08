@@ -8,7 +8,8 @@ BEE="$(realpath "${1:-dist/bee}")"
 ROOT="$(realpath "$(dirname "$0")/../..")/.wippy/e2e/hive"
 SESSION="bee-e2e-$$"
 rm -rf "$ROOT"
-mkdir -p "$ROOT/config" "$ROOT/alpha" "$ROOT/beta"
+mkdir -p "$ROOT/config" "$ROOT/alpha" "$ROOT/beta" "$ROOT/temporary"
+export TMPDIR="$ROOT/temporary"
 export XDG_CONFIG_HOME="$ROOT/config"
 
 cleanup() {
@@ -19,7 +20,7 @@ trap cleanup EXIT
 start() { # name folder command...
     local name="$1" folder="$2"; shift 2
     tmux new-session -d -s "$SESSION-$name" -x 120 -y 32 \
-        "export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'; cd '$folder' && $*; echo EXIT=\$?; sleep 600"
+        "export XDG_CONFIG_HOME='$XDG_CONFIG_HOME' TMPDIR='$TMPDIR'; cd '$folder' && $*; echo EXIT=\$?; sleep 600"
 }
 
 screen() { tmux capture-pane -pt "$SESSION-$1"; }
@@ -58,6 +59,23 @@ keys display Down Enter
 expect display "Keyboard help" "the System menu opens with Keyboard help, Library, Process Manager and Settings"
 keys display Down Down Down Enter
 expect display "BEE SETTINGS" "Settings runs on beta in a window here"
+
+for _ in $(seq 1 300); do
+    if [ -f "$ROOT/alpha/hive-sdk-proof.json" ]; then break; fi
+    sleep 0.1
+done
+python3 - "$ROOT/alpha/hive-sdk-proof.json" <<'PROOF'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+assert path.exists(), "FAIL: the application on alpha has no peer result"
+result = json.loads(path.read_text())
+assert result.get("ok") is True, result
+assert result["source_node"] != result["destination_node"], result
+assert result["source_pid"] != result["worker_pid"], result
+assert result["configuration"] == "ci" and result["total"] == 18, result
+print("PASS: app on alpha calls its copy on beta", json.dumps(result, sort_keys=True))
+PROOF
 
 keys beta C-c
 expect beta "EXIT=0" "beta stops cleanly"

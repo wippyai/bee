@@ -73,3 +73,7 @@ entries:
     '
   tools:
   - bee.gov.binding:delivery_call
+- name: hive_sdk_example
+  kind: library.lua
+  source: file://hive_sdk_example.lua
+  modules: [json]

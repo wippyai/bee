@@ -52,7 +52,7 @@ type Button = frame.Button
 -- developer packages show.
 local function filters(state: model.State): {Button}
     local found: {Button} = {{kind = "hub_catalog", key = "H", label = glyphs.package .. " Hub catalog", enabled = true, active = state.hub_open}}
-    if state.hub_open then
+    do
         found[#found + 1] = {kind = "search", key = "/", label = "Search packages…", enabled = true}
         found[#found + 1] = {kind = "keyword", key = "K", label = "Keyword " .. (state.hub.keyword == "" and "all" or state.hub.keyword), enabled = true}
         found[#found + 1] = {kind = "developer_packages", label = state.hub.developer_packages and "Developer packages [x]" or "Developer packages",

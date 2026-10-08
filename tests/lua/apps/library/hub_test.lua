@@ -74,7 +74,7 @@ local function define_tests()
         end)
         test.it("rejects malformed catalog counters and object keys without replacing valid state", function()
             local state = model.new()
-            model.apply_catalog(state, ok({total = 1, items = {{component = "acme/valid", title = "Valid", description = "", latest_version = "1.0.0"}}}))
+            model.apply_catalog(state, ok({total = 1, items = {{component = "acme/valid", title = "Valid", description = "", latest_version = "1.0.0", application = true}}}))
             local original = state.catalog[1]
             local malformed = {
                 {total = "2", items = {{component = "acme/replacement"}}},
@@ -409,7 +409,7 @@ local function define_tests()
             test.is_false(model.is_library({component = "wippy/arbitrary", title = "Library", description = "library", latest_version = "1.0.0", application = true}))
             test.is_true(model.is_library({component = "bee/console", title = "App", description = "app", latest_version = "1.0.0", application = false}))
             test.is_nil(model.component_status(state, "bee/settings"))
-            -- Only declared installed libraries are classified; unknown packages stay visible.
+            -- Unknown metadata does not classify a package as a library.
             test.is_false(model.is_library({component = "bee/terminal", title = "Terminal", description = "", latest_version = "0.4.6"}))
             test.is_false(model.is_library({component = "userspace/calc", title = "Calculator", description = "App", latest_version = "1.0.0"}))
             test.is_true(model.is_library({component = "wippy/test", title = "Test Framework", description = "Testing framework", latest_version = "0.4.19", application = false}))
@@ -421,9 +421,9 @@ local function define_tests()
             model.apply_catalog(state, ok({total = 5, items = {
                 {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false},
                 {component = "wippy/terminal", title = "Terminal", description = "Terminal library", latest_version = "0.4.6", application = false},
-                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
-                {component = "bee/terminal", title = "Terminal", description = "Terminal app", latest_version = "0.4.6"},
-                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
+                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0", application = true},
+                {component = "bee/terminal", title = "Terminal", description = "Terminal app", latest_version = "0.4.6", application = true},
+                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0", application = true},
             }}))
 
             -- By default, developer packages are hidden and only usable apps are visible
@@ -451,9 +451,11 @@ local function define_tests()
             test.is_false(state.developer_packages)
             test.eq(#state.catalog, 3)
 
-            -- Setting search query reveals developer packages matching query
+            -- Search keeps the developer filter in force.
             model.set_query(state, "test")
             test.eq(state.query, "test")
+            test.eq(#state.catalog, 3)
+            model.set_developer_packages(state, true)
             test.eq(#state.catalog, 5)
         end)
     end)

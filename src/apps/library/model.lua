@@ -308,9 +308,7 @@ local function installed_rows(state: State): {Row}
     return rows
 end
 
--- Shared lists what this bee's hive made first, then, only when the person
--- opens it, the Hub catalog: Hub metadata does not say which packages Bee can
--- run as applications until they are installed.
+-- Shared lists hive versions and Hub applications together.
 local function shared_rows(state: State): {Row}
     local rows: {Row} = {}
     local held: {[string]: boolean} = {}
@@ -347,15 +345,10 @@ local function shared_rows(state: State): {Row}
             catalog[#catalog + 1] = item
         end
     end
-    if state.hub_open then
-        for _, item in ipairs(catalog) do
-            rows[#rows + 1] = make({key = "h:" .. item.component, origin = "hub", kind = "package",
-                name = item.title ~= "" and item.title or item.component, version = item.latest_version,
-                status = M.STATUS_SHARED, source = "from Hub", component = item.component})
-        end
-    elseif #catalog > 0 or state.hub.total > 0 then
-        rows[#rows + 1] = make({key = "h:catalog", origin = "hub", kind = "section", name = "Hub catalog", version = "",
-            status = M.STATUS_SHARED, source = tostring(math.max(#catalog, state.hub.total)) .. " packages · H opens"})
+    for _, item in ipairs(catalog) do
+        rows[#rows + 1] = make({key = "h:" .. item.component, origin = "hub", kind = item.application == true and "app" or "package",
+            name = item.title ~= "" and item.title or item.component, version = item.latest_version,
+            status = M.STATUS_SHARED, source = "from Hub", component = item.component, note = item.description})
     end
     return rows
 end

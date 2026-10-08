@@ -54,7 +54,11 @@ local function decode_item(raw: unknown): (Item?, string?)
     if not description then return nil, "Hub module has an invalid description" end
     local latest_version = line_or_empty(value.latest_version, M.MAX_VERSION_BYTES)
     if not latest_version then return nil, "Hub module has an invalid latest version" end
-    return {component = name, title = display_name, description = description, latest_version = latest_version}, nil
+    local application: boolean? = nil
+    if value.type == "application" then application = true
+    elseif value.type ~= nil and value.type ~= "unspecified" then application = false end
+    return {component = name, title = display_name, description = description, latest_version = latest_version,
+        application = application}, nil
 end
 
 function M.decode(raw: unknown): (Request?, string?)
@@ -177,6 +181,28 @@ function M.decode_detail_result(module: unknown, readme: unknown, version_respon
     }, nil
 end
 
+function M.application(metadata: unknown, entries: unknown): boolean
+    local meta = bounds.object(metadata)
+    if meta and meta.type == "application" then return true end
+    for _, raw in ipairs(bounds.array(entries, 512) or {}) do
+        local entry = bounds.object(raw)
+        local declaration = entry and bounds.object(entry.meta)
+        if declaration and declaration.type == "bee.app" then return true end
+    end
+    return false
+end
+
+local function application_package(item: Item): (boolean?, string?)
+    if item.latest_version == "" then return false, nil end
+    local package, problem = hub.versions.open(item.component, item.latest_version, {timeout = M.TIMEOUT_SECONDS})
+    if not package then return nil, tostring(problem) end
+    local metadata, metadata_error = package:metadata()
+    local entries, entries_error = package:entries({include_data = false})
+    local closed, close_error = package:close()
+    if not metadata or not entries or not closed then return nil, tostring(metadata_error or entries_error or close_error) end
+    return M.application(metadata, entries), nil
+end
+
 function M.browse(raw: unknown): (Browse?, string?)
     local request, request_error = M.decode(raw)
     if not request then return nil, request_error end
@@ -206,7 +232,7 @@ function M.browse(raw: unknown): (Browse?, string?)
         local name = module and component(module.name) or nil
         if name then application[name] = false end
     end
-    local entries, find_error = snapshot:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.app"})
+    local entries, find_error = snapshot:find({["meta.type"] = "bee.app"})
     if find_error then return nil, tostring(find_error) end
     local definitions: {[string]: boolean} = {}
     for _, entry in ipairs(entries) do definitions[entry.id] = true end
@@ -217,7 +243,14 @@ function M.browse(raw: unknown): (Browse?, string?)
         local owner = ownership and component(ownership.owner) or nil
         if id and definitions[id] and owner then application[owner] = true end
     end
-    for _, item in ipairs(result.items) do item.application = application[item.component] end
+    for _, item in ipairs(result.items) do
+        if application[item.component] == true then item.application = true end
+        if item.application == nil then
+            local classified, problem = application_package(item)
+            if classified == nil then return nil, "Classify " .. item.component .. ": " .. tostring(problem) end
+            item.application = classified
+        end
+    end
     return result, nil
 end
 

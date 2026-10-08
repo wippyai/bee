@@ -776,12 +776,12 @@ end
 
 function M.visible_catalog(state: State): {Item}
     local source = state.all_catalog or state.catalog
-    if state.developer_packages or state.query ~= "" then
+    if state.developer_packages then
         return source
     end
     local apps: {Item} = {}
     for _, item in ipairs(source) do
-        if not M.is_library(item) then
+        if item.application == true then
             apps[#apps + 1] = item
         end
     end

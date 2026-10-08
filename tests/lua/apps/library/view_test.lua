@@ -428,19 +428,20 @@ local function define_tests()
             test.eq(view.screen(state), "list")
         end)
 
-        test.it("collapses the Hub catalog into one row with a Browse action", function()
+        test.it("shows a Hub application directly with its description and Install action", function()
             local state = fresh()
             hub.apply_catalog(state.hub, hub_reply({total = 45, items = {
-                {component = "kickside/core", title = "Kickside Core", description = "x", latest_version = "0.1.126"}}}))
+                {component = "kickside/core", title = "Kickside Core", description = "Inbox application", latest_version = "0.1.126", application = true}}}))
             model.show_tab(state, "shared")
             local rows = model.rows(state, "shared")
             test.eq(#rows, 1)
-            test.eq(rows[1].kind, "section")
+            test.eq(rows[1].kind, "app")
             local primary = view.actions(state, rows[1])[1]
-            test.eq(primary.kind, "hub_catalog")
+            test.eq(primary.kind, "install")
             local text = table.concat(plain(view.draw(100, 24, appearance.defaults(), state, ui()).rows), "\n")
-            test.is_true(text:find("45 packages", 1, true) ~= nil)
-            test.is_true(text:find("Kickside Core", 1, true) == nil)
+            test.is_true(text:find("Inbox application", 1, true) ~= nil)
+            test.is_true(text:find("0.1.126", 1, true) ~= nil)
+            test.is_true(text:find("Kickside Core", 1, true) ~= nil)
         end)
 
         test.it("keeps the list title whole when an installed name is long and marks the selected one", function()
@@ -501,9 +502,9 @@ local function define_tests()
             hub.apply_catalog(state.hub, hub_reply({total = 5, items = {
                 {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19", application = false},
                 {component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6", application = false},
-                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
-                {component = "bee/terminal", title = "Terminal", description = "Workspace terminal console", latest_version = "0.4.6"},
-                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
+                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0", application = true},
+                {component = "bee/terminal", title = "Terminal", description = "Workspace terminal console", latest_version = "0.4.6", application = true},
+                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0", application = true},
             }}))
             for _, dims in ipairs({{120, 36}, {80, 24}}) do
                 local w, h = dims[1], dims[2]
@@ -520,7 +521,7 @@ local function define_tests()
                 state.hub_open = false
                 local collapsed = table.concat(plain(view.draw(w, h, appearance.defaults(), state, ui()).rows), "\n")
                 test.is_true(collapsed:find("Hub catalog", 1, true) ~= nil)
-                test.is_true(collapsed:find("Editor", 1, true) == nil)
+                test.is_true(collapsed:find("Editor", 1, true) ~= nil)
                 state.hub_open = true
                 local shared = view.draw(w, h, appearance.defaults(), state, ui())
                 test.eq(#shared.rows, h)
@@ -564,7 +565,7 @@ local function define_tests()
             for _, dimensions in ipairs({{120, 36}, {80, 24}}) do
                 local rendered = table.concat(view.draw(dimensions[1], dimensions[2], appearance.defaults(), state, ui()).rows, "\n")
                 test.is_true(rendered:find("wippy/arbitrary", 1, true) ~= nil or rendered:find("Library", 1, true) ~= nil)
-                test.is_true(rendered:find("Test Framework", 1, true) ~= nil)
+                test.is_true(rendered:find("Test Framework", 1, true) == nil)
                 test.is_true(rendered:find("Editor", 1, true) == nil)
                 test.is_true(rendered:find("bee/console", 1, true) == nil)
             end

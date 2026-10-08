@@ -22,6 +22,15 @@ end
 
 local function define_tests()
     test.describe("Hub catalog", function()
+        test.it("classifies applications from Hub metadata without matching package names", function()
+            local app, library = module("unrelated/tasks"), module("bee/app-lookalike")
+            app.type, library.type = "application", "library"
+            local result = assert(catalog.decode_browse(browse({app, library})))
+            test.eq(result.items[1].application, true)
+            test.eq(result.items[2].application, false)
+            test.is_true(catalog.application({}, {{id = "arbitrary:entry", kind = "process.lua", meta = {type = "bee.app"}}}))
+            test.is_false(catalog.application({}, {{id = "bee:app", kind = "library.lua", meta = {title = "Application"}}}))
+        end)
         test.it("decodes only bounded browse query and page input", function()
             local default, default_error = catalog.decode({})
             test.is_nil(default_error)

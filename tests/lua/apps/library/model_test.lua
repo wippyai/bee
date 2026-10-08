@@ -263,23 +263,23 @@ local function define_tests()
             test.eq(model.rows(state, "installed")[1].status, "Installed")
         end)
 
-        test.it("shares the hive's versions first and keeps the Hub catalog collapsed until it is opened", function()
+        test.it("lists Hub applications directly beside hive versions and keeps libraries behind Developer packages", function()
             local state = fresh()
             hub.apply_installed(state.hub, hub_reply({modules = {
                 {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}}}, roots = {}}))
             hub.apply_catalog(state.hub, hub_reply({total = 4, items = {
                 {component = "wippy/test", title = "Test Framework", description = "BDD", latest_version = "0.4.19", application = false},
-                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
+                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0", application = true},
                 {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
             }}))
             load(state, {version("tally", "1.0.0", "node-laptop")}, {})
             local rows = model.rows(state, "shared")
             test.eq(#rows, 2)
             test.eq(rows[1].name, "Tally")
-            test.eq(rows[2].kind, "section")
-            test.eq(rows[2].name, "Hub catalog")
-            test.is_true(rows[2].source:find("packages", 1, true) ~= nil)
-            test.is_false(model.summary(state):find("2 shared", 1, true) ~= nil)
+            test.eq(rows[2].kind, "app")
+            test.eq(rows[2].name, "Editor")
+            test.eq(rows[2].note, "Text editor app")
+            test.is_true(model.summary(state):find("2 shared", 1, true) ~= nil)
             state.hub_open = true
             rows = model.rows(state, "shared")
             test.eq(#rows, 2)

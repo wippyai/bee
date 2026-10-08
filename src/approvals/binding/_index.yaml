@@ -144,6 +144,8 @@ entries:
             - denied
           proposal_digest:
             type: string
+          reviewed_digest:
+            type: string
           window_ttl_ms:
             type: integer
             minimum: 1
@@ -188,8 +190,17 @@ entries:
         additionalProperties: false
         required:
         - approval_id
+        - expected_revision
+        - proposal_digest
         properties:
           approval_id:
+            type: string
+          expected_revision:
+            type: integer
+            minimum: 1
+          proposal_digest:
+            type: string
+          reviewed_digest:
             type: string
       output:
         type: object
@@ -382,6 +393,10 @@ entries:
       feed_read_after: bee.approvals.binding:feed_read_after
       grant_window: bee.approvals.binding:grant_window
       runtime_lease: bee.approvals.binding:runtime_lease
+      effect: bee.approvals.binding:effect
+      events: bee.approvals.binding:events
+      end_request: bee.approvals.binding:end_request
+      grant: bee.approvals.binding:grant
       request: bee.approvals.binding:request
       decide: bee.approvals.binding:decide
       decide_batch: bee.approvals.binding:decide_batch
@@ -401,6 +416,38 @@ entries:
       deliveries: bee.approvals.binding:deliveries
       reconcile: bee.approvals.binding:reconcile
       capabilities: bee.approvals.binding:capabilities
+- name: effect
+  kind: function.lua
+  source: file://effect_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
+- name: events
+  kind: function.lua
+  source: file://events_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
+- name: end_request
+  kind: function.lua
+  source: file://end_request_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
+- name: grant
+  kind: function.lua
+  source: file://grant_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
 - name: service
   kind: library.lua
   source: file://service.lua
@@ -416,6 +463,7 @@ entries:
   - logger
   - funcs
   imports:
+    lifecycle: bee.approvals.persist:lifecycle
     windows: bee.approvals.types:windows
     runtime_lease: bee.approvals.types:runtime_lease
     bounds: bee.values:bounds

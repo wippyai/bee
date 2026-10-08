@@ -14,3 +14,11 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
+
+- name: exact_scope
+  kind: registry.entry
+  meta:
+    type: bee.approvals.scope
+    scope_type: exact
+    version: '1'
+    digest: 4ece134858741867be6791a940b93288439e4966646402e382074f125a27c8bb

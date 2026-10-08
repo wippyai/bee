@@ -159,8 +159,14 @@ function M.revoke(client: string, workspace: string): Reply
     if not revoked.ok then return revoked end
     local approval = bounds.id(row.approval_id)
     if approval then
+        local current = subject_call.call(binding, {"bee.gateway.security:external_withdraw_policy"},
+            "bee.approvals.binding:read", {approval_id = approval})
+        if not current.ok then return current end
+        local view = bounds.object(current.value)
+        if not view then return fail("STORAGE", "external approval is malformed") end
         local withdrawn = subject_call.call(binding, {"bee.gateway.security:external_withdraw_policy"},
-            "bee.approvals.binding:withdraw", {approval_id = approval})
+            "bee.approvals.binding:withdraw", {approval_id = approval, expected_revision = view.revision,
+                proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest})
         if not withdrawn.ok then return withdrawn end
     end
     return revoked

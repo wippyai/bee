@@ -2,6 +2,7 @@
 local sql = require("sql")
 local bounds = require("bounds")
 local windows = require("windows")
+local lifecycle = require("lifecycle")
 local M = {}
 type NewRequest = {
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
@@ -127,7 +128,13 @@ function M.activation_closures(tx: sql.Transaction, limit: integer): ({unknown}?
         ORDER BY approval_id LIMIT ?]], {limit})
 end
 
-function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_at: string, result_json: string, updated_at: string): string?
+function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_at: string, result_json: string, updated_at: string, state: string?): string?
+    local effect, read_error = lifecycle.read(tx, approval_id)
+    if not effect then return read_error end
+    local lifecycle_error = lifecycle.complete(tx, approval_id, state or (effect.state == "canceled" and "canceled" or "succeeded"), result_json, updated_at)
+    if lifecycle_error then return lifecycle_error end
+    local ack_error = lifecycle.ack_effect(tx, approval_id, updated_at)
+    if ack_error then return ack_error end
     return execute(tx, "UPDATE bee_approval_requests SET effect_completed_at = ?, effect_result_json = ?, updated_at = ? WHERE approval_id = ? AND effect_completed_at IS NULL",
         {completed_at, result_json, updated_at, approval_id}, "complete installation effect")
 end
@@ -173,12 +180,12 @@ function M.due(tx: sql.Transaction, now: integer, limit: integer): ({unknown}?, 
 end
 
 function M.retained(tx: sql.Transaction, horizon: integer, now: integer, limit: integer): ({unknown}?, string?)
-    return query(tx, "SELECT approval_id FROM bee_approval_requests WHERE state <> 'pending' AND expires_ms < ? AND NOT EXISTS (SELECT 1 FROM bee_approval_window_grants g WHERE g.grant_id = bee_approval_requests.approval_id AND g.revoked_at IS NULL AND g.until_ms > ?) AND NOT EXISTS (SELECT 1 FROM bee_approval_outbox o WHERE o.approval_id = bee_approval_requests.approval_id AND o.acknowledged_at IS NULL) LIMIT ?",
+    return query(tx, "SELECT approval_id FROM bee_approval_requests WHERE state <> 'pending' AND expires_ms < ? AND NOT EXISTS (SELECT 1 FROM bee_approval_window_grants g WHERE g.grant_id = bee_approval_requests.approval_id AND g.revoked_at IS NULL AND g.until_ms > ?) AND NOT EXISTS (SELECT 1 FROM bee_approval_events e WHERE e.approval_id = bee_approval_requests.approval_id AND e.acknowledged_at IS NULL) AND NOT EXISTS (SELECT 1 FROM bee_approval_effects f WHERE f.approval_id = bee_approval_requests.approval_id AND f.state NOT IN ('succeeded','failed','canceled')) AND NOT EXISTS (SELECT 1 FROM bee_approval_outbox o WHERE o.approval_id = bee_approval_requests.approval_id AND o.acknowledged_at IS NULL) LIMIT ?",
         {horizon, now, limit})
 end
 
 function M.forget(tx: sql.Transaction, approval_id: string): string?
-    for _, statement in ipairs({"DELETE FROM bee_approval_outbox WHERE approval_id = ?", "DELETE FROM bee_approval_inbox WHERE approval_id = ?",
+    for _, statement in ipairs({"DELETE FROM bee_approval_events WHERE approval_id = ?", "DELETE FROM bee_approval_effects WHERE approval_id = ?", "DELETE FROM bee_approval_grants WHERE approval_id = ?", "DELETE FROM bee_approval_decisions WHERE approval_id = ?", "DELETE FROM bee_approval_outbox WHERE approval_id = ?", "DELETE FROM bee_approval_inbox WHERE approval_id = ?",
         "DELETE FROM bee_approval_history WHERE approval_id = ?", "DELETE FROM bee_approval_requests WHERE approval_id = ?"}) do
         local err = execute(tx, statement, {approval_id}, "forget retained request")
         if err then return err end

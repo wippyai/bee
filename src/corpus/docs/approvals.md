@@ -1,4 +1,4 @@
-# Durable approval requests
+# Universal approval lifecycle, contract 2
 
 `bee.approvals` is the approval owner for one Bee node. It stores requests,
 decisions, history, inbox changes and delivery outbox rows in an owner-scoped
@@ -6,6 +6,45 @@ database. See [component/approvals](../component/approvals.md) and
 [sync and inbox](sync_and_inbox.md) for the surrounding owner-feed boundary.
 Application confirmation dialogs are live broker questions; they are not
 durable approvals and never grant remote operation authority.
+
+## Public contract
+
+Contract version `2` separates the authenticated requester from the authority
+subject. Requests carry origin context, an exact registered scope and adapter
+identity, evidence references and digests, presentation (`inline`, `dialog`,
+`inbox`), an independent effect admission deadline and an optional registered
+continuation with a stable effect ID. `reviewed_digest` binds this review; the
+original `proposal_digest` continues to identify the unchanged proposal.
+
+`request`, `decide`, `decide_batch`, `withdraw`, `end_request`, `read`, `inbox`,
+`feed_snapshot`, `feed_read_after` and `list` manage requests and decisions.
+`end_request` records `superseded` or `invalidated`. `grant` provides `check`,
+`reserve`, `admit`, `release` and `revoke` for exact, single-use decision grants.
+`effect` provides `read`, `claim`, `start`, `complete` and `reconcile`.
+`consume` and `revalidate` share effect admission and restart fencing.
+`events` reads a durable cursor and acknowledges stable event IDs independently
+of thread delivery. `capabilities` reports the version, states and bounds.
+
+Request, Decision, Grant and Effect are distinct durable records. A human
+approval admits one exact effect. The request's decision deadline stops a
+pending decision; it does not stop an approved effect. New admission enforces
+the separate effect deadline. Receipt replay does not spend another use.
+Withdrawal checks the pending revision and proposal digest and returns the
+committed outcome if a decision wins the race.
+
+Transactional events are `approval.requested`, `approval.decided`,
+`approval.denied`, `approval.expired`, `approval.withdrawn`,
+`approval.superseded` and `approval.invalidated`. Every request owes its
+requester a notification, including when there is no thread. Every terminal
+outcome authorizes or cancels its waiting effect and owes its registered
+consumer an event. Stable IDs and explicit acknowledgment support catch-up
+and at-least-once delivery; receivers replay their domain receipts.
+
+Legacy rows retain version `1` provenance, IDs, request/proposal digests,
+decision history and effect receipts. Their effect deadline remains their
+original expiry, so migration does not extend historical authority. Governance
+leases, follow consent, Docker admission and other reusable authorities remain
+in their domain stores until the later grant migration.
 
 ## Ownership and authority
 

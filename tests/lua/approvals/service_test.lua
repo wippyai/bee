@@ -331,7 +331,7 @@ local function define_tests()
                 proposal_digest = approved.proposal_digest, decision = "approved"}))
             value(call(alice, "decide", {approval_id = unrelated.approval_id, expected_revision = unrelated.revision,
                 proposal_digest = unrelated.proposal_digest, decision = "denied"}))
-            value(call(requester, "withdraw", {approval_id = withdrawn.approval_id}))
+            value(call(requester, "withdraw", {approval_id = withdrawn.approval_id, expected_revision = withdrawn.revision, proposal_digest = withdrawn.proposal_digest}))
             time.sleep("5ms")
             local store = open_test_store()
             executed(service.execute(store, OUTBOX, "reconcile", {}, nil, nil))
@@ -383,7 +383,7 @@ local function define_tests()
             test.eq(data.title, assert(bounds.object(created.prompt)).text)
             local sibling = value(call(requester, "request", request_of(workspace, {prompt = {text = "Review the remaining request"}})))
             local changed = assert(events.subscribe(service.ATTENTION, "approval.changed"))
-            value(call(requester, "withdraw", {approval_id = created.approval_id}))
+            value(call(requester, "withdraw", {approval_id = created.approval_id, expected_revision = created.revision, proposal_digest = created.proposal_digest}))
             local update = channel.select({changed:channel():case_receive(), time.after("1s"):case_receive()})
             changed:close()
             test.eq(update.channel, changed:channel())
@@ -601,6 +601,80 @@ local function define_tests()
             test.eq(decode_error, nil)
             test.eq(decoded ~= nil, true)
         end)
+        test.it("durably notifies every terminal outcome without a thread and closes waiting effects", function()
+            local db = open_test_store()
+            local expected = {approved = "approval.decided", denied = "approval.denied", expired = "approval.expired",
+                withdrawn = "approval.withdrawn", superseded = "approval.superseded", invalidated = "approval.invalidated"}
+            for outcome, event_kind in pairs(expected) do
+                local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-terminal-" .. key(), {ttl_ms = 10}), 1000, nil))
+                local fence: {[string]: unknown} = {approval_id = created.approval_id, expected_revision = 1, proposal_digest = created.proposal_digest}
+                if outcome == "approved" or outcome == "denied" then
+                    fence.decision = outcome
+                    executed(service.execute(db, ALICE, "decide", fence, 1005, nil))
+                elseif outcome == "expired" then executed(service.execute(db, OUTBOX, "reconcile", {}, 1011, nil))
+                elseif outcome == "withdrawn" then executed(service.execute(db, REQUESTER, "withdraw", fence, 1005, nil))
+                else fence.outcome = outcome; executed(service.execute(db, REQUESTER, "end_request", fence, 1005, nil)) end
+                local events = assert(db:query("SELECT * FROM bee_approval_events WHERE approval_id = ? ORDER BY seq", {created.approval_id}))
+                test.eq(#events, 2)
+                test.eq(events[2].kind, event_kind)
+                test.eq(events[2].acknowledged_at, nil)
+                local read = executed(service.execute(db, REQUESTER, "read", {approval_id = created.approval_id}, 1012, nil))
+                test.eq(assert(bounds.object(read.effect)).state, outcome == "approved" and "authorized" or "canceled")
+                executed(service.execute(db, REQUESTER, "events", {acknowledge = {events[2].event_id}}, 1013, nil))
+                executed(service.execute(db, REQUESTER, "events", {acknowledge = {events[2].event_id}}, 1014, nil))
+                local acknowledged = assert(db:query("SELECT acknowledged_at FROM bee_approval_events WHERE event_id = ?", {events[2].event_id}))
+                test.eq(acknowledged[1].acknowledged_at ~= nil, true)
+            end
+            db:release()
+        end)
+        test.it("binds subject, scope and reviewed evidence to an immutable request", function()
+            local db = open_test_store()
+            local asked = request_of("ws-contract-" .. key(), {contract_version = 2, subject = {principal_id = "subject-test"},
+                scope = {type = "exact", parameters = {target = "one"}}, presentation = "inline",
+                evidence = {{ref = "test:preflight", digest = string.rep("a", 64)}}})
+            local created = executed(service.execute(db, REQUESTER, "request", asked, 1000, nil))
+            test.eq(created.contract_version, 2)
+            local contract = assert(bounds.object(created.contract))
+            test.eq(assert(bounds.object(contract.requester)).actor_id, REQUESTER)
+            test.eq(assert(bounds.object(contract.subject)).principal_id, "subject-test")
+            local fence: {[string]: unknown} = {approval_id = created.approval_id, expected_revision = 1, proposal_digest = created.proposal_digest,
+                reviewed_digest = string.rep("0", 64), decision = "approved"}
+            test.eq(service.execute(db, ALICE, "decide", fence, 1001, nil).code, "CONFLICT")
+            fence.reviewed_digest = created.reviewed_digest
+            executed(service.execute(db, ALICE, "decide", fence, 1001, nil))
+            asked.evidence = {{ref = "test:preflight", digest = string.rep("b", 64)}}
+            test.eq(service.execute(db, REQUESTER, "request", asked, 1002, nil).code, "CONFLICT")
+            local records = assert(db:query("SELECT kind, reviewed_digest FROM bee_approval_decisions WHERE approval_id = ?", {created.approval_id}))
+            test.eq(records[1].kind, "allow_once")
+            test.eq(records[1].reviewed_digest, created.reviewed_digest)
+            db:release()
+        end)
+        test.it("separates the decision deadline from effect admission and keeps completed receipt replay", function()
+            local db = open_test_store()
+            local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-deadline-" .. key(),
+                {ttl_ms = 10, effect_admission_ms = 2000}), 1000, requester))
+            executed(service.execute(db, ALICE, "decide", {approval_id = created.approval_id,
+                expected_revision = 1, proposal_digest = created.proposal_digest, decision = "approved"}, 1005, nil))
+            local claim = {approval_id = created.approval_id, proposal_digest = created.proposal_digest,
+                effect_key = "deadline-effect", owner_incarnation = created.owner_incarnation}
+            local consumed = executed(service.execute(db, REQUESTER, "consume", claim, 1500, nil))
+            test.eq(consumed.consumed_effect, "deadline-effect")
+            test.eq(service.execute(db, REQUESTER, "consume", claim, 3000, nil).replayed, true)
+            db:release()
+        end)
+        test.it("fences withdrawal against the reviewed revision and digest and reports the committed race winner", function()
+            local created = value(call(requester, "request", request_of("ws-withdraw-" .. key())))
+            test.eq(code(call(requester, "withdraw", {approval_id = created.approval_id,
+                expected_revision = 2, proposal_digest = created.proposal_digest})), "CONFLICT")
+            test.eq(code(call(requester, "withdraw", {approval_id = created.approval_id,
+                expected_revision = 1, proposal_digest = string.rep("0", 64)})), "CONFLICT")
+            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = 1,
+                proposal_digest = created.proposal_digest, decision = "approved"}))
+            local raced = value(call(requester, "withdraw", {approval_id = created.approval_id,
+                expected_revision = 1, proposal_digest = created.proposal_digest}))
+            test.eq(raced.withdrawn, false)
+            test.eq(assert(bounds.object(raced.request)).decision, "approved")
+        end)
         test.it("enforces expiry at the owner, lets only the requester withdraw and binds consumption to one effect", function()
             local workspace = "ws-" .. key()
             local short = value(call(requester, "request", request_of(workspace, {ttl_ms = 1})))
@@ -609,8 +683,8 @@ local function define_tests()
             test.eq(code(late), "INVALID_STATE")
             test.eq(fault_value(late).state, "expired")
             local pending = value(call(requester, "request", request_of(workspace)))
-            test.eq(code(call(other_requester, "withdraw", {approval_id = pending.approval_id})), "DENIED")
-            local withdrawn = value(call(requester, "withdraw", {approval_id = pending.approval_id}))
+            test.eq(code(call(other_requester, "withdraw", {approval_id = pending.approval_id, expected_revision = pending.revision, proposal_digest = pending.proposal_digest})), "DENIED")
+            local withdrawn = value(call(requester, "withdraw", {approval_id = pending.approval_id, expected_revision = pending.revision, proposal_digest = pending.proposal_digest}))
             test.eq(withdrawn.withdrawn, true)
             test.eq((assert(bounds.object(withdrawn.request))).state, "withdrawn")
             test.eq(code(call(bob, "decide", {approval_id = pending.approval_id, expected_revision = 1, decision = "approved", proposal_digest = pending.proposal_digest})), "INVALID_STATE")

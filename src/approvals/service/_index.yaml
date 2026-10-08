@@ -12,6 +12,7 @@ entries:
     worker: bee.process:worker
     service: bee.approvals.binding:service
     outbox: bee.approvals.persist:outbox
+    dispatch: bee.approvals.persist:dispatch
 - name: authority
   kind: process.lua
   source: file://authority.lua

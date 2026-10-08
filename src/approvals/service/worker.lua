@@ -7,6 +7,7 @@ local logger = require("logger")
 local worker = require("worker")
 local service = require("service")
 local outbox = require("outbox")
+local dispatch = require("dispatch")
 local M = {}
 M.INTERVAL_MS = 5000
 type Reconcile = () -> service.Reply
@@ -29,8 +30,9 @@ function M.pass(): string?
         local db, open_error = service.open()
         if not db then return "open approval store: " .. tostring(open_error or "unavailable") end
         local _, drain_error = outbox.drain(db, tostring(process.pid()), outbox.thread_sender())
+        local _, dispatch_error = dispatch.deliver(db, nil)
         db:release()
-        return drain_error
+        return drain_error or dispatch_error
     end)
 end
 -- A failed pass is reported and runs again on the next tick or wake.

@@ -132,3 +132,25 @@ entries:
     bounds: bee.values:bounds
     service: bee.approvals.binding:service
     schema: bee.tests.support:schema
+- name: migration_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-migration-test.db
+  lifecycle: {auto_start: true}
+- name: migration_test
+  kind: function.lua
+  source: file://migration_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [sql, funcs]
+  imports:
+    test: wippy.test:test
+  security:
+    policies: [bee.approvals:migration_test_policy, bee.tests.support:schema_policy]
+- name: migration_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.approvals:migration_test_db]
+    effect: allow

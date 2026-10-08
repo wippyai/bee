@@ -623,7 +623,7 @@ function M.withdraw_intent(state: State, request_id: string): (Intent?, string?)
     if not detail or not selected or detail.approval_id ~= selected then return nil, "open the request before withdrawing" end
     if detail.state ~= "pending" then return nil, "the request is " .. M.text(detail.state, 40) end
     state.pending = {kind = "withdraw", request_id = request_id, approval_id = selected, revision = detail.revision, decision = nil}
-    return {target = "bee.approvals.binding:withdraw", request = {approval_id = selected}}, nil
+    return {target = "bee.approvals.binding:withdraw", request = {approval_id = selected, expected_revision = detail.revision, proposal_digest = detail.proposal_digest}}, nil
 end
 -- Who decided, as the person reads it: the person's own Bee application is
 -- "you"; any other approver is named by the last part of its identity.

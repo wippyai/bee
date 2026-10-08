@@ -510,7 +510,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals.binding:withdraw]
+    resources: [bee.approvals.binding:withdraw, bee.approvals.binding:read]
     effect: allow
 
 - name: installation_library_policy

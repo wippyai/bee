@@ -14,6 +14,14 @@ entries:
     description: List the caller's active approval windows or revoke one immediately on its authoritative node
   - name: runtime_lease
     description: Grant an approved exact runtime lease, check references, consume one effect idempotently, list or revoke
+  - name: effect
+    description: Versioned lifecycle effect
+  - name: events
+    description: Versioned lifecycle events
+  - name: end_request
+    description: Versioned lifecycle end_request
+  - name: grant
+    description: Check, reserve, admit, release or revoke exact decision authority
   - name: request
     description: Ask for a decision on one exact proposal under a host approver policy; the same key replays and a different request under it conflicts
   - name: decide

@@ -99,4 +99,38 @@ function M.policies(): ({[string]: Policy}?, string?)
     end
     return policies, nil
 end
+type Consumer = {destination: string, operation_ref: string, worker_name: string, effect_prefix: string?}
+type Scope = {version: string, digest: string}
+function M.consumers(): ({Consumer}?, string?)
+    local found, err = registry.find({["meta.type"] = "bee.approvals.effect-consumer"})
+    if not found or err then return nil, "discover approval effect consumers: " .. tostring(err) end
+    local result: {Consumer} = {}
+    local seen: {[string]: boolean} = {}
+    for _, entry in ipairs(found) do
+        local meta = bounds.object(entry.meta)
+        local destination = meta and bounds.id(meta.destination) or nil
+        local operation = meta and bounds.id(meta.operation_ref) or nil
+        local worker = meta and bounds.id(meta.worker_name) or nil
+        local prefix = meta and bounds.text(meta.effect_prefix, 128) or nil
+        if not destination or not operation or not worker or seen[destination] then return nil, "invalid or duplicate approval effect consumer" end
+        seen[destination] = true
+        result[#result + 1] = {destination = destination, operation_ref = operation, worker_name = worker, effect_prefix = prefix}
+    end
+    return result, nil
+end
+function M.consumer(destination: string): (Consumer?, string?)
+    local found, err = M.consumers()
+    if not found then return nil, err end
+    for _, entry in ipairs(found) do if entry.destination == destination then return entry, nil end end
+    return nil, "approval effect destination is not registered"
+end
+function M.scope(scope_type: string): (Scope?, string?)
+    local found, err = registry.find({["meta.type"] = "bee.approvals.scope", ["meta.scope_type"] = scope_type})
+    if not found or err or #found ~= 1 then return nil, "approval scope type is not uniquely registered" end
+    local meta = bounds.object(found[1].meta)
+    local version = meta and bounds.id(meta.version) or nil
+    local digest = meta and bounds.text(meta.digest, 64) or nil
+    if not version or not digest or #digest ~= 64 then return nil, "approval scope adapter is invalid" end
+    return {version = version, digest = digest}, nil
+end
 return M

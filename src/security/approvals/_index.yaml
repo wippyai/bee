@@ -49,6 +49,7 @@ entries:
     actions:
     - db.get
     - registry.get
+    - registry.find
     - system.read
     - process.send
     resources:

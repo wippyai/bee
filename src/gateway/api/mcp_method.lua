@@ -257,14 +257,7 @@ end
 -- The app_tools tool reports the projection: what is offered under which
 -- name, and why anything is not.
 local function app_listing(projection: mcp.AppProjection, node: unknown?): Object
-    local tools: {Object} = {}
-    for _, item in ipairs(projection.listed) do
-        local tool = projection.tools[tostring(item.name)]
-        tools[#tools + 1] = {name = tool.alias, description = tool.description, application = tool.definition_id,
-            function_id = tool.ref, node = node, input_schema = node and tool.input_schema or nil,
-            output_schema = node and tool.output_schema or nil}
-    end
-    return reply_result({ok = true, value = {tools = tools, diagnostics = projection.diagnostics}}, nil)
+    return reply_result({ok = true, value = mcp.app_listing(projection, node)}, nil)
 end
 -- One call of an application tool: the node re-reads discovery and the
 -- application's live grant and runs the tool as the application; the reply

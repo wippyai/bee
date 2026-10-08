@@ -260,6 +260,10 @@ local STRING_SCHEMA: Object = {type = "string"}
 local BOOLEAN_SCHEMA: Object = {type = "boolean"}
 local INTEGER_SCHEMA: Object = {type = "integer"}
 local STRING_ARRAY_SCHEMA = array_schema(STRING_SCHEMA)
+local JSON_VALUE_SCHEMA: Object = {anyOf = {
+    {type = "object"}, {type = "array"}, {type = "string"},
+    {type = "number"}, {type = "boolean"}, {type = "null"},
+}}
 
 
 local CAPABILITY_TOOL_SCHEMA: Object = {type = "object", additionalProperties = false,
@@ -278,7 +282,7 @@ local DELIVERY_DIAGNOSTIC_SCHEMA: Object = {type = "object", additionalPropertie
     properties = {code = STRING_SCHEMA, target = STRING_SCHEMA, message = STRING_SCHEMA, remedy = STRING_SCHEMA}}
 local OUTPUT_SCHEMAS: {[string]: Object} = {
     session = output_schema({type = "object"}),
-    call_tool = output_schema({type = "object"}),
+    call_tool = output_schema(JSON_VALUE_SCHEMA),
     thread_read = output_schema({type = "object"}),
     thread_message = output_schema({type = "object"}),
     capabilities = output_schema({type = "object", additionalProperties = false,
@@ -311,12 +315,7 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
             activation_refusal = STRING_SCHEMA}}),
     publish = output_schema({type = "object"}),
     application_open = output_schema({type = "object"}),
-    app_tools = output_schema({type = "object", additionalProperties = false, properties = {
-        tools = array_schema({type = "object", additionalProperties = false, properties = {
-            name = STRING_SCHEMA, description = STRING_SCHEMA, application = STRING_SCHEMA, function_id = STRING_SCHEMA,
-            node = STRING_SCHEMA, input_schema = {type = "object"}, output_schema = {type = "object"}}}),
-        diagnostics = array_schema({type = "object", additionalProperties = false, properties = {
-            code = STRING_SCHEMA, tool = STRING_SCHEMA, message = STRING_SCHEMA}})}}),
+    app_tools = output_schema(JSON_VALUE_SCHEMA),
     tests = output_schema({type = "object", additionalProperties = false,
         properties = {node = STRING_SCHEMA, run_id = STRING_SCHEMA, application = STRING_SCHEMA, state = {type = "string", enum = {"running", "complete", "interrupted"}}, error = STRING_SCHEMA,
             total = INTEGER_SCHEMA, progress = {type = "object", additionalProperties = false,
@@ -493,11 +492,20 @@ function M.app_projection(discovered: unknown, taken: {string}): AppProjection
                 result.tools[alias] = {alias = alias, ref = ref, definition_id = definition, description = description,
                     input_schema = input, output_schema = output, annotations = annotations}
                 result.listed[#result.listed + 1] = {name = alias, description = description, inputSchema = input,
-                    outputSchema = output_schema(output or {type = "object"}), annotations = annotations}
+                    outputSchema = output_schema(output or JSON_VALUE_SCHEMA), annotations = annotations}
             end
         end
     end
     return result
+end
+function M.app_listing(projection: AppProjection, node: unknown?): Object
+    local tools: {Object} = {}
+    for _, item in ipairs(projection.listed) do
+        local tool = projection.tools[tostring(item.name)]
+        tools[#tools + 1] = {name = tool.alias, description = tool.description, application = tool.definition_id,
+            function_id = tool.ref, node = node, input_schema = tool.input_schema, output_schema = tool.output_schema}
+    end
+    return {tools = tools, diagnostics = projection.diagnostics}
 end
 -- app_tool_arguments: the call's arguments, when they conform to the input
 -- schema the tool advertises.

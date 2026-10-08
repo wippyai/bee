@@ -67,6 +67,7 @@ entries:
   source: file://tests.lua
   imports:
     bounds: bee.values:bounds
+    app_tool_request: bee.node:app_tool_request
 - name: test_runs
   kind: library.lua
   source: file://test_runs.lua
@@ -114,3 +115,17 @@ entries:
   source: file://application_tests.lua
   imports:
     bounds: bee.values:bounds
+- name: app_tool_request
+  kind: library.lua
+  source: file://app_tool_request.lua
+  imports:
+    bounds: bee.values:bounds
+- name: peer_tools
+  kind: library.lua
+  source: file://peer_tools.lua
+  imports:
+    protocol: bee.hive:protocol
+    bounds: bee.values:bounds
+    outbound: bee.hive:outbound
+    schemas: bee.gateway.catalog:json_schema
+    declarations: bee.values:agent_tool

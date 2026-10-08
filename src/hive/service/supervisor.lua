@@ -19,6 +19,7 @@ local eventbus = require("events")
 local time = require("time")
 local receiver = require("receiver")
 local bounds = require("bounds")
+local remote = require("remote")
 
 type Completion = {request: protocol.Forwarded, reply: protocol.Reply?, complete: boolean}
 
@@ -64,6 +65,32 @@ local function main()
 
     local function application_call(request: protocol.Forwarded)
         if expired(request) then return end
+        if request.op ~= receiver.CALL then
+            if active >= receiver.MAX_ACTIVE then
+                if #applications >= receiver.MAX_QUEUED then process.send(request.caller, request.reply_topic, protocol.fail("application queue is full"))
+                else applications[#applications + 1] = request end
+                return
+            end
+            active = active + 1
+            local output = channel.new(1)
+            coroutine.spawn(function()
+                local handler = request.op == "application.discover" and remote.discover or remote.tests
+                local ok, reply = pcall(handler, request.args, request.caller, node)
+                output:send(ok and reply or protocol.fail(tostring(reply)))
+            end)
+            coroutine.spawn(function()
+                local deadline = assert(time.after(tostring(math.max(1, math.floor(request.expires - time.now():unix_nano()))) .. "ns"))
+                local selected = channel.select({output:case_receive(), deadline:case_receive()})
+                if selected.channel == deadline then
+                    completions:send({request = request, reply = protocol.fail("application deadline reached; outcome unknown"), complete = false})
+                    output:receive()
+                    completions:send({request = request, reply = nil, complete = true})
+                else
+                    completions:send({request = request, reply = selected.value, complete = true})
+                end
+            end)
+            return
+        end
         local invocation, admission_error = receiver.authorize(request.args, request.caller, node)
         if not invocation then
             process.send(request.caller, request.reply_topic, protocol.fail(tostring(admission_error)))
@@ -189,7 +216,7 @@ local function main()
                 and type(data.ttl) == "number" then
                 local args: {[string]: unknown} = {}
                 if type(data.args) == "table" then args = data.args end
-                if data.op == receiver.CALL then
+                if data.op == receiver.CALL or data.op == "application.discover" or data.op == "application.tests" then
                     local extra = bounds.fields(data, {"op", "args", "reply_topic", "ttl"})
                     if extra or data.ttl ~= data.ttl or data.ttl <= 0 or data.ttl > receiver.MAX_TTL then
                         process.send(caller, data.reply_topic, protocol.fail(extra or "application deadline exceeds its bound"))

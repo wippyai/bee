@@ -73,6 +73,8 @@ local function plan(workspace_id: string, selector: string, owned: {[string]: bo
     return {definition = definition, tests = planned}, nil
 end
 
+local start: (string, string, string, Plan) -> tests.Reply
+
 local function handle(raw: unknown): tests.Reply
     local request = raw :: Object
     local workspace_id, actor_id = request.workspace_id :: string, request.actor_id :: string
@@ -92,8 +94,12 @@ local function handle(raw: unknown): tests.Reply
     if #planned.tests > tests.MAX_TESTS then
         return tests.fail("INVALID", #planned.tests .. " tests match; at most " .. tests.MAX_TESTS .. " run at once, narrow the filter")
     end
+    return start(workspace_id, actor_id, request.application :: string, planned)
+end
+
+start = function(workspace_id: string, actor_id: string, overlay: string, planned: Plan): tests.Reply
     local run: test_runs.Row = {run_id = tostring(uuid.v7()), workspace_id = workspace_id, actor_id = actor_id,
-        overlay = request.application :: string, application = planned.definition.process, plan = planned.tests,
+        overlay = overlay, application = planned.definition.process, plan = planned.tests,
         state = "pending", result = nil}
     local created, code, message = test_runs.create(run)
     if not created then return tests.fail(code or "UNAVAILABLE", message or "the run was not recorded") end
@@ -103,4 +109,4 @@ local function handle(raw: unknown): tests.Reply
     return tests.succeed({run_id = run.run_id, application = run.application, total = #run.plan})
 end
 
-return {handle = handle}
+return {handle = handle, start = start}

@@ -12,7 +12,7 @@ local M = {}
 M.DB = "bee:db"
 
 type Object = {[string]: unknown}
-type Planned = {id: string, suite: string, timeout: string}
+type Planned = {id: string, suite: string, timeout: string, hive: {[string]: unknown}?}
 -- state is pending until the runner takes the run, running while it executes,
 -- then complete, or interrupted when the node stopped under it.
 type Row = {run_id: string, workspace_id: string, actor_id: string, overlay: string, application: string,

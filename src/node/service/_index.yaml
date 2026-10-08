@@ -35,11 +35,18 @@ entries:
   kind: process.lua
   source: file://tests.lua
   method: main
-  modules: [process, channel, funcs, time, logger]
+  modules:
+  - process
+  - channel
+  - funcs
+  - time
+  - logger
   imports:
     application: bee.node:application
     tests: bee.node:tests
     test_runs: bee.node:test_runs
+    receiver: bee.hive:receiver
+    bounds: bee.values:bounds
 - name: tests_service
   meta:
     title: Node · tests

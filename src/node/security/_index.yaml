@@ -178,9 +178,22 @@ entries:
 - name: tests_runner
   kind: security.policy
   meta:
-    comment: The test runner reads the registry to find an application and runs each test as that application, with the actor and scope the node gives the application's own instances
+    comment: The test runner reads the registry to find an application and runs each test as that application, with
+      the actor and scope the node gives the application's own instances
   policy:
-    actions: [registry.get, registry.version, registry.find, registry.overlay.get, security.actor.create, security.policy_group.get, security.policy.get, funcs.security, funcs.call, security.scope.create]
+    actions:
+    - registry.get
+    - registry.version
+    - registry.find
+    - registry.overlay.get
+    - security.actor.create
+    - security.policy_group.get
+    - security.policy.get
+    - funcs.security
+    - funcs.call
+    - security.scope.create
+    - registry.snapshot
+    - funcs.context
     resources: '*'
     effect: allow
 - name: app_tools_runner

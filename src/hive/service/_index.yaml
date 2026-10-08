@@ -5,21 +5,37 @@ entries:
   kind: process.lua
   source: file://supervisor.lua
   method: main
-  modules: [process, channel, system, registry, logger, events, time]
+  modules:
+  - process
+  - channel
+  - system
+  - registry
+  - logger
+  - events
+  - time
   imports:
     protocol: bee.hive:protocol
     receiver: bee.hive:receiver
     bounds: bee.values:bounds
+    remote: bee.hive:remote
 - name: supervisor_service
   meta:
-    title: Hive · supervisor
+    title: "Hive \xB7 supervisor"
   kind: process.service
   process: bee.hive.service:supervisor
   host: bee:workers
   lifecycle:
     auto_start: true
     security:
-      actor: {id: bee.hive.supervisor}
-      policies: [bee.hive.security:supervisor, bee.hive.security:routing, bee.hive.security:routing_changes, bee.hive.security:messaging, bee.hive.security:application_dispatch, bee.hive.security:admission_store]
+      actor:
+        id: bee.hive.supervisor
+      policies:
+      - bee.hive.security:supervisor
+      - bee.hive.security:routing
+      - bee.hive.security:routing_changes
+      - bee.hive.security:messaging
+      - bee.hive.security:application_dispatch
+      - bee.hive.security:admission_store
+      - bee.node.security:tests_backend_wake
     restart:
       max_attempts: 10

@@ -62,3 +62,21 @@ entries:
     transaction: bee.persist:transaction
     canonical: bee.values:canonical
     protocol: bee.hive:protocol
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  modules:
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    application: bee.node:application
+    app_tools: bee.node:app_tools
+    application_tests: bee.node:application_tests
+    receiver: bee.hive:receiver
+    operations: bee.hive:operations
+    protocol: bee.hive:protocol
+    canonical: bee.values:canonical
+    tests: bee.node:tests
+    test_runs: bee.node:test_runs
+    backend: bee.node.binding:tests_backend_library
+    grants: bee.gov.types:capability_grants

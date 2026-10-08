@@ -12,6 +12,7 @@ local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local session_tools = require("session_tools")
 local node_tests = require("node_tests")
+local app_requests = require("app_requests")
 local json_schema = require("json_schema")
 local canonical = require("canonical")
 local M = {}
@@ -191,6 +192,8 @@ local TOOLS: {Tool} = {
             application = {type = "string", minLength = 1, maxLength = 160, description = "list and run: the application definition id (app.<overlay>:app) or the overlay id it was delivered from"},
             filter = {type = "string", minLength = 1, maxLength = 160, description = "list and run: keep the tests whose entry id contains this text"},
             run_id = {type = "string", minLength = 1, maxLength = 160, description = "status: the run_id run returned"},
+            node = {type = "string", minLength = 1, maxLength = 160},
+            idempotency_key = {type = "string", minLength = 1, maxLength = 128},
         }, examples = {{operation = "run", application = "tally"}, {operation = "status", run_id = "0198f1c2-0000-7000-8000-000000000000"}}}},
     {name = "process_run", description = "Run the command a person approved for this attempt through request_capability with process.exec: the approved command followed by these arguments, in the approved folder of this workspace, with only the host PATH in its environment. Pass the approval_id capability_status reported as granted. Returns the exit code and the combined stdout and stderr, at most 1 MiB per stream; a run past timeout_ms is stopped. Refused once the approval's time runs out or for any other command.",
         operation = "bee.gateway.binding:process_run",
@@ -211,10 +214,15 @@ local TOOLS: {Tool} = {
             body = {type = "string", maxLength = 1048576},
             timeout = {type = "number", minimum = 1, maximum = 60},
         }}},
-    {name = "app_tools", description = "List the tools this workspace's applications offer agents, the application each belongs to, and why any tool is not offered. Each listed tool is callable by its own name, like any other tool: it runs as its application, with only the grants the person approved for that application, on the same state the application shows the person. Call it again after an application is installed or removed; tools/list follows the same discovery on every request.",
+    {name = "app_tools", description = "List the tools this workspace's applications offer agents, the application each belongs to, and why any tool is not offered. Each listed tool is callable by its own name, like any other tool: it runs as its application, with only the grants the person approved for that application, on the same state the application shows the person. Omit node for local discovery. With node, list only the peer tools exposed to this authenticated node. Use operation call, tool and arguments to invoke a listed peer tool; mutations need a stable idempotency_key. Call it again after an application is installed or removed; tools/list follows local discovery on every request.",
         operation = "bee.node.binding:app_tools",
-        policies = {TOOL_POLICY_REFS.app_tools}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, properties = table.create(0, 1)}},
+        policies = {TOOL_POLICY_REFS.app_tools}, annotations = {readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = false},
+        schema = {type = "object", additionalProperties = false, properties = {
+            node = {type = "string", minLength = 1, maxLength = 160},
+            operation = {type = "string", enum = {"list", "call"}},
+            tool = {type = "string", minLength = 1, maxLength = 64}, arguments = {type = "object"},
+            idempotency_key = {type = "string", minLength = 1, maxLength = 128},
+        }}},
     {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.apps:open_call",
         policies = {TOOL_POLICY_REFS.application_open}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_id", "arguments", "idempotency_key"}, properties = {
@@ -301,11 +309,12 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
     application_open = output_schema({type = "object"}),
     app_tools = output_schema({type = "object", additionalProperties = false, properties = {
         tools = array_schema({type = "object", additionalProperties = false, properties = {
-            name = STRING_SCHEMA, description = STRING_SCHEMA, application = STRING_SCHEMA, function_id = STRING_SCHEMA}}),
+            name = STRING_SCHEMA, description = STRING_SCHEMA, application = STRING_SCHEMA, function_id = STRING_SCHEMA,
+            node = STRING_SCHEMA, input_schema = {type = "object"}, output_schema = {type = "object"}}}),
         diagnostics = array_schema({type = "object", additionalProperties = false, properties = {
             code = STRING_SCHEMA, tool = STRING_SCHEMA, message = STRING_SCHEMA}})}}),
     tests = output_schema({type = "object", additionalProperties = false,
-        properties = {run_id = STRING_SCHEMA, application = STRING_SCHEMA, state = {type = "string", enum = {"running", "complete", "interrupted"}}, error = STRING_SCHEMA,
+        properties = {node = STRING_SCHEMA, run_id = STRING_SCHEMA, application = STRING_SCHEMA, state = {type = "string", enum = {"running", "complete", "interrupted"}}, error = STRING_SCHEMA,
             total = INTEGER_SCHEMA, progress = {type = "object", additionalProperties = false,
                 properties = {done = INTEGER_SCHEMA, total = INTEGER_SCHEMA}},
             tests = array_schema({type = "object", additionalProperties = false,
@@ -777,12 +786,16 @@ end
 
 -- The tests tool shares the node runner's own request decoder, so the schema
 -- the tool advertises and the fields it accepts cannot drift apart.
+function M.app_tools_arguments(params: Object): (Object?, string?)
+    return app_requests.decode(params.arguments)
+end
+
 function M.tests_arguments(params: Object): (Object?, string?)
     local arguments_value = bounds.object(params.arguments)
     if not arguments_value then return nil, "arguments must be an object" end
     local request, decode_error = node_tests.decode(arguments_value)
     if not request then return nil, decode_error end
-    local decoded: Object = {operation = request.operation, application = request.application, filter = request.filter, run_id = request.run_id}
+    local decoded: Object = {operation = request.operation, application = request.application, filter = request.filter, run_id = request.run_id, node = request.node, idempotency_key = request.idempotency_key}
     return decoded, nil
 end
 

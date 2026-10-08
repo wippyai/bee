@@ -2,6 +2,7 @@
 -- bounds a run keeps within and the reply envelope. The runner service and the
 -- facade that authorizes callers share these.
 local bounds = require("bounds")
+local app_tool_request = require("app_tool_request")
 
 local M = {}
 
@@ -21,7 +22,7 @@ M.MAX_ACTIVE = 4
 type Object = {[string]: unknown}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
-type Request = {operation: string, application: string?, filter: string?, run_id: string?}
+type Request = {operation: string, application: string?, filter: string?, run_id: string?, node: string?, idempotency_key: string?}
 
 function M.fail(code: string, message: string): Reply
     return {ok = false, value = nil, error = {code = code, message = message}}
@@ -42,11 +43,15 @@ end
 function M.decode(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(value, {"operation", "application", "filter", "run_id"})
+    local unknown_field = bounds.fields(value, {"operation", "application", "filter", "run_id", "node", "idempotency_key"})
     if unknown_field then return nil, unknown_field end
     local operation = bounds.member(value.operation, {"list", "run", "status"})
     if not operation then return nil, "operation must be list, run or status" end
-    local request: Request = {operation = operation, application = nil, filter = nil, run_id = nil}
+    local node, node_error = app_tool_request.node(value.node)
+    if node_error then return nil, node_error end
+    local key = value.idempotency_key == nil and nil or bounds.line(value.idempotency_key, 128)
+    if value.idempotency_key ~= nil and (operation ~= "run" or not key) then return nil, "only run takes a bounded idempotency key" end
+    local request: Request = {operation = operation, application = nil, filter = nil, run_id = nil, node = node, idempotency_key = key}
     if operation == "status" then
         if value.application ~= nil or value.filter ~= nil then return nil, "status takes only run_id" end
         request.run_id = bounds.id(value.run_id)

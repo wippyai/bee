@@ -18,10 +18,12 @@ local logger = require("logger")
 local application = require("application")
 local tests = require("tests")
 local test_runs = require("test_runs")
+local receiver = require("receiver")
+local bounds = require("bounds")
 
 type Object = {[string]: unknown}
 type Case = {name: string, status: string, error: string?, duration_ms: integer}
-type Entry = {id: string, suite: string, timeout: string, cases: {Case}, error: string?, truncated: boolean}
+type Entry = {id: string, suite: string, timeout: string, cases: {Case}, error: string?, truncated: boolean, hive: Object?}
 type Run = {id: string, workspace_id: string, definition: application.Definition,
     entries: {Entry}, done: integer, finished: boolean, cases: integer, dropped: integer}
 
@@ -160,8 +162,16 @@ local function proceed(run: Run)
     local inbox = assert(process.listen(tests.UPDATE .. run.id, {message = true}))
     local executor, authority_error = authority(run, run.workspace_id)
     for _, entry in ipairs(run.entries) do
-        if executor then execute(run, entry, executor, inbox)
-        else fail_entry(entry, tostring(authority_error)) end
+        local scoped, authorization_error = executor, authority_error
+        if entry.hive then
+            local invocation, denied = receiver.authorize({application = run.definition.process, workspace_id = run.workspace_id,
+                service = entry.hive.service, operation = entry.hive.operation, arguments = {}},
+                tostring(entry.hive.caller), tostring(entry.hive.node), true)
+            if not invocation or invocation.operation.ref ~= entry.id then scoped, authorization_error = nil, denied or "remote test ownership changes"
+            elseif scoped then scoped = scoped:with_context({["bee.hive.caller"] = invocation.caller}) end
+        end
+        if scoped then execute(run, entry, scoped, inbox)
+        else fail_entry(entry, tostring(authorization_error)) end
         run.done = run.done + 1
         if run.done < #run.entries then publish(run) end
     end
@@ -192,7 +202,7 @@ local function take(run_id: string)
     local definition, definition_error = application.definition(row.application)
     local entries: {Entry} = {}
     for _, planned in ipairs(row.plan) do
-        entries[#entries + 1] = {id = planned.id, suite = planned.suite, timeout = planned.timeout, cases = {}, error = nil, truncated = false}
+        entries[#entries + 1] = {id = planned.id, suite = planned.suite, timeout = planned.timeout, cases = {}, error = nil, truncated = false, hive = bounds.object(planned.hive)}
     end
     if not definition then
         for _, entry in ipairs(entries) do fail_entry(entry, tostring(definition_error)) end

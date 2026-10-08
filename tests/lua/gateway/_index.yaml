@@ -252,3 +252,14 @@ entries:
     node_client: bee.node:client
     bounds: bee.values:bounds
     gateway: bee.gateway.binding:gateway
+- name: node_tools_test
+  kind: function.lua
+  source: file://node_tools_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    mcp: bee.gateway.api:mcp
+    bounds: bee.values:bounds

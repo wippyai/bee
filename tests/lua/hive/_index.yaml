@@ -5,8 +5,19 @@ entries:
   kind: function.lua
   source: file://receiver_test.lua
   method: run
-  modules: [registry, system, process, channel, time, uuid, funcs]
-  meta: {type: test, suite: bee}
+  modules:
+  - registry
+  - system
+  - process
+  - channel
+  - time
+  - uuid
+  - funcs
+  - json
+  - security
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds

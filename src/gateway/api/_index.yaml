@@ -176,6 +176,7 @@ entries:
     gateway_protocol: bee.gateway:protocol
     canonical: bee.values:canonical
     record_bounds: bee.threads.records:bounds
+    app_requests: bee.node:app_tool_request
 - name: gateway_endpoint
   kind: registry.entry
   meta:

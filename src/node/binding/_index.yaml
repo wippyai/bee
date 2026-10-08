@@ -51,15 +51,23 @@ entries:
 - name: tests_call
   kind: function.lua
   meta:
-    comment: Runs and reads an admitted application's associated tests with authenticated workspace and overlay ownership evidence
+    comment: Runs and reads an admitted application's associated tests with authenticated workspace and overlay
+      ownership evidence
   source: file://tests_call.lua
   method: handle
-  modules: [funcs, security]
+  modules:
+  - funcs
+  - security
   imports:
     bounds: bee.values:bounds
     tests: bee.node:tests
+    peers: bee.node:peer_tools
   security:
-    policies: [bee.node.security:tests_facade]
+    policies:
+    - bee.node.security:tests_facade
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.hive.security:outbound
 - name: tests_backend
   kind: function.lua
   meta:
@@ -78,26 +86,48 @@ entries:
 - name: app_tools
   kind: function.lua
   meta:
-    comment: The tools the caller's workspace applications offer agents, with diagnostics for tools that are not offered
+    comment: The tools the caller's workspace applications offer agents, with diagnostics for tools that are not
+      offered
   source: file://app_tools_call.lua
   method: list
-  modules: [funcs, security, ctx]
-  imports: &app_tools_imports
+  modules:
+  - funcs
+  - security
+  - ctx
+  imports:
     bounds: bee.values:bounds
     application: bee.node:application
     app_tools: bee.node:app_tools
+    requests: bee.node:app_tool_request
+    peers: bee.node:peer_tools
   security:
-    policies: [bee.node.security:app_tools_runner, bee.node.security:identity]
+    policies:
+    - bee.node.security:app_tools_runner
+    - bee.node.security:identity
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.hive.security:outbound
 - name: app_tool_call
   kind: function.lua
   meta:
-    comment: Runs one tool the caller's workspace applications offer agents, as that application with the actor and exact scope its own instances run with
+    comment: Runs one tool the caller's workspace applications offer agents, as that application with the actor
+      and exact scope its own instances run with
   source: file://app_tools_call.lua
   method: call
-  modules: [funcs, security, ctx]
-  imports: *app_tools_imports
+  modules:
+  - funcs
+  - security
+  - ctx
+  imports:
+    bounds: bee.values:bounds
+    application: bee.node:application
+    app_tools: bee.node:app_tools
+    requests: bee.node:app_tool_request
+    peers: bee.node:peer_tools
   security:
-    policies: [bee.node.security:app_tools_runner, bee.node.security:identity]
+    policies:
+    - bee.node.security:app_tools_runner
+    - bee.node.security:identity
 - name: names
   kind: function.lua
   meta:
@@ -110,3 +140,21 @@ entries:
     client: bee.node:client
   security:
     policies: [bee.hive.security:caller, bee.hive.security:messaging]
+- name: tests_backend_library
+  kind: library.lua
+  meta:
+    comment: Plans a run of an application's tests, writes it to the node database and wakes the runner; reads a
+      run's results. Runs only in the test backend scope
+  source: file://tests_backend.lua
+  modules:
+  - process
+  - registry
+  - uuid
+  imports:
+    application: bee.node:application
+    tests: bee.node:tests
+    test_runs: bee.node:test_runs
+    discovery: wippy.test:discovery
+    application_tests: bee.node:application_tests
+    activation_profiles: bee.gov.types:activation_profile_decoder
+    bounds: bee.values:bounds

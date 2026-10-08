@@ -10,6 +10,8 @@ local ctx = require("ctx")
 local bounds = require("bounds")
 local application = require("application")
 local app_tools = require("app_tools")
+local requests = require("requests")
+local peers = require("peers")
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
@@ -25,11 +27,15 @@ local function caller_workspace(): string?
     return metadata and bounds.id(metadata.workspace_id) or nil
 end
 
+local call: (unknown) -> Reply
+
 local function list(raw: unknown): Reply
-    local request = bounds.object(raw == nil and {} or raw)
-    if not request or bounds.fields(request, {}) then return fail("INVALID", "list takes no arguments") end
+    local request, invalid = requests.decode(raw)
+    if not request then return fail("INVALID", invalid or "invalid app_tools request") end
     local workspace = caller_workspace()
     if not workspace then return fail("DENIED", "application tools need an authenticated workspace caller") end
+    if request.node ~= nil then return peers.tools(request) end
+    if request.operation == "call" then return call({tool = request.tool, arguments = request.arguments}) end
     local found, discovery_error = app_tools.discover(workspace)
     if not found then return fail("UNAVAILABLE", tostring(discovery_error)) end
     return {ok = true, value = found, error = nil}
@@ -46,7 +52,7 @@ end
 
 -- call: {tool, arguments}. The tool's reply is the application's
 -- {ok, value, error} envelope, returned as it is.
-local function call(raw: unknown): Reply
+call = function(raw: unknown): Reply
     local request = bounds.object(raw)
     if not request or bounds.fields(request, {"tool", "arguments"}) then
         return fail("INVALID", "call takes tool and arguments")

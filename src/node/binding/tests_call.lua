@@ -3,6 +3,7 @@ local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
 local tests = require("tests")
+local peers = require("peers")
 
 local OVERLAYS = "bee.gov.binding:overlay_call"
 local BACKEND = "bee.node.binding:tests_backend"
@@ -31,6 +32,10 @@ local function handle(raw: unknown): tests.Reply
     local metadata = actor and bounds.object(actor:meta()) or nil
     local workspace = metadata and bounds.id(metadata.workspace_id) or nil
     if not actor or not workspace then return tests.fail("DENIED", "tests need an authenticated workspace caller") end
+    if request.node ~= nil then
+        return peers.tests({operation = request.operation, application = request.application, filter = request.filter,
+            run_id = request.run_id, node = request.node, idempotency_key = request.idempotency_key})
+    end
     local owned: {[string]: boolean} = {}
     if request.application then
         local listed, fault = overlays()

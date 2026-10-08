@@ -14,6 +14,8 @@ local time = require("time")
 local uuid = require("uuid")
 local funcs = require("funcs")
 local application = require("application")
+local json = require("json")
+local security = require("security")
 
 type Object = {[string]: unknown}
 local WORKSPACE = "012345678901234567890123456789ab"
@@ -36,7 +38,7 @@ local function remove()
     end
 end
 
-local function install(audience: string, mode: string?, blocked: boolean?, calling: boolean?): string
+local function install(audience: string, mode: string?, blocked: boolean?, calling: boolean?, tooling: boolean?): string
     remove()
     local vocabulary = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
     local requirement = {id = "receiver.sdk:exposure", value = nil, expected_kind = "security.policy", targets = {RUN},
@@ -48,6 +50,11 @@ local function install(audience: string, mode: string?, blocked: boolean?, calli
         requirements[#requirements + 1] = {id = "receiver.sdk:call", expected_kind = "security.policy", targets = {APP},
             capability_request = {capability = "hive.call", parameters = {nodes = {audience, "runner"}, workspaces = {WORKSPACE},
                 applications = {APP}, services = {"test-sdk"}, operations = {"run"}},
+                catalog_revision = vocabulary.revision, template_revision = 1, target = APP, path = ".security.policies +="}}
+    end
+    if tooling then
+        requirements[#requirements + 1] = {id = "receiver.sdk:agent_tools", expected_kind = "security.policy", targets = {APP},
+            capability_request = {capability = "agent.tools", parameters = {tools = {RUN, "other.runner:run"}},
                 catalog_revision = vocabulary.revision, template_revision = 1, target = APP, path = ".security.policies +="}}
     end
     local proposal = assert(grants.propose(vocabulary, OWNER, APP, requirements))
@@ -67,6 +74,14 @@ return {run = function(args)
         registry = security.can("registry.get", "bee:db"), database = security.can("db.get", "bee:db"),
         exposure = security.can("hive.expose.open", "unrelated.runner:run"), caller = ctx.get("bee.hive.caller")}
 end}]]}}}
+    if tooling then
+        entries[#entries + 1] = {id = "other.runner:run", kind = "function.lua",
+            meta = {type = "tool", application_ref = APP, hive = "open", hive_service = "test-sdk",
+                hive_operation = {name = "unexposed", revision = "1", effect = "read", input = {type = "object"}, output = {type = "object"}},
+                llm_alias = "unexposed_sdk", llm_description = "An application tool without a Hive exposure grant",
+                input_schema = '{"type":"object"}', output_schema = '{"type":"object"}'},
+            data = {method = "run", source = "return {run = function() return {ok = true, value = {}} end}"}}
+    end
     if blocked then
         local operation = entries[2]
         operation.meta.hive_operation.input.properties.notify = {type = "string"}
@@ -506,6 +521,102 @@ end}]], {type = "object"})
             test.contains(tostring(timed.error or (timed_reply and timed_reply.error)), "outcome unknown")
             refused(pending, "outcome unknown")
             test.is_true(completed ~= nil and completed.ok, tostring(completed and completed.error))
+        end)
+        test.it("discovers only live exposed application tools approved for the authenticated peer", function()
+            local node = assert(system.node.id())
+            install(node, nil, nil, nil, true)
+            local overlay = assert(registry.overlay(OWNER))
+            local entry = assert(overlay:get(RUN))
+            entry.meta.type = "tool"
+            entry.meta.llm_alias = "remote_sdk"
+            entry.meta.llm_description = "Runs the approved SDK configuration"
+            entry.meta.input_schema = assert(json.encode(entry.meta.hive_operation.input))
+            entry.meta.output_schema = assert(json.encode({type = "object"}))
+            entry.data.source = [[return {run = function(args) return {ok = true, value = {configuration = args.configuration}} end}]]
+            entry.data.modules = nil
+            local changes = overlay:changes()
+            changes:update(entry)
+            assert(changes:apply())
+            local found = assert(protocol.call(node, "application.discover", {}, "5s", true))
+            local actor = assert(security.new_actor("gateway-peer-agent", {workspace_id = WORKSPACE}))
+            local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_app_tools_policy"))})
+            local gateway = funcs.new():with_actor(actor):with_scope(scope)
+            local host_listing = assert(bounds.object(assert(gateway:call("bee.node.binding:app_tools", {node = node}))))
+            local host_call = assert(bounds.object(assert(gateway:call("bee.node.binding:app_tools", {node = node,
+                operation = "call", tool = "remote_sdk", arguments = {configuration = "gateway-ci"}}))))
+            test.is_true(host_listing.ok == true, assert(json.encode(host_listing)))
+            test.eq(#(assert(bounds.object(host_listing.value)).tools :: {Object}), 1)
+            test.is_true(host_call.ok == true, assert(json.encode(host_call)))
+            test.eq(assert(bounds.object(host_call.value)).configuration, "gateway-ci")
+            local invoked = assert(protocol.call(node, "application.call", {application = APP, workspace_id = WORKSPACE,
+                service = "test-sdk", operation = "run", arguments = {configuration = "remote-ci"}}, "5s", true))
+            local forged = assert(protocol.call(node, "application.discover", {caller = "other-node"}, "5s", true))
+            changes = assert(registry.snapshot()):changes()
+            changes:delete(ADMISSION)
+            assert(changes:apply())
+            local revoked = assert(protocol.call(node, "application.discover", {}, "5s", true))
+            remove()
+            test.is_true(found.ok, tostring(found.error))
+            local tools = assert(found.value).tools :: {Object}
+            test.eq(#tools, 1)
+            test.eq(tools[1].alias, "remote_sdk")
+            test.eq(tools[1].workspace_id, WORKSPACE)
+            test.eq(tools[1].service, "test-sdk")
+            test.is_true(invoked.ok, tostring(invoked.error))
+            refused(forged, "field")
+            test.eq(#(assert(revoked.value).tools :: {Object}), 0)
+            install("unapproved-peer", nil, nil, nil, true)
+            local hidden = assert(protocol.call(node, "application.discover", {}, "5s", true))
+            remove()
+            test.is_true(hidden.ok, tostring(hidden.error))
+            test.eq(#(assert(hidden.value).tools :: {Object}), 0)
+        end)
+        test.it("runs exposed associated tests through the existing runner and replays the same remote run", function()
+            local node = assert(system.node.id())
+            install(node)
+            local overlay = assert(registry.overlay(OWNER))
+            local entry = assert(overlay:get(RUN))
+            entry.meta.type = "app_test"
+            entry.meta.application = APP
+            entry.meta.suite = "remote-sdk"
+            entry.meta.hive_operation.effect = "mutation"
+            entry.meta.hive_operation.input = {type = "object"}
+            entry.meta.hive_operation.output = {type = "boolean"}
+            entry.data.source = "return {run = function() return true end}"
+            entry.data.modules = nil
+            local changes = overlay:changes()
+            changes:update(entry)
+            assert(changes:apply())
+            local function remote(request: Object): Object
+                local reply = assert(protocol.call(node, "application.tests", request, "5s", true))
+                test.is_true(reply.ok, tostring(reply.error))
+                return assert(bounds.object(assert(reply.value).reply))
+            end
+            local listed = remote({operation = "list", application = APP})
+            local key = tostring(uuid.v7())
+            local started = remote({operation = "run", application = APP, idempotency_key = key})
+            local replayed = remote({operation = "run", application = APP, idempotency_key = key})
+            test.is_true(started.ok == true, assert(json.encode(started.error)))
+            local run = assert(bounds.object(started.value))
+            local result: Object? = nil
+            for _ = 1, 30 do
+                local status = remote({operation = "status", run_id = run.run_id})
+                result = bounds.object(status.value)
+                if result and result.state == "complete" then break end
+                time.after("100ms"):receive()
+            end
+            changes = assert(registry.snapshot()):changes()
+            changes:delete(ADMISSION)
+            assert(changes:apply())
+            local revoked = remote({operation = "status", run_id = run.run_id})
+            remove()
+            test.is_true(listed.ok == true, assert(json.encode(listed.error)))
+            test.eq(#(assert(bounds.object(listed.value)).tests :: {Object}), 1)
+            test.eq(assert(bounds.object(replayed.value)).run_id, run.run_id)
+            test.eq(run.node, node)
+            test.eq(assert(result).state, "complete")
+            test.eq(assert(bounds.object(assert(result).totals)).passed, 1, assert(json.encode(result)))
+            test.is_false(revoked.ok == true)
         end)
         test.it("rechecks admission after the execution queue opens", function()
             local started = assert(process.listen("bee.tests.hive.started", {message = true}))

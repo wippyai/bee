@@ -42,7 +42,7 @@ local function request(raw: unknown): (Request?, string?)
         arguments = arguments, idempotency_key = key, address = resolved}, nil
 end
 
-function M.authorize(raw: unknown, caller: string, node: string): (Invocation?, string?)
+function M.authorize(raw: unknown, caller: string, node: string, inspection: boolean?): (Invocation?, string?)
     local asked, decode_error = request(raw)
     if not asked then return nil, decode_error end
     local binding, admission, admission_error = application.admission(asked.application, asked.workspace_id)
@@ -102,9 +102,9 @@ function M.authorize(raw: unknown, caller: string, node: string): (Invocation?, 
         return nil, "operation exposure is revoked"
     end
     if selected.mode == "policy" then return nil, "policy operation requires a trusted subject mapping" end
-    if selected.effect == "mutation" and not asked.idempotency_key then return nil, "mutation requires an idempotency key" end
+    if not inspection and selected.effect == "mutation" and not asked.idempotency_key then return nil, "mutation requires an idempotency key" end
     local input_error = schemas.validate(selected.input, asked.arguments)
-    if input_error then return nil, input_error end
+    if not inspection and input_error then return nil, input_error end
     local definition, definition_error = application.definition(asked.application)
     if not definition then return nil, definition_error end
     local actor, actor_error = application.actor(asked.workspace_id, "hive", definition, 1)

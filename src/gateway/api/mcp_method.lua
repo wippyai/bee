@@ -237,10 +237,10 @@ end
 -- app_tools tool policy, on every request, so installs and removals show at
 -- once.
 local function app_projection(binding: gateway.Binding, holder: mcp.Tool, available: {mcp.Tool}, values: Object,
-    grants: {context.ResourceGrant}?): (mcp.AppProjection?, Object?)
+    grants: {context.ResourceGrant}?, arguments: Object?): (mcp.AppProjection?, Object?)
     local executor, failure = subject_executor(binding, holder, values, nil, grants)
     if not executor then return nil, failure end
-    local reply, call_error = executor:call(holder.operation, {})
+    local reply, call_error = executor:call(holder.operation, arguments or {})
     if call_error then return nil, refused("UNAVAILABLE", tostring(call_error), nil, true, "retry the same call") end
     local decoded, decode_error = decode_owner_reply(reply)
     if not decoded then return nil, refused("UNAVAILABLE", decode_error or "application tool discovery returned an invalid reply") end
@@ -251,12 +251,13 @@ local function app_projection(binding: gateway.Binding, holder: mcp.Tool, availa
 end
 -- The app_tools tool reports the projection: what is offered under which
 -- name, and why anything is not.
-local function app_listing(projection: mcp.AppProjection): Object
+local function app_listing(projection: mcp.AppProjection, node: unknown?): Object
     local tools: {Object} = {}
     for _, item in ipairs(projection.listed) do
         local tool = projection.tools[tostring(item.name)]
         tools[#tools + 1] = {name = tool.alias, description = tool.description, application = tool.definition_id,
-            function_id = tool.ref}
+            function_id = tool.ref, node = node, input_schema = node and tool.input_schema or nil,
+            output_schema = node and tool.output_schema or nil}
     end
     return reply_result({ok = true, value = {tools = tools, diagnostics = projection.diagnostics}}, nil)
 end
@@ -425,6 +426,7 @@ local function handle(): nil
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters, binding.workspace_id)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
     elseif tool.name == "tests" then arguments, argument_error = mcp.tests_arguments(parameters)
+    elseif tool.name == "app_tools" then arguments, argument_error = mcp.app_tools_arguments(parameters)
     else arguments, argument_error = mcp.configured_arguments(tool, parameters) end
     if arguments and (tool.name == "delivery" or tool.name == "publish") then
         argument_error = mcp.bound_workspace(arguments, binding.workspace_id)
@@ -435,12 +437,15 @@ local function handle(): nil
     if grant_error then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", grant_error))); return nil end
     local scope_error = profile_scope.check(bound.configuration.profile, tool.name, tool.operation, binding.workspace_id, arguments)
     if scope_error then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, scope_error)); return nil end
-    if tool.name == "app_tools" then
+    if tool.name == "app_tools" and arguments.operation == "list" then
+        if arguments.node ~= nil then
+            projection, projection_failure = app_projection(binding, tool, available, values, bound.configuration.resource_grants, arguments)
+        end
         if not projection then
             answer(response, http.STATUS.OK, mcp.result(call.id, projection_failure or refused("UNAVAILABLE", "application tools are unavailable")))
             return nil
         end
-        answer(response, http.STATUS.OK, mcp.result(call.id, app_listing(projection)))
+        answer(response, http.STATUS.OK, mcp.result(call.id, app_listing(projection, arguments.node)))
         return nil
     end
     local runtime: RuntimeGrant? = nil

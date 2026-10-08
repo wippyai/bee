@@ -34,6 +34,20 @@ local function define_tests()
             test.not_nil(problem)
         end)
 
+        test.it("orders application shorthand through SemVer without relaxing Hub versions", function()
+            test.eq(semver.compare_application("v2", "v1"), 1)
+            test.eq(semver.compare_application("1.10", "1.9"), 1)
+            test.eq(semver.compare_application("v2", "2.0.0"), 0)
+            test.eq(semver.compare_application("2.0.0-rc.1", "v2"), -1)
+            for _, raw in ipairs({"latest", "01", "1.02", " v2", "2-rc.1"}) do
+                local result, problem = semver.compare_application(raw, "v1")
+                test.is_nil(result)
+                test.not_nil(problem)
+            end
+            test.is_nil(semver.parse("v2"))
+            test.is_nil(semver.compare("v2", "v1"))
+        end)
+
         test.it("matches caret, tilde, intersections, alternatives and wildcards", function()
             test.is_true(semver.matches("1.8.0", "^1.2.3"))
             test.is_false(semver.matches("2.0.0", "^1.2.3"))

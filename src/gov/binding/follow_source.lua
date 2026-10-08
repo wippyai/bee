@@ -20,6 +20,15 @@ local function without_lease(config: owner.Config): owner.Config
         overlay_owner = config.overlay_owner, approval_policy = config.approval_policy,
         apply = config.apply, matches = config.matches, migrations = config.migrations}
 end
+local function consent_current(config: owner.Config, identity: Identity, intent_id: string, release: string): Result?
+    local current = store.get(config.activations, identity)
+    if not current.ok then return current end
+    local state = bounds.object(current.value)
+    if not state or state.intent_id ~= intent_id then return failure("CONFLICT", "Follow reservation changed") end
+    if state.version ~= release then return failure("ROLLBACK", "A newer installed version supersedes this source update") end
+    if state.mode ~= "following" then return failure("PAUSED", "Following is paused or pinned") end
+    return nil
+end
 local function execute(config: owner.Config, identity: Identity, item: delivery.Delivery,
     intent_id: string): Result
     local current = activations.get(config.activations, intent_id)
@@ -60,6 +69,8 @@ local function execute(config: owner.Config, identity: Identity, item: delivery.
         end
     end
     if not intent or intent.phase == "prepared" then
+        local stopped = consent_current(config, identity, intent_id, item.value.version)
+        if stopped then return stopped end
         current = owner.prepare(without_lease(config), {source_node = identity.source_node,
             source_workspace = identity.source_workspace, version = item.value.version,
             intent_id = intent_id, receipt_key = intent_id})
@@ -69,6 +80,24 @@ local function execute(config: owner.Config, identity: Identity, item: delivery.
     if not intent then return failure("INTERNAL", "Source activation is missing") end
     if intent.phase == "approval_bound" then return current end
     return owner.advance(config, intent_id, intent_id)
+end
+function M.observe_current(config: owner.Config, identity: Identity): Result
+    local desired = owner.desired(config)
+    if not desired.ok and desired.code ~= "NOT_FOUND" then return desired end
+    local working = desired.ok and bounds.object(desired.value) or nil
+    if not working or working.observed_outcome ~= "applied" then return store.get(config.activations, identity) end
+    local observed_id = bounds.id(working.observed_intent_id)
+    if not observed_id then return failure("INTERNAL", "Observed application intent is missing") end
+    local observed = activations.get(config.activations, observed_id)
+    if not observed.ok then return observed end
+    local intent = bounds.object(observed.value)
+    local release = intent and bounds.id(intent.version) or nil
+    local digest = intent and bounds.text(intent.artifact_digest, 64) or nil
+    if not intent or intent.source_node ~= identity.source_node or intent.source_workspace ~= identity.source_workspace then
+        return failure("CONFLICT", "Installed source identity changed")
+    end
+    if not release or not digest then return failure("INTERNAL", "Observed application version is missing") end
+    return store.observe_installation(config.activations, identity, release, digest)
 end
 function M.reconcile(config: owner.Config, identity: Identity, descriptor_raw: unknown,
     content: string, cursor: integer): Result
@@ -82,6 +111,10 @@ function M.reconcile(config: owner.Config, identity: Identity, descriptor_raw: u
     local verified, verification_error = delivery.verify_descriptor(descriptor_raw, item)
     if not verified or item.value.source_node ~= identity.source_node or item.value.source_workspace ~= identity.source_workspace
         or item.value.component ~= identity.component then return failure("INVALID", verification_error or "Source identity changed") end
+    read = M.observe_current(config, identity)
+    if not read.ok then return read end
+    row = bounds.object(read.value)
+    if not row then return failure("INTERNAL", "Following state is missing") end
     local pending = bounds.object(row.pending)
     if not pending then
         local reserved = store.reserve(config.activations, identity, descriptor_raw, cursor)
@@ -94,12 +127,15 @@ function M.reconcile(config: owner.Config, identity: Identity, descriptor_raw: u
     if pending.digest ~= (assert(descriptor)).digest then return failure("BUSY", "Another source update is in progress") end
     local intent_id = bounds.id(row.intent_id)
     if not intent_id then return failure("INTERNAL", "Follow activation identity is missing") end
-    local result = execute(config, identity, item, intent_id)
+    local result = consent_current(config, identity, intent_id, item.value.version)
+        or execute(config, identity, item, intent_id)
     local intent = result.ok and bounds.object(result.value) or nil
     local outcome = intent and bounds.id(intent.outcome) or nil
     local last_outcome: string
     local message: string
-    if not result.ok then
+    if not result.ok and result.code == "PAUSED" then
+        last_outcome, message = "paused", "Updates paused"
+    elseif not result.ok then
         last_outcome = (result.code == "UNCERTAIN" or result.code == "BUSY" or result.code == "UNAVAILABLE" or result.code == "APPROVAL") and "activating" or "failed"
         message = result.message or "Source update failed"
     elseif intent and intent.phase == "approval_bound" then

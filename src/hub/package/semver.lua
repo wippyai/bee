@@ -81,6 +81,17 @@ function M.compare(left: string, right: string): (integer?, string?)
     return compare_version(a, b), nil
 end
 
+local function application_version(raw: string): string
+    local value = raw:sub(1, 1) == "v" and raw:sub(2) or raw
+    if value:match("^%d+$") then return value .. ".0.0" end
+    if value:match("^%d+%.%d+$") then return value .. ".0" end
+    return raw
+end
+
+function M.compare_application(left: string, right: string): (integer?, string?)
+    return M.compare(application_version(left), application_version(right))
+end
+
 type Comparator = {op: string, version: Version?, major: string?, minor: string?}
 type Set = {Comparator}
 

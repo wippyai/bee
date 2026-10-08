@@ -977,7 +977,7 @@ local function main(options: unknown)
             -- its way the list follows it.
             if not busy and view.screen(state) ~= "package" then
                 for _, row in ipairs(model.rows(state, "installed")) do
-                    if row.status == model.STATUS_WAITING or row.status == model.STATUS_INSTALLING then
+                    if row.status == model.STATUS_WAITING or row.status == model.STATUS_INSTALLING or row.follow_state == "following" then
                         background(refresh_activations)
                         break
                     end

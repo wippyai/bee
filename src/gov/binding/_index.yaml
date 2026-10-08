@@ -395,6 +395,9 @@ entries:
   - events
   - logger
   imports:
+    follow_store: bee.gov.persist:follow_store
+    follow_source: bee.gov.binding:follow_source
+    follow_wake: bee.gov.service:follow_wake
     driver_admission: bee.gov.types:driver_admission
     artifact: bee.gov.types:artifact
     bounds: bee.values:bounds
@@ -441,6 +444,9 @@ entries:
   - events
   - logger
   imports:
+    follow_store: bee.gov.persist:follow_store
+    follow_source: bee.gov.binding:follow_source
+    follow_wake: bee.gov.service:follow_wake
     driver_admission: bee.gov.types:driver_admission
     artifact: bee.gov.types:artifact
     bounds: bee.values:bounds

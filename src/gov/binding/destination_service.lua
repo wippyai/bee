@@ -1373,6 +1373,15 @@ function M.apply_approved(raw: unknown): Result
                 local following = follows.get(activation_store, {source_node = source_node, source_workspace = source_workspace, component = chosen.component})
                 local state = following.ok and bounds.object(following.value) or nil
                 if not following.ok then close(plan_store, activation_store, lease_handle); return following end
+                if state and state.intent_id == intent_id then
+                    following = follower.observe_current(assert(configured.config), {source_node = source_node,
+                        source_workspace = source_workspace, component = chosen.component})
+                    if not following.ok then close(plan_store, activation_store, lease_handle); return following end
+                    state = bounds.object(following.value)
+                end
+                if state and state.intent_id == intent_id and state.version ~= intent.version then
+                    close(plan_store, activation_store, lease_handle); return failure("ROLLBACK", "A newer installed version supersedes this source update")
+                end
                 if state and state.pending ~= nil and state.intent_id == intent_id and state.mode ~= "following" then
                     close(plan_store, activation_store, lease_handle); return failure("PAUSED", "Following is paused or pinned")
                 end
@@ -1525,10 +1534,19 @@ function M.follow_all(): Result
                 outcomes[#outcomes + 1] = {workspace_id = workspace_id, source_node = source_node, component = component,
                     ok = false, message = profile_error or "Source application is no longer admitted"}
             else
+                local composed = assert(configured.config)
                 local publications: {Object} = {}
-                local desired = owner.desired(configured.config)
+                local desired = owner.desired(composed)
                 local working = desired.ok and bounds.object(desired.value) or nil
-                local installed = working and working.observed_outcome == "applied"
+                local observed_id = working and bounds.id(working.observed_intent_id) or nil
+                local observed = observed_id and activations.get(activation_store, observed_id) or nil
+                local installed_intent = observed and observed.ok and bounds.object(observed.value) or nil
+                local installed = working and working.observed_outcome == "applied" and installed_intent ~= nil
+                if installed then
+                    local advanced = follower.observe_current(composed, {source_node = source_node,
+                        source_workspace = source_workspace, component = component})
+                    if not advanced.ok then close(plan_store, activation_store, lease_handle); replicas.close(replica_store); return advanced end
+                end
                 local available_slot = state.pending ~= nil or (working and working.phase == "settled" and working.outcome == "applied")
                 local pending = bounds.object(state.pending)
                 if pending then publications[1] = {descriptor = pending, cursor = cursor}
@@ -1547,7 +1565,6 @@ function M.follow_all(): Result
                         end
                     end
                 end
-                local composed = configured.config
                 for _, publication in ipairs(publications) do
                     local descriptor = bounds.object(publication.descriptor)
                     local key = descriptor and bounds.id(descriptor.key) or nil

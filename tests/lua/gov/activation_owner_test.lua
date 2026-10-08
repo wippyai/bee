@@ -1245,7 +1245,7 @@ local function follow_tests()
     local follow_store = require("follow_store")
     local delivery = require("delivery")
     test.describe("Following source activation", function()
-        for _, scenario in ipairs({"equal", "widened", "migration", "restart", "paused", "failed"}) do
+        for _, scenario in ipairs({"equal", "shorthand", "widened", "lease", "migration", "restart", "uncertain", "superseded", "paused", "failed"}) do
             test.it("reconciles a " .. scenario .. " source update", function()
                 local workspace = "workspace-follow-" .. scenario
                 local plans = assert(plan_store.open("bee:db", "node-owner", workspace))
@@ -1257,8 +1257,9 @@ local function follow_tests()
                 end
                 local exact = assert(artifact.create({entry}))
                 local identity = {source_node = "source-a", source_workspace = "app-a", component = "demo/app"}
+                local release = scenario == "shorthand" and "v2" or "1.0.1"
                 local published = assert(delivery.create({schema_revision = delivery.SCHEMA, source_node = identity.source_node,
-                    source_workspace = identity.source_workspace, component = identity.component, version = "1.0.1",
+                    source_workspace = identity.source_workspace, component = identity.component, version = release,
                     artifact = {bytes = exact.bytes, digest = exact.digest}}))
                 local descriptor = assert(delivery.descriptor(published))
                 local review: capability_grants.Review? = nil
@@ -1268,8 +1269,15 @@ local function follow_tests()
                 end
                 local world: ResolverWorld = {revision = 4, digest = SHA, capability = installed_capability(review),
                     application_admission = admission(exact.digest, SHA, nil, workspace), blocked = scenario == "failed"}
+                local lease_handle: lease_store.Store? = nil
+                if scenario == "lease" then
+                    world.capability = widening_capability({LEASE_NARROW})
+                    lease_handle = assert(lease_store.open("bee:db", "node-owner", workspace))
+                    grant_lease(lease_handle, 2)
+                end
                 local requests, effects = 0, 0
-                local working = "1.0.0"
+                local working = scenario == "shorthand" and "v1" or "1.0.0"
+                local interrupted = false
                 local executor = {}
                 function executor.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
                     if method == "bee.approvals.binding:request" then requests = requests + 1 end
@@ -1278,8 +1286,12 @@ local function follow_tests()
                 local function configuration(): owner.Config
                     return {plans = plans, activations = activations, resolver = scenario == "migration" and migration_resolver(entry, {}) or shifting_resolver(entry, world),
                         approvals = executor, actor_id = "host-a", consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
-                        approval_policy = "local-install", migrations = migration_effect(),
+                        approval_policy = "local-install", migrations = migration_effect(), leases = lease_handle,
                         matches = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): (boolean?, string?)
+                            if scenario == "uncertain" and effects > 0 and not interrupted then
+                                interrupted = true
+                                return nil, "Effect observation is interrupted"
+                            end
                             return working == (assert(bounds.object(intent))).version, nil
                         end,
                         apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): ({[string]: unknown}?, string?)
@@ -1290,14 +1302,21 @@ local function follow_tests()
                         end}
                 end
                 expect_code(follower.reconcile(configuration(), identity, descriptor, published.bytes, 1), "PAUSED")
-                ok(follow_store.consent(activations, identity, "following", "1.0.0", exact.digest))
-                if scenario == "restart" or scenario == "paused" then
+                ok(follow_store.consent(activations, identity, "following", working, exact.digest))
+                if scenario == "restart" or scenario == "paused" or scenario == "superseded" then
                     ok(follow_store.reserve(activations, identity, descriptor, 1))
                 end
                 if scenario == "restart" then
                     assert(activation_store.close(activations)); assert(plan_store.close(plans))
                     plans = assert(plan_store.open("bee:db", "node-owner", workspace))
                     activations = assert(activation_store.open("bee:db", "node-owner", workspace))
+                elseif scenario == "superseded" then
+                    working = "1.0.2"
+                    selected_plan(plans, working, {bytes = exact.bytes, digest = exact.digest})
+                    ok(owner.prepare(configuration(), {source_node = identity.source_node,
+                        source_workspace = identity.source_workspace, version = working,
+                        intent_id = "manual-current", receipt_key = "manual-current"}))
+                    test.eq(ok(owner.advance(configuration(), "manual-current", "manual-current")).outcome, "applied")
                 elseif scenario == "paused" then
                     ok(follow_store.consent(activations, identity, "paused", "1.0.0", exact.digest))
                 end
@@ -1305,11 +1324,23 @@ local function follow_tests()
                 if scenario == "paused" then
                     expect_code(result, "PAUSED")
                     test.eq(effects, 0); test.eq(working, "1.0.0")
+                elseif scenario == "superseded" then
+                    expect_code(result, "ROLLBACK")
+                    test.eq(working, "1.0.2"); test.eq(effects, 0); test.eq(requests, 0)
+                elseif scenario == "uncertain" then
+                    expect_code(result, "UNCERTAIN")
+                    test.eq(working, "1.0.1"); test.eq(effects, 1)
+                    test.not_nil(ok(follow_store.get(activations, identity)).pending)
+                    assert(activation_store.close(activations)); assert(plan_store.close(plans))
+                    plans = assert(plan_store.open("bee:db", "node-owner", workspace))
+                    activations = assert(activation_store.open("bee:db", "node-owner", workspace))
+                    test.eq(ok(follower.reconcile(configuration(), identity, descriptor, published.bytes, 1)).outcome, "applied")
+                    test.eq(effects, 1); test.eq(requests, 0)
                 elseif scenario == "failed" then
                     expect_code(result, "BLOCKED")
                     test.eq(effects, 0); test.eq(working, "1.0.0")
                     test.eq(ok(follow_store.get(activations, identity)).last_outcome, "failed")
-                elseif scenario == "widened" or scenario == "migration" then
+                elseif scenario == "widened" or scenario == "lease" or scenario == "migration" then
                     test.eq(ok(result).phase, "approval_bound")
                     test.eq(ok(follow_store.get(activations, identity)).last_outcome, "needs_you")
                     test.eq(working, "1.0.0"); test.eq(effects, 0); test.eq(requests, 1)
@@ -1317,10 +1348,14 @@ local function follow_tests()
                     test.eq(requests, 1)
                 else
                     test.eq(ok(result).outcome, "applied")
-                    test.eq(working, "1.0.1"); test.eq(effects, 1); test.eq(requests, 0)
+                    test.eq(working, release); test.eq(effects, 1); test.eq(requests, 0)
                     test.eq(ok(follow_store.get(activations, identity)).last_outcome, "applied")
                     ok(follower.reconcile(configuration(), identity, descriptor, published.bytes, 1))
                     test.eq(effects, 1); test.eq(requests, 0)
+                end
+                if lease_handle then
+                    test.eq(ok(lease_store.get(lease_handle, "lease-1")).applies_used, 0)
+                    assert(lease_store.close(lease_handle))
                 end
                 assert(activation_store.close(activations)); assert(plan_store.close(plans))
             end)

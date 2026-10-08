@@ -92,6 +92,9 @@ function M.consent(store: Store, identity: Identity, raw_mode: unknown, raw_vers
     if not selected_mode or not release or not artifact_digest or (content_digest ~= nil and not sha(content_digest)) then
         return transaction.failure("INVALID", "following consent is invalid")
     end
+    if selected_mode == "following" and semver.compare_application(release, release) == nil then
+        return transaction.failure("INVALID_VERSION", "Following requires an ordered application version")
+    end
     return mutate(store, identity, function(tx: sql.Transaction, row: Row): Result
         if row.revision == 0 then row.version, row.artifact_digest, row.content_digest = release, artifact_digest, content_digest end
         row.mode = selected_mode
@@ -111,7 +114,7 @@ function M.reserve(store: Store, identity: Identity, raw: unknown, raw_cursor: u
     return mutate(store, identity, function(tx: sql.Transaction, row: Row): Result
         if row.mode ~= "following" then return transaction.failure("PAUSED", "Following is off, paused or pinned") end
         if row.pending then return transaction.failure("BUSY", "A source update is in progress") end
-        local order = semver.compare(admitted.version_id, row.version)
+        local order = semver.compare_application(admitted.version_id, row.version)
         local code: string? = nil
         if order == nil then code = "INVALID_VERSION"
         elseif order < 0 then code = "ROLLBACK"
@@ -145,7 +148,7 @@ function M.finish(store: Store, identity: Identity, raw_intent: unknown, raw_out
     return mutate(store, identity, function(tx: sql.Transaction, row: Row): Result
         if row.intent_id ~= intent_id then return transaction.failure("CONFLICT", "following activation changed") end
         row.last_outcome, row.last_message = outcome, message
-        if outcome ~= "needs_you" and outcome ~= "activating" then row.pending = nil end
+        if outcome ~= "needs_you" and outcome ~= "activating" and outcome ~= "paused" then row.pending = nil end
         return write(tx, store, row)
     end)
 end
@@ -187,4 +190,15 @@ function M.disable(store: Store, source_workspace: string, raw_mode: unknown): R
     end)
 end
 
+function M.observe_installation(store: Store, identity: Identity, release: string, artifact_digest: string): Result
+    if not bounds.id(release) or not sha(artifact_digest) then return transaction.failure("INVALID", "Observed application version is invalid") end
+    return mutate(store, identity, function(tx: sql.Transaction, row: Row): Result
+        if row.revision == 0 then return transaction.success(row, true) end
+        local order = semver.compare_application(release, row.version)
+        if order == nil then return transaction.failure("INVALID_VERSION", "Observed application has no semantic version ordering") end
+        if order <= 0 then return transaction.success(row, true) end
+        row.version, row.artifact_digest, row.content_digest = release, artifact_digest, nil
+        return write(tx, store, row)
+    end)
+end
 return M

@@ -132,6 +132,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     end
     local binding_entry = catalog.entry(pinned, decoded.binding_ref)
     local binding_meta = binding_entry and bounds.object(binding_entry.meta)
+    local driver_name = binding_meta and bounds.id(binding_meta.driver_id)
     local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
     if not descriptor_ref then return repair_only("Driver descriptor is missing") end
     local descriptor, descriptor_error = descriptors.load_from(pinned, descriptor_ref)
@@ -230,7 +231,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
         base.placement and base.placement.kind == "native" and base.placement.home == "private" or base.placement == nil and default_private)
     return {workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
         permission_transport = policy_data.permission_exchange ~= nil,
-        driver_name = descriptor.provider, placement_names = placement_names, leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
+        driver_name = driver_name, placement_names = placement_names, leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
         save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,
         credential_keys = credential_keys, credential_definition = decoded, definition_digest = decoded.digest, default_private_home = default_private,
         migration_diagnostic = diagnostic, repair_json = migration_draft and canonical.encode(migration_draft) or nil}, nil

@@ -44,6 +44,21 @@ end
 local function key(name: string, rune: string?)
     return {type = "key", action = "press", key = rune or "", key_type = name, ctrl = false, alt = false, shift = false}
 end
+local function focus(state: view.State): string
+    local shown = view.draw(120, 45, appearance.defaults(), state)
+    for _, row in ipairs(shown.rows) do
+        local selected = row:gsub("\27%[[0-9;]*m", ""):match("›(.*)")
+        if selected then return selected:gsub("^%[[x ]%]%s*", ""):match("^[^:]+") or "" end
+    end
+    return ""
+end
+local function select_field(state: view.State, label: string)
+    for _ = 1, 24 do
+        if focus(state):find(label, 1, true) then return end
+        view.input(state, key("tab"), view.draw(120, 45, appearance.defaults(), state))
+    end
+    error("Profile field is missing: " .. label)
+end
 local function define_tests()
     test.describe("Agent profile form input", function()
         test.it("keeps provider answers when the host has no accepted transport", function()
@@ -70,18 +85,11 @@ local function define_tests()
             local s: view.State = state()
             s.form.credentials = {"custom_login", "custom_api_key"}
             view.action(s, "advanced")
-            local function focus(): string
-                local shown = view.draw(120, 45, appearance.defaults(), s)
-                for _, row in ipairs(shown.rows) do
-                    local selected = row:gsub("\27%[[0-9;]*m", ""):match("›(.*)")
-                    if selected then return selected:gsub("^%[[x ]%]%s*", ""):match("^[^:]+") or "" end
-                end
-                return ""
-            end
-            s.selected = 6
-            local first = focus()
+            select_field(s, "Credential custom_login")
+            local first = focus(s)
             view.input(s, key("tab"), view.draw(120, 45, appearance.defaults(), s))
-            test.neq(focus(), first)
+            test.neq(focus(s), first)
+            test.is_true(focus(s):find("Credential custom_api_key", 1, true) ~= nil)
         end)
         test.it("masks entered credentials and sends them only to credential setup", function()
             local s = state()
@@ -101,8 +109,9 @@ local function define_tests()
             end
             view.action(s, "advanced")
             local drawn = view.draw(120, 45, appearance.defaults(), s)
-            for _ = 1, 6 do view.input(s, key("tab"), drawn) end
+            select_field(s, "API key custom_api_key")
             view.input(s, {type = "paste", text = entered}, drawn)
+            test.eq(s.credential_text.custom_api_key, entered)
             local rendered = table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n")
             test.is_nil((rendered:find(entered, 1, true)))
             test.is_true(rendered:find("API key custom_api_key", 1, true) ~= nil)

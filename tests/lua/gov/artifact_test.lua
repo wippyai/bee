@@ -44,6 +44,16 @@ local function define_tests()
             test.is_nil(made)
             test.contains(tostring(err), "host application admission")
         end)
+        test.it("refuses portable content that claims a host-approved Hive address", function()
+            local input = sdk()
+            input[#input + 1] = {id = "private.sdk:address", kind = "registry.entry",
+                meta = {type = "bee.hive.application_address"}, data = {workspace_id = "workspace",
+                    application = "private.sdk:app", overlay_owner = "author-owned",
+                    identity = {source_node = "source", source_workspace = "project", component = "vendor/sdk"}}}
+            local made, err = artifact.create(input)
+            test.is_nil(made)
+            test.contains(tostring(err), "host Hive application address")
+        end)
         test.it("refuses partial, malformed or unnamed Hive declarations", function()
             local invalid: {unknown} = {false, "run", {}, {name = "run", revision = "1", input = false, output = {}},
                 {name = "run", revision = "1", input = {}, output = "object"},

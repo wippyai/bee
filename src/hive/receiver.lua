@@ -4,6 +4,7 @@ local security = require("security")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local operations = require("operations")
+local address = require("address")
 local application = require("application")
 local access = require("access")
 local schemas = require("schemas")
@@ -15,7 +16,7 @@ M.MAX_ACTIVE = 4
 M.MAX_QUEUED = 64
 M.MAX_TTL = 30000000000
 type Object = {[string]: unknown}
-type Request = {application: string, workspace_id: string, service: string, operation: string, arguments: Object}
+type Request = {application: string, workspace_id: string, service: string, operation: string, arguments: Object, address: address.Resolved?}
 type Invocation = {request: Request, operation: operations.Operation, actor: security.Actor, scope: security.Scope,
     caller: {node: string, pid: string}}
 
@@ -24,23 +25,38 @@ local function request(raw: unknown): (Request?, string?)
     if not value then return nil, "application call requires an object" end
     local extra = bounds.fields(value, {"application", "workspace_id", "service", "operation", "arguments"})
     if extra then return nil, extra end
-    local app, workspace = bounds.id(value.application), bounds.id(value.workspace_id)
+    local workspace = bounds.id(value.workspace_id)
     local service, operation = bounds.line(value.service, 64), bounds.line(value.operation, 64)
     local arguments = bounds.object(value.arguments)
-    if not app or not workspace or not service or not operation or not arguments then
+    if not workspace or not service or not operation or not arguments then
         return nil, "application call requires application, workspace_id, service, operation and arguments"
     end
-    return {application = app, workspace_id = workspace, service = service, operation = operation, arguments = arguments}, nil
+    local resolved, address_error = address.resolve(value.application, workspace)
+    if not resolved then return nil, address_error end
+    return {application = resolved.application, workspace_id = workspace, service = service, operation = operation,
+        arguments = arguments, address = resolved}, nil
 end
 
 function M.authorize(raw: unknown, caller: string, node: string): (Invocation?, string?)
     local asked, decode_error = request(raw)
     if not asked then return nil, decode_error end
-    local binding, _, admission_error = application.admission(asked.application, asked.workspace_id)
+    local binding, admission, admission_error = application.admission(asked.application, asked.workspace_id)
     if not binding then return nil, admission_error or "application admission is absent or revoked" end
     local record, refusal = access.record(asked.workspace_id, asked.application)
     if not record then
         return nil, refusal and refusal.error and refusal.error.message or "application has no live exposure grant"
+    end
+    local mapped = asked.address
+    if mapped and mapped.overlay_owner and mapped.overlay_owner ~= record.overlay_owner then
+        return nil, "application address owner differs from its installed grant"
+    end
+    if admission and admission.overlay_owner ~= record.overlay_owner then
+        return nil, "application admission owner differs from its installed grant"
+    end
+    if admission and mapped and mapped.identity
+        and (admission.source_node ~= mapped.identity.source_node
+            or admission.source_workspace ~= mapped.identity.source_workspace) then
+        return nil, "application address source differs from its admitted source"
     end
     local owned, owner_error = registry.overlay(record.overlay_owner)
     if not owned then return nil, "exposure ownership is unavailable: " .. tostring(owner_error) end

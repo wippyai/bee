@@ -24,7 +24,7 @@ M.ADMISSION_TYPE = "bee.node.application_admission"
 type Definition = {process: string, title: string, terminal: boolean, revision: string, resume_schema: string, singleton: boolean}
 type Object = {[string]: unknown}
 
-local function host_admissions(pinned: registry.Snapshot): {Object}
+local function host_entries(pinned: registry.Snapshot, entry_type: string): {Object}
     local owners: {[string]: boolean} = {}
     for _, schema in ipairs({grants.SCHEMA, governed_admission.SCHEMA}) do
         for _, entry in ipairs(assert(pinned:find({[".kind"] = "registry.entry", ["meta.type"] = schema}))) do
@@ -36,15 +36,19 @@ local function host_admissions(pinned: registry.Snapshot): {Object}
     local claimed: {[string]: boolean} = {}
     for owner in pairs(owners) do
         local overlay = assert(registry.overlay(owner))
-        for _, entry in ipairs(assert(overlay:find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}))) do
+        for _, entry in ipairs(assert(overlay:find({[".kind"] = "registry.entry", ["meta.type"] = entry_type}))) do
             claimed[entry.id] = true
         end
     end
     local found: {Object} = {}
-    for _, entry in ipairs(assert(pinned:find({[".kind"] = "registry.entry", ["meta.type"] = M.ADMISSION_TYPE}))) do
+    for _, entry in ipairs(assert(pinned:find({[".kind"] = "registry.entry", ["meta.type"] = entry_type}))) do
         if not claimed[entry.id] then found[#found + 1] = entry end
     end
     return found
+end
+
+function M.host_entries(entry_type: string): {Object}
+    return host_entries(assert(registry.snapshot()), entry_type)
 end
 
 -- definition is the app process entry id declares, from its meta.application
@@ -61,7 +65,7 @@ end
 
 local function host_binding(definition_id: string): (governed_admission.Binding?, {[string]: unknown}?, string?)
     local pinned = assert(registry.snapshot())
-    for _, entry in ipairs(host_admissions(pinned)) do
+    for _, entry in ipairs(host_entries(pinned, M.ADMISSION_TYPE)) do
         local data = bounds.object(entry.data)
         local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
         if not bindings then return nil, nil, "admission " .. entry.id .. ": " .. tostring(bindings_error) end
@@ -125,7 +129,7 @@ function M.definitions(workspace_id: string): ({string}?, string?)
         end
     end
     local pinned = assert(registry.snapshot())
-    for _, entry in ipairs(host_admissions(pinned)) do
+    for _, entry in ipairs(host_entries(pinned, M.ADMISSION_TYPE)) do
         local data: unknown = entry.data
         local bindings, bindings_error = governed_admission.bindings(type(data) == "table" and data.bindings or nil)
         if not bindings then return nil, "admission " .. tostring(entry.id) .. ": " .. tostring(bindings_error) end

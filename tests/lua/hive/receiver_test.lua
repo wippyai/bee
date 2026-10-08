@@ -128,6 +128,108 @@ local function define_tests()
             test.eq(caller.node, assert(system.node.id()))
             test.not_nil(bounds.id(caller.pid))
         end)
+        test.it("addresses a copy by its approved source identity and preserves its service name", function()
+            install(assert(system.node.id()))
+            local identity = {source_node = "sdk-author", source_workspace = "project", component = "vendor/test-sdk"}
+            local changes = assert(registry.snapshot()):changes()
+            changes:create({id = ADMISSION .. "_address", kind = "registry.entry",
+                meta = {type = "bee.hive.application_address"}, data = {workspace_id = WORKSPACE,
+                    application = APP, overlay_owner = OWNER, identity = identity, aliases = {"project-sdk"}}})
+            assert(changes:apply())
+            local named = call({application = identity})
+            local aliased = call({application = {alias = "project-sdk"}})
+            changes = assert(registry.snapshot()):changes()
+            changes:delete(ADMISSION .. "_address")
+            assert(changes:apply())
+            remove()
+            test.is_true(named.ok, tostring(named.error))
+            test.is_true(aliased.ok, tostring(aliased.error))
+            test.eq(assert(bounds.object(assert(named.value).result)).configuration, "project-ci")
+        end)
+        test.it("refuses a different source even when it declares the same component", function()
+            install(assert(system.node.id()))
+            local changes = assert(registry.snapshot()):changes()
+            changes:create({id = ADMISSION .. "_address", kind = "registry.entry",
+                meta = {type = "bee.hive.application_address"}, data = {workspace_id = WORKSPACE,
+                    application = APP, overlay_owner = OWNER, identity = {source_node = "sdk-author",
+                        source_workspace = "project", component = "vendor/test-sdk"}, aliases = {}}})
+            assert(changes:apply())
+            local reply = call({application = {source_node = "another-author", source_workspace = "project",
+                component = "vendor/test-sdk"}})
+            changes = assert(registry.snapshot()):changes()
+            changes:delete(ADMISSION .. "_address")
+            assert(changes:apply())
+            remove()
+            refused(reply, "address")
+        end)
+        test.it("refuses an artifact's address claim and a stale address owner", function()
+            install(assert(system.node.id()))
+            local identity = {source_node = "sdk-author", source_workspace = "project", component = "vendor/test-sdk"}
+            local entry = {id = ADMISSION .. "_address", kind = "registry.entry",
+                meta = {type = "bee.hive.application_address"}, data = {workspace_id = WORKSPACE,
+                    application = APP, overlay_owner = OWNER, identity = identity, aliases = {}}}
+            local changes = assert(registry.overlay(OWNER)):changes()
+            changes:create(entry)
+            assert(changes:apply())
+            local forged = call({application = identity})
+            changes = assert(registry.overlay(OWNER)):changes()
+            changes:delete(entry.id)
+            assert(changes:apply())
+            entry.data.overlay_owner = "bee.tests.hive:another_installation"
+            changes = assert(registry.snapshot()):changes()
+            changes:create(entry)
+            assert(changes:apply())
+            local stale = call({application = identity})
+            changes = assert(registry.snapshot()):changes()
+            changes:delete(entry.id)
+            assert(changes:apply())
+            remove()
+            refused(forged, "address")
+            refused(stale, "owner")
+        end)
+        test.it("refuses ambiguous addresses, foreign workspaces and version fields", function()
+            install(assert(system.node.id()))
+            local identity = {source_node = "sdk-author", source_workspace = "project", component = "vendor/test-sdk"}
+            local changes = assert(registry.snapshot()):changes()
+            for _, suffix in ipairs({"_address", "_second_address"}) do
+                changes:create({id = ADMISSION .. suffix, kind = "registry.entry",
+                    meta = {type = "bee.hive.application_address"}, data = {workspace_id = WORKSPACE,
+                        application = APP, overlay_owner = OWNER, identity = identity, aliases = {"project-sdk"}}})
+            end
+            assert(changes:apply())
+            local duplicate_identity = call({application = identity})
+            local duplicate_alias = call({application = {alias = "project-sdk"}})
+            local foreign_workspace = call({application = identity, workspace_id = "another-workspace"})
+            local versioned = call({application = {source_node = "sdk-author", source_workspace = "project",
+                component = "vendor/test-sdk", version = "1"}})
+            changes = assert(registry.snapshot()):changes()
+            changes:delete(ADMISSION .. "_address")
+            changes:delete(ADMISSION .. "_second_address")
+            assert(changes:apply())
+            remove()
+            refused(duplicate_identity, "ambiguous")
+            refused(duplicate_alias, "ambiguous")
+            refused(foreign_workspace, "address")
+            refused(versioned, "address")
+        end)
+        test.it("rejects malformed host aliases instead of treating them as absent", function()
+            install(assert(system.node.id()))
+            local identity = {source_node = "sdk-author", source_workspace = "project", component = "vendor/test-sdk"}
+            local replies: {protocol.Reply} = {}
+            for _, aliases in ipairs({false, "project-sdk", {"project-sdk", "project-sdk"}}) do
+                local changes = assert(registry.snapshot()):changes()
+                changes:create({id = ADMISSION .. "_address", kind = "registry.entry",
+                    meta = {type = "bee.hive.application_address"}, data = {workspace_id = WORKSPACE,
+                        application = APP, overlay_owner = OWNER, identity = identity, aliases = aliases}})
+                assert(changes:apply())
+                replies[#replies + 1] = call({application = identity})
+                changes = assert(registry.snapshot()):changes()
+                changes:delete(ADMISSION .. "_address")
+                assert(changes:apply())
+            end
+            remove()
+            for _, reply in ipairs(replies) do refused(reply, "malformed") end
+        end)
         test.it("refuses an audience other than the authenticated sender node", function()
             install("another-node")
             local reply = call()

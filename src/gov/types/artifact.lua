@@ -151,6 +151,9 @@ local function entries(value: unknown): ({Entry}?, string?)
         if meta and meta.type == "bee.node.application_admission" then
             return nil, "portable artifact cannot declare a host application admission"
         end
+        if meta and meta.type == "bee.hive.application_address" then
+            return nil, "portable artifact cannot declare a host Hive application address"
+        end
         local id = identifier(item.id)
         local entry_kind = kind(item.kind)
         if not id or not entry_kind then return nil, "entries[" .. tostring(index) .. "] has an invalid id or kind" end

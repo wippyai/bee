@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.hive
 entries:
+- name: address
+  kind: library.lua
+  source: file://address.lua
+  imports:
+    bounds: bee.values:bounds
+    application: bee.node:application
 - name: receiver
   kind: library.lua
   source: file://receiver.lua
@@ -8,6 +14,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     operations: bee.hive:operations
+    address: bee.hive:address
     application: bee.node:application
     access: bee.gov.binding:capability_access
     schemas: bee.gateway.catalog:json_schema

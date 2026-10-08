@@ -321,6 +321,42 @@ while that path is unavailable. Existing service routes still forward without
 the application exposure gate. The app-facing `hive.call` capability/facade is
 not implemented. Exposure policies stay out of application execution scopes
 and exposure requirements do not attach those policies to app functions.
+For `application.call`, `application` accepts the existing exact definition ID,
+an immutable `{source_node, source_workspace, component}` object, or an
+`{alias}` object. The destination supplies identity and alias mappings as
+`registry.entry` records with `meta.type: bee.hive.application_address`:
+
+```json
+{
+  "id": "host.sdk:address",
+  "kind": "registry.entry",
+  "meta": {"type": "bee.hive.application_address"},
+  "data": {
+    "workspace_id": "destination-workspace",
+    "application": "app.project_sdk:app",
+    "overlay_owner": "destination-approved-installation-owner",
+    "identity": {
+      "source_node": "author-node",
+      "source_workspace": "project_sdk",
+      "component": "app.project_sdk"
+    },
+    "aliases": ["project-sdk"]
+  }
+}
+```
+
+This record is destination host configuration, separate from the portable
+application manifest. Portable artifacts cannot declare it, and records in
+installed application overlays cannot resolve addresses. The mapping's owner
+must match the live installed grant; a governed admission must also match that
+owner and source node/workspace. The destination rejects ambiguous identities
+or aliases and resolves a queued call's address again before execution. The
+service and operation retain their authored metadata names. Version is
+separate from identity and cannot appear in the address object. An address
+adds no exposure or execution authority. Calls to durable package entries
+remain unavailable through this receiver until their ownership can be verified
+independently of overlay shadows.
+
 A file grant installs a host-created
 `fs.directory` at a verified subroot of the destination workspace's own
 folder: the destination reads the workspace's root and subpath from the node

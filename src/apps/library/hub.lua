@@ -1,6 +1,4 @@
--- MIT. The Library's Hub package model, a presentation model. It never calls
--- Hub or the registry: the application sends typed intents to the public Hub
--- facade and folds its replies back here.
+-- MIT. Library package state and typed intents for the public Hub facade.
 local json = require("json")
 local canonical = require("canonical")
 local text = require("text")
@@ -662,7 +660,7 @@ function M.remove_parameter(state: State, name: string)
     end
 end
 
--- Reject incomplete or stale declarations; never manufacture defaults or types.
+-- Configuration edits require complete, current declarations.
 local function requirement_list(raw: unknown, maximum: integer): {unknown}?
     local rows = bounds.dense_list(raw, maximum, "package declaration")
     return rows

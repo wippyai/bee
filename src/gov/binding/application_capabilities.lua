@@ -97,9 +97,7 @@ function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requirements
             selected_policies[#selected_policies + 1] = generated_id
             policy.grants[generated_id] = true
         end
-        -- An application database grant binds its logical name to the
-        -- host-provisioned database, so the application's own migrations run
-        -- against that dedicated store and no other target is admitted.
+        -- Database grants bind logical migration targets to host-provisioned stores.
         local generated_databases: {Object} = {}
         for _, raw_grant in ipairs(proposed.capabilities) do
             local grant = object(raw_grant)
@@ -122,9 +120,7 @@ function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requirements
                     target_db = target}
             end
         end
-        -- A runtime module outside the profile ceiling is admitted by the
-        -- requested capability the catalog says authorizes it, so the person
-        -- approves the module together with that capability.
+        -- Requested capabilities admit their catalog-declared runtime modules.
         local admitted_modules: {[string]: boolean} = {}
         for name, allowed in pairs(original_policy.modules) do admitted_modules[name] = allowed end
         for name in pairs(capability_model.modules(model_vocabulary, proposed.capabilities)) do

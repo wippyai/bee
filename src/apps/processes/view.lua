@@ -68,7 +68,7 @@ local TABS = {{kind = "processes", label = "Processes", short = "Proc"}, {kind =
     {kind = "hive", label = "Hive", short = "Hive"}}
 local HIVE_HINTS = frame.hints({{key = "Tab", verb = "switch"}, {key = "Esc", verb = "close"}})
 local HIVE_MORE = frame.hints({{key = "↑↓", verb = "select"}, {key = "P", verb = "pause"}})
--- The footer names only keys the buttons above it do not show; help lists
+-- The footer supplements visible button keys; help lists
 -- them all.
 local HINTS = frame.hints({{key = "Tab", verb = "switch"}, {key = "Esc", verb = "close"}})
 local MORE = frame.hints({{key = "↑↓", verb = "select"}, {key = "S", verb = "sort"}, {key = "P", verb = "pause"}, {key = "Del", verb = "stop"}})

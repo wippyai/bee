@@ -55,9 +55,7 @@ local function copy_entry(raw: unknown): (Entry?, string?)
     local id = value and bounds.id(value.id) or nil
     local kind = value and bounds.id(value.kind) or nil
     if not value or not id or not kind then return nil, "registry state contains an invalid entry" end
-    -- The resolver never mutates a retained entry. Copy its author-facing
-    -- fields and ownership; the composed-state measurement below supplies the
-    -- bounded canonical check for the whole capture.
+    -- Copy retained definitions and ownership for bounded capture measurement.
     local result: Entry = {}
     for field, item in pairs(value) do result[field] = item end
     return result, nil

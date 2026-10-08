@@ -1,7 +1,7 @@
 -- MIT. The shared application frame: one header, tabs, one action and
 -- key-hint footer, a scrolling list, a table and an empty or error
 -- state, all drawn from semantic appearance roles. Pure: it paints one canvas
--- and records hit rectangles; it performs no calls and grants nothing.
+-- and records hit rectangles.
 --
 -- Anatomy: header, optional tabs, work and one footer with actions and hints.
 local tty = require("tty")

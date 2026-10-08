@@ -137,9 +137,7 @@ function M.resolve(entry: Entry, package: string, final: {[string]: Entry}, owne
             end
         end
     end
-    -- An agent tools request names this artifact's own tool functions. Each
-    -- decodes as a tool with schemas Bee advertises and declares no security
-    -- of its own: it runs only with the application's scope.
+    -- Artifact-owned tools use advertised schemas and the application's scope.
     if capability == "agent.tools" and capability_request then
         local tools = capability_request.parameters.tools
         if type(tools) ~= "table" then return nil, "agent tool parameters are invalid" end
@@ -156,9 +154,8 @@ function M.resolve(entry: Entry, package: string, final: {[string]: Entry}, owne
             aliases[decoded.alias] = ref
         end
     end
-    -- A Hive exposure request names this artifact's own operations at the
-    -- requested mode; the generated scope policy carries the enforcement, so
-    -- the requirement appends to one of those operations instead of an app.
+    -- Hive exposure targets artifact-owned operations; generated scope policies
+    -- enforce the requested mode.
     local exposure: {[string]: boolean}? = nil
     if capability == "hive.expose" and capability_request then
         local params = capability_request.parameters

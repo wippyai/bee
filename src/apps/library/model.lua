@@ -1,7 +1,7 @@
 -- MIT. The Library's list model: every application and driver a person can
 -- install, from three sources. Versions the agents of this bee made, versions
 -- other bees of the hive shared, and Hub packages are folded into one list per
--- tab. This model reads only the models it composes; it calls nothing.
+-- tab. The model composes local presentation state.
 local governed = require("governed")
 local hub = require("hub")
 local drivers = require("drivers")
@@ -308,7 +308,7 @@ local function installed_rows(state: State): {Row}
     return rows
 end
 
--- Shared lists hive versions and Hub applications together.
+-- Shared lists hive versions and the Hub catalog.
 local function shared_rows(state: State): {Row}
     local rows: {Row} = {}
     local held: {[string]: boolean} = {}

@@ -1,7 +1,7 @@
 -- MIT. A person-approved Hub installation request: the agent names a package,
 -- the host resolves its exact plan, and one approval carries the plan digest
 -- with the dependency, policy, migration and auto-start changes the person
--- decides on. The approved digest is the only authority to apply it. Pure:
+-- decides on. The approved digest authorizes application. Pure:
 -- nothing here calls the Hub, the approval owner or the registry.
 local bounds = require("bounds")
 local canonical = require("canonical")

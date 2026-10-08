@@ -89,8 +89,7 @@ function M.role(theme: Theme, name: string?): string
     return theme.text
 end
 
--- RGB intensity ramps blend from a to b (0 is a, 1 is b). Terminal colors
--- retain their palette identity instead of acquiring fixed RGB values.
+-- RGB ramps blend from a to b; terminal colors retain their palette identity.
 function M.mix(a: string, b: string, k: number): string
     local weight = math.max(0, math.min(1, k))
     if a:sub(1, 1) ~= "#" or b:sub(1, 1) ~= "#" then return weight == 0 and a or b end

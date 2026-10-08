@@ -380,8 +380,7 @@ function M.new(workspace_id: string): State
         pending_recover_key = nil, restored_intent_id = nil, pending_stage = nil,
         review_key = nil, report = nil, report_error = nil, changes = nil, changes_error = nil}
 end
--- Review evidence belongs to one plan. Nothing decoded for another version may
--- survive a selection change and describe the version now in front of a person.
+-- Selection changes clear the previous plan's review evidence.
 function M.forget_review(state: State)
     state.review_key, state.report, state.report_error = nil, nil, nil
     state.changes, state.changes_error = nil, nil

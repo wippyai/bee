@@ -409,7 +409,6 @@ local function define_tests()
             test.is_false(model.is_library({component = "wippy/arbitrary", title = "Library", description = "library", latest_version = "1.0.0", application = true}))
             test.is_true(model.is_library({component = "bee/console", title = "App", description = "app", latest_version = "1.0.0", application = false}))
             test.is_nil(model.component_status(state, "bee/settings"))
-            -- Unknown metadata does not classify a package as a library.
             test.is_false(model.is_library({component = "bee/terminal", title = "Terminal", description = "", latest_version = "0.4.6"}))
             test.is_false(model.is_library({component = "userspace/calc", title = "Calculator", description = "App", latest_version = "1.0.0"}))
             test.is_true(model.is_library({component = "wippy/test", title = "Test Framework", description = "Testing framework", latest_version = "0.4.19", application = false}))
@@ -451,7 +450,6 @@ local function define_tests()
             test.is_false(state.developer_packages)
             test.eq(#state.catalog, 3)
 
-            -- Search keeps the developer filter in force.
             model.set_query(state, "test")
             test.eq(state.query, "test")
             test.eq(#state.catalog, 3)

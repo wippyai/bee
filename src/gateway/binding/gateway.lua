@@ -407,7 +407,7 @@ function M.generation(db: sql.DB): (Generation?, Reply?)
     if epoch == nil then return nil, fail("STORAGE", "listener epoch is corrupt") end
     return {epoch = epoch, restarts = count}, nil
 end
--- Validity of a binding now: current epoch, not revoked, not expired.
+-- Binding validity requires the current epoch and a live, unrevoked binding.
 function M.valid(binding: Binding, generation: Generation): (boolean, string)
     if binding.revoked then return false, "binding is revoked" end
     if binding.epoch ~= generation.epoch then return false, "binding belongs to an earlier listener epoch" end

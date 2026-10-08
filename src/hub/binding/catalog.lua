@@ -153,9 +153,7 @@ function M.decode_versions(raw: unknown): (VersionPage?, string?)
     return {items = versions, total = total, page = page, page_size = M.MAX_VERSIONS}, nil
 end
 
--- decode_detail_result reads a package's details. The README is optional
--- content: when Hub could not serve it, readme_error says why and the package
--- and its versions still decode.
+-- Package details retain versions and a diagnostic when the optional README fails.
 function M.decode_detail_result(module: unknown, readme: unknown, version_response: unknown, requested_component: string,
     readme_error: string?): (Detail?, string?)
     local item, item_error = decode_item(module)

@@ -4,7 +4,6 @@ local form = require("form")
 local editor = require("editor")
 local funcs = require("funcs")
 local bounds = require("bounds")
-local M = {}
 local function read(workspace: string, id: string): {[string]: unknown}
     local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
     if err then error(tostring(err)) end

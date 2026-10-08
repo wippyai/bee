@@ -1,7 +1,6 @@
 -- MIT. Typed configuration evidence retains ownership and capability boundaries.
 local test = require("test")
 local requirement = require("requirement")
-local preflight = require("preflight")
 local function define_tests()
     test.describe("governed configuration", function()
         test.it("measures an integer default without interpreting it as a registry binding", function()

@@ -136,23 +136,6 @@ local function settle_failure(admitted: admission.Admitted, epoch: integer?, rea
     return reason .. " (" .. table.concat(details, "; ") .. ")"
 end
 
--- Picker admission may finish after the visible picker accepted close. It has
--- no action, attempt, gateway or placement yet. Retire only the attempt-bound
--- authority it obtained; first-use associations and credential definitions are
--- durable setup and remain available to a later launch.
-local function release_unstarted(admitted: admission.Admitted): (boolean, string?)
-    local details: {string} = {}
-    for _, resource in ipairs(admitted.request.resources) do
-        local revoked, revoke_error = call("bee.resources.binding:revoke", {grant_id = resource.grant_ref})
-        if not revoked then details[#details + 1] = "resource " .. resource.grant_ref .. ": " .. tostring(revoke_error) end
-    end
-    for _, projection_id in ipairs(admitted.request.projections or {}) do
-        local revoked, revoke_error = call("bee.credentials.binding:revoke", {projection_id = projection_id})
-        if not revoked then details[#details + 1] = "credential " .. projection_id .. ": " .. tostring(revoke_error) end
-    end
-    if #details > 0 then return false, table.concat(details, "; ") end
-    return true, nil
-end
 
 local function persist_checkpoint(state: hooks.State, records: {{[string]: unknown}}?): (boolean, string?)
     local intent = hooks.next_intent(state, "launch:" .. state.attempt_id .. ":window:checkpoint", now_ms())

@@ -665,18 +665,6 @@ local function main(options: unknown)
         invalidate()
         details()
     end
-    local function operation_relative(delta: integer)
-        if #hubs.operations == 0 then return end
-        local current = 0
-        for index, item in ipairs(hubs.operations) do
-            if hubs.selected_operation and item.digest == hubs.selected_operation.digest then current = index; break end
-        end
-        local next_index = math.floor(math.max(1, math.min(#hubs.operations, current + delta)))
-        hub.select_operation(hubs, hubs.operations[next_index].digest)
-        hub.show(hubs, "operations")
-        invalidate()
-        changed()
-    end
     local function cancel_confirmation()
         if hubs.recovery then
             model.show_tab(state, "history")
@@ -1019,9 +1007,6 @@ local function main(options: unknown)
         elseif screen == "version" then version_hit(kind)
         elseif screen == "platform" then platform_hit(kind, key)
         else list_hit(kind, key) end
-    end
-    local function direction(data: {[string]: unknown}): integer
-        return (data.button == "wheel_up" or data.button == "up") and -1 or 1
     end
 
     show_tab("installed")

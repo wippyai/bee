@@ -26,10 +26,6 @@ local TECHNICAL_HINTS = frame.hints({{key = "T", verb = "details"}, {key = "R", 
     {key = "I", verb = "status"}, {key = "G", verb = "recover"}})
 local PACKAGE_PHASES: {[string]: boolean} = {details = true, plan = true, confirm = true, result = true}
 
-local function bare(label: string): string
-    local value = label:match("^%s*(.-)%s*$")
-    return value or label
-end
 
 -- The tab a tab hit selects, or nil for any other hit kind.
 function M.tab_of(kind: string): model.Tab?

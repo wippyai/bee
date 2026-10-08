@@ -1332,7 +1332,7 @@ entries:
   kind: function.lua
   source: file://hub_ui_test.lua
   method: run
-  modules: [process, channel, time, tty, funcs, security, system, uuid, env]
+  modules: [process, channel, time, tty, funcs, system, uuid, env]
   meta: {type: test, suite: bee, timeout: 180s}
   imports:
     test: wippy.test:test
@@ -1348,7 +1348,6 @@ entries:
   imports:
     test: wippy.test:test
     requirement: bee.gov.binding:requirement
-    preflight: bee.gov.binding:preflight
 
 - name: uninstall_pin_test
   kind: function.lua

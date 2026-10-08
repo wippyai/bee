@@ -14,7 +14,6 @@ entries:
   source: file://hub.lua
   modules:
   - json
-  - hash
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical

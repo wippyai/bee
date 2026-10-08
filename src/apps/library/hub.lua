@@ -3,7 +3,6 @@
 -- facade and folds its replies back here.
 local json = require("json")
 local canonical = require("canonical")
-local hash = require("hash")
 local text = require("text")
 local bounds = require("bounds")
 local form = require("form")
@@ -197,11 +196,6 @@ local function copy_parameter(parameter: Parameter): Parameter
     return {name = parameter.name, value = clone(parameter.value), json = parameter.json}
 end
 
-local function copy_parameters(parameters: {Parameter}): {Parameter}
-    local copied: {Parameter} = {}
-    for index, parameter in ipairs(parameters) do copied[index] = copy_parameter(parameter) end
-    return copied
-end
 
 local function managed_root(root: Root): boolean
     return root.managed or root.component == "bee/bee"

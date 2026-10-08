@@ -159,9 +159,6 @@ end
 local function thread_records(thread_id: string): {{[string]: unknown}}
     return records_of(thread_id, {"approval.request", "approval.transition"})
 end
-local function thread_notices(thread_id: string): {{[string]: unknown}}
-    return records_of(thread_id, {"message"})
-end
 local function await_records(thread_id: string, kinds: {string}, count: integer): {{[string]: unknown}}
     local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
     local records: {{[string]: unknown}} = {}

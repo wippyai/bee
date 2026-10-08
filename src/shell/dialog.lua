@@ -268,7 +268,6 @@ function M.draw(canvas: tty.Canvas, state: State, width: integer, height: intege
     local normal = appearance.style(theme.text, theme.surface)
     local border = appearance.style(theme.border, theme.surface)
     local muted = appearance.style(theme.muted, theme.surface)
-    local active = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
     local reset = "\27[0m"
     if p.width <= 0 or p.height <= 0 then return {x = 1, y = 1, visible = false} end
 

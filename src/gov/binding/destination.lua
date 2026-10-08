@@ -25,17 +25,6 @@ local function failure(code: string, message: string, value: unknown?): transact
     return transaction.failure(code, message, value)
 end
 
-local function identity(raw: unknown): (Object?, string?)
-    local value = bounds.object(raw)
-    if not value then return nil, "plan identity must be an object" end
-    local extra = bounds.fields(value, {"source_node", "source_workspace", "version"})
-    if extra then return nil, extra end
-    local source_node, source_workspace, version = bounds.id(value.source_node), bounds.id(value.source_workspace), bounds.id(value.version)
-    if not source_node then return nil, "plan identity is invalid" end
-    if not source_workspace then return nil, "plan identity is invalid" end
-    if not version then return nil, "plan identity is invalid" end
-    return {operation = "get", source_node = source_node, source_workspace = source_workspace, version = version}, nil
-end
 
 local function replica_identity(raw: unknown): (ReplicaIdentity?, string?)
     local value = bounds.object(raw)

@@ -48,10 +48,6 @@ entries:
     artifact_source: bee.hub.binding:artifact_source
     plan: bee.hub.package:plan
     binary_identity: bee.hub.package:binary_identity
-    catalog: bee.hub.binding:catalog
-    inspect: bee.hub.binding:inspect
-    inspection: bee.hub.package:inspection
-    requirements: bee.hub.package:requirements
     hub_result: bee.hub.package:result
     inventory: bee.hub.package:inventory
     inventory_reader: bee.hub.package:inventory_reader

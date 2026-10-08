@@ -66,7 +66,6 @@ local NAME = "bee.node"
 -- request waiting for a decision, or an application the person approved.
 local ATTENTION = "bee.attention"
 local APPROVALS_ROLE = "approvals"
-local APP_TYPE = "bee.app"
 local MENU_TYPE = "bee.menu"
 local DEFAULT_WIDTH, DEFAULT_HEIGHT = 80, 24
 

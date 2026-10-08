@@ -593,7 +593,6 @@ entries:
     requirement: bee.gov.binding:requirement
     drivers: bee.gov.types:drivers
     driver_admission: bee.gov.types:driver_admission
-    workspace_applications: bee.gov.types:workspace_applications
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
     canonical: bee.values:canonical
@@ -601,8 +600,6 @@ entries:
     application_admission: bee.gov.types:governed_application_admission
     protected_kernel: bee.gov.types:protected_kernel
     capability_model: bee.capability:model
-    capability_grants: bee.gov.types:capability_grants
-    capability_files: bee.gov.types:capability_files
     preflight: bee.gov.binding:preflight
     lists: bee.gov.types:lists
 - name: staging_resources

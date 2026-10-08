@@ -194,6 +194,15 @@ local function define_tests()
         end)
     end)
     test.describe("Native interactive launch specifications", function()
+        test.it("renders Muse model effort and approval selections for first and resumed windows", function()
+            for _, resume in ipairs({"", "native-session"}) do
+                local request = assert(muse_launch.decode({profile_id = "window", brief = "", model = "muse-model",
+                    effort = "high", approval_mode = "untrusted", resume_ref = resume ~= "" and resume or nil}))
+                local command = quote.line(muse_launch.specification(request).argv)
+                test.eq(command, "--approval-mode untrusted --model muse-model --reasoning-effort high" ..
+                    (resume ~= "" and " resume native-session" or ""))
+            end
+        end)
         test.it("opens native UIs without a prompt and preserves scoped flags on resume", function()
             local claude_request, claude_error = claude_launch.decode({profile_id = "window", brief = "", model = "sonnet", effort = "high"})
             if not claude_request then error(tostring(claude_error)) end
@@ -482,14 +491,14 @@ local function define_tests()
             local window, window_error = muse_launch.decode({profile_id = "window", brief = ""})
             if not window then error(tostring(window_error)) end
             local native = muse_launch.specification(window)
-            test.eq(#native.argv, 0)
+            test.eq(quote.line(native.argv), "--approval-mode on-request")
             test.eq(native.readiness, "terminal:attached")
             local prompted, prompted_error = muse_launch.decode({profile_id = "window", brief = "--help"})
             if not prompted then error(tostring(prompted_error)) end
-            test.eq(quote.line(muse_launch.specification(prompted).argv), "-- --help")
+            test.eq(quote.line(muse_launch.specification(prompted).argv), "--approval-mode on-request -- --help")
             local native_resume, native_resume_error = muse_launch.decode({profile_id = "window", brief = "", resume_ref = "native-session"})
             if not native_resume then error(tostring(native_resume_error)) end
-            test.eq(quote.line(muse_launch.specification(native_resume).argv), "resume native-session")
+            test.eq(quote.line(muse_launch.specification(native_resume).argv), "--approval-mode on-request resume native-session")
             local native_both, native_both_error = muse_launch.decode({profile_id = "window", brief = "--help", resume_ref = "native-session"})
             test.is_nil(native_both)
             test.eq(native_both_error, "window resume cannot carry a brief")

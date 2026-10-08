@@ -92,6 +92,7 @@ entries:
           render:
           - kind: argv
             contexts:
+            - window
             - first_turn
             tokens:
             - --approval-mode
@@ -124,6 +125,7 @@ entries:
           render:
           - kind: argv
             contexts:
+            - window
             - first_turn
             tokens:
             - if: model
@@ -165,6 +167,7 @@ entries:
           render:
           - kind: argv
             contexts:
+            - window
             - first_turn
             tokens:
             - if: effort
@@ -227,6 +230,12 @@ entries:
     argv_templates:
       window:
         argv:
+        - render: approval_mode
+          context: window
+        - render: model
+          context: window
+        - render: effort
+          context: window
         - if: resume_ref
           then:
           - resume

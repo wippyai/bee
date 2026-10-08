@@ -42,7 +42,9 @@ entries:
           private_home: true
         exit_codes_trustworthy: false
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.grok.permission:permission_adapter
+          adapter_digest: c3100cb9d142a66ca726583cc86a9b06fa15c6219a523f536bf9aaaac8124386
         input_ready:
           strategy: none
         interrupt:
@@ -75,7 +77,9 @@ entries:
           private_home: true
         exit_codes_trustworthy: false
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.grok.permission:permission_adapter
+          adapter_digest: c3100cb9d142a66ca726583cc86a9b06fa15c6219a523f536bf9aaaac8124386
         input_ready:
           strategy: none
         interrupt:

@@ -35,6 +35,9 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    gateway_hooks:
+    - PermissionRequest
+    hook_command_ref: bee.gateway.env:hook_executable
     prepare_options:
       model: gemini-3.8-flash
       effort: high
@@ -99,6 +102,7 @@ entries:
     - UserPromptSubmit
     - PreToolUse
     - PostToolUse
+    - PermissionRequest
     - Stop
     hook_command_ref: bee.gateway.env:hook_executable
     profile_instructions: true

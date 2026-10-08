@@ -20,7 +20,7 @@ local function capabilities(value: unknown): (Capabilities?, string?)
         local adapter_ref = item.adapter_ref == nil and nil or bounds.id(item.adapter_ref)
         local reason = item.reason == nil and nil or bounds.text(item.reason, 1024)
         if not transport or (transport == "provider" and (not reason or adapter_ref ~= nil))
-            or (transport ~= "provider" and (not adapter_ref or item.reason ~= nil)) then return nil, "permission_answers." .. context .. " needs an adapter or an unsupported reason" end
+            or (transport ~= "provider" and not adapter_ref) or (item.reason ~= nil and not reason) then return nil, "permission_answers." .. context .. " needs an adapter or an unsupported reason" end
         result[context] = {transport = transport, adapter_ref = adapter_ref, reason = reason}
     end
     return {permission_answers = result}, nil

@@ -23,9 +23,24 @@ func agyPayload(raw []byte, event string) ([]byte, error) {
 		InitialSteps int    `json:"initialNumSteps"`
 		FullyIdle    bool   `json:"fullyIdle"`
 		Error        string `json:"error"`
+		Tool         *struct {
+			Name string         `json:"name"`
+			Args map[string]any `json:"args"`
+		} `json:"toolCall"`
 	}
 	if err := json.Unmarshal(raw, &hook); err != nil || !safeSegment(hook.Conversation, 160) {
 		return nil, errors.New("hook-post: invalid Agy hook identity")
+	}
+	if event == "PermissionRequest" {
+		if hook.Tool == nil || !safeSegment(hook.Tool.Name, 128) || hook.Tool.Args == nil {
+			return nil, errors.New("hook-post: invalid Agy permission request")
+		}
+		body, err := json.Marshal(map[string]any{"session_id": hook.Conversation, "tool_name": hook.Tool.Name,
+			"tool_input": hook.Tool.Args, "hook_event_name": event})
+		if err != nil || len(body) > MaxPayloadBytes {
+			return nil, errors.New("hook-post: Agy permission request exceeds its bound")
+		}
+		return body, nil
 	}
 	if event == "UserPromptSubmit" && hook.Invocation != 0 {
 		return nil, nil

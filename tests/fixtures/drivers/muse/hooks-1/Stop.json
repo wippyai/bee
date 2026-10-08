@@ -1,0 +1,12 @@
+{
+  "cwd": "/fixture/work",
+  "hook_event_name": "Stop",
+  "last_assistant_message": "Fixture answer.",
+  "model": "fixture",
+  "model_provider": "meta",
+  "permission_mode": "default",
+  "session_id": "01a11c63-d759-7f13-a812-26ce48653ef1",
+  "stop_hook_active": false,
+  "transcript_path": null,
+  "turn_id": "f0f6f7cb-c46f-4c6a-b01d-c08b43916f07"
+}

@@ -16,6 +16,9 @@ entries:
       profiles:
       - id: session
         mode: session
+        hooks:
+          transports: [command]
+          events: [PermissionRequest]
         protocol: stream-json
         protocol_revision: agy-stream-json-1
         answer_path:
@@ -49,9 +52,14 @@ entries:
           required_placement_features: []
           git_writable_roots_adapter: agy_add_dir
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
       - id: batch
         mode: batch
+        hooks:
+          transports: [command]
+          events: [PermissionRequest]
         protocol: stream-json
         protocol_revision: agy-stream-json-1
         answer_path:
@@ -82,7 +90,9 @@ entries:
           required_placement_features: []
           git_writable_roots_adapter: agy_add_dir
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
       - id: window
         mode: window
         protocol: pty
@@ -95,6 +105,7 @@ entries:
           - UserPromptSubmit
           - PreToolUse
           - PostToolUse
+          - PermissionRequest
           - Stop
         answer_path:
           strategy: none
@@ -109,7 +120,9 @@ entries:
         input_ready:
           strategy: none
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
 - name: default_window
   kind: registry.entry
   meta:

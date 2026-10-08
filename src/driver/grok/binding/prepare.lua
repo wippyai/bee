@@ -1,3 +1,5 @@
--- MIT. The universal driver implements this contract method.
+-- SPDX-License-Identifier: MIT
 local universal = require("universal")
-return {handle = universal.prepare("bee.driver.grok.descriptor:cli")}
+local acp = require("acp")
+local prepare = universal.prepare("bee.driver.grok.descriptor:cli")
+return {handle = function(raw: unknown): unknown return acp.launch(raw, prepare) end}

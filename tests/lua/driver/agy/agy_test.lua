@@ -62,11 +62,14 @@ local function define_tests()
             test.eq(session_p.answer_path.adapter_ref, "bee.driver.agy.descriptor:cli")
             test.eq(session_p.resume.strategy, "per-process")
             test.eq(session_p.input_ready.strategy, "protocol")
-            test.eq(session_p.permission_exchange.mode, "none")
+            test.eq(session_p.permission_exchange.mode, "adapter")
+            test.eq(session_p.permission_exchange.adapter_ref, "bee.driver.permission:permission_request_hook")
+            test.eq(#assert(session_p.permission_exchange.adapter_digest), 64)
 
-            -- unsupported capability claims removed: no hooks declared in profile
-            test.eq(#session_p.hooks.transports, 0)
-            test.eq(#session_p.hooks.events, 0)
+            test.eq(#session_p.hooks.transports, 1)
+            test.eq(session_p.hooks.transports[1], "command")
+            test.eq(#session_p.hooks.events, 1)
+            test.eq(session_p.hooks.events[1], "PermissionRequest")
 
             -- MCP client transports verified: stdio and streamable_http, no speculative sse/ws
             test.is_true(has(session_p.mcp.client_transports, "stdio"))

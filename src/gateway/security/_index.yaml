@@ -349,8 +349,9 @@ entries:
     actions:
     - funcs.call
     - bee.sessions.hook_boundary
+    - bee.harness.permission_hook
     resources: '*'
-    expression: (action == "funcs.call" && resource == "bee.threads.sessions.binding:hook_boundary") || (action == "bee.sessions.hook_boundary" && resource == actor.id)
+    expression: (action == "funcs.call" && resource in ["bee.threads.sessions.binding:hook_boundary", "bee.harness.binding:permission_hook"]) || (action in ["bee.sessions.hook_boundary", "bee.harness.permission_hook"] && resource == actor.id)
     effect: allow
 - name: session_boundary_resolver_policy
   kind: security.policy

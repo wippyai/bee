@@ -7,12 +7,16 @@ entries:
   method: handle
   imports:
     universal: bee.driver.binding:universal
+    acp: bee.driver.grok.binding:acp
+    bounds: bee.values:bounds
 - name: dispatch
   kind: function.lua
   source: file://dispatch.lua
   method: handle
   imports:
     universal: bee.driver.binding:universal
+    acp: bee.driver.grok.binding:acp
+    bounds: bee.values:bounds
 - name: configure
   kind: function.lua
   source: file://configure.lua
@@ -36,6 +40,8 @@ entries:
   method: handle
   imports:
     universal: bee.driver.binding:universal
+    acp: bee.driver.grok.binding:acp
+    bounds: bee.values:bounds
 - name: configuration_policy
   kind: security.policy.expr
   meta:
@@ -76,3 +82,13 @@ entries:
     descriptor_ref: bee.driver.grok.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.grok.profiles:profiles
+
+- name: acp
+  kind: library.lua
+  source: file://acp.lua
+  modules: [json]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    events: bee.driver.codec:events
+    driver_types: bee.driver:types

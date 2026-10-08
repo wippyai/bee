@@ -5,7 +5,7 @@ entries:
   kind: registry.entry
   meta:
     type: harness.permission_adapter
-    comment: Claude and Codex PermissionRequest hook response protocol; host acceptance separately authorizes answers
+    comment: Claude, Codex, Agy and Muse PermissionRequest hook response protocol; host acceptance separately authorizes answers
   data:
     adapter:
       schema_revision: bee.permission-adapter@2

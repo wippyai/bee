@@ -12,6 +12,7 @@ entries:
     test: wippy.test:test
     launch: bee.tests.driver.support:grok_launch
     prepare: bee.driver.grok.binding:prepare
+    configure: bee.driver.grok.binding:configure
     dispatch: bee.driver.grok.binding:dispatch
 - name: protocol_test
   kind: function.lua
@@ -36,4 +37,16 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     configuration: bee.driver.grok.binding:configuration
+    configure: bee.driver.grok.binding:configure
+- name: acp_test
+  kind: function.lua
+  source: file://acp_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    normalize: bee.driver.grok.binding:normalize
+    prepare: bee.driver.grok.binding:prepare
     configure: bee.driver.grok.binding:configure

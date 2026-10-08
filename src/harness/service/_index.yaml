@@ -240,6 +240,7 @@ entries:
   - events
   imports:
     machine: bee.harness.carrier:machine
+    bounds: bee.values:bounds
     placement_protocol: bee.placement.native:protocol
     commits: bee.threads.delivery:commits
   security:

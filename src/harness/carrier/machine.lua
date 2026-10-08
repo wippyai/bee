@@ -42,6 +42,7 @@ local hook_records = require("hook_records")
 local carrier_types = require("carrier_types")
 local hints = require("hints")
 local permission_exchange = require("permission_exchange")
+local hook_exchange = require("hook_exchange")
 local descriptor = require("descriptor")
 local readiness = require("readiness")
 local M = {}
@@ -1149,14 +1150,14 @@ local function snapshot_terminal(value: driver_types.Terminal?): (driver_types.T
     if not copied then return nil, copy_error end
     return checkpoint.decode_terminal(copied)
 end
-type Normalized = {state: Object, observations: {record_types.Observation}, terminal: driver_types.Terminal?}
+type Normalized = {state: Object, observations: {record_types.Observation}, terminal: driver_types.Terminal?, writes: {string}}
 local function decode_normalized(value: unknown): (Normalized?, string?)
     local object = bounds.object(value)
     if not object then return nil, "reply must be an object" end
-    local unknown_field = bounds.fields(object, {"ok", "error", "state", "observations", "terminal"})
+    local unknown_field = bounds.fields(object, {"ok", "error", "state", "observations", "terminal", "writes"})
     if unknown_field then return nil, "reply: " .. unknown_field end
     if object.ok == false then
-        if object.state ~= nil or object.observations ~= nil or object.terminal ~= nil then return nil, "failed reply carries successful result fields" end
+        if object.state ~= nil or object.observations ~= nil or object.terminal ~= nil or object.writes ~= nil then return nil, "failed reply carries successful result fields" end
         local message = bounds.text(object.error, 4096)
         if not message or message == "" then return nil, "failure has no bounded error" end
         return nil, message
@@ -1178,15 +1179,29 @@ local function decode_normalized(value: unknown): (Normalized?, string?)
         terminal, state_error = checkpoint.decode_terminal(object.terminal)
         if not terminal then return nil, "normalizer terminal: " .. tostring(state_error) end
     end
-    return {state = state, observations = observations, terminal = terminal}, nil
+    local raw_writes, writes_error = bounds.array(object.writes or {}, checkpoint.MAX_PENDING_WRITES)
+    if not raw_writes then return nil, "normalizer writes: " .. tostring(writes_error) end
+    local writes: {string} = {}
+    for _, raw_write in ipairs(raw_writes) do
+        local line = bounds.text(raw_write, checkpoint.MAX_PENDING_WRITE_BYTES)
+        if not line or line == "" then return nil, "normalizer write is not bounded text" end
+        writes[#writes + 1] = line
+    end
+    if terminal and #writes > 0 then return nil, "terminal normalizer result carries writes" end
+    return {state = state, observations = observations, terminal = terminal, writes = writes}, nil
 end
-local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({record_types.Observation}?, driver_types.Terminal?, string?)
-    local reply, err = io.call(session.plan.normalize_target, {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false})
+local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({record_types.Observation}?, driver_types.Terminal?, string?, {string}?)
+    local input: Object = {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false}
+    if session.plan.exchange and session.plan.exchange.transport == "stdio" then
+        input.context = {permission_exchange = true, brief = session.plan.request.brief, resume_ref = session.plan.resume_ref,
+            options = session.plan.policy.prepare_options}
+    end
+    local reply, err = io.call(session.plan.normalize_target, input)
     if err then return nil, nil, "driver normalize: " .. err end
     local result, decode_error = decode_normalized(reply)
     if not result then return nil, nil, "driver normalize: " .. tostring(decode_error) end
     session.normalizer = result.state
-    return result.observations, result.terminal, nil
+    return result.observations, result.terminal, nil, result.writes
 end
 -- One output chunk: frame, normalize, commit in bounded batches, then
 -- acknowledge. A chunk the carrier cannot checkpoint is never acknowledged.
@@ -1246,11 +1261,51 @@ local function permission_context(io: IO, session: Session): permission_exchange
         commit = function(records: {Object}): (boolean, string?) return M.commit(io, session, records) end,
         call = io.call, digest_of = digest_of,
         step = function(name: string) step(io, name) end,
-        write = function(write_id: string, line: string): (boolean, string?) return M.write(io, session, write_id, line) end,
+        write = function(write_id: string, line: string): (boolean, string?)
+            if session.plan.exchange and session.plan.exchange.transport == "hook_http" then
+                return M.commit(io, session, {{source = "bee", body = {type = "extension", event_key = "write:" .. write_id .. ":prepared",
+                    data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1",
+                        payload_json = canonical.encode({write_id = write_id, phase = "prepared", delivery = "hook", acknowledgment = "unproven"})}}}})
+            end
+            return M.write(io, session, write_id, line)
+        end,
         revalidate = function(): string? return revalidate_permission(io, session) end,
         recovered = session.recovered,
         waiting = function(): boolean return not session.terminal and not session.eof.stdout and session.runner ~= nil end,
         settled = function(): boolean return session.settled ~= nil or session.terminal ~= nil end}
+end
+function M.permission_hook(io: IO, session: Session, raw: unknown): (Object?, string?)
+    local input = bounds.object(raw)
+    local event_id = input and bounds.id(input.event_id)
+    local payload = input and bounds.object(input.payload)
+    local request = session.plan.request
+    if not input or not event_id or not payload or input.binding_id ~= session.checkpoint.gateway_binding
+        or input.attempt_id ~= request.attempt_id or input.subject ~= (request.session_ref and request.session_ref:match("^bs:") and request.session_ref or request.owner_id)
+        or input.epoch ~= session.epoch then return nil, "hook differs from this carrier attachment" end
+    local selected = session.plan.exchange
+    if not selected then return {}, nil end
+    if selected.transport ~= "hook_http" then return nil, "carrier does not answer HTTP permission hooks" end
+    local checked, check_error = must(io, M.GATEWAY .. ":check", {binding_id = input.binding_id})
+    local binding = bounds.object(checked)
+    if not binding or binding.valid ~= true or binding.carrier_epoch ~= session.epoch then return nil, check_error or "hook binding changed" end
+    local queue, queue_error = must(io, M.GATEWAY .. ":hook_queue", {binding_id = input.binding_id})
+    local queued = bounds.object(queue)
+    local rows = queued and bounds.array(queued.hooks, 64)
+    if not rows then return nil, queue_error or "hook evidence unavailable" end
+    local evidence: Object? = nil
+    for _, row in ipairs(rows) do
+        local item = bounds.object(row)
+        if item and item.event_id == event_id then evidence = item end
+    end
+    if not evidence then return nil, "permission hook is not admitted" end
+    local ctx = permission_context(io, session)
+    local prepared, prepare_error = hook_exchange.request(ctx, event_id, payload, evidence)
+    if not prepared then return nil, prepare_error end
+    local advanced, advance_error = permission_exchange.advance(ctx, true)
+    if not advanced then return nil, advance_error end
+    local line, response_error = hook_exchange.response(ctx, event_id)
+    if response_error then return nil, response_error end
+    return {pending = line == nil, permission_response = line}, nil
 end
 function M.on_output(io: IO, session: Session, sender: string, message: placement_protocol.Output): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
@@ -1266,6 +1321,9 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
         return true, nil
     end
+    local protocol_writes: {checkpoint.PendingWrite} = {}
+    local protocol_records: {Object} = {}
+    local prior_writes = #session.checkpoint.pending_writes
     local before_state, before_state_error = snapshot_state(session.normalizer)
     if session.normalizer ~= nil and before_state == nil then return false, "normalizer state cannot be checkpointed: " .. tostring(before_state_error) end
     local before_terminal, before_terminal_error = snapshot_terminal(session.terminal)
@@ -1288,6 +1346,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         session.eof.stderr = before.eof_stderr
         session.held_from = before.held_from
         session.stderr_sequence = before.stderr_sequence
+        while #session.checkpoint.pending_writes > prior_writes do table.remove(session.checkpoint.pending_writes) end
         return false, reason
     end
     local records: {{[string]: unknown}} = {}
@@ -1332,13 +1391,33 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
                     envelope_index = problem.index, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "warning", code = code, content = {text = problem.message}}}}
             end
             for _, envelope in ipairs(envelopes) do
-                local observations, terminal, err = normalize(io, session, envelope.index, envelope.value, false)
+                local observations, terminal, err, writes = normalize(io, session, envelope.index, envelope.value, false)
                 if not observations then return refuse(err or "driver normalize failed") end
                 for event_index, item in ipairs(observations) do
                     records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence,
                         source_last_sequence = message.sequence, envelope_index = envelope.index, event_index = event_index - 1}, body = item}
                 end
                 if terminal and not session.terminal then session.terminal = terminal end
+                for write_index, line in ipairs(writes or {}) do
+                    if not session.plan.exchange or session.plan.exchange.transport ~= "stdio" or session.plan.launch.stdin_eof == true then
+                        return refuse("normalizer writes require an admitted duplex channel")
+                    end
+                    local write_id = "protocol:" .. tostring(envelope.index) .. ":" .. tostring(write_index)
+                    local digest = assert(digest_of(line))
+                    local existing: checkpoint.PendingWrite? = nil
+                    for _, item in ipairs(session.checkpoint.pending_writes) do
+                        if item.write_id == write_id then existing = item end
+                    end
+                    if existing and (existing.input_digest ~= digest or existing.data ~= line) then return refuse("protocol write identity changed on replay") end
+                    if not existing then
+                        if #session.checkpoint.pending_writes + #protocol_writes >= checkpoint.MAX_PENDING_WRITES then return refuse("too many protocol writes await acknowledgment") end
+                        local pending: checkpoint.PendingWrite = {write_id = write_id, input_digest = digest, data = line, dispatched = false}
+                        protocol_writes[#protocol_writes + 1] = pending
+                    end
+                    protocol_records[#protocol_records + 1] = {source = "bee", body = {type = "extension", event_key = "write:" .. write_id .. ":intended",
+                        data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1",
+                            payload_json = canonical.encode({write_id = write_id, input_digest = digest, phase = "intended"})}}}
+                end
             end
         end
     else
@@ -1360,6 +1439,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     -- stdout position; records committed beyond it replay idempotently from
     -- the chunks the runner still holds.
     local at_boundary = session.held_from == nil
+    if #protocol_writes > 0 and not at_boundary then return refuse("protocol input requires a complete checkpoint boundary") end
     local detected, detect_error = permission_exchange.detect(permission_context(io, session), records)
     if detect_error then return refuse(detect_error) end
     permission_exchange.acknowledge(permission_context(io, session), records)
@@ -1367,8 +1447,14 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     local offset = 0
     while true do
         local batch: {{[string]: unknown}} = {}
-        for index = offset + 1, math.min(offset + M.MAX_RECORDS_PER_COMMIT, total) do batch[#batch + 1] = records[index] end
-        local final = offset + #batch >= total
+        local batch_limit = M.MAX_RECORDS_PER_COMMIT - #protocol_records
+        for index = offset + 1, math.min(offset + batch_limit, total) do batch[#batch + 1] = records[index] end
+        local observations_in_batch = #batch
+        local final = offset + observations_in_batch >= total
+        if final then
+            for _, record in ipairs(protocol_records) do batch[#batch + 1] = record end
+            for _, pending in ipairs(protocol_writes) do session.checkpoint.pending_writes[#session.checkpoint.pending_writes + 1] = pending end
+        end
         if final and at_boundary then
             local state, state_error = snapshot_state(session.normalizer)
             if session.normalizer ~= nil and state == nil then return refuse("normalizer state cannot be checkpointed: " .. tostring(state_error)) end
@@ -1394,8 +1480,13 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         local committed, commit_error = M.commit(io, session, batch)
         if not committed then return false, commit_error end
         if final then break end
-        offset = offset + #batch
+        offset = offset + observations_in_batch
         step(io, "partial_commit")
+    end
+    if #protocol_writes > 0 then step(io, "protocol_prepared") end
+    for _, pending in ipairs(protocol_writes) do
+        io.send(sender, placement_protocol.TOPIC_INPUT, {write_id = pending.write_id, generation = session.epoch, data = pending.data})
+        pending.dispatched = true
     end
     session.last_sequence[message.stream] = message.sequence
     step(io, "committed")

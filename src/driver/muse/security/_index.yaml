@@ -40,6 +40,7 @@ entries:
     - UserPromptSubmit
     - PreToolUse
     - PostToolUse
+    - PermissionRequest
     - Stop
     hook_command_ref: bee.gateway.env:hook_executable
     prepare_options:
@@ -74,7 +75,7 @@ entries:
     executable_env:
       muse: bee.driver.muse.env:executable
     environment: {}
-    allow_host_home: true
+    allow_host_home: false
     gateway_tools:
     - session_catalog
     - session_open
@@ -110,6 +111,7 @@ entries:
     - UserPromptSubmit
     - PreToolUse
     - PostToolUse
+    - PermissionRequest
     - Stop
     hook_command_ref: bee.gateway.env:hook_executable
     prepare_options: {}

@@ -348,9 +348,24 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [funcs, security, registry]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.placement.native.security:placement_exec_policy]
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
     hooks: bee.gateway.hooks:hooks
     resolver: bee.driver.binding:resolver
+    admission: bee.harness.launch:admission
+    muse: bee.tests.sessions:muse_permission_fixture
+- name: muse_permission_fixture
+  kind: library.lua
+  source: file://muse_permission_fixture.lua
+  modules: [registry, funcs, security, env, time, exec, json]
+  imports:
+    bounds: bee.values:bounds
+    admission: bee.harness.launch:admission
+    catalog: bee.harness.catalog:catalog
+    harness: bee.tests.threads:harness
+    adapter: bee.harness.permission:adapter
+    configuration: bee.gateway.env:configuration

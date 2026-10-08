@@ -1,0 +1,12 @@
+{
+  "session_id": "763eefbc-39c7-4716-816b-bf1ff413d865",
+  "hook_event_name": "PermissionRequest",
+  "tool_name": "run_command",
+  "tool_input": {
+    "CommandLine": "printf fixture-tool",
+    "Cwd": "/fixture/work",
+    "WaitMsBeforeAsync": 1000,
+    "toolAction": "Printing fixture output",
+    "toolSummary": "Fixture command"
+  }
+}

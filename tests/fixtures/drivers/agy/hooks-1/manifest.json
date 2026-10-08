@@ -7,5 +7,16 @@
     "PreInvocation",
     "Stop"
   ],
-  "transcript": "transcript.jsonl"
+  "transcript": "transcript.jsonl",
+  "permission_exchange": {
+    "source": "Agy 1.3.1 embedded PreToolUse Contract",
+    "response": {
+      "decision": "allow",
+      "reason": "person approved"
+    },
+    "native_event": "PreToolUse",
+    "canonical_event": "PermissionRequest",
+    "capture": "Isolated Gemini loopback fixture function call; fake API key",
+    "observed_limit": "The installed Agy 1.3.1 accepts the gate response, but decision allow and a command-scoped permissionOverrides response leave independent command permission checks auto-denied in headless mode. Provider permission prompts remain authoritative."
+  }
 }

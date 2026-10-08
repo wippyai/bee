@@ -49,16 +49,15 @@ entries:
       permission_answers:
         window:
           transport: provider
-          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval channel is selected. The window retains
-            provider prompts; command hooks are observations only.
+          reason: Grok 1.0.30 window hooks expose PreToolUse vetoes, not permission answers. Allow does not bypass provider checks; the native window retains provider prompts. Duplex ACP session/request_permission is available in headless contexts.
         first_turn:
-          transport: provider
-          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval channel is selected. The window retains
-            provider prompts; command hooks are observations only.
+          transport: stdio
+          adapter_ref: bee.driver.grok.permission:permission_adapter
+          reason: A host-accepted exchange selects duplex ACP with default permission mode. Explicit models use session/set_model; effort selection remains on the print route.
         resume:
-          transport: provider
-          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval channel is selected. The window retains
-            provider prompts; command hooks are observations only.
+          transport: stdio
+          adapter_ref: bee.driver.grok.permission:permission_adapter
+          reason: A host-accepted exchange selects duplex ACP with default permission mode. Explicit models use session/set_model; effort selection remains on the print route.
     options:
       profiles:
       - window
@@ -209,6 +208,11 @@ entries:
               then:
               - --reasoning-effort
               - field: effort
+        permission_exchange:
+          type: boolean
+          default: false
+          profiles: [session, batch]
+          unsupported: ACP permission exchange requires a structured turn
         resume_ref:
           type: id
           forbid_option: true
@@ -243,20 +247,12 @@ entries:
             - window
             - first_turn
             - resume
-            file: .bee/system-prompt-append.txt
+            file: .grok/rules/bee.md
             format: text
             path: []
             merge: append
             value:
               field: provider.system_prompt_append
-          - kind: argv
-            contexts:
-            - window
-            - first_turn
-            - resume
-            tokens:
-            - --rules
-            - field: system_prompt_append
       rules:
       - kind: values
         field: gateway_hooks

@@ -184,9 +184,12 @@ function M.write_protected(home_path: string, relative: string, content: string,
     end
     local file, open_error = vol:open(target, "wx")
     if not file then return nil, "create configuration: " .. tostring(open_error) end
-    local written, write_error = file:write(content)
-    file:close()
+    local written: boolean = true
+    local write_error: unknown = nil
+    if content ~= "" then written, write_error = file:write(content) end
+    local closed, close_error = file:close()
     if not written then return nil, "write configuration: " .. tostring(write_error) end
+    if closed == false then return nil, "close configuration: " .. tostring(close_error) end
     return target, nil, false
 end
 -- Only materialization's persisted delivery files use this operation. Login

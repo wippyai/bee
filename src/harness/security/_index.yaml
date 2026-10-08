@@ -231,3 +231,14 @@ entries:
     expression: (action == "process.registry.lookup" && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister")
       && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource == "bee.harness.binding:present_restore")
     effect: allow
+- name: permission_hook_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, bee.gateway.manage, process.registry.lookup, process.send, process.monitor]
+    resources: '*'
+    expression: >-
+      (action == "funcs.call" && resource == "bee.gateway.binding:check") ||
+      (action == "bee.gateway.manage" && resource == "bindings") ||
+      (action == "process.registry.lookup" && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$") ||
+      action in ["process.send", "process.monitor"]
+    effect: allow

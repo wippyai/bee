@@ -152,9 +152,13 @@ local function define_tests()
             }})
             test.is_true(reply.ok)
             local arguments = principals.strings((assert(bounds.object(reply.delivery))).arguments)
-            test.eq(#arguments, 2)
-            test.eq(arguments[1], "--rules")
-            test.eq(arguments[2], "Keep the Bee thread current.")
+            test.eq(#arguments, 0)
+            local found = false
+            for _, raw in ipairs(assert(bounds.array(assert(bounds.object(reply.delivery)).files, 16))) do
+                local file = assert(bounds.object(raw))
+                if file.path == ".grok/rules/bee.md" then test.eq(file.content, "Keep the Bee thread current."); found = true end
+            end
+            test.is_true(found)
         end)
         test.it("delivers command hooks without enabling an unused MCP server", function()
             local reply = configure.handle({fixture = false, gateway = {

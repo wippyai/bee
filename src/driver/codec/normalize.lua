@@ -14,7 +14,7 @@ type Reply<State> = {ok: boolean, error: string?, state: State?, observations: {
 function M.handle<State>(raw: unknown, protocol: Protocol<State>): Reply<State>
     local request = bounds.object(raw)
     if not request then return {ok = false, error = "request must be an object"} end
-    local unknown = bounds.fields(request, {"state", "index", "envelope", "eof", "resumed"})
+    local unknown = bounds.fields(request, {"state", "index", "envelope", "eof", "resumed", "context"})
     if unknown then return {ok = false, error = unknown} end
     local index = bounds.count(request.index)
     if not index then return {ok = false, error = "index must be a nonnegative integer"} end

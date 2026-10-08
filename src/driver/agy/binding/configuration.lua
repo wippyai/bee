@@ -1,7 +1,7 @@
 -- MIT. Typed Antigravity CLI (agy) configuration delivery under an empty callee scope.
 -- Agy accepts no host provider configuration. Gateway tools are rendered as
 -- safe-relative configuration files. Command hooks use the host-selected Bee
--- executable and report observations without emitting permission decisions.
+-- executable and return admitted permission gate decisions.
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -54,17 +54,20 @@ function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_prot
     if not hook_token then return nil, "agy hooks require a separate hook credential environment" end
     local selected: {[string]: unknown} = {}
     for _, event in ipairs(gateway.hooks) do
-        if event ~= "SessionStart" and event ~= "UserPromptSubmit" and event ~= "PreToolUse" and event ~= "PostToolUse" and event ~= "Stop" then
+        if event ~= "SessionStart" and event ~= "UserPromptSubmit" and event ~= "PreToolUse" and event ~= "PostToolUse" and event ~= "Stop" and event ~= "PermissionRequest" then
             return nil, "agy does not support gateway hook event " .. event
         end
-        local native_event = event == "UserPromptSubmit" and "PreInvocation" or event
-        local command_event = (event == "UserPromptSubmit" or event == "Stop") and ("agy:" .. event) or event
+        local native_event = event == "UserPromptSubmit" and "PreInvocation" or (event == "PermissionRequest" and "PreToolUse" or event)
+        local command_event = (event == "UserPromptSubmit" or event == "Stop" or event == "PermissionRequest") and ("agy:" .. event) or event
         local command = quote.line({executable, "hook-post", gateway.endpoint, gateway.action_id, hook_token, command_event})
-        local handler = {type = "command", command = command, timeout = 3}
+        local handler = {type = "command", command = command, timeout = event == "PermissionRequest" and 600 or 3}
         if event == "Stop" or event == "UserPromptSubmit" or event == "SessionStart" then
             selected[native_event] = {handler}
         else
-            selected[native_event] = {{matcher = "", hooks = {handler}}}
+            local groups = selected[native_event]
+            if type(groups) ~= "table" then groups = {} end
+            table.insert(groups, {matcher = "", hooks = {handler}})
+            selected[native_event] = groups
         end
     end
     local content, content_error = canonical.encode({bee = selected})

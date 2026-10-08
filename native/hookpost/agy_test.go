@@ -67,3 +67,45 @@ func TestAgyTranscriptBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestAgyTranscriptRejectsEscapesAndIncompleteStops(t *testing.T) {
+	artifact := filepath.Join(t.TempDir(), "fixture-session")
+	transcript := filepath.Join(artifact, ".system_generated", "logs", "transcript_full.jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0700); err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]any{"conversationId": "fixture-session", "artifactDirectoryPath": artifact,
+		"transcriptPath": transcript, "fullyIdle": true, "error": ""}
+	for _, content := range []string{
+		`{"step_index":0,"type":"USER_INPUT","source":"USER_EXPLICIT","status":"DONE","content":"Fixture prompt."}` + "\n",
+		`{"step_index":0,"type":"USER_INPUT","source":"USER_EXPLICIT","status":"DONE","content":"Fixture prompt."}` + "\n" + `{"step_index":1,"type":"PLANNER_RESPONSE","status":"ACTIVE","content":"unfinished"}` + "\n",
+		`{broken`,
+	} {
+		if err := os.WriteFile(transcript, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(fields)
+		if _, err := agyPayload(raw, "Stop"); err == nil {
+			t.Fatal("incomplete transcript settled successfully")
+		}
+	}
+	outside := filepath.Join(t.TempDir(), "outside.jsonl")
+	if err := os.WriteFile(outside, []byte("not a transcript"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(transcript); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, transcript); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(fields)
+	if _, err := agyPayload(raw, "Stop"); err == nil {
+		t.Fatal("transcript escaped its artifact root")
+	}
+	fields["fullyIdle"] = false
+	raw, _ = json.Marshal(fields)
+	if _, err := agyPayload(raw, "Stop"); err == nil {
+		t.Fatal("active provider settled successfully")
+	}
+}

@@ -174,3 +174,13 @@ entries:
   security:
     policies:
     - bee.harness.launch:setup_facade_policy
+- name: permission_hook
+  kind: function.lua
+  source: file://permission_hook.lua
+  method: handle
+  modules: [funcs, security, process, channel, time, uuid]
+  imports:
+    bounds: bee.values:bounds
+    prestart: bee.harness.carrier:prestart
+  security:
+    policies: [bee.harness.security:permission_hook_policy]

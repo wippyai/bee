@@ -31,10 +31,10 @@ local function define_tests()
                 local definition = assert(bounds.object(entry.data))
                 local policy = assert(registry.get(tostring(definition.policy_ref)))
                 local policy_data = policy.data
-                local private = case.provider == "grok"
+                local private = case.provider == "grok" or case.provider == "muse"
                 if private then
                     local credentials = principals.strings(definition.credentials)
-                    test.eq(credentials[1], "grok_login")
+                    test.eq(credentials[1], case.provider .. "_login")
                     test.is_true(policy_data.allow_host_home ~= true)
                 else test.eq(policy_data.allow_host_home, true) end
                 local home = assert(case.launch.provider_home)

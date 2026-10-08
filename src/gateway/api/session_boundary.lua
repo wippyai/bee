@@ -9,7 +9,8 @@ function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Obje
     local event, event_id = outcome.event, bounds.id(outcome.event_id)
     if event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" then return {}, nil end
     if not event_id then return nil, "hook occurrence omitted its identity" end
-    if binding.subject:sub(1, 3) ~= "bs:" then return {}, nil end
+    local window = binding.subject:sub(1, 3) == "bs:"
+    if not window and event ~= "PermissionRequest" then return {}, nil end
     if payload then
         local decoded, decode_error = hooks.payload(payload)
         if not decoded then return nil, decode_error end
@@ -30,8 +31,12 @@ function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Obje
         if not payload or not transport then return nil, "permission hook omitted its transport or input" end
         request.permission = {payload = payload, transport = transport, action_id = binding.action_id, binding_id = binding.binding_id}
     end
-    local reply = subject_call.call(binding, {"bee.gateway.security:session_boundary_policy"},
-        "bee.threads.sessions.binding:hook_boundary", request)
+    local target = "bee.threads.sessions.binding:hook_boundary"
+    if not window then
+        target = "bee.harness.binding:permission_hook"
+        request = {binding_id = binding.binding_id, event_id = event_id, payload = payload}
+    end
+    local reply = subject_call.call(binding, {"bee.gateway.security:session_boundary_policy"}, target, request)
     if not reply.ok then return nil, reply.error and reply.error.message or "session boundary unavailable" end
     local value = bounds.object(reply.value)
     if not value or bounds.fields(value, {"additional_context", "permission_response"}) then return nil, "invalid session boundary reply" end

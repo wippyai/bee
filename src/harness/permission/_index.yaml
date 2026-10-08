@@ -31,3 +31,11 @@ entries:
     permission: bee.harness.permission:adapter
     checkpoint: bee.harness.carrier:checkpoint
     service_reply: bee.values:reply
+- name: hook_exchange
+  kind: library.lua
+  source: file://hook_exchange.lua
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    hooks: bee.gateway.hooks:hooks
+    exchange: bee.harness.permission:exchange

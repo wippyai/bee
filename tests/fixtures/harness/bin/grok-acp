@@ -1,0 +1,28 @@
+#!/usr/bin/python3
+import json, os, sys
+
+def emit(value):
+    print(json.dumps(value), flush=True)
+
+def receive(method):
+    value = json.loads(sys.stdin.readline())
+    assert value['method'] == method
+    return value
+
+initial = receive('initialize')
+emit({'jsonrpc': '2.0', 'id': initial['id'], 'result': {'protocolVersion': 1, '_meta': {'currentWorkingDirectory': os.getcwd(), 'defaultAuthMethodId': 'api_key'}}})
+created = receive('session/new')
+emit({'jsonrpc': '2.0', 'id': created['id'], 'result': {'sessionId': 'fixture-session'}})
+prompt = receive('session/prompt')
+root = os.environ['BEE_FIXTURE_STREAMS']
+with open(root + '/grok/acp-1/PermissionRequest.json') as fixture:
+    emit(json.load(fixture))
+response = json.loads(sys.stdin.readline())
+assert response['id'] == 0 and isinstance(response['id'], int)
+choice = response['result']['outcome']['optionId']
+assert choice in ('allow-once', 'reject-once')
+answer = 'Fixture approved answer.' if choice == 'allow-once' else 'Fixture denied answer.'
+emit({'jsonrpc': '2.0', 'method': 'session/update', 'params': {'sessionId': 'fixture-session', 'update': {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': answer}}}})
+emit({'jsonrpc': '2.0', 'id': prompt['id'], 'result': {'stopReason': 'end_turn'}})
+for line in sys.stdin:
+    pass

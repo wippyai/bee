@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "/fixture/brain/763eefbc-39c7-4716-816b-bf1ff413d865",
+  "conversationId": "763eefbc-39c7-4716-816b-bf1ff413d865",
+  "modelName": "gemini-3.8-flash-low",
+  "stepIdx": 2,
+  "toolCall": {
+    "args": {
+      "CommandLine": "printf fixture-tool",
+      "Cwd": "/fixture/work",
+      "WaitMsBeforeAsync": 1000,
+      "toolAction": "Printing fixture output",
+      "toolSummary": "Fixture command"
+    },
+    "name": "run_command"
+  },
+  "transcriptPath": "/fixture/brain/763eefbc-39c7-4716-816b-bf1ff413d865/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "/fixture/work"
+  ]
+}

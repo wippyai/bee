@@ -21,6 +21,8 @@ local exec = require("exec")
 local hash = require("hash")
 local catalog = require("catalog")
 local adapter = require("adapter")
+local machine = require("machine")
+local carrier_fixtures = require("carrier_fixtures")
 local approvals = require("approvals")
 local placement_fixture = require("placement_fixture")
 local exits = require("exits")
@@ -398,6 +400,92 @@ local function define_tests()
     test.describe("Carrier permission exchange", function()
         progress = assert(process.listen("bee.test.carrier.progress", {message = true}))
         local stream = prepare_host()
+        test.it("Grok ACP handshakes and answers a captured permission through the durable carrier", function()
+            local before_policy = assert(registry.get(POLICY))
+            local before_acceptance = assert(registry.get(ACCEPTANCE))
+            local before_sources = assert(registry.get("bee.credentials.env:credential_sources"))
+            local before_files = assert(registry.get("bee.credentials.security:credential_file_policy"))
+            local ok, failure = pcall(function()
+                local bin = assert(bounds.text(env.get("bee.harness.catalog:fixture_bin"))) .. "/grok-acp"
+                local binding = "bee.driver.grok.binding:binding"
+                local declaration = assert(registry.get("bee.driver.grok.permission:permission_adapter"))
+                local decoded = assert(adapter.decode(declaration.id, assert(bounds.object(declaration.data)).adapter))
+                local candidates = assert(catalog.usable(assert(catalog.snapshot())))
+                local binding_digest, profile_digest = "", ""
+                for _, candidate in ipairs(candidates) do
+                    if candidate.binding_id == binding then binding_digest, profile_digest = candidate.binding_digest.entry, candidate.profile_digest.entry end
+                end
+                test.neq(binding_digest, "")
+                local measured = measure_executable(bin)
+                local accepted = assert(registry.get(ACCEPTANCE))
+                assert(bounds.object(accepted.data)).acceptance = {schema_revision = "bee.permission-acceptance@2", binding_id = binding,
+                    profile_id = "batch", binding_digest = binding_digest, profile_digest = profile_digest, adapter_ref = declaration.id,
+                    adapter_digest = decoded.digest, fixture_digest = string.rep("a", 64), executable_revision = measured.revision,
+                    executable_kind = measured.kind, executable_digest = measured.digest, proof_revision = "bee.permission-proof@1",
+                    accepted_by = "fixture-operator", accepted_at = "2026-10-08T00:00:00.000Z"}
+                apply(accepted)
+                local selected = assert(registry.get(POLICY))
+                local data = assert(bounds.object(selected.data))
+                data.executables = {grok = bin}; data.prepare_options = {permission_mode = "default"}
+                data.permission_exchange = {adapter_ref = declaration.id, acceptance_ref = ACCEPTANCE, fixture_digest = string.rep("a", 64),
+                    approver_policy = APPROVER_POLICY, poll_ms = 50, ttl_ms = 60000}
+                apply(selected)
+                local sources = assert(registry.get("bee.credentials.env:credential_sources"))
+                local source_data = assert(bounds.object(sources.data))
+                local allowed = principals.objects(source_data.sources)
+                allowed[#allowed + 1] = {ref = "bee.harness.catalog:grok_login_fixture", workspace_id = "*", audience = ACTOR,
+                    provider = "grok", projection_kinds = {"file"}, path = ".grok/auth.json", write_back = true,
+                    setup_path = ".grok/config.toml", setup_destination = ".grok/.bee-global-config.toml",
+                    setup_content_format = "opaque", setup_initialize_empty = true}
+                source_data.sources = allowed; apply(sources)
+                local file_policy = assert(registry.get("bee.credentials.security:credential_file_policy"))
+                local file_data = assert(bounds.object(file_policy.data))
+                local resource_policy = assert(bounds.object(file_data.policy))
+                local resource_ids = principals.strings(resource_policy.resources)
+                resource_ids[#resource_ids + 1] = "bee.harness.catalog:grok_login_fixture"
+                resource_policy.resources = resource_ids; apply(file_policy)
+                for _, scenario in ipairs({{decision = "approved"}, {decision = "denied"}, {decision = "approved", crash = "protocol_prepared"}}) do
+                    local decision = scenario.decision
+                    local thread_id, workspace = thread(), fresh("grok-ws")
+                    local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
+                    launch.binding_ref = binding; launch.environment = {BEE_FIXTURE_STREAMS = assert(bounds.text(env.get("bee.harness.catalog:fixture_streams")))}
+                    local credential_caller = funcs.new():with_actor(principals.actor(ACTOR, workspace)):with_scope(scope({
+                        "bee.credentials:client_test_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}))
+                    local function credential(method: string, input: Object): Object
+                        local raw, err = credential_caller:call("bee.credentials.binding:" .. method, input)
+                        return reply_value(method, raw, err)
+                    end
+                    credential("define", {workspace_id = workspace, name = "grok_login", provider = "grok", optional = true,
+                        source = {kind = "fs_directory", ref = "bee.harness.catalog:grok_login_fixture"}})
+                    local plan = assert(machine.plan({call = function(target: string, input: unknown): (unknown, string?)
+                            local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call(target, input)
+                            return raw, err and tostring(err) or nil
+                        end, send = function(_: string, _: string, _: unknown) end, self_pid = function(): string return process.pid() end,
+                        now_ms = function(): integer return 0 end, key = function(): string return fresh("key") end}, carrier_fixtures.request(launch)))
+                    local projection = credential("issue_projection", {workspace_id = workspace, name = "grok_login", audience = ACTOR,
+                        attempt_id = launch.attempt_id, profile_id = "batch", profile_digest = plan.binding.profile_digest.entry,
+                        binding_digest = plan.binding.binding_digest.entry, launch_policy_digest = plan.policy.digest, idempotency_key = fresh("key")})
+                    launch.projections = {projection.projection_id}
+                    local pid = spawn_carrier(scenario.crash and "bee.harness.catalog:carrier_faulted" or "bee.harness.service:carrier", launch, "open", scenario.crash)
+                    if scenario.crash then
+                        local crashed = await_carrier(pid)
+                        test.is_true(tostring(crashed.error):find("crash after protocol_prepared", 1, true) ~= nil)
+                        pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
+                    end
+                    local view = await_request(workspace, pid)
+                    test.eq(view.request_kind, "permission")
+                    decide(view, decision)
+                    local settlement = settlement_of(await_carrier(pid), "Grok ACP")
+                    test.eq(settlement.outcome, "succeeded")
+                    test.eq(settlement.answer, decision == "approved" and "Fixture approved answer." or "Fixture denied answer.")
+                    local permissions = phases(records_of(thread_id))
+                    test.eq(count(permissions, "intended"), 1)
+                    test.eq(count(permissions, "consumed"), decision == "approved" and 1 or 0)
+                end
+            end)
+            apply(before_policy); apply(before_acceptance); apply(before_sources); apply(before_files)
+            assert(ok, tostring(failure))
+        end)
         test.it("asks, waits, consumes and answers an allowed request through one deterministic write, woken by a hint rather than the poll", function()
             -- The commit of the approval transition on the thread wakes this
             -- exchange; its poll comes only after the approval has expired.

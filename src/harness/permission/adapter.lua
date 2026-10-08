@@ -21,7 +21,7 @@ type Object = {[string]: unknown}
 -- acknowledgment names the request field the harness echoes back when
 -- it acts, where that differs from the response correlation.
 type Fields = {correlation: string, tool: string, input: string, prompt: string?, acknowledgment: string?}
-type Response = {envelope: Object, correlation_field: string?, decision_field: string, allow_value: string, deny_value: string, reason_field: string?, response_field: string?}
+type Response = {correlation_kind: string?, envelope: Object, correlation_field: string?, decision_field: string, allow_value: string, deny_value: string, reason_field: string?, response_field: string?}
 -- correlation_echo names the observation type and the field that carries
 -- the request's correlation back; continued_output claims only that the
 -- harness produced something afterwards.
@@ -161,7 +161,7 @@ function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
     end
     local response = bounds.object(object.response)
     if not response then return nil, "adapter response must be an object" end
-    local unknown_response = bounds.fields(response, {"envelope", "correlation_field", "decision_field", "allow_value", "deny_value", "reason_field", "response_field", "mode"})
+    local unknown_response = bounds.fields(response, {"envelope", "correlation_field", "decision_field", "allow_value", "deny_value", "reason_field", "response_field", "mode", "correlation_kind"})
     if unknown_response then return nil, "adapter response: " .. unknown_response end
     local envelope = bounds.object(response.envelope == nil and {} or response.envelope)
     if not envelope then return nil, "adapter response envelope must be an object" end
@@ -182,6 +182,11 @@ function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
         local named, reason_error = field_name(response, "reason_field", "response")
         if not named then return nil, reason_error end
         reason_field = named
+    end
+    local correlation_kind: string? = nil
+    if response.correlation_kind ~= nil then
+        if response.correlation_kind ~= "integer" or not correlation_field then return nil, "integer correlation requires a response field" end
+        correlation_kind = "integer"
     end
     local response_field: string? = nil
     if response.response_field ~= nil then
@@ -244,7 +249,7 @@ function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
     local sum, digest_error = digest_of(object)
     if not sum then return nil, "adapter is not measurable: " .. tostring(digest_error) end
     local fields: Fields = {correlation = correlation, tool = tool, input = input, prompt = prompt, acknowledgment = acknowledgment_path}
-    local shape: Response = {envelope = envelope, correlation_field = correlation_field, decision_field = decision_field, allow_value = allow_value, deny_value = deny_value, reason_field = reason_field, response_field = response_field}
+    local shape: Response = {correlation_kind = correlation_kind, envelope = envelope, correlation_field = correlation_field, decision_field = decision_field, allow_value = allow_value, deny_value = deny_value, reason_field = reason_field, response_field = response_field}
     local decoded: Adapter = {adapter_id = adapter_id, schema_revision = M.REVISION, event_name = event_name, event_revision = event_revision, request = fields, response = shape,
         acknowledgment = acknowledgment, deny_acknowledgment = deny_acknowledgment, cancellation = cancellation, proof_fixture = proof_fixture, digest = sum}
     return decoded, nil
@@ -341,7 +346,15 @@ end
 local function encode_response(adapter: Adapter, request: Request, decision: string, reason: string?, response: unknown): (string?, string?)
     local line = copy_object(adapter.response.envelope)
     local failed: string? = nil
-    if adapter.response.correlation_field then failed = assign(line, adapter.response.correlation_field, request.correlation_id) end
+    if adapter.response.correlation_field then
+        local correlation: unknown = request.correlation_id
+        if adapter.response.correlation_kind == "integer" then
+            local numeric = tonumber(request.correlation_id)
+            if not numeric or not bounds.count(numeric) or tostring(numeric) ~= request.correlation_id then return nil, "response correlation is not a canonical integer" end
+            correlation = numeric
+        end
+        failed = assign(line, adapter.response.correlation_field, correlation)
+    end
     if not failed then failed = assign(line, adapter.response.decision_field, decision) end
     if not failed and reason and adapter.response.reason_field then failed = assign(line, adapter.response.reason_field, reason) end
     if not failed and response ~= nil and adapter.response.response_field then failed = assign(line, adapter.response.response_field, response) end

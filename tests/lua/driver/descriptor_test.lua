@@ -16,6 +16,20 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("declares the captured Muse permission response channel in every context", function()
+            local cli = assert(descriptor.load("bee.driver.muse.descriptor:cli"))
+            local pinned = assert(registry.snapshot())
+            for _, context in ipairs({"window", "first_turn", "resume"}) do
+                local answer = descriptor.permission_answer(cli, context)
+                test.eq(answer.transport, "hook_http")
+                test.eq(answer.adapter_ref, "bee.driver.permission:permission_request_hook")
+            end
+            for _, profile in ipairs({"window", "batch"}) do
+                local selected = assert(resolver.profile(pinned, "bee.driver.muse.binding:binding", profile))
+                test.eq(selected.permission_exchange.mode, "adapter")
+                test.eq(selected.permission_exchange.adapter_ref, "bee.driver.permission:permission_request_hook")
+            end
+        end)
         test.it("declares exactly the hooks each shipped route requests and delivers", function()
             local pinned = assert(registry.snapshot())
             local routes = assert(registry.find({["meta.type"] = "bee.launch_definition"}))
@@ -161,8 +175,8 @@ local function define_tests()
         test.it("declares permission answer transports for the launch context without provider dispatch", function()
             local expected: {[string]: {string}} = {
                 claude = {"stdio", "hook_http"}, codex = {"provider", "hook_mcp"},
-                agy = {"provider", "provider"}, grok = {"provider", "provider"},
-                muse = {"provider", "provider"}, opencode = {"provider", "provider"}}
+                agy = {"hook_http", "hook_http"}, grok = {"stdio", "provider"},
+                muse = {"hook_http", "hook_http"}, opencode = {"provider", "provider"}}
             for provider, transports in pairs(expected) do
                 local loaded = assert(descriptor.load("bee.driver." .. provider .. ".descriptor:cli"))
                 local headless = descriptor.permission_answer(loaded, "first_turn")

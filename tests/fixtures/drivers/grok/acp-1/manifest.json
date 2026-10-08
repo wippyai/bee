@@ -1,0 +1,23 @@
+{
+  "executable": "grok",
+  "version": "1.0.30",
+  "source": "Private HOME, fake XAI_API_KEY, isolated leader and loopback OpenAI SSE endpoint",
+  "permission_event": "session/request_permission",
+  "request_file": "PermissionRequest.json",
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 0,
+    "result": {
+      "outcome": {
+        "outcome": "selected",
+        "optionId": "allow-once"
+      }
+    }
+  },
+  "window_limit": "PreToolUse allow does not bypass provider permission checks; native window has no PermissionRequest response hook.",
+  "instruction_delivery": {
+    "path": ".grok/rules/bee.md",
+    "evidence": "Installed Grok 1.0.30 embedded rules documentation: $GROK_HOME/rules/ is always scanned and applies to all projects. agent stdio help does not admit --rules.",
+    "live_consumption": "unproven"
+  }
+}

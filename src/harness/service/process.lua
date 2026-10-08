@@ -10,6 +10,7 @@ local machine = require("machine")
 local placement_protocol = require("placement_protocol")
 local eventbus = require("events")
 local commits = require("commits")
+local bounds = require("bounds")
 type Mode = "open" | "resume"
 local function io_for(after: ((string) -> ())?): machine.IO
     return {
@@ -43,6 +44,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local states = assert(process.listen(placement_protocol.TOPIC_STARTED, {message = true}))
     local acks = assert(process.listen(placement_protocol.TOPIC_ACK, {message = true}))
     local inputs = assert(process.listen(TOPIC_INPUT, {message = true}))
+    local permission_hooks = assert(process.listen("bee.carrier.permission.hook", {message = true}))
     local attached = assert(process.listen(placement_protocol.TOPIC_ATTACHED, {message = true}))
     local statuses = assert(process.listen(placement_protocol.TOPIC_WRITE_STATUS, {message = true}))
     local events = assert(process.events())
@@ -123,7 +125,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         end
     end
     while true do
-        local cases = {states:case_receive(), outputs:case_receive(), exits:case_receive(), acks:case_receive(), inputs:case_receive(), attached:case_receive(), statuses:case_receive(), events:case_receive()}
+        local cases = {states:case_receive(), outputs:case_receive(), exits:case_receive(), acks:case_receive(), inputs:case_receive(), attached:case_receive(), statuses:case_receive(), events:case_receive(), permission_hooks:case_receive()}
         if close_grace then cases[#cases + 1] = close_grace:case_receive() end
         if hints then
             cases[#cases + 1] = poll_timer:channel():case_receive()
@@ -194,6 +196,14 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
                 local ok, err = machine.on_write_status(io, session, tostring(message:from()), data)
                 if not ok then error("write status: " .. tostring(err)) end
             end
+        elseif selected.channel == permission_hooks then
+            local message = selected.value
+            local data = bounds.object(message:payload():data())
+            local topic = data and bounds.text(data.reply_topic, 128)
+            if topic and topic:match("^bee%.carrier%.permission%.reply/[a-zA-Z0-9%-]+$") then
+                local answer, err = machine.permission_hook(io, session, data)
+                process.send(tostring(message:from()), topic, {ok = answer ~= nil, value = answer, error = err})
+            end
         elseif selected.channel == inputs then
             local message = selected.value
             local data = message:payload():data()
@@ -258,6 +268,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     process.unlisten(exits)
     process.unlisten(acks)
     process.unlisten(inputs)
+    process.unlisten(permission_hooks)
     process.unlisten(attached)
     process.unlisten(statuses)
     poll_timer:stop()

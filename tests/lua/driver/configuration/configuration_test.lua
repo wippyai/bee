@@ -152,9 +152,9 @@ local function define_tests()
             end
         end)
 
-        test.it("renders observation-only Agy command hooks with quoted host inputs", function()
+        test.it("renders Agy lifecycle and permission command hooks with quoted host inputs", function()
             local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-a", tools = {},
-                hooks = {"PreToolUse", "PostToolUse", "Stop"}, token_environment = "MCP_TOKEN", hook_token_environment = "HOOK_TOKEN",
+                hooks = {"PreToolUse", "PostToolUse", "Stop", "PermissionRequest"}, token_environment = "MCP_TOKEN", hook_token_environment = "HOOK_TOKEN",
                 hook_command = "/private/Bee's bin/bee"}
             local reply = agy.handle({fixture = false, gateway = selected, home_directory = "/private/agy-session"})
             local output, err = configuration.decode_reply(reply, nil, selected)
@@ -171,7 +171,9 @@ local function define_tests()
             test.eq(doc.bee.PostToolUse[1].hooks[1].type, "command")
             test.eq(doc.bee.Stop[1].type, "command")
             test.is_nil(doc.bee.Stop[1].hooks)
-            test.is_true(doc.bee.Stop[1].command:find("hook-post 127.0.0.1:4312 action-a HOOK_TOKEN Stop", 1, true) ~= nil)
+            test.is_true(doc.bee.Stop[1].command:find("hook-post 127.0.0.1:4312 action-a HOOK_TOKEN agy:Stop", 1, true) ~= nil)
+            test.eq(doc.bee.PreToolUse[2].hooks[1].timeout, 600)
+            test.is_true(doc.bee.PreToolUse[2].hooks[1].command:find("HOOK_TOKEN agy:PermissionRequest", 1, true) ~= nil)
             test.is_true(doc.bee.Stop[1].command:find("MCP_TOKEN", 1, true) == nil)
             local original = measured_digest({fixture = false, gateway = selected}, "bee.driver.agy.binding:configure")
             selected.hook_command = "/other/bee"
@@ -180,6 +182,8 @@ local function define_tests()
             test.eq(agy.handle({fixture = false, gateway = selected}).ok, false)
             selected.hook_command = "/bee"
             selected.hooks = {"SessionStart"}
+            test.eq(agy.handle({fixture = false, gateway = selected, home_directory = "/private/agy-session"}).ok, true)
+            selected.hooks = {"SessionEnd"}
             test.eq(agy.handle({fixture = false, gateway = selected}).ok, false)
             for _, path in ipairs({"bee", "", "/bad\npath"}) do
                 selected.hook_command = path
@@ -207,8 +211,9 @@ local function define_tests()
             test.eq(claude_delivery.files[1].content, text)
             local grok_delivery, grok_error = configuration.decode_reply(grok.handle({fixture = false, instructions = text, home_directory = "/private/grok"}), nil, nil, text)
             if not grok_delivery then error(tostring(grok_error)) end
-            test.eq(grok_delivery.arguments[1], "--rules")
-            test.eq(grok_delivery.arguments[2], text)
+            test.eq(#grok_delivery.arguments, 0)
+            test.eq(grok_delivery.files[1].path, ".grok/rules/bee.md")
+            test.eq(grok_delivery.files[1].content, text)
             local agy_reply = agy.handle({fixture = false, instructions = text, home_directory = "/private/agy-session"})
             local agy_delivery, agy_error = configuration.decode_reply(agy_reply, nil, nil, text)
             if not agy_delivery then error(tostring(agy_error)) end

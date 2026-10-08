@@ -24,8 +24,13 @@ entries:
           - UserPromptSubmit
           - PreToolUse
           - PostToolUse
+          - PermissionRequest
           - Stop
           adapter_ref: bee.driver.muse.descriptor:cli
+        permission_exchange:
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
         inbound:
         - next_turn
         protocol: stream-json
@@ -66,6 +71,7 @@ entries:
           - UserPromptSubmit
           - PreToolUse
           - PostToolUse
+          - PermissionRequest
           - Stop
           adapter_ref: bee.driver.muse.descriptor:cli
         protocol: pty
@@ -83,7 +89,9 @@ entries:
         input_ready:
           strategy: none
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
 - name: default_window
   kind: registry.entry
   meta:
@@ -113,6 +121,7 @@ entries:
       kind: new
     session_resource: session
     credentials:
+    - muse_login
     - muse_api_key
     presentation:
       start_menu: true

@@ -1849,6 +1849,8 @@ entries:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
+    machine: bee.harness.carrier:machine
+    carrier_fixtures: bee.harness.catalog:carrier_fixtures
     approvals: bee.approvals.binding:service
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: codex_auth_test
@@ -2521,3 +2523,23 @@ entries:
     test: wippy.test:test
     hooks: bee.gateway.hooks:hooks
     principals: bee.tests.principals:bound
+- name: permission_hook_test
+  kind: function.lua
+  source: file://permission_hook_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, json, hash]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    adapter: bee.harness.permission:adapter
+    exchange: bee.harness.permission:exchange
+    hook_exchange: bee.harness.permission:hook_exchange
+    hooks: bee.gateway.hooks:hooks
+
+- name: grok_login_fixture
+  kind: fs.directory
+  directory: .wippy/grok-acp-login-fixture
+  auto_init: true
+  meta: {type: test_support}

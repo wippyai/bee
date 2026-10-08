@@ -37,6 +37,7 @@ var knownEvents = map[string]struct{}{
 	"PreToolUse":         {},
 	"PostToolUse":        {},
 	"PostToolUseFailure": {},
+	"PermissionRequest":  {},
 	"Stop":               {},
 	"StopFailure":        {},
 	"SessionEnd":         {},
@@ -75,7 +76,11 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 		return tokenError
 	}
 
-	requestCtx, cancel := context.WithTimeout(ctx, RequestTimeout)
+	timeout := RequestTimeout
+	if event == "PermissionRequest" {
+		timeout = 10 * time.Minute
+	}
+	requestCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := requestCtx.Err(); err != nil {
 		return err
@@ -137,6 +142,9 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return nil
+	}
+	if event == "PermissionRequest" {
+		return permissionResponseFor(data, stdout, agyTranscript)
 	}
 	var envelope struct {
 		Output *struct {
@@ -370,4 +378,45 @@ func payload(raw []byte, event string) ([]byte, error) {
 		return nil, errors.New("hook-post: input exceeds 32768 bytes")
 	}
 	return body, nil
+}
+
+func permissionResponse(data []byte, stdout io.Writer) error {
+	return permissionResponseFor(data, stdout, false)
+}
+
+func permissionResponseFor(data []byte, stdout io.Writer, agy bool) error {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) == nil && fields != nil && len(fields) == 0 {
+		return nil
+	}
+	var envelope struct {
+		Output *struct {
+			Event    string `json:"hookEventName"`
+			Decision *struct {
+				Behavior string `json:"behavior"`
+				Message  string `json:"message,omitempty"`
+			} `json:"decision"`
+		} `json:"hookSpecificOutput"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&envelope) != nil || envelope.Output == nil || envelope.Output.Event != "PermissionRequest" ||
+		envelope.Output.Decision == nil || (envelope.Output.Decision.Behavior != "allow" && envelope.Output.Decision.Behavior != "deny") ||
+		len(envelope.Output.Decision.Message) > 4096 {
+		return errors.New("hook-post: invalid permission response")
+	}
+	var extra json.RawMessage
+	if decoder.Decode(&extra) != io.EOF {
+		return errors.New("hook-post: multiple response documents")
+	}
+	if stdout == nil {
+		return errors.New("hook-post: stdout is required")
+	}
+	if agy {
+		return json.NewEncoder(stdout).Encode(struct {
+			Decision string `json:"decision"`
+			Reason   string `json:"reason,omitempty"`
+		}{envelope.Output.Decision.Behavior, envelope.Output.Decision.Message})
+	}
+	return json.NewEncoder(stdout).Encode(envelope)
 }

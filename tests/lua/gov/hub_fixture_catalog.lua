@@ -84,7 +84,7 @@ function M.entries(): {inspection.Entry}
         capability = "agent.tools", parameters = {tools = tools}, reason = "Offer progress tools"},
         data = {targets = {{entry = NS .. ":app", path = ".security.policies +="}}}}
     for ordinal, sql in ipairs({"CREATE TABLE evidence (version INTEGER NOT NULL)", "INSERT INTO evidence VALUES (1), (2)"}) do
-        entries[#entries + 1] = {id = NS .. ":migration_" .. tostring(ordinal), kind = "function.lua",
+        entries[#entries + 1] = {id = NS .. (ordinal == 1 and ":schema_migration" or ":evidence_migration"), kind = "function.lua",
             meta = {type = "migration", target_db = "progress", ordinal = ordinal,
                 timestamp = "2026-10-0" .. tostring(ordinal) .. "T00:00:00Z"},
             data = {source = migration(sql), method = "run", imports = {migration = "wippy.migration:migration"}}}

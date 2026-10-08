@@ -702,11 +702,6 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         -- updated packages, not unrelated packages' migration history.
         if not migrations[key] then issue("APPLIED_MIGRATION_REMOVED", item.id, "candidate omits an applied migration", "retain applied migration history") end
     end
-    table.sort(pending, function(a: Migration, b: Migration): boolean
-        if a.target_db ~= b.target_db then return a.target_db < b.target_db end
-        if a.ordinal ~= b.ordinal then return a.ordinal < b.ordinal end
-        return a.id < b.id
-    end)
     table.sort(diagnostics, function(a: Diagnostic, b: Diagnostic): boolean
         if a.code ~= b.code then return a.code < b.code end
         if a.target ~= b.target then return a.target < b.target end
@@ -719,6 +714,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     if not measured then return nil, tostring(measure_error) end
     local pending_ids: {string} = {}
     for _, item in ipairs(pending) do pending_ids[#pending_ids + 1] = M.migration_key(item) end
+    table.sort(pending_ids)
     return {schema_revision = "bee.governance-preflight@1", plan_digest = measured, destination_node = context.node_id,
         base_revision = candidate.base_revision, policy_digest = context.policy_digest, ready = #diagnostics == 0,
         diagnostics = diagnostics, pending_migrations = pending_ids}, nil

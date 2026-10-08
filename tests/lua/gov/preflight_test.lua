@@ -512,6 +512,22 @@ local function define_tests()
                 pending_migrations = report.pending_migrations}
             test.is_nil(preflight.encode_report(forged))
         end)
+        test.it("encodes pending migration identities independently of execution ordinals", function()
+            local candidate, context = fixture()
+            candidate.migrations = {
+                {id = "demo:z_schema", target_db = "host:db", checksum = SHA, ordinal = 1},
+                {id = "demo:a_index", target_db = "host:db", checksum = SHA, ordinal = 2}}
+            local report = checked(candidate, context)
+            test.is_true(report.ready)
+            local bytes, digest, problem = preflight.encode_report(report)
+            test.is_nil(problem)
+            local decoded = assert(preflight.decode_report(bytes, digest))
+            test.eq(#decoded.pending_migrations, 2)
+            test.eq(decoded.pending_migrations[1], "host:db\ndemo:a_index")
+            test.eq(decoded.pending_migrations[2], "host:db\ndemo:z_schema")
+            test.eq(candidate.migrations[1].ordinal, 1)
+            test.eq(candidate.migrations[2].ordinal, 2)
+        end)
         test.it("decodes the reviewed candidate only from its exact measured bytes", function()
             local candidate = fixture()
             local bytes = assert(canonical.encode(candidate, 1048576))

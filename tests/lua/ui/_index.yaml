@@ -72,6 +72,9 @@ entries:
     inbox_model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
     gateway: bee.gateway.app:view
+    processes: bee.apps.processes:view
+    process_history: bee.apps.processes:history
+    process_probe: bee.apps.processes:probe
 - name: profile_discovery_test
   kind: function.lua
   source: file://profile_discovery_test.lua

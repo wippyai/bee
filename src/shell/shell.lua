@@ -112,6 +112,9 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         for _, instance in ipairs(running) do
             if instance.desktop == desktop and alerts[instance.id] and alerts[instance.id].count > 0 then return alerts[instance.id] end
         end
+        for _, alert in pairs(alerts) do
+            if alert.desktop == desktop and alert.count > 0 then return alert end
+        end
         return nil
     end
     -- app_dialogs holds the dialogs apps ask, by app instance; the display
@@ -559,10 +562,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             local alert = current_alert()
             if alert then
                 alert_popup = false
+                local app = alert.app
                 for _, instance in ipairs(running) do
-                    if instance.id == alert.id then open_app(instance.app, {"--approval", alert.approval_id}); break end
+                    if instance.id == alert.id then app = instance.app; break end
                 end
-                if views[alert.id] then focus(alert.id) else focus_pending[alert.id] = true end
+                if app then open_app(app, {"--approval", alert.approval_id}) end
+                if views[alert.id] then focus(alert.id) end
             end
         elseif action == "select_text" then begin_selection(id)
         elseif action == "rename" and win then editor = title_editor.open(win.id, model.display_title(win), win.accent or "")
@@ -754,6 +759,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if instance.desktop == desktop then attach(instance.id) end
         elseif event.kind == "attention" and event.id then
             if event.alert then
+                for id, previous in pairs(alerts) do
+                    if event.alert.desktop and previous.desktop == event.alert.desktop and previous.app == event.alert.app
+                        and id ~= event.id then alerts[id] = nil end
+                end
                 local previous = alerts[event.id]
                 if not previous or previous.approval_id ~= event.alert.approval_id then alert_popup = true end
                 alerts[event.id] = event.alert

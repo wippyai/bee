@@ -32,13 +32,12 @@ and nowhere else.
 | 1 | Header: uppercase identity left, muted live summary right | `frame.header` |
 | 2 | Tabs, when the application has sections | `frame.tabs` |
 | 3 | Blank | — |
-| 4 … H−2 | Work area, columns 2 … W−1 (from row 3 without tabs) | `layout.work` |
-| H−1 | Action bar | `frame.actions` |
-| H | Footer: bounded status left, reserved hints and ? help right | `frame.footer`, `frame.hints` |
+| 4 … H−1 | Work area, columns 2 … W−1 (from row 3 without tabs); status uses its last row when supplied | `layout.work` |
+| H | Shared footer: actions left, complete hints and ? help right | `frame.footer`, `frame.hints` |
 
-Below 6 rows the tabs and the action bar are omitted and the work area runs
-from row 2 to H−1; below 2 rows only the header remains. The key hints always
-retain navigation and Help. Help lists every declared action, including unavailable ones.
+Below 6 rows the tabs are omitted and the work area runs from row 2 to H−1;
+below 2 rows only the header remains. The footer drops hints before actions
+and never splits an item. Help lists every declared action, including unavailable ones.
 
 ## 3. Size classes
 
@@ -48,9 +47,9 @@ dimensions must reach a class.
 | Class | From | Work area (with tabs and actions) |
 |---|---|---|
 | `narrow` | below 80x24 | identity, selection, one value |
-| `compact` | 80x24 | 78x19 |
-| `standard` | 120x36 | 118x31 |
-| `wide` | 160x48 | 158x43 |
+| `compact` | 80x24 | 78x20 |
+| `standard` | 120x36 | 118x32 |
+| `wide` | 160x48 | 158x44 |
 
 A dashboard shows fewer panels and a list with detail shows the list alone on
 `narrow` and `compact`; Enter opens the detail as a second page. `standard` and
@@ -63,8 +62,8 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
 
 ## 4. Actions
 
-- The action bar is the penultimate row, starting at column 2
-  (`frame.actions`). Order: the primary action first, then secondary actions,
+- Pass buttons to the shared footer on the final row, starting at column 2
+  (`frame.footer(painter, status, hints, more, buttons)`). Order: the primary action first, then secondary actions,
   then toggles, then destructive actions last.
 - Exactly one enabled button per screen is `primary`: the action Enter
   performs. It is filled: `selection_text` on `accent`. Secondary buttons are
@@ -82,12 +81,12 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
 
 ## 5. Status and key hints
 
-- The footer is the final row (`frame.footer`). The status at the left is a
+- The footer is the final row (`frame.footer`). Status appears above it as a
   sentence naming the latest effect or the current state: `Saved count 2`,
-  `Waiting for approval`, `Paused`. The key hints at the right use
+  `Waiting for approval`, `Paused`. Actions appear at the left; hints at the right use
   `frame.hints`: key, space, lowercase verb, joined with ` · `.
-- The footer reserves hints and a clickable `? help` at the right. Status
-  uses a bounded region at the left; long text is truncated first. Help
+- Hints and a clickable `? help` occupy the space after the actions. A narrow
+  window drops whole hints before actions; it never wraps or splits an item. Help
   lists the screen's complete declared buttons, tabs and hints, plus the full
   status message.
 - Each app owns a `frame.menu()` state. Return `controls = frame.controls(painter)`

@@ -227,7 +227,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     local phase_name = ""
     local phase_started = now_ms()
     local launch_records: {{[string]: unknown}} = {}
-    local function phase(name: string)
+    local function record_phase(name: string)
         local at = now_ms()
         if phase_name ~= "" then
             launch_records[#launch_records + 1] = {source = "bee", body = {type = "extension",
@@ -236,6 +236,9 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                     payload_json = assert(json.encode({phase = phase_name, started_ms = phase_started, ended_ms = at}))}}}
         end
         phase_name, phase_started = name, at
+    end
+    local function phase(name: string)
+        record_phase(name)
         local output = assert(tty.surface())
         local width, height = tty.screen_size()
         local frame = restore_view.draw(width, height, launch.appearance, name .. "…", "Starting Agent", "")
@@ -805,7 +808,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
-    phase("Recording supervised process start")
+    record_phase("Recording supervised process start")
     local started, started_error = call(THREADS .. ":start_attempt", {thread_id = admitted.thread_id,
         idempotency_key = "launch:" .. admitted.attempt_id .. ":window:started", action_id = admitted.action_id,
         attempt_id = admitted.attempt_id, started = {execution_kind = "process", execution_ref = admitted.attempt_id,
@@ -823,7 +826,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
-    phase("Running")
+    record_phase("Running")
     local recorded, record_error = funcs.call(hooks.COMMIT, {thread_id = state.thread_id,
         idempotency_key = "launch:" .. state.attempt_id .. ":window:startup", attempt_id = state.attempt_id,
         carrier_epoch = state.epoch, expected_revision = state.revision, checkpoint = state.checkpoint, records = launch_records})

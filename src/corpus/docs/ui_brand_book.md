@@ -52,10 +52,10 @@ The terminal supplies the monospace typeface. Design in cells.
   around every value.
 - Prefer 1, 2, 4 and 6-cell gaps. A control label includes its own surrounding
   spaces, such as `" Run "`.
-- Put the action bar on the penultimate row (`frame.actions`) and the footer on
-  the final row (`frame.footer`): the changing status at the left, the stable
-  key hints and clickable `? help` at the right. Bound status text so hints
-  remain visible. Overflow actions appear in `F10 More`.
+- Use one footer on the final row (`frame.footer`): actions at the left,
+  complete key hints and clickable `? help` at the right. Hints give way to
+  actions on narrow windows; items never wrap. Status appears above the footer.
+  Overflow actions appear in `F10 More`.
 - Write key hints as key then lowercase verb, joined with ` · `
   (`frame.hints`): `↑↓ select · Enter open · Esc close`.
 - Truncate by display width with an ellipsis; every frame call does this. Byte
@@ -73,11 +73,10 @@ Every application frame follows the same reading order:
 3. **Work:** lists (`frame.row`), tables (`frame.table`), forms, metrics or a
    focused detail. Selection uses the same accent pair as tabs and a `›` marker
    in column 1.
-4. **Actions:** the penultimate row. Visible keys use the same verbs as mouse
-   controls.
-5. **Feedback:** the final row: explicit status text at the left, key hints at
-   the right. Empty, loading and error states in the work area use
-   `frame.empty`.
+4. **Actions and hints:** one footer on the final row. Visible keys use the
+   same verbs as mouse controls; hints occupy the right and give way to actions.
+5. **Feedback:** explicit status above the footer. Empty, loading and error
+   states in the work area use `frame.empty`.
 
 Use progressive disclosure. A narrow window keeps identity, selection, the main
 value and one action. Wider windows may add metadata, a side rail or detail pane.

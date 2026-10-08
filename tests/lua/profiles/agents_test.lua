@@ -134,6 +134,16 @@ local function define_tests()
             test.is_nil(listing)
             test.eq(err, "DENIED: no")
         end)
+        test.it("preserves a saved profile's permission transport refusal", function()
+            local item = candidate("c:profile", "Saved Claude", "incompatible", {
+                "bee.permission_answers=ask requires a host-accepted permission transport"})
+            item.features = {"presentation:start_menu", "driver:claude"}
+            local client = fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?)
+                return {items = {item}, complete = true, unavailable_count = 1, diagnostics = {}}, nil
+            end})
+            local listing = must_list(client, true)
+            test.eq(listing.items[1].reason, "Permission answers: ask requires a host-accepted permission transport")
+        end)
     end)
     test.describe("Sessions directory and work control", function()
         test.it("pages every visible session, filters by its public workspace address and lists closed sessions on request", function()

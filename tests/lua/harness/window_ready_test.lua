@@ -25,8 +25,10 @@ end
 
 local function define_tests()
     test.describe("Managed window readiness", function()
-        for _, structured in ipairs({false, true}) do
-        test.it("announces " .. (structured and "structured" or "direct") .. " launch readiness before opening the terminal", function()
+        for _, scenario in ipairs({{structured = false, owned = false}, {structured = true, owned = false}, {structured = false, owned = true}}) do
+        local structured, owned = scenario.structured, scenario.owned
+        test.it(owned and "records startup while the provider owns the surface" or
+            "announces " .. (structured and "structured" or "direct") .. " launch readiness before opening the terminal", function()
             local ref = "bee.driver.claude.descriptor:cli"
             local original = assert(registry.get(ref))
             local original_mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
@@ -46,6 +48,7 @@ local function define_tests()
             local events = assert(process.events())
             local ready = assert(process.listen("bee.app.ready", {message = true}))
             local opening = assert(process.listen("bee.test.window_opening", {message = true}))
+            local checkpoint = assert(process.listen("bee.app.checkpoint", {message = true}))
             local self = tostring(process.pid())
             local instance_id = "window-ready-" .. uuid.v7()
             -- The broker runs an application under a principal bound to its workspace.
@@ -56,7 +59,7 @@ local function define_tests()
                     instance_id = instance_id, view_id = instance_id, definition_id = "bee.harness.app:app",
                     execution_generation = 1, definition_revision = "1", registry_revision = "1",
                     launch_token = uuid.v7(), resume_schema = recovery.SCHEMA, resume_state = "",
-                    arguments = {structured and assert(json.encode({request_id = "structured-ready", definition_ref = DEFINITION, brief = ""})) or DEFINITION}}, self)
+                    arguments = {structured and assert(json.encode({request_id = "structured-ready", definition_ref = DEFINITION, brief = ""})) or DEFINITION}}, self, owned)
             if not window then error("window spawn failed: " .. tostring(spawn_error)) end
             local pid = tostring(window)
 
@@ -102,6 +105,20 @@ local function define_tests()
             test.is_true(continued, "the Claude login notice did not continue to native open on Enter")
 
             assert(process.send(pid, "bee.test.window_release", {version = 1}))
+            if owned then
+                local recorded = false
+                local completion_deadline = time.after("30s")
+                while not recorded do
+                    local selected = channel.select({checkpoint:case_receive(), events:case_receive(), completion_deadline:case_receive()})
+                    assert(selected.ok and selected.channel ~= completion_deadline, "startup did not record its supervised process start")
+                    if selected.channel == events then
+                        local event = selected.value
+                        assert(not (event.kind == process.event.EXIT and tostring(event.from) == pid),
+                            "the provider surface owner exited: " .. tostring(event.result and event.result.error))
+                    elseif tostring(selected.value:from()) == pid then recorded = true end
+                end
+                test.contains(table.concat(assert(view:snapshot()).rows, "\n"), "Provider owns the terminal")
+            end
             assert(process.cancel(pid, "readiness test complete"))
             local exited = false
             local stop_deadline = time.after("30s")
@@ -113,6 +130,7 @@ local function define_tests()
             end
             process.unlisten(ready)
             process.unlisten(opening)
+            process.unlisten(checkpoint)
             view:close()
             end)
             apply(original)

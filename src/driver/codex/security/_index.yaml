@@ -180,6 +180,12 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.model:
+        kind: declared
+      provider.options.sandbox:
+        kind: declared
+      provider.options.approval_policy:
+        kind: declared
       provider.effort:
       - low
       - medium

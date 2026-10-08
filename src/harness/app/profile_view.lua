@@ -68,7 +68,8 @@ end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"},
         {kind = "driver", name = "", label = "Driver: " .. (state.form.driver_name or state.form.draft.driver_binding_ref)}}
-    result[#result + 1] = {kind = "answers", name = "", label = "Permission answers: " .. (state.form.draft.bee.permission_answers or "provider")}
+    result[#result + 1] = {kind = "answers", name = "", label = "Permission answers: " .. (state.form.draft.bee.permission_answers or "provider") ..
+        (state.form.permission_transport and "" or " · host transport unavailable")}
     if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "System prompt"} end
     if state.form.draft._allowed.workdir then result[#result + 1] = {kind = "workdir", name = "", label = folder_label(state)} end
     if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Run in: " .. ((state.form.placement_names or {})[editor.placement_ref(state.form.draft) or "bee.placement.profiles:native"] or editor.placement_ref(state.form.draft) or "Definition default")} end
@@ -336,7 +337,10 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
             if field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
             elseif field.kind == "answers" then
                 local current = state.form.draft.bee.permission_answers
-                state.form.draft.bee.permission_answers = current == "provider" and "ask" or current == "ask" and "deny" or "provider"; ok = true
+                if state.form.permission_transport then
+                    state.form.draft.bee.permission_answers = current == "provider" and "ask" or current == "ask" and "deny" or "provider"
+                else state.form.draft.bee.permission_answers = "provider" end
+                ok = true
             elseif field.kind == "placement" then ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
             elseif field.kind == "refresh" then
                 local ready = M.action(state, "save") == "save"

@@ -13,9 +13,12 @@ local inbox = require("inbox")
 local inbox_model = require("inbox_model")
 local leases = require("leases")
 local gateway = require("gateway")
+local processes = require("processes")
+local process_history = require("process_history")
+local process_probe = require("process_probe")
 local function check(shown: frame.View, height: integer, action: string)
     test.is_true(shown.rows[height]:find(action, 1, true) ~= nil)
-    test.is_nil(shown.rows[height - 1]:find(action, 1, true))
+    test.is_nil((shown.rows[height - 1]:find(action, 1, true)))
     for _, hit in ipairs(shown.hits) do
         if hit.kind == "frame_help" or hit.kind == "frame_more" then test.eq(hit.y, height) end
     end
@@ -33,6 +36,10 @@ local function define_tests()
                     {offset = 0, status = "", reading = false, editor = nil, content = contents.new()}), 24, "? help")
                 check(inbox.draw(width, 24, prefs, inbox_model.new({"workspace"}), {}, 0, "", leases.new()), 24, "F10 More")
                 check(gateway.draw(width, 24, prefs, {}, 0, "", nil), 24, "R Refresh")
+                local snapshot: process_probe.Snapshot = {processes = {}, services = {}, host_executed = {}, error = ""}
+                check(processes.draw(width, 24, snapshot, process_history.new_history(), prefs, "", 0,
+                    false, "", false, false, {}, false), 24, "P Pause")
+                check(processes.draw_hive(width, 24, {}, prefs, "", 0, false, ""), 24, "P Pause")
             end
         end)
     end)

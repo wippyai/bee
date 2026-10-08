@@ -221,6 +221,9 @@ entries:
     type: test_support
   modules:
   - process
+  - tty
+  - channel
+  - exec
   imports:
     runtime: bee.harness.app:runtime
 - name: window_ready_test

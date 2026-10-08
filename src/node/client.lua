@@ -24,7 +24,7 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- id, "dialog" a dialog an app asks, "dialog_closed" the id of the app
 -- whose dialog is gone and "attention" the id of an app that needs the
 -- person, which a display brings forward.
-type Alert = {id: string, count: integer, title: string, approval_id: string}
+type Alert = {id: string, count: integer, title: string, approval_id: string, app: string?, desktop: string?, workspace: string?}
 type Event = {changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
     workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?}
 -- What a node reports to list and watch; owner is the PID of the node's
@@ -141,7 +141,14 @@ function M.alert(value: unknown): Alert?
     if type(value) ~= "table" or type(value.id) ~= "string" or type(value.count) ~= "number" or value.count < 0
         or value.count ~= math.floor(value.count) or type(value.title) ~= "string" or #value.title > 160
         or type(value.approval_id) ~= "string" then return nil end
-    return {id = value.id, count = math.floor(value.count), title = value.title:gsub("%c", " "), approval_id = value.approval_id}
+    for _, name in ipairs({"app", "desktop", "workspace"}) do
+        local field = value[name]
+        if field ~= nil and (type(field) ~= "string" or #field == 0 or #field > 256 or field:find("%c")) then return nil end
+    end
+    return {id = value.id, count = math.floor(value.count), title = value.title:gsub("%c", " "), approval_id = value.approval_id,
+        app = type(value.app) == "string" and value.app or nil,
+        desktop = type(value.desktop) == "string" and value.desktop or nil,
+        workspace = type(value.workspace) == "string" and value.workspace or nil}
 end
 
 -- state decodes a list or watch reply.

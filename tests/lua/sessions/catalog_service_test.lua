@@ -22,6 +22,42 @@ end
 
 local function define_tests()
     test.describe("Sessions catalog route readiness", function()
+        test.it("explains unsupported permission transport and admits provider answers", function()
+            local workspace = "edited-profile-workspace"
+            local saved = assert(bounds.object(assert(funcs.call("bee.harness.binding:call", {
+                operation = "put", workspace_id = workspace, profile_id = "edited-profile",
+                expected_revision = 0, idempotency_key = "edited-profile",
+                profile = {schema_revision = "bee.agent-profile@3", name = "UX Claude",
+                    definition_ref = "bee.driver.claude.profiles:default_window",
+                    driver_binding_ref = "bee.driver.claude.binding:binding",
+                    provider = {model = "sonnet", effort = "high", system_prompt_append = "Use concise responses."},
+                    bee = {permission_answers = "ask"}, placement = {kind = "native", home = "machine"}},
+            }))))
+            test.eq(saved.ok, true)
+            local page, failure = catalog.list({kind = "profile", include_unavailable = true}, workspace)
+            if not page then error(failure and failure.message or "catalog unavailable") end
+            local found = false
+            for _, candidate in ipairs(page.items) do
+                if candidate.ref == "edited-profile" then
+                    test.eq(candidate.status, "incompatible", table.concat(candidate.reasons, "; "))
+                    test.eq(candidate.reasons[1], "bee.permission_answers=ask requires a host-accepted permission transport")
+                    found = true
+                end
+            end
+            test.is_true(found)
+            local value = assert(bounds.object(saved.value))
+            local profile = assert(bounds.object(value.profile))
+            profile.bee = {permission_answers = "provider"}
+            local changed = assert(bounds.object(assert(funcs.call("bee.harness.binding:call", {
+                operation = "put", workspace_id = workspace, profile_id = "edited-profile",
+                expected_revision = 1, idempotency_key = "edited-profile-provider", profile = profile,
+            }))))
+            test.eq(changed.ok, true)
+            local ready, ready_error = catalog.list({kind = "profile"}, workspace)
+            if not ready then error(ready_error and ready_error.message or "catalog unavailable") end
+            test.eq(#ready.items, 1)
+            test.eq(ready.items[1].status, "ready")
+        end)
         test.it("retains a saved profile's identity and title beside its definition", function()
             local saved = assert(funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",

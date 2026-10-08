@@ -426,7 +426,7 @@ local function main(saved: unknown)
         if type(value.alerts) == "table" then
             for _, item in ipairs(value.alerts) do
                 local alert = client.alert(item)
-                if alert and instances[alert.id] then alerts[alert.id] = alert end
+                if alert and (instances[alert.id] or (alert.app and alert.desktop and alert.workspace)) then alerts[alert.id] = alert end
             end
         end
         if type(value.revision) == "number" then revision = math.floor(value.revision) end
@@ -899,7 +899,12 @@ local function main(saved: unknown)
                     local opened = open(app, desktop_id, {arguments = arguments}, true)
                     local value = opened.value
                     if opened.ok and value then
-                        local alert = pending and {id = value.id, count = pending.count, title = pending.title, approval_id = pending.approval_id}
+                        assert(type(value.id) == "string", "Presented app has no instance identity")
+                        local alert: client.Alert? = pending and {id = value.id, count = pending.count, title = pending.title,
+                            approval_id = pending.approval_id, app = app, desktop = desktop_id, workspace = workspace_id}
+                        for id, previous in pairs(alerts) do
+                            if previous.desktop == desktop_id and previous.app == app and id ~= value.id then alerts[id] = nil end
+                        end
                         if alert then alerts[value.id] = alert end
                         broadcast({kind = "attention", id = value.id, alert = alert})
                     else logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error}) end
@@ -926,7 +931,7 @@ local function main(saved: unknown)
         elseif event.kind == "approval.changed" and type(data.count) == "number" then
             for id, alert in pairs(alerts) do
                 local instance = instances[id]
-                if instance and instance.workspace == workspace_id then
+                if alert.workspace == workspace_id or (instance and instance.workspace == workspace_id) then
                     alert.count = math.floor(data.count)
                     if type(data.approval_id) == "string" then alert.approval_id = data.approval_id end
                     if type(data.title) == "string" then alert.title = data.title end

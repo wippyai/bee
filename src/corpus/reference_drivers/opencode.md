@@ -555,7 +555,9 @@ entries:
     placement_profiles:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
-    profile_restrictions: {}
+    profile_restrictions:
+      provider.model:
+        kind: declared
     profile_instructions: true
 ```
 

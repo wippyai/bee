@@ -133,12 +133,12 @@ local function define_tests()
                 test.is_true(plain:find("Fix API", 1, true) ~= nil)
                 test.is_true(plain:find("closed", 1, true) ~= nil)
                 test.is_nil((plain:find("bs:n:w:s", 1, true)))
-                test.contains(shown.rows[size[2]], "Enter Open")
-                test.is_nil((shown.rows[size[2]]:find("Enter open", 1, true)))
+                test.contains(shown.rows[math.floor(size[2])], "Enter Open")
+                test.is_nil((shown.rows[math.floor(size[2])]:find("Enter open", 1, true)))
                 local hinted = false
                 for _, hint in ipairs(assert(shown.controls).hints) do if hint.key == "Esc" and hint.verb == "back" then hinted = true end end
                 test.is_true(hinted)
-                test.contains(directory_view.draw(160, size[2], appearance.defaults(), rows, 1, "", false).rows[size[2]], "Esc back")
+                test.contains(directory_view.draw(160, size[2], appearance.defaults(), rows, 1, "", false).rows[math.floor(size[2])], "Esc back")
             end
         end)
     end)
@@ -189,7 +189,7 @@ local function define_tests()
                 test.is_nil((screen(shown.rows):find("bs:", 1, true)))
                 test.is_true(screen(shown.rows):find("Stop current work", 1, true) ~= nil)
                 -- Stop is a button; the footer names only keys no button shows.
-                test.is_nil((shown.rows[size[2]]:find("Ctrl+K stop work", 1, true)))
+                test.is_nil((shown.rows[math.floor(size[2])]:find("Ctrl+K stop work", 1, true)))
                 local hinted = false
                 for _, hint in ipairs(assert(shown.controls).hints) do
                     if hint.key == "Ctrl+D" and hint.verb == "details" then hinted = true end

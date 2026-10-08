@@ -17,14 +17,14 @@ local function define_tests()
                 local rows = frame.rows(painter)
                 test.eq(tty.text.width(rows[12]), width)
                 test.is_true(rows[12]:find("Enter Open", 1, true) ~= nil)
-                test.is_nil(rows[11]:find("Enter Open", 1, true))
+                test.is_nil((rows[11]:find("Enter Open", 1, true)))
                 for _, hit in ipairs(painter.hits) do test.eq(hit.y, 12) end
                 local plain = rows[12]:gsub("\27%[[0-9;]*m", "")
-                test.is_nil(plain:find("…", 1, true))
+                test.is_nil((plain:find("…", 1, true)))
                 if width >= 80 then
                     test.is_true(plain:find("/ search", 1, true) > plain:find("E Edit", 1, true))
                     test.is_true(plain:find("? help", 1, true) ~= nil)
-                else test.is_nil(plain:find("/ search", 1, true)) end
+                else test.is_nil((plain:find("/ search", 1, true))) end
             end
         end)
         test.it("shares the footer row with the canonical action geometry", function()

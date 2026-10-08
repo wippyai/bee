@@ -16,6 +16,37 @@ local function read(workspace: string, id: string): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Agent profile form persistence", function()
+        test.it("edits the CLI permission mode from its declared schema", function()
+            local opened = assert(form.load("profile-cli-permission-edit", {definition_ref = "bee.driver.claude.profiles:default_window", title = "CLI permissions"}, true))
+            test.is_true(editor.cycle_option(opened.draft, "permission_mode"))
+            test.is_true(editor.cycle_option(opened.draft, "permission_mode"))
+            test.eq(opened.draft.provider.permission_mode, "acceptEdits")
+            test.is_true(form.save(opened))
+            local restored = assert(form.reload(opened))
+            test.eq(restored.draft.provider.permission_mode, "acceptEdits")
+            restored.draft.provider.permission_mode = "invented"
+            test.is_nil(editor.result(restored.draft))
+        end)
+        test.it("refuses permission answers without the host's accepted transport", function()
+            local opened = assert(form.load("profile-permission-edit", {definition_ref = "bee.driver.claude.profiles:default_window", title = "Permissions"}, true))
+            opened.draft.bee.permission_answers = "ask"
+            local saved, reason = form.save(opened)
+            test.is_false(saved)
+            test.eq(reason, "This host has no accepted permission transport. Use provider answers.")
+            test.is_nil(opened.pending)
+            opened.draft.bee.permission_answers = "provider"
+            test.is_true(form.save(opened))
+        end)
+        test.it("saves and reloads the declared model under a shipped window policy", function()
+            local workspace = "profile-model-edit"
+            local opened = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Model worker"}, true))
+            test.is_true(editor.set_text_option(opened.draft, "model", "sonnet"))
+            test.is_true(form.save(opened))
+            local restored = assert(form.reload(opened))
+            test.eq(restored.draft.provider.model, "sonnet")
+            test.is_false(editor.set_text_option(restored.draft, "model", "invalid model\n"))
+            test.eq(restored.draft.provider.model, "sonnet")
+        end)
         test.it("changes a saved driver through the new driver's declared schema and keeps the profile identity", function()
             local workspace = "profile-driver-change"
             local original = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Named worker"}, true))

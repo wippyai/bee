@@ -103,8 +103,6 @@ local function main(value: unknown)
     local running = true
     local hits: {frame.Hit} = {}
 
-    -- One frame: header, work rows, the action bar and the status footer.
-    -- Every row is bounded to the canvas; hits come from what was drawn.
     local function paint()
         local painter = frame.new(width, height, preferences)
         local theme = painter.theme
@@ -117,12 +115,11 @@ local function main(value: unknown)
             frame.line(painter, 2, "Count: " .. tostring(count), theme.text)
         end
         if height >= 3 then
-            frame.actions(painter, height - 1, {
+            frame.footer(painter, "Status: " .. status, HINTS, nil, {
                 {kind = "increment", key = "Enter", label = width >= 30 and "Add one" or "+1", enabled = true, primary = true},
                 {kind = "exit", key = "Esc", label = "Exit", enabled = true},
             })
         end
-        if height >= 2 then frame.footer(painter, "Status: " .. status, HINTS) end
         hits = painter.hits
         assert(output:present(frame.rows(painter)))
     end
@@ -406,8 +403,8 @@ function M.rendering(): string
         .. " toolkit Bee's own applications use: frame.new, then frame.header for the uppercase title"
         .. " and a muted summary, frame.tabs, frame.table or frame.row for selectable rows (a › marker"
         .. " shows selection without color), frame.empty for an empty or failed list with its next"
-        .. " action, frame.actions on the penultimate row with one primary button, and frame.footer on"
-        .. " the final row for the status and the frame.hints key help; resolve mouse input with"
+        .. " action, frame.footer with one primary button and secondary buttons at the left on"
+        .. " the final row and frame.hints key help at the right; hints give way to actions. Status appears above; resolve mouse input with"
         .. " frame.hit over the hits the frame recorded. Use semantic appearance roles from"
         .. " bee.ui:appearance, authenticate appearance messages by their broker sender, and"
         .. " declare exactly the native modules and library imports the source uses."
@@ -698,8 +695,8 @@ local ARCHETYPES: {Archetype} = {
         calls = {"frame.table", "frame.window", "frame.split", "frame.panel"}},
     {name = "dashboard grid", request = "several independent measurements at once",
         calls = {"frame.grid", "frame.panel", "viz.tiles", "viz.bars", "viz.line", "viz.gauge"}},
-    {name = "form", request = "values the person enters or edits", calls = {"frame.field", "frame.actions"}},
-    {name = "wizard", request = "a task done in ordered steps", calls = {"frame.steps", "frame.field", "frame.actions"}},
+    {name = "form", request = "values the person enters or edits", calls = {"frame.field", "frame.footer"}},
+    {name = "wizard", request = "a task done in ordered steps", calls = {"frame.steps", "frame.field", "frame.footer"}},
     {name = "log and stream", request = "an append-only sequence of lines or events",
         calls = {"frame.row", "frame.window", "viz.series"}},
     {name = "monitor", request = "a measurement that changes over time",
@@ -717,7 +714,7 @@ function M.visual_style(): string
     return "Read the visual style, corpus document docs/app_style, before drawing:"
         .. " it fixes the rows, gaps, color roles, states and mouse targets, and every rule names its frame call."
         .. " Layouts change only at the size classes frame.size reports, compact from 80x24, standard from 120x36"
-        .. " and wide from 160x48, and frame.layout returns the header, tabs, work, action bar and footer rows."
+        .. " and wide from 160x48, and frame.layout returns the header, tabs, work and shared footer rows."
         .. " Pick the archetype that matches the request and compose it from its calls, so even a complex"
         .. " dashboard is a one-shot composition: " .. table.concat(routes, "; ") .. "."
         .. " Chart with the visualization kit bee.ui.viz:viz, imported as viz = \"bee.ui.viz:viz\":"

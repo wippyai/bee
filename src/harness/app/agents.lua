@@ -51,7 +51,9 @@ function M.list(client: sessions.Client, include_unavailable: boolean, query: st
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
                 local provider = ""
                 for _, feature in ipairs(candidate.features) do provider = feature:match("^driver:(.+)$") or provider end
-                if not ready and reason:find("owner_safe:", 1, true) then
+                if not ready and reason:find("bee.permission_answers=", 1, true) then
+                    reason = reason:gsub("bee.permission_answers=", "Permission answers: ")
+                elseif not ready and reason:find("owner_safe:", 1, true) then
                     reason = "Login needed · " .. reason
                 elseif provider ~= "" then
                     if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."

@@ -16,7 +16,7 @@ local M = {}
 -- What a profile form opens: a definition for a new profile, or a saved
 -- profile, whose own definition applies.
 type Subject = {definition_ref: string?, title: string, saved_profile_id: string?, saved_profile_revision: integer?}
-type Form = {driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
+type Form = {permission_transport: boolean?, driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?,
     fields: {[string]: {label: string, section: string, order: integer}}?, unsupported: {string}?,
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
@@ -204,6 +204,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     local credential_choices = decoded.credentials
     if base.placement and base.placement.kind == "docker" and decoded.docker_credentials then credential_choices = decoded.docker_credentials end
     return {workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
+        permission_transport = policy_data.permission_exchange ~= nil,
         driver_name = descriptor.provider, placement_names = placement_names, leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
         save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,
         migration_diagnostic = diagnostic, repair_json = migration_draft and canonical.encode(migration_draft) or nil}, nil
@@ -230,6 +231,9 @@ function M.save(form: Form): (boolean, string?)
     end
     if form.submitted then profile = form.submitted end
     if not profile then return false, err end
+    if profile.bee.permission_answers and profile.bee.permission_answers ~= "provider" and not form.permission_transport then
+        return false, "This host has no accepted permission transport. Use provider answers."
+    end
     form.pending, form.submitted = "save", profile
     local saved, save_error = call({operation = "put", workspace_id = form.workspace_id,
         profile_id = form.profile_id, expected_revision = form.revision, idempotency_key = form.save_key, profile = profile})

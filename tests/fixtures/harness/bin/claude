@@ -5,6 +5,10 @@ if [[ "${1:-}" == "--version" ]]; then
   printf '%s\n' 'Claude Code 2.1.265'
   exit 0
 fi
+if [[ "${1:-}" == "--help" ]]; then
+  printf '%s\n' '--model <name>' '--permission-mode <mode>'
+  exit 0
+fi
 # The permission mode answers a control_request from stdin with a timeout,
 # which is why this fixture runs under bash.
 stream="${BEE_FIXTURE_STREAM:?BEE_FIXTURE_STREAM names the captured stream}"

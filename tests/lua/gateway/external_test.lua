@@ -140,6 +140,32 @@ local function define_tests()
             end
             logs:close()
         end)
+        test.it("grants Hub Library tools separately from external pairing and application tools", function()
+            local paired = request()
+            decide(paired, "approved")
+            local issued = value(external.complete(assert(bounds.id(paired.client_id)), "fixture-cli"))
+            local endpoint, action, token = assert(bounds.text(issued.endpoint, 256)), assert(bounds.id(issued.action_id)),
+                assert(bounds.text(issued.token, 128))
+            local hub_tools = {"components", "install_request", "uninstall_request", "install_status"}
+            local initial = names((rpc(endpoint, action, token, "tools/list", {})))
+            for _, name in ipairs(hub_tools) do test.is_nil(initial[name]) end
+            local asked = rpc(endpoint, action, token, "tools/call", {name = "session", arguments = {operation = "request_access",
+                idempotency_key = "external-hub-library", traits = {"bee.hub:library"}, reason = "Manage workspace Hub packages"}})
+            local approval = value(assert(bounds.object(asked.result)).structuredContent)
+            local pending = names((rpc(endpoint, action, token, "tools/list", {})))
+            for _, name in ipairs(hub_tools) do test.is_nil(pending[name]) end
+            decide(approval, "approved")
+            local granted = rpc(endpoint, action, token, "tools/call", {name = "session", arguments = {
+                operation = "access_status", approval_id = approval.approval_id}})
+            test.eq(value(assert(bounds.object(granted.result)).structuredContent).status, "granted")
+            local admitted = names((rpc(endpoint, action, token, "tools/list", {})))
+            for _, name in ipairs(hub_tools) do test.is_true(admitted[name] == true) end
+            test.is_nil(admitted.app_tools)
+            local installed = rpc(endpoint, action, token, "tools/call", {name = "components", arguments = {operation = "installed"}})
+            test.is_nil(installed.error)
+            test.is_false(assert(bounds.object(installed.result)).isError == true)
+            value(external.revoke(assert(bounds.id(paired.client_id)), WORKSPACE))
+        end)
         test.it("refuses configuration retrieval by another terminal or workspace", function()
             local paired = request()
             local id = assert(bounds.id(paired.client_id))

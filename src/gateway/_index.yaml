@@ -80,15 +80,11 @@ entries:
         tools:
         - overlay
         - delivery
-        - components
         - tests
       - id: bee.mcp:packages
-        title: Request package changes
-        prompt: Ask the person to install, remove or publish packages
+        title: Request package publication
+        prompt: Ask the person to publish packages
         tools:
-        - install_request
-        - uninstall_request
-        - install_status
         - publish_request
         - publish_status
       - id: bee.mcp:capabilities
@@ -111,6 +107,7 @@ entries:
         - bee.app:tools
         - bee.app:share
         - bee.app:runtime
+        - bee.hub:library
         - bee.mcp:sessions
         - bee.mcp:authoring
         - bee.mcp:packages

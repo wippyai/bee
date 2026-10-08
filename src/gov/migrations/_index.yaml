@@ -71,3 +71,14 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+
+- name: follow_source
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-07T05:00:00Z'
+  source: file://follow_source.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

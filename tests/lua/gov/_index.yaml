@@ -1247,3 +1247,18 @@ entries:
     governed: bee.apps.library:governed
     preflight: bee.gov.binding:preflight
     client: bee.node:client
+
+- name: follow_store_test
+  kind: function.lua
+  source: file://follow_store_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.tests.gov:plan_test_policy]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    activation_store: bee.gov.persist:activation_store
+    follow_store: bee.gov.persist:follow_store
+    delivery: bee.gov.types:delivery
+    artifact: bee.gov.types:artifact

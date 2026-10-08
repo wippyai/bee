@@ -50,3 +50,13 @@ entries:
     protocol: bee.gov.types:workspace_protocol
     workspace: bee.gov.types:workspace
     bounds: bee.values:bounds
+- name: follow_store
+  kind: library.lua
+  source: file://follow_store.lua
+  modules: [sql, json, hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist:transaction
+    semver: bee.hub.package:semver
+    version: bee.sync.values:version

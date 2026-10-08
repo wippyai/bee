@@ -202,12 +202,39 @@ function M.execute(db: sql.DB, actor: string, name: string, request: unknown, no
 end
 -- A new request waiting for the person is announced on this node, so the
 -- desktops working in its workspace open Needs you.
-local function announce(value: unknown)
+local function announce(value: unknown, db: sql.DB, requested: boolean)
     local view = bounds.object(value)
     local workspace_id = view and bounds.id(view.workspace_id) or nil
-    if not view or not workspace_id or view.state ~= "pending" then return end
-    local sent, send_error = events.send(M.ATTENTION, "approval.requested", workspace_id, {approval_id = view.approval_id})
-    if not sent then logger:warn("Pending approval not announced", {approval_id = view.approval_id, error = tostring(send_error)}) end
+    local approval_id = view and bounds.id(view.approval_id) or nil
+    if not view or not workspace_id or not approval_id then return end
+    requested = requested and view.state == "pending"
+    local counted = transaction.read(db, M.LABEL, function(tx: sql.Transaction): Result
+        local at = now_ms()
+        local count, err = store.attention_count(tx, workspace_id, at)
+        if count == nil then return storage(err or "count attention") end
+        local target: unknown = nil
+        if not requested and count > 0 then
+            local found, target_error = store.attention_target(tx, workspace_id, at)
+            if not found then return storage(target_error or "pending attention target is missing") end
+            target = found
+        end
+        return success({count = count, target = target}, false)
+    end)
+    local counts = counted.ok and bounds.object(counted.value)
+    local count = counts and bounds.count(counts.count)
+    if count == nil then logger:warn("Approval count not announced", {approval_id = approval_id}); return end
+    local prompt = bounds.object(view.prompt)
+    local target = counts and bounds.object(counts.target)
+    if target then
+        approval_id = bounds.id(target.approval_id)
+        prompt = type(target.prompt_json) == "string" and bounds.object(json.decode(target.prompt_json)) or nil
+        if not approval_id or not prompt then logger:warn("Approval target not announced"); return end
+    end
+    local title = prompt and bounds.line(prompt.text, 160) or nil
+    if not title and prompt and type(prompt.text) == "string" then title = prompt.text:gsub("%c", " "):sub(1, 160) end
+    local sent, send_error = events.send(M.ATTENTION, requested and "approval.requested" or "approval.changed", workspace_id,
+        {approval_id = approval_id, title = title or "Review request", count = count})
+    if not sent then logger:warn("Approval not announced", {approval_id = approval_id, error = tostring(send_error)}) end
 end
 -- Every method authenticates the caller, opens the linked owner store and
 -- executes; a committed mutation wakes the outbox worker.
@@ -217,9 +244,18 @@ local function run(request: unknown, name: string): Reply
     local db, open_error = M.open()
     if not db then return M.reply(storage(open_error or "open approval store")) end
     local result = M.execute(db, actor, name, request, nil, nil)
+    if mutating[name] and result.ok and not result.replayed then
+        wake()
+        local announced: unknown = result.value
+        local envelope = bounds.object(announced)
+        if name == "withdraw" then announced = envelope and envelope.request
+        elseif name == "decide_batch" then
+            local decisions = envelope and bounds.array(envelope.decisions, M.MAX_BATCH)
+            announced = decisions and decisions[1]
+        end
+        announce(announced, db, name == "request")
+    end
     db:release()
-    if mutating[name] and result.ok and not result.replayed then wake() end
-    if name == "request" and result.ok and not result.replayed then announce(result.value) end
     return M.reply(result)
 end
 function M.view(row: Row): ApprovalView

@@ -58,7 +58,7 @@ type SavedInstance = {id: string, app: string, title: string, desktop: string, w
     token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
     singleton: boolean}
 type SavedWatcher = {pid: string, desktop: string}
-type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer}
+type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer, alerts: {client.Alert}}
 type Definition = application.Definition
 
 local NAME = "bee.node"
@@ -253,6 +253,7 @@ local function main(saved: unknown)
     local by_pid: {[string]: string} = {}
     -- watchers maps each watching display to the desktop it shows.
     local watchers: {[string]: string} = {}
+    local alerts: {[string]: client.Alert} = {}
 
     local function describe(instance: Instance): {[string]: unknown}
         return {id = instance.id, app = instance.app, title = instance.title, desktop = instance.desktop, pid = instance.pid}
@@ -334,9 +335,11 @@ local function main(saved: unknown)
         for _, instance in pairs(instances) do running[#running + 1] = describe(instance) end
         table.sort(running, function(a, b) return tostring(a.id) < tostring(b.id) end)
         local listed = workspace_catalog() or {}
+        local pending_alerts: {client.Alert} = {}
+        for _, alert in pairs(alerts) do if alert.count > 0 then pending_alerts[#pending_alerts + 1] = alert end end
         return {node = node, owner = tostring(process.pid()), supervisor = protocol.supervisor_pid() or "",
             revision = revision, home = home_id, appearance = current, running = running,
-            apps = installed_apps, workspaces = listed.workspaces, desktops = listed.desktops, dialogs = dialogs()}
+            apps = installed_apps, workspaces = listed.workspaces, desktops = listed.desktops, dialogs = dialogs(), alerts = pending_alerts}
     end
 
     -- start runs app on desktop as instance id, in the desktop's workspace or
@@ -418,6 +421,12 @@ local function main(saved: unknown)
                         logger:warn("App instance lost across upgrade", {id = item.id, error = tostring(err)})
                     end
                 end
+            end
+        end
+        if type(value.alerts) == "table" then
+            for _, item in ipairs(value.alerts) do
+                local alert = client.alert(item)
+                if alert and instances[alert.id] then alerts[alert.id] = alert end
             end
         end
         if type(value.revision) == "number" then revision = math.floor(value.revision) end
@@ -880,7 +889,7 @@ local function main(saved: unknown)
 
     -- present opens app with arguments on every desktop a display shows that
     -- works in workspace_id and asks those displays to bring it forward.
-    local function present(workspace_id: string, app: string, arguments: {string})
+    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string}?)
         local seen: {[string]: boolean} = {}
         for _, desktop_id in pairs(watchers) do
             if desktop_id ~= "" and not seen[desktop_id] then
@@ -889,7 +898,10 @@ local function main(saved: unknown)
                 if desktop and desktop.workspace_id == workspace_id then
                     local opened = open(app, desktop_id, {arguments = arguments}, true)
                     local value = opened.value
-                    if opened.ok and value then broadcast({kind = "attention", id = value.id})
+                    if opened.ok and value then
+                        local alert = pending and {id = value.id, count = pending.count, title = pending.title, approval_id = pending.approval_id}
+                        if alert then alerts[value.id] = alert end
+                        broadcast({kind = "attention", id = value.id, alert = alert})
                     else logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error}) end
                 end
             end
@@ -906,8 +918,21 @@ local function main(saved: unknown)
             local inbox = role_app(APPROVALS_ROLE)
             local approval_id = type(data.approval_id) == "string" and data.approval_id or nil
             if not inbox then logger:warn("No installed app handles approvals")
-            elseif approval_id then present(workspace_id, inbox, {"--approval", approval_id})
+            elseif approval_id then
+                local count = type(data.count) == "number" and math.floor(data.count) or nil
+                local title = type(data.title) == "string" and data.title or "Review request"
+                present(workspace_id, inbox, {"--approval", approval_id}, count and {count = count, title = title, approval_id = approval_id} or nil)
             else present(workspace_id, inbox, {}) end
+        elseif event.kind == "approval.changed" and type(data.count) == "number" then
+            for id, alert in pairs(alerts) do
+                local instance = instances[id]
+                if instance and instance.workspace == workspace_id then
+                    alert.count = math.floor(data.count)
+                    if type(data.approval_id) == "string" then alert.approval_id = data.approval_id end
+                    if type(data.title) == "string" then alert.title = data.title end
+                    broadcast({kind = "attention", id = id, alert = alert, changed = true})
+                end
+            end
         elseif event.kind == "application.applied" and type(data.component) == "string" then
             refresh()
             local prefix = tostring(data.component) .. ":"
@@ -1005,7 +1030,9 @@ local function main(saved: unknown)
         end
         local saved_watchers: {SavedWatcher} = {}
         for pid, desktop in pairs(watchers) do saved_watchers[#saved_watchers + 1] = {pid = pid, desktop = desktop} end
-        return {instances = saved_instances, watchers = saved_watchers, revision = revision}
+        local saved_alerts: {client.Alert} = {}
+        for _, alert in pairs(alerts) do saved_alerts[#saved_alerts + 1] = alert end
+        return {instances = saved_instances, watchers = saved_watchers, revision = revision, alerts = saved_alerts}
     end
 
     if not restore(saved) then

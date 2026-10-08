@@ -19,6 +19,7 @@ local BINDINGS: Bindings = {
     desktop = {
         {group = "Start and switch", key = "F1", action = "Open or close the Start menu"},
         {group = "Start and switch", key = "F3", action = "Desktops, workspaces and hive nodes"},
+        {group = "Start and switch", key = "F4", action = "Open the Needs you request"},
         {group = "Start and switch", key = "Alt+Tab", action = "Focus the next window"},
         {group = "Start and switch", key = "Alt+Shift+Tab", action = "Focus the previous window"},
         {group = "Display", key = "F12", action = "Reload this display"},

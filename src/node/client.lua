@@ -24,14 +24,15 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- id, "dialog" a dialog an app asks, "dialog_closed" the id of the app
 -- whose dialog is gone and "attention" the id of an app that needs the
 -- person, which a display brings forward.
-type Event = {kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
+type Alert = {id: string, count: integer, title: string, approval_id: string}
+type Event = {changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
     workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?}
 -- What a node reports to list and watch; owner is the PID of the node's
 -- owner process, which a watcher monitors to learn that the node stopped,
 -- supervisor is the node's Hive supervisor, whose exit means the node
 -- stopped; desktop is the desktop a watch chose for the display, and revision
 -- is the last event the snapshot includes.
-type State = {node: string, owner: string, supervisor: string, revision: integer, home: string, desktop: string?, appearance: appearance.Preferences,
+type State = {alerts: {Alert}?, node: string, owner: string, supervisor: string, revision: integer, home: string, desktop: string?, appearance: appearance.Preferences,
     apps: {App}, running: {Instance}, workspaces: {Workspace}, desktops: {Desktop}, dialogs: {Dialog}}
 
 local M = {}
@@ -136,6 +137,13 @@ function M.apps(value: unknown): {App}
     return apps
 end
 
+function M.alert(value: unknown): Alert?
+    if type(value) ~= "table" or type(value.id) ~= "string" or type(value.count) ~= "number" or value.count < 0
+        or value.count ~= math.floor(value.count) or type(value.title) ~= "string" or #value.title > 160
+        or type(value.approval_id) ~= "string" then return nil end
+    return {id = value.id, count = math.floor(value.count), title = value.title:gsub("%c", " "), approval_id = value.approval_id}
+end
+
 -- state decodes a list or watch reply.
 function M.state(value: {[string]: unknown}): State?
     if type(value.node) ~= "string" or type(value.owner) ~= "string" or type(value.supervisor) ~= "string" or type(value.home) ~= "string"
@@ -152,6 +160,13 @@ function M.state(value: {[string]: unknown}): State?
             if decoded then running[#running + 1] = decoded end
         end
     end
+    local alerts: {Alert} = {}
+    if type(value.alerts) == "table" then
+        for _, raw in ipairs(value.alerts) do
+            local alert = M.alert(raw)
+            if alert then alerts[#alerts + 1] = alert end
+        end
+    end
     local desktop: string? = nil
     if type(value.desktop) == "string" then desktop = value.desktop end
     local dialogs: {Dialog} = {}
@@ -164,7 +179,7 @@ function M.state(value: {[string]: unknown}): State?
     return {node = value.node, owner = value.owner, supervisor = value.supervisor, revision = math.floor(value.revision), home = value.home, desktop = desktop,
         appearance = preferences,
         apps = apps, running = running, workspaces = M.workspaces(value.workspaces), desktops = M.desktops(value.desktops),
-        dialogs = dialogs}
+        dialogs = dialogs, alerts = alerts}
 end
 
 -- event decodes a message received on EVENTS.
@@ -180,6 +195,8 @@ function M.event(data: unknown): Event?
     elseif data.kind == "closed" or data.kind == "dialog_closed" or data.kind == "attention" then
         if type(data.id) ~= "string" then return nil end
         event.id = data.id
+        if data.alert ~= nil then event.alert = M.alert(data.alert); if not event.alert then return nil end end
+        if data.changed == true then event.changed = true end
     elseif data.kind == "title" then
         if type(data.id) ~= "string" or type(data.title) ~= "string" then return nil end
         event.id, event.title = data.id, data.title

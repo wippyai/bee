@@ -44,7 +44,7 @@ type SavedWindow = {id: string, handle: string}
 type Saved = {target: string, origin: string, owner: string?, supervisor: string?, desktop: string,
     scenes: {[string]: model.Scene}, orders: {[string]: {string}}, windows: {SavedWindow}, welcomed: boolean,
     appearance: appearance.Preferences?}
-type TabHit = {id: string, x: integer, width: integer, action: string?}
+type TabHit = {id: string, x: integer, width: integer, action: string?, y: integer?, height: integer?}
 
 local function saved_handover(value: unknown): Saved?
     if type(value) ~= "table" or type(value.target) ~= "string" or type(value.origin) ~= "string"
@@ -106,6 +106,14 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     -- Windows that ask for the person arrive beneath the window the person
     -- types in, and take the keyboard only when no window holds it.
     local attention_pending: {[string]: boolean} = {}
+    local alerts: {[string]: client.Alert} = {}
+    local alert_popup = true
+    local function current_alert(): client.Alert?
+        for _, instance in ipairs(running) do
+            if instance.desktop == desktop and alerts[instance.id] and alerts[instance.id].count > 0 then return alerts[instance.id] end
+        end
+        return nil
+    end
     -- app_dialogs holds the dialogs apps ask, by app instance; the display
     -- shows those of the apps on its desktop, one at a time.
     local app_dialogs: {[string]: client.Dialog} = {}
@@ -397,10 +405,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     -- open_app asks the node to start app on this desktop; the node's opened
     -- event brings the window. A singleton app already running there comes
     -- back as the existing instance, which the display focuses.
-    local function open_app(app: string)
+    local function open_app(app: string, arguments: {string}?)
         local shown = desktop
         run(function(): Result
-            local value, err = client.call(target, "open", {app = app, desktop = shown})
+            local value, err = client.call(target, "open", {app = app, desktop = shown, args = arguments and {arguments = arguments} or nil})
             if err then return {kind = "failed", problem = err} end
             if type(value) ~= "table" or type(value.id) ~= "string" then return {kind = "failed", problem = "open returned no instance"} end
             if value.existing == true then return {kind = "existing", id = value.id} end
@@ -547,7 +555,16 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         for _, item in ipairs(current.windows) do
             if item.id == id then win = item end
         end
-        if action == "select_text" then begin_selection(id)
+        if action == "attention" then
+            local alert = current_alert()
+            if alert then
+                alert_popup = false
+                for _, instance in ipairs(running) do
+                    if instance.id == alert.id then open_app(instance.app, {"--approval", alert.approval_id}); break end
+                end
+                if views[alert.id] then focus(alert.id) else focus_pending[alert.id] = true end
+            end
+        elseif action == "select_text" then begin_selection(id)
         elseif action == "rename" and win then editor = title_editor.open(win.id, model.display_title(win), win.accent or "")
         elseif action:sub(1, 7) == "accent:" and win then set_scene(model.personalize(current, win.id, win.user_title or "", action:sub(8)))
         elseif action == "quit" then stopped = ""
@@ -618,7 +635,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         fit()
         local current = scene()
         local drawn = render.draw(current, order(), contents, capture, preview, status, desktop_label(), preferences,
-            {start = start, catalog = catalog, destinations = destinations(), editor = editor,
+            {alert = current_alert(), alert_popup = alert_popup, start = start, catalog = catalog, destinations = destinations(), editor = editor,
                 modal = modal, selection = active_selection, workspaces = workspaces_open})
         tab_hits = drawn.tabs
         surface:present(drawn.rows, {cursor = drawn.cursor})
@@ -662,6 +679,8 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             running = node_state.running
             catalog = descriptors(node_state.apps)
             catalog_ready = true
+            alerts = {}
+            for _, alert in ipairs(node_state.alerts or {}) do alerts[alert.id] = alert end
             app_dialogs = {}
             for _, item in ipairs(node_state.dialogs) do app_dialogs[item.id] = item end
             status = notice or ""
@@ -734,6 +753,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             running[#running + 1] = instance
             if instance.desktop == desktop then attach(instance.id) end
         elseif event.kind == "attention" and event.id then
+            if event.alert then
+                local previous = alerts[event.id]
+                if not previous or previous.approval_id ~= event.alert.approval_id then alert_popup = true end
+                alerts[event.id] = event.alert
+            end
+            if event.changed or (event.alert and event.alert.count == 0) then return end
             if views[event.id] then set_scene(model.attend(scene(), event.id)) else attention_pending[event.id] = true end
         elseif event.kind == "moved" and event.instance then
             local instance = event.instance
@@ -826,7 +851,8 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         end
         for _, hit in ipairs(tab_hits) do
             if x >= hit.x and x < hit.x + hit.width then
-                if hit.action == "workspaces" then invoke("workspaces")
+                if hit.action == "attention" then invoke("attention")
+                elseif hit.action == "workspaces" then invoke("workspaces")
                 elseif event.button == "right" and hit.id ~= "" then
                     start = {selected = 1, offset = 0, kind = "window", target = hit.id, x = x, y = y + 1}
                 elseif hit.action == "close" then close_app(hit.id)
@@ -851,6 +877,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                 preview = layout.drag(current, capture, x, y)
             end
             return
+        end
+        if event.action == "press" and event.button == "left" then
+            for _, hit in ipairs(tab_hits) do
+                if hit.action == "attention" and hit.y and y >= hit.y and y < hit.y + (hit.height or 1)
+                    and x >= hit.x and x < hit.x + hit.width then invoke("attention"); return end
+            end
         end
         if height >= 3 and y == 1 then on_bar(event); return end
         local visible = model.visible(current)
@@ -989,6 +1021,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         if event.type == "key" and event.ctrl == true and event.key == "q" and event.action ~= "release" then return true end
         if noticed and (event.type == "key" or (event.type == "mouse" and event.action == "press")) then
             status, noticed = "", false
+        end
+        if event.type == "key" and event.key_type == "f4" and event.action ~= "release" and current_alert() then
+            invoke("attention")
+            return false
         end
         local current_modal = modal
         if current_modal then

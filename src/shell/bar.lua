@@ -2,7 +2,8 @@
 local tty = require("tty")
 local model = require("model")
 local appearance = require("appearance")
-type TabHit = {id: string, x: integer, width: integer, action: string?}
+type Alert = {id: string, count: integer, title: string, approval_id: string}
+type TabHit = {id: string, x: integer, width: integer, action: string?, y: integer?, height: integer?}
 type Frame = {text: string, hits: {TabHit}}
 local M = {}
 type Strip = {text: string, hits: {TabHit}}
@@ -58,7 +59,7 @@ end
 -- controls and, at the right, the status or the desktop label, which opens
 -- the workspace menu.
 function M.draw(scene: model.Scene, order: {string}, status: string, label: string,
-    preferences: appearance.Preferences, opened: boolean): Frame
+    preferences: appearance.Preferences, opened: boolean, alert: Alert?): Frame
     status = string.gsub(status, "%c", " ")
     label = string.gsub(label, "%c", " ")
     local theme = preferences.theme
@@ -75,8 +76,11 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     if status ~= "" and width >= 36 then right = " " .. status .. " "
     elseif width >= 24 then right = " " .. label .. " ▾ " end
     right = tty.text.truncate(right, math.floor(math.max(0, width >= 100 and 32 or (width >= 80 and 24 or width // 2))))
+    local badge = alert and alert.count > 0 and (" ! " .. tostring(alert.count) .. " Needs you ") or ""
+    if tty.text.width(badge) + 7 > width then badge = "" end
+    if badge ~= "" and tty.text.width(badge) + tty.text.width(right) + 7 > width then right = "" end
     local origin = 7
-    local room = math.floor(math.max(0, width - origin - tty.text.width(right) - tty.text.width(restore)))
+    local room = math.floor(math.max(0, width - origin - tty.text.width(right) - tty.text.width(restore) - tty.text.width(badge)))
     local strip = tabstrip(scene, order, room, preferences.taskbar == "icons")
     local text = active .. (opened and " BEE ▴ " or " BEE ▾ ") .. normal
     local hits: {TabHit} = {}
@@ -109,6 +113,11 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
             hits[#hits + 1] = {id = restore_id, x = origin + 1 + room + (index - 1) * 3, width = 3, action = action}
         end
         text = text .. appearance.style(theme.accent, theme.surface) .. restore
+    end
+    if badge ~= "" and alert then
+        local x = width - tty.text.width(right) - tty.text.width(badge) + 1
+        hits[#hits + 1] = {id = alert.id, x = x, width = tty.text.width(badge), action = "attention", y = 1, height = 1}
+        text = text .. active .. badge
     end
     if right ~= "" then
         hits[#hits + 1] = {id = "", x = width - tty.text.width(right) + 1, width = tty.text.width(right), action = "workspaces"}

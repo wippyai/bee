@@ -16,13 +16,14 @@ type Text = {cut: (string, integer, integer) -> string, plain: (string) -> strin
 local text = tty.text
 type Cursor = {x: integer, y: integer, visible: boolean}
 type Content = {rows: {string}, cursor: Cursor?}
-type TabHit = {id: string, x: integer, width: integer, action: string?}
+type Alert = bar.Alert
+type TabHit = {id: string, x: integer, width: integer, action: string?, y: integer?, height: integer?}
 type Frame = {rows: {string}, tabs: {TabHit}, cursor: Cursor}
 local M = {}
 local function styled(style: string, text: string): string return style .. text .. "\27[0m" end
 
 -- Overlays drawn above the desktop, at most one of each.
-type Overlays = {start: menu.State?, catalog: {menu.Descriptor}?, destinations: {menu.Destination}?, editor: title_editor.State?,
+type Overlays = {alert: Alert?, alert_popup: boolean?, start: menu.State?, catalog: {menu.Descriptor}?, destinations: {menu.Destination}?, editor: title_editor.State?,
     modal: dialog.State?, selection: selection.State?, workspaces: workspace_menu.Menu?}
 
 function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Content},
@@ -86,9 +87,21 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     end
     local hits: {TabHit} = {}
     if height >= 3 then
-        local strip = bar.draw(scene, order, status, label, prefs, start ~= nil and start.kind == nil)
+        local strip = bar.draw(scene, order, status, label, prefs, start ~= nil and start.kind == nil, overlays.alert)
         hits = strip.hits
         canvas:put(1, 1, strip.text, width)
+    end
+    local alert = overlays.alert
+    if alert and alert.count > 0 and overlays.alert_popup ~= false and width >= 24 and height >= 8 then
+        local card_width = math.floor(math.min(54, width - 2))
+        local rect: frame.Rect = {x = width - card_width, y = 3, width = card_width, height = 5}
+        for y = rect.y, rect.y + rect.height - 1 do
+            canvas:put(rect.x, y, styled(FRAME, string.rep(" ", rect.width)), rect.width)
+        end
+        local inner = frame.panel(painter, rect, "Needs you", tostring(alert.count) .. " pending")
+        frame.put(painter, inner.x, inner.y, alert.title, inner.width, theme.text)
+        frame.put(painter, inner.x, inner.y + 2, "F4 Open request", inner.width, theme.accent)
+        hits[#hits + 1] = {id = alert.id, x = rect.x, y = rect.y, width = rect.width, height = rect.height, action = "attention"}
     end
     if start then
         local items = menu.entries(start, scene, catalog, overlays.destinations)

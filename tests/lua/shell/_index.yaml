@@ -71,3 +71,13 @@ entries:
   imports:
     test: wippy.test:test
     watch: bee.shell:watch
+- name: attention_alert_test
+  kind: function.lua
+  source: file://attention_alert_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.shell:model
+    render: bee.shell:render
+    appearance: bee.ui:appearance

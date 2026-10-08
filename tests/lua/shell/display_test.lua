@@ -89,13 +89,14 @@ local function exits(lifecycle: unknown, pids: {string})
     end
 end
 
--- open_probe opens the probe from the Start panel's Apps menu, which lists
--- the Inbox ("Needs you") first by title and the probe next.
+-- open_probe selects the probe after Agents and Needs you in the Apps menu.
 local function open_probe(view: tty.Viewport)
     expect(view, "an empty desktop opens the Start panel", "Bees", true)
     key(view, "enter")
     expect(view, "Apps lists the probe", "Probe", true)
-    expect(view, "Apps lists the Inbox first", "Needs you", true)
+    expect(view, "Apps lists the Inbox", "Needs you", true)
+    expect(view, "Apps lists Agents", "Agents", true)
+    key(view, "down")
     key(view, "down")
     key(view, "enter")
     expect(view, "the probe opens in a window", "label ", true)
@@ -228,6 +229,44 @@ local function define_tests()
                 if selected.channel == deadline then error("bee did not exit on an unknown command") end
                 if selected.value.kind == process.event.EXIT and tostring(selected.value.from) == pid then break end
             end
+            view:close()
+        end)
+
+        test.it("alerts on arrival, preserves a busy keyboard and opens the request by key or click", function()
+            local lifecycle = assert(process.events())
+            local view, pid = start()
+            open_probe(view)
+            local listed = assert(client.state(assert(client.call(assert(system.node.id()), "list", {}))))
+            local workspace = listed.home
+            assert(events.send("bee.attention", "approval.requested", workspace,
+                {approval_id = "busy-request", count = 2, title = "Allow a workspace edit?"}))
+            expect(view, "arrival shows the counted badge", "! 2 Needs you", true)
+            expect(view, "arrival names the request", "Allow a workspace edit?", true)
+            key(view, "w", {ctrl = true})
+            expect(view, "arrival leaves the probe holding the keyboard", "label ", false)
+            test.eq(running(), #listed.running)
+            key(view, "f4")
+            expect(view, "F4 dismisses the card", "Allow a workspace edit?", false)
+            key(view, "w", {ctrl = true})
+            expect(view, "F4 focuses and closes Needs you", "! 2 Needs you", false)
+
+            assert(events.send("bee.attention", "approval.requested", workspace,
+                {approval_id = "idle-request", count = 1, title = "Review the idle request"}))
+            expect(view, "idle arrival names the request", "Review the idle request", true)
+            expect(view, "idle arrival attaches Needs you", "No decisions needed", true)
+            key(view, "w", {ctrl = true})
+            expect(view, "idle arrival gives Needs you the keyboard", "! 1 Needs you", false)
+
+            assert(events.send("bee.attention", "approval.requested", workspace,
+                {approval_id = "click-request", count = 1, title = "Review the clicked request"}))
+            expect(view, "another arrival shows the card", "Review the clicked request", true)
+            expect(view, "click arrival attaches Needs you", "No decisions needed", true)
+            local position = assert((bar(view):find("! 1 Needs you", 1, true)))
+            assert(view:send({type = "mouse", action = "press", button = "left", x = position, y = 1}))
+            expect(view, "clicking the badge dismisses the card", "Review the clicked request", false)
+            key(view, "w", {ctrl = true})
+            expect(view, "clicking focuses Needs you", "! 1 Needs you", false)
+            exits(lifecycle, {pid})
             view:close()
         end)
 

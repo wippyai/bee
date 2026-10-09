@@ -539,3 +539,12 @@ entries:
     bounds: bee.values:bounds
     host: bee.tests.memory:host
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+- name: usage_test
+  kind: function.lua
+  source: file://usage_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds

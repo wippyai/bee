@@ -11,7 +11,7 @@ local journal = require("journal")
 local record_types = require("record_types")
 local trait_access = require("trait_access")
 local M = {}
-type Event = {id: string, kind: string, session_ref: string, thread_id: string, sequence: integer, record_ref: record_types.Ref, turn_ref: string?, payload: unknown}
+type Event = {id: string, kind: string, session_ref: string, thread_id: string, sequence: integer, record_ref: record_types.Ref, turn_ref: string?, payload: unknown, usage: unknown?}
 type Interval = {start: integer, finish: integer?}
 function M.discover(tx: sql.Transaction, actor: string, trait: string): ({traits.Selection}?, string?)
     if access.forwarded(actor) then return nil, "peers cannot act as local listeners" end
@@ -122,6 +122,6 @@ function M.event(tx: sql.Transaction, selection: traits.Selection, intervals: {I
     end
     if session ~= selection.session_ref or not kind or not bounds.member(kind, selection.declaration.listens or {}) then return nil, nil end
     return {id = record.record_id, kind = kind, session_ref = selection.session_ref, thread_id = record.thread_id, sequence = record.sequence,
-        record_ref = {thread_id = record.thread_id, record_id = record.record_id}, turn_ref = turn, payload = payload}, nil
+        record_ref = {thread_id = record.thread_id, record_id = record.record_id}, turn_ref = turn, payload = payload, usage = kind == "turn.completed" and bounds.object(payload) and assert(bounds.object(payload)).usage or nil}, nil
 end
 return M

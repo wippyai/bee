@@ -21,6 +21,7 @@ local time = require("time")
 local commits = require("commits")
 local inbox = require("inbox")
 local ctx = require("ctx")
+local usage = require("usage")
 local M = {}
 type Result = transaction.Result
 type Row = {[string]: unknown}
@@ -1384,6 +1385,8 @@ function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
         local node, op_ref, reference_error = node_and_operation(nil, scope_workspace)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local now = transaction.now()
+        local before, usage_error = usage.turn(tx, session.thread_id, turn, nil)
+        if not before then return failure("INTERNAL", usage_error or "read turn usage") end
         local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "turn.observation",
             work.work_ref, work.revision, {turn = turn.turn_ref, observation = decoded_observation})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn observation") end
@@ -1394,12 +1397,12 @@ function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
         local progress_error = journal.turn_progress(tx, now_ms(), turn.turn_ref, turn.owner_epoch)
         if progress_error then return failure("CONFLICT", progress_error) end
         local data = decoded_observation.data
-        local steps, tools, tokens = 0, 0, 0
-        if data.type == "turn.signal" and data.phase == "started" then steps = 1
-        elseif data.type == "tool.call" then tools = 1
-        elseif data.type == "turn.signal" and data.phase == "ended" and data.usage then
-            tokens = math.floor(math.min(bounds.MAX_SAFE_INTEGER, (data.usage.input_tokens or 0) + (data.usage.output_tokens or 0)))
-        end
+        local observed, usage_error = usage.turn(tx, session.thread_id, turn, nil)
+        if not observed then return failure("INTERNAL", usage_error or "read turn usage") end
+        local steps = data.type == "turn.signal" and data.phase == "started" and 1 or 0
+        local tools = (observed.tool_calls or 0) - (before.tool_calls or 0)
+        local tokens = math.floor(math.min(bounds.MAX_SAFE_INTEGER, (observed.input_tokens or 0) + (observed.output_tokens or 0)))
+            - math.floor(math.min(bounds.MAX_SAFE_INTEGER, (before.input_tokens or 0) + (before.output_tokens or 0)))
         local session_progress_error = journal.session_progress(tx, now, steps, tools, tokens, session.session_ref)
         if session_progress_error then return failure("INTERNAL", session_progress_error) end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
@@ -1451,8 +1454,10 @@ function M.work_settle(db: sql.DB, actor: string, request: unknown): Result
         if not result_digest then return failure("INTERNAL", "measure work result") end
         local now = transaction.now()
         local next_revision = work.revision + 1
+        local per_turn, usage_error = usage.turn(tx, session.thread_id, turn, checked_result.usage)
+        if not per_turn then return failure("INVALID_ARGUMENT", usage_error or "turn usage is invalid") end
         local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "work.settled", work.work_ref,
-            next_revision, {turn = turn.turn_ref, state = checked_result.state, result_digest = result_digest})
+            next_revision, {turn = turn.turn_ref, state = checked_result.state, result_digest = result_digest, usage = per_turn})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append work settlement") end
         local turn_error = journal.settle_turn(tx, record_id, turn.turn_ref, turn.owner_epoch)
         if turn_error then return failure("CONFLICT", turn_error) end

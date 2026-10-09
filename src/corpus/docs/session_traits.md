@@ -49,7 +49,12 @@ ack_page({thread_id = thread, subscription_id = subscription,
 Use the contract's normal reply envelope. A page's `events` contains
 `{id, kind, session_ref, thread_id, sequence, record_ref, turn_ref?, payload}`.
 The payload contains the committed event content; completed turns include their
-stored input and result. Process the page durably, then acknowledge its exact
+stored input and result. A `turn.completed` event also carries
+`usage = {input_tokens?, output_tokens?, cached_tokens?, tool_calls?, coverage}`.
+Unknown counters remain absent; reported zero remains zero. Coverage is
+`unknown` when no counters are known and `partial` when any are known. Native
+hook and stream summaries count once, and tool calls deduplicate by call ID.
+Process the page durably, then acknowledge its exact
 identity and extent. An empty filtered page can still advance through unrelated
 records: acknowledge it when it has a `page_id`. Outstanding pages replay until
 acknowledged. The host owns the consumer identity, cursor and durability, so a

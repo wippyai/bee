@@ -191,6 +191,7 @@ entries:
   - time
   - ctx
   imports:
+    usage: bee.threads.service:usage
     journal: bee.threads.persist:journal
     budget_values: bee.threads.records:budgets
     access: bee.threads.service:access
@@ -236,3 +237,14 @@ entries:
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     record_bounds: bee.threads.records:bounds
+
+- name: usage
+  kind: library.lua
+  source: file://usage.lua
+  modules: [sql, json]
+  imports:
+    bounds: bee.values:bounds
+    record: bee.threads.records:record
+    record_types: bee.threads:record_types
+    journal: bee.threads.persist:journal
+    access: bee.threads.service:access

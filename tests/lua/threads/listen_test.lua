@@ -83,50 +83,50 @@ local function define_tests()
         end)
         test.it("requires fresh consent after a registry upgrade and fences old pages", function()
             for _, selected in ipairs({true, false}) do
-            local session = host.open()
-            local client = host.client("old-" .. harness.key())
-            local subscription = subscribed(session, client)
-            host.turn(session, "old fact")
-            local old_page = page(session, client, subscription.subscription_id)
-            if not selected then
-                local offered = assert((gateway.surface(session.binding)))
-                host.value(gateway.select_surface(session.binding, offered.revision, {}, {}))
-            end
-            local app = assert(registry.get(host.APP))
-            local trait = assert(registry.get(host.TRAIT))
-            local original_meta, original_data = app.meta, trait.data
-            local meta: {[string]: unknown} = {}
-            for key, value in pairs(assert(bounds.object(app.meta))) do meta[key] = value end
-            local descriptor: {[string]: unknown} = {}
-            for key, value in pairs(assert(bounds.object(meta.application))) do descriptor[key] = value end
-            descriptor.revision = "2"; meta.application = descriptor; app.meta = meta
-            trait.data = {prompt = "Remember facts from completed turns.", tools = {}, listens = {"turn.completed", "tool.after"}}
-            local changes = registry.snapshot():changes(); changes:update(app); changes:update(trait); assert(changes:apply())
-            local ok, cause = pcall(function()
-                test.eq(denied(host.receive(client, "page", {thread_id = session.thread, subscription_id = subscription.subscription_id})), "DENIED")
-                local upgraded = host.client("new-" .. harness.key(), nil, "2")
-                test.eq(denied(host.receive(upgraded, "page", {thread_id = session.thread, subscription_id = subscription.subscription_id})), "DENIED")
-                local binding = session.binding
-                local current, failure = gateway.surface(binding)
-                test.not_nil(current, failure and failure.error and failure.error.message)
-                test.eq(#assert(current).selection.active, 0)
-                local token, endpoint = host.transport(session)
-                local unchanged = host.rpc(session, token, endpoint, "tools/call", {name = "capabilities", arguments = {}})
-                test.neq(unchanged.isError, true)
-                session.grant_id, session.approval_id = host.approve(session.binding)
-                test.eq(session.binding.binding_id, binding.binding_id)
-                local reactivated = subscribed(session, upgraded)
-                test.eq(reactivated.subscription_id, subscription.subscription_id)
-                host.turn(session, "new approved fact")
-                local next_page = page(session, upgraded, subscription.subscription_id)
-                test.eq(#assert(bounds.array(next_page.events, 64)), 1)
-                test.neq(next_page.page_id, old_page.page_id)
-                test.eq(denied(host.receive(upgraded, "ack_page", {thread_id = session.thread, subscription_id = subscription.subscription_id,
-                    page_id = old_page.page_id, scanned_through = old_page.scanned_through, idempotency_key = harness.key()})), "CONFLICT")
-            end)
-            app.meta, trait.data = original_meta, original_data
-            local restore = registry.snapshot():changes(); restore:update(app); restore:update(trait); assert(restore:apply())
-            if not ok then error(cause) end
+                local session = host.open()
+                local client = host.client("old-" .. harness.key())
+                local subscription = subscribed(session, client)
+                host.turn(session, "old fact")
+                local old_page = page(session, client, subscription.subscription_id)
+                if not selected then
+                    local offered = assert((gateway.surface(session.binding)))
+                    host.value(gateway.select_surface(session.binding, offered.revision, {}, {}))
+                end
+                local app = assert(registry.get(host.APP))
+                local trait = assert(registry.get(host.TRAIT))
+                local original_meta, original_data = app.meta, trait.data
+                local meta: {[string]: unknown} = {}
+                for key, value in pairs(assert(bounds.object(app.meta))) do meta[key] = value end
+                local descriptor: {[string]: unknown} = {}
+                for key, value in pairs(assert(bounds.object(meta.application))) do descriptor[key] = value end
+                descriptor.revision = "2"; meta.application = descriptor; app.meta = meta
+                trait.data = {prompt = "Remember facts from completed turns.", tools = {}, listens = {"turn.completed", "tool.after"}}
+                local changes = registry.snapshot():changes(); changes:update(app); changes:update(trait); assert(changes:apply())
+                local ok, cause = pcall(function()
+                    test.eq(denied(host.receive(client, "page", {thread_id = session.thread, subscription_id = subscription.subscription_id})), "DENIED")
+                    local upgraded = host.client("new-" .. harness.key(), nil, "2")
+                    test.eq(denied(host.receive(upgraded, "page", {thread_id = session.thread, subscription_id = subscription.subscription_id})), "DENIED")
+                    local binding = session.binding
+                    local current, failure = gateway.surface(binding)
+                    test.not_nil(current, failure and failure.error and failure.error.message)
+                    test.eq(#assert(current).selection.active, 0)
+                    local token, endpoint = host.transport(session)
+                    local unchanged = host.rpc(session, token, endpoint, "tools/call", {name = "capabilities", arguments = {}})
+                    test.neq(unchanged.isError, true)
+                    session.grant_id, session.approval_id = host.approve(session.binding)
+                    test.eq(session.binding.binding_id, binding.binding_id)
+                    local reactivated = subscribed(session, upgraded)
+                    test.eq(reactivated.subscription_id, subscription.subscription_id)
+                    host.turn(session, "new approved fact")
+                    local next_page = page(session, upgraded, subscription.subscription_id)
+                    test.eq(#assert(bounds.array(next_page.events, 64)), 1)
+                    test.neq(next_page.page_id, old_page.page_id)
+                    test.eq(denied(host.receive(upgraded, "ack_page", {thread_id = session.thread, subscription_id = subscription.subscription_id,
+                        page_id = old_page.page_id, scanned_through = old_page.scanned_through, idempotency_key = harness.key()})), "CONFLICT")
+                end)
+                app.meta, trait.data = original_meta, original_data
+                local restore = registry.snapshot():changes(); restore:update(app); restore:update(trait); assert(restore:apply())
+                if not ok then error(cause) end
             end
         end)
         test.it("reattaches session selection and skips the interval after revocation", function()

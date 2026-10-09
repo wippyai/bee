@@ -349,7 +349,6 @@ entries:
   source: file://extension_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [registry]
   imports: {test: wippy.test:test, surface: bee.gateway.catalog:surface, traits: bee.gateway.security:traits, bounds: bee.values:bounds, host: bee.tests.memory:host, gateway: bee.gateway.binding:gateway}
   security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}
 - name: reattachment_test

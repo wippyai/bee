@@ -1344,8 +1344,6 @@ function M.apply_access(binding: Binding, approval_id: string): Reply
     if not security.can("bee.approvals.own", "gateway.access") then return fail("DENIED", "only the access effect consumer applies decisions") end
     local current, failure = M.surface(binding)
     if not current then return failure or fail("STORAGE", "read surface") end
-    -- An applied grant is an already completed effect, even after the approval's
-    -- request lifetime. Replaying status must not re-consume or re-activate it.
     local receipt_db, receipt_failure = open()
     if not receipt_db then return receipt_failure or fail("STORAGE", "read access receipt") end
     local receipts, receipt_error = surface_store.receipt(receipt_db, binding.binding_id, approval_id)

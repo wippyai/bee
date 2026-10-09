@@ -198,7 +198,6 @@ entries:
   kind: process.lua
   source: file://access_worker.lua
   method: main
-  modules: [logger]
   imports:
     worker: bee.process:worker
     effects: bee.gateway.service:access_effects

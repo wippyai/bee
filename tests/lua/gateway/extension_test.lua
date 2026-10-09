@@ -1,7 +1,6 @@
 local test = require("test")
 local surface = require("surface")
 local traits = require("traits")
-local registry = require("registry")
 local bounds = require("bounds")
 local host = require("host")
 local gateway = require("gateway")

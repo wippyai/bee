@@ -1,11 +1,7 @@
 local funcs = require("funcs")
-local cdc = require("cdc")
-local events = require("events")
+local approval_effect = require("approval_effect")
 local json = require("json")
 local http_client = require("http_client")
-local system = require("system")
-local channel = require("channel")
-local time = require("time")
 local security = require("security")
 local bounds = require("bounds")
 local gateway = require("gateway")
@@ -41,32 +37,8 @@ function M.approve(binding: gateway.Binding, approval: string?, trait_id: string
         id = assert(bounds.id(requested.approval_id))
     end
     local person = funcs.new():with_actor(security.new_actor("bee.application:" .. M.WORKSPACE .. ":needs-you", {workspace_id = M.WORKSPACE, definition_id = "bee.approvals.inbox.app:app"}))
-    local raw, err = person:call("bee.approvals.binding:read", {approval_id = id})
-    assert(not err, tostring(err))
-    local question = M.value(raw)
-    local logs = assert(events.subscribe("logs", "logs.entry"))
-    local diagnostics: {string} = {}
-    local changes = assert(cdc.stream("bee:changes", {tables = {"bee_approval_requests"}, ops = {"update"}}))
-    raw, err = person:call("bee.approvals.binding:decide", {approval_id = id, decision = "approved", expected_revision = question.revision,
-        proposal_digest = question.proposal_digest, reviewed_digest = question.reviewed_digest})
-    assert(not err, tostring(err)); M.value(raw)
-    do
-        local decided = M.value(raw)
-        local effect = assert(bounds.object(decided.effect))
-        assert(effect.destination == "gateway.access", "approval has no durable access continuation")
-        local source = assert(changes):channel()
-        local deadline = time.after("20s")
-        while decided.effect_completed_at == nil do
-            local selected = channel.select({source:case_receive(), logs:channel():case_receive(), deadline:case_receive()})
-            assert(selected.ok and selected.channel ~= deadline, "access effect did not complete: " .. tostring(json.encode(system.supervisor.state("bee.gateway.service:access_service"))) .. " | " .. table.concat(diagnostics, " | "))
-            if selected.channel == logs:channel() then diagnostics[#diagnostics + 1] = assert(json.encode(selected.value.data)) end
-            raw, err = person:call("bee.approvals.binding:read", {approval_id = id})
-            assert(not err, tostring(err)); decided = M.value(raw)
-        end
-        assert(assert(bounds.object(decided.effect_result)).ok == true, "access effect failed")
-        assert(changes):close()
-        logs:close()
-    end
+    local question = approval_effect.decide(person, id, "approved")
+    assert(assert(bounds.object(question.effect)).destination == "gateway.access", "approval has no durable access continuation")
     return id .. ":grant", id, question
 end
 function M.bind(owner: harness.Client, session: string, thread: string, trait_id: string, seed: boolean?, prior: gateway.Binding?): (gateway.Binding, {[string]: unknown})

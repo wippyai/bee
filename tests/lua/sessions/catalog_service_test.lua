@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local machine = require("machine")
 local materialization = require("materialization")
 local admission = require("admission")
+local json = require("json")
 
 type Object = {[string]: unknown}
 type Candidate = {ref: string, kind: string, status: string, reasons: {string}}
@@ -33,7 +34,7 @@ local function define_tests()
                     provider = {model = "sonnet", effort = "high", system_prompt_append = "Use concise responses."},
                     bee = {permission_answers = "ask"}, placement = {kind = "native", home = "machine"}},
             }))))
-            test.eq(saved.ok, true)
+            test.eq(saved.ok, true,assert(json.encode(saved)))
             local page, failure = catalog.list({kind = "profile", include_unavailable = true}, workspace)
             if not page then error(failure and failure.message or "catalog unavailable") end
             local found = false
@@ -62,7 +63,7 @@ local function define_tests()
             local saved = assert(funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
                 profile = {schema_revision = "bee.agent-profile@3", name = "Selected container profile", definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}}}}))
-            test.is_true((assert(bounds.object(saved))).ok == true)
+            test.is_true((assert(bounds.object(saved))).ok == true,assert(json.encode(saved)))
             local page, page_fault = catalog.list({include_unavailable = true}, "saved-profile-workspace")
             if not page then error(page_fault and page_fault.message or "catalog list failed") end
             local found = false

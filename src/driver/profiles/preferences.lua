@@ -17,7 +17,7 @@ type Object = {[string]: unknown}
 type Scalar = string | number | boolean
 type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer} | {kind: "declared"}
 type Bee = profile_access.Bee
-type Value = {docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
+type Value = {authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
 
 local RESERVED_OPTIONS: {[string]: boolean} = {
     profile_id = true,
@@ -183,7 +183,7 @@ end
 function M.decode(value: unknown): (Value?, string?)
     local object = bounds.object(value)
     if not object then return nil, "saved preferences must be an object" end
-    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "bee", "home", "docker_overrides"})
+    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "bee", "home", "docker_overrides", "authority_grant_id"})
     if unexpected then return nil, unexpected end
     local options, options_error = decode_options(object.options == nil and {} or object.options, "options")
     if not options then return nil, options_error end
@@ -203,7 +203,9 @@ function M.decode(value: unknown): (Value?, string?)
     elseif object.home ~= nil then return nil, "home must be private or machine" end
     local docker_overrides = bounds.object(object.docker_overrides)
     if object.docker_overrides ~= nil and not docker_overrides then return nil, "docker_overrides must be an object" end
-    return {docker_overrides = docker_overrides, home = home, bee = bee, options = options, mcp_tools = mcp_tools, instructions = text}, nil
+    local authority = bounds.id(object.authority_grant_id)
+    if object.authority_grant_id ~= nil and not authority then return nil,"invalid profile authority grant" end
+    return {authority_grant_id = authority,docker_overrides = docker_overrides, home = home, bee = bee, options = options, mcp_tools = mcp_tools, instructions = text}, nil
 end
 
 local function allowed_value(values: {Scalar}, selected: Scalar): boolean

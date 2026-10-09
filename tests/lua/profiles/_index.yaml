@@ -14,7 +14,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.harness.binding:call, bee.harness.profiles:context_probe]
+    resources: [bee.harness.binding:call, bee.harness.profiles:context_probe, bee.approvals.binding:grant]
     effect: allow
 - name: test_read
   kind: security.policy
@@ -190,3 +190,24 @@ entries:
     agents: bee.harness.app:agents
     sessions: bee.threads.sessions.client:sessions
     protocol: bee.threads.sessions.types:protocol
+- name: grants_migration_db
+  kind: db.sql.sqlite
+  file: .wippy/profile-grants-migration.db
+  lifecycle: {auto_start: true}
+  meta: {type: test_support}
+- name: grants_migration_policy
+  kind: security.policy
+  policy: {actions: [db.get], resources: ['bee.harness.profiles:grants_migration_db'], effect: allow}
+- name: grants_migration_test
+  kind: function.lua
+  source: file://grants_migration_test.lua
+  method: run
+  modules: [sql, hash, json, funcs]
+  meta: {type: test, suite: bee}
+  security: {policies: ['bee.harness.profiles:grants_migration_policy', 'bee.tests.support:schema_policy']}
+  imports:
+    test: wippy.test:test
+    schema: bee.tests.support:schema
+    grants: bee.approvals.grants:store
+    authority: bee.harness.profiles.persist:grants
+    bounds: bee.values:bounds

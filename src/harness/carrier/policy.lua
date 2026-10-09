@@ -355,10 +355,11 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     local gateway_surface: {[string]: unknown}? = nil
     if data.gateway_access ~= nil then
         if data.gateway_surface ~= nil then return nil, ref .. ": gateway_access and gateway_surface cannot both declare access" end
-        local synthesized, access_error = access_surface(data.gateway_access, gateway_tools, selected ~= nil)
+        local synthesized, access_error = access_surface(data.gateway_access, gateway_tools, selected ~= nil and selected.authority_grant_id ~= nil)
         if not synthesized then return nil, ref .. ": gateway_access: " .. tostring(access_error) end
         local configured, _, surface_error = surface.prepare(synthesized, mcp.TOOLS, gateway_tools)
         if not configured then return nil, ref .. ": gateway_access: " .. tostring(surface_error) end
+        if selected then synthesized.authority_grant_id = selected.authority_grant_id end
         gateway_surface = synthesized
     elseif data.gateway_surface ~= nil then
         gateway_surface = bounds.object(data.gateway_surface)
@@ -376,6 +377,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     for _, override in ipairs(allowed_overrides) do
         if not bounds.member(override, M.OVERRIDES) then return nil, ref .. ": allowed_overrides names " .. override .. ", which a launch policy does not admit" end
     end
+    if gateway_surface and selected then gateway_surface.authority_grant_id = selected.authority_grant_id end
     local gateway_ttl_ms = 3600000
     if data.gateway_ttl_ms ~= nil then
         local declared = bounds.integer(data.gateway_ttl_ms)

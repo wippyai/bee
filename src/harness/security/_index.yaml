@@ -130,6 +130,7 @@ entries:
     actions:
     - funcs.call
     - db.get
+    - registry.find
     - registry.get
     - system.read
     resources:

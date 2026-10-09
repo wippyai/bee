@@ -10,6 +10,8 @@ local protocol = require("protocol")
 local migration = require("migration")
 local driver_profile = require("driver_profile")
 
+local authority = require("authority")
+local clock = require("clock")
 local M = {}
 type Result = transaction.Result
 type Request = protocol.Request
@@ -87,16 +89,19 @@ local function append(store: sync.Store, tx: sql.Transaction, input: Request, no
     })
 end
 
-local function get(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string): Result
+local function get(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string, owner: string): Result
     local result = store:projection_in(tx, feed_name, input.profile_id)
     if not result.ok then return clean(result) end
     if result.value == nil then return failure("NOT_FOUND", "profile does not exist") end
     local item, item_error = projection(result.value)
     if not item then return item_error or failure("INTERNAL", "decode profile") end
-    return transaction.success(reply(input, item.profile_id, item.revision, item.profile, item.tombstone, item.migration_diagnostic), false)
+    local value = reply(input, item.profile_id, item.revision, item.profile, item.tombstone, item.migration_diagnostic)
+    local err = authority.decorate(tx,owner,value)
+    if err then return failure("STORAGE",err) end
+    return transaction.success(value, false)
 end
 
-local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string): Result
+local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string, owner: string): Result
     local collected: {Stored} = {}
     local cursor: integer? = nil
     local after: string? = nil
@@ -155,7 +160,10 @@ local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed
     local last = math.floor(math.min(#collected, start + input.limit - 1))
     for index = start, last do
         local item = collected[index]
-        items[#items + 1] = reply(input, item.profile_id, item.revision, item.profile, item.tombstone, item.migration_diagnostic)
+        local value = reply(input, item.profile_id, item.revision, item.profile, item.tombstone, item.migration_diagnostic)
+        local err = authority.decorate(tx,owner,value)
+        if err then return failure("STORAGE",err) end
+        items[#items + 1] = value
     end
     local complete = last >= #collected
     return transaction.success({workspace_id = input.workspace_id, items = items, cursor = cursor,
@@ -170,7 +178,16 @@ local function put(store: sync.Store, tx: sql.Transaction, input: Request, node:
     local value = bounds.object(result.value)
     local revision = value and bounds.count(value.revision) or nil
     if not revision then return failure("INTERNAL", "profile append omitted revision") end
-    return transaction.success(reply(input, input.profile_id, revision, profile, false), result.replayed)
+    if not result.replayed then
+        local retired = authority.retire(tx,node,input.workspace_id,input.profile_id,actor)
+        if retired then return failure("STORAGE",retired) end
+        local record, err = authority.save(tx,node,input.workspace_id,input.profile_id,revision,profile,actor,false,clock.now())
+        if not record then return failure("STORAGE",err or "save profile grant") end
+    end
+    local saved = reply(input,input.profile_id,revision,profile,false)
+    local err = authority.decorate(tx,node,saved)
+    if err then return failure("STORAGE",err) end
+    return transaction.success(saved,result.replayed)
 end
 
 local function remove(store: sync.Store, tx: sql.Transaction, input: Request, node: string, actor: string, feed_name: string): Result
@@ -191,6 +208,10 @@ local function remove(store: sync.Store, tx: sql.Transaction, input: Request, no
     local value = bounds.object(result.value)
     local revision = value and bounds.count(value.revision) or nil
     if not revision then return failure("INTERNAL", "profile removal omitted revision") end
+    if not result.replayed then
+        local err = authority.retire(tx,node,input.workspace_id,input.profile_id,actor)
+        if err then return failure("STORAGE",err) end
+    end
     return transaction.success(reply(input, input.profile_id, revision, nil, true), result.replayed)
 end
 
@@ -232,9 +253,9 @@ function M.call(input: Request, node: string, actor: string, pinned: registry.Sn
         query = input.query, sort = input.sort}
     local result: Result
     if input.operation == "get" then
-        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return get(store, tx, request, selected_feed) end)
+        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return get(store, tx, request, selected_feed,owner) end)
     elseif input.operation == "list" then
-        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return list(store, tx, request, selected_feed) end)
+        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return list(store, tx, request, selected_feed,owner) end)
     elseif input.operation == "put" then
         result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result return put(store, tx, request, owner, caller, selected_feed) end)
     else

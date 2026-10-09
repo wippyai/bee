@@ -189,7 +189,7 @@ function M.profile(value: unknown): (Profile?, string?)
     return result, nil
 end
 
-type LaunchPreferences = {docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
+type LaunchPreferences = {authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
 function M.preferences(profile: Profile): (LaunchPreferences?, string?)
     local provider = profile.provider
     local options: Object = {}

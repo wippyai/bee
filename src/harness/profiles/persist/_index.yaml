@@ -22,3 +22,18 @@ entries:
     protocol: bee.harness.profiles:protocol
     migration: bee.harness.profiles.persist:migration
     driver_profile: bee.driver.profiles:profile
+    authority: bee.harness.profiles.persist:grants
+    clock: bee.values:clock
+
+- name: grants
+  kind: library.lua
+  source: file://grants.lua
+  modules: [sql]
+  imports:
+    grants: bee.approvals.grants:store
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    clock: bee.values:clock
+- name: grant_policy
+  kind: registry.entry
+  meta: {type: bee.approvals.grant-policy, domain: profile_choices, allow_permanent: true}

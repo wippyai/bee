@@ -63,8 +63,10 @@ end
 local function decode_profile_row(workspace: string, raw: unknown): (ProfileRow?, string?)
     local row = object(raw)
     if not row then return nil, "profile snapshot row is not an object" end
-    local extra = bounds.fields(row, {"workspace_id", "profile_id", "revision", "tombstone", "profile", "migration_diagnostic"})
+    local extra = bounds.fields(row, {"workspace_id", "profile_id", "revision", "tombstone", "profile", "migration_diagnostic", "grant_id", "grant_state"})
     if extra then return nil, "profile snapshot row: " .. extra end
+    if row.grant_id ~= nil and not bounds.id(row.grant_id) then return nil,"profile grant identity is invalid" end
+    if row.grant_state ~= nil and not bounds.member(row.grant_state,{"active","revoked","expired","exhausted","missing"}) then return nil,"profile grant state is invalid" end
     local row_workspace = bounds.id(row.workspace_id)
     local profile_id = bounds.id(row.profile_id)
     local revision = bounds.count(row.revision)

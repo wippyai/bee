@@ -176,7 +176,7 @@ local function define_tests()
             local stock = assert(policy.decode("test:policy", raw))
             test.eq(table.concat(stock.gateway_tools, ","), "thread_read")
             local chosen = assert(policy.decode("test:policy", raw, nil,
-                {options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = ""}))
+                {authority_grant_id = "profile-grant", options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = ""}))
             test.eq(table.concat(chosen.gateway_tools, ","), "app_tools,thread_read")
             data.gateway_surface = {tools = {}, traits = {}, base_tools = {"thread_read"}, active_traits = {},
                 fixed_context = {}, dynamic_keys = {}, access = {policy = "agent-access", traits = {"bee.app:tools"}}}
@@ -200,9 +200,13 @@ local function define_tests()
             test.is_nil((assert(narrowed.gateway_surface)).access)
             -- A profile that lists them is the person's choice: they are base tools.
             local chosen = assert(policy.decode("test:policy", raw, nil,
-                {options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = ""}))
+                {authority_grant_id = "profile-grant", options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = ""}))
             test.eq(table.concat((assert(chosen.gateway_surface)).base_tools :: {string}, ","), "app_tools,thread_read")
             test.is_nil((assert(chosen.gateway_surface)).access)
+            test.eq((assert(chosen.gateway_surface)).authority_grant_id,"profile-grant")
+            local unreviewed = assert(policy.decode("test:policy",raw,nil,{options = {},mcp_tools = {"thread_read","app_tools"},instructions = ""}))
+            test.eq(table.concat((assert(unreviewed.gateway_surface)).base_tools :: {string},","),"thread_read")
+            test.eq(table.concat(((assert(unreviewed.gateway_surface)).access :: {traits: {string}}).traits,","),"bee.app:tools")
             data.gateway_access = {policy = "agent-access", traits = {"research:notes"}}
             local _, refused = policy.decode("test:policy", raw)
             test.eq(refused, "test:policy: gateway_access: research:notes is not a built-in consent trait")

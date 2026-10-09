@@ -163,7 +163,7 @@ local function read_definition(pinned: catalog.Pinned, definition_ref: string): 
     if not entry then return nil, "launch definition " .. definition_ref .. " is not in the registry" end
     return definition.decode(definition_ref, entry)
 end
-type Selected = {profile_id: string, revision: integer, profile: profiles.Profile}
+type Selected = {grant_id: string, profile_id: string, revision: integer, profile: profiles.Profile}
 local function selected_profile(workspace: string, id: string, revision: integer, definition_ref: string): (Selected?, Reply?)
     local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
     if err then return nil, fail("UNAVAILABLE", "saved profile did not answer") end
@@ -176,12 +176,15 @@ local function selected_profile(workspace: string, id: string, revision: integer
     local profile, profile_error = profiles.profile(value.profile)
     if not profile then return nil, fail("UNAVAILABLE", profile_error or "invalid saved profile") end
     if profile.definition_ref ~= definition_ref then return nil, fail("CONFLICT", "saved profile selects a different launch definition") end
-    return {profile_id = id, revision = revision, profile = profile}, nil
+    local grant_id = bounds.id(value.grant_id)
+    if not grant_id or value.grant_state ~= "active" then return nil,fail("DENIED","saved profile authority is " .. tostring(value.grant_state)) end
+    return {grant_id = grant_id,profile_id = id, revision = revision, profile = profile}, nil
 end
 local function preference_value(selected: Selected?): placement_types.Preferences?
     if not selected then return nil end
     local value = profiles.preferences(selected.profile)
-    return value
+    if not value then return nil end
+    return {authority_grant_id = selected.grant_id,docker_overrides = value.docker_overrides,home = value.home,bee = value.bee,options = value.options,mcp_tools = value.mcp_tools,instructions = value.instructions}
 end
 -- agent_preferences: the carrier preferences for one admitted agent closure.
 -- The run offers exactly the closure's tool aliases through the gateway and
@@ -216,7 +219,7 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     if #instructions > M.MAX_AGENT_INSTRUCTIONS_BYTES then
         return nil, fail("INVALID", "agent instructions exceed " .. tostring(M.MAX_AGENT_INSTRUCTIONS_BYTES) .. " bytes for this route")
     end
-    return {bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
+    return {authority_grant_id = selected and selected.grant_id or nil,bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, placement_override: profiles.Placement?): (Plan?, Reply?, placement_types.Preferences?)
     if selected then

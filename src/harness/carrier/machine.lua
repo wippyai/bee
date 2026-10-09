@@ -639,12 +639,13 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
         surface_value = policy.with_workspace(surface_value, request.workspace_id)
         if not surface_value then return nil, "gateway admit: cannot compose the launch workspace" end
     end
-    if request.preferences and request.preferences.bee then
+    if request.preferences then
         local composed: Object = {}
         for key, value in pairs(surface_value or {tools = {}, traits = {}, base_tools = gateway.tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}) do composed[key] = value end
         composed.profile = request.preferences.bee
+        composed.authority_grant_id = request.preferences.authority_grant_id
         local grants: {Object} = {}
-        for _, file in ipairs(request.preferences.bee.files or {}) do
+        for _, file in ipairs(request.preferences.bee and request.preferences.bee.files or {}) do
             local found = false
             for _, resource in ipairs(request.profile_grants or {}) do
                 if resource.workspace_id == file.workspace_id and resource.name == file.resource and resource.subpath == file.subpath and resource.access == file.access then

@@ -19,6 +19,8 @@ local budget_values = require("budget_values")
 local canonical = require("canonical")
 local time = require("time")
 local commits = require("commits")
+local inbox = require("inbox")
+local ctx = require("ctx")
 local M = {}
 type Result = transaction.Result
 type Row = {[string]: unknown}
@@ -640,6 +642,12 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
     end
     local input_digest = digest(input_json)
     if not input_digest then return failure("INTERNAL", "measure immutable work input") end
+    local peer_context = bounds.object(ctx.get("bee.hive.caller"))
+    local origin = peer_context and bounds.object(peer_context.origin)
+    if origin and (not access.forwarded(caller) or not bounds.id(origin.thread_id) or not bounds.id(origin.session)
+        or tostring(origin.session):match("^bs:([^:]+):") ~= peer_context.node) then
+        return failure("DENIED", "session origin requires an authenticated Hive peer")
+    end
     local arguments = {session = session_ref, input = input_json, output_schema = output_schema, budget = selected_budget_json}
     workspace = mutation_workspace(session_ref, workspace, "send")
     if not workspace then return failure("DENIED", "sending requires a host workspace grant") end
@@ -669,15 +677,20 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
         if not id then return failure("INTERNAL", id_error or "allocate work reference") end
         local work_ref = qualified("bw", node, workspace, id)
         local now = transaction.now()
+        local sender_kind = origin and "session" or caller:match("^bs:") and "session" or "principal"
+        local sender_id = origin and tostring(origin.session) or caller
         local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "work.queued", work_ref, 1,
             {session = session_ref, input_digest = input_digest, output_schema = output_schema, input = input.input,
-                sender = {kind = caller:match("^bs:") and "session" or "principal", id = caller}})
+                sender = {kind = sender_kind, id = sender_id}})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append work event") end
-        local sender_kind = caller:match("^bs:") and "session" or "principal"
-        local work_error = journal.insert_work(tx, work_ref, session_ref, workspace, sequence, input_json, input_digest, output_schema, sender_kind, caller, op_ref, now, selected_budget_json)
+        if origin and peer_context then
+            local refused = inbox.session_request(tx, session, caller, work_ref, input.input, origin)
+            if refused then return refused end
+        end
+        local work_error = journal.insert_work(tx, work_ref, session_ref, workspace, sequence, input_json, input_digest, output_schema, sender_kind, sender_id, op_ref, now, selected_budget_json)
         if work_error then return failure("INTERNAL", work_error) end
         local receipt = {work = work_ref, session = session_ref, operation = op_ref, committed_at = now, sequence = sequence,
-            kind = "request", state = "queued", output_schema = output_schema, sender = {kind = sender_kind, id = caller}}
+            kind = "request", state = "queued", output_schema = output_schema, sender = {kind = sender_kind, id = sender_id}}
         return finish_operation(tx, caller, workspace, operation_key, op_ref, "work_send", request_digest, work_ref, receipt, now)
     end)
 end
@@ -945,6 +958,8 @@ function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
             local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "work.cancelled",
                 work.work_ref, work.revision + 1, {before_activation = true, reason = summary})
             if not record_id or not sequence then return failure("INTERNAL", event_error or "append cancellation event") end
+            local inbox_error = inbox.session_reply(tx, session, work.work_ref, checked_result)
+            if inbox_error then return inbox_error end
             local update_error = journal.cancel_queued_work(tx, result_json, work.work_ref)
             if update_error then return failure("CONFLICT", update_error) end
         elseif work.phase == "reserved" or work.phase == "accepted" then
@@ -1314,6 +1329,8 @@ function M.turn_accept(db: sql.DB, actor: string, request: unknown): Result
         if update_turn_error then return failure("CONFLICT", update_turn_error) end
         local start_error = journal.start_budget(tx, now_ms(), session.session_ref)
         if start_error then return failure("INTERNAL", start_error) end
+        local inbox_error = inbox.session_accepted(tx, session.thread_id, work.work_ref)
+        if inbox_error then return inbox_error end
         local update_work_error = journal.accept_work(tx, work.work_ref)
         if update_work_error then return failure("CONFLICT", update_work_error) end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref, state = "accepted",
@@ -1441,6 +1458,8 @@ function M.work_settle(db: sql.DB, actor: string, request: unknown): Result
             local context_error = journal.save_context(tx, context_json, now, session.session_ref)
             if context_error then return failure("INTERNAL", context_error) end
         end
+        local inbox_error = inbox.session_reply(tx, session, work.work_ref, checked_result)
+        if inbox_error then return inbox_error end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref, phase = "settled",
             result = checked_result, operation = op_ref, committed_at = now, sequence = sequence}
         return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "work_settle", request_digest, work.work_ref, receipt, now)

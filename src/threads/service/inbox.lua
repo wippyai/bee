@@ -12,6 +12,7 @@ local transaction = require("transaction")
 local authority = require("authority")
 local sends = require("sends")
 local outbox = require("outbox")
+local lifecycle = require("lifecycle")
 local M = {}
 type Result = transaction.Result
 type Object = {[string]: unknown}
@@ -587,4 +588,68 @@ function M.transport(db: sql.DB, actor: string, request: unknown): Result
         return failure("CONFLICT", "item was not offered")
     end)
 end
+type Session = {session_ref: string, thread_id: string, workspace_id: string, route_json: string}
+function M.session_request(tx: sql.Transaction, session: Session, actor: string, work: string, input: unknown, origin: Object): Result?
+    local head, head_error = reader.head(tx, session.thread_id)
+    if not head then return storage(head_error or "read session inbox head") end
+    local action, action_error = reader.action(tx, session.thread_id, session.session_ref)
+    if action_error then return storage(action_error) end
+    if not action then
+        local admission = assert(lifecycle.admitted({request_id = session.session_ref, principal_id = session.session_ref,
+            binding_ref = "bee.threads.sessions:contract", binding_digest = assert(sends.payload_digest({message_id = session.session_ref,
+                content = {text = session.route_json}})), grant_refs = {}, budget_ref = "bee.threads.sessions:contract", input = {text = "Session inbox"}}))
+        local admitted, refused = authority.commit_record(tx, head, session.session_ref, "bee", {kind = "action.admitted", body = admission},
+            {action_id = session.session_ref}, nil, nil, 0)
+        if not admitted then return refused or storage("admit session inbox") end
+        local err = execute(tx, "INSERT INTO bee_thread_actions (thread_id, action_id, admitted_record_id, state) VALUES (?, ?, ?, 'admitted')",
+            {session.thread_id, session.session_ref, admitted.record_id})
+        if err then return err end
+    end
+    local err = execute(tx, "INSERT INTO bee_thread_inbox_epochs (thread_id, action_id, grant_epoch) VALUES (?, ?, 1) ON CONFLICT(thread_id, action_id) DO NOTHING",
+        {session.thread_id, session.session_ref})
+    if err then return err end
+    local sequence, sequence_error = rows(tx, "SELECT next_sequence FROM bee_thread_inbox_epochs WHERE thread_id = ? AND action_id = ?", {session.thread_id, session.session_ref})
+    if not sequence then return sequence_error or storage("read session inbox sequence") end
+    local ordinal = bounds.integer(sequence[1].next_sequence)
+    if not ordinal or ordinal > MAX_ITEMS then return failure("LIMIT_EXCEEDED", "session inbox is full") end
+    local text = type(input) == "string" and input ~= "" and input or assert(json.encode(input))
+    local body, body_error = message.decode({message_id = work, message_kind = "request", sender_id = actor,
+        sender_action_id = origin.session, recipient_ids = {session.session_ref}, recipient_action_ids = {session.session_ref}, content = {text = text}})
+    if not body then return failure("INVALID_ARGUMENT", tostring(body_error)) end
+    local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "message", body = body}, {}, nil, nil, 0)
+    if not committed then return refused or storage("commit session inbox request") end
+    local payload_digest = assert(sends.payload_digest({message_id = work, content = body.content}))
+    err = execute(tx, "INSERT INTO bee_thread_inbox_items (thread_id, action_id, inbox_sequence, record_id, payload_digest, sender_actor, sender_action_id, sender_node_id, sender_thread_id, message_id, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'committed')",
+        {session.thread_id, session.session_ref, ordinal, committed.record_id, payload_digest, actor, origin.session,
+            tostring(origin.session):match("^bs:([^:]+):"), origin.thread_id, work})
+    if err then return err end
+    return execute(tx, "UPDATE bee_thread_inbox_epochs SET next_sequence = next_sequence + 1 WHERE thread_id = ? AND action_id = ?", {session.thread_id, session.session_ref})
+end
+function M.session_accepted(tx: sql.Transaction, thread_id: string, work: string): Result?
+    return execute(tx, "UPDATE bee_thread_inbox_items SET state = 'transport_accepted', transport_accepted_at = ? WHERE thread_id = ? AND message_id = ? AND state = 'committed'",
+        {transaction.now(), thread_id, work})
+end
+function M.session_reply(tx: sql.Transaction, session: Session, work: string, result: Object): Result?
+    local found, find_error = rows(tx, "SELECT record_id, sender_actor, sender_action_id FROM bee_thread_inbox_items WHERE thread_id = ? AND action_id = ? AND message_id = ?",
+        {session.thread_id, session.session_ref, work})
+    if not found then return find_error or storage("read session inbox correlation") end
+    if #found == 0 then return nil end
+    if #found ~= 1 then return failure("INTERNAL", "session inbox correlation is ambiguous") end
+    local original = found[1]
+    local head, head_error = reader.head(tx, session.thread_id)
+    if not head then return storage(head_error or "read session reply head") end
+    local value, fault = bounds.object(result.value), bounds.object(result.error)
+    local text = value and bounds.text(value.text) or fault and bounds.text(fault.message) or assert(json.encode(result))
+    if text == "" then text = assert(json.encode(result)) end
+    local outcome = bounds.member(result.state, {"succeeded", "failed", "cancelled", "uncertain"}) or "failed"
+    local body, body_error = message.decode({message_id = work .. "/reply", message_kind = "reply", sender_id = session.session_ref,
+        sender_action_id = session.session_ref, recipient_ids = {original.sender_actor}, content = {text = text}, outcome = outcome,
+        in_reply_to = {thread_id = session.thread_id, record_id = original.record_id}})
+    if not body then return failure("INTERNAL", tostring(body_error)) end
+    local committed, refused = authority.commit_record(tx, head, session.session_ref, "bee", {kind = "message", body = body}, {}, nil, nil, 0)
+    if not committed then return refused or storage("commit session inbox reply") end
+    return execute(tx, "UPDATE bee_thread_inbox_items SET state = 'replied', delivery_block = NULL, reply_thread_id = ?, reply_record_id = ? WHERE thread_id = ? AND record_id = ?",
+        {session.thread_id, committed.record_id, session.thread_id, original.record_id})
+end
+
 return M

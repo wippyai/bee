@@ -7,9 +7,14 @@ set -euo pipefail
 BEE="$(realpath "${1:-dist/bee}")"
 ROOT="$(realpath "$(dirname "$0")/../..")/.wippy/e2e/hive"
 SESSION="bee-e2e-$$"
+REPO="$(realpath "$(dirname "$0")/../..")"
 rm -rf "$ROOT"
-mkdir -p "$ROOT/config" "$ROOT/alpha" "$ROOT/beta" "$ROOT/temporary"
+mkdir -p "$ROOT/config" "$ROOT/alpha" "$ROOT/beta" "$ROOT/temporary" "$ROOT/home"
+FIXTURE_HOME="$ROOT/home"
+export BEE_FIXTURE_BIN="$REPO/tests/fixtures/harness/bin"
+export BEE_FIXTURE_SESSION_STREAM="$REPO/tests/fixtures/hive/sessions-reply.jsonl"
 export TMPDIR="$ROOT/temporary"
+export TMUX_TMPDIR="$ROOT/temporary"
 export XDG_CONFIG_HOME="$ROOT/config"
 
 cleanup() {
@@ -19,8 +24,13 @@ trap cleanup EXIT
 
 start() { # name folder command...
     local name="$1" folder="$2"; shift 2
-    tmux new-session -d -s "$SESSION-$name" -x 120 -y 32 \
-        "export XDG_CONFIG_HOME='$XDG_CONFIG_HOME' TMPDIR='$TMPDIR'; cd '$folder' && $*; echo EXIT=\$?; sleep 600"
+    local node_command pane_command
+    printf -v node_command '%q ' "$@"
+    printf -v pane_command 'cd %q && %s; echo EXIT=$?; sleep 600' "$folder" "$node_command"
+    tmux -f /dev/null new-session -d -s "$SESSION-$name" -x 120 -y 32 \
+        env -i HOME="$FIXTURE_HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" TMPDIR="$TMPDIR" \
+        BEE_FIXTURE_BIN="$BEE_FIXTURE_BIN" BEE_FIXTURE_SESSION_STREAM="$BEE_FIXTURE_SESSION_STREAM" \
+        PATH="$BEE_FIXTURE_BIN:/usr/bin:/bin" /bin/bash -c "$pane_command"
 }
 
 screen() { tmux capture-pane -pt "$SESSION-$1"; }
@@ -36,7 +46,7 @@ expect() { # pane text step
 
 keys() { tmux send-keys -t "$SESSION-$1" "${@:2}"; }
 
-"$BEE" hive init >/dev/null
+env -i HOME="$FIXTURE_HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" TMPDIR="$TMPDIR" PATH=/usr/bin:/bin "$BEE" hive init >/dev/null
 start alpha "$ROOT/alpha" "$BEE" node
 start beta "$ROOT/beta" "$BEE" node
 expect alpha "is running" "alpha node starts"
@@ -57,7 +67,7 @@ keys display F1
 expect display "System" "the Start panel opens on beta"
 keys display Down Enter
 expect display "Keyboard help" "the System menu opens with Keyboard help, Library, Process Manager and Settings"
-keys display Down Down Down Enter
+keys display End Enter
 expect display "BEE SETTINGS" "Settings runs on beta in a window here"
 
 for _ in $(seq 1 300); do
@@ -75,6 +85,25 @@ assert result["source_node"] != result["destination_node"], result
 assert result["source_pid"] != result["worker_pid"], result
 assert result["configuration"] == "ci" and result["total"] == 18, result
 print("PASS: app on alpha calls its copy on beta", json.dumps(result, sort_keys=True))
+PROOF
+
+for _ in $(seq 1 300); do
+    if [ -f "$ROOT/alpha/hive-sessions-proof.json" ]; then break; fi
+    sleep 0.1
+done
+python3 - "$ROOT/alpha/hive-sessions-proof.json" <<'PROOF'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+assert path.exists(), "FAIL: alpha has no Sessions peer result"
+result = json.loads(path.read_text())
+assert result.get("ok") is True, result
+assert result["source_node"] != result["destination_node"], result
+assert result["source_session"] != result["destination_session"], result
+assert result["sender_session"] == result["source_session"], result
+assert result["default_denied"] and result["durable_replay"], result
+assert result["reply"] == "Fixture reply across bees", result
+print("PASS: agent on alpha lists beta, sends and awaits its fixture reply", json.dumps(result, sort_keys=True))
 PROOF
 
 keys beta C-c

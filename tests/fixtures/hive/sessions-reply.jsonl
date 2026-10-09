@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"hive-fixture"}
+{"type":"result","subtype":"success","is_error":false,"result":"Fixture reply across bees","session_id":"hive-fixture","num_turns":1}

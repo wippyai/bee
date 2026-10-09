@@ -1,6 +1,7 @@
 -- MIT
 local hive = require("hive")
 local bounds = require("bounds")
+local pump = require("pump")
 local M = {}
 type Object = {[string]: unknown}
 function M.call(node: string, operation: string, arguments: Object): Object
@@ -14,8 +15,10 @@ function M.call(node: string, operation: string, arguments: Object): Object
     end
     local result, err, code = hive.call({node = node, workspace_id = workspace, application = "bee.harness.app:app", service = "sessions",
         operation = operation, arguments = arguments, idempotency_key = arguments.operation_key})
-    if err then return {ok = false, error = {code = code or "UNKNOWN_OUTCOME", message = err,
+    local outcome = pump.outcome(result, err)
+    local reply = bounds.object(result)
+    if err or not reply or type(reply.ok) ~= "boolean" then return {ok = false, error = {code = code or (arguments.operation_key and "UNKNOWN_OUTCOME" or "UNAVAILABLE"), message = err or outcome.message or "peer outcome is unknown",
         retry = (code == "DENIED" or code == "INVALID") and "never" or arguments.operation_key and "same_key" or "refresh", operation_key = arguments.operation_key}} end
-    return assert(bounds.object(result))
+    return reply
 end
 return M

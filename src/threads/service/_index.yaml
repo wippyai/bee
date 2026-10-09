@@ -136,6 +136,7 @@ entries:
     authority: bee.threads.service:authority
     sends: bee.threads.service:sends
     outbox: bee.threads.persist:outbox
+    lifecycle: bee.threads.records:lifecycle
 - name: outbox
   kind: library.lua
   source: file://outbox.lua
@@ -161,6 +162,7 @@ entries:
   - uuid
   - system
   - time
+  - ctx
   imports:
     journal: bee.threads.persist:journal
     budget_values: bee.threads.records:budgets
@@ -175,6 +177,7 @@ entries:
     canonical: bee.values:canonical
     record_bounds: bee.threads.records:bounds
     commits: bee.threads.delivery:commits
+    inbox: bee.threads.service:inbox
 - name: pump_sender
   kind: library.lua
   source: file://pump_sender.lua

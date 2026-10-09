@@ -10,6 +10,7 @@ entries:
     suite: bee
   modules:
   - funcs
+  - registry
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
@@ -543,6 +544,7 @@ entries:
   - funcs
   - registry
   - security
+  - json
   imports:
     test: wippy.test:test
     receiver: bee.hive:receiver
@@ -555,3 +557,27 @@ entries:
   method: handle
   imports:
     receiver: bee.hive:receiver
+- name: peer_call_probe
+  kind: function.lua
+  source: "local bounds = require(\"bounds\")\nlocal function call(raw: unknown): {[string]: unknown}\n    local asked = assert(bounds.object(raw))\n\
+    \    if asked.node == \"lost-peer\" then return {ok = false, error = {code = \"UNKNOWN_OUTCOME\", message = \"destination\
+    \ committed before the deadline\"}} end\n    return {ok = true, value = {ok = true, value = {node = asked.node, operation\
+    \ = asked.operation}}}\nend\nreturn {call = call}"
+  method: call
+  imports:
+    bounds: bee.values:bounds
+- name: peer_correlation_test
+  kind: function.lua
+  source: file://peer_correlation_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    record: bee.threads.records:record

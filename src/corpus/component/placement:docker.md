@@ -11,7 +11,7 @@ container PTY to the application's granted surface.
 | Namespace | Responsibility |
 |---|---|
 | `bee.placement.docker.binding` | The contract binding, one function per contract method, `prepare_environment`, and the `spec` and `methods` libraries |
-| `bee.placement.docker.service` | `daemon` (Docker API through `curl` on the Unix socket `/var/run/docker.sock`), `execution`, `runner`, `window`, `sweeper` (service `sweeper_service`), `image` and `image_owner` (service `image_owner_service`), `environment`, `runtime_probe` |
+| `bee.placement.docker.service` | `daemon` (Docker API through `curl` on the Unix socket `/var/run/docker.sock`), `execution`, `runner`, `window`, `image` and `image_owner` (on-demand service `image_owner_service`, including the sweep task), `environment`, `runtime_probe` |
 | `bee.placement.docker.profiles` | The `coding` placement profile and its `coding_recipe` |
 | `bee.placement.docker.env` | `environment_configuration` (`meta.type: bee.docker_environment`) |
 | `bee.placement.docker.security` | Policies for Docker calls, the daemon socket, the image owner and the environment owner |
@@ -97,3 +97,19 @@ admission invokes it before gateway projection. The profile editor's Ctrl+R
 revokes the receipt and restores the host gateway configuration; it requires the
 person-only `bee.placement.environment.revoke` grant. The sweeper stops admitted
 containers when their environment is revoked.
+
+Docker has one supervised owner, active for recorded image or environment
+requests and eligible placement attempts. Requests for an absent owner start
+it and receive an authenticated acceptance naming its PID. Build operations
+remain serial; an independent guarded task reconciles attempts and enforces
+revocation even while a build or environment approval waits. Active attempts
+retain the existing supervision interval. Uncertain attempts and exited
+attempts awaiting cleanup keep supervision active. Boot backlog recovery
+starts the owner from durable attempts; monitored launch admission and runner
+exit wake it. The owner stops after requests and supervision drain.
+
+An authorized cleanup records a durable intent and demand-wakes this owner.
+The sweep task performs container removal once, then records completion or
+failure for waiting callers. Concurrent callers observe that same operation
+through database changes; they do not run competing Docker removals. Cleanup
+requested after a refused start is also eligible for supervised recovery.

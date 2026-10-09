@@ -93,6 +93,7 @@ entries:
   - process
   - channel
   - time
+  - cdc
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
@@ -130,6 +131,7 @@ entries:
   - process
   - channel
   - time
+  - cdc
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
@@ -150,6 +152,46 @@ entries:
     policies:
     - bee.placement.native:apply_test_policy
     - bee.placement.docker.tests:creator_policy
+    - bee.placement.docker.tests:cleanup_test_policy
+    - bee.placement.docker.security:host_user_policy
+- name: cleanup_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: cleanup
+  meta:
+    type: test
+    suite: bee_docker
+    resources: [docker_daemon]
+    timeout: 60s
+  modules:
+  - funcs
+  - registry
+  - security
+  - process
+  - channel
+  - time
+  - cdc
+  imports:
+    placement_decode: bee.placement:decode
+    test: wippy.test:test
+    principals: bee.tests.principals:bound
+    profiles: bee.placement.profiles:profiles
+    request_codec: bee.placement:request
+    store: bee.placement.native.persist:store
+    spec: bee.placement.docker.binding:spec
+    types: bee.placement:types
+    service: bee.placement.docker.binding:methods
+    placement_resolver: bee.placement.binding:resolver
+    protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    prestart: bee.harness.carrier:prestart
+    bounds: bee.values:bounds
+    completion: bee.placement.native:completion
+  security:
+    policies:
+    - bee.placement.native:apply_test_policy
+    - bee.placement.docker.tests:creator_policy
+    - bee.placement.docker.tests:cleanup_test_policy
     - bee.placement.docker.security:host_user_policy
 - name: readiness_test
   kind: function.lua
@@ -167,6 +209,7 @@ entries:
   - process
   - channel
   - time
+  - cdc
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
@@ -246,6 +289,7 @@ entries:
   - registry
   - security
   - time
+  - cdc
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
@@ -277,6 +321,7 @@ entries:
   - process
   - channel
   - time
+  - cdc
   imports:
     placement_decode: bee.placement:decode
     test: wippy.test:test
@@ -344,3 +389,10 @@ entries:
   - ALL
   tmpfs:
     /tmp: rw,nosuid,nodev,size=128m
+- name: cleanup_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.registry.register, process.registry.unregister, cdc.subscribe]
+    resources: ["bee.test.docker.cleanup", "bee:changes"]
+    effect: allow

@@ -85,7 +85,7 @@ The facade takes the authenticated caller's workspace and actor and supplies
 overlay ownership evidence to `bee.node.binding:tests_backend` under its private
 scope. The backend verifies workspace admission and, for overlay delivery,
 caller ownership before planning. It plans the tests, writes the run (workspace, actor, application, plan) as a row of
-`bee_node_test_runs` and wakes the runner with the run id. A message to the runner
+`bee_node_test_runs` and demand-wakes the runner. A message to the runner
 is only a hint that a row waits: the runner reads the request from the row, trusts
 no message field, and a forged message starts nothing.
 
@@ -119,3 +119,9 @@ discovery and runs the tool as the application: actor
 `bee.application:<workspace>:agent-<binding>` and the exact scope the
 application's own instances run in, so the tool reaches the same granted
 state the application's UI shows the person.
+
+The test runner starts through supervised demand after a run commits. Boot
+recovery finds pending or running rows; a new runner interrupts earlier running
+rows once and executes pending rows. It requests quiet stop after every
+execution coroutine finishes and the final results are durable. An enqueue
+during quiet stop advances the demand generation and restarts the runner.

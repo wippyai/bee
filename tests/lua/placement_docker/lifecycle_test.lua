@@ -4,6 +4,8 @@ local funcs = require("funcs")
 local registry = require("registry")
 local security = require("security")
 local process = require("process")
+local channel = require("channel")
+local cdc = require("cdc")
 local completion = require("completion")
 local protocol = require("protocol")
 local principals = require("principals")
@@ -296,6 +298,58 @@ local function input_tests()
         end
     end)
 end
+local function cleanup_tests()
+    test.describe("Docker cleanup ownership", function()
+        configure()
+        test.it("joins concurrent cleanup callers, preserves failure, and removes once on the next request", function()
+            local id = "docker-cleanup-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
+            local selected = request(id)
+            selected.launch.argv = {"-c", "printf DONE"}
+            selected.launch.stdin, selected.launch.stdin_eof = "", true
+            local held = assert(process.listen("bee.test.docker.cleanup", {message = true}))
+            assert(process.registry.register("bee.test.docker.cleanup"))
+            local changes = assert(cdc.stream("bee:changes", {tables = {"bee_placement_evidence"}, ops = {"insert"}}))
+            local watch = completion.listen()
+            local owner: string? = nil
+            local ok, failure = pcall(function()
+                value(call("prepare", selected))
+                completion.attach(watch, placement_call, id)
+                value(call("start", {attempt_id = id}))
+                completion.wait(watch, placement_call, id, true, nil)
+                owner = tostring(assert((held:receive())):from())
+                local finished = channel.new(2) :: channel.Channel<service.Reply>
+                for _ = 1, 2 do
+                    coroutine.spawn(function() finished:send(call("cleanup", {attempt_id = id})) end)
+                end
+                while true do
+                    local db = assert(store.open())
+                    local rows = assert(db:query("SELECT COUNT(*) AS count FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'docker.cleanup_requested'", {id}))
+                    db:release()
+                    if rows[1].count == 2 then break end
+                    assert((changes:channel():receive()))
+                end
+                process.registry.unregister("bee.test.docker.cleanup")
+                assert(process.send(assert(owner), "bee.test.docker.cleanup.release", {fail = true}))
+                owner = nil
+                for _ = 1, 2 do
+                    local failed = assert((finished:receive()))
+                    test.eq(failed.ok, false)
+                    test.eq(failed.error and failed.error.code, "UNAVAILABLE")
+                    test.eq(failed.error and failed.error.message, "fixture cleanup refusal")
+                end
+                test.eq(value(call("cleanup", {attempt_id = id})).cleanup_state, "complete")
+                local db = assert(store.open())
+                local rows = assert(db:query("SELECT COUNT(*) AS count FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'docker.removed'", {id}))
+                db:release()
+                test.eq(rows[1].count, 1)
+            end)
+            process.registry.unregister("bee.test.docker.cleanup")
+            if owner then process.send(owner, "bee.test.docker.cleanup.release", {}) end
+            changes:close(); process.unlisten(held); completion.close(watch)
+            if not ok then error(tostring(failure)) end
+        end)
+    end)
+end
 local function readiness_tests()
     test.describe("Docker placement readiness", function()
         configure()
@@ -335,4 +389,4 @@ local function isolated_cases(definition: () -> ())
         return result
     end
 end
-return {run = isolated_cases(run), boundary = isolated_cases(boundary), input = isolated_cases(input_tests), readiness = isolated_cases(readiness_tests), creator = creator}
+return {run = isolated_cases(run), boundary = isolated_cases(boundary), input = isolated_cases(input_tests), cleanup = isolated_cases(cleanup_tests), readiness = isolated_cases(readiness_tests), creator = creator}

@@ -219,6 +219,22 @@ def hold_test_runner_quiet(src):
             else sweep() end""")
 
 
+def hold_docker_cleanup(src):
+    replace_once(src / "placement/docker/binding/methods.lua",
+                 "function M.cleanup_loaded(loaded: Loaded): Reply",
+                 """function M.cleanup_loaded(loaded: Loaded): Reply
+    local controller = process.registry.lookup("bee.test.docker.cleanup")
+    if controller then
+        local release = assert(process.listen("bee.test.docker.cleanup.release", {message = true}))
+        assert(process.send(tostring(controller), "bee.test.docker.cleanup", {attempt_id = loaded.attempt.attempt_id}))
+        local message = assert((release:receive()))
+        assert(tostring(message:from()) == tostring(controller))
+        process.unlisten(release)
+        local response = bounds.object(message:payload():data())
+        if response and response.fail == true then return fail("UNAVAILABLE", "fixture cleanup refusal") end
+    end""")
+
+
 def main():
     shutil.rmtree(COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
@@ -228,6 +244,7 @@ def main():
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
     owner_scheduling(src)
     hold_test_runner_quiet(src)
+    hold_docker_cleanup(src)
     observe_carrier(src)
     hold_attempt_snapshot(src)
     gate_runner(src)

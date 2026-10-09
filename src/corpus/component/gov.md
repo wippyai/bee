@@ -441,3 +441,11 @@ are relative or absolute within that root; hidden/credential paths and shared-ro
 workspace subfolders are refused. Each read returns canonical base64,
 `window_digest`, `next_offset` and `eof`, with a 16,384-byte limit. It neither
 executes nor writes source and does not open the staging store.
+
+The activation worker runs on demand under its own destination actor and
+scope. It drains approved activations and ended requests in bounded batches,
+then reconciles source following. Failed outcomes and following retries keep
+the worker active on its existing retry schedule. Source consent and Sync
+receipt completion demand-wake the worker; boot recovery probes approval
+queues and the following ledger. Approval decision wakes remain a direct-name
+integration for the separate approvals consolidation.

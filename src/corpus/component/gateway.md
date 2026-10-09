@@ -90,7 +90,7 @@ refuses the call.
 | `bee.gateway.binding` | Lifecycle, hook, effect and request operations (`open`, `admit`, `seal`, `materialize`, `revoke`, `address`, ...) |
 | `bee.gateway.persist`, `.migrations` | Binding, credential, hook, listener and surface stores and their migrations |
 | `bee.gateway.security` | Policies and the approval, installation and publication libraries |
-| `bee.gateway.service` | The `worker` and `publication_worker` processes |
+| `bee.gateway.service` | The on-demand `external` owner and the scoped `worker` and `publication_worker` functions |
 
 The gateway owner starts for routed pairing or durable effect work and stops
 when waits and both effect tasks drain. Installation and publication execute

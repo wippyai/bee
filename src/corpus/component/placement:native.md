@@ -430,3 +430,10 @@ releasing the initial prompt. Closing or finishing the window stops both the
 observer and server before revoking hook authority. Observer setup, mapping,
 delivery, and shutdown failures become placement evidence; they do not terminate
 the terminal CLI. Startup failure retains the original terminal argv.
+
+Native supervision starts on demand after monitored launch admission or
+runner exit, and boot recovery starts it for eligible durable attempts. It
+keeps the existing sweep interval while starting, running or stopping attempts
+exist, or an exited attempt has unsettled preparer state. Intended and uncertain
+native attempts do not keep this sweeper resident. It requests quiet stop
+after eligibility drains, with no retry outstanding.

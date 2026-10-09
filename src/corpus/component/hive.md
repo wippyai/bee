@@ -73,3 +73,11 @@ The approvals consolidation retains a separate integration obligation:
 worker names. Its wake path needs demand delivery to the consolidated approval
 owner and the gateway and activation owners. The services lane leaves both
 approvals namespaces unchanged.
+
+Within the services audit, excluding the concurrent approvals consolidation,
+an idle node runs four resident owners: Hive, Node, Threads and Sync. Threads
+runs outbound pump rounds as its own scoped task. Gateway, activation, test
+execution, Docker and native supervision run only while work exists. Discovery
+uses service metadata; backlog probes run under each declared domain actor
+and scope. Supervision events, durable work and retry or pairing deadlines
+drive owner lifetime.

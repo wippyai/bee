@@ -42,7 +42,7 @@ export GIT_CONFIG_VALUE_1 := https://github.com/wippyai/bee
 $(shell python3 build/local_manifest.py $(RUNTIME_SOURCE) .)
 endif
 
-.PHONY: tools runtime-pin native-pin compose lint test e2e footprint build install binary-identity binary-identity-check hub-publish release-build-check
+.PHONY: fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test e2e footprint build install binary-identity binary-identity-check hub-publish release-build-check
 
 $(BUILDER):
 	GOBIN=$(abspath $(BIN)) go install github.com/wippyai/builder/cmd/wippy-builder@$(BUILDER_VERSION)
@@ -83,6 +83,15 @@ release-build-check: binary-identity-check
 hub-publish:
 	python3 build/hub_publish.py --version "$(VERSION)" --wippy "$(abspath $(WIPPY))"
 
+agent-corpus-local:
+	python3 tools/corpus.py
+
+agent-corpus-check:
+	python3 tools/corpus.py --check
+
+fixture-lint: binary-identity compose
+	cd tests && $(abspath $(WIPPY)) install && $(abspath $(WIPPY)) lint
+
 lint: binary-identity compose
 	python3 tools/corpus.py --check
 	$(WIPPY) lint
@@ -95,8 +104,8 @@ lint: binary-identity compose
 # environment: the harness and placement suites resolve the fixture
 # executables in tests/fixtures/harness/bin by name and never reach the
 # person's home, PATH or provider credentials. Provider variables a developer
-# shell carries are set to fixture values the drivers must not read. The gateway
-# and governance effect workers stay stopped, and so does the inbox forwarding pump:
+# shell carries are set to fixture values the drivers must not read. Gateway,
+# activation and inbox forwarding drains are disabled by fixture composition:
 # the store suites queue, reserve, claim and drain that work themselves.
 # TESTS selects test entries by id.
 TEST_ROOT := $(abspath tests/.wippy/fixture)
@@ -121,7 +130,6 @@ test: binary-identity compose $(TEST_FIXTURES)/harness/bin/gateway-client
 		CLAUDE_CONFIG_DIR=$(TEST_ROOT)/shell/claude CODEX_HOME=$(TEST_ROOT)/shell/codex \
 		ANTHROPIC_API_KEY=fixture-shell-value-not-a-key \
 		$(abspath $(WIPPY)) test --host bee:terminal \
-		-o bee.gov.service:activation_service:lifecycle.auto_start=false \
 		-o bee.credentials.service:configuration_service:lifecycle.auto_start=false \
 		$(if $(TESTS),test $(TESTS))
 

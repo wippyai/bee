@@ -190,6 +190,13 @@ def host_environment():
     target.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
+def owner_scheduling(src):
+    path = src / "threads/service/_index.yaml"
+    document = yaml.safe_load(path.read_text())
+    next(entry for entry in document["entries"] if entry["name"] == "service")["meta"]["pump"] = False
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
 def main():
     shutil.rmtree(COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
@@ -197,6 +204,7 @@ def main():
     # The composition is a module root like the repository: its manifest
     # beside src, so module-relative directories resolve as they do in a pack.
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
+    owner_scheduling(src)
     observe_carrier(src)
     hold_attempt_snapshot(src)
     gate_runner(src)

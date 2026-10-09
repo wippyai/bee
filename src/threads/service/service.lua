@@ -30,6 +30,10 @@ local database = require("database")
 local owner = require("owner")
 local notices = require("notices")
 local commits = require("commits")
+local time = require("time")
+local registry = require("registry")
+local outbox = require("outbox")
+local worker = require("worker")
 
 local CHANGES = "bee:changes"
 local NAME = "bee.threads"
@@ -39,11 +43,11 @@ local OPERATION = "bee.threads.binding:"
 -- MAX_FORWARDED bounds the forwarded operations in flight; a watch holds one
 -- for up to its wait.
 local MAX_FORWARDED = 32
-local PEER_OPERATIONS: {[string]: boolean} = {send = true, send_status = true, notify = true, watch = true}
+local PEER_OPERATIONS: {[string]: boolean} = {send = true, send_status = true, notify = true, watch = true, inbox_send = true, inbox_reply = true, inbox_resolve = true, inbox_describe = true}
 
 -- changes opens the capture of records committed to thread stores.
 local function changes()
-    local stream, err = cdc.stream(CHANGES, {tables = {"bee_thread_records"}, ops = {"insert"}})
+    local stream, err = cdc.stream(CHANGES, {tables = {"bee_thread_records", "bee_thread_inbox_outbox"}, ops = {"insert", "update"}})
     if not stream then error("capture thread commits: " .. tostring(err)) end
     return stream:channel()
 end
@@ -108,14 +112,52 @@ local function main()
     local requests = assert(process.listen(protocol.FORWARD, {message = true}))
     local lifecycle = assert(process.events())
     local committed = changes()
+    local pumping = true
+    for _, entry in ipairs(registry.find({["meta.type"] = "bee.threads.owner"}) or {}) do
+        if type(entry.meta) == "table" and entry.meta.pump == false then pumping = false end
+    end
+    local pump_executor = funcs.new():with_actor(security.new_actor("bee.threads.pump"))
+        :with_scope(assert(security.named_scope("bee.threads.security:pump_scope")))
+    local pumping_round: funcs.Future? = nil
+    local pump_due: integer? = nil
+    local pump_retry = worker.RETRY_FIRST_MS
+    local function schedule_pump()
+        if not pumping then return end
+        local store, problem = database.open()
+        local due: integer? = nil
+        if store then due, problem = outbox.next_deadline(store); store:release() end
+        if problem then
+            logger:error("Forwarding schedule unreadable", {cause = tostring(problem)})
+            pump_due = math.floor(time.now():unix_nano() / 1000000) + pump_retry
+            pump_retry = math.min(pump_retry * 2, worker.RETRY_LAST_MS)
+        else pump_due = due end
+    end
+    schedule_pump()
     local inflight = 0
     settle(nil)
     local announced, announce_error = protocol.ready(NAME)
     if not announced then logger:warn("Hive supervisor not told the threads service is ready", {error = announce_error}) end
     logger:info("Threads ready", {node = node, incarnation = incarnation})
     while true do
-        local selected = channel.select({lifecycle:case_receive(), requests:case_receive(), committed:case_receive()})
-        if selected.channel == lifecycle then
+        if not pumping_round and pump_due and pump_due <= math.floor(time.now():unix_nano() / 1000000) then
+            pumping_round = assert(pump_executor:async("bee.threads.service:pump_worker"))
+        end
+        local cases = {lifecycle:case_receive(), requests:case_receive(), committed:case_receive()}
+        local pumped = pumping_round and pumping_round:response() or nil
+        if pumped then cases[#cases + 1] = pumped:case_receive()
+        elseif pump_due then
+            cases[#cases + 1] = time.after(tostring(math.max(1, pump_due - math.floor(time.now():unix_nano() / 1000000))) .. "ms"):case_receive()
+        end
+        local selected = channel.select(cases)
+        if selected.channel == pumped and pumping_round then
+            local _, problem = pumping_round:result()
+            pumping_round = nil
+            if problem then
+                logger:error("Forwarding pump round failed", {cause = tostring(problem)})
+                pump_due = math.floor(time.now():unix_nano() / 1000000) + pump_retry
+                pump_retry = math.min(pump_retry * 2, worker.RETRY_LAST_MS)
+            else pump_retry = worker.RETRY_FIRST_MS; schedule_pump() end
+        elseif selected.channel == lifecycle then
             if not selected.ok or selected.value.kind == process.event.CANCEL then return end
         elseif selected.channel == requests then
             if not selected.ok then return end
@@ -137,13 +179,14 @@ local function main()
                     end)
                 end
             end
-        else
+        elseif selected.channel == committed then
+            schedule_pump()
             if not selected.ok then
                 committed = changes()
                 settle(nil)
             else
                 local after: unknown = selected.value.after
-                if type(after) == "table" and type(after.thread_id) == "string" then
+                if selected.value.table == "bee_thread_records" and selected.value.op == "insert" and type(after) == "table" and type(after.thread_id) == "string" then
                     settle(after.thread_id)
                     eventbus.send(commits.system(after.thread_id), commits.KIND, after.thread_id, {sequence = after.sequence})
                 end

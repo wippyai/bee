@@ -4,7 +4,8 @@ entries:
 - name: access
   kind: library.lua
   source: file://access.lua
-  modules: [security]
+  modules:
+  - security
   imports:
     bounds: bee.values:bounds
 - name: boundary
@@ -16,11 +17,14 @@ entries:
     types: bee.threads:types
     access: bee.threads.service:access
     notices: bee.threads.service:notices
-  modules: [sql]
+  modules:
+  - sql
 - name: notices
   kind: library.lua
   source: file://notices.lua
-  modules: [sql, uuid]
+  modules:
+  - sql
+  - uuid
   imports:
     bounds: bee.values:bounds
     record: bee.threads.records:record
@@ -33,7 +37,9 @@ entries:
 - name: authority
   kind: library.lua
   source: file://authority.lua
-  modules: [sql, json]
+  modules:
+  - sql
+  - json
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -50,7 +56,8 @@ entries:
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
-  modules: [sql]
+  modules:
+  - sql
   imports:
     bounds: bee.values:bounds
     values: bee.threads.records:values
@@ -65,7 +72,10 @@ entries:
 - name: sends
   kind: library.lua
   source: file://send.lua
-  modules: [sql, hash, json]
+  modules:
+  - sql
+  - hash
+  - json
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -87,26 +97,42 @@ entries:
   - logger
   - events
   - cdc
+  - time
+  - registry
   imports:
     protocol: bee.hive:protocol
     database: bee.threads.persist:database
     owner: bee.threads.persist:owner
     notices: bee.threads.service:notices
     commits: bee.threads.delivery:commits
+    outbox: bee.threads.persist:outbox
+    worker: bee.process:worker
 - name: service
   meta:
-    title: Threads · owner
+    title: "Threads \xB7 owner"
+    type: bee.threads.owner
+    pump: true
   kind: process.service
   process: bee.threads.service:threads
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires: ['wippy.bootloader:bootloader.service', 'bee:changes']
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee:changes
     security:
       actor:
         id: bee.threads
-      policies: ['bee.threads.security:store', 'bee.threads.security:changes', 'bee.threads.security:announce', 'bee.threads.security:names',
-        'bee.threads.security:admission', 'bee.threads.security:node', 'bee.hive.security:messaging']
+      policies:
+      - bee.threads.security:store
+      - bee.threads.security:changes
+      - bee.threads.security:announce
+      - bee.threads.security:names
+      - bee.threads.security:admission
+      - bee.threads.security:node
+      - bee.hive.security:messaging
+      - bee.threads.security:pump_execution
+      - bee.threads.security:pump_discovery
     restart:
       max_attempts: 10
 - name: app_alias
@@ -184,34 +210,14 @@ entries:
   imports:
     protocol: bee.hive:protocol
 - name: pump_worker
-  kind: process.lua
+  kind: function.lua
   source: file://pump_worker.lua
-  method: main
+  method: round
   modules:
   - logger
   imports:
-    worker: bee.process:worker
     database: bee.threads.persist:database
     outbox: bee.threads.service:outbox
     pump: bee.threads.service:pump
     bounds: bee.values:bounds
     sender: bee.threads.service:pump_sender
-- name: pump_service
-  meta:
-    title: Threads · forwarding
-  kind: process.service
-  process: bee.threads.service:pump_worker
-  host: bee:workers
-  lifecycle:
-    auto_start: true
-    requires:
-    - wippy.bootloader:bootloader.service
-    security:
-      actor:
-        id: bee.threads.pump
-      policies:
-      - bee.threads.security:store
-      - bee.hive.security:caller
-      - bee.hive.security:messaging
-    restart:
-      max_attempts: 10

@@ -256,4 +256,10 @@ function M.view(row: Row): (Object?, string?)
     if receipt ~= nil then view.receipt = receipt end
     return view, nil
 end
+function M.next_deadline(db: sql.DB): (integer?, string?)
+    local rows, problem = db:query("SELECT MIN(MAX(next_attempt_ms, COALESCE(lease_until_ms, next_attempt_ms))) AS due FROM bee_thread_inbox_outbox WHERE state = 'queued'")
+    if not rows then return nil, tostring(problem) end
+    local due = rows[1] and tonumber(rows[1].due) or nil
+    return due and math.floor(due) or nil, nil
+end
 return M

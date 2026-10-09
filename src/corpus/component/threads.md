@@ -65,3 +65,9 @@ work and returns `interactive_active` when a nonclosed hook Session remains,
 even with no current Work. The ordinary pull scan retains its existing shape
 and filtering. This reads the existing session/work store in one transaction;
 no schema or persisted identity changes.
+
+The resident Threads owner runs forwarding rounds as independent scoped
+function tasks. Outbox commits activate the pump; the next retry or lease
+expiry schedules the next round. Transport waits and pump failures leave the
+owner's admission and commit handling available. There is no separate resident
+forwarding service.

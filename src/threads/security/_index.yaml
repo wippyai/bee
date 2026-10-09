@@ -3,6 +3,7 @@ namespace: bee.threads.security
 entries:
 - name: store
   kind: security.policy
+  groups: [pump_scope]
   meta:
     comment: Threads keeps threads, records, deliveries and notices in the node database
   policy:
@@ -353,4 +354,30 @@ entries:
     - system.read
     resources:
     - node
+    effect: allow
+- name: pump_transport
+  kind: security.policy
+  groups: [pump_scope]
+  policy:
+    actions: [process.registry.lookup, process.send, system.read]
+    resources: '*'
+    effect: allow
+- name: pump_execution
+  kind: security.policy
+  policy:
+    actions: [registry.find, security.policy_group.get, funcs.call]
+    resources: ['*', bee.threads.security:pump_scope, bee.threads.service:pump_worker]
+    effect: allow
+- name: pump_discovery
+  kind: security.policy
+  policy:
+    actions: [registry.get]
+    resources: [bee.threads.service:service]
+    effect: allow
+- name: pump_round
+  kind: security.policy
+  groups: [pump_scope]
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:pump_worker]
     effect: allow

@@ -488,3 +488,25 @@ entries:
     harness: bee.tests.threads:harness
     schema: bee.tests.support:schema
     owner: bee.threads.persist:owner
+- name: pump_deadline_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/pump-deadline-test.db
+  lifecycle: {auto_start: true}
+- name: pump_deadline_test
+  kind: function.lua
+  source: file://pump_deadline_test.lua
+  method: run
+  modules: [sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    outbox: bee.threads.persist:outbox
+- name: pump_fixture_test
+  kind: function.lua
+  source: file://pump_fixture_test.lua
+  method: run
+  modules: [registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test

@@ -20,7 +20,9 @@ entries:
     - bee.hive.security:caller
     - bee.hive.security:messaging
     - bee.hive.security:admission_store
+    - bee.threads.sessions.security:source_identity_call_policy
   modules:
   - security
   - registry
   - time
+  - funcs

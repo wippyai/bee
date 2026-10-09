@@ -10,6 +10,7 @@ local schemas = require("schemas")
 local operations = require("operations")
 local time = require("time")
 local canonical = require("canonical")
+local funcs = require("funcs")
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
 local function fail(code: string, message: string): Reply
     return {ok = false, value = nil, error = {code = code, message = message}}
@@ -49,8 +50,18 @@ local function call(raw: unknown): Reply
                     return fail("INVALID", "mutation idempotency_key must equal operation_key")
                 end
                 local uncertain = selected.effect == "mutation" and "UNKNOWN_OUTCOME" or "UNAVAILABLE"
+                local origin: {[string]: unknown}? = nil
+                if data.origin_provider ~= nil then
+                    local provider = bounds.id(data.origin_provider)
+                    if not provider then return fail("INVALID", "host origin provider is malformed") end
+                    local supplied, supply_error = funcs.call(provider, {})
+                    local envelope = bounds.object(supplied)
+                    if supply_error or not envelope or envelope.ok ~= true then return fail("DENIED", "source session identity is unavailable") end
+                    local identity = bounds.object(envelope.value)
+                    if identity and identity.session ~= nil then origin = identity end
+                end
                 local reply, err = protocol.call(node, "application.call", {application = asked.application, workspace_id = asked.workspace_id,
-                    service = asked.service, operation = asked.operation, arguments = arguments, idempotency_key = asked.idempotency_key}, tostring(timeout), true)
+                    service = asked.service, operation = asked.operation, arguments = arguments, idempotency_key = asked.idempotency_key, origin = origin}, tostring(timeout), true)
                 if not reply then return fail(uncertain, tostring(err)) end
                 if not reply.ok then
                     local message = tostring(reply.error)

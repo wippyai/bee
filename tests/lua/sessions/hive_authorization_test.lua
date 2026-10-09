@@ -4,11 +4,12 @@ local security = require("security")
 local bounds = require("bounds")
 local funcs = require("funcs")
 local registry = require("registry")
+local json = require("json")
 local WORKSPACE = string.rep("a", 32)
 local APP = "bee.harness.app:app"
 local function request(operation: string, arguments: {[string]: unknown}?): {[string]: unknown}
     return {application = APP, workspace_id = WORKSPACE, service = "sessions", operation = operation,
-        arguments = arguments or {}, idempotency_key = "test-key"}
+        arguments = arguments or {}, idempotency_key = arguments and arguments.operation_key or "test-key"}
 end
 local function consent(scope: string, duration: integer?): {[string]: unknown}
     local raw, err = funcs.call("bee.threads.sessions.binding:allowance", {operation = "grant", peer = "peer-a",
@@ -26,44 +27,166 @@ local function authorized(asked: {[string]: unknown}, caller: string, node: stri
     local reply = assert(bounds.object(raw))
     return reply.ok == true and {} or nil, type(reply.error) == "string" and reply.error or nil
 end
+local function authority(method: string, request: {[string]: unknown}): {[string]: unknown}
+    local caller = funcs.new():with_actor(assert(security.new_actor("bee.sessions.allowance.owner", {workspace_id = WORKSPACE})))
+    local raw, err = caller:call("bee.approvals.binding:" .. method, request)
+    assert(not err, tostring(err))
+    local reply = assert(bounds.object(raw))
+    assert(reply.ok == true, assert(json.encode(reply)))
+    return assert(bounds.object(reply.value))
+end
+local function needs(peer: string): {[string]: unknown}
+    local listed = authority("list", {workspace_id = WORKSPACE})
+    for _, raw in ipairs(assert(bounds.array(listed.requests, 64))) do
+        local view = assert(bounds.object(raw))
+        local proposal = assert(bounds.object(view.proposal))
+        local payload = assert(bounds.object(proposal.payload))
+        if payload.peer == peer and view.request_kind == "question" then return view end
+    end
+    error("peer has no Needs you request")
+end
+local function decide(view: {[string]: unknown}, revision: unknown): {[string]: unknown}
+    local caller = funcs.new():with_actor(assert(security.new_actor("bee.application:" .. WORKSPACE .. ":needs-you",
+        {workspace_id = WORKSPACE, definition_id = "bee.approvals.inbox.app:app"})))
+    local raw, err = caller:call("bee.approvals.binding:decide", {approval_id = view.approval_id, expected_revision = revision,
+        proposal_digest = view.proposal_digest, decision = "approved", response = {text = assert(json.encode({scope = "message", duration_ms = 3600000}))}})
+    assert(not err, tostring(err))
+    return assert(bounds.object(raw))
+end
 local function define_tests()
     test.describe("Hive Sessions authorization", function()
+        test.it("projects exact exposure and workspace authority from a trusted grant", function()
+            local actor = assert(security.new_actor("bee.hive.member.peer-a", {node = "peer-a", workspace_id = WORKSPACE,
+                session_operations = {"bee.threads.sessions.binding:list"}, workspace_permissions = {"bee.sessions.workspace.list"}}))
+            local exposure = assert(security.policy("bee.security.hive:session_exposure"))
+            test.eq(exposure:evaluate(actor, "hive.expose.policy", "bee.threads.sessions.binding:list"), "allow")
+            test.eq(assert(security.named_scope("bee.security.hive:hive_exposure_scope")):evaluate(actor, "hive.expose.policy", "bee.threads.sessions.binding:list"), "allow")
+            test.is_true(exposure:evaluate(actor, "hive.expose.policy", "bee.threads.sessions.binding:send") ~= "allow")
+            local workspace = assert(security.policy("bee.threads.sessions.security:peer_workspace_policy"))
+            test.eq(workspace:evaluate(actor, "bee.sessions.workspace.list", WORKSPACE), "allow")
+            test.is_true(workspace:evaluate(actor, "bee.sessions.workspace.send", WORKSPACE) ~= "allow")
+        end)
         test.it("refuses peers without destination allowance", function()
             local invocation, err = authorized(request("list"), "{peer-a@workers|1}", "receiver")
             test.is_nil(invocation)
             test.contains(tostring(err), "allowance")
         end)
+        test.it("uses only central windows and observes central revocation immediately", function()
+            test.eq(consent("message", 3600000).ok, true)
+            test.eq(#assert(registry.find({["meta.type"] = "bee.sessions.allowance"})), 0)
+            local listed = authority("grant_window", {operation = "list", workspace_id = WORKSPACE})
+            local found = false
+            for _, raw in ipairs(assert(bounds.array(listed.grants, 64))) do
+                local grant = assert(bounds.object(raw))
+                local view = authority("read", {approval_id = grant.grant_id})
+                local payload = assert(bounds.object(assert(bounds.object(view.proposal)).payload))
+                if payload.peer == "peer-a" then
+                    found = true
+                    test.eq(payload.scope, "message")
+                    authority("grant_window", {operation = "revoke", grant_id = grant.grant_id})
+                end
+            end
+            test.is_true(found)
+            test.is_nil(authorized(request("list"), "{peer-a@workers|1}", "receiver"))
+        end)
         test.it("records one Needs you request and gives agents no consent management authority", function()
             local asked = request("list")
             authorized(asked, "{peer-request@workers|1}", "receiver")
             authorized(asked, "{peer-request@workers|2}", "receiver")
-            local rows = assert(registry.find({["meta.type"] = "bee.sessions.allowance"}))
+            local listed = authority("list", {workspace_id = WORKSPACE})
             local found = 0
-            for _, entry in ipairs(rows) do
-                if entry.data.peer == "peer-request" then
-                    found = found + 1
-                    test.not_nil(entry.data.approval_id)
-                    test.eq(entry.data.scope, nil)
-                end
+            for _, raw in ipairs(assert(bounds.array(listed.requests, 64))) do
+                local view = assert(bounds.object(raw))
+                local payload = assert(bounds.object(assert(bounds.object(view.proposal)).payload))
+                if payload.peer == "peer-request" then found = found + 1 end
             end
             test.eq(found, 1)
+            test.eq(#assert(registry.find({["meta.type"] = "bee.sessions.allowance"})), 0)
             local policy = assert(security.policy("bee.threads.sessions.security:person_allowance_policy"))
             local actor = assert(security.new_actor("bee.hive.member.peer-request", {workspace_id = WORKSPACE, node = "peer-request"}))
             test.is_true(policy:evaluate(actor, "bee.sessions.allowance.manage", WORKSPACE) ~= "allow")
         end)
-        test.it("limits list-only allowance and rejects forged peer fields", function()
-            test.eq(consent("list").ok, true)
-            local exposure = assert(registry.find({[".kind"] = "security.policy.expr"}))
-            for _, entry in ipairs(exposure) do
-                if entry.id:find("bee.security.hive:session_", 1, true) then
-                    local data = assert(bounds.object(entry.data))
-                    local policy = assert(bounds.object(data.policy))
-                    local expression = assert(bounds.text(policy.expression))
-                    assert(expression:find("bee.threads.sessions.binding:list", 1, true), expression)
+        test.it("consumes the person's revision-bound scope and duration answer", function()
+            test.is_nil(authorized(request("list"), "{peer-answer@workers|1}", "receiver"))
+            local view = needs("peer-answer")
+            test.eq(decide(view, 0).ok, false)
+            test.eq(decide(view, view.revision).ok, true)
+            test.not_nil(authorized(request("send", {session = "bs:receiver:" .. WORKSPACE .. ":s", input = "hi", operation_key = "answer-k"}), "{peer-answer@workers|2}", "receiver"))
+            test.is_nil(authorized(request("open", {spec = {definition = "d"}, operation_key = "answer-open"}), "{peer-answer@workers|2}", "receiver"))
+            local active = authority("grant_window", {operation = "list", workspace_id = WORKSPACE})
+            local found = false
+            for _, raw in ipairs(assert(bounds.array(active.grants, 64))) do
+                local grant = assert(bounds.object(raw))
+                local view = authority("read", {approval_id = grant.grant_id})
+                local payload = assert(bounds.object(assert(bounds.object(view.proposal)).payload))
+                if payload.peer == "peer-answer" then
+                    found = true
+                    test.eq(payload.scope, "message")
+                    test.eq(grant.until_ms, assert(bounds.integer(grant.granted_ms)) + 3600000)
                 end
             end
+            test.is_true(found)
+            test.eq(#assert(registry.find({["meta.type"] = "bee.sessions.allowance"})), 0)
+        end)
+        test.it("resumes a centrally consumed consent without recreating a revoked window", function()
+            test.is_nil(authorized(request("list"), "{peer-resume@workers|1}", "receiver"))
+            local view = needs("peer-resume")
+            test.eq(decide(view, view.revision).ok, true)
+            view = needs("peer-resume")
+            local permission = authority("request", {workspace_id = WORKSPACE, idempotency_key = tostring(view.approval_id) .. ".window",
+                request_kind = "permission", policy = "hive-session-agents",
+                proposal = {kind = "operation", ref = "bee.threads.sessions:allowance", revision = "1",
+                    payload = {peer = "peer-resume", workspace_id = WORKSPACE, scope = "message"}},
+                prompt = {text = "Allow agents from bee peer-resume with message scope; person consent: " .. tostring(view.approval_id)}})
+            authority("consume", {approval_id = view.approval_id, proposal_digest = view.proposal_digest,
+                effect_key = permission.approval_id, owner_incarnation = view.owner_incarnation})
+            test.not_nil(authorized(request("list"), "{peer-resume@workers|1}", "receiver"))
+            authority("grant_window", {operation = "revoke", grant_id = permission.approval_id})
+            test.is_nil(authorized(request("list"), "{peer-resume@workers|1}", "receiver"))
+            test.is_nil(authorized(request("list"), "{peer-resume@workers|1}", "receiver"))
+        end)
+        test.it("downgrades a peer scope and revokes every central window for that peer", function()
+            test.eq(consent("open", 3600000).ok, true)
+            test.eq(consent("list", 3600000).ok, true)
+            test.not_nil(authorized(request("list"), "{peer-a@workers|1}", "receiver"))
+            test.is_nil(authorized(request("send", {session = "bs:receiver:" .. WORKSPACE .. ":s", input = "hi", operation_key = "downgrade"}), "{peer-a@workers|1}", "receiver"))
+            local listed = authority("grant_window", {operation = "list", workspace_id = WORKSPACE})
+            local found = 0
+            for _, raw in ipairs(assert(bounds.array(listed.grants, 64))) do
+                local window = assert(bounds.object(raw))
+                local permission = authority("read", {approval_id = window.grant_id})
+                local data = assert(bounds.object(assert(bounds.object(permission.proposal)).payload))
+                if data.peer == "peer-a" then found = found + 1; test.eq(data.scope, "list") end
+            end
+            test.eq(found, 1)
+            revoke()
+            test.is_nil(authorized(request("list"), "{peer-a@workers|1}", "receiver"))
+        end)
+        test.it("withdraws a pending question when consent is revoked in Sessions", function()
+            authorized(request("list"), "{peer-withdraw@workers|1}", "receiver")
+            local view = needs("peer-withdraw")
+            local raw, err = funcs.call("bee.threads.sessions.binding:allowance", {operation = "revoke", peer = "peer-withdraw", workspace_id = WORKSPACE})
+            test.is_nil(err)
+            test.eq(assert(bounds.object(raw)).ok, true)
+            local caller = funcs.new():with_actor(assert(security.new_actor("bee.application:" .. WORKSPACE .. ":needs-you",
+                {workspace_id = WORKSPACE, definition_id = "bee.approvals.inbox.app:app"})))
+            local read = assert(bounds.object((caller:call("bee.approvals.binding:read", {approval_id = view.approval_id}))))
+            test.eq(assert(bounds.object(read.value)).state, "withdrawn")
+            test.eq(decide(view, view.revision).ok, false)
+            test.is_nil(authorized(request("list"), "{peer-withdraw@workers|2}", "receiver"))
+        end)
+        test.it("limits list-only allowance and rejects forged peer fields", function()
+            test.eq(consent("list").ok, true)
             test.not_nil(authorized(request("list"), "{peer-a@workers|1}", "receiver"))
             test.is_nil(authorized(request("send", {session = "bs:receiver:" .. WORKSPACE .. ":s", input = "hi", operation_key = "k"}), "{peer-a@workers|1}", "receiver"))
+            local own_origin = request("list")
+            own_origin.origin = {session = "bs:peer-a:" .. WORKSPACE .. ":agent", thread_id = "source-thread", workspace_id = WORKSPACE}
+            test.not_nil(authorized(own_origin, "{peer-a@workers|1}", "receiver"))
+            local wrong_origin = request("list")
+            wrong_origin.origin = {session = "bs:another-bee:" .. WORKSPACE .. ":s", thread_id = "source-thread", workspace_id = WORKSPACE}
+            test.is_nil(authorized(wrong_origin, "{peer-a@workers|1}", "receiver"))
+            wrong_origin.origin = {session = "bs:peer-a:", thread_id = "source-thread"}
+            test.is_nil(authorized(wrong_origin, "{peer-a@workers|1}", "receiver"))
             local forged = request("list")
             forged.peer = "peer-a"
             test.is_nil(authorized(forged, "{peer-b@workers|1}", "receiver"))
@@ -78,6 +201,36 @@ local function define_tests()
             test.is_nil(authorized(request("close", {session = "bs:receiver:" .. WORKSPACE .. ":s", operation_key = "k"}), "{peer-a@workers|1}", "receiver"))
             revoke()
         end)
+        test.it("requires receiving workspace permission in addition to a live allowance", function()
+            test.eq(consent("list").ok, true)
+            local entry = assert(registry.get("bee.threads.sessions.security:peer_workspace_policy"))
+            local changed = assert(bounds.object(entry.data))
+            local policy = assert(bounds.object(changed.policy))
+            local saved_actions = policy.actions
+            policy.actions = {"hive.expose.policy"}
+            local changes = assert(registry.snapshot()):changes()
+            changes:update({id = entry.id, kind = entry.kind, meta = entry.meta, data = changed})
+            assert(changes:apply())
+            local invocation, err = authorized(request("list"), "{peer-a@workers|1}", "receiver")
+            test.is_nil(invocation)
+            test.contains(tostring(err), "workspace session permission")
+            policy.actions = saved_actions
+            changes = assert(registry.snapshot()):changes()
+            changes:update({id = entry.id, kind = entry.kind, meta = entry.meta, data = changed})
+            assert(changes:apply())
+            revoke()
+        end)
+        test.it("requires the receiver mutation key to match the durable owner key", function()
+            test.eq(consent("message").ok, true)
+            local asked = request("send", {session = "bs:receiver:" .. WORKSPACE .. ":s", input = "hi", operation_key = "owner-key"})
+            asked.idempotency_key = nil
+            test.is_nil(authorized(asked, "{peer-a@workers|1}", "receiver"))
+            asked.idempotency_key = "other-key"
+            test.is_nil(authorized(asked, "{peer-a@workers|1}", "receiver"))
+            asked.idempotency_key = "owner-key"
+            test.not_nil(authorized(asked, "{peer-a@workers|1}", "receiver"))
+            revoke()
+        end)
         test.it("rechecks revocation, workspace bounds and expiry", function()
             test.eq(consent("open").ok, true)
             local args = {spec = {definition = "d"}, operation_key = "k"}
@@ -86,15 +239,6 @@ local function define_tests()
             revoke()
             test.is_nil(authorized(request("list"), "{peer-a@workers|1}", "receiver"))
             test.eq(consent("list", 1).ok, true)
-            local entries = assert(registry.find({["meta.type"] = "bee.sessions.allowance"}))
-            for _, entry in ipairs(entries) do
-                if entry.data.peer == "peer-a" then
-                    entry.data.expires_ms = 1
-                    local changes = registry.snapshot():changes()
-                    changes:update({id = tostring(entry.id), kind = tostring(entry.kind), meta = bounds.object(entry.meta), data = entry.data})
-                    assert(changes:apply())
-                end
-            end
             test.is_nil(authorized(request("list"), "{peer-a@workers|1}", "receiver"))
             revoke()
         end)

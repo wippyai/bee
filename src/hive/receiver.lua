@@ -18,14 +18,14 @@ M.MAX_ACTIVE = 4
 M.MAX_QUEUED = 64
 M.MAX_TTL = 30000000000
 type Object = {[string]: unknown}
-type Request = {application: string, workspace_id: string, service: string, operation: string, arguments: Object, idempotency_key: string?, address: address.Resolved?}
+type Request = {application: string, workspace_id: string, service: string, operation: string, arguments: Object, idempotency_key: string?, origin: Object?, address: address.Resolved?}
 type Invocation = {request: Request, operation: operations.Operation, actor: security.Actor, scope: security.Scope,
-    caller: {node: string, pid: string}, receipt_key: string?, owner_receipts: boolean?}
+    caller: {node: string, pid: string, origin: Object?, allowance_revision: integer?}, receipt_key: string?, owner_receipts: boolean?}
 
 local function request(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application call requires an object" end
-    local extra = bounds.fields(value, {"application", "workspace_id", "service", "operation", "arguments", "idempotency_key"})
+    local extra = bounds.fields(value, {"application", "workspace_id", "service", "operation", "arguments", "idempotency_key", "origin"})
     if extra then return nil, extra end
     local workspace = value.workspace_id == nil and "" or bounds.id(value.workspace_id)
     local service, operation = bounds.line(value.service, 64), bounds.line(value.operation, 64)
@@ -36,10 +36,11 @@ local function request(raw: unknown): (Request?, string?)
     local key = value.idempotency_key == nil and nil or bounds.line(value.idempotency_key, 128)
     if value.idempotency_key ~= nil and not key then return nil, "idempotency key is malformed" end
     if not canonical.encode(value, protocol.MAX_BYTES) then return nil, "application call exceeds its byte bound" end
+    if value.origin ~= nil and not bounds.object(value.origin) then return nil, "source origin must be an object" end
     local resolved, address_error = address.resolve(value.application, workspace)
     if not resolved then return nil, address_error end
     return {application = resolved.application, workspace_id = workspace, service = service, operation = operation,
-        arguments = arguments, idempotency_key = key, address = resolved}, nil
+        arguments = arguments, idempotency_key = key, origin = bounds.object(value.origin), address = resolved}, nil
 end
 
 local function host_exposure(asked: Request, caller: string, node: string, inspection: boolean?): (boolean, Invocation?, string?)
@@ -66,11 +67,15 @@ local function host_exposure(asked: Request, caller: string, node: string, inspe
         end
     end
     if not operation then return true, nil, "unknown exposed operation" end
+    if not inspection and operation.effect == "mutation" and (not asked.idempotency_key or asked.idempotency_key ~= asked.arguments.operation_key) then
+        return true, nil, "mutation idempotency_key must equal operation_key"
+    end
     local input_error = schemas.validate(operation.input, asked.arguments)
     if not inspection and input_error then return true, nil, input_error end
     local peer = protocol.node_of(caller, node)
+    local origin = asked.origin
     local executor = funcs.new():with_context({["bee.hive.caller"] = {node = peer, pid = caller}})
-    local raw, err = executor:call(authorizer, {workspace_id = asked.workspace_id, operation = asked.operation, arguments = asked.arguments, inspection = inspection == true})
+    local raw, err = executor:call(authorizer, {workspace_id = asked.workspace_id, operation = asked.operation, arguments = asked.arguments, origin = origin, inspection = inspection == true})
     local reply = bounds.object(raw)
     local mapped = reply and reply.ok == true and bounds.object(reply.value) or nil
     if err or not mapped then return true, nil, reply and tostring(reply.error) or tostring(err) end
@@ -80,7 +85,8 @@ local function host_exposure(asked: Request, caller: string, node: string, inspe
     asked.workspace_id = workspace
     local binding, _, admission_error = application.admission(asked.application, workspace)
     if not binding then return true, nil, admission_error or "application admission is absent or revoked" end
-    local actor = assert(security.new_actor(subject, {node = peer, workspace_id = workspace}))
+    local actor = assert(security.new_actor(subject, {node = peer, workspace_id = workspace,
+        session_operations = bounds.ids(mapped.session_operations, true), workspace_permissions = bounds.ids(mapped.workspace_permissions, true)}))
     local exposure = assert(security.named_scope("bee.security.hive:hive_exposure_scope"))
     if exposure:evaluate(actor, "hive.expose." .. operation.mode, operation.ref) ~= "allow" then
         return true, nil, "operation exposure is revoked: " .. peer .. " / " .. workspace .. " / " .. operation.ref
@@ -92,7 +98,7 @@ local function host_exposure(asked: Request, caller: string, node: string, inspe
         return true, nil, "receiving workspace session permission is denied"
     end
     return true, {request = asked, operation = operation, actor = actor, scope = scope,
-        caller = {node = peer, pid = caller}, owner_receipts = selected.owner_receipts == true}, nil
+        caller = {node = peer, pid = caller, origin = bounds.object(mapped.origin), allowance_revision = bounds.integer(mapped.allowance_revision)}, owner_receipts = selected.owner_receipts == true}, nil
 end
 
 function M.authorize(raw: unknown, caller: string, node: string, inspection: boolean?): (Invocation?, string?)

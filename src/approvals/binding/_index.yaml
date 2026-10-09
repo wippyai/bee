@@ -147,6 +147,8 @@ entries:
           window_ttl_ms:
             type: integer
             minimum: 1
+          window_permanent:
+            type: boolean
           response: {}
       output:
         type: object

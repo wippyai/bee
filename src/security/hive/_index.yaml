@@ -11,3 +11,13 @@ entries:
     actions: '*'
     resources: '*'
     effect: allow
+- name: session_exposure
+  kind: security.policy.expr
+  groups:
+  - hive_exposure_scope
+  policy:
+    actions:
+    - hive.expose.policy
+    resources: '*'
+    effect: allow
+    expression: actor.id matches "^bee[.]hive[.]member[.]" && resource in actor.meta.session_operations

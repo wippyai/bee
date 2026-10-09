@@ -19,6 +19,7 @@ local function install_policy()
     local data = assert(bounds.object(entry.data))
     local listed = assert(bounds.array(data.policies, 64))
     listed[#listed + 1] = {name = POLICY, approvers = {PERSON}, max_ttl_ms = 14400000}
+    listed[#listed + 1] = {name = "permanent-window-policy", approvers = {PERSON}, max_ttl_ms = 14400000, allow_permanent = true}
     data.policies = listed
     local change = registry.snapshot():changes()
     assert(change:update(entry)); assert(change:apply())
@@ -65,6 +66,28 @@ local function define_tests()
             test.eq(request(db, workspace, nil, NOW, "other-subject").state, "pending")
             local history = assert(db:query("SELECT reason FROM bee_approval_history WHERE approval_id = ? AND revision = 2", {matched.approval_id}))
             test.ok(tostring(history[1].reason):find(tostring(grant.grant_id), 1, true) ~= nil)
+            db:release()
+        end)
+        test.it("keeps permanent consent in the central window authority and requires host opt-in", function()
+            local db, workspace = open(), key()
+            local denied = request(db, workspace)
+            local decision = item(denied)
+            decision.window_permanent = true
+            test.eq(service.execute(db, PERSON, "decide", decision, NOW).code, "FORBIDDEN")
+            local created = value(service.execute(db, SUBJECT, "request", {workspace_id = workspace, idempotency_key = key(),
+                request_kind = "permission", policy = "permanent-window-policy",
+                proposal = {kind = "operation", ref = "test:write", revision = "1", payload = {path = "one.txt"}},
+                prompt = {text = "Allow until revoked"}}, NOW))
+            decision = item(created)
+            decision.window_permanent = true
+            local granted = value(service.execute(db, PERSON, "decide", decision, NOW))
+            local grant = assert(bounds.object(granted.window_grant))
+            test.eq(grant.until_ms, 253402300799000)
+            local listed = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW + 315360000000))
+            test.eq(#assert(bounds.array(listed.grants, 64)), 1)
+            value(service.execute(db, PERSON, "grant_window", {operation = "revoke", grant_id = grant.grant_id}, NOW + 1))
+            listed = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW + 2))
+            test.eq(#assert(bounds.array(listed.grants, 64)), 0)
             db:release()
         end)
         test.it("managed correlation identities do not broaden exact tool input or adapter authority", function()

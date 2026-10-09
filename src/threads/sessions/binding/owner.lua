@@ -131,6 +131,17 @@ local function describe(session: string): (Object?, string?)
     return snapshot(value)
 end
 
+function M.source_identity(raw: unknown): Reply
+    local asked = bounds.object(raw)
+    if not asked or bounds.fields(asked, {}) then return fail("INVALID", "source identity takes no fields", nil) end
+    local actor, workspace = identity()
+    if not actor or not actor:match("^bs:") then return succeed({}) end
+    local stored, err = journal.invoke("session_describe", {session = actor})
+    local value = bounds.object(stored)
+    if not value or err then return fail("DENIED", "source session is unavailable", nil) end
+    return succeed({session = actor, thread_id = value.thread_ref, workspace_id = workspace})
+end
+
 -- open starts a session: the agent's own program runs in a terminal that
 -- Bee keeps whether or not anyone watches it. Messages are typed into it;
 -- the person opens its terminal from Sessions.

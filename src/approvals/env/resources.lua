@@ -8,7 +8,7 @@ M.THREAD_APPEND = "bee.threads.binding:append"
 type DefinitionSelector = {definition_id: string}
 type Approver = string | DefinitionSelector
 type Confirmation = "standard" | "explicit"
-type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer, request_ttl_ms: integer?, confirm: Confirmation}
+type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer, request_ttl_ms: integer?, confirm: Confirmation, allow_permanent: boolean}
 M.MAX_POLICIES = 64
 M.MAX_APPROVERS = 64
 M.MAX_TTL_MS = 31536000000
@@ -41,7 +41,7 @@ function M.policies(): ({[string]: Policy}?, string?)
     for _, raw in ipairs(listed) do
         local item = bounds.object(raw)
         if not item then return nil, "approver policy is not an object" end
-        local extra = bounds.fields(item, {"name", "approvers", "max_ttl_ms", "request_ttl_ms", "confirm"})
+        local extra = bounds.fields(item, {"name", "approvers", "max_ttl_ms", "request_ttl_ms", "confirm", "allow_permanent"})
         if extra then return nil, "approver policy: " .. extra end
         local name = bounds.id(item.name)
         if not name then return nil, "approver policy has no valid name" end
@@ -69,6 +69,7 @@ function M.policies(): ({[string]: Policy}?, string?)
             elseif item.confirm == "explicit" then confirm = "explicit"
             else return nil, "approver policy " .. name .. " confirm must be standard or explicit" end
         end
+        if item.allow_permanent ~= nil and type(item.allow_permanent) ~= "boolean" then return nil, "allow_permanent must be boolean" end
         local subjects: {Approver} = {}
         local seen: {[string]: boolean} = {}
         for _, approver in ipairs(approvers) do
@@ -94,7 +95,7 @@ function M.policies(): ({[string]: Policy}?, string?)
                 return nil, "approver policy " .. name .. " lists an invalid approver selector"
             end
         end
-        policies[name] = {name = name, approvers = subjects, max_ttl_ms = ttl, request_ttl_ms = request_ttl, confirm = confirm}
+        policies[name] = {name = name, approvers = subjects, max_ttl_ms = ttl, request_ttl_ms = request_ttl, confirm = confirm, allow_permanent = item.allow_permanent == true}
     end
     return policies, nil
 end

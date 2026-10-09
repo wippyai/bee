@@ -759,7 +759,7 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
                 if type(approver) == "string" and approver == grant.granted_by then authorized = true end
                 if type(approver) == "table" and approver.definition_id == grant.granted_definition then authorized = true end
             end
-            if authorized and not grant.revoked_at and grant.until_ms > now and grant.until_ms - grant.granted_ms <= policy.max_ttl_ms then
+            if authorized and not grant.revoked_at and grant.until_ms > now and (grant.until_ms - grant.granted_ms <= policy.max_ttl_ms or (policy.allow_permanent and grant.until_ms == windows.PERMANENT_UNTIL_MS)) then
                 local attach_error = store.attach_window(tx, row.approval_id, grant.grant_id, true)
                 if attach_error then return storage(attach_error) end
                 local settled, settle_error = settle(tx, row, "decided", "approved", grant.granted_by, nil, grant.granted_by,
@@ -774,7 +774,7 @@ end
 -- decide: an eligible approver settles the pending revision for the exact
 -- proposal digest; an identical retry replays, anything else conflicts.
 local function op_decide(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "expected_revision", "decision", "proposal_digest", "response", "window_ttl_ms"})
+    local unknown_field = bounds.fields(object, {"approval_id", "expected_revision", "decision", "proposal_digest", "response", "window_ttl_ms", "window_permanent"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local approval_id = bounds.id(object.approval_id)
     if not approval_id then return failure("INVALID_ARGUMENT", "approval_id is not an identifier") end
@@ -797,6 +797,16 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if policy_error then return storage(policy_error) end
     if not may_decide then return failure("DENIED", "caller is not an eligible approver for this request") end
     local window_ttl: integer? = nil
+    if object.window_permanent ~= nil and type(object.window_permanent) ~= "boolean" then return failure("INVALID_ARGUMENT", "window_permanent must be boolean") end
+    if object.window_permanent == true then
+        if object.window_ttl_ms ~= nil then return failure("INVALID_ARGUMENT", "choose duration or permanent") end
+        local policies, policy_error = resources.policies()
+        if not policies then return storage(policy_error or "approver policies") end
+        local configured = policies[row.policy]
+        if not configured or not configured.allow_permanent then return failure("FORBIDDEN", "policy does not permit permanent windows") end
+        if decision ~= "approved" or row.request_kind ~= "permission" or response ~= nil then return failure("INVALID_ARGUMENT", "windows approve permissions without a response") end
+        window_ttl = windows.PERMANENT_UNTIL_MS - now
+    end
     if object.window_ttl_ms ~= nil then
         window_ttl = bounds.integer(object.window_ttl_ms)
         if not window_ttl or window_ttl < 1 then return failure("INVALID_ARGUMENT", "window_ttl_ms must be a positive integer") end
@@ -813,7 +823,8 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
         local same_response = wanted == (text(current.response_json) or "")
         local same_window = window_ttl == nil and current.window_grant == nil
             or (window_ttl ~= nil and current.window_grant ~= nil and current.allowed_by_grant == nil
-                and current.window_grant.until_ms - current.window_grant.granted_ms == window_ttl)
+                and (current.window_grant.until_ms - current.window_grant.granted_ms == window_ttl
+                    or (object.window_permanent == true and current.window_grant.until_ms == windows.PERMANENT_UNTIL_MS)))
         if current.decider_id == actor and current.decision == decision and same_response and same_window then return success(M.view(current), true) end
         return failure("CONFLICT", "request was decided " .. tostring(current.decision) .. " by " .. tostring(current.decider_id), M.view(current))
     end

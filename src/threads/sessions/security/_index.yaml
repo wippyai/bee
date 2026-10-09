@@ -80,8 +80,7 @@ entries:
     - security.actor.create
     - funcs.security
     - funcs.context
-    expression: action in ["funcs.security", "funcs.context"] || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$"
-      || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"
+    expression: action in ["funcs.security", "funcs.context"] || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"
     resources: '*'
     effect: allow
 - name: owner_workspace_identity_policy
@@ -106,15 +105,13 @@ entries:
     resources:
     - '*'
     effect: allow
-- name: allowance_store_policy
+- name: allowance_authority_policy
   kind: security.policy
   policy:
     actions:
     - registry.get
     - registry.find
     - registry.snapshot
-    - registry.version
-    - registry.apply
     - db.get
     - system.read
     - funcs.call
@@ -123,9 +120,17 @@ entries:
     - funcs.security
     - bee.approvals.request
     - bee.approvals.consume
-    resources:
-    - '*'
+    - bee.approvals.decide
+    resources: '*'
     effect: allow
+- name: peer_workspace_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - bee.sessions.workspace.*
+    resources: '*'
+    effect: allow
+    expression: resource == actor.meta.workspace_id && action in actor.meta.workspace_permissions
 - name: peer_session_policy
   kind: security.policy.expr
   policy:
@@ -148,3 +153,11 @@ entries:
     expression: actor.id matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" && actor.meta.definition_id in ["bee.harness.app:app",
       "bee.approvals.inbox.app:app"] && ((action == "bee.sessions.allowance.manage" && resource == actor.meta.workspace_id)
       || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:allowance", "bee.threads.sessions.binding:peers"]))
+- name: source_identity_call_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.sessions.binding:source_identity
+    effect: allow

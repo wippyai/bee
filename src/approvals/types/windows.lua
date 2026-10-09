@@ -3,6 +3,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local hash = require("hash")
 local M = {}
+M.PERMANENT_UNTIL_MS = 253402300799000
 type Grant = {grant_id: string, owner_node: string, workspace_id: string, requester_id: string, policy: string,
     scope_digest: string, granted_by: string, granted_definition: string?, granted_ms: integer, granted_at: string,
     until_ms: integer, until_at: string, revoked_at: string?}

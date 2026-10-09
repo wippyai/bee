@@ -1870,6 +1870,7 @@ entries:
     owner_receipts: true
     permission_action: bee.sessions.workspace
     outbound_action: bee.sessions.remote
+    origin_provider: bee.threads.sessions.binding:source_identity
 - name: allowances
   kind: library.lua
   source: file://allowances.lua
@@ -1877,15 +1878,15 @@ entries:
   - registry
   - security
   - hash
-  - time
   - funcs
   - ctx
   - system
   - json
+  - uuid
   imports:
     bounds: bee.values:bounds
     workspaces: bee.node:workspaces
-    application: bee.node:application
+    windows: bee.approvals.types:windows
 - name: allowance
   kind: function.lua
   source: 'local allowances = require("allowances")
@@ -1896,7 +1897,7 @@ entries:
     allowances: bee.threads.sessions.binding:allowances
   security:
     policies:
-    - bee.threads.sessions.security:allowance_store_policy
+    - bee.threads.sessions.security:allowance_authority_policy
 - name: peer_authorize
   kind: function.lua
   source: 'local allowances = require("allowances")
@@ -1907,13 +1908,14 @@ entries:
     allowances: bee.threads.sessions.binding:allowances
   security:
     policies:
-    - bee.threads.sessions.security:allowance_store_policy
+    - bee.threads.sessions.security:allowance_authority_policy
 - name: remote
   kind: library.lua
   source: file://remote.lua
   imports:
     hive: bee.hive:hive
     bounds: bee.values:bounds
+    pump: bee.threads.service:pump
 - name: peers
   kind: function.lua
   source: file://peers.lua
@@ -1930,3 +1932,35 @@ entries:
     - bee.hive.security:caller
     - bee.hive.security:messaging
     - bee.hive.security:outbound
+- name: source_identity
+  kind: function.lua
+  source: file://owner.lua
+  method: source_identity
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies:
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.threads.sessions.security:owner_principal_policy

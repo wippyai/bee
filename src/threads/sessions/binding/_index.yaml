@@ -1954,6 +1954,7 @@ entries:
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
     session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
     remote: bee.threads.sessions.binding:remote
   security:
     policies:

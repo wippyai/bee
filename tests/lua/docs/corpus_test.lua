@@ -34,6 +34,12 @@ local function call(request: unknown): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Docs corpus and tool", function()
+        test.it("serves the Hive Sessions allowance guide through the docs tool", function()
+            local read = call({operation = "read", id = "docs/hive_sessions"})
+            if type(read.content) ~= "string" then error("Hive Sessions guide must be text") end
+            test.is_true(read.content:find("receiving bee", 1, true) ~= nil)
+            test.is_true(read.content:find("central Approvals window", 1, true) ~= nil)
+        end)
         test.it("ships a complete, hashed manifest of the selected documentation", function()
             local volume = volume()
             local manifest, manifest_error = corpus.manifest(volume)

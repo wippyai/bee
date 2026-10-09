@@ -29,10 +29,14 @@ entries:
     clock: bee.values:clock
     history_values: bee.apps.processes:history
     hive: bee.apps.processes:hive
+    application: bee.app:client
+    confirmation: bee.approvals.app:confirmation
   security:
     policies:
     - bee.hive.security:caller
     - bee.hive.security:messaging
+    - bee.security.approvals:confirmation_client
+    - bee.security.approvals:confirmation_authority
     - bee.apps.processes:observe
     - bee.apps.processes:service_titles
 - name: service_titles

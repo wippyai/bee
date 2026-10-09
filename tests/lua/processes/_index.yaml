@@ -1,6 +1,18 @@
 version: '1.0'
 namespace: bee.tests.processes
 entries:
+- name: app_test
+  kind: function.lua
+  source: file://app_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [system, tty, channel, time, sql, json]
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+    bounds: bee.values:bounds
+  security:
+    policies: [bee.security.approvals:approval_store_policy]
 - name: view_test
   kind: function.lua
   source: file://view_test.lua

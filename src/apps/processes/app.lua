@@ -16,6 +16,8 @@ local view = require("view")
 local frame = require("frame")
 local clock = require("clock")
 local hive = require("hive")
+local application = require("application")
+local confirmation = require("confirmation")
 
 -- A finished job: a stop's problem, or one round of hive samples.
 type Result = {problem: string?, samples: {hive.Sample}?}
@@ -30,24 +32,15 @@ local function sample_hive(): Result
     return {samples = samples}
 end
 
--- stop_app asks the node to close the app whose process is pid.
-local function stop_app(node: string, pid: string): Result
-    local listed, list_error = client.call(node, "list", {})
-    if not listed then return {problem = "Stop failed: " .. tostring(list_error)} end
-    local state = client.state(listed)
-    if not state then return {problem = "Stop failed: malformed node state"} end
-    for _, instance in ipairs(state.running) do
-        if instance.pid == pid then
-            local _, close_error = client.call(node, "close", {id = instance.id})
-            if close_error then return {problem = "Stop failed: " .. close_error} end
-            return {problem = nil}
-        end
-    end
-    return {problem = "Only apps can be stopped"}
+local function stop_app(node: string, instance_id: string, execution_id: string?): Result
+    local _, err = client.call(node, "close", {id = instance_id, execution_id = execution_id})
+    return {problem = err and ("Stop failed: " .. err) or nil}
 end
 
 local function main(value: unknown)
     local node = assert(system.node.id())
+    local launch = assert(application.launch(value))
+    local review = confirmation.new({workspace_id = launch.workspace_id, origin = {app_id = launch.definition_id, instance_id = launch.instance_id, attempt_id = launch.execution_id}})
     local input = assert(tty.events())
     local menu = frame.menu()
     local lifecycle = assert(process.events())
@@ -66,7 +59,7 @@ local function main(value: unknown)
     local selected = ""
     local offset, capacity = 0, 0
     local hits: {frame.Hit} = {}
-    local paused, confirming, by_steps, services = false, false, false, false
+    local paused, by_steps, services = false, false, false
     -- mode is the pane shown: processes, services or hive.
     local mode = "processes"
     local hive_state = hive.new(node)
@@ -80,7 +73,7 @@ local function main(value: unknown)
     local function set_mode(next_mode: string)
         mode = next_mode
         services = mode == "services"
-        selected = ""; offset = 0; status = ""; confirming = false
+        selected = ""; offset = 0; status = ""; confirmation.cancel(review)
         if mode == "hive" then hive_round() end
     end
     local rows: {view.Row} = {}
@@ -96,7 +89,7 @@ local function main(value: unknown)
         end)
         local found = false
         for _, item in ipairs(rows) do if item.pid == selected then found = true end end
-        if not found then selected = rows[1] and rows[1].pid or ""; confirming = false end
+        if not found then selected = rows[1] and rows[1].pid or ""; confirmation.cancel(review) end
     end
     local function reveal()
         for index, item in ipairs(rows) do
@@ -121,7 +114,7 @@ local function main(value: unknown)
         for i, item in ipairs(rows) do if item.pid == selected then index = i end end
         index = math.floor(math.max(1, math.min(#rows, index + step)))
         if rows[index] then selected = rows[index].pid end
-        confirming = false; status = ""; reveal(); dirty = true
+        confirmation.cancel(review); status = ""; reveal(); dirty = true
     end
     local function sample()
         local now = time.now():unix_nano()
@@ -140,15 +133,32 @@ local function main(value: unknown)
         end
         dirty = true
     end
+    local function stop_target(): {[string]: unknown}?
+        local listed, err = client.call(node, "list", {})
+        local state = listed and client.state(listed)
+        if not state then status = err or "Application list is unavailable"; return nil end
+        for _, instance in ipairs(state.running) do
+            if instance.pid == selected then return {node = node, instance_id = instance.id, execution_id = instance.execution_id, definition_id = instance.app} end
+        end
+        status = "Only apps can be stopped"
+        return nil
+    end
     local function end_app()
-        if not services and selected ~= "" and not stopping then confirming = true; dirty = true end
+        if not services and selected ~= "" and not stopping then
+            local target = stop_target()
+            if target then
+                local opened, err = confirmation.open(review, "app.stop", target, "inline", "Stop selected app?", "Stop selected app?")
+                if not opened then status = err or "Confirmation is unavailable" end
+            end
+            dirty = true
+        end
     end
     order()
     while running do
         if dirty then
             local drawn = mode == "hive"
                 and view.draw_hive(width, height, hive.nodes(hive_state), preferences, hive_selected, offset, paused, status)
-                or view.draw(width, height, snapshot, history, preferences, selected, offset, paused, status, confirming, services, rows, by_steps)
+                or view.draw(width, height, snapshot, history, preferences, selected, offset, paused, status, confirmation.active(review), services, rows, by_steps)
             frame.render(drawn, menu, preferences)
             hits, capacity, offset = drawn.hits, drawn.capacity, drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -186,14 +196,21 @@ local function main(value: unknown)
                 elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
                 elseif data.type == "key" and data.action ~= "release" then
                     local key = data.key_type
-                    if confirming then
+                    if confirmation.active(review) then
                         if key == "enter" then
-                            local pid = selected
-                            stopping, confirming = true, false
-                            status = "Stopping application…"
-                            coroutine.spawn(function() results:send(stop_app(node, pid)) end)
+                            local target = stop_target()
+                            if target then
+                                local accepted, err = confirmation.accept(review, target, "enter")
+                                if accepted then
+                                    local instance_id = tostring(target.instance_id)
+                                    local execution_id = type(target.execution_id) == "string" and target.execution_id or nil
+                                    stopping = true
+                                    status = "Stopping application…"
+                                    coroutine.spawn(function() results:send(stop_app(node, instance_id, execution_id)) end)
+                                else status = err or "Target changed; review it again" end
+                            end
                             dirty = true
-                        elseif key == "esc" or key == "escape" then confirming = false; dirty = true end
+                        elseif key == "esc" or key == "escape" then confirmation.cancel(review); dirty = true end
                     elseif key == "tab" then
                         set_mode(mode == "processes" and "services" or (mode == "services" and "hive" or "processes"))
                         order(); dirty = true
@@ -216,11 +233,11 @@ local function main(value: unknown)
                         if kind == "pause" then toggle_pause()
                         elseif kind == "processes" or kind == "services" or kind == "hive" then
                             set_mode(kind); order(); dirty = true
-                        elseif kind == "sort" and not confirming then by_steps = not by_steps; order(); reveal(); dirty = true
-                        elseif kind == "stop" and not confirming then end_app()
+                        elseif kind == "sort" and not confirmation.active(review) then by_steps = not by_steps; order(); reveal(); dirty = true
+                        elseif kind == "stop" and not confirmation.active(review) then end_app()
                         elseif hit and kind == "row" then
                             if mode == "hive" then hive_selected = hit.key
-                            else selected = hit.key; confirming = false; status = "" end
+                            else selected = hit.key; confirmation.cancel(review); status = "" end
                             dirty = true
                         end
                     end
@@ -228,6 +245,7 @@ local function main(value: unknown)
             end
         end
     end
+    confirmation.cancel(review)
     ticker:stop()
     process.unlisten(changes)
     output:close(); tty.stop()

@@ -9,6 +9,7 @@ local frame = require("frame")
 local appearance = require("appearance")
 local client = require("client")
 local bounds = require("bounds")
+local confirmation = require("confirmation")
 type Object = {[string]: unknown}
 local function value(raw: unknown, err: unknown): (Object?, string?)
     local reply = bounds.object(raw)
@@ -30,7 +31,7 @@ local function main(options: unknown)
     local selected = 1
     local status = ""
     local records: string? = nil
-    local confirm = false
+    local review = confirmation.new({workspace_id = launch.workspace_id, origin = {app_id = launch.definition_id, instance_id = launch.instance_id, attempt_id = launch.execution_id}})
     local function load()
         local listing, err = value(funcs.call("bee.gateway.binding:external_call", {operation = "list"}))
         if not listing then status = err or "Clients are unavailable"; return end
@@ -47,12 +48,18 @@ local function main(options: unknown)
         clients = next_clients
         selected = math.floor(math.max(1, math.min(selected, #clients)))
     end
-    local function act(kind: string)
+    local function act(kind: string, gesture: "enter" | "space" | "click" | "shortcut"?)
         local chosen = clients[selected]
         if kind == "revoke" and chosen and chosen.status ~= "revoked" and chosen.status ~= "expired" then
-            if not confirm then confirm = true; status = "Revoke " .. chosen.name .. "? Enter confirms · Esc keeps access"; return end
+            local target = {client_id = chosen.client_id, thread_id = chosen.thread_id, expires_at = chosen.expires_at, status = chosen.status}
+            if not confirmation.active(review) then
+                local opened, err = confirmation.open(review, "mcp.revoke", target, "inline", "Revoke " .. chosen.name .. "?", "Revoke " .. chosen.name .. "?")
+                status = opened and ("Revoke " .. chosen.name .. "? Enter confirms · Esc keeps access") or err or "Confirmation is unavailable"
+                return
+            end
+            local accepted, err = confirmation.accept(review, target, gesture or "shortcut")
+            if not accepted then status = err or "Confirmation failed"; return end
             local revoked, err = value(funcs.call("bee.gateway.binding:external_call", {operation = "revoke", client_id = chosen.client_id}))
-            confirm = false
             status = revoked and "Access revoked" or err or "Revocation is unavailable"
             load()
         elseif kind == "read" and chosen then
@@ -91,18 +98,19 @@ local function main(options: unknown)
             local data = event.value
             if type(data) == "table" and data.type == "key" and data.action == "press" then
                 if data.key_type == "esc" or data.key_type == "escape" then
-                    if confirm then confirm = false; status = "" elseif records then records = nil else break end
-                elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); confirm = false
-                elseif data.key_type == "down" then selected = math.floor(math.min(#clients, selected + 1)); confirm = false
-                elseif data.key_type == "enter" then act(confirm and "revoke" or "read")
+                    if confirmation.active(review) then confirmation.cancel(review); status = "" elseif records then records = nil else break end
+                elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); confirmation.cancel(review)
+                elseif data.key_type == "down" then selected = math.floor(math.min(#clients, selected + 1)); confirmation.cancel(review)
+                elseif data.key_type == "enter" then act(confirmation.active(review) and "revoke" or "read", "enter")
                 elseif type(data.key) == "string" and data.key:lower() == "x" then act("revoke")
                 elseif type(data.key) == "string" and data.key:lower() == "r" then act("refresh") end
             elseif type(data) == "table" and data.type == "mouse" and data.action == "press" and data.button == "left" then
                 local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
-                if hit then if hit.kind == "client" then selected = hit.index; confirm = false else act(hit.kind) end end
+                if hit then if hit.kind == "client" then selected = hit.index; confirmation.cancel(review) else act(hit.kind, "click") end end
             end
         end
     end
+    confirmation.cancel(review)
     ticker:stop()
 end
 return {main = main}

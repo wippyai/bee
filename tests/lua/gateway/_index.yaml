@@ -255,10 +255,14 @@ entries:
   source: file://external_app_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [process, system, channel, time, tty]
+  modules: [process, system, channel, time, tty, sql, json, funcs, security]
+  security: {policies: [bee.gateway:external_test_policy]}
   imports:
     test: wippy.test:test
     client: bee.node:client
+    bounds: bee.values:bounds
+    external: bee.gateway.binding:external
+    gateway: bee.gateway.binding:gateway
 - name: external_hive_test
   kind: function.lua
   source: file://external_hive_test.lua

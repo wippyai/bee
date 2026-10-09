@@ -18,6 +18,7 @@ entries:
     appearance: bee.ui:appearance
     client: bee.app:client
     bounds: bee.values:bounds
+    confirmation: bee.approvals.app:confirmation
   meta:
     type: bee.app
     application:
@@ -28,4 +29,4 @@ entries:
       instance_policy: singleton
       menus: [bee.shell:system_menu]
   security:
-    policies: [bee.gateway.security:external_view_policy]
+    policies: [bee.gateway.security:external_view_policy, bee.security.approvals:confirmation_client, bee.security.approvals:confirmation_authority]
